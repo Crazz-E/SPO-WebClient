@@ -354,6 +354,15 @@ export function renderWorkforceTable(
   // Table body
   const tbody = document.createElement('tbody');
 
+  // Helper: WorkersCap determines if this worker class is used by the building.
+  // Falls back to WorkersMax if WorkersCap is not available (backward compat).
+  const isClassActive = (classIndex: number): boolean => {
+    const cap = valueMap.has(`WorkersCap${classIndex}`)
+      ? getNumValue(`WorkersCap${classIndex}`)
+      : getNumValue(`WorkersMax${classIndex}`);
+    return cap > 0;
+  };
+
   // Row 1: Jobs (Workers/WorkersMax ratio)
   const jobsRow = document.createElement('tr');
   jobsRow.innerHTML = `<td class="workforce-label">Jobs</td>`;
@@ -363,8 +372,8 @@ export function renderWorkforceTable(
     const td = document.createElement('td');
     td.className = 'workforce-value';
 
-    // If WorkersMax is 0, leave cell empty
-    if (workersMax === 0) {
+    // If worker class is not active, leave cell empty
+    if (!isClassActive(i)) {
       td.textContent = '';
     } else {
       td.textContent = `${workers}/${workersMax}`;
@@ -377,13 +386,11 @@ export function renderWorkforceTable(
   const qualityRow = document.createElement('tr');
   qualityRow.innerHTML = `<td class="workforce-label">Work Force Quality</td>`;
   for (let i = 0; i < 3; i++) {
-    const workersMax = getNumValue(`WorkersMax${i}`);
     const quality = getNumValue(`WorkersK${i}`);
     const td = document.createElement('td');
     td.className = 'workforce-value';
 
-    // If WorkersMax is 0, leave cell empty
-    if (workersMax === 0) {
+    if (!isClassActive(i)) {
       td.textContent = '';
     } else {
       td.textContent = formatPercentage(quality);
@@ -397,15 +404,14 @@ export function renderWorkforceTable(
   salariesRow.innerHTML = `<td class="workforce-label">Salaries</td>`;
 
   for (let i = 0; i < 3; i++) {
-    const workersMax = getNumValue(`WorkersMax${i}`);
     const workforcePrice = getNumValue(`WorkForcePrice${i}`);
     const salaryPercent = getNumValue(`Salaries${i}`);
+    const minSalary = getNumValue(`MinSalaries${i}`);
 
     const td = document.createElement('td');
     td.className = 'workforce-value workforce-salary-cell';
 
-    // Only populate cell if WorkersMax > 0
-    if (workersMax > 0) {
+    if (isClassActive(i)) {
       // Display: $value from server
       const priceSpan = document.createElement('span');
       priceSpan.className = 'workforce-salary-price';
@@ -419,7 +425,7 @@ export function renderWorkforceTable(
       const input = document.createElement('input');
       input.type = 'number';
       input.className = 'salary-input';
-      input.min = '0';
+      input.min = minSalary > 0 ? minSalary.toString() : '0';
       input.max = '250';
       input.step = '1';
       input.value = salaryPercent.toString();
@@ -433,9 +439,10 @@ export function renderWorkforceTable(
       const handleChange = () => {
         let newVal = parseFloat(input.value);
 
-        // Validate range
-        if (isNaN(newVal)) newVal = 0;
-        if (newVal < 0) newVal = 0;
+        // Validate range (respect MinSalaries floor)
+        const floor = minSalary > 0 ? minSalary : 0;
+        if (isNaN(newVal)) newVal = floor;
+        if (newVal < floor) newVal = floor;
         if (newVal > 250) newVal = 250;
 
         // Update input if corrected
@@ -460,6 +467,26 @@ export function renderWorkforceTable(
     salariesRow.appendChild(td);
   }
   tbody.appendChild(salariesRow);
+
+  // Row 4: Min Salary (read-only, from MinSalaries{i})
+  // Only show if any class has a non-zero MinSalaries value
+  const hasMinSalaries = [0, 1, 2].some(i => getNumValue(`MinSalaries${i}`) > 0);
+  if (hasMinSalaries) {
+    const minSalaryRow = document.createElement('tr');
+    minSalaryRow.innerHTML = `<td class="workforce-label">Min Salary</td>`;
+    for (let i = 0; i < 3; i++) {
+      const minSal = getNumValue(`MinSalaries${i}`);
+      const td = document.createElement('td');
+      td.className = 'workforce-value';
+      if (!isClassActive(i)) {
+        td.textContent = '';
+      } else {
+        td.textContent = minSal > 0 ? `${minSal}%` : '-';
+      }
+      minSalaryRow.appendChild(td);
+    }
+    tbody.appendChild(minSalaryRow);
+  }
 
   table.appendChild(tbody);
   return table;

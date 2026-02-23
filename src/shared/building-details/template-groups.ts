@@ -136,12 +136,32 @@ export const RES_GENERAL_GROUP: PropertyGroup = {
     { rdoName: 'ROI', displayName: 'ROI', type: PropertyType.PERCENTAGE, colorCode: 'auto' },
     { rdoName: 'Years', displayName: 'Age', type: PropertyType.NUMBER, unit: 'years' },
     { rdoName: 'Trouble', displayName: 'Status', type: PropertyType.NUMBER, hideEmpty: true },
+    // Residential-specific stats (PopulatedBlock.StoreToCache)
+    { rdoName: 'Occupancy', displayName: 'Occupancy', type: PropertyType.PERCENTAGE },
+    { rdoName: 'Inhabitants', displayName: 'Inhabitants', type: PropertyType.NUMBER },
+    { rdoName: 'QOL', displayName: 'Quality of Life', type: PropertyType.PERCENTAGE },
+    { rdoName: 'Beauty', displayName: 'Beauty', type: PropertyType.PERCENTAGE },
+    { rdoName: 'Crime', displayName: 'Crime', type: PropertyType.PERCENTAGE },
+    { rdoName: 'Pollution', displayName: 'Pollution', type: PropertyType.PERCENTAGE },
+    // Investment sliders (ResidentialSheet.pas xfer_ controls)
+    { rdoName: 'invCrimeRes', displayName: 'Crime Resistance', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
+    { rdoName: 'invPollutionRes', displayName: 'Pollution Resistance', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
+    { rdoName: 'invPrivacy', displayName: 'Privacy', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
+    { rdoName: 'InvBeauty', displayName: 'Beauty Investment', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
+    // Editable sliders
     { rdoName: 'Rent', displayName: 'Rent', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
     { rdoName: 'Maintenance', displayName: 'Maintenance', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
+    // Repair info
+    { rdoName: 'Repair', displayName: 'Repair Status', type: PropertyType.TEXT },
+    { rdoName: 'RepairPrice', displayName: 'Repair Cost', type: PropertyType.CURRENCY },
   ],
   rdoCommands: {
     'Rent': { command: 'property' },
     'Maintenance': { command: 'property' },
+    'invCrimeRes': { command: 'property' },
+    'invPollutionRes': { command: 'property' },
+    'invPrivacy': { command: 'property' },
+    'InvBeauty': { command: 'property' },
   },
 };
 
@@ -558,6 +578,10 @@ export const FILMS_GROUP: PropertyGroup = {
   icon: 'F',
   order: 10,
   properties: [
+    // Current film info (FilmsSheet.pas queries)
+    { rdoName: 'FilmName', displayName: 'Film Name', type: PropertyType.TEXT },
+    { rdoName: 'FilmBudget', displayName: 'Budget', type: PropertyType.CURRENCY },
+    { rdoName: 'FilmTime', displayName: 'Duration', type: PropertyType.NUMBER, unit: 'months' },
     { rdoName: 'InProd', displayName: 'In Production', type: PropertyType.TEXT },
     { rdoName: 'FilmDone', displayName: 'Film Done', type: PropertyType.BOOLEAN },
     { rdoName: 'AutoProd', displayName: 'Auto Produce', type: PropertyType.BOOLEAN, editable: true },

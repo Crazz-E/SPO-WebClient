@@ -177,6 +177,49 @@ describe('General handler RDO properties', () => {
     expect(maintProp!.editable).toBe(true);
   });
 
+  it('ResGeneral should have 20 properties (PopulatedBlock stats + investment sliders)', () => {
+    expect(RES_GENERAL_GROUP.properties).toHaveLength(20);
+  });
+
+  it('ResGeneral should have residential stats from PopulatedBlock.StoreToCache', () => {
+    const rdoNames = RES_GENERAL_GROUP.properties.map(p => p.rdoName);
+    expect(rdoNames).toContain('Occupancy');
+    expect(rdoNames).toContain('Inhabitants');
+    expect(rdoNames).toContain('QOL');
+    expect(rdoNames).toContain('Beauty');
+    expect(rdoNames).toContain('Crime');
+    expect(rdoNames).toContain('Pollution');
+  });
+
+  it('ResGeneral should have investment sliders from ResidentialSheet.pas', () => {
+    const investmentProps = ['invCrimeRes', 'invPollutionRes', 'invPrivacy', 'InvBeauty'];
+    for (const propName of investmentProps) {
+      const prop = RES_GENERAL_GROUP.properties.find(p => p.rdoName === propName);
+      expect(prop).toBeDefined();
+      expect(prop!.type).toBe(PropertyType.SLIDER);
+      expect(prop!.editable).toBe(true);
+      expect(prop!.max).toBe(500);
+    }
+  });
+
+  it('ResGeneral should have rdoCommands for all editable sliders', () => {
+    const editableSliders = ['Rent', 'Maintenance', 'invCrimeRes', 'invPollutionRes', 'invPrivacy', 'InvBeauty'];
+    for (const name of editableSliders) {
+      expect(RES_GENERAL_GROUP.rdoCommands![name]).toBeDefined();
+      expect(RES_GENERAL_GROUP.rdoCommands![name].command).toBe('property');
+    }
+  });
+
+  it('ResGeneral should have repair properties', () => {
+    const repair = RES_GENERAL_GROUP.properties.find(p => p.rdoName === 'Repair');
+    expect(repair).toBeDefined();
+    expect(repair!.type).toBe(PropertyType.TEXT);
+
+    const repairPrice = RES_GENERAL_GROUP.properties.find(p => p.rdoName === 'RepairPrice');
+    expect(repairPrice).toBeDefined();
+    expect(repairPrice!.type).toBe(PropertyType.CURRENCY);
+  });
+
   it('BankGeneral should have BudgetPerc slider', () => {
     const budgetProp = BANK_GENERAL_GROUP.properties.find(p => p.rdoName === 'BudgetPerc');
     expect(budgetProp).toBeDefined();
@@ -247,6 +290,27 @@ describe('Specialized handler RDO properties', () => {
     expect(tableProp!.columns).toHaveLength(6);
     const colNames = tableProp!.columns!.map(c => c.rdoSuffix);
     expect(colNames).toEqual(['antName', 'antTown', 'antViewers', 'antActive', 'antX', 'antY']);
+  });
+
+  it('Films should have 10 properties (display + controls + action buttons)', () => {
+    expect(FILMS_GROUP.properties).toHaveLength(10);
+  });
+
+  it('Films should have display properties from FilmsSheet.pas', () => {
+    const rdoNames = FILMS_GROUP.properties.map(p => p.rdoName);
+    expect(rdoNames).toContain('FilmName');
+    expect(rdoNames).toContain('FilmBudget');
+    expect(rdoNames).toContain('FilmTime');
+
+    const filmName = FILMS_GROUP.properties.find(p => p.rdoName === 'FilmName');
+    expect(filmName!.type).toBe(PropertyType.TEXT);
+
+    const filmBudget = FILMS_GROUP.properties.find(p => p.rdoName === 'FilmBudget');
+    expect(filmBudget!.type).toBe(PropertyType.CURRENCY);
+
+    const filmTime = FILMS_GROUP.properties.find(p => p.rdoName === 'FilmTime');
+    expect(filmTime!.type).toBe(PropertyType.NUMBER);
+    expect(filmTime!.unit).toBe('months');
   });
 
   it('Films should have production properties with editable booleans', () => {
@@ -444,6 +508,36 @@ describe('collectTemplatePropertyNamesStructured with TABLE columns', () => {
     expect(collected.regularProperties).toContain('FilmDone');
     expect(collected.regularProperties).toContain('AutoProd');
     expect(collected.regularProperties).toContain('AutoRel');
+    expect(collected.regularProperties).toContain('FilmName');
+    expect(collected.regularProperties).toContain('FilmBudget');
+    expect(collected.regularProperties).toContain('FilmTime');
+  });
+
+  it('should expand WORKFORCE_TABLE to 24 properties (8 per class × 3 classes)', () => {
+    registerInspectorTabs('testWorkforce', [
+      { tabName: 'Workforce', tabHandler: 'Workforce' },
+    ]);
+
+    const template = getTemplateForVisualClass('testWorkforce');
+    const collected = collectTemplatePropertyNamesStructured(template);
+
+    // 8 properties per class: Workers, WorkersMax, WorkersK, Salaries,
+    // WorkForcePrice, WorkersCap, MinSalaries, SalaryValues
+    const workforceProps = [
+      'Workers', 'WorkersMax', 'WorkersK', 'Salaries',
+      'WorkForcePrice', 'WorkersCap', 'MinSalaries', 'SalaryValues',
+    ];
+    for (const baseName of workforceProps) {
+      for (let i = 0; i < 3; i++) {
+        expect(collected.regularProperties).toContain(`${baseName}${i}`);
+      }
+    }
+
+    // Count workforce-specific properties (all 24)
+    const wfProps = Array.from(collected.regularProperties).filter(p =>
+      workforceProps.some(base => p.startsWith(base))
+    );
+    expect(wfProps).toHaveLength(24);
   });
 });
 

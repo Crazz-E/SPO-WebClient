@@ -75,6 +75,47 @@ function buildRdoCommandArgs(
       args.push(RdoValue.int(boolVal));
       break;
     }
+    case 'RDOLaunchMovie': {
+      // MovieStudios.pas — 4th param is word bitmask: flgAutoRelease=$01, flgAutoProduce=$02
+      const filmName = params.filmName || '';
+      const budget = params.budget || '1000000';
+      const months = params.months || '12';
+      const autoRelBit = parseInt(params.autoRel || '0', 10) !== 0 ? 1 : 0;
+      const autoProdBit = parseInt(params.autoProd || '0', 10) !== 0 ? 1 : 0;
+      const autoInfo = autoRelBit | (autoProdBit << 1);
+      args.push(
+        RdoValue.string(filmName),
+        RdoValue.double(parseFloat(budget)),
+        RdoValue.int(parseInt(months, 10)),
+        RdoValue.int(autoInfo)
+      );
+      break;
+    }
+    case 'RDOCancelMovie':
+    case 'RDOReleaseMovie': {
+      args.push(RdoValue.int(0));
+      break;
+    }
+    case 'RDOSetMinistryBudget': {
+      const minId = parseInt(params.ministryId || '0', 10);
+      args.push(RdoValue.int(minId), RdoValue.string(value));
+      break;
+    }
+    case 'RDOBanMinister': {
+      const minId = parseInt(params.ministryId || '0', 10);
+      args.push(RdoValue.int(minId));
+      break;
+    }
+    case 'RDOSitMinister': {
+      const minId = parseInt(params.ministryId || '0', 10);
+      args.push(RdoValue.int(minId), RdoValue.string(value));
+      break;
+    }
+    case 'RDOSetMinSalaryValue': {
+      const levelIndex = params.levelIndex || '0';
+      args.push(RdoValue.int(parseInt(levelIndex, 10)), RdoValue.int(parseInt(value, 10)));
+      break;
+    }
     case 'property': {
       args.push(RdoValue.int(parseInt(value, 10)));
       break;
@@ -287,6 +328,85 @@ describe('Facility SET Command Format (buildRdoCommandArgs)', () => {
     it('should format false as WordBool #0', () => {
       const result = buildRdoCommandArgs('RDOAutoRelease', '0');
       expect(result).toBe('"#0"');
+    });
+  });
+
+  describe('RDOLaunchMovie (bitmask)', () => {
+    it('should encode autoRel=1, autoProd=0 as bitmask #1', () => {
+      const result = buildRdoCommandArgs('RDOLaunchMovie', '0', {
+        filmName: 'Test Film', budget: '2000000', months: '12',
+        autoRel: '1', autoProd: '0',
+      });
+      expect(result).toBe('"%Test Film","@2000000","#12","#1"');
+    });
+
+    it('should encode autoRel=0, autoProd=1 as bitmask #2', () => {
+      const result = buildRdoCommandArgs('RDOLaunchMovie', '0', {
+        filmName: 'Test Film', budget: '2000000', months: '12',
+        autoRel: '0', autoProd: '1',
+      });
+      expect(result).toBe('"%Test Film","@2000000","#12","#2"');
+    });
+
+    it('should encode autoRel=1, autoProd=1 as bitmask #3', () => {
+      const result = buildRdoCommandArgs('RDOLaunchMovie', '0', {
+        filmName: 'Test Film', budget: '2000000', months: '12',
+        autoRel: '1', autoProd: '1',
+      });
+      expect(result).toBe('"%Test Film","@2000000","#12","#3"');
+    });
+
+    it('should encode both off as #0', () => {
+      const result = buildRdoCommandArgs('RDOLaunchMovie', '0', {
+        filmName: 'Test Film', budget: '2000000', months: '12',
+        autoRel: '0', autoProd: '0',
+      });
+      expect(result).toBe('"%Test Film","@2000000","#12","#0"');
+    });
+
+    it('should format budget as double (@) not integer (#)', () => {
+      const result = buildRdoCommandArgs('RDOLaunchMovie', '0', {
+        filmName: 'Film', budget: '1500000.50', months: '6',
+      });
+      expect(result).toContain('"@1500000.5"');
+    });
+  });
+
+  describe('RDOCancelMovie / RDOReleaseMovie', () => {
+    it('should format cancel with dummy integer arg', () => {
+      const result = buildRdoCommandArgs('RDOCancelMovie', '0');
+      expect(result).toBe('"#0"');
+    });
+
+    it('should format release with dummy integer arg', () => {
+      const result = buildRdoCommandArgs('RDOReleaseMovie', '0');
+      expect(result).toBe('"#0"');
+    });
+  });
+
+  describe('RDOSetMinistryBudget', () => {
+    it('should format ministryId as integer and budget as string', () => {
+      const result = buildRdoCommandArgs('RDOSetMinistryBudget', '5000000', { ministryId: '2' });
+      expect(result).toBe('"#2","%5000000"');
+    });
+  });
+
+  describe('RDOBanMinister / RDOSitMinister', () => {
+    it('should format ban with ministryId integer', () => {
+      const result = buildRdoCommandArgs('RDOBanMinister', '0', { ministryId: '3' });
+      expect(result).toBe('"#3"');
+    });
+
+    it('should format sit with ministryId integer and tycoon name string', () => {
+      const result = buildRdoCommandArgs('RDOSitMinister', 'TycoonName', { ministryId: '1' });
+      expect(result).toBe('"#1","%TycoonName"');
+    });
+  });
+
+  describe('RDOSetMinSalaryValue', () => {
+    it('should format levelIndex and value as integers', () => {
+      const result = buildRdoCommandArgs('RDOSetMinSalaryValue', '80', { levelIndex: '1' });
+      expect(result).toBe('"#1","#80"');
     });
   });
 

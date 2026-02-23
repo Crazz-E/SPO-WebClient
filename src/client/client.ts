@@ -1282,12 +1282,18 @@ export class StarpeaceClient {
     const monthsStr = prompt('Production months:', '12');
     if (!monthsStr) return;
 
+    // Read current AutoRel/AutoProd toggles from building data
+    const filmsGroup = buildingDetails.groups['films'] || [];
+    const autoRel = filmsGroup.find(p => p.name === 'AutoRel')?.value || '0';
+    const autoProd = filmsGroup.find(p => p.name === 'AutoProd')?.value || '0';
+
     try {
       await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RDOLaunchMovie', '0', {
         filmName,
         budget: budgetStr,
         months: monthsStr,
-        autoRel: '0',
+        autoRel,
+        autoProd,
       });
       this.showNotification(`Launching movie: ${filmName}`, 'success');
       this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);

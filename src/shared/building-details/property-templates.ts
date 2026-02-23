@@ -166,12 +166,17 @@ function collectGroupPropertyNamesStructured(
     // Handle WORKFORCE_TABLE type specially
     if (prop.type === 'WORKFORCE_TABLE') {
       // Add all workforce properties for 3 worker classes (0, 1, 2)
+      // WorkCenterBlock.StoreToCache: Workers, WorkersMax, WorkersK, Salaries,
+      // WorkForcePrice, WorkersCap, MinSalaries, SalaryValues per class
       for (let i = 0; i < 3; i++) {
         regularProperties.add(`Workers${i}`);
         regularProperties.add(`WorkersMax${i}`);
         regularProperties.add(`WorkersK${i}`);
         regularProperties.add(`Salaries${i}`);
         regularProperties.add(`WorkForcePrice${i}`);
+        regularProperties.add(`WorkersCap${i}`);
+        regularProperties.add(`MinSalaries${i}`);
+        regularProperties.add(`SalaryValues${i}`);
       }
       continue;
     }
