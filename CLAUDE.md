@@ -51,9 +51,22 @@ Browser Client ──WebSocket──> Node.js Gateway ──RDO Protocol──> 
 
 ## Environment
 
+**Platform:** Windows 11 Pro — shell is **Git Bash** (MINGW64), NOT Linux.
 **Node.js path:** `C:\Program Files\nodejs\` (v24.13.1, npm 11.8.0)
 
 For bash/git-bash shells, add to PATH: `export PATH="/c/Program Files/nodejs:$PATH"`
+
+**Windows-specific rules (MANDATORY):**
+- **Paths:** Use forward slashes (`src/server/rdo.ts`) in code/scripts. Bash tool receives Git Bash, so Unix-style paths work, but native Windows commands (e.g. `where`) use backslashes.
+- **No Linux-only commands:** Do NOT use `grep`, `find`, `xargs`, `sed`, `awk`, `wc`, `chmod`, `chown`, `ln -s`, `readlink`, `lsof`, `kill`, `ps aux`, `rm -rf` in Bash. Use the dedicated Claude Code tools (Grep, Glob, Read, Edit, Write) instead.
+- **Process management:** Use `tasklist` / `taskkill` instead of `ps` / `kill`. Use `Get-Process` / `Stop-Process` via `powershell -Command "..."` for port conflicts.
+- **Null device:** Use `/dev/null` in Git Bash (it translates automatically). Do NOT use `NUL`.
+- **npm scripts:** `npm test`, `npm run build`, etc. work identically — always prefer npm scripts over raw shell commands.
+- **File permissions:** Windows has no `chmod`/`chown`. Never attempt to set Unix permissions.
+- **Symlinks:** Avoid `ln -s`. Windows symlinks require admin privileges and behave differently.
+- **Line endings:** Repo uses LF (`.gitattributes`). Do not introduce CRLF.
+- **Temp files:** Use `$TEMP` or `/tmp` (Git Bash maps `/tmp` to a Windows temp directory).
+- **Environment variables:** Use `export VAR=value` in Git Bash. For persistent vars, guide user to Windows System Properties or their shell profile.
 
 ## MCP Servers (Claude Code)
 
@@ -231,7 +244,7 @@ Read the relevant doc when working on a specific system:
 
 ## Installed Skills
 
-**Total: 21 skills** | Updated: 2026-02-16 | See [SKILLS_SECURITY_REPORT.md](.claude/SKILLS_SECURITY_REPORT.md) for details
+**Total: 23 skills** | Updated: 2026-02-24 | See [SKILLS_SECURITY_REPORT.md](.claude/SKILLS_SECURITY_REPORT.md) for details
 
 | Skill | Category | Purpose | Stars |
 |-------|----------|---------|-------|
@@ -256,6 +269,8 @@ Read the relevant doc when working on a specific system:
 | `r3f-performance` | Rendering | LOD, frustum culling, instancing, draw call reduction | 6 |
 | `web-games` | Game Dev | Browser game development, WebGPU, PWA patterns | 0 |
 | `webgl-expert` | Rendering | WebGL API, shaders (GLSL), canvas rendering, GPU | 8 |
+| `dependency-audit` | Security | Vulnerability scanning, license compliance, supply chain security | 13,893 |
+| `dependency-updater` | Dependencies | Smart updates, auto-detect project type, safe MINOR/PATCH, prompt MAJOR | 21,069 |
 
 ## SkillsMP API
 

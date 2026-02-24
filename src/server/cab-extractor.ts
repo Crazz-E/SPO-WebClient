@@ -1,7 +1,7 @@
 /**
  * CAB Extractor - Cross-platform Microsoft Cabinet archive extraction
  *
- * Uses the '7zip-min' npm package for CAB extraction.
+ * Uses the '7zip-min' npm package (v2) for CAB extraction.
  * No external tools required - 7zip-min includes precompiled 7za binaries.
  * Works on Windows, Linux, and macOS.
  *
@@ -13,29 +13,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { toErrorMessage } from '../shared/error-utils';
-
-// 7zip-min is a CommonJS module with callback-based API
-const _7z = require('7zip-min');
-
-/** Promisify _7z.unpack (callback-based API) */
-function unpackAsync(cabPath: string, targetDir: string): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    _7z.unpack(cabPath, targetDir, (err: Error | null) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-}
-
-/** Promisify _7z.list (callback-based API) */
-function listAsync(cabPath: string): Promise<unknown[]> {
-  return new Promise((resolve, reject) => {
-    _7z.list(cabPath, (err: Error | null, result: unknown[]) => {
-      if (err) reject(err);
-      else resolve(result ?? []);
-    });
-  });
-}
+import type { ListItem } from '7zip-min';
+import * as _7z from '7zip-min';
 
 /**
  * Information about a file within a CAB archive
@@ -56,20 +35,9 @@ export interface CabExtractionResult {
 }
 
 /**
- * Convert 7zip-min list output to CabFileInfo array
- *
- * 7zip-min list() returns an array of objects:
- * [{
- *   name: 'filename.txt',
- *   size: '1234',  // Note: string, not number
- *   date: '2000-01-01',
- *   time: '00:00:00',
- *   attr: '.....',
- *   method: 'MSZip',
- *   block: '0'
- * }]
+ * Convert 7zip-min ListItem[] to CabFileInfo array
  */
-function parse7zList(output: Array<{ name: string; size: string; date?: string; time?: string; attr?: string; method?: string; block?: string }>): CabFileInfo[] {
+function parse7zList(output: ListItem[]): CabFileInfo[] {
   const files: CabFileInfo[] = [];
 
   if (!Array.isArray(output)) {
@@ -153,8 +121,8 @@ export async function extractCabArchive(
   }
 
   try {
-    // Extract using 7zip-min (promisified callback API)
-    await unpackAsync(cabPath, targetDir);
+    // Extract using 7zip-min native Promise API (v2)
+    await _7z.unpack(cabPath, targetDir);
 
     // Get list of extracted files, excluding the source CAB file itself
     const cabBaseName = path.basename(cabPath).toLowerCase();
@@ -189,10 +157,10 @@ export async function listCabContents(cabPath: string): Promise<CabFileInfo[] | 
   }
 
   try {
-    // 7zip-min list() returns an array of file objects (promisified callback API)
-    const output = await listAsync(cabPath);
-    return parse7zList(output as Array<{ name: string; size: string }>);
-  } catch (error) {
+    // 7zip-min list() native Promise API (v2)
+    const output = await _7z.list(cabPath);
+    return parse7zList(output);
+  } catch (error: unknown) {
     return null;
   }
 }

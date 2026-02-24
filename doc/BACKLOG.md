@@ -381,6 +381,26 @@
   - **Maintainability:** Easier to understand and modify individual modules
   - **Backward compatible:** All imports still work via barrel exports
 
+#### Dependency Security Audit
+- **Status:** ✅ COMPLETED (February 2026)
+- **Goal:** Audit all dependencies for known vulnerabilities, license compliance, and outdated packages
+- **Findings:**
+  - **Production dependencies (4):** 0 vulnerabilities — `ws@8.19.0`, `node-fetch@2.7.0`, `cheerio@1.1.2→1.2.0`, `7zip-min@1.4.5→2.1.0`
+  - **Dev dependencies (10):** 19 high-severity advisories, all from a single root cause (`minimatch` < 10.2.1 ReDoS via `test-exclude` → `glob` chain in Jest). Dev-only, no production impact.
+  - **Licenses:** All permissive (MIT/ISC/BSD), no copyleft detected
+- **Actions Taken:**
+  - Updated `cheerio` 1.1.2 → 1.2.0 (minor, safe)
+  - Updated `esbuild` 0.27.2 → 0.27.3 (patch, safe)
+  - Updated `@types/node` 25.0.9 → 25.3.0 (patch, safe)
+  - Updated `7zip-min` 1.4.5 → 2.1.0 (major, backward-compatible callback API)
+    - Simplified [cab-extractor.ts](src/server/cab-extractor.ts): removed manual promisify wrappers, using native Promise API and built-in `ListItem` type
+    - Replaced `require('7zip-min')` with `import * as _7z from '7zip-min'`
+  - Build and all 1595 tests verified passing after updates
+- **Deferred (intentional):**
+  - `node-fetch` v2 → v3: ESM-only, would break CommonJS server build
+  - `jsdom` v27 → v28: Major version, needs compatibility review
+  - Jest `minimatch` ReDoS: Dev-only, will resolve when Jest 30.x updates upstream `test-exclude` chain
+
 ### FEATURES
 #### Search Menu
 - **Status:** ✅ COMPLETED (January 2026)
