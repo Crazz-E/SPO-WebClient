@@ -1,6 +1,6 @@
 /**
  * Scenario 1: Authentication
- * RDO exchanges: idof DirectoryServer, RDOOpenSession (call, not get),
+ * RDO exchanges: idof DirectoryServer, RDOOpenSession (get — zero-arg function via COM late-binding),
  * RDOMapSegaUser, RDOLogonUser, RDOEndSession
  */
 
@@ -28,9 +28,9 @@ export function createAuthScenario(
       },
       {
         id: 'auth-rdo-002',
-        request: `C 1 sel ${vars.directoryServerId} call RDOOpenSession "^"`,
-        response: `A1 res="#${vars.directorySessionId}"`,
-        matchKeys: { verb: 'sel', action: 'call', member: 'RDOOpenSession' },
+        request: `C 1 sel ${vars.directoryServerId} get RDOOpenSession`,
+        response: `A1 RDOOpenSession="#${vars.directorySessionId}"`,
+        matchKeys: { verb: 'sel', action: 'get', member: 'RDOOpenSession' },
       },
       {
         id: 'auth-rdo-003',

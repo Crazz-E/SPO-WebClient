@@ -21,6 +21,7 @@ jest.mock('node-fetch', () => ({
 /// <reference path="../../__tests__/matchers/rdo-matchers.d.ts" />
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { RdoMock } from '../../../mock-server/rdo-mock';
+import { RdoStrictValidator } from '../../../mock-server/rdo-strict-validator';
 import { RdoProtocol } from '../../../server/rdo';
 import { RdoVerb, RdoAction } from '../../../shared/types/protocol-types';
 import {
@@ -34,12 +35,22 @@ import { DEFAULT_VARIABLES } from '../../../mock-server/scenarios/scenario-varia
 
 describe('Protocol Validation: focusBuilding() / SwitchFocusEx', () => {
   let rdoMock: RdoMock;
+  let validator: RdoStrictValidator;
   const scenario = createSwitchFocusScenario();
   const worldContextId = DEFAULT_VARIABLES.clientViewId; // '8161308'
 
   beforeEach(() => {
     rdoMock = new RdoMock();
+    validator = new RdoStrictValidator();
     rdoMock.addScenario(scenario.rdo);
+    validator.addScenario(scenario.rdo);
+  });
+
+  afterEach(() => {
+    const errors = validator.getErrors();
+    if (errors.length > 0) {
+      throw new Error(validator.formatReport());
+    }
   });
 
   /**
@@ -69,6 +80,7 @@ describe('Protocol Validation: focusBuilding() / SwitchFocusEx', () => {
     it('should match the SwitchFocusEx scenario exchange for first focus', () => {
       const command = buildFocusCommand('0', 472, 392);
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
 
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('sf-rdo-001');
@@ -109,6 +121,7 @@ describe('Protocol Validation: focusBuilding() / SwitchFocusEx', () => {
       // First focus: previous = 0
       const firstCommand = buildFocusCommand('0', 472, 392);
       const firstResult = rdoMock.match(firstCommand);
+      validator.validate(RdoProtocol.parse(firstCommand), firstCommand);
       expect(firstResult).not.toBeNull();
 
       // Extract building ID from first response (farm objectId)

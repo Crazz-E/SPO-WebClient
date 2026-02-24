@@ -2,7 +2,8 @@ import {
   RdoPacket,
   RdoVerb,
   RdoAction,
-  RDO_CONSTANTS
+  RDO_CONSTANTS,
+  RDO_ERROR_CODES
 } from '../shared/types';
 import {
   RdoValue,
@@ -21,12 +22,29 @@ import {
 export class RdoFramer {
   private buffer: string = '';
 
+  /**
+   * Find the next unquoted semicolon delimiter position.
+   * Per Delphi's KeyWordPos (RDOUtils.pas), semicolons inside "..." are skipped.
+   */
+  private findDelimiter(): number {
+    let inQuotes = false;
+    for (let i = 0; i < this.buffer.length; i++) {
+      const ch = this.buffer[i];
+      if (ch === '"') {
+        inQuotes = !inQuotes;
+      } else if (ch === RDO_CONSTANTS.PACKET_DELIMITER && !inQuotes) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
   public ingest(chunk: Buffer | string): string[] {
     this.buffer += chunk.toString('latin1');
     const messages: string[] = [];
     let delimiterIndex: number;
 
-    while ((delimiterIndex = this.buffer.indexOf(RDO_CONSTANTS.PACKET_DELIMITER)) !== -1) {
+    while ((delimiterIndex = this.findDelimiter()) !== -1) {
       const message = this.buffer.substring(0, delimiterIndex).trim();
       if (message.length > 0) {
         messages.push(message);
@@ -66,12 +84,23 @@ export class RdoProtocol {
 		  return { raw, type: 'RESPONSE', payload: raw };
 		}
 
-		return {
+		const payload = match[2];
+		const packet: RdoPacket = {
 		  raw,
 		  type: 'RESPONSE',
 		  rid: parseInt(match[1], 10),
-		  payload: match[2]
+		  payload,
 		};
+
+		// Check for RDO error response: "error <code>" (ErrorCodes.pas:0-17)
+		const errorMatch = payload.match(/^error\s+(\d+)$/i);
+		if (errorMatch) {
+		  const code = parseInt(errorMatch[1], 10);
+		  packet.errorCode = code;
+		  packet.errorName = RDO_ERROR_CODES[code] ?? `unknownError(${code})`;
+		}
+
+		return packet;
 	  }
 
 	  /**

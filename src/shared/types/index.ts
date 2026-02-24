@@ -7,6 +7,7 @@
 export {
   RDO_PORTS,
   RDO_CONSTANTS,
+  RDO_ERROR_CODES,
   RdoVerb,
   RdoAction,
   SessionPhase,

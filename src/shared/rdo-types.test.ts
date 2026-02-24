@@ -56,6 +56,16 @@ describe('RdoValue', () => {
       expect(value.format()).toBe('"%Test, Inc."');
     });
 
+    it('should escape internal double quotes (Delphi convention: " → "")', () => {
+      const value = RdoValue.string('Build "Project"');
+      expect(value.format()).toBe('"%Build ""Project"""');
+    });
+
+    it('should handle strings with only a double quote', () => {
+      const value = RdoValue.string('"');
+      expect(value.format()).toBe('"%"""');
+    });
+
     it('should expose raw value', () => {
       const value = RdoValue.string('test');
       expect(value.value).toBe('test');
@@ -197,6 +207,24 @@ describe('RdoParser', () => {
     it('should return empty prefix for untyped values', () => {
       const result = RdoParser.extract('"hello"');
       expect(result).toEqual({ prefix: '', value: 'hello' });
+    });
+
+    it('should unescape doubled quotes in values (Delphi convention: "" → ")', () => {
+      const result = RdoParser.extract('"%Build ""Project"""');
+      expect(result).toEqual({ prefix: '%', value: 'Build "Project"' });
+    });
+
+    it('should unescape doubled quotes without prefix', () => {
+      const result = RdoParser.extract('"Hello ""World"""');
+      expect(result).toEqual({ prefix: '', value: 'Hello "World"' });
+    });
+
+    it('should roundtrip strings with double quotes', () => {
+      const original = 'A "B" C';
+      const encoded = RdoValue.string(original).format();
+      const decoded = RdoParser.extract(encoded);
+      expect(decoded.prefix).toBe('%');
+      expect(decoded.value).toBe(original);
     });
   });
 

@@ -19,6 +19,8 @@ jest.mock('node-fetch', () => ({
 /// <reference path="../../__tests__/matchers/rdo-matchers.d.ts" />
 import { describe, it, expect } from '@jest/globals';
 import { RdoMock } from '../../../mock-server/rdo-mock';
+import { RdoProtocol } from '../../../server/rdo';
+import { RdoStrictValidator } from '../../../mock-server/rdo-strict-validator';
 import type { RdoScenario } from '../../../mock-server/types/rdo-exchange-types';
 
 // Import all scenario creators
@@ -122,5 +124,67 @@ describe('Protocol Compliance: Total exchange count', () => {
     ].reduce((sum, n) => sum + n, 0);
 
     expect(totalExchanges).toBe(34);
+  });
+});
+
+/**
+ * Strict Validation Self-Check
+ *
+ * For each scenario, parse its own exchange.request strings through the
+ * RdoStrictValidator and assert zero errors. This ensures that scenario
+ * matchKeys are internally consistent with their own request strings.
+ *
+ * If a scenario's matchKeys say { action: 'get' } but the request string
+ * says "call", this self-check catches it.
+ */
+function selfPlayValidation(rdoScenario: RdoScenario): string[] {
+  const validator = new RdoStrictValidator();
+  validator.addScenario(rdoScenario);
+
+  for (const exchange of rdoScenario.exchanges) {
+    if (exchange.pushOnly || !exchange.request) continue;
+    const parsed = RdoProtocol.parse(exchange.request);
+    validator.validate(parsed, exchange.request);
+  }
+
+  return validator.getErrors().map(e =>
+    `[${e.exchangeId}] ${e.type}: ${e.message}`
+  );
+}
+
+describe('Protocol Compliance: Strict validation self-check', () => {
+  it('auth-scenario: matchKeys match request strings', () => {
+    const errors = selfPlayValidation(createAuthScenario().rdo);
+    expect(errors).toEqual([]);
+  });
+
+  it('world-list-scenario: matchKeys match request strings', () => {
+    const errors = selfPlayValidation(createWorldListScenario().rdo);
+    expect(errors).toEqual([]);
+  });
+
+  it('select-company-scenario: matchKeys match request strings', () => {
+    const errors = selfPlayValidation(createSelectCompanyScenario().rdo);
+    expect(errors).toEqual([]);
+  });
+
+  it('switch-focus-scenario: matchKeys match request strings', () => {
+    const errors = selfPlayValidation(createSwitchFocusScenario().rdo);
+    expect(errors).toEqual([]);
+  });
+
+  it('mail-scenario: matchKeys match request strings', () => {
+    const errors = selfPlayValidation(createMailScenario().rdo);
+    expect(errors).toEqual([]);
+  });
+
+  it('build-roads-scenario: matchKeys match request strings', () => {
+    const errors = selfPlayValidation(createBuildRoadsScenario().rdo);
+    expect(errors).toEqual([]);
+  });
+
+  it('build-menu-scenario: matchKeys match request strings', () => {
+    const errors = selfPlayValidation(createBuildMenuScenario().rdo);
+    expect(errors).toEqual([]);
   });
 });

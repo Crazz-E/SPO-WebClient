@@ -10,6 +10,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { RdoMock } from '../../../mock-server/rdo-mock';
+import { RdoStrictValidator } from '../../../mock-server/rdo-strict-validator';
 import { RdoProtocol } from '../../rdo';
 import { cleanPayload } from '../../rdo-helpers';
 import {
@@ -105,11 +106,21 @@ describe('Building Details Scenario Structure', () => {
 
 describe('GetPropertyList Round-Trip Matching', () => {
   let rdoMock: RdoMock;
+  let validator: RdoStrictValidator;
 
   beforeEach(() => {
     rdoMock = new RdoMock();
+    validator = new RdoStrictValidator();
     const { rdo } = createBuildingDetailsScenario();
     rdoMock.addScenario(rdo);
+    validator.addScenario(rdo);
+  });
+
+  afterEach(() => {
+    const errors = validator.getErrors();
+    if (errors.length > 0) {
+      throw new Error(validator.formatReport());
+    }
   });
 
   /**
@@ -140,6 +151,7 @@ describe('GetPropertyList Round-Trip Matching', () => {
       // Build the same command cacherGetPropertyList would send
       const cmd = buildGetPropertyListCommand(200, '99999', propNames);
       const result = rdoMock.match(cmd);
+      validator.validate(RdoProtocol.parse(cmd), cmd);
 
       expect(result).not.toBeNull();
       expect(result!.exchange.matchKeys!.member).toBe('GetPropertyList');
@@ -149,11 +161,21 @@ describe('GetPropertyList Round-Trip Matching', () => {
 
 describe('Multi-Group Building Matching', () => {
   let rdoMock: RdoMock;
+  let validator: RdoStrictValidator;
 
   beforeEach(() => {
     rdoMock = new RdoMock();
+    validator = new RdoStrictValidator();
     const { rdo } = createBuildingDetailsScenario();
     rdoMock.addScenario(rdo);
+    validator.addScenario(rdo);
+  });
+
+  afterEach(() => {
+    const errors = validator.getErrors();
+    if (errors.length > 0) {
+      throw new Error(validator.formatReport());
+    }
   });
 
   it('should differentiate Factory groups by argsPattern', () => {
@@ -230,11 +252,21 @@ describe('Multi-Group Building Matching', () => {
 
 describe('Response Parsing', () => {
   let rdoMock: RdoMock;
+  let validator: RdoStrictValidator;
 
   beforeEach(() => {
     rdoMock = new RdoMock();
+    validator = new RdoStrictValidator();
     const { rdo } = createBuildingDetailsScenario();
     rdoMock.addScenario(rdo);
+    validator.addScenario(rdo);
+  });
+
+  afterEach(() => {
+    const errors = validator.getErrors();
+    if (errors.length > 0) {
+      throw new Error(validator.formatReport());
+    }
   });
 
   /**
@@ -316,11 +348,21 @@ describe('Response Parsing', () => {
 
 describe('argsPattern Matching Accuracy', () => {
   let rdoMock: RdoMock;
+  let validator: RdoStrictValidator;
 
   beforeEach(() => {
     rdoMock = new RdoMock();
+    validator = new RdoStrictValidator();
     const { rdo } = createBuildingDetailsScenario();
     rdoMock.addScenario(rdo);
+    validator.addScenario(rdo);
+  });
+
+  afterEach(() => {
+    const errors = validator.getErrors();
+    if (errors.length > 0) {
+      throw new Error(validator.formatReport());
+    }
   });
 
   it('should NOT match when property names are completely different', () => {

@@ -39,6 +39,7 @@ jest.mock('node-fetch', () => ({
 /// <reference path="../../__tests__/matchers/rdo-matchers.d.ts" />
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { RdoMock } from '../../../mock-server/rdo-mock';
+import { RdoStrictValidator } from '../../../mock-server/rdo-strict-validator';
 import { RdoProtocol } from '../../../server/rdo';
 import { RdoVerb, RdoAction } from '../../../shared/types/protocol-types';
 import { createMailScenario, CAPTURED_MAIL_SEND } from '../../../mock-server/scenarios/mail-scenario';
@@ -46,6 +47,7 @@ import { DEFAULT_VARIABLES } from '../../../mock-server/scenarios/scenario-varia
 
 describe('Protocol Validation: Mail System', () => {
   let rdoMock: RdoMock;
+  let validator: RdoStrictValidator;
   const scenario = createMailScenario();
   const mailServerId = DEFAULT_VARIABLES.mailServerId;
   const mailAccount = DEFAULT_VARIABLES.mailAccount;
@@ -55,7 +57,16 @@ describe('Protocol Validation: Mail System', () => {
 
   beforeEach(() => {
     rdoMock = new RdoMock();
+    validator = new RdoStrictValidator();
     rdoMock.addScenario(scenario.rdo);
+    validator.addScenario(scenario.rdo);
+  });
+
+  afterEach(() => {
+    const errors = validator.getErrors();
+    if (errors.length > 0) {
+      throw new Error(validator.formatReport());
+    }
   });
 
   // =========================================================================
@@ -73,6 +84,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-002');
     });
@@ -129,6 +141,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-003');
     });
@@ -171,6 +184,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-014');
     });
@@ -216,6 +230,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-005');
     });
@@ -257,6 +272,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-007');
     });
@@ -307,6 +323,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-006');
     });
@@ -339,6 +356,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-009');
     });
@@ -382,6 +400,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-010');
     });
@@ -412,6 +431,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-011');
     });
@@ -440,6 +460,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-012');
     });
@@ -460,6 +481,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-008');
     });
@@ -501,6 +523,7 @@ describe('Protocol Validation: Mail System', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('mail-rdo-013');
     });

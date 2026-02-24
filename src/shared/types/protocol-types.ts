@@ -43,7 +43,36 @@ export interface RdoPacket {
   args?: string[];
   separator?: string;
   payload?: string;
+  /** RDO error code (0-17) if the response is an error. See ErrorCodes.pas */
+  errorCode?: number;
+  /** Human-readable error name from ErrorCodes.pas */
+  errorName?: string;
 }
+
+/**
+ * RDO error codes from ErrorCodes.pas.
+ * Format on wire: "error <code>" as the response payload.
+ */
+export const RDO_ERROR_CODES: Record<number, string> = {
+  0: 'errNoError',
+  1: 'errIllegalVerb',
+  2: 'errIllegalObject',
+  3: 'errIllegalMember',
+  4: 'errIllegalParams',
+  5: 'errUnexistentMethod',
+  6: 'errUnexistentProperty',
+  7: 'errOutOfRange',
+  8: 'errQueryTimedOut',
+  9: 'errIllegalPropValue',
+  10: 'errWriteOnlyProperty',
+  11: 'errReadOnlyProperty',
+  12: 'errObjectNotInCatalog',
+  13: 'errCatalogNotSet',
+  14: 'errIllegalObjectId',
+  15: 'errIllegalQueryId',
+  16: 'errObjectNotFound',
+  17: 'errServerBusy',
+};
 
 export interface WorldZone {
   id: string;

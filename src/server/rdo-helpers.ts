@@ -12,16 +12,18 @@ export function cleanPayload(payload: string): string {
   let cleaned = payload.trim();
 
   // Handle res="..." format (e.g., res="#6805584" -> 6805584)
-  const resMatch = cleaned.match(/^res="([^"]*)"$/);
+  // Regex handles doubled quotes inside: res="%Hello ""World"""
+  const resMatch = cleaned.match(/^res="((?:[^"]|"")*)"$/);
   if (resMatch) {
-    cleaned = resMatch[1];
+    // Value already extracted from inside quotes — unescape and skip outer-quote removal
+    cleaned = resMatch[1].replace(/""/g, '"');
+  } else {
+    // Remove outer quotes (only when not already extracted from res="...")
+    cleaned = cleaned.replace(/^"|"$/g, '');
   }
 
-  // Remove outer quotes
-  cleaned = cleaned.replace(/^"|"$/g, '');
-
-  // Remove type prefix (#, %, @, $) if present
-  if (cleaned.length > 0 && ['#', '%', '@', '$'].includes(cleaned[0])) {
+  // Remove type prefix (#, %, @, $, ^, !, *) if present
+  if (cleaned.length > 0 && ['#', '%', '@', '$', '^', '!', '*'].includes(cleaned[0])) {
     cleaned = cleaned.substring(1);
   }
 
@@ -74,20 +76,21 @@ export function extractRevenue(line: string): string {
  */
 export function parsePropertyResponse(payload: string, propName: string): string {
   // Try to extract value using Property="value" format
-  const regex = new RegExp(`${propName}\\s*=\\s*"([^"]*)"`, 'i');
+  // Handles doubled quotes inside: Property="%Hello ""World"""
+  const regex = new RegExp(`${propName}\\s*=\\s*"((?:[^"]|"")*)"`, 'i');
   const match = payload.match(regex);
   if (match && match[1]) {
-    // Remove type prefix (#, $, %, @) if present
-    return match[1].replace(/^[$#%@]/, '');
+    // Unescape doubled quotes and remove type prefix (#, $, %, @)
+    return match[1].replace(/""/g, '"').replace(/^[$#%@]/, '');
   }
 
   // Handle case where payload starts directly with property name
   if (payload.startsWith(propName)) {
     const cleaned = payload.substring(propName.length).trim();
     // Remove = and quotes if present, then type prefix
-    const valueMatch = cleaned.match(/^=\s*"?([^"]*)"?$/);
+    const valueMatch = cleaned.match(/^=\s*"?((?:[^"]|"")*)"?$/);
     if (valueMatch) {
-      return valueMatch[1].replace(/^[$#%@]/, '');
+      return valueMatch[1].replace(/""/g, '"').replace(/^[$#%@]/, '');
     }
     return cleaned.replace(/^[$#%@]/, '');
   }
@@ -118,10 +121,10 @@ export function parseIdOfResponse(payload: string | undefined): string {
   }
 
   // Handle objid="value" format (standard idof response)
-  const objidMatch = payload.match(/objid\s*=\s*"([^"]*)"/i);
+  const objidMatch = payload.match(/objid\s*=\s*"((?:[^"]|"")*)"/i);
   if (objidMatch && objidMatch[1]) {
-    // Remove type prefix (#, $, %, @) if present
-    return objidMatch[1].replace(/^[$#%@]/, '').trim();
+    // Unescape doubled quotes and remove type prefix (#, $, %, @) if present
+    return objidMatch[1].replace(/""/g, '"').replace(/^[$#%@]/, '').trim();
   }
 
   // Fallback: clean payload and remove type prefixes

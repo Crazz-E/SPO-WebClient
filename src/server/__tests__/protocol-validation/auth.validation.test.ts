@@ -43,6 +43,7 @@ describe('Protocol Validation: connectDirectory()', () => {
   });
 
   afterEach(() => {
+    harness.assertNoViolations();
     harness.cleanup();
   });
 

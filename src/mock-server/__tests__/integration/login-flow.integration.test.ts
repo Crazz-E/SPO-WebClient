@@ -115,10 +115,10 @@ describe('Login Flow Integration', () => {
       expect(idofResult).not.toBeNull();
       expect(idofResult!.response).toContain('objid=');
 
-      // Match the OpenSession command (call, not get — per original Delphi server)
-      const openResult = rdoMock.match('C 1 sel 39751288 call RDOOpenSession "^"');
+      // Match the OpenSession command (get — zero-arg function via COM late-binding)
+      const openResult = rdoMock.match('C 1 sel 39751288 get RDOOpenSession');
       expect(openResult).not.toBeNull();
-      expect(openResult!.response).toContain('res=');
+      expect(openResult!.response).toContain('RDOOpenSession=');
     });
 
     it('world-list RDO exchanges match correctly', () => {

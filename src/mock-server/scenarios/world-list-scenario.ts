@@ -95,9 +95,9 @@ export function createWorldListScenario(
       },
       {
         id: 'wl-rdo-002',
-        request: `C 7 sel ${vars.directoryServerId} call RDOOpenSession "^"`,
-        response: `A7 res="#${vars.directorySessionId}"`,
-        matchKeys: { verb: 'sel', action: 'call', member: 'RDOOpenSession' },
+        request: `C 7 sel ${vars.directoryServerId} get RDOOpenSession`,
+        response: `A7 RDOOpenSession="#${vars.directorySessionId}"`,
+        matchKeys: { verb: 'sel', action: 'get', member: 'RDOOpenSession' },
       },
       {
         id: 'wl-rdo-003',

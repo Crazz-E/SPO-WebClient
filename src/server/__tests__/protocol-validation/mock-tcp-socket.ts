@@ -16,6 +16,7 @@ import { EventEmitter } from 'events';
 import { RdoProtocol } from '../../../server/rdo';
 import { RdoMock } from '../../../mock-server/rdo-mock';
 import { RDO_CONSTANTS } from '../../../shared/types/protocol-types';
+import type { RdoStrictValidator } from '../../../mock-server/rdo-strict-validator';
 
 /** Additional data to emit when a specific RDO member is matched */
 export interface PushTrigger {
@@ -37,6 +38,7 @@ export interface FallbackResponse {
 
 export class MockTcpSocket extends EventEmitter {
   private rdoMock: RdoMock;
+  private validator: RdoStrictValidator | null;
   private capturedCommands: string[] = [];
   private capturedWrites: string[] = [];
   private pushTriggers: PushTrigger[] = [];
@@ -47,9 +49,10 @@ export class MockTcpSocket extends EventEmitter {
   readable = true;
   destroyed = false;
 
-  constructor(rdoMock: RdoMock) {
+  constructor(rdoMock: RdoMock, validator?: RdoStrictValidator) {
     super();
     this.rdoMock = rdoMock;
+    this.validator = validator ?? null;
   }
 
   /** Add a push trigger — emits extra data when a matching command is sent */
@@ -89,6 +92,12 @@ export class MockTcpSocket extends EventEmitter {
     }
 
     const parsed = RdoProtocol.parse(stripped);
+
+    // Strict validation (non-blocking — violations collected for afterEach assertion)
+    if (this.validator && stripped.startsWith(RDO_CONSTANTS.CMD_PREFIX_CLIENT)) {
+      this.validator.validate(parsed, stripped);
+    }
+
     const match = this.rdoMock.match(stripped);
 
     if (match) {
@@ -177,6 +186,11 @@ export class MockTcpSocket extends EventEmitter {
   /** Find commands matching a member name */
   getCommandsByMember(member: string): string[] {
     return this.capturedCommands.filter(cmd => cmd.includes(member));
+  }
+
+  /** Get the strict validator (if configured) */
+  getValidator(): RdoStrictValidator | null {
+    return this.validator;
   }
 
   /** Reset captured data */

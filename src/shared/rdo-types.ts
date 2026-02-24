@@ -108,7 +108,9 @@ export class RdoValue {
     if (this._prefix === RdoTypePrefix.VOID) {
       return `"${this._prefix}"`;
     }
-    return `"${this._prefix}${this._value}"`;
+    // Escape internal double quotes per Delphi convention: " → ""
+    const escaped = String(this._value).replace(/"/g, '""');
+    return `"${this._prefix}${escaped}"`;
   }
 
   /**
@@ -169,16 +171,18 @@ export class RdoParser {
     const knownPrefixes = Object.values(RdoTypePrefix) as string[];
 
     if (knownPrefixes.includes(firstChar)) {
+      // Unescape doubled quotes per Delphi convention: "" → "
+      const value = cleaned.substring(1).replace(/""/g, '"');
       return {
         prefix: firstChar,
-        value: cleaned.substring(1)
+        value,
       };
     }
 
-    // No recognized prefix - return as-is
+    // No recognized prefix - unescape and return as-is
     return {
       prefix: '',
-      value: cleaned
+      value: cleaned.replace(/""/g, '"'),
     };
   }
 

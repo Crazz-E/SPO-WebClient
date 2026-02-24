@@ -51,7 +51,7 @@
 
 | Member | Kind | Verb | Signature | Return | Line | Notes |
 |--------|------|------|-----------|--------|------|-------|
-| `RDOOpenSession` | function | `call` | `()` | `#sessionId` | 143 | Returns TDirectorySession object ID. **NOT a property — must use `call`, not `get`** |
+| `RDOOpenSession` | function | `get` | `()` | `#sessionId` | 143 | Returns TDirectorySession object ID. Zero-arg function — legacy Voyager sends `get` via COM late-binding (server GET fallthrough dispatches to function). Response format: `RDOOpenSession="#id"` |
 
 ## TDirectorySession (DServer/DirectoryServer.pas:15)
 

@@ -58,7 +58,7 @@ describe('auth scenario', () => {
   it('RDO exchanges contain correct matchKeys', () => {
     const { rdo } = createAuthScenario();
     expect(rdo.exchanges[0].matchKeys).toEqual({ verb: 'idof', targetId: 'DirectoryServer' });
-    expect(rdo.exchanges[1].matchKeys).toEqual({ verb: 'sel', action: 'call', member: 'RDOOpenSession' });
+    expect(rdo.exchanges[1].matchKeys).toEqual({ verb: 'sel', action: 'get', member: 'RDOOpenSession' });
     expect(rdo.exchanges[2].matchKeys).toEqual({ verb: 'sel', action: 'call', member: 'RDOMapSegaUser' });
     expect(rdo.exchanges[3].matchKeys).toEqual({ verb: 'sel', action: 'call', member: 'RDOLogonUser' });
     expect(rdo.exchanges[4].matchKeys).toEqual({ verb: 'sel', action: 'call', member: 'RDOEndSession' });

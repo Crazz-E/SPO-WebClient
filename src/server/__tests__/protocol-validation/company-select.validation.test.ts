@@ -27,6 +27,7 @@ jest.mock('node-fetch', () => ({
 /// <reference path="../../__tests__/matchers/rdo-matchers.d.ts" />
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { RdoMock } from '../../../mock-server/rdo-mock';
+import { RdoStrictValidator } from '../../../mock-server/rdo-strict-validator';
 import {
   createSelectCompanyScenario,
   CAPTURED_COOKIE,
@@ -39,13 +40,23 @@ import { DEFAULT_VARIABLES } from '../../../mock-server/scenarios/scenario-varia
 
 describe('Protocol Validation: selectCompany()', () => {
   let rdoMock: RdoMock;
+  let validator: RdoStrictValidator;
   const scenario = createSelectCompanyScenario();
   const worldContextId = DEFAULT_VARIABLES.clientViewId; // '8161308'
   const tycoonId = 22;
 
   beforeEach(() => {
     rdoMock = new RdoMock();
+    validator = new RdoStrictValidator();
     rdoMock.addScenario(scenario.rdo);
+    validator.addScenario(scenario.rdo);
+  });
+
+  afterEach(() => {
+    const errors = validator.getErrors();
+    if (errors.length > 0) {
+      throw new Error(validator.formatReport());
+    }
   });
 
   describe('EnableEvents SET command', () => {
@@ -103,6 +114,7 @@ describe('Protocol Validation: selectCompany()', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('sc-rdo-002');
     });
@@ -145,6 +157,7 @@ describe('Protocol Validation: selectCompany()', () => {
       });
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('sc-rdo-003');
     });

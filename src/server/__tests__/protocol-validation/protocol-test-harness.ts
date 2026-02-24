@@ -12,6 +12,11 @@
 import { MockTcpSocket, PushTrigger, FallbackResponse } from './mock-tcp-socket';
 import { RdoMock } from '../../../mock-server/rdo-mock';
 import { HttpMock } from '../../../mock-server/http-mock';
+import {
+  RdoStrictValidator,
+  ViolationSeverity,
+} from '../../../mock-server/rdo-strict-validator';
+import type { RdoViolation, StrictValidatorConfig } from '../../../mock-server/rdo-strict-validator';
 import type { RdoScenario } from '../../../mock-server/types/rdo-exchange-types';
 import type { HttpScenario } from '../../../mock-server/types/http-exchange-types';
 import type { StarpeaceSession } from '../../spo_session';
@@ -24,6 +29,8 @@ export interface SocketConfig {
   pushTriggers?: PushTrigger[];
   /** Fallback responses for commands not in scenarios */
   fallbackResponses?: FallbackResponse[];
+  /** Disable strict validation for this socket (default: false = validation enabled) */
+  disableStrictValidation?: boolean;
 }
 
 /** Configuration for creating a test harness */
@@ -36,6 +43,8 @@ export interface HarnessConfig {
   socketConfigs: SocketConfig[];
   /** HTTP scenarios for node-fetch mock (shared across all requests) */
   httpScenarios?: HttpScenario[];
+  /** Global strict validation config overrides */
+  strictValidation?: Partial<StrictValidatorConfig>;
 }
 
 /** The test harness instance */
@@ -52,6 +61,14 @@ export interface ProtocolTestHarness {
   getAllCapturedCommands(): string[];
   /** Get captured commands from a specific socket (by creation order) */
   getCapturedCommands(socketIndex: number): string[];
+  /** Get all strict validation violations from all sockets combined */
+  getAllViolations(): RdoViolation[];
+  /** Get violations from a specific socket's validator */
+  getViolations(socketIndex: number): RdoViolation[];
+  /** Assert no strict validation errors — throws with AI-friendly report if any exist */
+  assertNoViolations(): void;
+  /** Format a full violation report */
+  getViolationReport(): string;
   /** Clean up listeners and state */
   cleanup(): void;
 }
@@ -66,6 +83,7 @@ export function createProtocolTestHarness(config: HarnessConfig): ProtocolTestHa
   const httpMock = new HttpMock();
   const createdSockets: MockTcpSocket[] = [];
   const rdoMocks: RdoMock[] = [];
+  const validators: RdoStrictValidator[] = [];
   let socketCreateCount = 0;
 
   // Load HTTP scenarios
@@ -90,7 +108,33 @@ export function createProtocolTestHarness(config: HarnessConfig): ProtocolTestHa
     }
     rdoMocks.push(rdoMock);
 
-    const socket = new MockTcpSocket(rdoMock);
+    // Create per-socket strict validator
+    let validator: RdoStrictValidator | undefined;
+    if (!socketConfig?.disableStrictValidation) {
+      // Auto-exempt fallback response members from strict validation
+      const exemptMembers = new Set<string>();
+      if (socketConfig?.fallbackResponses) {
+        for (const fb of socketConfig.fallbackResponses) {
+          exemptMembers.add(fb.member);
+        }
+      }
+
+      validator = new RdoStrictValidator({
+        enabled: true,
+        exemptMembers,
+        ...config.strictValidation,
+      });
+
+      // Load same scenarios into validator
+      if (socketConfig) {
+        for (const scenario of socketConfig.rdoScenarios) {
+          validator.addScenario(scenario);
+        }
+      }
+    }
+    validators.push(validator ?? new RdoStrictValidator({ enabled: false }));
+
+    const socket = new MockTcpSocket(rdoMock, validator);
 
     // Apply push triggers
     if (socketConfig?.pushTriggers) {
@@ -189,12 +233,50 @@ export function createProtocolTestHarness(config: HarnessConfig): ProtocolTestHa
       return createdSockets[socketIndex].getCapturedCommands();
     },
 
+    getAllViolations(): RdoViolation[] {
+      return validators.flatMap(v => v.getViolations());
+    },
+
+    getViolations(socketIndex: number): RdoViolation[] {
+      if (socketIndex >= validators.length) return [];
+      return validators[socketIndex].getViolations();
+    },
+
+    assertNoViolations(): void {
+      const allViolations = validators.flatMap(v => v.getViolations());
+      const errors = allViolations.filter(
+        v => v.severity === ViolationSeverity.ERROR
+      );
+      if (errors.length > 0) {
+        const reports = validators
+          .filter(v => v.hasErrors())
+          .map(v => v.formatReport());
+        throw new Error(
+          `RDO STRICT VALIDATION: ${errors.length} error(s) detected.\n\n` +
+          reports.join('\n\n===\n\n')
+        );
+      }
+    },
+
+    getViolationReport(): string {
+      return validators
+        .map((v, i) => {
+          const report = v.formatReport();
+          return report !== 'No RDO strict validation violations.'
+            ? `Socket ${i}: ${report}`
+            : '';
+        })
+        .filter(Boolean)
+        .join('\n\n===\n\n') || 'No RDO strict validation violations.';
+    },
+
     cleanup(): void {
       for (const socket of createdSockets) {
         socket.removeAllListeners();
       }
       createdSockets.length = 0;
       rdoMocks.length = 0;
+      validators.length = 0;
       socketCreateCount = 0;
       httpMock.reset();
     },

@@ -29,6 +29,7 @@ jest.mock('node-fetch', () => ({
 /// <reference path="../../__tests__/matchers/rdo-matchers.d.ts" />
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { RdoMock } from '../../../mock-server/rdo-mock';
+import { RdoStrictValidator } from '../../../mock-server/rdo-strict-validator';
 import { RdoProtocol } from '../../../server/rdo';
 import { RdoVerb, RdoAction } from '../../../shared/types/protocol-types';
 import { RdoParser, RdoTypePrefix } from '../../../shared/rdo-types';
@@ -48,11 +49,21 @@ describe('Protocol Validation: buildRoad() + placeBuilding()', () => {
 
   describe('CreateCircuitSeg command format', () => {
     let rdoMock: RdoMock;
+    let validator: RdoStrictValidator;
     const roadScenario = createBuildRoadsScenario();
 
     beforeEach(() => {
       rdoMock = new RdoMock();
+      validator = new RdoStrictValidator();
       rdoMock.addScenario(roadScenario.rdo);
+      validator.addScenario(roadScenario.rdo);
+    });
+
+    afterEach(() => {
+      const errors = validator.getErrors();
+      if (errors.length > 0) {
+        throw new Error(validator.formatReport());
+      }
     });
 
     /**
@@ -102,6 +113,7 @@ describe('Protocol Validation: buildRoad() + placeBuilding()', () => {
       );
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
 
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('br-rdo-001');
@@ -195,11 +207,21 @@ describe('Protocol Validation: buildRoad() + placeBuilding()', () => {
 
   describe('NewFacility command format', () => {
     let rdoMock: RdoMock;
+    let validator: RdoStrictValidator;
     const buildMenuScenario = createBuildMenuScenario();
 
     beforeEach(() => {
       rdoMock = new RdoMock();
+      validator = new RdoStrictValidator();
       rdoMock.addScenario(buildMenuScenario.rdo);
+      validator.addScenario(buildMenuScenario.rdo);
+    });
+
+    afterEach(() => {
+      const errors = validator.getErrors();
+      if (errors.length > 0) {
+        throw new Error(validator.formatReport());
+      }
     });
 
     /**
@@ -235,6 +257,7 @@ describe('Protocol Validation: buildRoad() + placeBuilding()', () => {
       );
 
       const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
 
       expect(result).not.toBeNull();
       expect(result!.exchange.id).toBe('bm-rdo-001');

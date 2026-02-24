@@ -5,6 +5,11 @@
  * Type declarations are in rdo-matchers.d.ts
  */
 
+import { RdoStrictValidator } from '../../../mock-server/rdo-strict-validator';
+import { RdoProtocol } from '../../../server/rdo';
+import type { RdoScenario } from '../../../mock-server/types/rdo-exchange-types';
+import type { StrictValidatorConfig } from '../../../mock-server/rdo-strict-validator';
+
 export const rdoMatchers = {
   /**
    * Checks if a command array contains an RDO call to the specified method
@@ -138,6 +143,39 @@ export const rdoMatchers = {
           : `Response matches RDO format`
         : `Response does not match RDO format:\n  ${response}\n` +
           `Expected format: A<RID> res=<values>; or A<RID> res;`
+    };
+  },
+
+  /**
+   * Validates that a scenario's own request strings pass strict RDO validation.
+   * Creates a validator, loads the scenario, parses each exchange.request through
+   * RdoProtocol.parse(), and validates against the exchange's matchKeys.
+   *
+   * This catches matchKey/request inconsistencies (e.g., matchKeys say 'get' but
+   * the request string says 'call').
+   */
+  toPassStrictRdoValidation(
+    scenario: RdoScenario,
+    config?: Partial<StrictValidatorConfig>
+  ) {
+    const validator = new RdoStrictValidator(config);
+    validator.addScenario(scenario);
+
+    for (const exchange of scenario.exchanges) {
+      if (exchange.pushOnly || !exchange.request) continue;
+      const parsed = RdoProtocol.parse(exchange.request);
+      validator.validate(parsed, exchange.request);
+    }
+
+    const errors = validator.getErrors();
+    const pass = errors.length === 0;
+
+    return {
+      pass,
+      message: () => pass
+        ? `Scenario '${scenario.name}' passes strict RDO validation`
+        : `Scenario '${scenario.name}' has ${errors.length} strict validation error(s):\n` +
+          validator.formatReport()
     };
   }
 };

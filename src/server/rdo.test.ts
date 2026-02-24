@@ -73,6 +73,28 @@ describe('RdoFramer', () => {
       const packets = framer.ingest('Complete;');
       expect(packets).toEqual(['PartialComplete']);
     });
+
+    it('should NOT split on semicolons inside quoted strings', () => {
+      const framer = new RdoFramer();
+      const packets = framer.ingest('A1234 res="%Status; OK";');
+      expect(packets).toHaveLength(1);
+      expect(packets[0]).toBe('A1234 res="%Status; OK"');
+    });
+
+    it('should split correctly with quoted semicolons and real delimiters', () => {
+      const framer = new RdoFramer();
+      const packets = framer.ingest('A1 res="%a;b";A2 res="#42";');
+      expect(packets).toHaveLength(2);
+      expect(packets[0]).toBe('A1 res="%a;b"');
+      expect(packets[1]).toBe('A2 res="#42"');
+    });
+
+    it('should handle semicolons in multi-value quoted strings', () => {
+      const framer = new RdoFramer();
+      const packets = framer.ingest('A1 Name="%Test;Corp";');
+      expect(packets).toHaveLength(1);
+      expect(packets[0]).toBe('A1 Name="%Test;Corp"');
+    });
   });
 });
 
@@ -130,6 +152,64 @@ describe('RdoProtocol.parse()', () => {
       const packet = RdoProtocol.parse('A2222');
       expect(packet.rid).toBe(2222);
       expect(packet.payload).toBe('');
+    });
+  });
+
+  describe('RDO error code parsing (ErrorCodes.pas)', () => {
+    it('should detect "error 0" as errNoError', () => {
+      const packet = RdoProtocol.parse('A100 error 0');
+      expect(packet.type).toBe('RESPONSE');
+      expect(packet.rid).toBe(100);
+      expect(packet.errorCode).toBe(0);
+      expect(packet.errorName).toBe('errNoError');
+      expect(packet.payload).toBe('error 0');
+    });
+
+    it('should detect "error 5" as errUnexistentMethod', () => {
+      const packet = RdoProtocol.parse('A200 error 5');
+      expect(packet.errorCode).toBe(5);
+      expect(packet.errorName).toBe('errUnexistentMethod');
+    });
+
+    it('should detect "error 8" as errQueryTimedOut', () => {
+      const packet = RdoProtocol.parse('A300 error 8');
+      expect(packet.errorCode).toBe(8);
+      expect(packet.errorName).toBe('errQueryTimedOut');
+    });
+
+    it('should detect "error 17" as errServerBusy', () => {
+      const packet = RdoProtocol.parse('A400 error 17');
+      expect(packet.errorCode).toBe(17);
+      expect(packet.errorName).toBe('errServerBusy');
+    });
+
+    it('should detect "error 2" as errIllegalObject', () => {
+      const packet = RdoProtocol.parse('A500 error 2');
+      expect(packet.errorCode).toBe(2);
+      expect(packet.errorName).toBe('errIllegalObject');
+    });
+
+    it('should handle unknown error codes gracefully', () => {
+      const packet = RdoProtocol.parse('A600 error 99');
+      expect(packet.errorCode).toBe(99);
+      expect(packet.errorName).toBe('unknownError(99)');
+    });
+
+    it('should NOT treat normal payloads as errors', () => {
+      const packet = RdoProtocol.parse('A700 res="#42"');
+      expect(packet.errorCode).toBeUndefined();
+      expect(packet.errorName).toBeUndefined();
+    });
+
+    it('should NOT treat partial "error" string as error code', () => {
+      const packet = RdoProtocol.parse('A800 error message text');
+      expect(packet.errorCode).toBeUndefined();
+    });
+
+    it('should be case-insensitive for "Error" vs "error"', () => {
+      const packet = RdoProtocol.parse('A900 Error 5');
+      expect(packet.errorCode).toBe(5);
+      expect(packet.errorName).toBe('errUnexistentMethod');
     });
   });
 

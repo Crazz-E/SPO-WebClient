@@ -136,6 +136,7 @@ describe('Protocol Validation: loginWorld()', () => {
   });
 
   afterEach(() => {
+    harness.assertNoViolations();
     harness.cleanup();
   });
 
