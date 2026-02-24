@@ -1,9 +1,9 @@
 # SPO-Original Delphi Reference Index
 
-> **Source path:** `C:\Users\Crazz\Documents\SPO\SPO-Original`
+> **Source path:** See `delphi-archaeologist` skill for current codebase path
 >
 > Pre-indexed reference for RDO conformity checking. Consult this before implementing any RDO request.
-> See the 8-step checklist in [CLAUDE.md](../CLAUDE.md) under "RDO conformity check".
+> The 8-step conformity checklist is in the `rdo-protocol` skill (auto-loads for RDO work).
 
 ## RDO Dispatch Rules (from RDOObjectServer.pas)
 

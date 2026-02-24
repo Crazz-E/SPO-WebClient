@@ -10,11 +10,13 @@
 - Modify these files without discussion: `src/shared/rdo-types.ts`, `src/server/rdo.ts`, `src/__fixtures__/*`
 - Load screenshots directly in the main context during debug/E2E sessions — use sub-agent delegation (see below)
 
+**RDO conformity:** When adding/modifying RDO requests, the `rdo-protocol` skill auto-loads with the 8-step conformity checklist, dispatch rules, and Delphi type mappings.
+
 **Screenshot analysis (mandatory for debug/E2E sessions):**
 Never read screenshot images in the main conversation context — each costs ~3-5MB and saturates the 20MB limit. Instead:
-1. Enable debug overlay first: `browser_press_key("d")` + toggle keys (`3`=concrete, `4`=water grid, `5`=roads) — labels all visible tiles with coordinates, IDs, and color-coded diamonds. See [doc/E2E-TESTING.md](doc/E2E-TESTING.md) for key sequences per scenario.
+1. Enable debug overlay first: `browser_press_key("d")` + toggle keys (`3`=concrete, `4`=water grid, `5`=roads)
 2. Save to `screenshots/` directory (git-ignored): `browser_take_screenshot(filename: "screenshots/descriptive-name.png")`
-3. Delegate to sub-agent: `Task(subagent_type: "general-purpose", prompt: "Read screenshots/<name>.png. Debug overlay active: [describe toggles]. Check: 1. <criterion>... Reply PASS/FAIL per criterion.")` — include the color legend in the prompt so the sub-agent knows Green=building, Blue=junction, Orange=road.
+3. Delegate to sub-agent: `Task(subagent_type: "general-purpose", prompt: "Read screenshots/<name>.png. Debug overlay active: [describe toggles]. Check: 1. <criterion>... Reply PASS/FAIL per criterion.")` — color legend: Green=building, Blue=junction, Orange=road.
 4. Only the text verdict returns (~100 bytes vs ~3-5MB per image)
 
 **Critical patterns & gotchas:**
@@ -24,21 +26,7 @@ Never read screenshot images in the main conversation context — each costs ~3-
 - Concrete tiles stored as `"${x},${y}"` (col,row) not `"${i},${j}"` (row,col)
 - ROAD_TYPE constants are `as const` — use explicit `number` type annotation for local vars
 - `worldContextId` = world operations (map focus, queries); `interfaceServerId` = building operations
-- WebSocket: Client→Server = `WsReq*` types, Server→Client = `WsResp*` types; use `sendResponse()`/`sendError()`
-
-**RDO conformity check (mandatory for new RDO implementations):**
-When adding/modifying RDO requests in `spo_session.ts`, mock scenarios, or protocol tests, follow this checklist. Full reference: [doc/spo-original-reference.md](doc/spo-original-reference.md)
-
-1. **Look up method** in `doc/spo-original-reference.md` server object tables
-   - If not indexed: search SPO-Original Delphi source (see Quick-Find Paths in reference doc), then add the entry
-2. **Verify verb**: `published property` → `get`/`set` | `published function/procedure` → `call`
-   - TRAP: `get` on a function works (fallthrough in RDOObjectServer.pas) but is semantically WRONG
-3. **Verify param types**: Match Delphi types → RDO prefixes (`widestring`→`%`, `integer`→`#`, `double`→`@`, `wordbool`→`#`)
-4. **Verify param order & count**: Match the Delphi declaration exactly
-5. **Verify separator**: `^` for call-with-return, `*` for void procedures
-6. **Verify return type**: function → olevariant (check actual content prefix), procedure → void (`*`)
-7. **Check push behavior**: Does the method trigger server pushes? (e.g., `RegisterEventsById` fires InitClient)
-8. **Update reference**: Add any new discoveries to `doc/spo-original-reference.md`
+- WebSocket: Client->Server = `WsReq*` types, Server->Client = `WsResp*` types; use `sendResponse()`/`sendError()`
 
 ## Project
 
@@ -46,7 +34,7 @@ When adding/modifying RDO requests in `spo_session.ts`, mock scenarios, or proto
 TypeScript + Node.js + WebSocket + Canvas 2D Isometric | RDO protocol | Alpha 0.1.0
 
 ```
-Browser Client ──WebSocket──> Node.js Gateway ──RDO Protocol──> Game Servers
+Browser Client --WebSocket--> Node.js Gateway --RDO Protocol--> Game Servers
 ```
 
 ## Environment
@@ -78,24 +66,12 @@ Project-level MCP config is in [.mcp.json](.mcp.json) (committed to git). All de
 | **Playwright** | `@playwright/mcp` | Browser automation for E2E testing |
 | **Context7** | `@upstash/context7-mcp` | Live documentation lookup (TS, Jest, Node.js, etc.) |
 
-**Setup (one-time per dev):**
-
-```bash
-# Set GitHub token (required for GitHub MCP)
-# Generate at: https://github.com/settings/tokens (scopes: repo, read:org)
-export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_your_token_here"
-
-# Or add to your shell profile (~/.bashrc, ~/.zshrc, etc.) for persistence
-```
-
-**Note:** Chrome/browser automation is built into Claude Code (`claude --chrome`), no MCP needed.
-
 ## Commands
 
 ```bash
 npm run dev          # Build + start server (port 8080)
 npm run build        # Build all (server + client)
-npm test             # Run Jest tests (~750 tests)
+npm test             # Run Jest tests (~1666 tests)
 npm run test:watch   # Watch mode
 npm run test:coverage # Coverage report
 ```
@@ -105,35 +81,38 @@ npm run test:coverage # Coverage report
 ```
 src/
 ├── client/
-│   ├── client.ts                        # Main controller
-│   ├── renderer/                        # Canvas 2D isometric engine
-│   │   ├── isometric-map-renderer.ts    # Orchestrator (terrain+concrete+roads+buildings+overlays)
-│   │   ├── isometric-terrain-renderer.ts # Chunk-based terrain (32×32 tiles, LRU, 4 zoom levels)
-│   │   ├── chunk-cache.ts              # OffscreenCanvas chunk pre-rendering
-│   │   ├── coordinate-mapper.ts        # Isometric projection + 90° rotation (N/E/S/W)
-│   │   ├── vegetation-flat-mapper.ts   # Auto-replaces vegetation near buildings/roads
-│   │   ├── touch-handler-2d.ts         # Mobile gestures (pan, pinch, rotation, double-tap)
-│   │   ├── texture-cache.ts            # Terrain texture LRU (1024 max)
-│   │   ├── texture-atlas-cache.ts      # Terrain atlas PNG+JSON
-│   │   ├── game-object-texture-cache.ts # Road/building/concrete textures + object atlases (2048 max)
-│   │   ├── road-texture-system.ts      # Road topology + INI loading
-│   │   ├── concrete-texture-system.ts  # Concrete logic + INI loading
-│   │   └── painter-algorithm.ts        # Back-to-front sort by (i+j)
-│   └── ui/                             # UI components (entry: map-navigation-ui.ts)
+│   ├── client.ts              # Main controller
+│   ├── renderer/              # Canvas 2D isometric engine
+│   └── ui/                    # UI components (entry: map-navigation-ui.ts)
 ├── server/
-│   ├── server.ts                       # HTTP/WebSocket server + API endpoints
-│   ├── spo_session.ts                  # RDO session manager
-│   ├── rdo.ts                          # RDO protocol parser
-│   ├── texture-alpha-baker.ts          # BMP→PNG alpha pre-baking
-│   ├── atlas-generator.ts             # Terrain/object atlas generator
-│   ├── terrain-chunk-renderer.ts      # Server-side chunk pre-rendering
-│   └── services/                      # Background services (ServiceRegistry)
+│   ├── server.ts              # HTTP/WebSocket server + API endpoints
+│   ├── spo_session.ts         # RDO session manager
+│   ├── rdo.ts                 # RDO protocol parser
+│   └── services/              # Background services (ServiceRegistry)
 └── shared/
-    ├── rdo-types.ts                   # RDO type system (CRITICAL)
-    ├── error-utils.ts                 # toErrorMessage(err: unknown)
-    ├── types/                         # Type definitions
-    └── building-details/              # Property templates
+    ├── rdo-types.ts           # RDO type system (CRITICAL)
+    ├── error-utils.ts         # toErrorMessage(err: unknown)
+    ├── types/                 # Type definitions
+    └── building-details/      # Property templates
 ```
+
+## Project Skills
+
+11 project-specific skills auto-load contextually when working on relevant files. Each skill contains the key rules, gotchas, and references for its subsystem — no need to manually consult docs.
+
+| Skill | Auto-loads for |
+|-------|---------------|
+| `rdo-protocol` | RDO commands, spo_session.ts, rdo.ts, protocol work |
+| `building-inspector` | Building details, facility inspector, property templates |
+| `road-rendering` | Road topology, textures, road-texture-system.ts |
+| `terrain-rendering` | Terrain, concrete, chunk cache, texture pipeline |
+| `mock-server` | Mock server, test scenarios, capture files |
+| `user-profile-mail` | Profile panel, mail system, mail RDO |
+| `cab-extraction` | CAB files, asset extraction, 7zip |
+| `delphi-archaeologist` | SPO-Original Delphi codebase reverse-engineering |
+| `e2e-test` | E2E testing with Playwright MCP |
+| `dependency-audit` | Vulnerability scanning, license compliance |
+| `dependency-updater` | Dependency updates, outdated packages |
 
 ## RDO Protocol
 
@@ -170,7 +149,7 @@ const { prefix, value } = RdoParser.extract(token);
 
 ## Testing
 
-**Convention:** `module.ts` → `module.test.ts` (same directory)
+**Convention:** `module.ts` -> `module.test.ts` (same directory)
 
 ```bash
 npm test -- rdo-types              # Specific file
@@ -179,7 +158,7 @@ npm test -- --testNamePattern="X"  # Specific suite
 
 **Custom matchers:** `toContainRdoCommand()`, `toMatchRdoCallFormat()`, `toMatchRdoSetFormat()`, `toHaveRdoTypePrefix()`
 
-**Current status:** 23 suites, ~750 tests (721 passed, 10 pre-existing failures in building-data-service/cab-extractor, 17 skipped)
+**Current status:** 56 suites, ~1666 tests, all passing
 
 ## API Endpoints
 
@@ -206,27 +185,6 @@ Full procedure, credentials, and selectors: **[doc/E2E-TESTING.md](doc/E2E-TESTI
 Credentials: `SPO_test3` / `test3` / BETA zone / Shamba world / President of Shamba company
 **These credentials are LOCKED — never change without explicit developer approval.**
 
-## Documentation Index
-
-Read the relevant doc when working on a specific system:
-
-| Working on... | Read |
-|---------------|------|
-| RDO protocol, commands, parsing | [doc/rdo_typing_system.md](doc/rdo_typing_system.md) |
-| Building properties (256+ props) | [doc/building_details_protocol.md](doc/building_details_protocol.md) |
-| Road rendering | [doc/road_rendering.md](doc/road_rendering.md) |
-| Road internals (reverse-engineered) | [doc/road_rendering_reference.md](doc/road_rendering_reference.md) |
-| Road texture↔screen mapping | [doc/ROAD-TEXTURE-MAPPING.md](doc/ROAD-TEXTURE-MAPPING.md) |
-| Concrete textures | [doc/concrete_rendering.md](doc/concrete_rendering.md) |
-| Terrain texture pipeline | [doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md](doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md) |
-| CAB extraction | [doc/CAB-EXTRACTION.md](doc/CAB-EXTRACTION.md) |
-| E2E testing procedure | [doc/E2E-TESTING.md](doc/E2E-TESTING.md) |
-| Project history & backlog | [doc/BACKLOG.md](doc/BACKLOG.md) |
-| Raw RDO packet captures | [doc/building_details_rdo.txt](doc/building_details_rdo.txt) |
-| Mock server / adding scenarios | [doc/mock-server-guide.md](doc/mock-server-guide.md) |
-| RDO conformity / Delphi source index | [doc/spo-original-reference.md](doc/spo-original-reference.md) |
-| Facility inspector tabs (legacy Voyager) | [doc/facility-tabs-reference.md](doc/facility-tabs-reference.md) |
-
 ## Git Conventions
 
 **Branch:** `feature/`, `fix/`, `refactor/`, `doc/` + description
@@ -241,89 +199,6 @@ Read the relevant doc when working on a specific system:
 | `textures` | Extract CAB textures | update |
 | `mapData` | Map data caching | update |
 | `terrainChunks` | Server-side chunk pre-rendering | textures, mapData |
-
-## Installed Skills
-
-**Total: 23 skills** | Updated: 2026-02-24 | See [SKILLS_SECURITY_REPORT.md](.claude/SKILLS_SECURITY_REPORT.md) for details
-
-| Skill | Category | Purpose | Stars |
-|-------|----------|---------|-------|
-| `typescript` | Language | Strict mode, generics, utility types | 12,990 |
-| `nodejs-backend` | Backend | Async/await, layered architecture, DI | 28,683 |
-| `jest-testing` | Testing | Vitest + Jest patterns, mocking, coverage | 97,659 |
-| `security-auditor` | Security | OWASP Top 10, XSS/SQLi/CSRF detection | 1,367 |
-| `memory-optimization` | Performance | Memory profiling, leak detection | 1,367 |
-| `protocol-reverse-engineering` | Protocol | Network protocol analysis (for RDO) | 28,683 |
-| `web-performance` | Performance | Core Web Vitals, caching, runtime | 20,474 |
-| `git-workflow` | Git | Conventional commits, PR workflows | 1,036 |
-| `debugging` | Debugging | Systematic diagnosis, root cause analysis | 95,384 |
-| `e2e-testing` | Testing | Playwright patterns, visual regression | 46,711 |
-| `refactoring` | Quality | Extract/inline patterns, SOLID | 9,848 |
-| `claude-md-improver` | Claude | CLAUDE.md audit & improvement (Official Anthropic) | 7,492 |
-| `claude-code-workflow` | Claude | AI-assisted dev workflow, prompting strategies | 7 |
-| `context-master` | Context | Universal context mgmt, saves 62% context | 13 |
-| `agentic-jumpstart-testing` | Testing | Playwright E2E + Vitest unit test patterns | 21 |
-| `mobile-design` | Mobile | Mobile-first design thinking for iOS/Android | 20,474 |
-| `mobile-ux-optimizer` | Mobile | Touch interfaces, responsive layouts, PWA | 34 |
-| `docs-codebase` | Docs | README, API docs, ADRs, changelogs, technical writing | 30 |
-| `r3f-performance` | Rendering | LOD, frustum culling, instancing, draw call reduction | 6 |
-| `web-games` | Game Dev | Browser game development, WebGPU, PWA patterns | 0 |
-| `webgl-expert` | Rendering | WebGL API, shaders (GLSL), canvas rendering, GPU | 8 |
-| `dependency-audit` | Security | Vulnerability scanning, license compliance, supply chain security | 13,893 |
-| `dependency-updater` | Dependencies | Smart updates, auto-detect project type, safe MINOR/PATCH, prompt MAJOR | 21,069 |
-
-## SkillsMP API
-
-**All Claude skill searches must use the SkillsMP.com API.**
-
-API Key: `sk_live_skillsmp_Y-DcREuip4XIpakL7dMNRMVZvQSO81aqE6JI-8LODBg` (not confidential, safe to commit)
-
-### Endpoints
-
-**Keyword Search:**
-```bash
-GET https://skillsmp.com/api/v1/skills/search?q=<query>&page=1&limit=20&sortBy=stars
-```
-
-**AI Semantic Search:**
-```bash
-GET https://skillsmp.com/api/v1/skills/ai-search?q=<query>
-```
-
-### Example Usage
-
-```bash
-# Keyword search
-curl -X GET "https://skillsmp.com/api/v1/skills/search?q=typescript" \
-  -H "Authorization: Bearer sk_live_skillsmp_Y-DcREuip4XIpakL7dMNRMVZvQSO81aqE6JI-8LODBg"
-
-# AI semantic search
-curl -X GET "https://skillsmp.com/api/v1/skills/ai-search?q=How+to+optimize+isometric+rendering" \
-  -H "Authorization: Bearer sk_live_skillsmp_Y-DcREuip4XIpakL7dMNRMVZvQSO81aqE6JI-8LODBg"
-```
-
-### Response Format
-
-```json
-{
-  "success": true,
-  "data": {
-    "skills": [...],
-    "total": 42,
-    "page": 1,
-    "limit": 20
-  }
-}
-```
-
-### Error Codes
-
-| Code | HTTP | Description |
-|------|------|-------------|
-| `MISSING_API_KEY` | 401 | API key not provided |
-| `INVALID_API_KEY` | 401 | Invalid API key |
-| `MISSING_QUERY` | 400 | Missing required query parameter |
-| `INTERNAL_ERROR` | 500 | Internal server error |
 
 ## Troubleshooting
 

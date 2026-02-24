@@ -20,7 +20,7 @@ RDO (Remote Data Objects) is SPO's custom text-based RPC protocol. It exposes De
 
 ### 1.1 Wire Framing
 
-Messages are **semicolon-terminated text strings** over raw TCP. There are no length prefixes, no binary headers — just UTF-8/ANSI text delimited by `;`.
+Messages are **semicolon-terminated text strings** over raw TCP. There are no length prefixes, no binary headers — just ANSI/Latin-1 text delimited by `;`.
 
 ```
 ┌─────────────────────────────────────────────────────────┐

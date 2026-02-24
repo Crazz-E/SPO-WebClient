@@ -1,7 +1,7 @@
 ---
 name: e2e-test
 description: Run E2E tests with Playwright MCP (complete workflow from server start to cleanup)
-user-invocable: true
+user-invokable: true
 disable-model-invocation: true
 ---
 
@@ -11,7 +11,7 @@ Automates the complete end-to-end testing workflow using Playwright MCP for brow
 
 ## Overview
 
-This skill orchestrates the full E2E test lifecycle documented in [doc/E2E-TESTING.md](../../doc/E2E-TESTING.md):
+This skill orchestrates the full E2E test lifecycle documented in [doc/E2E-TESTING.md](../../../doc/E2E-TESTING.md):
 1. Start dev server (background)
 2. Wait for server ready
 3. Execute login scenario with MANDATORY credentials
@@ -226,6 +226,6 @@ A test passes when:
 
 ## References
 
-- Full E2E testing procedure: [doc/E2E-TESTING.md](../../doc/E2E-TESTING.md)
-- Protected files and rules: [CLAUDE.md](../../CLAUDE.md)
-- RDO protocol details: [doc/rdo_typing_system.md](../../doc/rdo_typing_system.md)
+- Full E2E testing procedure: [doc/E2E-TESTING.md](../../../doc/E2E-TESTING.md)
+- Protected files and rules: [CLAUDE.md](../../../CLAUDE.md)
+- RDO protocol details: [doc/rdo_typing_system.md](../../../doc/rdo_typing_system.md)

@@ -1,7 +1,7 @@
 ---
 name: delphi-archaeologist
 description: Analyze SPO-Original Delphi 5 codebase to understand systems and document them for the WebClient knowledge base. Two modes — Explore (understand how X works) and Document (write formal docs for subsystem Y).
-user-invocable: true
+user-invokable: true
 disable-model-invocation: false
 metadata:
   version: 1.0.0
