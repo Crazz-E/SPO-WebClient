@@ -17,6 +17,7 @@ export class LoginUI {
   private onDirectoryConnect: ((username: string, password: string, zonePath?: string) => void) | null = null;
   private onWorldSelect: ((worldName: string) => void) | null = null;
   private onCompanySelect: ((companyId: string) => void) | null = null;
+  private onCreateCompany: (() => void) | null = null;
 
   constructor() {
     this.uiLoginPanel = document.getElementById('login-panel')!;
@@ -47,6 +48,10 @@ export class LoginUI {
    */
   public setOnCompanySelect(callback: (companyId: string) => void) {
     this.onCompanySelect = callback;
+  }
+
+  public setOnCreateCompany(callback: () => void) {
+    this.onCreateCompany = callback;
   }
 
   /**
@@ -301,6 +306,18 @@ export class LoginUI {
         this.uiCompanyList.appendChild(card);
       });
     });
+
+    // "Create New Company" button
+    const createBtn = document.createElement('div');
+    createBtn.className = 'company-card';
+    createBtn.innerHTML = `<div class="company-name" style="text-align: center; color: var(--primary-blue, #3b82f6);">+ Create New Company</div>`;
+    createBtn.style.cssText = 'border: 2px dashed var(--primary-blue, #3b82f6); cursor: pointer; opacity: 0.8; margin-top: 8px;';
+    createBtn.onclick = () => {
+      if (this.onCreateCompany) {
+        this.onCreateCompany();
+      }
+    };
+    this.uiCompanyList.appendChild(createBtn);
   }
 
 

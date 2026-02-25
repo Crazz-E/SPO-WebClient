@@ -618,6 +618,70 @@ public async selectCompany(companyId: string): Promise<void> {
 }
 
 /**
+ * Create a new company via RDO NewCompany.
+ * Delphi: function RDONewCompany(username, name, clustername: widestring): OleVariant;
+ * Returns "[CompanyName,CompanyId]" on success.
+ */
+public async createCompany(
+  companyName: string,
+  cluster: string
+): Promise<{ success: boolean; companyName: string; companyId: string; message?: string }> {
+  if (!this.worldContextId) {
+    return { success: false, companyName: '', companyId: '', message: 'Not connected to world' };
+  }
+
+  const username = this.cachedUsername || '';
+  this.log.debug(`[Session] Creating company: "${companyName}" in cluster "${cluster}" for user "${username}"`);
+
+  try {
+    const packet = await this.sendRdoRequest('world', {
+      verb: RdoVerb.SEL,
+      targetId: this.worldContextId,
+      action: RdoAction.CALL,
+      member: 'NewCompany',
+      separator: '"^"',
+      args: [`%${username}`, `%${companyName}`, `%${cluster}`]
+    });
+
+    const payload = packet.payload || '';
+
+    // Success: res="%[CompanyName,CompanyId]"
+    const resMatch = /res="%(.*)"/.exec(payload);
+    if (resMatch) {
+      const resultStr = resMatch[1];
+      const companyMatch = /^\[(.+),(\d+)]$/.exec(resultStr);
+      if (companyMatch) {
+        const newName = companyMatch[1];
+        const newId = companyMatch[2];
+        this.log.info(`[Session] Company created: "${newName}" (ID: ${newId})`);
+        this.availableCompanies.push({ id: newId, name: newName, ownerRole: username });
+        return { success: true, companyName: newName, companyId: newId };
+      }
+    }
+
+    // Error: res="#errorCode"
+    const errorMatch = /res="#(-?\d+)"/.exec(payload);
+    if (errorMatch) {
+      const errorCode = parseInt(errorMatch[1], 10);
+      const errorMessages: Record<number, string> = {
+        6: 'Unknown cluster',
+        11: 'Company name already taken',
+        28: 'Zone tier mismatch',
+        33: 'Maximum number of companies reached',
+      };
+      const msg = errorMessages[errorCode] || `Failed with error code ${errorCode}`;
+      this.log.warn(`[Session] Company creation failed: ${msg}`);
+      return { success: false, companyName: '', companyId: '', message: msg };
+    }
+
+    return { success: false, companyName: '', companyId: '', message: 'Unexpected response from server' };
+  } catch (e: unknown) {
+    this.log.error('[Session] Failed to create company:', e);
+    return { success: false, companyName: '', companyId: '', message: toErrorMessage(e) };
+  }
+}
+
+/**
  * Switch to a different company (public role or player company)
  * Performs a full re-login using the ownerRole as username
  */
@@ -5451,6 +5515,23 @@ private handlePush(socketName: string, packet: RdoPacket) {
         const minId = parseInt(params.ministryId || '0', 10);
         const minName = params.ministerName || '';
         args.push(RdoValue.int(minId), RdoValue.string(minName));
+        break;
+      }
+
+      case 'RDOQueueResearch': {
+        // Args: inventionId (widestring), priority (integer, default=10)
+        // Delphi: procedure RDOQueueResearch(InventionId: widestring; Priority: integer)
+        const inventionId = params.inventionId || '';
+        const priority = parseInt(params.priority || '10', 10);
+        args.push(RdoValue.string(inventionId), RdoValue.int(priority));
+        break;
+      }
+
+      case 'RDOCancelResearch': {
+        // Args: inventionId (widestring)
+        // Delphi: procedure RDOCancelResearch(InventionId: widestring)
+        const cancelId = params.inventionId || '';
+        args.push(RdoValue.string(cancelId));
         break;
       }
 

@@ -14,6 +14,7 @@ export interface GameSettings {
   hideVegetationOnMove: boolean;
   vehicleAnimations: boolean;
   soundEnabled: boolean;
+  soundVolume: number;
   debugOverlay: boolean;
 }
 
@@ -21,6 +22,7 @@ const DEFAULT_SETTINGS: GameSettings = {
   hideVegetationOnMove: true,
   vehicleAnimations: true,
   soundEnabled: true,
+  soundVolume: 0.8,
   debugOverlay: false,
 };
 
@@ -161,7 +163,8 @@ export class SettingsPanel {
     // Settings rows
     this.addToggle('hideVegetationOnMove', 'Hide Vegetation on Move', 'Hide tree/plant textures while panning for better performance');
     this.addToggle('vehicleAnimations', 'Vehicle Animations', 'Show animated vehicles on roads');
-    this.addToggle('soundEnabled', 'Sound', 'Enable game sounds (placeholder)');
+    this.addToggle('soundEnabled', 'Sound', 'Enable game sounds');
+    this.addSlider('soundVolume', 'Volume', 'Master volume level', 0, 1, 0.05);
     this.addToggle('debugOverlay', 'Debug Overlay', 'Show debug information overlay on the map');
 
     // Close button
@@ -220,6 +223,60 @@ export class SettingsPanel {
 
     row.appendChild(labelDiv);
     row.appendChild(checkbox);
+    this.panel!.appendChild(row);
+  }
+
+  private addSlider(key: keyof GameSettings, label: string, description: string, min: number, max: number, step: number): void {
+    const row = document.createElement('div');
+    row.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(148,163,184,0.1);
+    `;
+
+    const labelDiv = document.createElement('div');
+    const labelEl = document.createElement('div');
+    labelEl.textContent = label;
+    labelEl.style.cssText = 'font-size: 14px; font-weight: 600;';
+    const descEl = document.createElement('div');
+    descEl.textContent = description;
+    descEl.style.cssText = 'font-size: 12px; color: var(--text-secondary, #94a3b8); margin-top: 2px;';
+    labelDiv.appendChild(labelEl);
+    labelDiv.appendChild(descEl);
+
+    const controlDiv = document.createElement('div');
+    controlDiv.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = String(min);
+    slider.max = String(max);
+    slider.step = String(step);
+    slider.value = String(this.settings[key] as number);
+    slider.style.cssText = 'width: 100px; cursor: pointer; accent-color: #3b82f6;';
+
+    const valueLabel = document.createElement('span');
+    valueLabel.textContent = `${Math.round((this.settings[key] as number) * 100)}%`;
+    valueLabel.style.cssText = 'font-size: 12px; min-width: 32px; text-align: right; color: var(--text-secondary, #94a3b8);';
+
+    slider.oninput = () => {
+      const val = parseFloat(slider.value);
+      (this.settings as unknown as Record<string, number>)[key] = val;
+      valueLabel.textContent = `${Math.round(val * 100)}%`;
+      this.saveSettings();
+      this.applySettings();
+      if (this.onSettingsChange) {
+        this.onSettingsChange(this.getSettings());
+      }
+    };
+
+    controlDiv.appendChild(slider);
+    controlDiv.appendChild(valueLabel);
+
+    row.appendChild(labelDiv);
+    row.appendChild(controlDiv);
     this.panel!.appendChild(row);
   }
 

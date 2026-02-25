@@ -28,11 +28,18 @@ interface MockElement {
   textContent: string;
   type: string;
   checked: boolean;
+  min: string;
+  max: string;
+  step: string;
+  value: string;
+  innerHTML: string;
+  className: string;
   children: MockElement[];
   parentElement: MockElement | null;
   appendChild: jest.Mock;
   onmousedown: ((e: unknown) => void) | null;
   onchange: (() => void) | null;
+  oninput: (() => void) | null;
 }
 
 function createMockElement(): MockElement {
@@ -42,6 +49,12 @@ function createMockElement(): MockElement {
     textContent: '',
     type: '',
     checked: false,
+    min: '',
+    max: '',
+    step: '',
+    value: '',
+    innerHTML: '',
+    className: '',
     children: [],
     parentElement: null,
     appendChild: jest.fn(function (this: MockElement, child: MockElement) {
@@ -51,6 +64,7 @@ function createMockElement(): MockElement {
     }),
     onmousedown: null,
     onchange: null,
+    oninput: null,
   };
   return el;
 }
@@ -86,6 +100,7 @@ describe('SettingsPanel', () => {
     expect(settings.hideVegetationOnMove).toBe(true);
     expect(settings.vehicleAnimations).toBe(true);
     expect(settings.soundEnabled).toBe(true);
+    expect(settings.soundVolume).toBe(0.8);
     expect(settings.debugOverlay).toBe(false);
   });
 
@@ -94,6 +109,7 @@ describe('SettingsPanel', () => {
       hideVegetationOnMove: false,
       vehicleAnimations: false,
       soundEnabled: false,
+      soundVolume: 0.5,
       debugOverlay: true,
     };
     storageMap.set('spo_settings', JSON.stringify(saved));
@@ -138,6 +154,30 @@ describe('SettingsPanel', () => {
 
     panel.toggle();
     expect(panel.isVisible()).toBe(false);
+  });
+
+  it('should default soundVolume to 0.8 when loading partial settings', () => {
+    storageMap.set('spo_settings', JSON.stringify({ soundEnabled: false }));
+
+    const panel = new SettingsPanel();
+    const settings = panel.getSettings();
+
+    expect(settings.soundEnabled).toBe(false);
+    expect(settings.soundVolume).toBe(0.8); // default
+  });
+
+  it('should persist soundVolume from saved settings', () => {
+    const saved: GameSettings = {
+      hideVegetationOnMove: true,
+      vehicleAnimations: true,
+      soundEnabled: true,
+      soundVolume: 0.3,
+      debugOverlay: false,
+    };
+    storageMap.set('spo_settings', JSON.stringify(saved));
+
+    const panel = new SettingsPanel();
+    expect(panel.getSettings().soundVolume).toBe(0.3);
   });
 
   it('should handle corrupted localStorage gracefully', () => {

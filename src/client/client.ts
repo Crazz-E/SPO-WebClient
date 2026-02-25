@@ -89,6 +89,9 @@ import {
   // Connection Search
   WsReqSearchConnections,
   WsRespSearchConnections,
+  // Company Creation
+  WsReqCreateCompany,
+  WsRespCreateCompany,
 } from '../shared/types';
 import { getErrorMessage } from '../shared/error-codes';
 import { toErrorMessage } from '../shared/error-utils';
@@ -96,6 +99,8 @@ import { Season } from '../shared/map-config';
 import { UIManager } from './ui/ui-manager';
 import { getFacilityDimensionsCache } from './facility-dimensions-cache';
 import { ConnectionPickerDialog } from './ui/building-details';
+import { SoundManager } from './audio/sound-manager';
+import { CompanyCreationDialog } from './ui/company-creation-dialog';
 
 export class StarpeaceClient {
   private ws: WebSocket | null = null;
@@ -148,13 +153,34 @@ export class StarpeaceClient {
   // Logout state
   private isLoggingOut: boolean = false;
 
+  // Audio
+  private soundManager: SoundManager;
+
+  // Company creation dialog
+  private companyCreationDialog: CompanyCreationDialog | null = null;
+
   constructor() {
     this.uiGamePanel = document.getElementById('game-panel')!;
     this.uiStatus = document.getElementById('status-indicator')!;
 
     this.ui = new UIManager();
+    this.soundManager = new SoundManager();
     this.setupUICallbacks();
+    this.setupAudio();
     this.init();
+  }
+
+  /**
+   * Initialize audio: unlock on first user interaction, wire settings
+   */
+  private setupAudio(): void {
+    const initAudio = () => {
+      this.soundManager.initOnInteraction();
+      document.removeEventListener('click', initAudio);
+      document.removeEventListener('keydown', initAudio);
+    };
+    document.addEventListener('click', initAudio);
+    document.addEventListener('keydown', initAudio);
   }
 
   /**
@@ -172,6 +198,10 @@ export class StarpeaceClient {
 
     this.ui.loginUI.setOnCompanySelect((companyId) => {
       this.selectCompanyAndStart(companyId);
+    });
+
+    this.ui.loginUI.setOnCreateCompany(() => {
+      this.showCompanyCreationDialog();
     });
   }
 
@@ -369,6 +399,7 @@ export class StarpeaceClient {
         const isSystem = chat.from === 'SYSTEM';
         this.ui.renderChatMessage(chat.from, chat.message, isSystem);
         this.ui.log('Chat', `[${chat.channel}] ${chat.from}: ${chat.message}`);
+        this.soundManager.play('chat-message');
         break;
 
       case WsMessageType.EVENT_CHAT_USER_TYPING:
@@ -445,6 +476,7 @@ export class StarpeaceClient {
       case WsMessageType.EVENT_END_OF_PERIOD:
         this.ui.log('Period', 'Financial period ended — refreshing data');
         this.showNotification('Financial period ended', 'info');
+        this.soundManager.play('period-end');
         // Refresh tycoon stats to reflect latest P&L
         this.refreshTycoonData();
         break;
@@ -453,6 +485,7 @@ export class StarpeaceClient {
       case WsMessageType.EVENT_NEW_MAIL: {
         const newMail = msg as WsEventNewMail;
         this.ui.log('Mail', `New mail! ${newMail.unreadCount} unread message(s)`);
+        this.soundManager.play('mail');
         if (this.ui.toolbarUI) {
           this.ui.toolbarUI.setMailBadge(newMail.unreadCount);
         }
@@ -713,6 +746,41 @@ export class StarpeaceClient {
     }
   }
 
+  private showCompanyCreationDialog(): void {
+    // Known clusters — could be fetched from server in future
+    const defaultClusters = ['PGI', 'Moab', 'Dissidents', 'Magna', 'Mariko'];
+
+    if (!this.companyCreationDialog) {
+      this.companyCreationDialog = new CompanyCreationDialog({
+        onCreateCompany: async (companyName: string, cluster: string) => {
+          const req: WsReqCreateCompany = {
+            type: WsMessageType.REQ_CREATE_COMPANY,
+            companyName,
+            cluster,
+          };
+
+          const resp = await this.sendRequest(req) as WsRespCreateCompany;
+          this.ui.log('Company', `Company created: "${resp.companyName}" (ID: ${resp.companyId})`);
+          this.showNotification(`Company "${resp.companyName}" created!`, 'success');
+          this.soundManager.play('notification');
+
+          // Add new company to list and auto-select it
+          this.availableCompanies.push({
+            id: resp.companyId,
+            name: resp.companyName,
+            ownerRole: this.storedUsername,
+          });
+          this.selectCompanyAndStart(resp.companyId);
+        },
+        onCancel: () => {
+          // Nothing to do
+        },
+      });
+    }
+
+    this.companyCreationDialog.show(defaultClusters);
+  }
+
   private loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64) {
     const coords = x !== undefined && y !== undefined ? ` at (${x}, ${y})` : ' at player position';
     this.ui.log('Map', `Loading area${coords} ${w}x${h}...`);
@@ -763,6 +831,17 @@ export class StarpeaceClient {
           this.ui.settingsPanel.setRenderer(renderer);
         }
       }
+    }
+
+    // Wire sound manager to settings
+    if (this.ui.settingsPanel) {
+      const initialSettings = this.ui.settingsPanel.getSettings();
+      this.soundManager.setEnabled(initialSettings.soundEnabled);
+      this.soundManager.setVolume(initialSettings.soundVolume);
+      this.ui.settingsPanel.setOnSettingsChange((settings) => {
+        this.soundManager.setEnabled(settings.soundEnabled);
+        this.soundManager.setVolume(settings.soundVolume);
+      });
     }
 
     this.ui.log('Renderer', 'Game view initialized');
@@ -1231,6 +1310,10 @@ export class StarpeaceClient {
       this.startRepair(buildingDetails);
     } else if (actionId === 'stopRepair') {
       this.stopRepair(buildingDetails);
+    } else if (actionId === 'queueResearch') {
+      this.queueResearch(buildingDetails);
+    } else if (actionId === 'cancelResearch') {
+      this.cancelResearch(buildingDetails);
     }
   }
 
@@ -1466,6 +1549,39 @@ export class StarpeaceClient {
       this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
     } catch (err: unknown) {
       this.showNotification(`Failed to stop repair: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  // =========================================================================
+  // RESEARCH ACTIONS
+  // =========================================================================
+
+  private async queueResearch(buildingDetails: BuildingDetailsResponse): Promise<void> {
+    try {
+      // inventionId would come from UI selection; using placeholder for now
+      await this.setBuildingProperty(
+        buildingDetails.x, buildingDetails.y,
+        'RDOQueueResearch', '10',
+        { inventionId: '', priority: '10' }
+      );
+      this.showNotification('Research queued', 'success');
+      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+    } catch (err: unknown) {
+      this.showNotification(`Failed to queue research: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  private async cancelResearch(buildingDetails: BuildingDetailsResponse): Promise<void> {
+    try {
+      await this.setBuildingProperty(
+        buildingDetails.x, buildingDetails.y,
+        'RDOCancelResearch', '0',
+        { inventionId: '' }
+      );
+      this.showNotification('Research cancelled', 'success');
+      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+    } catch (err: unknown) {
+      this.showNotification(`Failed to cancel research: ${toErrorMessage(err)}`, 'error');
     }
   }
 

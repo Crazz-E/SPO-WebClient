@@ -205,6 +205,10 @@ export enum WsMessageType {
   // Connection Search
   REQ_SEARCH_CONNECTIONS = 'REQ_SEARCH_CONNECTIONS',
   RESP_SEARCH_CONNECTIONS = 'RESP_SEARCH_CONNECTIONS',
+
+  // Company Creation
+  REQ_CREATE_COMPANY = 'REQ_CREATE_COMPANY',
+  RESP_CREATE_COMPANY = 'RESP_CREATE_COMPANY',
 }
 
 // =============================================================================
@@ -998,6 +1002,24 @@ export interface WsRespSearchConnections extends WsMessage {
   results: ConnectionSearchResult[];
   fluidId: string;
   direction: 'input' | 'output';
+}
+
+// =============================================================================
+// COMPANY CREATION MESSAGES
+// =============================================================================
+
+export interface WsReqCreateCompany extends WsMessage {
+  type: WsMessageType.REQ_CREATE_COMPANY;
+  companyName: string;
+  cluster: string;
+}
+
+export interface WsRespCreateCompany extends WsMessage {
+  type: WsMessageType.RESP_CREATE_COMPANY;
+  success: boolean;
+  companyName: string;
+  companyId: string;
+  message?: string;
 }
 
 // =============================================================================

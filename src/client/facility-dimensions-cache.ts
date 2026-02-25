@@ -117,6 +117,16 @@ export class ClientFacilityDimensionsCache {
   }
 
   /**
+   * Check if a visualClass represents a construction state.
+   * Construction entries have textureFilename starting with "Construction".
+   */
+  isConstructionState(visualClass: string): boolean {
+    const facility = this.getFacility(visualClass);
+    if (!facility?.textureFilename) return false;
+    return facility.textureFilename.startsWith('Construction');
+  }
+
+  /**
    * Clear cache (for testing)
    */
   clear(): void {

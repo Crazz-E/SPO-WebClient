@@ -220,6 +220,47 @@ describe('ClientFacilityDimensionsCache', () => {
     });
   });
 
+  describe('isConstructionState()', () => {
+    it('should return true for Construction texture', () => {
+      cache.initialize({
+        '100': makeFacility('100', 'SmallRes_Construction', 'Construction64.gif'),
+      });
+      expect(cache.isConstructionState('100')).toBe(true);
+    });
+
+    it('should return true for large Construction textures', () => {
+      cache.initialize({
+        '200': makeFacility('200', 'WH_Construction', 'Construction256.gif'),
+      });
+      expect(cache.isConstructionState('200')).toBe(true);
+    });
+
+    it('should return false for normal building textures', () => {
+      cache.initialize({
+        '101': makeFacility('101', 'FoodStore', 'MapPGIFoodStore64x32x0.gif'),
+      });
+      expect(cache.isConstructionState('101')).toBe(false);
+    });
+
+    it('should return false for empty texture', () => {
+      cache.initialize({
+        '102': makeFacility('102', 'Empty', ''),
+      });
+      expect(cache.isConstructionState('102')).toBe(false);
+    });
+
+    it('should return false for unknown visualClass', () => {
+      cache.initialize({
+        '100': makeFacility('100', 'Test'),
+      });
+      expect(cache.isConstructionState('999')).toBe(false);
+    });
+
+    it('should return false when cache is not initialized', () => {
+      expect(cache.isConstructionState('100')).toBe(false);
+    });
+  });
+
   describe('Edge cases', () => {
     it('should handle non-numeric visualClass by name', () => {
       cache.initialize({

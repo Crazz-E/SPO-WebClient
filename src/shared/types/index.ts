@@ -224,6 +224,9 @@ export type {
   // Connection Search
   WsReqSearchConnections,
   WsRespSearchConnections,
+  // Company Creation
+  WsReqCreateCompany,
+  WsRespCreateCompany,
 } from './message-types';
 
 export type { ConnectionSearchResult } from './message-types';

@@ -140,6 +140,8 @@ import {
   WsRespPoliticsLaunchCampaign,
   WsReqSearchConnections,
   WsRespSearchConnections,
+  WsReqCreateCompany,
+  WsRespCreateCompany,
   BankActionType,
   AutoConnectionActionType,
 } from '../shared/types';
@@ -838,6 +840,9 @@ const server = http.createServer(async (req, res) => {
       '.png': 'image/png',
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
+      '.wav': 'audio/wav',
+      '.mp3': 'audio/mpeg',
+      '.ogg': 'audio/ogg',
     };
 
     // If requesting a BMP, check if a pre-baked PNG exists (has alpha channel pre-applied)
@@ -1687,6 +1692,59 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
             wsRequestId: msg.wsRequestId,
             errorMessage: toErrorMessage(err) || 'Failed to demolish road',
             code: ErrorCodes.ERROR_AccessDenied
+          };
+          ws.send(JSON.stringify(errorResp));
+        }
+        break;
+      }
+
+      // ========================================================================
+      // COMPANY CREATION
+      // ========================================================================
+
+      case WsMessageType.REQ_CREATE_COMPANY: {
+        const req = msg as WsReqCreateCompany;
+        console.log(`[Gateway] Creating company: "${req.companyName}" in cluster "${req.cluster}"`);
+
+        if (!req.companyName || req.companyName.trim().length === 0) {
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: 'Company name cannot be empty',
+            code: ErrorCodes.ERROR_InvalidParameter
+          };
+          ws.send(JSON.stringify(errorResp));
+          break;
+        }
+
+        try {
+          const result = await session.createCompany(req.companyName.trim(), req.cluster);
+
+          if (result.success) {
+            const response: WsRespCreateCompany = {
+              type: WsMessageType.RESP_CREATE_COMPANY,
+              wsRequestId: msg.wsRequestId,
+              success: true,
+              companyName: result.companyName,
+              companyId: result.companyId,
+            };
+            ws.send(JSON.stringify(response));
+          } else {
+            const errorResp: WsRespError = {
+              type: WsMessageType.RESP_ERROR,
+              wsRequestId: msg.wsRequestId,
+              errorMessage: result.message || 'Failed to create company',
+              code: ErrorCodes.ERROR_Unknown
+            };
+            ws.send(JSON.stringify(errorResp));
+          }
+        } catch (err: unknown) {
+          console.error('[Gateway] Failed to create company:', err);
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: toErrorMessage(err) || 'Failed to create company',
+            code: ErrorCodes.ERROR_Unknown
           };
           ws.send(JSON.stringify(errorResp));
         }

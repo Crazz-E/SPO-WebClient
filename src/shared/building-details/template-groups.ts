@@ -188,6 +188,70 @@ export const HQ_GENERAL_GROUP: PropertyGroup = {
 };
 
 /**
+ * HQ Inventions — Research/technology tab for HQ buildings
+ * Voyager: InventionsSheet.pas — 3 sections: developing, completed, available
+ * Note: No CLASSES.BIN config references hdqInventions — runtime-injected for HQ buildings
+ *
+ * RDO methods:
+ *   RDOQueueResearch(inventionId: widestring, priority: integer) — void
+ *   RDOCancelResearch(inventionId: widestring) — void
+ */
+export const HQ_INVENTIONS_GROUP: PropertyGroup = {
+  id: 'hqInventions',
+  name: 'Research',
+  icon: 'R',
+  order: 15,
+  properties: [
+    { rdoName: 'RsKind', displayName: 'Research Type', type: PropertyType.NUMBER, hideEmpty: true },
+    // Section 1: In Development
+    {
+      rdoName: 'devName',
+      displayName: 'In Development',
+      type: PropertyType.TABLE,
+      indexed: true,
+      countProperty: 'devCount0',
+      columns: [
+        { rdoSuffix: 'devName', label: 'Name', type: PropertyType.TEXT, width: '45%' },
+        { rdoSuffix: 'devCost', label: 'Cost', type: PropertyType.CURRENCY, width: '30%' },
+        { rdoSuffix: 'devProgress', label: 'Progress', type: PropertyType.PERCENTAGE, width: '25%' },
+      ],
+    },
+    // Section 2: Completed
+    {
+      rdoName: 'hasName',
+      displayName: 'Completed',
+      type: PropertyType.TABLE,
+      indexed: true,
+      countProperty: 'hasCount0',
+      columns: [
+        { rdoSuffix: 'hasName', label: 'Name', type: PropertyType.TEXT, width: '55%' },
+        { rdoSuffix: 'hasCost', label: 'Value', type: PropertyType.CURRENCY, width: '45%' },
+      ],
+    },
+    // Section 3: Available for Research
+    {
+      rdoName: 'avlName',
+      displayName: 'Available',
+      type: PropertyType.TABLE,
+      indexed: true,
+      countProperty: 'avlCount0',
+      columns: [
+        { rdoSuffix: 'avlName', label: 'Name', type: PropertyType.TEXT, width: '35%' },
+        { rdoSuffix: 'avlCost', label: 'Cost', type: PropertyType.CURRENCY, width: '25%' },
+        { rdoSuffix: 'avlDesc', label: 'Description', type: PropertyType.TEXT, width: '40%' },
+      ],
+    },
+    // Action buttons
+    { rdoName: 'queueResearch', displayName: 'Queue Research', type: PropertyType.ACTION_BUTTON, actionId: 'queueResearch', buttonLabel: 'Queue Research' },
+    { rdoName: 'cancelResearch', displayName: 'Cancel Research', type: PropertyType.ACTION_BUTTON, actionId: 'cancelResearch', buttonLabel: 'Cancel' },
+  ],
+  rdoCommands: {
+    'RDOQueueResearch': { command: 'RDOQueueResearch' },
+    'RDOCancelResearch': { command: 'RDOCancelResearch' },
+  },
+};
+
+/**
  * BankGeneral — Bank facilities (1 class)
  * Voyager: BankGeneralSheet.pas — bank stats + budget slider
  */
@@ -920,6 +984,7 @@ export const GROUP_BY_ID: Record<string, PropertyGroup> = {
   'srvGeneral': SRV_GENERAL_GROUP,
   'resGeneral': RES_GENERAL_GROUP,
   'hqGeneral': HQ_GENERAL_GROUP,
+  'hqInventions': HQ_INVENTIONS_GROUP,
   'bankGeneral': BANK_GENERAL_GROUP,
   'whGeneral': WH_GENERAL_GROUP,
   'tvGeneral': TV_GENERAL_GROUP,
@@ -978,6 +1043,7 @@ export const HANDLER_TO_GROUP: Record<string, PropertyGroup> = {
   'IndGeneral': IND_GENERAL_GROUP,
   'SrvGeneral': SRV_GENERAL_GROUP,
   'HqGeneral': HQ_GENERAL_GROUP,
+  'hdqInventions': HQ_INVENTIONS_GROUP,
   'BankGeneral': BANK_GENERAL_GROUP,
   'WHGeneral': WH_GENERAL_GROUP,
   'TVGeneral': TV_GENERAL_GROUP,

@@ -2705,6 +2705,15 @@ export class IsometricMapRenderer {
         // Draw texture scaled to match current zoom level
         ctx.drawImage(texture, drawX, drawY, scaledWidth, scaledHeight);
 
+        // Draw construction indicator if building is under construction
+        if (textureFilename.startsWith('Construction')) {
+          this.drawConstructionIndicator(
+            southCornerScreenPos.x,
+            southCornerScreenPos.y + halfHeight,
+            scaledWidth
+          );
+        }
+
         // Draw VisualClass label for debugging/identification
         this.drawBuildingLabel(building.visualClass, southCornerScreenPos.x, southCornerScreenPos.y + halfHeight);
       } else {
@@ -2740,6 +2749,40 @@ export class IsometricMapRenderer {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, Math.round(x), Math.round(y));
+  }
+
+  /**
+   * Draw construction indicator below a building under construction.
+   * Shows an orange "BUILDING" label. Skipped at zoom levels 0-1.
+   */
+  private drawConstructionIndicator(x: number, y: number, buildingWidth: number): void {
+    if (this.terrainRenderer.getZoomLevel() <= 1) return;
+
+    const ctx = this.ctx;
+    const label = 'BUILDING';
+    ctx.font = '9px monospace';
+    const metrics = ctx.measureText(label);
+    const padding = 3;
+    const barWidth = Math.max(metrics.width + padding * 2, buildingWidth * 0.5);
+    const barHeight = 13;
+
+    // Position below the building center
+    const bx = Math.round(x - barWidth / 2);
+    const by = Math.round(y + 4);
+
+    // Background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(bx, by, barWidth, barHeight);
+
+    // Orange border top
+    ctx.fillStyle = '#F59E0B';
+    ctx.fillRect(bx, by, barWidth, 2);
+
+    // Label text
+    ctx.fillStyle = '#F59E0B';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, Math.round(x), Math.round(by + barHeight / 2 + 1));
   }
 
   /**
