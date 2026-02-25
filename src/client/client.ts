@@ -101,6 +101,7 @@ import { getFacilityDimensionsCache } from './facility-dimensions-cache';
 import { ConnectionPickerDialog } from './ui/building-details';
 import { SoundManager } from './audio/sound-manager';
 import { CompanyCreationDialog } from './ui/company-creation-dialog';
+import { KeyBindingRegistry } from './input/key-binding-registry';
 
 export class StarpeaceClient {
   private ws: WebSocket | null = null;
@@ -159,12 +160,16 @@ export class StarpeaceClient {
   // Company creation dialog
   private companyCreationDialog: CompanyCreationDialog | null = null;
 
+  // Key binding registry
+  private keyBindingRegistry: KeyBindingRegistry;
+
   constructor() {
     this.uiGamePanel = document.getElementById('game-panel')!;
     this.uiStatus = document.getElementById('status-indicator')!;
 
     this.ui = new UIManager();
     this.soundManager = new SoundManager();
+    this.keyBindingRegistry = new KeyBindingRegistry();
     this.setupUICallbacks();
     this.setupAudio();
     this.init();
@@ -285,6 +290,12 @@ export class StarpeaceClient {
       this.ui.toolbarUI.setOnSettings(() => {
         if (this.ui.settingsPanel) {
           this.ui.settingsPanel.toggle();
+        }
+      });
+
+      this.ui.toolbarUI.setOnTransport(() => {
+        if (this.ui.transportPanel) {
+          this.ui.transportPanel.toggle();
         }
       });
     }
@@ -574,7 +585,7 @@ export class StarpeaceClient {
         });
         // Update profile panel tycoon info
         if (this.ui.profilePanel) {
-          this.ui.profilePanel.setTycoonInfo(profile.name, profile.ranking, this.currentWorldName);
+          this.ui.profilePanel.setTycoonInfo(profile.name, profile.ranking, this.currentWorldName, profile.photoUrl);
         }
         break;
       }
@@ -833,6 +844,11 @@ export class StarpeaceClient {
       }
     }
 
+    // Wire key binding registry to settings panel
+    if (this.ui.settingsPanel) {
+      this.ui.settingsPanel.setKeyBindingRegistry(this.keyBindingRegistry);
+    }
+
     // Wire sound manager to settings
     if (this.ui.settingsPanel) {
       const initialSettings = this.ui.settingsPanel.getSettings();
@@ -841,6 +857,13 @@ export class StarpeaceClient {
       this.ui.settingsPanel.setOnSettingsChange((settings) => {
         this.soundManager.setEnabled(settings.soundEnabled);
         this.soundManager.setVolume(settings.soundVolume);
+        if (this.ui.mapNavigationUI) {
+          const renderer = this.ui.mapNavigationUI.getRenderer();
+          if (renderer) {
+            renderer.setVehicleAnimationsEnabled(settings.vehicleAnimations);
+            renderer.setEdgeScrollEnabled(settings.edgeScrollEnabled);
+          }
+        }
       });
     }
 
@@ -852,6 +875,18 @@ export class StarpeaceClient {
   private async sendChatMessage(message: string) {
     // Double-click prevention
     if (this.isSendingChatMessage) {
+      return;
+    }
+
+    // GM chat: messages starting with /gm are broadcast to all players
+    if (message.startsWith('/gm ')) {
+      const gmMessage = message.substring(4).trim();
+      if (gmMessage) {
+        this.sendMessage({
+          type: WsMessageType.REQ_GM_CHAT_SEND,
+          message: gmMessage,
+        } as WsMessage);
+      }
       return;
     }
 
@@ -1314,6 +1349,9 @@ export class StarpeaceClient {
       this.queueResearch(buildingDetails);
     } else if (actionId === 'cancelResearch') {
       this.cancelResearch(buildingDetails);
+    } else {
+      console.warn(`[Client] Unhandled building action: ${actionId}`);
+      this.showNotification(`Action "${actionId}" is not yet implemented`, 'error');
     }
   }
 
@@ -1556,33 +1594,16 @@ export class StarpeaceClient {
   // RESEARCH ACTIONS
   // =========================================================================
 
-  private async queueResearch(buildingDetails: BuildingDetailsResponse): Promise<void> {
-    try {
-      // inventionId would come from UI selection; using placeholder for now
-      await this.setBuildingProperty(
-        buildingDetails.x, buildingDetails.y,
-        'RDOQueueResearch', '10',
-        { inventionId: '', priority: '10' }
-      );
-      this.showNotification('Research queued', 'success');
-      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
-    } catch (err: unknown) {
-      this.showNotification(`Failed to queue research: ${toErrorMessage(err)}`, 'error');
-    }
+  private async queueResearch(_buildingDetails: BuildingDetailsResponse): Promise<void> {
+    // Research system requires an invention selection UI that doesn't exist yet.
+    // Sending empty inventionId would silently fail on the server.
+    this.showNotification('Research queue is not yet available', 'info');
   }
 
-  private async cancelResearch(buildingDetails: BuildingDetailsResponse): Promise<void> {
-    try {
-      await this.setBuildingProperty(
-        buildingDetails.x, buildingDetails.y,
-        'RDOCancelResearch', '0',
-        { inventionId: '' }
-      );
-      this.showNotification('Research cancelled', 'success');
-      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
-    } catch (err: unknown) {
-      this.showNotification(`Failed to cancel research: ${toErrorMessage(err)}`, 'error');
-    }
+  private async cancelResearch(_buildingDetails: BuildingDetailsResponse): Promise<void> {
+    // Research system requires knowing which invention to cancel.
+    // Sending empty inventionId would silently fail on the server.
+    this.showNotification('Research cancellation is not yet available', 'info');
   }
 
   // =========================================================================

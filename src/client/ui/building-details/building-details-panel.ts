@@ -754,11 +754,22 @@ export class BuildingDetailsPanel {
 		  }
 		  : undefined;
 
+		// Owner-only: supply property change (SortMode, MaxPrice)
+		const supplyPropertyChange: TablePropertyChangeCallback | undefined = this.isOwner
+		  ? async (propertyName, value, additionalParams) => {
+			if (this.options.onPropertyChange) {
+			  await this.options.onPropertyChange(propertyName, value, additionalParams);
+			  if (this.options.onRefresh) await this.options.onRefresh();
+			}
+		  }
+		  : undefined;
+
 		const suppliesEl = renderSuppliesWithTabs(
 		  details.supplies,
 		  this.options.onNavigateToBuilding,
 		  supplyDisconnect,
-		  supplySearch
+		  supplySearch,
+		  supplyPropertyChange
 		);
 		this.contentContainer.appendChild(suppliesEl);
 		return;

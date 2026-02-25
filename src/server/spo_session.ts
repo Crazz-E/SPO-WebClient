@@ -1588,6 +1588,26 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       this.log.warn('[Profile] TycoonCurriculum.asp fetch failed, using push data only:', e);
     }
 
+    // Try to fetch avatar photo from RenderTycoon.asp
+    try {
+      const worldIp = this.currentWorldInfo?.ip;
+      const worldName = this.currentWorldInfo?.name || '';
+      if (worldIp && name) {
+        const renderUrl = `http://${worldIp}/five/0/visual/voyager/new%20directory/RenderTycoon.asp?WorldName=${encodeURIComponent(worldName)}&Tycoon=${encodeURIComponent(name)}&RIWS=`;
+        const renderHtml = await (await fetch(renderUrl, { redirect: 'follow' })).text();
+        const photoMatch = /<img[^>]+id=["']?picture["']?[^>]+src=["']([^"']+)["']/i.exec(renderHtml)
+          || /<img[^>]+src=["']([^"']+)["'][^>]+id=["']?picture["']?/i.exec(renderHtml);
+        if (photoMatch) {
+          const rawUrl = photoMatch[1];
+          const baseUrl = `http://${worldIp}/five/0/visual/voyager/new%20directory`;
+          const fullUrl = rawUrl.startsWith('http') ? rawUrl : `${baseUrl}/${rawUrl}`;
+          profile.photoUrl = `/proxy-image?url=${encodeURIComponent(fullUrl)}`;
+        }
+      }
+    } catch (e) {
+      this.log.warn('[Profile] RenderTycoon.asp photo fetch failed:', e);
+    }
+
     this.log.debug(`[Profile] Fetched tycoon profile: ${profile.name} (Ranking #${profile.ranking})`);
     return profile;
   }
@@ -4987,6 +5007,11 @@ private handlePush(socketName: string, packet: RdoPacket) {
               name,
               metaFluid: supplyProps[0] || '',
               fluidValue: supplyProps[1] || '',
+              lastCostPerc: supplyProps[2] || undefined,
+              minK: supplyProps[3] || undefined,
+              maxPrice: supplyProps[4] || undefined,
+              qpSorted: supplyProps[5] || undefined,
+              sortMode: supplyProps[6] || undefined,
               connectionCount,
               connections,
             });
@@ -5618,8 +5643,16 @@ private handlePush(socketName: string, packet: RdoPacket) {
       case 'RDOAutoRelease':
         return 'AutoRel';
 
-      case 'RDOSetOutputPrice':
+      case 'RDOSetOutputPrice': {
+        // Output price is per-fluid; read back via PricePc (single-product) or indexed
+        const fluidId = params.fluidId;
+        if (fluidId) {
+          // Multi-product: read back the output PricePc for the specific fluid
+          // The cacher stores output properties per-fluid under the output sub-object
+          return 'PricePc';
+        }
         return 'PricePc';
+      }
 
       case 'RDOConnectInput':
       case 'RDODisconnectInput':
@@ -5673,8 +5706,10 @@ private handlePush(socketName: string, packet: RdoPacket) {
         return params.propertyName || rdoCommand;
 
       default:
-        // Fallback: try to infer from command name
-        return rdoCommand.replace('RDOSet', 'srv');
+        // Fallback: skip read-back for unknown commands — return the command name as-is
+        // so the caller gets a likely-stale value rather than querying a wrong property
+        this.log.warn(`[BuildingDetails] mapRdoCommandToPropertyName: unknown command "${rdoCommand}", read-back may be inaccurate`);
+        return rdoCommand;
     }
   }
 

@@ -98,6 +98,8 @@ export const PLACEHOLDER_IMAGE = {
 export const ROAD_CONSTANTS = {
   /** Circuit ID for roads */
   CIRCUIT_ID: 1,
+  /** Circuit ID for railroads */
+  RAILROAD_CIRCUIT_ID: 2,
   /** Cost per road tile in dollars */
   COST_PER_TILE: 2000000,
 } as const;

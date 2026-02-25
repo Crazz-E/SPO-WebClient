@@ -40,6 +40,7 @@ import {
   WsReqChatJoinChannel,
   WsReqChatSendMessage,
   WsReqChatTypingStatus,
+  WsReqGmChatSend,
   WsRespChatUserList,
   WsRespChatChannelList,
   WsRespChatChannelInfo,
@@ -923,6 +924,10 @@ const server = http.createServer(async (req, res) => {
 // 2. WebSocket Server
 const wss = new WebSocketServer({ server });
 
+// GM Chat: track all connected WebSocket clients and their usernames
+const connectedClients = new Map<WebSocket, string>(); // ws → username
+const GM_USERNAMES = new Set((process.env.SPO_GM_USERS || 'admin').split(',').map(s => s.trim()));
+
 wss.on('connection', (ws: WebSocket) => {
   console.log('[Gateway] New Client Connected');
 
@@ -955,6 +960,8 @@ wss.on('connection', (ws: WebSocket) => {
           worldInfo: worldInfo,
           companyId: '' // Will be set after company selection
         };
+        // Track for GM chat broadcast
+        connectedClients.set(ws, loginMsg.username);
       }
 
       // Capture company selection
@@ -1010,6 +1017,7 @@ wss.on('connection', (ws: WebSocket) => {
 
   ws.on('close', async () => {
     console.log('[Gateway] Client Disconnected');
+    connectedClients.delete(ws);
     // Send Logoff before cleanup to gracefully close game server session
     // Note: endSession() schedules socket closure 2 seconds after Logoff
     try {
@@ -1265,6 +1273,35 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
         // No response needed for typing status
         break;
       }
+
+      case WsMessageType.REQ_GM_CHAT_SEND: {
+        const gmReq = msg as WsReqGmChatSend;
+        const senderName = connectedClients.get(ws) || 'Unknown';
+        if (!GM_USERNAMES.has(senderName)) {
+          ws.send(JSON.stringify({
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            error: 'Only Game Masters can send GM messages',
+          }));
+          break;
+        }
+        // Broadcast to all connected clients
+        const gmEvent: WsEventChatMsg = {
+          type: WsMessageType.EVENT_CHAT_MSG,
+          channel: 'GM',
+          from: senderName,
+          message: gmReq.message,
+          isGM: true,
+        };
+        const gmPayload = JSON.stringify(gmEvent);
+        for (const [clientWs] of connectedClients) {
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(gmPayload);
+          }
+        }
+        break;
+      }
+
 		case WsMessageType.REQ_BUILDING_FOCUS:
         const focusReq = msg as WsReqBuildingFocus;
         console.log(`[Gateway] Focusing building at (${focusReq.x}, ${focusReq.y})`);

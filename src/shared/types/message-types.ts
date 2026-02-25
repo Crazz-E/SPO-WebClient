@@ -34,6 +34,7 @@ import type {
   AutoConnectionActionType,
   PolicyData,
   PoliticsData,
+  TransportData,
 } from './domain-types';
 
 import type { RdoVerb, RdoAction } from './protocol-types';
@@ -83,6 +84,9 @@ export enum WsMessageType {
   EVENT_CHAT_USER_TYPING = 'EVENT_CHAT_USER_TYPING',
   EVENT_CHAT_CHANNEL_CHANGE = 'EVENT_CHAT_CHANNEL_CHANGE',
   EVENT_CHAT_USER_LIST_CHANGE = 'EVENT_CHAT_USER_LIST_CHANGE',
+
+  // GM Chat (gateway-level broadcast)
+  REQ_GM_CHAT_SEND = 'REQ_GM_CHAT_SEND',
 
   REQ_BUILDING_FOCUS = 'REQ_BUILDING_FOCUS',
   REQ_BUILDING_UNFOCUS = 'REQ_BUILDING_UNFOCUS',
@@ -209,6 +213,10 @@ export enum WsMessageType {
   // Company Creation
   REQ_CREATE_COMPANY = 'REQ_CREATE_COMPANY',
   RESP_CREATE_COMPANY = 'RESP_CREATE_COMPANY',
+
+  // Transport (Railroad/Train)
+  REQ_TRANSPORT_DATA = 'REQ_TRANSPORT_DATA',
+  RESP_TRANSPORT_DATA = 'RESP_TRANSPORT_DATA',
 }
 
 // =============================================================================
@@ -325,6 +333,7 @@ export interface WsEventChatMsg extends WsMessage {
   channel: string;
   from: string;
   message: string;
+  isGM?: boolean;
 }
 
 export interface WsEventTycoonUpdate extends WsMessage {
@@ -407,6 +416,11 @@ export interface WsEventChatUserTyping extends WsMessage {
 export interface WsEventChatChannelChange extends WsMessage {
   type: WsMessageType.EVENT_CHAT_CHANNEL_CHANGE;
   channelName: string;
+}
+
+export interface WsReqGmChatSend extends WsMessage {
+  type: WsMessageType.REQ_GM_CHAT_SEND;
+  message: string;
 }
 
 export interface WsEventChatUserListChange extends WsMessage {
@@ -1020,6 +1034,19 @@ export interface WsRespCreateCompany extends WsMessage {
   companyName: string;
   companyId: string;
   message?: string;
+}
+
+// =============================================================================
+// TRANSPORT MESSAGES
+// =============================================================================
+
+export interface WsReqTransportData extends WsMessage {
+  type: WsMessageType.REQ_TRANSPORT_DATA;
+}
+
+export interface WsRespTransportData extends WsMessage {
+  type: WsMessageType.RESP_TRANSPORT_DATA;
+  data: TransportData;
 }
 
 // =============================================================================

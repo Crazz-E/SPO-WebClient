@@ -16,6 +16,7 @@ export class ToolbarUI {
   private onMail: (() => void) | null = null;
   private onSettings: (() => void) | null = null;
   private onRefresh: (() => void) | null = null;
+  private onTransport: (() => void) | null = null;
   private onLogout: (() => void) | null = null;
 
   // Button references for state updates
@@ -93,6 +94,10 @@ export class ToolbarUI {
     this.onRefresh = callback;
   }
 
+  public setOnTransport(callback: () => void) {
+    this.onTransport = callback;
+  }
+
   /**
    * Définit le callback pour Logout
    */
@@ -155,6 +160,12 @@ export class ToolbarUI {
         tooltip: 'Messages',
         callback: () => this.onMail?.(),
         isMailButton: true
+      },
+      {
+        icon: '🚂',
+        label: 'Transport',
+        tooltip: 'Train Routes',
+        callback: () => this.onTransport?.()
       },
       {
         icon: '⚙️',

@@ -67,6 +67,7 @@ export class ProfilePanel {
   private tycoonName = '';
   private ranking = 0;
   private worldName = '';
+  private photoUrl = '';
 
   // Cached tab data
   private curriculumData: CurriculumData | null = null;
@@ -179,19 +180,41 @@ export class ProfilePanel {
     // Tycoon info section
     const infoDiv = document.createElement('div');
     infoDiv.style.cssText = 'text-align: center; margin-bottom: 16px;';
+    const photoHtml = this.photoUrl
+      ? `<img src="${this.escapeHtml(this.photoUrl)}" alt="${this.escapeHtml(this.tycoonName)}" style="
+          width: 100px; height: 130px;
+          border: 2px solid rgba(52, 89, 80, 0.8);
+          border-radius: 8px;
+          margin: 0 auto 8px;
+          object-fit: cover;
+          display: block;
+        " onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+        <div style="
+          width: 100px; height: 130px;
+          background: rgba(20, 57, 48, 0.6);
+          border: 2px solid rgba(52, 89, 80, 0.8);
+          border-radius: 8px;
+          margin: 0 auto 8px;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          color: #64748b;
+          font-size: 11px;
+        ">No Photo</div>`
+      : `<div style="
+          width: 100px; height: 130px;
+          background: rgba(20, 57, 48, 0.6);
+          border: 2px solid rgba(52, 89, 80, 0.8);
+          border-radius: 8px;
+          margin: 0 auto 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #64748b;
+          font-size: 11px;
+        ">No Photo</div>`;
     infoDiv.innerHTML = `
-      <div style="
-        width: 100px; height: 130px;
-        background: rgba(20, 57, 48, 0.6);
-        border: 2px solid rgba(52, 89, 80, 0.8);
-        border-radius: 8px;
-        margin: 0 auto 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #64748b;
-        font-size: 11px;
-      ">No Photo</div>
+      ${photoHtml}
       <div style="color: white; font-weight: 700; font-size: 15px;">${this.escapeHtml(this.tycoonName)}</div>
       <div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">
         ${this.ranking > 0 ? `#${this.ranking} in the NTA ranking.` : ''}
@@ -267,10 +290,11 @@ export class ProfilePanel {
     return this.panel.style.display !== 'none';
   }
 
-  public setTycoonInfo(name: string, ranking: number, worldName: string): void {
+  public setTycoonInfo(name: string, ranking: number, worldName: string, photoUrl?: string): void {
     this.tycoonName = name;
     this.ranking = ranking;
     this.worldName = worldName;
+    this.photoUrl = photoUrl || '';
   }
 
   public setOnSwitchCompany(callback: (companyName: string, companyId: number) => void): void {

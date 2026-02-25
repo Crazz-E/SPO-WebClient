@@ -8,11 +8,14 @@
  * - Debug overlay on/off
  */
 
+import type { KeyBindingRegistry, KeyActionId } from '../input/key-binding-registry';
+
 const STORAGE_KEY = 'spo_settings';
 
 export interface GameSettings {
   hideVegetationOnMove: boolean;
   vehicleAnimations: boolean;
+  edgeScrollEnabled: boolean;
   soundEnabled: boolean;
   soundVolume: number;
   debugOverlay: boolean;
@@ -21,6 +24,7 @@ export interface GameSettings {
 const DEFAULT_SETTINGS: GameSettings = {
   hideVegetationOnMove: true,
   vehicleAnimations: true,
+  edgeScrollEnabled: true,
   soundEnabled: true,
   soundVolume: 0.8,
   debugOverlay: false,
@@ -30,6 +34,8 @@ const DEFAULT_SETTINGS: GameSettings = {
 export interface SettingsRendererAPI {
   setHideVegetationOnMove(enabled: boolean): void;
   setDebugMode(enabled: boolean): void;
+  setVehicleAnimationsEnabled(enabled: boolean): void;
+  setEdgeScrollEnabled(enabled: boolean): void;
 }
 
 export class SettingsPanel {
@@ -39,6 +45,7 @@ export class SettingsPanel {
   private settings: GameSettings;
   private renderer: SettingsRendererAPI | null = null;
   private onSettingsChange: ((settings: GameSettings) => void) | null = null;
+  private keyBindingRegistry: KeyBindingRegistry | null = null;
 
   constructor() {
     this.settings = this.loadSettings();
@@ -58,6 +65,13 @@ export class SettingsPanel {
    */
   public setOnSettingsChange(callback: (settings: GameSettings) => void): void {
     this.onSettingsChange = callback;
+  }
+
+  /**
+   * Attach key binding registry for the keyboard shortcuts section.
+   */
+  public setKeyBindingRegistry(registry: KeyBindingRegistry): void {
+    this.keyBindingRegistry = registry;
   }
 
   /**
@@ -163,9 +177,15 @@ export class SettingsPanel {
     // Settings rows
     this.addToggle('hideVegetationOnMove', 'Hide Vegetation on Move', 'Hide tree/plant textures while panning for better performance');
     this.addToggle('vehicleAnimations', 'Vehicle Animations', 'Show animated vehicles on roads');
+    this.addToggle('edgeScrollEnabled', 'Edge Scrolling', 'Scroll the map when mouse reaches screen edges');
     this.addToggle('soundEnabled', 'Sound', 'Enable game sounds');
     this.addSlider('soundVolume', 'Volume', 'Master volume level', 0, 1, 0.05);
     this.addToggle('debugOverlay', 'Debug Overlay', 'Show debug information overlay on the map');
+
+    // Keyboard shortcuts section
+    if (this.keyBindingRegistry) {
+      this.addKeybindingSection();
+    }
 
     // Close button
     const closeBtn = document.createElement('button');
@@ -280,6 +300,105 @@ export class SettingsPanel {
     this.panel!.appendChild(row);
   }
 
+  private addKeybindingSection(): void {
+    if (!this.keyBindingRegistry || !this.panel) return;
+
+    const header = document.createElement('h3');
+    header.textContent = 'Keyboard Shortcuts';
+    header.style.cssText = 'margin: 16px 0 8px 0; font-size: 15px; font-weight: 700; border-top: 1px solid rgba(148,163,184,0.2); padding-top: 16px;';
+    this.panel.appendChild(header);
+
+    const bindings = this.keyBindingRegistry.getAllBindings();
+
+    for (const binding of bindings) {
+      const row = document.createElement('div');
+      row.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(148,163,184,0.05);
+      `;
+
+      const labelEl = document.createElement('div');
+      labelEl.textContent = binding.label;
+      labelEl.style.cssText = 'font-size: 13px;';
+
+      const keyBtn = document.createElement('button');
+      keyBtn.textContent = this.formatKeyName(binding.currentKey ?? '—');
+      keyBtn.style.cssText = `
+        min-width: 48px;
+        padding: 4px 10px;
+        background: rgba(51, 65, 85, 0.5);
+        border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
+        border-radius: 6px;
+        color: var(--text-primary, #f1f5f9);
+        font-size: 13px;
+        font-family: var(--font-mono, monospace);
+        cursor: pointer;
+        text-align: center;
+      `;
+
+      let listening = false;
+      const captureHandler = (ev: KeyboardEvent) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        listening = false;
+        document.removeEventListener('keydown', captureHandler, true);
+
+        const newKey = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+        this.keyBindingRegistry!.rebind(binding.action as KeyActionId, newKey);
+        keyBtn.textContent = this.formatKeyName(newKey);
+        keyBtn.style.borderColor = 'var(--glass-border, rgba(148,163,184,0.2))';
+      };
+
+      keyBtn.onmousedown = () => {
+        if (listening) return;
+        listening = true;
+        keyBtn.textContent = '...';
+        keyBtn.style.borderColor = '#3b82f6';
+        document.addEventListener('keydown', captureHandler, true);
+      };
+
+      row.appendChild(labelEl);
+      row.appendChild(keyBtn);
+      this.panel.appendChild(row);
+    }
+
+    // Reset defaults button
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = 'Reset Keys to Defaults';
+    resetBtn.style.cssText = `
+      display: block;
+      margin: 12px auto 0;
+      padding: 6px 16px;
+      background: rgba(51, 65, 85, 0.3);
+      border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
+      border-radius: 6px;
+      color: var(--text-secondary, #94a3b8);
+      font-size: 12px;
+      cursor: pointer;
+    `;
+    resetBtn.onmousedown = () => {
+      this.keyBindingRegistry!.resetToDefaults();
+      // Rebuild the panel to reflect reset bindings
+      if (this.panel && this.panel.parentElement) {
+        this.panel.parentElement.removeChild(this.panel);
+      }
+      this.panel = null;
+      this.ensureDOM();
+      if (this.overlay) {
+        this.overlay.style.display = 'flex';
+      }
+    };
+    this.panel.appendChild(resetBtn);
+  }
+
+  private formatKeyName(key: string): string {
+    if (key.length === 1) return key.toUpperCase();
+    return key;
+  }
+
   // ---------------------------------------------------------------------------
   // Persistence
   // ---------------------------------------------------------------------------
@@ -308,6 +427,8 @@ export class SettingsPanel {
     if (this.renderer) {
       this.renderer.setHideVegetationOnMove(this.settings.hideVegetationOnMove);
       this.renderer.setDebugMode(this.settings.debugOverlay);
+      this.renderer.setVehicleAnimationsEnabled(this.settings.vehicleAnimations);
+      this.renderer.setEdgeScrollEnabled(this.settings.edgeScrollEnabled);
     }
   }
 }

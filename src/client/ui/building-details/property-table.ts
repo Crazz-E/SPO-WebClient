@@ -42,7 +42,8 @@ export function renderConnectionsTable(
   supply: BuildingSupplyData,
   onConnectionClick?: (x: number, y: number) => void,
   onDisconnect?: DisconnectCallback,
-  onSearchConnection?: SearchConnectionCallback
+  onSearchConnection?: SearchConnectionCallback,
+  onPropertyChange?: TablePropertyChangeCallback
 ): HTMLElement {
   const container = document.createElement('div');
   container.className = 'property-table-container';
@@ -50,11 +51,13 @@ export function renderConnectionsTable(
   // Header with supply info
   const header = document.createElement('div');
   header.className = 'supply-header';
+
+  const costPerc = supply.lastCostPerc ? ` (Cost: ${escapeHtml(supply.lastCostPerc)}%)` : '';
   header.innerHTML = `
     <div class="supply-name">${escapeHtml(supply.name)}</div>
     <div class="supply-info">
       <span class="supply-fluid">${escapeHtml(supply.metaFluid)}</span>
-      <span class="supply-value">${escapeHtml(supply.fluidValue)}</span>
+      <span class="supply-value">${escapeHtml(supply.fluidValue)}${costPerc}</span>
       <span class="supply-count">${supply.connectionCount} connection${supply.connectionCount !== 1 ? 's' : ''}</span>
     </div>
   `;
@@ -72,6 +75,70 @@ export function renderConnectionsTable(
   }
 
   container.appendChild(header);
+
+  // Supply controls bar (SortMode + MaxPrice) — owner-only when onPropertyChange provided
+  if (onPropertyChange) {
+    const controlsBar = document.createElement('div');
+    controlsBar.className = 'supply-controls';
+
+    // Sort mode toggle (0=cost, 1=quality)
+    const sortDiv = document.createElement('div');
+    sortDiv.className = 'supply-control-item';
+    const sortLabel = document.createElement('label');
+    sortLabel.className = 'control-label';
+    sortLabel.textContent = 'Sort: ';
+    const sortSelect = document.createElement('select');
+    sortSelect.className = 'supply-sort-select';
+    const optCost = document.createElement('option');
+    optCost.value = '0';
+    optCost.textContent = 'By Cost';
+    const optQuality = document.createElement('option');
+    optQuality.value = '1';
+    optQuality.textContent = 'By Quality';
+    sortSelect.appendChild(optCost);
+    sortSelect.appendChild(optQuality);
+    sortSelect.value = supply.sortMode === '1' ? '1' : '0';
+    sortSelect.onchange = () => {
+      onPropertyChange('RDOSetInputSortMode', sortSelect.value, { fluidId: supply.metaFluid });
+    };
+    sortDiv.appendChild(sortLabel);
+    sortDiv.appendChild(sortSelect);
+    controlsBar.appendChild(sortDiv);
+
+    // Max price slider (0-1000)
+    const priceDiv = document.createElement('div');
+    priceDiv.className = 'supply-control-item';
+    const priceLabel = document.createElement('label');
+    priceLabel.className = 'control-label';
+    priceLabel.textContent = 'Max Price: ';
+    const priceSlider = document.createElement('input');
+    priceSlider.type = 'range';
+    priceSlider.className = 'property-slider';
+    priceSlider.min = '0';
+    priceSlider.max = '1000';
+    priceSlider.step = '10';
+    const currentMaxPrice = parseInt(supply.maxPrice || '200', 10);
+    priceSlider.value = isNaN(currentMaxPrice) ? '200' : String(currentMaxPrice);
+    const priceValueSpan = document.createElement('span');
+    priceValueSpan.className = 'slider-value';
+    priceValueSpan.textContent = `${priceSlider.value}%`;
+    priceSlider.oninput = () => {
+      priceValueSpan.textContent = `${priceSlider.value}%`;
+    };
+    let priceDebounce: ReturnType<typeof setTimeout> | null = null;
+    priceSlider.onchange = () => {
+      if (priceDebounce) clearTimeout(priceDebounce);
+      priceDebounce = setTimeout(() => {
+        onPropertyChange('RDOSetInputMaxPrice', priceSlider.value, { fluidId: supply.metaFluid });
+      }, 300);
+    };
+    priceDiv.appendChild(priceLabel);
+    priceDiv.appendChild(priceSlider);
+    priceDiv.appendChild(priceValueSpan);
+    controlsBar.appendChild(priceDiv);
+
+    container.appendChild(controlsBar);
+  }
 
   if (supply.connections.length === 0) {
     const empty = document.createElement('div');
@@ -198,7 +265,8 @@ export function renderSuppliesWithTabs(
   supplies: BuildingSupplyData[],
   onConnectionClick?: (x: number, y: number) => void,
   onDisconnect?: DisconnectCallback,
-  onSearchConnection?: SearchConnectionCallback
+  onSearchConnection?: SearchConnectionCallback,
+  onPropertyChange?: TablePropertyChangeCallback
 ): HTMLElement {
   const container = document.createElement('div');
   container.className = 'supplies-container';
@@ -213,7 +281,7 @@ export function renderSuppliesWithTabs(
 
   if (supplies.length === 1) {
     // Single supply - no tabs needed
-    container.appendChild(renderConnectionsTable(supplies[0], onConnectionClick, onDisconnect, onSearchConnection));
+    container.appendChild(renderConnectionsTable(supplies[0], onConnectionClick, onDisconnect, onSearchConnection, onPropertyChange));
     return container;
   }
 
@@ -235,7 +303,7 @@ export function renderSuppliesWithTabs(
     const tabPane = document.createElement('div');
     tabPane.className = 'nested-tab-pane' + (index === 0 ? ' active' : '');
     tabPane.dataset.index = index.toString();
-    tabPane.appendChild(renderConnectionsTable(supply, onConnectionClick, onDisconnect, onSearchConnection));
+    tabPane.appendChild(renderConnectionsTable(supply, onConnectionClick, onDisconnect, onSearchConnection, onPropertyChange));
 
     // Click handler
     tabBtn.onclick = () => {

@@ -73,6 +73,7 @@ import {
 // painter-algorithm's (i+j) sort is NORTH-only; we use screenY-based sort instead
 import { CarClassManager } from './car-class-system';
 import { VehicleAnimationSystem } from './vehicle-animation-system';
+import { EdgeScrollController } from './edge-scroll-controller';
 
 interface CachedZone {
   x: number;
@@ -474,6 +475,7 @@ export class IsometricMapRenderer {
   private vehicleSystemReady: boolean = false;
   private animationLoopRunning: boolean = false;
   private lastRenderTime: number = 0;
+  private edgeScrollController: EdgeScrollController | null = null;
 
   constructor(canvasId: string) {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -3722,9 +3724,40 @@ export class IsometricMapRenderer {
     this.requestRender();
   }
 
+  public setVehicleAnimationsEnabled(enabled: boolean): void {
+    if (this.vehicleSystem) {
+      this.vehicleSystem.setEnabled(enabled);
+      if (!enabled) {
+        this.requestRender();
+      }
+    }
+  }
+
+  public setEdgeScrollEnabled(enabled: boolean): void {
+    if (this.edgeScrollController) {
+      this.edgeScrollController.setEnabled(enabled);
+    }
+  }
+
   // =========================================================================
   // MOUSE CONTROLS
   // =========================================================================
+
+  /** Convert screen pixel deltas to rotation-aware map deltas (Jacobian inverse) */
+  private screenDeltaToMapDelta(screenDx: number, screenDy: number): { deltaI: number; deltaJ: number } {
+    const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
+    const u = config.u;
+    const a = (screenDx + 2 * screenDy) / (2 * u);
+    const b = (2 * screenDy - screenDx) / (2 * u);
+
+    switch (this.terrainRenderer.getRotation()) {
+      case Rotation.NORTH: return { deltaI: a,  deltaJ: b };
+      case Rotation.EAST:  return { deltaI: -b, deltaJ: a };
+      case Rotation.SOUTH: return { deltaI: -a, deltaJ: -b };
+      case Rotation.WEST:  return { deltaI: b,  deltaJ: -a };
+      default:             return { deltaI: a,  deltaJ: b };
+    }
+  }
 
   private setupMouseControls() {
     // Disable terrain renderer's built-in mouse controls (we'll handle them)
@@ -3736,6 +3769,28 @@ export class IsometricMapRenderer {
     this.canvas.addEventListener('mouseleave', () => this.onMouseLeave());
     this.canvas.addEventListener('wheel', (e) => this.onWheel(e));
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Edge-scrolling: auto-pan when mouse is near screen edges
+    this.edgeScrollController = new EdgeScrollController({
+      onPan: (screenDx, screenDy) => {
+        const { deltaI, deltaJ } = this.screenDeltaToMapDelta(screenDx, screenDy);
+        this.terrainRenderer.pan(deltaI, deltaJ);
+        this.markCameraMoving();
+        if (this.zoneRequestManager) {
+          this.zoneRequestManager.markMoving();
+        }
+        this.requestRender();
+      },
+      onScrollStart: () => {
+        // markCameraMoving handles debouncing
+      },
+      onScrollStop: () => {
+        if (this.zoneRequestManager) {
+          this.zoneRequestManager.markStopped(this.terrainRenderer.getZoomLevel());
+        }
+        this.checkVisibleZones();
+      },
+    });
   }
 
   private onMouseDown(e: MouseEvent) {
@@ -3795,26 +3850,7 @@ export class IsometricMapRenderer {
       const dx = e.clientX - this.lastMouseX;
       const dy = e.clientY - this.lastMouseY;
 
-      // Convert screen delta to map delta for grab-and-move behavior
-      // The base formula (NORTH rotation) is derived from inverting the isometric
-      // projection Jacobian. For other rotations, the (di, dj) pair is rotated
-      // to match the rotated coordinate axes.
-      const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
-      const u = config.u;
-
-      const a = (dx + 2 * dy) / (2 * u);
-      const b = (2 * dy - dx) / (2 * u);
-
-      let deltaI: number;
-      let deltaJ: number;
-      switch (this.terrainRenderer.getRotation()) {
-        case Rotation.NORTH: deltaI = a;  deltaJ = b;  break;
-        case Rotation.EAST:  deltaI = -b; deltaJ = a;  break;
-        case Rotation.SOUTH: deltaI = -a; deltaJ = -b; break;
-        case Rotation.WEST:  deltaI = b;  deltaJ = -a; break;
-        default:             deltaI = a;  deltaJ = b;
-      }
-
+      const { deltaI, deltaJ } = this.screenDeltaToMapDelta(dx, dy);
       this.terrainRenderer.pan(deltaI, deltaJ);
 
       this.lastMouseX = e.clientX;
@@ -3827,6 +3863,17 @@ export class IsometricMapRenderer {
       if (this.zoneRequestManager) {
         this.zoneRequestManager.markMoving();
       }
+    }
+
+    // Edge-scroll: update position when not dragging
+    if (!this.isDragging && this.edgeScrollController) {
+      const rect = this.canvas.getBoundingClientRect();
+      this.edgeScrollController.updateMousePosition(
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+        rect.width,
+        rect.height
+      );
     }
 
     if (this.roadDrawingMode && this.roadDrawingState.isDrawing) {
@@ -3889,6 +3936,11 @@ export class IsometricMapRenderer {
       // Also request immediately (manager will handle delay internally)
       this.checkVisibleZones();
     }
+
+    // Stop edge-scrolling when mouse leaves canvas
+    if (this.edgeScrollController) {
+      this.edgeScrollController.stop();
+    }
   }
 
   private onWheel(e: WheelEvent) {
@@ -3900,8 +3952,26 @@ export class IsometricMapRenderer {
       : Math.min(3, oldZoom + 1);
 
     if (newZoom !== oldZoom) {
+      // Zoom-to-cursor: record map position under mouse at old zoom
+      const rect = this.canvas.getBoundingClientRect();
+      const mouseScreenX = e.clientX - rect.left;
+      const mouseScreenY = e.clientY - rect.top;
+      const mapPosBefore = this.terrainRenderer.screenToMap(mouseScreenX, mouseScreenY);
+
+      // Change zoom (this recalculates origin for the same camera position)
       this.terrainRenderer.setZoomLevel(newZoom);
       this.terrainRenderer.clearDistantZoomCaches(newZoom);
+
+      // Where does that same map position appear on screen at the new zoom?
+      const screenPosAfter = this.terrainRenderer.mapToScreen(mapPosBefore.x, mapPosBefore.y);
+
+      // Pan to compensate: move the camera so the map point stays under the mouse
+      const screenDx = screenPosAfter.x - mouseScreenX;
+      const screenDy = screenPosAfter.y - mouseScreenY;
+      if (Math.abs(screenDx) > 0.5 || Math.abs(screenDy) > 0.5) {
+        const { deltaI, deltaJ } = this.screenDeltaToMapDelta(screenDx, screenDy);
+        this.terrainRenderer.pan(deltaI, deltaJ);
+      }
 
       // Mark as moving then stopped (triggers delayed zone load based on new zoom)
       if (this.zoneRequestManager) {
@@ -3998,6 +4068,12 @@ export class IsometricMapRenderer {
     if (this.touchHandler) {
       this.touchHandler.destroy();
       this.touchHandler = null;
+    }
+
+    // Destroy edge-scroll controller
+    if (this.edgeScrollController) {
+      this.edgeScrollController.destroy();
+      this.edgeScrollController = null;
     }
 
     // Destroy terrain renderer (cancels its own RAF, clears caches)

@@ -75,9 +75,13 @@ export type {
   PoliticsRatingEntry,
   PoliticsCampaignEntry,
   PoliticsData,
+  // Transport types
+  TrainInfo,
+  TrainRouteStop,
+  TransportData,
 } from './domain-types';
 
-export type { MailFolder, BankActionType, AutoConnectionActionType } from './domain-types';
+export type { MailFolder, BankActionType, AutoConnectionActionType, TrainStatus } from './domain-types';
 
 // Message types (WebSocket protocol)
 export {
@@ -227,6 +231,11 @@ export type {
   // Company Creation
   WsReqCreateCompany,
   WsRespCreateCompany,
+  // GM Chat
+  WsReqGmChatSend,
+  // Transport
+  WsReqTransportData,
+  WsRespTransportData,
 } from './message-types';
 
 export type { ConnectionSearchResult } from './message-types';

@@ -69,10 +69,12 @@ function createMockElement(): MockElement {
   return el;
 }
 
-function createMockRenderer(): SettingsRendererAPI & { setHideVegetationOnMove: jest.Mock; setDebugMode: jest.Mock } {
+function createMockRenderer(): SettingsRendererAPI & { setHideVegetationOnMove: jest.Mock; setDebugMode: jest.Mock; setVehicleAnimationsEnabled: jest.Mock; setEdgeScrollEnabled: jest.Mock } {
   return {
     setHideVegetationOnMove: jest.fn(),
     setDebugMode: jest.fn(),
+    setVehicleAnimationsEnabled: jest.fn(),
+    setEdgeScrollEnabled: jest.fn(),
   };
 }
 
@@ -108,6 +110,7 @@ describe('SettingsPanel', () => {
     const saved: GameSettings = {
       hideVegetationOnMove: false,
       vehicleAnimations: false,
+      edgeScrollEnabled: false,
       soundEnabled: false,
       soundVolume: 0.5,
       debugOverlay: true,
@@ -119,6 +122,7 @@ describe('SettingsPanel', () => {
 
     expect(settings.hideVegetationOnMove).toBe(false);
     expect(settings.vehicleAnimations).toBe(false);
+    expect(settings.edgeScrollEnabled).toBe(false);
     expect(settings.debugOverlay).toBe(true);
   });
 
@@ -139,6 +143,17 @@ describe('SettingsPanel', () => {
 
     expect(renderer.setHideVegetationOnMove).toHaveBeenCalledWith(true);
     expect(renderer.setDebugMode).toHaveBeenCalledWith(false);
+    expect(renderer.setVehicleAnimationsEnabled).toHaveBeenCalledWith(true);
+    expect(renderer.setEdgeScrollEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it('should apply vehicleAnimations=false to renderer from saved settings', () => {
+    storageMap.set('spo_settings', JSON.stringify({ vehicleAnimations: false }));
+    const renderer = createMockRenderer();
+    const panel = new SettingsPanel();
+    panel.setRenderer(renderer);
+
+    expect(renderer.setVehicleAnimationsEnabled).toHaveBeenCalledWith(false);
   });
 
   it('should start hidden', () => {
@@ -170,6 +185,7 @@ describe('SettingsPanel', () => {
     const saved: GameSettings = {
       hideVegetationOnMove: true,
       vehicleAnimations: true,
+      edgeScrollEnabled: true,
       soundEnabled: true,
       soundVolume: 0.3,
       debugOverlay: false,

@@ -349,19 +349,24 @@ export class PoliticsPanel {
     this.contentArea.appendChild(rightCol);
   }
 
-  private getRatingDataForTab(tab: RatingTab): PoliticsRatingEntry[] {
+  private getRatingDataForTab(tab: RatingTab): PoliticsRatingEntry[] | null {
     if (!this.politicsData) return [];
     switch (tab) {
       case 'popular': return this.politicsData.popularRatings;
-      case 'tycoons': return []; // Tycoons' ratings not yet implemented
+      case 'tycoons': return null; // Not yet implemented
       case 'ifel': return this.politicsData.ifelRatings;
-      case 'publicity': return []; // Publicity not yet implemented
+      case 'publicity': return null; // Not yet implemented
       default: return [];
     }
   }
 
-  private renderRatingsTable(ratings: PoliticsRatingEntry[]): HTMLElement {
+  private renderRatingsTable(ratings: PoliticsRatingEntry[] | null): HTMLElement {
     const table = document.createElement('div');
+
+    if (ratings === null) {
+      table.innerHTML = '<div style="color: #6b8f80; font-size: 12px; text-align: center; padding: 20px; font-style: italic;">Not yet available</div>';
+      return table;
+    }
 
     if (ratings.length === 0) {
       table.innerHTML = '<div style="color: #88aa99; font-size: 12px; text-align: center; padding: 20px;">No data available</div>';

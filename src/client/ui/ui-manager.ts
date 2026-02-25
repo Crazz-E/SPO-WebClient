@@ -16,6 +16,7 @@ import { ProfilePanel } from './profile-panel';
 import { PoliticsPanel } from './politics-panel';
 import { MinimapUI } from './minimap-ui';
 import { SettingsPanel } from './settings-panel';
+import { TransportPanel } from './transport-panel';
 import {
   BuildingDetailsResponse,
   WsMessage,
@@ -54,6 +55,7 @@ export class UIManager {
   public politicsPanel: PoliticsPanel | null = null;
   public minimapUI: MinimapUI | null = null;
   public settingsPanel: SettingsPanel | null = null;
+  public transportPanel: TransportPanel | null = null;
 
   // Console
   private uiConsole: HTMLElement;
@@ -135,6 +137,13 @@ export class UIManager {
     // Politics Panel
     if (sendMessage) {
       this.politicsPanel = new PoliticsPanel({
+        sendMessage,
+      });
+    }
+
+    // Transport Panel
+    if (sendMessage) {
+      this.transportPanel = new TransportPanel({
         sendMessage,
       });
     }

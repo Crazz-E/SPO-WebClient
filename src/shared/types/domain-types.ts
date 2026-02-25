@@ -259,6 +259,16 @@ export interface BuildingSupplyData {
   metaFluid: string;
   /** Current value */
   fluidValue: string;
+  /** Last cost percentage */
+  lastCostPerc?: string;
+  /** Minimum quality threshold */
+  minK?: string;
+  /** Maximum price willing to pay (0-1000) */
+  maxPrice?: string;
+  /** Whether sorted by Q/P ratio */
+  qpSorted?: string;
+  /** Sort mode: 0=cost, 1=quality */
+  sortMode?: string;
   /** Connection count */
   connectionCount: number;
   /** Connections */
@@ -479,6 +489,7 @@ export interface TycoonProfileFull {
   failureLevel: number;
   levelName: string;
   levelTier: number;
+  photoUrl?: string;         // Avatar photo URL (from RenderTycoon.asp)
 }
 
 // =============================================================================
@@ -656,4 +667,36 @@ export interface RoadDrawingState {
   isMouseDown: boolean;
   /** Timestamp when mouse was pressed */
   mouseDownTime: number;
+}
+
+// =============================================================================
+// TRANSPORT (RAILROAD/TRAIN) TYPES
+// =============================================================================
+
+/** Status of a train */
+export type TrainStatus = 'idle' | 'moving' | 'loading' | 'unloading';
+
+/** A stop on a train route */
+export interface TrainRouteStop {
+  stationName: string;
+  x: number;
+  y: number;
+  stopOrder: number;
+}
+
+/** A train entry in the transport system */
+export interface TrainInfo {
+  trainId: number;
+  name: string;
+  ownerName: string;
+  status: TrainStatus;
+  x: number;
+  y: number;
+  routeStops: TrainRouteStop[];
+}
+
+/** Overview data for the transport panel */
+export interface TransportData {
+  trains: TrainInfo[];
+  railSegmentCount: number;
 }
