@@ -99,20 +99,8 @@ export class TransportPanel {
     header.appendChild(title);
     header.appendChild(closeBtn);
 
-    // Drag behavior
-    header.addEventListener('mousedown', (e: MouseEvent) => {
-      this.isDragging = true;
-      this.dragOffsetX = e.clientX - panel.offsetLeft;
-      this.dragOffsetY = e.clientY - panel.offsetTop;
-    });
-    document.addEventListener('mousemove', (e: MouseEvent) => {
-      if (!this.isDragging) return;
-      panel.style.left = `${e.clientX - this.dragOffsetX}px`;
-      panel.style.top = `${e.clientY - this.dragOffsetY}px`;
-    });
-    document.addEventListener('mouseup', () => {
-      this.isDragging = false;
-    });
+    // Drag behavior (listeners added/removed per drag, no leak)
+    header.addEventListener('mousedown', (e: MouseEvent) => this.startDrag(e));
 
     // Content area
     const content = document.createElement('div');
@@ -127,6 +115,32 @@ export class TransportPanel {
     panel.appendChild(content);
 
     return panel;
+  }
+
+  // ===========================================================================
+  // DRAG
+  // ===========================================================================
+
+  private startDrag(e: MouseEvent): void {
+    this.isDragging = true;
+    const rect = this.panel.getBoundingClientRect();
+    this.dragOffsetX = e.clientX - rect.left;
+    this.dragOffsetY = e.clientY - rect.top;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!this.isDragging) return;
+      this.panel.style.left = `${ev.clientX - this.dragOffsetX}px`;
+      this.panel.style.top = `${ev.clientY - this.dragOffsetY}px`;
+    };
+
+    const onMouseUp = () => {
+      this.isDragging = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   }
 
   // ===========================================================================

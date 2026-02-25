@@ -555,6 +555,13 @@ export class StarpeaceClient {
         this.ui.handlePoliticsResponse(msg);
         break;
 
+      // Transport Response
+      case WsMessageType.RESP_TRANSPORT_DATA:
+        if (this.ui.transportPanel) {
+          this.ui.transportPanel.handleMessage(msg);
+        }
+        break;
+
       // Connection Search Response
       case WsMessageType.RESP_SEARCH_CONNECTIONS: {
         const searchResp = msg as WsRespSearchConnections;

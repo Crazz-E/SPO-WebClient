@@ -5226,31 +5226,31 @@ private handlePush(socketName: string, packet: RdoPacket) {
         await this.cacherCloseObject(tempObjectId);
       }
 
-      // Get the construction socket
-      const socket = this.sockets.get('construction');
-      if (!socket) {
-        throw new Error('Construction socket unavailable');
-      }
-
       // Build the RDO command arguments based on the command type
       const rdoArgs = this.buildRdoCommandArgs(propertyName, value, additionalParams);
 
-      // Send SetProperty command via construction service
-      // The sel on CurrBlock is persistent (no closure needed)
-      let setCmd: string;
+      // Send SetProperty command via construction service using sendRdoRequest
       if (propertyName === 'property' && additionalParams?.propertyName) {
-        // Direct property set: use SET verb
+        // Direct property SET: published property assignment
         const actualPropName = additionalParams.propertyName;
-        setCmd = `C sel ${currBlock} set ${actualPropName}=${rdoArgs};`;
+        await this.sendRdoRequest('construction', {
+          verb: RdoVerb.SEL,
+          targetId: currBlock,
+          action: RdoAction.SET,
+          member: actualPropName,
+          args: rdoArgs,
+        });
       } else {
-        // RDO method call: use CALL verb
-        setCmd = `C sel ${currBlock} call ${propertyName} "*" ${rdoArgs};`;
+        // RDO method CALL: published procedure (void, push separator)
+        await this.sendRdoRequest('construction', {
+          verb: RdoVerb.SEL,
+          targetId: currBlock,
+          action: RdoAction.CALL,
+          member: propertyName,
+          args: rdoArgs,
+          separator: '"*"',
+        });
       }
-      socket.write(setCmd);
-      this.log.debug(`[BuildingDetails] Sent: ${setCmd}`);
-
-      // Wait for server to process the command
-      await new Promise(resolve => setTimeout(resolve, 200));
 
       // Read back the new value via map service to confirm the change
       const verifyObjectId = await this.cacherCreateObject();
@@ -5289,7 +5289,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
     rdoCommand: string,
     value: string,
     additionalParams?: Record<string, string>
-  ): string {
+  ): string[] {
     const params = additionalParams || {};
     const args: RdoValue[] = [];
 
@@ -5586,8 +5586,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
         break;
     }
 
-    // Format all arguments and join with commas
-    return args.map(arg => arg.format()).join(',');
+    // Return pre-formatted tokens for sendRdoRequest args
+    return args.map(arg => arg.format());
   }
 
   /**
