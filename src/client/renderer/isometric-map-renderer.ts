@@ -45,6 +45,7 @@ import {
   roadBlockId,
   detectSmoothCorner,
   isJunctionTopology,
+  rotateRoadBlockId,
 
   isBridge,
   ROAD_TYPE,
@@ -61,6 +62,7 @@ import {
   getConcreteId,
   buildNeighborConfig,
   canReceiveConcrete,
+  rotateConcreteId,
   CONCRETE_NONE,
   CONCRETE_FULL,
   PLATFORM_IDS,
@@ -68,7 +70,7 @@ import {
   ConcreteMapData,
   ConcreteCfg
 } from './concrete-texture-system';
-import { painterSort } from './painter-algorithm';
+// painter-algorithm's (i+j) sort is NORTH-only; we use screenY-based sort instead
 import { CarClassManager } from './car-class-system';
 import { VehicleAnimationSystem } from './vehicle-animation-system';
 
@@ -402,6 +404,7 @@ export class IsometricMapRenderer {
   private onFetchFacilityDimensions: ((visualClass: string) => Promise<FacilityDimensions | null>) | null = null;
   private onRoadSegmentComplete: ((x1: number, y1: number, x2: number, y2: number) => void) | null = null;
   private onCancelRoadDrawing: (() => void) | null = null;
+  private onRoadDemolishClick: ((x: number, y: number) => void) | null = null;
 
   // Zone overlay
   private zoneOverlayEnabled: boolean = false;
@@ -647,12 +650,22 @@ export class IsometricMapRenderer {
   private setupTouchControls(): void {
     this.touchHandler = new TouchHandler2D(this.canvas, {
       onPan: (dx, dy) => {
-        // Convert screen delta to map delta (same logic as mouse drag)
+        // Convert screen delta to map delta (rotation-aware, same logic as mouse drag)
         const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
         const u = config.u;
-        const mapDeltaI = (dy / u + dx / (2 * u)) * 0.5;
-        const mapDeltaJ = (dy / u - dx / (2 * u)) * 0.5;
-        this.terrainRenderer.pan(mapDeltaI, -mapDeltaJ);
+        const a = (dx + 2 * dy) / (4 * u);
+        const b = (2 * dy - dx) / (4 * u);
+
+        let deltaI: number;
+        let deltaJ: number;
+        switch (this.terrainRenderer.getRotation()) {
+          case Rotation.NORTH: deltaI = a;  deltaJ = b;  break;
+          case Rotation.EAST:  deltaI = -b; deltaJ = a;  break;
+          case Rotation.SOUTH: deltaI = -a; deltaJ = -b; break;
+          case Rotation.WEST:  deltaI = b;  deltaJ = -a; break;
+          default:             deltaI = a;  deltaJ = b;
+        }
+        this.terrainRenderer.pan(deltaI, deltaJ);
         this.markCameraMoving();
 
         // Mark zone request manager as moving
@@ -1379,6 +1392,10 @@ export class IsometricMapRenderer {
     this.onCancelRoadDrawing = callback;
   }
 
+  public setRoadDemolishClickCallback(callback: ((x: number, y: number) => void) | null) {
+    this.onRoadDemolishClick = callback;
+  }
+
   // =========================================================================
   // CAMERA CONTROL
   // =========================================================================
@@ -1430,6 +1447,46 @@ export class IsometricMapRenderer {
    */
   public getZoom(): number {
     return this.terrainRenderer.getZoomLevel();
+  }
+
+  /**
+   * Get all loaded buildings (for minimap rendering)
+   */
+  public getAllBuildings(): MapBuilding[] {
+    return this.allBuildings;
+  }
+
+  /**
+   * Get all loaded road segments (for minimap rendering)
+   */
+  public getAllSegments(): MapSegment[] {
+    return this.allSegments;
+  }
+
+  /**
+   * Get map dimensions in tiles (for minimap scaling)
+   */
+  public getMapDimensions(): { width: number; height: number } {
+    return this.terrainRenderer.getTerrainLoader().getDimensions();
+  }
+
+  /**
+   * Get visible tile bounds (for minimap viewport rectangle)
+   */
+  public getVisibleTileBounds(): TileBounds {
+    const viewport: Rect = {
+      x: 0,
+      y: 0,
+      width: this.canvas.width,
+      height: this.canvas.height,
+    };
+    const origin = this.terrainRenderer.getOrigin();
+    return this.terrainRenderer.getCoordinateMapper().getVisibleBounds(
+      viewport,
+      this.terrainRenderer.getZoomLevel(),
+      this.terrainRenderer.getRotation(),
+      origin
+    );
   }
 
   /**
@@ -1651,8 +1708,9 @@ export class IsometricMapRenderer {
     // Clear ground cache
     this.groundCtx.clearRect(0, 0, this.groundCanvas!.width, this.groundCanvas!.height);
 
-    // === Render terrain chunks directly to ground cache ===
-    if (chunkCache) {
+    // === Render terrain to ground cache ===
+    if (chunkCache && rotation === Rotation.NORTH) {
+      // NORTH rotation: use pre-rendered chunks (fast path)
       const extBounds = this.getExtendedBounds(margin);
       const visibleChunks = chunkCache.getVisibleChunksFromBounds(extBounds);
 
@@ -1671,6 +1729,9 @@ export class IsometricMapRenderer {
       }
 
       this.groundCtx.restore();
+    } else {
+      // Non-NORTH rotations: render terrain tiles directly (chunks are NORTH-only)
+      this.renderTerrainTilesToGroundCache(margin);
     }
 
     // === Ctx-swap: render vegetation, concrete, roads to ground cache ===
@@ -1697,6 +1758,64 @@ export class IsometricMapRenderer {
     this.groundCacheRotation = rotation;
     this.groundCacheOriginX = origin.x;
     this.groundCacheOriginY = origin.y;
+  }
+
+  /**
+   * Render terrain tiles directly to the ground cache (for non-NORTH rotations).
+   * Chunks are pre-rendered at NORTH positions, so at other rotations we fall back
+   * to tile-by-tile rendering using the rotation-aware coordinate mapper.
+   */
+  private renderTerrainTilesToGroundCache(margin: number): void {
+    if (!this.groundCtx) return;
+
+    const FLAT_MASK = 0xC0;
+    const extBounds = this.getExtendedBounds(margin);
+    const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
+    const halfWidth = config.tileWidth / 2;
+    const terrainLoader = this.terrainRenderer.getTerrainLoader();
+    const textureCache = this.terrainRenderer.getTextureCache();
+    const ctx = this.groundCtx as unknown as CanvasRenderingContext2D;
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.save();
+    ctx.translate(margin, margin);
+
+    for (let i = extBounds.minI; i <= extBounds.maxI; i++) {
+      for (let j = extBounds.minJ; j <= extBounds.maxJ; j++) {
+        let textureId = terrainLoader.getTextureId(j, i);
+        if (isSpecialTile(textureId)) {
+          textureId = textureId & FLAT_MASK;
+        }
+
+        const screenPos = this.terrainRenderer.mapToScreen(i, j);
+        const sx = Math.round(screenPos.x);
+        const sy = Math.round(screenPos.y);
+
+        // Cull if off-screen (with ground cache padding)
+        if (sx < -config.tileWidth - margin || sx > this.canvas.width + config.tileWidth + margin ||
+            sy < -config.tileHeight - margin || sy > this.canvas.height + config.tileHeight + margin) {
+          continue;
+        }
+
+        const texture = textureCache.getTextureSync(textureId);
+        if (texture) {
+          ctx.drawImage(texture, sx - halfWidth, sy, config.tileWidth, config.tileHeight);
+        } else {
+          // Diamond fallback color
+          const color = textureCache.getFallbackColor(textureId);
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + halfWidth, sy + config.tileHeight / 2);
+          ctx.lineTo(sx, sy + config.tileHeight);
+          ctx.lineTo(sx - halfWidth, sy + config.tileHeight / 2);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+
+    ctx.restore();
   }
 
   /**
@@ -1929,9 +2048,13 @@ export class IsometricMapRenderer {
         // Skip tiles without concrete
         if (!mapData.hasConcrete(i, j)) continue;
 
-        // Calculate concrete ID based on neighbors
-        const concreteId = getConcreteId(i, j, mapData);
+        // Calculate concrete ID based on neighbors, then rotate for current view
+        let concreteId = getConcreteId(i, j, mapData);
         if (concreteId === CONCRETE_NONE) continue;
+        const concreteRotation = this.terrainRenderer.getRotation() as number;
+        if (concreteRotation !== 0) {
+          concreteId = rotateConcreteId(concreteId, concreteRotation);
+        }
 
         // Get screen position
         const screenPos = this.terrainRenderer.mapToScreen(i, j);
@@ -1945,8 +2068,9 @@ export class IsometricMapRenderer {
       }
     }
 
-    // Painter's algorithm: higher (i+j) drawn first, lower drawn last (on top)
-    concreteTiles.sort(painterSort);
+    // Painter's algorithm: lower screen Y (farther from viewer) drawn first.
+    // Using screenY instead of (i+j) makes sorting correct at all rotations.
+    concreteTiles.sort((a, b) => a.screenY - b.screenY);
 
     const scaleFactor = config.tileWidth / 64;
 
@@ -2190,6 +2314,13 @@ export class IsometricMapRenderer {
             ? smoothResult.roadBlock
             : roadBlockId(topology, landId, onConcrete, false, false);
 
+          // Rotate road texture to match current view rotation.
+          // rotateRoadBlockId uses road-texture-system's Rotation enum (same numeric values)
+          const viewRotation = this.terrainRenderer.getRotation() as number;
+          if (viewRotation !== 0) {
+            fullRoadBlockId = rotateRoadBlockId(fullRoadBlockId, viewRotation);
+          }
+
           const texturePath = this.roadBlockClassManager.getImagePath(fullRoadBlockId);
           if (texturePath) {
             const filename = texturePath.split('/').pop() || '';
@@ -2219,8 +2350,8 @@ export class IsometricMapRenderer {
       });
     }
 
-    // Unified painter's algorithm: sort all tiles by (i+j) descending (back-to-front)
-    allRoadTiles.sort((a, b) => (b.y + b.x) - (a.y + a.x));
+    // Unified painter's algorithm: sort by screen Y ascending (rotation-aware back-to-front)
+    allRoadTiles.sort((a, b) => a.sy - b.sy);
 
     const scale = config.tileWidth / 64;
 
@@ -2354,8 +2485,8 @@ export class IsometricMapRenderer {
       }
     }
 
-    // Sort by (i+j) descending for painter's algorithm (back-to-front)
-    vegTiles.sort((a, b) => (b.i + b.j) - (a.i + a.j));
+    // Sort by screen Y ascending for painter's algorithm (rotation-aware back-to-front)
+    vegTiles.sort((a, b) => a.sy - b.sy);
 
     // Draw vegetation tiles
     if (useAtlas) {
@@ -2511,13 +2642,12 @@ export class IsometricMapRenderer {
              b.y + bh > bounds.minI - margin && b.y < bounds.maxI + margin;
     });
 
-    // Painter's algorithm: sort by depth (x+y)
-    // In isometric view, lower (x+y) = closer to viewer = lower on screen = draw LAST (on top)
-    // Higher (x+y) = farther from viewer = higher on screen = draw FIRST (behind)
+    // Painter's algorithm: sort by screen Y ascending (rotation-aware).
+    // Lower screen Y = farther from viewer = draw FIRST (behind).
     const sortedBuildings = visibleBuildings.sort((a, b) => {
-      const aDepth = a.y + a.x;
-      const bDepth = b.y + b.x;
-      return bDepth - aDepth; // Descending: draw farther buildings first, closer ones last
+      const aScreen = this.terrainRenderer.mapToScreen(a.y, a.x);
+      const bScreen = this.terrainRenderer.mapToScreen(b.y, b.x);
+      return aScreen.y - bScreen.y;
     });
 
     sortedBuildings.forEach(building => {
@@ -3392,22 +3522,17 @@ export class IsometricMapRenderer {
   }
 
   /**
-   * Draw compass indicator showing cardinal directions in ISOMETRIC orientation
+   * Draw compass indicator showing cardinal directions in ISOMETRIC orientation.
+   * Rotates with the current map rotation so labels always reflect correct screen positions.
    *
-   * Isometric grid mapping (45° rotation from top-down view):
-   * - Grid row (i) increases toward bottom-left on screen
-   * - Grid col (j) increases toward bottom-right on screen
-   *
-   * Cardinal directions (rotated 45° for isometric):
-   * - N (North) = top-right on screen (decreasing row)
-   * - E (East) = bottom-right on screen (increasing col)
-   * - S (South) = bottom-left on screen (increasing row)
-   * - W (West) = top-left on screen (decreasing col)
+   * At NORTH rotation: N=top-right, E=bottom-right, S=bottom-left, W=top-left
+   * Each 90° CW rotation shifts all labels one position clockwise.
    */
   private drawCompass(ctx: CanvasRenderingContext2D) {
     const compassX = this.canvas.width - 55;
     const compassY = this.canvas.height - 55;
     const radius = 35;
+    const rotation = this.terrainRenderer.getRotation();
 
     // Background rounded rectangle
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -3421,48 +3546,63 @@ export class IsometricMapRenderer {
     const tileW = radius * 0.6;
     const tileH = radius * 0.3;
     ctx.beginPath();
-    ctx.moveTo(compassX, compassY - tileH);       // top
-    ctx.lineTo(compassX + tileW, compassY);       // right
-    ctx.lineTo(compassX, compassY + tileH);       // bottom
-    ctx.lineTo(compassX - tileW, compassY);       // left
+    ctx.moveTo(compassX, compassY - tileH);
+    ctx.lineTo(compassX + tileW, compassY);
+    ctx.lineTo(compassX, compassY + tileH);
+    ctx.lineTo(compassX - tileW, compassY);
     ctx.closePath();
     ctx.stroke();
 
-    // Direction labels at 45° angles (isometric orientation)
+    // Four compass positions: top-right, bottom-right, bottom-left, top-left
+    const positions = [
+      { dx: 0.65, dy: -0.65 },
+      { dx: 0.65, dy: 0.65 },
+      { dx: -0.65, dy: 0.65 },
+      { dx: -0.65, dy: -0.65 }
+    ];
+
+    // Directions and colors (N, E, S, W)
+    const dirs = [
+      { label: 'N', color: '#ff6666' },
+      { label: 'E', color: '#6699ff' },
+      { label: 'S', color: '#ffcc44' },
+      { label: 'W', color: '#66cc66' }
+    ];
+
+    // Draw direction labels — at rotation R, direction d appears at position (d + R) % 4
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // N - top-right (red, primary direction indicator)
-    ctx.fillStyle = '#ff6666';
-    ctx.fillText('N', compassX + radius * 0.65, compassY - radius * 0.65);
+    for (let d = 0; d < 4; d++) {
+      const pos = positions[(d + rotation) % 4];
+      ctx.fillStyle = dirs[d].color;
+      ctx.fillText(dirs[d].label, compassX + radius * pos.dx, compassY + radius * pos.dy);
+    }
 
-    // E - bottom-right (blue)
-    ctx.fillStyle = '#6699ff';
-    ctx.fillText('E', compassX + radius * 0.65, compassY + radius * 0.65);
+    // North arrow — points to N's current screen position
+    const nPos = positions[rotation % 4];
+    const arrowLen = 0.4;
+    const arrowEndX = compassX + radius * nPos.dx * arrowLen / 0.65;
+    const arrowEndY = compassY + radius * nPos.dy * arrowLen / 0.65;
 
-    // S - bottom-left (yellow)
-    ctx.fillStyle = '#ffcc44';
-    ctx.fillText('S', compassX - radius * 0.65, compassY + radius * 0.65);
-
-    // W - top-left (green)
-    ctx.fillStyle = '#66cc66';
-    ctx.fillText('W', compassX - radius * 0.65, compassY - radius * 0.65);
-
-    // Arrow pointing North (toward top-right)
     ctx.strokeStyle = '#ff6666';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(compassX, compassY);
-    ctx.lineTo(compassX + radius * 0.4, compassY - radius * 0.4);
+    ctx.lineTo(arrowEndX, arrowEndY);
     ctx.stroke();
 
-    // Arrow head
+    // Arrow head triangle
+    const tipX = compassX + radius * nPos.dx * 0.5 / 0.65;
+    const tipY = compassY + radius * nPos.dy * 0.5 / 0.65;
+    const perpX = -nPos.dy * 0.15;
+    const perpY = nPos.dx * 0.15;
     ctx.fillStyle = '#ff6666';
     ctx.beginPath();
-    ctx.moveTo(compassX + radius * 0.5, compassY - radius * 0.5);
-    ctx.lineTo(compassX + radius * 0.25, compassY - radius * 0.35);
-    ctx.lineTo(compassX + radius * 0.35, compassY - radius * 0.25);
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(tipX - radius * (nPos.dx * 0.25 / 0.65 - perpX), tipY - radius * (nPos.dy * 0.25 / 0.65 - perpY));
+    ctx.lineTo(tipX - radius * (nPos.dx * 0.25 / 0.65 + perpX), tipY - radius * (nPos.dy * 0.25 / 0.65 + perpY));
     ctx.closePath();
     ctx.fill();
 
@@ -3471,12 +3611,6 @@ export class IsometricMapRenderer {
     ctx.beginPath();
     ctx.arc(compassX, compassY, 2, 0, Math.PI * 2);
     ctx.fill();
-
-    // Small grid hints
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.font = '7px monospace';
-    ctx.fillText('i-', compassX + radius * 0.2, compassY - radius * 0.2);
-    ctx.fillText('j+', compassX + radius * 0.2, compassY + radius * 0.2);
   }
 
   // =========================================================================
@@ -3591,6 +3725,9 @@ export class IsometricMapRenderer {
         this.requestRender();
       } else if (this.placementMode) {
         // Building placement handled by client
+      } else if (this.onRoadDemolishClick) {
+        // Road demolish mode — send tile coordinates on click
+        this.onRoadDemolishClick(mapPos.j, mapPos.i);
       } else {
         // Check building click
         const building = this.getBuildingAt(mapPos.j, mapPos.i);
@@ -3611,11 +3748,24 @@ export class IsometricMapRenderer {
       const dy = e.clientY - this.lastMouseY;
 
       // Convert screen delta to map delta for grab-and-move behavior
+      // The base formula (NORTH rotation) is derived from inverting the isometric
+      // projection Jacobian. For other rotations, the (di, dj) pair is rotated
+      // to match the rotated coordinate axes.
       const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
       const u = config.u;
 
-      const deltaI = (dx + 2 * dy) / (2 * u);
-      const deltaJ = (2 * dy - dx) / (2 * u);
+      const a = (dx + 2 * dy) / (2 * u);
+      const b = (2 * dy - dx) / (2 * u);
+
+      let deltaI: number;
+      let deltaJ: number;
+      switch (this.terrainRenderer.getRotation()) {
+        case Rotation.NORTH: deltaI = a;  deltaJ = b;  break;
+        case Rotation.EAST:  deltaI = -b; deltaJ = a;  break;
+        case Rotation.SOUTH: deltaI = -a; deltaJ = -b; break;
+        case Rotation.WEST:  deltaI = b;  deltaJ = -a; break;
+        default:             deltaI = a;  deltaJ = b;
+      }
 
       this.terrainRenderer.pan(deltaI, deltaJ);
 
@@ -3829,5 +3979,6 @@ export class IsometricMapRenderer {
     this.onFetchFacilityDimensions = null;
     this.onRoadSegmentComplete = null;
     this.onCancelRoadDrawing = null;
+    this.onRoadDemolishClick = null;
   }
 }

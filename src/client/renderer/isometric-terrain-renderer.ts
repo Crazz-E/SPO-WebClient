@@ -704,17 +704,25 @@ export class IsometricTerrainRenderer {
       const dx = e.clientX - this.lastMouseX;
       const dy = e.clientY - this.lastMouseY;
 
-      // Convert screen delta to map delta
-      // In isometric view, horizontal movement affects both i and j
+      // Convert screen delta to map delta (rotation-aware)
       const config = ZOOM_LEVELS[this.zoomLevel];
       const u = config.u;
 
-      // Approximate conversion (simplified)
-      const mapDeltaI = (dy / u + dx / (2 * u)) * 0.5;
-      const mapDeltaJ = (dy / u - dx / (2 * u)) * 0.5;
+      const a = (dx + 2 * dy) / (2 * u);
+      const b = (2 * dy - dx) / (2 * u);
 
-      this.cameraI += mapDeltaI;
-      this.cameraJ -= mapDeltaJ;
+      let deltaI: number;
+      let deltaJ: number;
+      switch (this.rotation) {
+        case Rotation.NORTH: deltaI = a;  deltaJ = b;  break;
+        case Rotation.EAST:  deltaI = -b; deltaJ = a;  break;
+        case Rotation.SOUTH: deltaI = -a; deltaJ = -b; break;
+        case Rotation.WEST:  deltaI = b;  deltaJ = -a; break;
+        default:             deltaI = a;  deltaJ = b;
+      }
+
+      this.cameraI += deltaI;
+      this.cameraJ += deltaJ;
 
       // Clamp to map bounds
       const dims = this.terrainLoader.getDimensions();
