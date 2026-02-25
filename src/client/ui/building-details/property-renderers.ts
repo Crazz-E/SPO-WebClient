@@ -139,14 +139,17 @@ export function renderBooleanProperty(
   editable?: boolean,
   onChange?: (value: number) => void
 ): HTMLElement {
-  const isTrue = value === '1' || value.toLowerCase() === 'yes' || value.toLowerCase() === 'true';
+  // Delphi WordBool: -1 = true, 0 = false; also accept 1/yes/true
+  const numVal = parseInt(value, 10);
+  const isTrue = (!isNaN(numVal) && numVal !== 0) || value.toLowerCase() === 'yes' || value.toLowerCase() === 'true';
 
   if (editable && onChange) {
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.className = 'property-checkbox';
     checkbox.checked = isTrue;
-    checkbox.onchange = () => onChange(checkbox.checked ? 1 : 0);
+    // WordBool: -1 for true, 0 for false (Delphi convention)
+    checkbox.onchange = () => onChange(checkbox.checked ? -1 : 0);
     return checkbox;
   }
 

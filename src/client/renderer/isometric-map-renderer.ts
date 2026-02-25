@@ -3674,6 +3674,11 @@ export class IsometricMapRenderer {
     return this.hideVegetationOnMove;
   }
 
+  public setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
+    this.requestRender();
+  }
+
   // =========================================================================
   // MOUSE CONTROLS
   // =========================================================================

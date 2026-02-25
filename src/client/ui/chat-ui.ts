@@ -5,6 +5,16 @@
 
 import { ChatUser } from '../../shared/types';
 
+interface StoredMessage {
+  from: string;
+  message: string;
+  isSystem: boolean;
+  timestamp: number;
+}
+
+const CHAT_STORAGE_PREFIX = 'spo_chat_';
+const MAX_STORED_MESSAGES = 100;
+
 export class ChatUI {
   // DOM elements
   private container: HTMLElement | null = null;
@@ -82,8 +92,13 @@ export class ChatUI {
   /**
    * Display a message in the chat
    */
-  public renderMessage(from: string, message: string, isSystem: boolean = false) {
+  public renderMessage(from: string, message: string, isSystem: boolean = false, skipSave: boolean = false) {
     if (!this.messagesContainer) return;
+
+    // Persist to localStorage (skip when replaying stored messages)
+    if (!skipSave) {
+      this.saveMessage(from, message, isSystem);
+    }
 
     const msgDiv = document.createElement('div');
     msgDiv.className = 'chat-message';
@@ -164,6 +179,8 @@ export class ChatUI {
   public setCurrentChannel(channelName: string) {
     this.currentChannel = channelName;
     this.renderChannelTabs();
+    // Load stored messages for the new channel
+    this.loadStoredMessages();
   }
 
   /**
@@ -806,6 +823,39 @@ export class ChatUI {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
+  }
+
+  /**
+   * Save a message to localStorage for the current channel
+   */
+  private saveMessage(from: string, message: string, isSystem: boolean): void {
+    const key = CHAT_STORAGE_PREFIX + (this.currentChannel || 'Lobby');
+    try {
+      const stored: StoredMessage[] = JSON.parse(localStorage.getItem(key) || '[]');
+      stored.push({ from, message, isSystem, timestamp: Date.now() });
+      // Cap at MAX_STORED_MESSAGES
+      if (stored.length > MAX_STORED_MESSAGES) {
+        stored.splice(0, stored.length - MAX_STORED_MESSAGES);
+      }
+      localStorage.setItem(key, JSON.stringify(stored));
+    } catch {
+      // localStorage full or unavailable — silently ignore
+    }
+  }
+
+  /**
+   * Load stored messages for the current channel into the container
+   */
+  private loadStoredMessages(): void {
+    const key = CHAT_STORAGE_PREFIX + (this.currentChannel || 'Lobby');
+    try {
+      const stored: StoredMessage[] = JSON.parse(localStorage.getItem(key) || '[]');
+      for (const msg of stored) {
+        this.renderMessage(msg.from, msg.message, msg.isSystem, true);
+      }
+    } catch {
+      // Corrupt data — silently ignore
+    }
   }
 
   /**

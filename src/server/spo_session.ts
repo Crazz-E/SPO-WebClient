@@ -16,6 +16,7 @@ import {
   CompanyInfo,
   MapData,
   WsEventRdoPush,
+  WsEventEndOfPeriod,
   ChatUser,
   WsEventChatUserTyping,
   WsEventChatChannelChange,
@@ -3164,6 +3165,62 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     };
   }
 
+  /**
+   * Demolish a road segment at (x, y)
+   *
+   * Delphi reference (World.pas:4311-4354):
+   *   function RDOBreakCircuitAt(CircuitId, TycoonId, x, y: integer): OleVariant;
+   *   CircuitId: 1=Roads, 2=Rail
+   *   Returns: 0=success, 1=unknown, 2=invalidSegment, 3=accessDenied
+   *
+   * Uses worldContextId (same as road building)
+   */
+  public async demolishRoad(x: number, y: number): Promise<{ success: boolean; message?: string; errorCode?: number }> {
+    if (!this.worldContextId) {
+      return { success: false, message: 'Not connected to world', errorCode: 1 };
+    }
+
+    const circuitId = 1; // Road circuit type
+    const ownerId = this.fTycoonProxyId || 0;
+
+    try {
+      const result = await this.sendRdoRequest('world', {
+        verb: RdoVerb.SEL,
+        targetId: this.worldContextId,
+        action: RdoAction.CALL,
+        member: 'BreakCircuitAt',
+        separator: '"^"',
+        args: [
+          `#${circuitId}`,
+          `#${ownerId}`,
+          `#${x}`,
+          `#${y}`
+        ]
+      });
+
+      const resultMatch = /res="#(-?\d+)"/.exec(result.payload || '');
+      const resultCode = resultMatch ? parseInt(resultMatch[1], 10) : -1;
+
+      if (resultCode === 0) {
+        this.log.debug(`[RoadDemolish] Road demolished at (${x}, ${y})`);
+        return { success: true };
+      }
+
+      const errorMessages: Record<number, string> = {
+        1: 'Unknown error',
+        2: 'No road segment found at this location',
+        3: 'Access denied - insufficient permissions',
+      };
+
+      const message = errorMessages[resultCode] || `Failed with code ${resultCode}`;
+      this.log.warn(`[RoadDemolish] Failed at (${x}, ${y}): ${message}`);
+      return { success: false, message, errorCode: resultCode };
+    } catch (e: unknown) {
+      this.log.error(`[RoadDemolish] Failed to demolish road:`, e);
+      return { success: false, message: toErrorMessage(e), errorCode: 1 };
+    }
+  }
+
   public async executeRdo(serviceName: string, packetData: Partial<RdoPacket>): Promise<string> {
     if (!this.sockets.has(serviceName)) {
       throw new Error(`Service ${serviceName} not connected`);
@@ -3662,7 +3719,9 @@ private handlePush(socketName: string, packet: RdoPacket) {
         incomePerHour: cleanArgs[1],
         ranking: parseInt(cleanArgs[2], 10) || 0,
         buildingCount: parseInt(cleanArgs[3], 10) || 0,
-        maxBuildings: parseInt(cleanArgs[4], 10) || 0
+        maxBuildings: parseInt(cleanArgs[4], 10) || 0,
+        // Include last-known failureLevel from InitClient (0=nominal, >0=debt)
+        failureLevel: this.failureLevel ?? undefined,
       };
 
       // Cache push data for profile queries
@@ -3680,7 +3739,17 @@ private handlePush(socketName: string, packet: RdoPacket) {
     }
   }
 
-  // 6. Generic push fallback (for unhandled events)
+  // 6. EndOfPeriod — server signals a financial period has ended
+  if (packet.member === 'EndOfPeriod') {
+    this.log.debug('[Push] EndOfPeriod received');
+    const endOfPeriodEvent: WsEventEndOfPeriod = {
+      type: WsMessageType.EVENT_END_OF_PERIOD,
+    };
+    this.emit('ws_event', endOfPeriodEvent);
+    return;
+  }
+
+  // 7. Generic push fallback (for unhandled events)
   const event: WsEventRdoPush = {
     type: WsMessageType.EVENT_RDO_PUSH,
     rawPacket: packet.raw
@@ -5382,6 +5451,20 @@ private handlePush(socketName: string, packet: RdoPacket) {
         const minId = parseInt(params.ministryId || '0', 10);
         const minName = params.ministerName || '';
         args.push(RdoValue.int(minId), RdoValue.string(minName));
+        break;
+      }
+
+      case 'RdoRepair': {
+        // Args: dummy integer (0)
+        // Voyager: IndustryGeneralSheet.pas — Proxy.RdoRepair(0)
+        args.push(RdoValue.int(0));
+        break;
+      }
+
+      case 'RdoStopRepair': {
+        // Args: dummy integer (0)
+        // Voyager: IndustryGeneralSheet.pas — Proxy.RdoStopRepair(0)
+        args.push(RdoValue.int(0));
         break;
       }
 

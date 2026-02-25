@@ -10,6 +10,7 @@ export class ToolbarUI {
   // Callbacks for unimplemented buttons
   private onBuildMenu: (() => void) | null = null;
   private onBuildRoad: (() => void) | null = null;
+  private onDemolishRoad: (() => void) | null = null;
   private onSearch: (() => void) | null = null;
   private onCompanyMenu: (() => void) | null = null;
   private onMail: (() => void) | null = null;
@@ -19,6 +20,7 @@ export class ToolbarUI {
 
   // Button references for state updates
   private roadBuildingBtn: HTMLElement | null = null;
+  private roadDemolishBtn: HTMLElement | null = null;
   private mailBtn: HTMLElement | null = null;
   private mailBadge: HTMLElement | null = null;
 
@@ -50,6 +52,10 @@ export class ToolbarUI {
    */
   public setOnBuildRoad(callback: () => void) {
     this.onBuildRoad = callback;
+  }
+
+  public setOnDemolishRoad(callback: () => void) {
+    this.onDemolishRoad = callback;
   }
 
   /**
@@ -125,6 +131,13 @@ export class ToolbarUI {
         isRoadButton: true
       },
       {
+        icon: '🚧',
+        label: 'Demolish',
+        tooltip: 'Demolish Roads',
+        callback: () => this.onDemolishRoad?.(),
+        isDemolishButton: true
+      },
+      {
         icon: '🔍',
         label: 'Search',
         tooltip: 'Search Buildings',
@@ -169,6 +182,9 @@ export class ToolbarUI {
       // Store reference to road button for state updates
       if ('isRoadButton' in btnConfig && btnConfig.isRoadButton) {
         this.roadBuildingBtn = btn;
+      }
+      if ('isDemolishButton' in btnConfig && btnConfig.isDemolishButton) {
+        this.roadDemolishBtn = btn;
       }
       // Store reference to mail button for badge updates
       if ('isMailButton' in btnConfig && btnConfig.isMailButton) {
@@ -427,6 +443,22 @@ export class ToolbarUI {
       this.roadBuildingBtn.style.borderColor = 'transparent';
       this.roadBuildingBtn.style.color = 'var(--text-secondary)';
       this.roadBuildingBtn.classList.remove('road-active');
+    }
+  }
+
+  public setRoadDemolishActive(active: boolean) {
+    if (!this.roadDemolishBtn) return;
+
+    if (active) {
+      this.roadDemolishBtn.style.background = 'rgba(239, 68, 68, 0.3)'; // Red tint
+      this.roadDemolishBtn.style.borderColor = '#ef4444'; // Red border
+      this.roadDemolishBtn.style.color = '#f87171'; // Red text
+      this.roadDemolishBtn.classList.add('demolish-active');
+    } else {
+      this.roadDemolishBtn.style.background = 'transparent';
+      this.roadDemolishBtn.style.borderColor = 'transparent';
+      this.roadDemolishBtn.style.color = 'var(--text-secondary)';
+      this.roadDemolishBtn.classList.remove('demolish-active');
     }
   }
 }

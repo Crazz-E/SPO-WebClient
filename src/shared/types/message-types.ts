@@ -65,6 +65,7 @@ export enum WsMessageType {
   EVENT_MAP_DATA = 'EVENT_MAP_DATA',
   EVENT_TYCOON_UPDATE = 'EVENT_TYCOON_UPDATE',
   EVENT_RDO_PUSH = 'EVENT_RDO_PUSH',
+  EVENT_END_OF_PERIOD = 'EVENT_END_OF_PERIOD',
 
   // Chat functionality
   REQ_CHAT_GET_USERS = 'REQ_CHAT_GET_USERS',
@@ -124,6 +125,8 @@ export enum WsMessageType {
   RESP_BUILD_ROAD = 'RESP_BUILD_ROAD',
   REQ_GET_ROAD_COST = 'REQ_GET_ROAD_COST',
   RESP_GET_ROAD_COST = 'RESP_GET_ROAD_COST',
+  REQ_DEMOLISH_ROAD = 'REQ_DEMOLISH_ROAD',
+  RESP_DEMOLISH_ROAD = 'RESP_DEMOLISH_ROAD',
 
   // Search Menu / Directory
   REQ_SEARCH_MENU_HOME = 'REQ_SEARCH_MENU_HOME',
@@ -327,11 +330,17 @@ export interface WsEventTycoonUpdate extends WsMessage {
   ranking: number;
   buildingCount: number;
   maxBuildings: number;
+  /** 0 = nominal, 1 = warning (debt), 2 = alert (near bankruptcy) */
+  failureLevel?: number;
 }
 
 export interface WsEventRdoPush extends WsMessage {
   type: WsMessageType.EVENT_RDO_PUSH;
   rawPacket: string;
+}
+
+export interface WsEventEndOfPeriod extends WsMessage {
+  type: WsMessageType.EVENT_END_OF_PERIOD;
 }
 
 // =============================================================================
@@ -678,6 +687,23 @@ export interface WsRespGetRoadCost extends WsMessage {
   cost: number;
   tileCount: number;
   costPerTile: number;
+}
+
+// =============================================================================
+// ROAD DEMOLITION MESSAGES
+// =============================================================================
+
+export interface WsReqDemolishRoad extends WsMessage {
+  type: WsMessageType.REQ_DEMOLISH_ROAD;
+  x: number;
+  y: number;
+}
+
+export interface WsRespDemolishRoad extends WsMessage {
+  type: WsMessageType.RESP_DEMOLISH_ROAD;
+  success: boolean;
+  message?: string;
+  errorCode?: number;
 }
 
 // =============================================================================

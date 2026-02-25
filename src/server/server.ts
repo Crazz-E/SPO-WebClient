@@ -78,6 +78,9 @@ import {
   WsRespBuildRoad,
   WsReqGetRoadCost,
   WsRespGetRoadCost,
+  // Road Demolition
+  WsReqDemolishRoad,
+  WsRespDemolishRoad,
   // Search Menu
   WsReqSearchMenuHome,
   WsRespSearchMenuHome,
@@ -1656,6 +1659,34 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
             wsRequestId: msg.wsRequestId,
             errorMessage: toErrorMessage(err) || 'Failed to get road cost',
             code: ErrorCodes.ERROR_Unknown
+          };
+          ws.send(JSON.stringify(errorResp));
+        }
+        break;
+      }
+
+      case WsMessageType.REQ_DEMOLISH_ROAD: {
+        const req = msg as WsReqDemolishRoad;
+        console.log(`[Gateway] Demolish road at (${req.x}, ${req.y})`);
+
+        try {
+          const result = await session.demolishRoad(req.x, req.y);
+
+          const response: WsRespDemolishRoad = {
+            type: WsMessageType.RESP_DEMOLISH_ROAD,
+            wsRequestId: msg.wsRequestId,
+            success: result.success,
+            message: result.message,
+            errorCode: result.errorCode
+          };
+          ws.send(JSON.stringify(response));
+        } catch (err: unknown) {
+          console.error('[Gateway] Failed to demolish road:', err);
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: toErrorMessage(err) || 'Failed to demolish road',
+            code: ErrorCodes.ERROR_AccessDenied
           };
           ws.send(JSON.stringify(errorResp));
         }

@@ -177,8 +177,8 @@ describe('General handler RDO properties', () => {
     expect(maintProp!.editable).toBe(true);
   });
 
-  it('ResGeneral should have 20 properties (PopulatedBlock stats + investment sliders)', () => {
-    expect(RES_GENERAL_GROUP.properties).toHaveLength(20);
+  it('ResGeneral should have 22 properties (PopulatedBlock stats + investment sliders + repair actions)', () => {
+    expect(RES_GENERAL_GROUP.properties).toHaveLength(22);
   });
 
   it('ResGeneral should have residential stats from PopulatedBlock.StoreToCache', () => {

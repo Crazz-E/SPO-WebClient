@@ -154,6 +154,9 @@ export const RES_GENERAL_GROUP: PropertyGroup = {
     // Repair info
     { rdoName: 'Repair', displayName: 'Repair Status', type: PropertyType.TEXT },
     { rdoName: 'RepairPrice', displayName: 'Repair Cost', type: PropertyType.CURRENCY },
+    // Repair actions (Voyager: IndustryGeneralSheet.pas — RdoRepair / RdoStopRepair)
+    { rdoName: 'startRepair', displayName: 'Start Repair', type: PropertyType.ACTION_BUTTON, actionId: 'startRepair', buttonLabel: 'Start Repair' },
+    { rdoName: 'stopRepair', displayName: 'Stop Repair', type: PropertyType.ACTION_BUTTON, actionId: 'stopRepair', buttonLabel: 'Stop Repair' },
   ],
   rdoCommands: {
     'Rent': { command: 'property' },

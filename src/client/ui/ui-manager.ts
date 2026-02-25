@@ -14,6 +14,8 @@ import { SearchMenuPanel } from './search-menu';
 import { MailPanel } from './mail-panel';
 import { ProfilePanel } from './profile-panel';
 import { PoliticsPanel } from './politics-panel';
+import { MinimapUI } from './minimap-ui';
+import { SettingsPanel } from './settings-panel';
 import {
   BuildingDetailsResponse,
   WsMessage,
@@ -50,6 +52,8 @@ export class UIManager {
   public mailPanel: MailPanel | null = null;
   public profilePanel: ProfilePanel | null = null;
   public politicsPanel: PoliticsPanel | null = null;
+  public minimapUI: MinimapUI | null = null;
+  public settingsPanel: SettingsPanel | null = null;
 
   // Console
   private uiConsole: HTMLElement;
@@ -81,6 +85,12 @@ export class UIManager {
 
     // Zone Overlay UI
     this.zoneOverlayUI = new ZoneOverlayUI();
+
+    // Minimap (toggle with 'M' key)
+    this.minimapUI = new MinimapUI();
+
+    // Settings Panel
+    this.settingsPanel = new SettingsPanel();
 
     // Building Details Panel (new detailed panel)
     this.buildingDetailsPanel = new BuildingDetailsPanel(gamePanel, {

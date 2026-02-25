@@ -106,6 +106,7 @@ export type {
   WsEventChatMsg,
   WsEventTycoonUpdate,
   WsEventRdoPush,
+  WsEventEndOfPeriod,
   // Chat messages
   WsReqChatGetUsers,
   WsReqChatGetChannels,
@@ -169,6 +170,9 @@ export type {
   WsRespBuildRoad,
   WsReqGetRoadCost,
   WsRespGetRoadCost,
+  // Road demolition messages
+  WsReqDemolishRoad,
+  WsRespDemolishRoad,
   // Logout messages
   WsReqLogout,
   WsRespLogout,

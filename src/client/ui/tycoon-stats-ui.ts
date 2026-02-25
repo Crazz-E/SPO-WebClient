@@ -14,6 +14,8 @@ export interface TycoonStats {
   levelName?: string;
   levelTier?: number;
   area?: number;
+  /** 0 = nominal, 1 = warning (debt), 2 = alert (near bankruptcy) */
+  failureLevel?: number;
 }
 
 export class TycoonStatsUI {
@@ -108,12 +110,18 @@ export class TycoonStatsUI {
     areaEl.dataset.type = 'area';
     areaEl.style.display = 'none';
 
+    // Bankruptcy warning (hidden until failureLevel > 0)
+    const debtEl = this.createStatElement('⚠', 'Debt', 'Company Financial Status');
+    debtEl.dataset.type = 'debt';
+    debtEl.style.display = 'none';
+
     this.statsPanel.appendChild(rankingEl);
     this.statsPanel.appendChild(buildingsEl);
     this.statsPanel.appendChild(cashEl);
     this.statsPanel.appendChild(incomeEl);
     this.statsPanel.appendChild(prestigeEl);
     this.statsPanel.appendChild(areaEl);
+    this.statsPanel.appendChild(debtEl);
 
     this.container.appendChild(this.statsPanel);
   }
@@ -249,6 +257,28 @@ export class TycoonStatsUI {
       const rankingVal = this.statsPanel.querySelector('[data-type="ranking"] .stat-value');
       if (rankingVal) {
         rankingVal.textContent = `#${stats.ranking} ${stats.username} (${stats.levelName})`;
+      }
+    }
+
+    // Update debt/bankruptcy indicator
+    if (stats.failureLevel !== undefined && stats.failureLevel > 0) {
+      const debtContainer = this.statsPanel.querySelector('[data-type="debt"]') as HTMLElement | null;
+      const debtVal = debtContainer?.querySelector('.stat-value') as HTMLElement | null;
+      if (debtContainer && debtVal) {
+        debtContainer.style.display = 'flex';
+        if (stats.failureLevel >= 2) {
+          debtVal.textContent = 'BANKRUPTCY';
+          debtVal.style.color = 'var(--danger, #EF4444)';
+        } else {
+          debtVal.textContent = 'In Debt';
+          debtVal.style.color = 'var(--warning, #F59E0B)';
+        }
+      }
+    } else {
+      // Hide debt indicator when nominal
+      const debtContainer = this.statsPanel.querySelector('[data-type="debt"]') as HTMLElement | null;
+      if (debtContainer) {
+        debtContainer.style.display = 'none';
       }
     }
   }

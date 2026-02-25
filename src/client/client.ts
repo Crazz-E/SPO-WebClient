@@ -58,6 +58,8 @@ import {
   // Road Building
   WsReqBuildRoad,
   WsRespBuildRoad,
+  WsReqDemolishRoad,
+  WsRespDemolishRoad,
   // Company Switching
   WsReqSwitchCompany,
   // Logout
@@ -141,6 +143,7 @@ export class StarpeaceClient {
   // Road building state
   private isRoadBuildingMode: boolean = false;
   private isBuildingRoad: boolean = false;
+  private isRoadDemolishMode: boolean = false;
 
   // Logout state
   private isLoggingOut: boolean = false;
@@ -225,6 +228,10 @@ export class StarpeaceClient {
         this.toggleRoadBuildingMode();
       });
 
+      this.ui.toolbarUI.setOnDemolishRoad(() => {
+        this.toggleRoadDemolishMode();
+      });
+
       this.ui.toolbarUI.setOnSearch(() => {
         this.ui.showSearchMenu();
       });
@@ -243,6 +250,12 @@ export class StarpeaceClient {
 
       this.ui.toolbarUI.setOnRefresh(() => {
         this.refreshMapData();
+      });
+
+      this.ui.toolbarUI.setOnSettings(() => {
+        if (this.ui.settingsPanel) {
+          this.ui.settingsPanel.toggle();
+        }
       });
     }
 
@@ -415,17 +428,25 @@ export class StarpeaceClient {
             maxBuildings: tycoonUpdate.maxBuildings
           };
           this.ui.log('Tycoon', `Cash: ${tycoonUpdate.cash} | Income/h: ${tycoonUpdate.incomePerHour} | Rank: ${tycoonUpdate.ranking} | Buildings: ${tycoonUpdate.buildingCount}/${tycoonUpdate.maxBuildings}`);
-          
+
           // --- UPDATE: Update the UI ---
           this.ui.updateTycoonStats({
             username: this.storedUsername,
-            ...this.currentTycoonData
+            ...this.currentTycoonData,
+            failureLevel: tycoonUpdate.failureLevel,
           });
         break;
 
       case WsMessageType.EVENT_RDO_PUSH:
         const pushData = (msg as any).rawPacket || msg;
         this.ui.log('Push', `Received: ${JSON.stringify(pushData).substring(0, 100)}...`);
+        break;
+
+      case WsMessageType.EVENT_END_OF_PERIOD:
+        this.ui.log('Period', 'Financial period ended — refreshing data');
+        this.showNotification('Financial period ended', 'info');
+        // Refresh tycoon stats to reflect latest P&L
+        this.refreshTycoonData();
         break;
 
       // Mail Events
@@ -729,6 +750,19 @@ export class StarpeaceClient {
           this.selectCompanyAndStart(company.id);
         }
       });
+    }
+
+    // Wire minimap and settings to renderer
+    if (this.ui.mapNavigationUI) {
+      const renderer = this.ui.mapNavigationUI.getRenderer();
+      if (renderer) {
+        if (this.ui.minimapUI) {
+          this.ui.minimapUI.setRenderer(renderer);
+        }
+        if (this.ui.settingsPanel) {
+          this.ui.settingsPanel.setRenderer(renderer);
+        }
+      }
     }
 
     this.ui.log('Renderer', 'Game view initialized');
@@ -1193,6 +1227,10 @@ export class StarpeaceClient {
       this.banMinister(buildingDetails);
     } else if (actionId === 'sitMinister') {
       this.sitMinister(buildingDetails);
+    } else if (actionId === 'startRepair') {
+      this.startRepair(buildingDetails);
+    } else if (actionId === 'stopRepair') {
+      this.stopRepair(buildingDetails);
     }
   }
 
@@ -1408,6 +1446,30 @@ export class StarpeaceClient {
   }
 
   // =========================================================================
+  // REPAIR ACTIONS (Start / Stop Repair)
+  // =========================================================================
+
+  private async startRepair(buildingDetails: BuildingDetailsResponse): Promise<void> {
+    try {
+      await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RdoRepair', '0');
+      this.showNotification('Repair started', 'success');
+      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+    } catch (err: unknown) {
+      this.showNotification(`Failed to start repair: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  private async stopRepair(buildingDetails: BuildingDetailsResponse): Promise<void> {
+    try {
+      await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RdoStopRepair', '0');
+      this.showNotification('Repair stopped', 'success');
+      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+    } catch (err: unknown) {
+      this.showNotification(`Failed to stop repair: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  // =========================================================================
   // CONNECTION PICKER (Find Suppliers / Find Clients)
   // =========================================================================
 
@@ -1619,6 +1681,91 @@ export class StarpeaceClient {
   }
 
   // =========================================================================
+  // ROAD DEMOLITION METHODS
+  // =========================================================================
+
+  /**
+   * Toggle road demolition mode
+   */
+  public toggleRoadDemolishMode(): void {
+    this.isRoadDemolishMode = !this.isRoadDemolishMode;
+
+    // Cancel road building mode if active
+    if (this.isRoadDemolishMode && this.isRoadBuildingMode) {
+      this.cancelRoadBuildingMode();
+    }
+
+    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    if (renderer) {
+      if (this.isRoadDemolishMode) {
+        // Cancel any building placement
+        if (this.currentBuildingToPlace) {
+          this.cancelBuildingPlacement();
+        }
+
+        renderer.setRoadDemolishClickCallback((x: number, y: number) => {
+          this.demolishRoadAt(x, y);
+        });
+
+        this.ui.log('Road', 'Road demolish mode enabled. Click on a road segment to demolish it. Press ESC to cancel.');
+      } else {
+        renderer.setRoadDemolishClickCallback(null);
+        this.ui.log('Road', 'Road demolish mode disabled');
+      }
+    }
+
+    if (this.ui.toolbarUI) {
+      this.ui.toolbarUI.setRoadDemolishActive(this.isRoadDemolishMode);
+    }
+  }
+
+  /**
+   * Cancel road demolition mode
+   */
+  private cancelRoadDemolishMode(): void {
+    this.isRoadDemolishMode = false;
+
+    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    if (renderer) {
+      renderer.setRoadDemolishClickCallback(null);
+    }
+
+    if (this.ui.toolbarUI) {
+      this.ui.toolbarUI.setRoadDemolishActive(false);
+    }
+  }
+
+  /**
+   * Demolish a road segment at (x, y)
+   */
+  private async demolishRoadAt(x: number, y: number): Promise<void> {
+    this.ui.log('Road', `Demolishing road at (${x}, ${y})...`);
+
+    try {
+      const req: WsReqDemolishRoad = {
+        type: WsMessageType.REQ_DEMOLISH_ROAD,
+        x,
+        y
+      };
+
+      const response = await this.sendRequest(req) as WsRespDemolishRoad;
+
+      if (response.success) {
+        this.ui.log('Road', `Road demolished at (${x}, ${y})`);
+        this.showNotification('Road demolished', 'success');
+        // Refresh the map to remove the demolished road
+        this.loadMapArea(x, y);
+      } else {
+        this.ui.log('Error', response.message || 'Failed to demolish road');
+        this.showNotification(response.message || 'Failed to demolish road', 'error');
+      }
+    } catch (err: unknown) {
+      this.ui.log('Error', `Failed to demolish road: ${toErrorMessage(err)}`);
+      this.showNotification(`Failed to demolish road: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  // =========================================================================
   // BUILDING CONSTRUCTION METHODS
   // =========================================================================
 
@@ -1781,6 +1928,9 @@ export class StarpeaceClient {
           document.removeEventListener('keydown', handler);
         } else if (this.isRoadBuildingMode) {
           this.cancelRoadBuildingMode();
+          document.removeEventListener('keydown', handler);
+        } else if (this.isRoadDemolishMode) {
+          this.cancelRoadDemolishMode();
           document.removeEventListener('keydown', handler);
         }
       }
@@ -2026,6 +2176,15 @@ export class StarpeaceClient {
   public async getProfile(): Promise<void> {
     const req: WsReqGetProfile = { type: WsMessageType.REQ_GET_PROFILE };
     this.sendMessage(req);
+  }
+
+  /**
+   * Refresh tycoon financial data (e.g., after EndOfPeriod push)
+   */
+  private refreshTycoonData(): void {
+    this.getProfile().catch(err => {
+      this.ui.log('Error', `Failed to refresh tycoon data: ${toErrorMessage(err)}`);
+    });
   }
 
   public async logout(): Promise<void> {
