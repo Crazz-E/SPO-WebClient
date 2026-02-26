@@ -144,7 +144,7 @@ describe('SettingsPanel', () => {
     expect(renderer.setHideVegetationOnMove).toHaveBeenCalledWith(true);
     expect(renderer.setDebugMode).toHaveBeenCalledWith(false);
     expect(renderer.setVehicleAnimationsEnabled).toHaveBeenCalledWith(true);
-    expect(renderer.setEdgeScrollEnabled).toHaveBeenCalledWith(true);
+    expect(renderer.setEdgeScrollEnabled).toHaveBeenCalledWith(false);
   });
 
   it('should apply vehicleAnimations=false to renderer from saved settings', () => {

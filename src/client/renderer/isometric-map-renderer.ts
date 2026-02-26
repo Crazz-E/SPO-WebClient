@@ -55,7 +55,7 @@ import {
   landTypeOf,
   isWater
 } from './road-texture-system';
-import { formatLandId, landTypeName, landClassName, decodeLandId, isSpecialTile } from '../../shared/land-utils';
+import { formatLandId, landTypeName, landClassName, decodeLandId, isSpecialTile, rotateLandId } from '../../shared/land-utils';
 import {
   ConcreteBlockClassManager,
   loadConcreteBlockClassFromIni,
@@ -1782,11 +1782,17 @@ export class IsometricMapRenderer {
     ctx.save();
     ctx.translate(margin, margin);
 
+    const rotation = this.terrainRenderer.getRotation() as number;
+
     for (let i = extBounds.minI; i <= extBounds.maxI; i++) {
       for (let j = extBounds.minJ; j <= extBounds.maxJ; j++) {
         let textureId = terrainLoader.getTextureId(j, i);
         if (isSpecialTile(textureId)) {
           textureId = textureId & FLAT_MASK;
+        }
+        // Rotate directional border textures so edges align with the rotated view
+        if (rotation !== 0) {
+          textureId = rotateLandId(textureId, rotation);
         }
 
         const screenPos = this.terrainRenderer.mapToScreen(i, j);
@@ -2435,8 +2441,9 @@ export class IsometricMapRenderer {
     // Skip entirely at the farthest zoom level — vegetation is too small to see
     const currentZoom = this.terrainRenderer.getZoomLevel();
     if (currentZoom === 0) return;
-    // At z1, auto-enable hide-on-move behavior for performance
-    if ((this.hideVegetationOnMove || currentZoom === 1) && this.isCameraMoving) return;
+    // At z1, auto-enable hide-on-move behavior for performance.
+    // At z3 (closest zoom), always show vegetation — detail is important at this level.
+    if (currentZoom !== 3 && (this.hideVegetationOnMove || currentZoom === 1) && this.isCameraMoving) return;
 
     const ctx = this.ctx;
     const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
@@ -2671,11 +2678,19 @@ export class IsometricMapRenderer {
         const scaledWidth = texture.width * scaleFactor;
         const scaledHeight = texture.height * scaleFactor;
 
-        // Calculate the anchor point: the SOUTH corner of the building footprint
-        // In isometric: lower i,j values = closer to viewer (higher screen Y)
-        // The south corner (front, closest to viewer) is at (building.x, building.y)
-        // But we need the SOUTH VERTEX of that tile, which is at the bottom of the tile
-        const southCornerScreenPos = this.terrainRenderer.mapToScreen(building.y, building.x);
+        // Calculate the anchor point: the SOUTH corner of the building footprint.
+        // The south corner (closest to viewer, highest screen Y) changes with rotation:
+        //   NORTH: (y, x)  EAST: (y+h-1, x)  SOUTH: (y+h-1, x+w-1)  WEST: (y, x+w-1)
+        const rotation = this.terrainRenderer.getRotation();
+        let anchorI: number, anchorJ: number;
+        switch (rotation) {
+          case Rotation.NORTH: anchorI = building.y;              anchorJ = building.x;              break;
+          case Rotation.EAST:  anchorI = building.y + ysize - 1;  anchorJ = building.x;              break;
+          case Rotation.SOUTH: anchorI = building.y + ysize - 1;  anchorJ = building.x + xsize - 1;  break;
+          case Rotation.WEST:  anchorI = building.y;              anchorJ = building.x + xsize - 1;  break;
+          default:             anchorI = building.y;              anchorJ = building.x;              break;
+        }
+        const southCornerScreenPos = this.terrainRenderer.mapToScreen(anchorI, anchorJ);
 
         // The texture bottom-center should align with the south vertex of the south corner tile
         // South vertex is at screenPos.y + tileHeight
@@ -2683,7 +2698,7 @@ export class IsometricMapRenderer {
         let drawY = Math.round(southCornerScreenPos.y + config.tileHeight - scaledHeight);
 
         // Buildings on water platforms are elevated to match the platform
-        if (this.isOnWaterPlatform(building.x, building.y)) {
+        if (this.isOnWaterPlatform(anchorJ, anchorI)) {
           const platformYShift = Math.round(PLATFORM_SHIFT * scaleFactor);
           drawY -= platformYShift;
         }
@@ -3681,10 +3696,10 @@ export class IsometricMapRenderer {
     this.cameraStopTimer = window.setTimeout(() => {
       this.isCameraMoving = false;
       this.cameraStopTimer = null;
-      // Re-render with vegetation visible again
-      if (this.hideVegetationOnMove) {
-        this.requestRender();
-      }
+      // Invalidate ground cache so vegetation gets baked in on next render.
+      // The cache was built while isCameraMoving was true (vegetation skipped).
+      this.invalidateGroundCache();
+      this.requestRender();
     }, this.CAMERA_STOP_DEBOUNCE_MS);
   }
 

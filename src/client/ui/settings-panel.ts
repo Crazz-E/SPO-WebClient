@@ -24,7 +24,7 @@ export interface GameSettings {
 const DEFAULT_SETTINGS: GameSettings = {
   hideVegetationOnMove: true,
   vehicleAnimations: true,
-  edgeScrollEnabled: true,
+  edgeScrollEnabled: false,
   soundEnabled: true,
   soundVolume: 0.8,
   debugOverlay: false,

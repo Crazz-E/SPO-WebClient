@@ -331,3 +331,50 @@ export function formatLandId(landId: number): string {
   const hex = '0x' + landId.toString(16).toUpperCase().padStart(2, '0');
   return `${hex} (${landClassName(decoded.landClass)}, ${landTypeName(decoded.landType)}, var=${decoded.landVar})`;
 }
+
+// =============================================================================
+// ROTATION
+// =============================================================================
+
+/**
+ * LandType rotation tables.
+ *
+ * Under view rotation the diamond edges stay fixed on screen but map
+ * directions move.  To keep terrain border textures aligned we remap the
+ * directional LandType component so the border stays on the correct
+ * diamond edge for the current view.
+ *
+ * Rotation direction (CW): N→E→S→W→N,  NEo→SEo→SWo→NWo→NEo (same for inner)
+ *
+ * Index = original LandType, value = rotated LandType.
+ * [rotation][originalLandType] → rotatedLandType
+ */
+const LAND_TYPE_ROTATION: readonly number[][] = [
+  // NORTH (identity)
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+  // EAST (90° CW): N→E, E→S, S→W, W→N, NEo→SEo, SEo→SWo, SWo→NWo, NWo→NEo, same inner
+  [0, 2, 3, 4, 1, 6, 7, 8, 5, 10, 11, 12, 9, 13],
+  // SOUTH (180°): N→S, E→W, S→N, W→E, NEo→SWo, SEo→NWo, SWo→NEo, NWo→SEo, same inner
+  [0, 3, 4, 1, 2, 7, 8, 5, 6, 11, 12, 9, 10, 13],
+  // WEST (270° CW): N→W, E→N, S→E, W→S, NEo→NWo, SEo→NEo, SWo→SEo, NWo→SWo, same inner
+  [0, 4, 1, 2, 3, 8, 5, 6, 7, 12, 9, 10, 11, 13],
+];
+
+/**
+ * Rotate a landId for the current map rotation.
+ * Preserves LandClass and LandVar — only remaps the directional LandType.
+ *
+ * @param landId  Raw landId byte (0-255)
+ * @param rotation  Rotation enum value (0=North, 1=East, 2=South, 3=West)
+ * @returns Rotated landId
+ */
+export function rotateLandId(landId: number, rotation: number): number {
+  if (rotation === 0) return landId; // NORTH = identity
+
+  const landType = landTypeOf(landId);
+  if (landType >= LAND_TYPE_ROTATION[rotation].length) return landId;
+
+  const rotatedType = LAND_TYPE_ROTATION[rotation][landType];
+  // Reconstruct landId: class (bits 7-6) | type (bits 5-2) | var (bits 1-0)
+  return (landId & LND_CLASS_MASK) | (rotatedType << LND_TYPE_SHIFT) | (landId & LND_VAR_MASK);
+}
