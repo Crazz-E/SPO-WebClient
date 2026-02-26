@@ -100,7 +100,18 @@
       "Bash(wc *)",
       "Bash(tree *)",
       "Bash(which *)",
-      "Bash(echo *)"
+      "Bash(echo *)",
+      "Bash(powershell*Get-Content*SPO-Original*)",
+      "Bash(powershell*Get-ChildItem*SPO-Original*)",
+      "Bash(powershell*Select-String*SPO-Original*)",
+      "Bash(powershell*Test-Path*SPO-Original*)",
+      "Bash(powershell.exe*Get-Content*SPO-Original*)",
+      "Bash(powershell.exe*Get-ChildItem*SPO-Original*)",
+      "Bash(powershell.exe*Select-String*SPO-Original*)",
+      "Bash(powershell.exe*Test-Path*SPO-Original*)",
+      "Bash(cmd.exe*type*SPO-Original*)",
+      "Bash(cmd.exe*dir*SPO-Original*)",
+      "Bash(cmd.exe*findstr*SPO-Original*)"
     ],
     "deny": [
       "Bash(git clean*)",
