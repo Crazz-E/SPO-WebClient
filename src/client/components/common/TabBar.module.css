@@ -1,0 +1,60 @@
+/* TabBar — horizontal scrollable tabs with gold indicator */
+
+.container {
+  display: flex;
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--glass-border);
+  gap: 0;
+}
+
+.container::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-default);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tab:hover {
+  color: var(--text-secondary);
+}
+
+.active {
+  color: var(--accent-gold);
+}
+
+.badge {
+  font-size: var(--text-xs);
+  background: var(--primary-muted);
+  color: var(--primary-light);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  min-width: 18px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.indicator {
+  position: absolute;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent-gold);
+  border-radius: var(--radius-full);
+  transition: left var(--duration-base) var(--ease-default),
+    width var(--duration-base) var(--ease-default);
+}

@@ -1,0 +1,211 @@
+/* BuildMenu — centered modal */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 399;
+  background: rgba(0, 0, 0, 0.5);
+  animation: fadeIn var(--duration-fast) var(--ease-default);
+}
+
+.modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 400;
+  width: min(700px, calc(100vw - var(--space-8)));
+  max-height: 80vh;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: scaleIn 200ms var(--ease-out) both;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.title {
+  flex: 1;
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.backBtn,
+.closeBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: var(--space-1);
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.backBtn:hover,
+.closeBtn:hover {
+  color: var(--text-primary);
+}
+
+/* Content */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-5);
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+/* Category grid */
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.categoryCard {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+  transition:
+    border-color var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+}
+
+.categoryCard:hover {
+  transform: translateY(-1px);
+}
+
+.categoryName {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.levelBadge {
+  font-size: 10px;
+  color: var(--accent-gold);
+  background: var(--accent-gold-subtle);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+/* Facility list */
+.facilityList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.facilityCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: left;
+  transition:
+    border-color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
+}
+
+.facilityCard:hover:not(:disabled) {
+  border-color: var(--accent-gold-dark);
+  box-shadow: var(--shadow-gold-glow);
+}
+
+.unavailable {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.facilityInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.facilityName {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.facilityDesc {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.facilityMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.facilityCost {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.facilityArea {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Loading */
+.loadingGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.empty {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-disabled);
+  font-size: var(--text-sm);
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .modal {
+    width: calc(100vw - var(--space-4));
+    max-height: 90vh;
+  }
+
+  .categoryGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

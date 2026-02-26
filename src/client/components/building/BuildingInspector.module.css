@@ -1,0 +1,68 @@
+/* BuildingInspector — property sheet layout */
+
+.inspector {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Header */
+.header {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.buildingName {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.ownerName {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.visualClass {
+  font-size: var(--text-xs);
+  color: var(--accent-gold);
+  background: var(--accent-gold-subtle);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+/* Content — scrollable tab area */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+/* Loading state */
+.loadingState {
+  padding: var(--space-4);
+}
+
+/* Empty state */
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-disabled);
+  font-size: var(--text-sm);
+  text-align: center;
+  padding: var(--space-8);
+}

@@ -1,0 +1,32 @@
+/* GlassCard — glassmorphism container */
+
+.card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-lg);
+}
+
+.light {
+  background: var(--glass-bg-light);
+  border-color: var(--glass-border-active);
+}
+
+.card[role='button'] {
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
+}
+
+.card[role='button']:hover {
+  border-color: var(--glass-border-active);
+  box-shadow: var(--shadow-glow);
+}
+
+.card[role='button']:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}

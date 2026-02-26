@@ -1,0 +1,107 @@
+/* BottomSheet — slide-up mobile panel */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 450;
+}
+
+.sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 451;
+  background: var(--bg-secondary);
+  border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
+  transition: height 250ms var(--ease-out);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
+  max-height: calc(100vh - 56px); /* Leave space for TopBar */
+  overflow: hidden;
+}
+
+/* Height states */
+.peek {
+  height: 120px;
+}
+
+.half {
+  height: 50vh;
+}
+
+.full {
+  height: calc(100vh - 56px);
+}
+
+/* Drag handle */
+.handleArea {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) 0;
+  cursor: grab;
+  background: none;
+  border: none;
+  flex-shrink: 0;
+}
+
+.handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--text-disabled);
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4) var(--space-2);
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+
+.closeBtn:hover {
+  color: var(--text-primary);
+}
+
+/* Content */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 var(--space-4) var(--space-4);
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+/* Only visible on mobile */
+@media (min-width: 768px) {
+  .backdrop,
+  .sheet {
+    display: none;
+  }
+}

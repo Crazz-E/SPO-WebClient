@@ -1,0 +1,15 @@
+/* GameScreen — map-first HUD overlay shell */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+/* On mobile, adjust for BottomNav */
+@media (max-width: 767px) {
+  .screen {
+    padding-bottom: 56px; /* BottomNav height */
+  }
+}

@@ -1,0 +1,120 @@
+/* TopBar — ultra-slim translucent stats strip */
+
+.bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--topbar-height);
+  z-index: 300;
+  background: var(--topbar-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  font-size: var(--text-sm);
+  transition: background var(--duration-base) var(--ease-default);
+}
+
+/* Debt warning tint */
+.debtTint {
+  background: rgba(220, 38, 38, 0.12);
+  border-bottom-color: rgba(220, 38, 38, 0.3);
+}
+
+/* Critical alert — pulsing red */
+.alertPulse {
+  animation: debtPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes debtPulse {
+  0%, 100% {
+    background: rgba(220, 38, 38, 0.12);
+  }
+  50% {
+    background: rgba(220, 38, 38, 0.25);
+  }
+}
+
+/* Sections */
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 0 0 auto;
+}
+
+.center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 0 0 auto;
+}
+
+/* Company pill — clickable */
+.companyPill {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  font-family: var(--font-sans);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+.companyPill:hover {
+  border-color: var(--accent-gold-dark);
+  color: var(--text-primary);
+}
+
+/* Date */
+.date {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stats */
+.stat {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.statGold {
+  color: var(--accent-gold);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mobile — hide non-essential stats */
+@media (max-width: 767px) {
+  .bar {
+    padding: 0 var(--space-3);
+  }
+
+  .center {
+    display: none;
+  }
+
+  .right {
+    gap: var(--space-2);
+  }
+
+  .stat:not(.statGold) {
+    display: none;
+  }
+}

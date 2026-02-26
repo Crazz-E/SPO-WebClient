@@ -1,0 +1,42 @@
+/* FinancialSummary — metric cards */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-3) var(--space-2);
+  background: var(--bg-secondary);
+}
+
+.value {
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Profit/loss highlight */
+.profit .value {
+  color: var(--success);
+}
+
+.loss .value {
+  color: var(--error);
+}

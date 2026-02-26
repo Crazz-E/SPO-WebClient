@@ -1,0 +1,94 @@
+/* FacilityList — scrollable facility rows */
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.row:hover {
+  background: var(--bg-tertiary);
+}
+
+.rowLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.rowRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.revenue {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.status {
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.operating {
+  color: var(--success);
+}
+
+.alert {
+  color: var(--warning);
+}
+
+.upgrading {
+  color: var(--info);
+}
+
+.closed {
+  color: var(--text-disabled);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--space-8);
+  color: var(--text-disabled);
+  font-size: var(--text-sm);
+}

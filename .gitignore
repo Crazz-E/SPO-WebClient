@@ -5,6 +5,10 @@ node_modules/
 dist/
 public/client.js
 public/client.js.map
+public/client.css
+public/react-app.js
+public/react-app.js.map
+public/react-app.css
 
 # Environment variables
 .env

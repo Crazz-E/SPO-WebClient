@@ -1,0 +1,32 @@
+/* RightRail — map controls, bottom-right */
+
+.rail {
+  position: absolute;
+  bottom: calc(var(--space-6) + 40px); /* above ChatStrip */
+  right: var(--space-3);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rail-gap);
+}
+
+.divider {
+  width: 28px;
+  height: 1px;
+  background: var(--glass-border);
+  margin: var(--space-1) 0;
+}
+
+/* Mobile — hidden (map controls not useful on mobile) */
+@media (max-width: 767px) {
+  .rail {
+    display: none;
+  }
+}

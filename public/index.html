@@ -10,9 +10,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Design System -->
+    <!-- Design System (legacy) -->
     <link rel="stylesheet" href="design-system.css">
     <link rel="stylesheet" href="search-menu-styles.css">
+    <!-- React UI styles (new green design system) -->
+    <link rel="stylesheet" href="react-app.css">
 
     <style>
         body {
@@ -395,8 +397,13 @@
         <div id="console-output"></div>
     </div>
 
-    <!-- Application Script -->
+    <!-- React mount point (new UI, Phase 0+) -->
+    <div id="react-root"></div>
+
+    <!-- Application Scripts -->
     <script src="client.js"></script>
+    <!-- React UI layer (Phase 0: empty shell, Phase 1+: progressive takeover) -->
+    <script src="react-app.js"></script>
 
     <script>
         // Console toggle functionality

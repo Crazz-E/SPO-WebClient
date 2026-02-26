@@ -1,0 +1,1 @@
+export { PoliticsPanel } from './PoliticsPanel';

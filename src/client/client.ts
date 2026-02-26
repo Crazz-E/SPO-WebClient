@@ -96,11 +96,14 @@ import {
 import { getErrorMessage } from '../shared/error-codes';
 import { toErrorMessage } from '../shared/error-utils';
 import { Season } from '../shared/map-config';
-import { UIManager } from './ui/ui-manager';
+import { MapNavigationUI } from './ui/map-navigation-ui';
+import { MinimapUI } from './ui/minimap-ui';
+import { ClientBridge, registerClientCallbacks } from './bridge/client-bridge';
+import type { GameSettings } from './store/game-store';
+import { useUiStore } from './store/ui-store';
+import { useBuildingStore } from './store/building-store';
 import { getFacilityDimensionsCache } from './facility-dimensions-cache';
-import { ConnectionPickerDialog } from './ui/building-details';
 import { SoundManager } from './audio/sound-manager';
-import { CompanyCreationDialog } from './ui/company-creation-dialog';
 import { KeyBindingRegistry } from './input/key-binding-registry';
 
 // [E2E-DEBUG] Wire-level debug tracker exposed on window.__spoDebug
@@ -197,8 +200,9 @@ export class StarpeaceClient {
   private isConnected: boolean = false;
   private pendingRequests = new Map<string, { resolve: (msg: WsMessage) => void, reject: (err: unknown) => void }>();
 
-  // UI Manager
-  private ui: UIManager;
+  // Canvas-level UI components (owned directly)
+  private mapNavigationUI: MapNavigationUI | null = null;
+  private minimapUI: MinimapUI | null = null;
 
   // UI Elements (kept for status only)
   private uiGamePanel: HTMLElement;
@@ -222,6 +226,7 @@ export class StarpeaceClient {
 
   // Building construction state
   private buildingCategories: BuildingCategory[] = [];
+  private lastLoadedFacilities: BuildingInfo[] = [];
   private currentBuildingToPlace: BuildingInfo | null = null;
 
   // Double-click prevention flags
@@ -234,9 +239,6 @@ export class StarpeaceClient {
   private isCloneMode: boolean = false;
   private cloneSourceBuilding: BuildingDetailsResponse | null = null;
 
-  // Connection picker dialog state
-  private connectionPickerDialog: ConnectionPickerDialog | null = null;
-
   // Road building state
   private isRoadBuildingMode: boolean = false;
   private isBuildingRoad: boolean = false;
@@ -247,9 +249,6 @@ export class StarpeaceClient {
 
   // Audio
   private soundManager: SoundManager;
-
-  // Company creation dialog
-  private companyCreationDialog: CompanyCreationDialog | null = null;
 
   // Key binding registry
   private keyBindingRegistry: KeyBindingRegistry;
@@ -262,10 +261,119 @@ export class StarpeaceClient {
 
     this.debugWire = initSpoDebug(); // [E2E-DEBUG]
     this.debugWire.getState = () => this.getDebugState(); // [E2E-DEBUG]
-    this.ui = new UIManager();
     this.soundManager = new SoundManager();
     this.keyBindingRegistry = new KeyBindingRegistry();
-    this.setupUICallbacks();
+    registerClientCallbacks({
+      onBuildMenu: () => this.openBuildMenu(),
+      onBuildRoad: () => this.toggleRoadBuildingMode(),
+      onDemolishRoad: () => this.toggleRoadDemolishMode(),
+      onRefreshMap: () => this.refreshMapData(),
+      onLogout: () => this.logout(),
+      onSendChatMessage: (message: string) => this.sendChatMessage(message),
+      onJoinChannel: (channelName: string) => this.joinChannel(channelName),
+      onDirectoryConnect: (username: string, password: string, zonePath?: string) =>
+        this.performDirectoryLogin(username, password, zonePath),
+      onWorldSelect: (worldName: string) => this.login(worldName),
+      onCompanySelect: (companyId: string) => this.selectCompanyAndStart(companyId),
+      onCreateCompany: () => this.showCompanyCreationDialog(),
+      onCreateCompanySubmit: (companyName: string, cluster: string) =>
+        this.handleCreateCompany(companyName, cluster),
+      onRequestBuildingCategories: () => this.openBuildMenu(),
+      onRequestBuildingFacilities: (kind: number, cluster: string) =>
+        this.loadBuildingFacilitiesByKind(kind, cluster),
+      onPlaceBuilding: (facilityClass: string, visualClassId: number) =>
+        this.placeBuildingFromMenu(facilityClass, visualClassId),
+      onSettingsChange: (settings) => this.applySettings(settings),
+
+      // Building actions (called from React BuildingInspector)
+      onSetBuildingProperty: (x, y, propertyName, value, additionalParams) =>
+        this.setBuildingProperty(x, y, propertyName, value, additionalParams),
+      onUpgradeBuilding: (x, y, action, count) =>
+        this.upgradeBuildingAction(x, y, action as 'DOWNGRADE' | 'START_UPGRADE' | 'STOP_UPGRADE', count),
+      onRefreshBuilding: (x, y) => this.refreshBuildingDetails(x, y),
+      onRenameBuilding: (x, y, newName) => this.renameFacility(x, y, newName),
+      onDeleteBuilding: (x, y) => this.deleteFacility(x, y).then(success => {
+        if (success) ClientBridge.hideBuildingPanel();
+      }),
+      onNavigateToBuilding: (x, y) => this.focusBuilding(x, y),
+      onBuildingAction: (actionId) => {
+        const details = useBuildingStore.getState().details;
+        if (details) this.handleBuildingAction(actionId, details);
+      },
+      onSearchConnections: (x, y, fluidId, fluidName, direction) => {
+        ClientBridge.showConnectionPicker({ fluidName, fluidId, direction, buildingX: x, buildingY: y });
+      },
+      onConnectionSearch: (buildingX, buildingY, fluidId, direction, filters) => {
+        useBuildingStore.getState().setConnectionSearching(true);
+        this.searchConnections(buildingX, buildingY, fluidId, direction, filters);
+      },
+      onConnectionConnect: (fluidId, direction, selectedCoords) => {
+        const picker = useBuildingStore.getState().connectionPicker;
+        if (picker) {
+          this.connectFacilities(picker.buildingX, picker.buildingY, fluidId, direction, selectedCoords);
+        }
+      },
+
+      // Mail
+      onMailGetFolder: (folder) => this.sendMessage({ type: WsMessageType.REQ_MAIL_GET_FOLDER, folder }),
+      onMailReadMessage: (messageId) => this.sendMessage({
+        type: WsMessageType.REQ_MAIL_READ_MESSAGE,
+        folder: 'Inbox' as MailFolder,
+        messageId,
+      }),
+      onMailSend: (to, subject, body) => this.sendMessage({
+        type: WsMessageType.REQ_MAIL_COMPOSE,
+        to, subject, body: [body],
+      }),
+      onMailDelete: (messageId) => this.sendMessage({
+        type: WsMessageType.REQ_MAIL_DELETE,
+        folder: 'Inbox' as MailFolder,
+        messageId,
+      }),
+      onMailSaveDraft: (to, subject, body) => this.sendMessage({
+        type: WsMessageType.REQ_MAIL_SAVE_DRAFT,
+        to, subject, body: [body],
+      }),
+
+      // Search menu
+      onSearchMenuHome: () => this.sendMessage({ type: WsMessageType.REQ_SEARCH_MENU_HOME }),
+      onSearchMenuNavigate: (page) => {
+        const pageTypeMap: Record<string, WsMessageType> = {
+          towns: WsMessageType.REQ_SEARCH_MENU_TOWNS,
+          rankings: WsMessageType.REQ_SEARCH_MENU_RANKINGS,
+          banks: WsMessageType.REQ_SEARCH_MENU_BANKS,
+          people: WsMessageType.REQ_SEARCH_MENU_PEOPLE,
+        };
+        const msgType = pageTypeMap[page];
+        if (msgType) {
+          this.sendMessage({ type: msgType });
+        }
+      },
+
+      // Profile
+      onSwitchCompany: (companyName) => {
+        const company = this.availableCompanies.find(c => c.name === companyName);
+        if (company) {
+          ClientBridge.log('Profile', `Switching to company: ${companyName}`);
+          this.selectCompanyAndStart(company.id);
+        }
+      },
+      onProfileRequestTab: (tab) => {
+        const tabTypeMap: Record<string, WsMessageType> = {
+          curriculum: WsMessageType.REQ_PROFILE_CURRICULUM,
+          bank: WsMessageType.REQ_PROFILE_BANK,
+          profitloss: WsMessageType.REQ_PROFILE_PROFITLOSS,
+          companies: WsMessageType.REQ_PROFILE_COMPANIES,
+          autoconnections: WsMessageType.REQ_PROFILE_AUTOCONNECTIONS,
+          policy: WsMessageType.REQ_PROFILE_POLICY,
+        };
+        const msgType = tabTypeMap[tab];
+        if (msgType) {
+          this.sendMessage({ type: msgType });
+        }
+      },
+    });
+
     this.setupAudio();
     this.init();
   }
@@ -284,144 +392,57 @@ export class StarpeaceClient {
   }
 
   /**
-   * Configure les callbacks des composants UI
+   * Apply settings to renderer + sound manager, and persist to localStorage.
    */
-  private setupUICallbacks() {
-    // LoginUI callbacks
-    this.ui.loginUI.setOnDirectoryConnect((username, password, zonePath) => {
-      this.performDirectoryLogin(username, password, zonePath);
-    });
+  private applySettings(settings: GameSettings): void {
+    // Apply to renderer
+    if (this.mapNavigationUI) {
+      const renderer = this.mapNavigationUI.getRenderer();
+      if (renderer) {
+        renderer.setHideVegetationOnMove(settings.hideVegetationOnMove);
+        renderer.setDebugMode(settings.debugOverlay);
+        renderer.setVehicleAnimationsEnabled(settings.vehicleAnimations);
+        renderer.setEdgeScrollEnabled(settings.edgeScrollEnabled);
+      }
+    }
 
-    this.ui.loginUI.setOnWorldSelect((worldName) => {
-      this.login(worldName);
-    });
+    // Apply to sound manager
+    this.soundManager.setEnabled(settings.soundEnabled);
+    this.soundManager.setVolume(settings.soundVolume);
 
-    this.ui.loginUI.setOnCompanySelect((companyId) => {
-      this.selectCompanyAndStart(companyId);
-    });
-
-    this.ui.loginUI.setOnCreateCompany(() => {
-      this.showCompanyCreationDialog();
-    });
+    // Persist to localStorage
+    ClientBridge.persistSettings(settings);
   }
 
   /**
    * Configure les callbacks des composants Game UI
    */
   private setupGameUICallbacks() {
-    // ChatUI callbacks
-    if (this.ui.chatUI) {
-      this.ui.chatUI.setOnSendMessage((message) => {
-        this.sendChatMessage(message);
-      });
-
-      this.ui.chatUI.setOnJoinChannel((channel) => {
-        this.joinChannel(channel);
-      });
-
-      this.ui.chatUI.setOnGetUsers(() => {
-        this.requestUserList();
-      });
-
-      this.ui.chatUI.setOnGetChannels(() => {
-        this.requestChannelList();
-      });
-
-      this.ui.chatUI.setOnTypingStatus((isTyping) => {
-        this.sendTypingStatus(isTyping);
-      });
-    }
-
     // MapNavigationUI callbacks
-    if (this.ui.mapNavigationUI) {
-      this.ui.mapNavigationUI.setOnLoadZone((x, y, w, h) => {
-        this.ui.log('Map', `Requesting zone (${x}, ${y}) ${w}x${h}`);
+    if (this.mapNavigationUI) {
+      this.mapNavigationUI.setOnLoadZone((x, y, w, h) => {
+        ClientBridge.log('Map', `Requesting zone (${x}, ${y}) ${w}x${h}`);
         this.loadMapArea(x, y, w, h);
       });
 
-      this.ui.mapNavigationUI.setOnBuildingClick((x, y, visualClass) => {
+      this.mapNavigationUI.setOnBuildingClick((x, y, visualClass) => {
         this.handleMapClick(x, y, visualClass);
       });
 
-      this.ui.mapNavigationUI.setOnFetchFacilityDimensions(async (visualClass) => {
+      this.mapNavigationUI.setOnFetchFacilityDimensions(async (visualClass) => {
         return await this.getFacilityDimensions(visualClass);
       });
     }
 
-    // ToolbarUI callbacks (unimplemented features)
-    if (this.ui.toolbarUI) {
-      this.ui.toolbarUI.setOnBuildMenu(() => {
-        this.openBuildMenu();
-      });
+    // buildMenuUI callbacks — migrated to React BuildMenu + bridge
 
-      this.ui.toolbarUI.setOnBuildRoad(() => {
-        this.toggleRoadBuildingMode();
-      });
-
-      this.ui.toolbarUI.setOnDemolishRoad(() => {
-        this.toggleRoadDemolishMode();
-      });
-
-      this.ui.toolbarUI.setOnSearch(() => {
-        this.ui.showSearchMenu();
-      });
-
-      this.ui.toolbarUI.setOnCompanyMenu(() => {
-        this.ui.showProfilePanel('companies');
-      });
-
-      this.ui.toolbarUI.setOnMail(() => {
-        this.ui.showMailPanel();
-      });
-
-      this.ui.toolbarUI.setOnLogout(() => {
-        this.logout();
-      });
-
-      this.ui.toolbarUI.setOnRefresh(() => {
-        this.refreshMapData();
-      });
-
-      this.ui.toolbarUI.setOnSettings(() => {
-        if (this.ui.settingsPanel) {
-          this.ui.settingsPanel.toggle();
-        }
-      });
-
-      this.ui.toolbarUI.setOnTransport(() => {
-        if (this.ui.transportPanel) {
-          this.ui.transportPanel.toggle();
-        }
-      });
-    }
-
-    // BuildMenuUI callbacks
-    if (this.ui.buildMenuUI) {
-      this.ui.buildMenuUI.setOnCategorySelected((category) => {
-        this.loadBuildingFacilities(category);
-      });
-
-      this.ui.buildMenuUI.setOnBuildingSelected((building) => {
-        this.startBuildingPlacement(building);
-      });
-
-      this.ui.buildMenuUI.setOnClose(() => {
-        this.cancelBuildingPlacement();
-      });
-    }
-
-    // ZoneOverlayUI callbacks
-    if (this.ui.zoneOverlayUI) {
-      this.ui.zoneOverlayUI.setOnToggle((enabled, type) => {
-        this.toggleZoneOverlay(enabled, type);
-      });
-    }
+    // ZoneOverlayUI removed — zone overlays are toggled via keyboard shortcuts (number keys)
   }
 
   private init() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = `${protocol}//${window.location.host}/ws`;
-    this.ui.log('System', `Connecting to Gateway at ${url}...`);
+    ClientBridge.log('System', `Connecting to Gateway at ${url}...`);
 
     this.ws = new WebSocket(url);
 
@@ -429,7 +450,7 @@ export class StarpeaceClient {
       this.isConnected = true;
       this.uiStatus.textContent = "● Online";
       this.uiStatus.style.color = "#0f0";
-      this.ui.log('System', 'Gateway Connected.');
+      ClientBridge.log('System', 'Gateway Connected.');
     };
 
     this.ws.onmessage = (event) => {
@@ -445,7 +466,7 @@ export class StarpeaceClient {
       this.isConnected = false;
       this.uiStatus.textContent = "● Offline";
       this.uiStatus.style.color = "#f00";
-      this.ui.log('System', 'Gateway Disconnected.');
+      ClientBridge.log('System', 'Gateway Disconnected.');
     };
 
     // Handle browser close/refresh - send logout request
@@ -466,7 +487,7 @@ export class StarpeaceClient {
       this.debugWire.lastSent = msg.type || '';
       this.debugWire.history.push({ dir: '→', type: msg.type || '?', ts: Date.now(), reqId: requestId });
       if (this.debugWire.history.length > this.debugWire.maxHistory) this.debugWire.history.shift();
-      this.ui.log('Wire', `→ SEND ${msg.type} [${requestId.slice(-6)}]`);
+      ClientBridge.log('Wire', `→ SEND ${msg.type} [${requestId.slice(-6)}]`);
       updateDebugBadge(this.debugWire);
       // [/E2E-DEBUG]
       this.ws.send(JSON.stringify(msg));
@@ -493,7 +514,7 @@ export class StarpeaceClient {
     this.debugWire.lastSent = msg.type || '';
     this.debugWire.history.push({ dir: '→', type: msg.type || '?', ts: Date.now() });
     if (this.debugWire.history.length > this.debugWire.maxHistory) this.debugWire.history.shift();
-    this.ui.log('Wire', `→ SEND ${msg.type}`);
+    ClientBridge.log('Wire', `→ SEND ${msg.type}`);
     updateDebugBadge(this.debugWire);
     // [/E2E-DEBUG]
     this.ws.send(JSON.stringify(msg));
@@ -508,7 +529,7 @@ export class StarpeaceClient {
     const reqTag = msg.wsRequestId ? ` [${msg.wsRequestId.slice(-6)}]` : '';
     this.debugWire.history.push({ dir: '←', type: msg.type, ts: Date.now(), reqId: msg.wsRequestId });
     if (this.debugWire.history.length > this.debugWire.maxHistory) this.debugWire.history.shift();
-    this.ui.log('Wire', `← RECV ${msg.type}${reqTag}${isError ? ' ✗ERROR' : ''}`);
+    ClientBridge.log('Wire', `← RECV ${msg.type}${reqTag}${isError ? ' ✗ERROR' : ''}`);
     updateDebugBadge(this.debugWire);
     // [/E2E-DEBUG]
 
@@ -528,28 +549,34 @@ export class StarpeaceClient {
 
     // 2. Events & Pushes
     switch (msg.type) {
-      case WsMessageType.EVENT_CHAT_MSG:
+      case WsMessageType.EVENT_CHAT_MSG: {
         const chat = msg as WsEventChatMsg;
         const isSystem = chat.from === 'SYSTEM';
-        this.ui.renderChatMessage(chat.from, chat.message, isSystem);
-        this.ui.log('Chat', `[${chat.channel}] ${chat.from}: ${chat.message}`);
+        ClientBridge.addChatMessage(chat.channel, {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          from: chat.from,
+          text: chat.message,
+          timestamp: Date.now(),
+          isSystem,
+          isGM: chat.from === 'GM',
+        });
+        ClientBridge.log('Chat', `[${chat.channel}] ${chat.from}: ${chat.message}`);
         this.soundManager.play('chat-message');
         break;
+      }
 
-      case WsMessageType.EVENT_CHAT_USER_TYPING:
+      case WsMessageType.EVENT_CHAT_USER_TYPING: {
         const typing = msg as WsEventChatUserTyping;
-        if (this.ui.chatUI) {
-          this.ui.chatUI.updateUserTypingStatus(typing.username, typing.isTyping);
-        }
+        ClientBridge.setChatUserTyping(typing.username, typing.isTyping);
         break;
+      }
 
-      case WsMessageType.EVENT_CHAT_CHANNEL_CHANGE:
+      case WsMessageType.EVENT_CHAT_CHANNEL_CHANGE: {
         const channelChange = msg as WsEventChatChannelChange;
-        if (this.ui.chatUI) {
-          this.ui.chatUI.setCurrentChannel(channelChange.channelName);
-        }
+        ClientBridge.setCurrentChannel(channelChange.channelName);
         this.requestUserList();
         break;
+      }
 
       case WsMessageType.EVENT_CHAT_USER_LIST_CHANGE:
         const userChange = msg as WsEventChatUserListChange;
@@ -559,8 +586,8 @@ export class StarpeaceClient {
       case WsMessageType.EVENT_MAP_DATA:
       case WsMessageType.RESP_MAP_DATA:
         const mapMsg = msg as WsRespMapData;
-        this.ui.log('Map', `Received area (${mapMsg.data.x}, ${mapMsg.data.y}): ${mapMsg.data.buildings.length} buildings, ${mapMsg.data.segments.length} segments`);
-        this.ui.updateMapData(mapMsg.data);
+        ClientBridge.log('Map', `Received area (${mapMsg.data.x}, ${mapMsg.data.y}): ${mapMsg.data.buildings.length} buildings, ${mapMsg.data.segments.length} segments`);
+        this.mapNavigationUI?.getRenderer()?.updateMapData(mapMsg.data);
         break;
 
       case WsMessageType.EVENT_BUILDING_REFRESH: {
@@ -574,10 +601,10 @@ export class StarpeaceClient {
             this.currentFocusedVisualClass || '0'
           ).then(refreshedDetails => {
             if (refreshedDetails) {
-              this.ui.updateBuildingDetailsPanel(refreshedDetails);
+              ClientBridge.updateBuildingDetails(refreshedDetails);
             }
           }).catch(err => {
-            this.ui.log('Error', `Failed to refresh building: ${toErrorMessage(err)}`);
+            ClientBridge.log('Error', `Failed to refresh building: ${toErrorMessage(err)}`);
           });
         }
         break;
@@ -592,10 +619,10 @@ export class StarpeaceClient {
             buildingCount: tycoonUpdate.buildingCount,
             maxBuildings: tycoonUpdate.maxBuildings
           };
-          this.ui.log('Tycoon', `Cash: ${tycoonUpdate.cash} | Income/h: ${tycoonUpdate.incomePerHour} | Rank: ${tycoonUpdate.ranking} | Buildings: ${tycoonUpdate.buildingCount}/${tycoonUpdate.maxBuildings}`);
+          ClientBridge.log('Tycoon', `Cash: ${tycoonUpdate.cash} | Income/h: ${tycoonUpdate.incomePerHour} | Rank: ${tycoonUpdate.ranking} | Buildings: ${tycoonUpdate.buildingCount}/${tycoonUpdate.maxBuildings}`);
 
-          // --- UPDATE: Update the UI ---
-          this.ui.updateTycoonStats({
+          // --- UPDATE: Push stats to React TopBar via Zustand ---
+          ClientBridge.updateTycoonStats({
             username: this.storedUsername,
             ...this.currentTycoonData,
             failureLevel: tycoonUpdate.failureLevel,
@@ -604,11 +631,11 @@ export class StarpeaceClient {
 
       case WsMessageType.EVENT_RDO_PUSH:
         const pushData = (msg as any).rawPacket || msg;
-        this.ui.log('Push', `Received: ${JSON.stringify(pushData).substring(0, 100)}...`);
+        ClientBridge.log('Push', `Received: ${JSON.stringify(pushData).substring(0, 100)}...`);
         break;
 
       case WsMessageType.EVENT_END_OF_PERIOD:
-        this.ui.log('Period', 'Financial period ended — refreshing data');
+        ClientBridge.log('Period', 'Financial period ended — refreshing data');
         this.showNotification('Financial period ended', 'info');
         this.soundManager.play('period-end');
         // Refresh tycoon stats to reflect latest P&L
@@ -618,24 +645,17 @@ export class StarpeaceClient {
       // Mail Events
       case WsMessageType.EVENT_NEW_MAIL: {
         const newMail = msg as WsEventNewMail;
-        this.ui.log('Mail', `New mail! ${newMail.unreadCount} unread message(s)`);
+        ClientBridge.log('Mail', `New mail! ${newMail.unreadCount} unread message(s)`);
         this.soundManager.play('mail');
-        if (this.ui.toolbarUI) {
-          this.ui.toolbarUI.setMailBadge(newMail.unreadCount);
-        }
-        if (this.ui.mailPanel) {
-          this.ui.mailPanel.setUnreadCount(newMail.unreadCount);
-        }
+        ClientBridge.setMailUnreadCount(newMail.unreadCount);
         break;
       }
 
       // Mail Responses (delegated to mail panel)
       case WsMessageType.RESP_MAIL_CONNECTED: {
         const mailConn = msg as WsRespMailConnected;
-        this.ui.log('Mail', `Mail service connected. ${mailConn.unreadCount} unread.`);
-        if (this.ui.toolbarUI) {
-          this.ui.toolbarUI.setMailBadge(mailConn.unreadCount);
-        }
+        ClientBridge.log('Mail', `Mail service connected. ${mailConn.unreadCount} unread.`);
+        ClientBridge.setMailUnreadCount(mailConn.unreadCount);
         break;
       }
 
@@ -645,7 +665,7 @@ export class StarpeaceClient {
       case WsMessageType.RESP_MAIL_DELETED:
       case WsMessageType.RESP_MAIL_UNREAD_COUNT:
       case WsMessageType.RESP_MAIL_DRAFT_SAVED:
-        this.ui.handleMailResponse(msg);
+        ClientBridge.handleMailResponse(msg);
         break;
 
       // Search Menu Responses
@@ -657,7 +677,7 @@ export class StarpeaceClient {
       case WsMessageType.RESP_SEARCH_MENU_RANKINGS:
       case WsMessageType.RESP_SEARCH_MENU_RANKING_DETAIL:
       case WsMessageType.RESP_SEARCH_MENU_BANKS:
-        this.ui.handleSearchMenuResponse(msg);
+        ClientBridge.handleSearchMenuResponse(msg);
         break;
 
       // Profile Tab Responses (delegated to profile panel)
@@ -670,34 +690,30 @@ export class StarpeaceClient {
       case WsMessageType.RESP_PROFILE_AUTOCONNECTION_ACTION:
       case WsMessageType.RESP_PROFILE_POLICY:
       case WsMessageType.RESP_PROFILE_POLICY_SET:
-        this.ui.handleProfileResponse(msg);
+        ClientBridge.handleProfileResponse(msg);
         break;
 
       // Politics Response
       case WsMessageType.RESP_POLITICS_DATA:
-        this.ui.handlePoliticsResponse(msg);
+        ClientBridge.handlePoliticsResponse(msg);
         break;
 
       // Transport Response
       case WsMessageType.RESP_TRANSPORT_DATA:
-        if (this.ui.transportPanel) {
-          this.ui.transportPanel.handleMessage(msg);
-        }
+        ClientBridge.handleTransportResponse(msg);
         break;
 
       // Connection Search Response
       case WsMessageType.RESP_SEARCH_CONNECTIONS: {
         const searchResp = msg as WsRespSearchConnections;
-        if (this.connectionPickerDialog) {
-          this.connectionPickerDialog.updateResults(searchResp.results);
-        }
+        ClientBridge.updateConnectionResults(searchResp.results);
         break;
       }
 
       // Profile Response
       case WsMessageType.RESP_GET_PROFILE: {
         const profile = (msg as WsRespGetProfile).profile;
-        this.ui.log('Profile', `Profile loaded: ${profile.name} (${profile.levelName})`);
+        ClientBridge.log('Profile', `Profile loaded: ${profile.name} (${profile.levelName})`);
         const baseStats = this.currentTycoonData ?? {
           cash: profile.budget,
           incomePerHour: '0',
@@ -705,7 +721,7 @@ export class StarpeaceClient {
           buildingCount: profile.facCount,
           maxBuildings: profile.facMax,
         };
-        this.ui.updateTycoonStats({
+        ClientBridge.updateTycoonStats({
           username: this.storedUsername,
           ...baseStats,
           prestige: profile.prestige,
@@ -713,21 +729,16 @@ export class StarpeaceClient {
           levelTier: profile.levelTier,
           area: profile.area,
         });
-        // Update profile panel tycoon info
-        if (this.ui.profilePanel) {
-          this.ui.profilePanel.setTycoonInfo(profile.name, profile.ranking, this.currentWorldName, profile.photoUrl);
-        }
+        // Update profile store with full tycoon data
+        ClientBridge.setProfile(profile);
         break;
       }
 
       // Error responses without wsRequestId (from fire-and-forget messages like search menu)
       case WsMessageType.RESP_ERROR: {
         const errorResp = msg as WsRespError;
-        this.ui.log('Error', errorResp.errorMessage || 'Unknown error');
-        // If search menu is open, show the error there
-        if (this.ui.searchMenuPanel) {
-          this.ui.handleSearchMenuError(errorResp.errorMessage || 'Request failed');
-        }
+        ClientBridge.log('Error', errorResp.errorMessage || 'Unknown error');
+        ClientBridge.handleSearchMenuError(errorResp.errorMessage || 'Request failed');
         break;
       }
     }
@@ -739,7 +750,7 @@ export class StarpeaceClient {
     this.storedUsername = username;
     this.storedPassword = password;
     const zoneDisplay = zonePath?.split('/').pop() || 'BETA';
-    this.ui.log('Directory', `Authenticating for ${zoneDisplay}...`);
+    ClientBridge.log('Directory', `Authenticating for ${zoneDisplay}...`);
 
     try {
       const req: WsReqConnectDirectory = {
@@ -750,11 +761,10 @@ export class StarpeaceClient {
       };
 
       const resp = (await this.sendRequest(req)) as WsRespConnectSuccess;
-      this.ui.log('Directory', `Authentication Success. Found ${resp.worlds.length} world(s) in ${zoneDisplay}.`);
-      this.ui.loginUI.renderWorldList(resp.worlds);
-      this.ui.loginUI.hideConnectButton();
+      ClientBridge.log('Directory', `Authentication Success. Found ${resp.worlds.length} world(s) in ${zoneDisplay}.`);
+      ClientBridge.showWorlds(resp.worlds);
     } catch (err: unknown) {
-      this.ui.log('Error', `Directory Auth Failed: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Directory Auth Failed: ${toErrorMessage(err)}`);
       alert('Login Failed: ' + toErrorMessage(err));
     }
   }
@@ -765,8 +775,8 @@ export class StarpeaceClient {
       return;
     }
 
-    this.ui.log('Login', `Joining world ${worldName}...`);
-    this.ui.loginUI.showWorldListLoading(`Connecting to ${worldName}...`);
+    ClientBridge.log('Login', `Joining world ${worldName}...`);
+    // React LoginScreen already sets isLoading=true before calling onWorldSelect
     this.currentWorldName = worldName;
 
     try {
@@ -777,7 +787,7 @@ export class StarpeaceClient {
         worldName
       };
       const resp = (await this.sendRequest(req)) as WsRespLoginSuccess;
-      this.ui.log('Login', `Success! Tycoon: ${resp.tycoonId}`);
+      ClientBridge.log('Login', `Success! Tycoon: ${resp.tycoonId}`);
 
       // Store world properties from InterfaceServer
       if (resp.worldXSize !== undefined) this.worldXSize = resp.worldXSize;
@@ -786,22 +796,17 @@ export class StarpeaceClient {
 
       if (resp.companies && resp.companies.length > 0) {
         this.availableCompanies = resp.companies;
-        this.ui.log('Login', `Found ${resp.companies.length} compan${resp.companies.length > 1 ? 'ies' : 'y'}`);
+        ClientBridge.log('Login', `Found ${resp.companies.length} compan${resp.companies.length > 1 ? 'ies' : 'y'}`);
 
-        this.ui.loginUI.showCompanyListLoading('Loading companies...');
-
-        // Small delay for loading state visibility
-        setTimeout(() => {
-          this.ui.loginUI.renderCompanySelection(resp.companies || []);
-        }, 300);
+        ClientBridge.showCompanies(resp.companies || []);
       } else {
-        this.ui.log('Error', 'No companies found - cannot proceed');
+        ClientBridge.log('Error', 'No companies found - cannot proceed');
         this.showNotification('No companies available for this account', 'error');
       }
 
     } catch (err: unknown) {
-      this.ui.log('Error', `Login failed: ${toErrorMessage(err)}`);
-      this.ui.loginUI.showWorldListLoading('Connection failed. Please try again.');
+      ClientBridge.log('Error', `Login failed: ${toErrorMessage(err)}`);
+      ClientBridge.setLoginLoading(false);
       this.showNotification(`World login failed: ${toErrorMessage(err)}`, 'error');
     }
   }
@@ -813,8 +818,8 @@ export class StarpeaceClient {
     }
 
     this.isSelectingCompany = true;
-    this.ui.log('Company', `Selecting company ID: ${companyId}...`);
-    this.ui.loginUI.showCompanyListLoading('Loading world...');
+    ClientBridge.log('Company', `Selecting company ID: ${companyId}...`);
+    // React LoginScreen already sets isLoading=true before calling onCompanySelect
 
     try {
       // Find the selected company
@@ -828,7 +833,7 @@ export class StarpeaceClient {
       const needsSwitch = company.ownerRole && company.ownerRole !== this.storedUsername;
 
       if (needsSwitch) {
-        this.ui.log('Company', `Switching to role-based company: ${company.name} (${company.ownerRole})...`);
+        ClientBridge.log('Company', `Switching to role-based company: ${company.name} (${company.ownerRole})...`);
 
         // Use switchCompany instead of selectCompany
         const req: WsReqSwitchCompany = {
@@ -837,7 +842,7 @@ export class StarpeaceClient {
         };
 
         await this.sendRequest(req);
-        this.ui.log('Company', 'Company switch successful');
+        ClientBridge.log('Company', 'Company switch successful');
       } else {
         // Normal company selection
         const req: WsReqSelectCompany = {
@@ -846,7 +851,7 @@ export class StarpeaceClient {
         };
 
         const selectResp = await this.sendRequest(req);
-        this.ui.log('Company', 'Company selected successfully');
+        ClientBridge.log('Company', 'Company selected successfully');
 
         // Restore camera to player's last saved position (Bug 14)
         const respAny = selectResp as Record<string, unknown>;
@@ -854,7 +859,7 @@ export class StarpeaceClient {
             && (respAny.playerX !== 0 || respAny.playerY !== 0)) {
           this.savedPlayerX = respAny.playerX;
           this.savedPlayerY = respAny.playerY;
-          this.ui.log('Map', `Restoring camera to saved position (${this.savedPlayerX}, ${this.savedPlayerY})`);
+          ClientBridge.log('Map', `Restoring camera to saved position (${this.savedPlayerX}, ${this.savedPlayerY})`);
         }
       }
 
@@ -869,7 +874,7 @@ export class StarpeaceClient {
 
       // Apply server WorldSeason to renderer (overrides default SUMMER)
       if (this.worldSeason !== null) {
-        const renderer = this.ui.mapNavigationUI?.getRenderer();
+        const renderer = this.mapNavigationUI?.getRenderer();
         if (renderer) {
           renderer.setSeason(this.worldSeason as Season);
         }
@@ -877,7 +882,7 @@ export class StarpeaceClient {
 
       // Center camera on saved position if available
       if (this.savedPlayerX !== undefined && this.savedPlayerY !== undefined) {
-        const renderer = this.ui.mapNavigationUI?.getRenderer();
+        const renderer = this.mapNavigationUI?.getRenderer();
         if (renderer) {
           renderer.centerOn(this.savedPlayerX, this.savedPlayerY);
         }
@@ -885,19 +890,19 @@ export class StarpeaceClient {
 
       // Connect to mail service (non-blocking, fire-and-forget)
       this.connectMailService().catch(err => {
-        this.ui.log('Mail', `Mail service connection failed: ${toErrorMessage(err)}`);
+        ClientBridge.log('Mail', `Mail service connection failed: ${toErrorMessage(err)}`);
       });
 
       // Fetch extended tycoon profile (non-blocking)
       this.getProfile().catch(err => {
-        this.ui.log('Profile', `Profile fetch failed: ${toErrorMessage(err)}`);
+        ClientBridge.log('Profile', `Profile fetch failed: ${toErrorMessage(err)}`);
       });
 
       // NOTE: Initial map area is loaded by the zone system via triggerZoneCheck()
       // Do NOT call loadMapArea() here to avoid duplicate requests
     } catch (err: unknown) {
-      this.ui.log('Error', `Company selection failed: ${toErrorMessage(err)}`);
-      this.ui.loginUI.showCompanyListLoading('Failed to load world. Please try again.');
+      ClientBridge.log('Error', `Company selection failed: ${toErrorMessage(err)}`);
+      ClientBridge.setLoginLoading(false);
       this.showNotification(`Company selection failed: ${toErrorMessage(err)}`, 'error');
     } finally {
       this.isSelectingCompany = false;
@@ -907,41 +912,33 @@ export class StarpeaceClient {
   private showCompanyCreationDialog(): void {
     // Known clusters — could be fetched from server in future
     const defaultClusters = ['PGI', 'Moab', 'Dissidents', 'Magna', 'Mariko'];
+    ClientBridge.showCompanyCreationDialog(defaultClusters);
+  }
 
-    if (!this.companyCreationDialog) {
-      this.companyCreationDialog = new CompanyCreationDialog({
-        onCreateCompany: async (companyName: string, cluster: string) => {
-          const req: WsReqCreateCompany = {
-            type: WsMessageType.REQ_CREATE_COMPANY,
-            companyName,
-            cluster,
-          };
+  private async handleCreateCompany(companyName: string, cluster: string): Promise<void> {
+    const req: WsReqCreateCompany = {
+      type: WsMessageType.REQ_CREATE_COMPANY,
+      companyName,
+      cluster,
+    };
 
-          const resp = await this.sendRequest(req) as WsRespCreateCompany;
-          this.ui.log('Company', `Company created: "${resp.companyName}" (ID: ${resp.companyId})`);
-          this.showNotification(`Company "${resp.companyName}" created!`, 'success');
-          this.soundManager.play('notification');
+    const resp = await this.sendRequest(req) as WsRespCreateCompany;
+    ClientBridge.log('Company', `Company created: "${resp.companyName}" (ID: ${resp.companyId})`);
+    this.showNotification(`Company "${resp.companyName}" created!`, 'success');
+    this.soundManager.play('notification');
 
-          // Add new company to list and auto-select it
-          this.availableCompanies.push({
-            id: resp.companyId,
-            name: resp.companyName,
-            ownerRole: this.storedUsername,
-          });
-          this.selectCompanyAndStart(resp.companyId);
-        },
-        onCancel: () => {
-          // Nothing to do
-        },
-      });
-    }
-
-    this.companyCreationDialog.show(defaultClusters);
+    // Add new company to list and auto-select it
+    this.availableCompanies.push({
+      id: resp.companyId,
+      name: resp.companyName,
+      ownerRole: this.storedUsername,
+    });
+    this.selectCompanyAndStart(resp.companyId);
   }
 
   private loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64) {
     const coords = x !== undefined && y !== undefined ? ` at (${x}, ${y})` : ' at player position';
-    this.ui.log('Map', `Loading area${coords} ${w}x${h}...`);
+    ClientBridge.log('Map', `Loading area${coords} ${w}x${h}...`);
 
     // Use provided coordinates or 0,0 (server will use player position)
     const req: WsReqMapLoad = {
@@ -957,64 +954,36 @@ export class StarpeaceClient {
   }
 
   private switchToGameView() {
-    this.ui.loginUI.hide();
+    // React App.tsx switches to GameScreen when status becomes 'connected'
     this.uiGamePanel.style.display = 'flex';
     this.uiGamePanel.style.flexDirection = 'column';
 
-    // Initialize Game UI
-    this.ui.initGameUI(this.uiGamePanel, (msg) => this.sendMessage(msg));
+    // Initialize Map & Navigation
+    this.mapNavigationUI = new MapNavigationUI(this.uiGamePanel);
+    this.mapNavigationUI.init();
     this.setupGameUICallbacks();
-    this.ui.initTycoonStats(this.storedUsername);
 
-    // Wire profile panel company switching callback
-    if (this.ui.profilePanel) {
-      this.ui.profilePanel.setOnSwitchCompany((companyName: string, _companyId: number) => {
-        // Find matching company from available companies
-        const company = this.availableCompanies.find(c => c.name === companyName);
-        if (company) {
-          this.ui.log('Profile', `Switching to company: ${companyName}`);
-          this.selectCompanyAndStart(company.id);
-        }
-      });
+    // Tycoon stats: push initial username to React TopBar via Zustand
+    ClientBridge.updateTycoonStats({
+      username: this.storedUsername,
+      cash: '0', incomePerHour: '0', ranking: 0, buildingCount: 0, maxBuildings: 0,
+    });
+
+    // Profile company switching is handled via registerClientCallbacks.onSwitchCompany
+
+    // Create minimap and wire to renderer
+    this.minimapUI = new MinimapUI();
+    const renderer = this.mapNavigationUI.getRenderer();
+    if (renderer) {
+      this.minimapUI.setRenderer(renderer);
     }
 
-    // Wire minimap and settings to renderer
-    if (this.ui.mapNavigationUI) {
-      const renderer = this.ui.mapNavigationUI.getRenderer();
-      if (renderer) {
-        if (this.ui.minimapUI) {
-          this.ui.minimapUI.setRenderer(renderer);
-        }
-        if (this.ui.settingsPanel) {
-          this.ui.settingsPanel.setRenderer(renderer);
-        }
-      }
-    }
+    // Load persisted settings and apply to renderer + sound
+    ClientBridge.loadPersistedSettings();
+    const initialSettings = ClientBridge.getSettings();
+    this.applySettings(initialSettings);
 
-    // Wire key binding registry to settings panel
-    if (this.ui.settingsPanel) {
-      this.ui.settingsPanel.setKeyBindingRegistry(this.keyBindingRegistry);
-    }
-
-    // Wire sound manager to settings
-    if (this.ui.settingsPanel) {
-      const initialSettings = this.ui.settingsPanel.getSettings();
-      this.soundManager.setEnabled(initialSettings.soundEnabled);
-      this.soundManager.setVolume(initialSettings.soundVolume);
-      this.ui.settingsPanel.setOnSettingsChange((settings) => {
-        this.soundManager.setEnabled(settings.soundEnabled);
-        this.soundManager.setVolume(settings.soundVolume);
-        if (this.ui.mapNavigationUI) {
-          const renderer = this.ui.mapNavigationUI.getRenderer();
-          if (renderer) {
-            renderer.setVehicleAnimationsEnabled(settings.vehicleAnimations);
-            renderer.setEdgeScrollEnabled(settings.edgeScrollEnabled);
-          }
-        }
-      });
-    }
-
-    this.ui.log('Renderer', 'Game view initialized');
+    ClientBridge.log('Renderer', 'Game view initialized');
   }
 
   // --- Chat Functions ---
@@ -1046,7 +1015,7 @@ export class StarpeaceClient {
       };
       await this.sendRequest(req);
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to send message: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to send message: ${toErrorMessage(err)}`);
     } finally {
       this.isSendingChatMessage = false;
     }
@@ -1067,11 +1036,9 @@ export class StarpeaceClient {
       };
       const resp = (await this.sendRequest(req)) as WsRespChatUserList;
 
-      if (this.ui.chatUI) {
-        this.ui.chatUI.updateUserList(resp.users);
-      }
+      ClientBridge.setChatUsers(resp.users);
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to get user list: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to get user list: ${toErrorMessage(err)}`);
     }
   }
 
@@ -1082,11 +1049,9 @@ export class StarpeaceClient {
       };
       const resp = (await this.sendRequest(req)) as WsRespChatChannelList;
 
-      if (this.ui.chatUI) {
-        this.ui.chatUI.updateChannelList(resp.channels);
-      }
+      ClientBridge.setChatChannels(resp.channels);
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to get channel list: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to get channel list: ${toErrorMessage(err)}`);
     }
   }
 
@@ -1099,19 +1064,16 @@ export class StarpeaceClient {
     this.isJoiningChannel = true;
 
     try {
-      this.ui.log('Chat', `Joining channel: ${channelName || 'Lobby'}`);
+      ClientBridge.log('Chat', `Joining channel: ${channelName || 'Lobby'}`);
       const req: WsReqChatJoinChannel = {
         type: WsMessageType.REQ_CHAT_JOIN_CHANNEL,
         channelName
       };
       await this.sendRequest(req);
 
-      if (this.ui.chatUI) {
-        this.ui.chatUI.clearMessages();
-        this.ui.chatUI.hideChannelList();
-      }
+      // React ChatStrip shows messages per-channel from store — no clearing needed
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to join channel: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to join channel: ${toErrorMessage(err)}`);
     } finally {
       this.isJoiningChannel = false;
     }
@@ -1139,7 +1101,7 @@ export class StarpeaceClient {
     }
 
     this.isFocusingBuilding = true;
-    this.ui.log('Building', `Requesting focus at (${x}, ${y})`);
+    ClientBridge.log('Building', `Requesting focus at (${x}, ${y})`);
 
     try {
       // Auto-unfocus previous building
@@ -1160,103 +1122,32 @@ export class StarpeaceClient {
 
       // Request detailed building info using visualClass from ObjectsInArea
       const details = await this.requestBuildingDetails(x, y, visualClass || '0');
-      if (details) {
-        // Show BuildingDetailsPanel with full details
-        this.ui.showBuildingDetailsPanel(
-          details,
-          async (propertyName, value, additionalParams) => {
-            await this.setBuildingProperty(x, y, propertyName, value, additionalParams);
-          },
-          (targetX: number, targetY: number) => {
-            this.focusBuilding(targetX, targetY);
-          },
-          async (action, count) => {
-            await this.upgradeBuildingAction(x, y, action, count);
-          },
-          async () => {
-            // Refresh callback: re-fetch building details
-            const refreshedDetails = await this.requestBuildingDetails(x, y, visualClass || '0');
-            if (refreshedDetails) {
-              this.ui.updateBuildingDetailsPanel(refreshedDetails);
-            }
-          },
-          async (newName) => {
-            // Rename callback
-            await this.renameFacility(x, y, newName);
-          },
-          async () => {
-            // Delete callback
-            await this.deleteFacility(x, y);
-          },
-          (actionId, buildingDetails) => {
-            this.handleBuildingAction(actionId, buildingDetails);
-          },
-          this.currentCompanyName,
-          (fluidId, fluidName, direction) => {
-            this.openConnectionPicker(x, y, fluidId, fluidName, direction);
-          }
-        );
-      } else {
-        // Fallback: create minimal details from BuildingFocusInfo
-        const fallbackDetails: BuildingDetailsResponse = {
-          buildingId: response.building.buildingId || '',
-          buildingName: response.building.buildingName || 'Building',
-          ownerName: response.building.ownerName || 'Unknown',
-          x,
-          y,
-          visualClass: visualClass || '0',
-          templateName: 'Building',
-          securityId: '',
-          groups: {
-            generic: [
-              { name: 'Name', value: response.building.buildingName },
-              { name: 'Owner', value: response.building.ownerName },
-              { name: 'Revenue', value: response.building.revenue },
-            ]
-          },
-          timestamp: Date.now()
-        };
-        // Also provide callback for fallback case
-        this.ui.showBuildingDetailsPanel(
-          fallbackDetails,
-          async (propertyName, value, additionalParams) => {
-            await this.setBuildingProperty(x, y, propertyName, value, additionalParams);
-          },
-          (targetX: number, targetY: number) => {
-            this.focusBuilding(targetX, targetY);
-          },
-          async (action, count) => {
-            await this.upgradeBuildingAction(x, y, action, count);
-          },
-          async () => {
-            // Refresh callback for fallback mode
-            const refreshedDetails = await this.requestBuildingDetails(x, y, visualClass || '0');
-            if (refreshedDetails) {
-              this.ui.updateBuildingDetailsPanel(refreshedDetails);
-            }
-          },
-          async (newName) => {
-            // Rename callback
-            await this.renameFacility(x, y, newName);
-          },
-          async () => {
-            // Delete callback
-            await this.deleteFacility(x, y);
-          },
-          (actionId, buildingDetails) => {
-            this.handleBuildingAction(actionId, buildingDetails);
-          },
-          this.currentCompanyName,
-          (fluidId, fluidName, direction) => {
-            this.openConnectionPicker(x, y, fluidId, fluidName, direction);
-          }
-        );
-      }
+      // Show building in React panel (callbacks registered centrally via registerClientCallbacks)
+      const displayDetails = details ?? {
+        buildingId: response.building.buildingId || '',
+        buildingName: response.building.buildingName || 'Building',
+        ownerName: response.building.ownerName || 'Unknown',
+        x,
+        y,
+        visualClass: visualClass || '0',
+        templateName: 'Building',
+        securityId: '',
+        groups: {
+          generic: [
+            { name: 'Name', value: response.building.buildingName },
+            { name: 'Owner', value: response.building.ownerName },
+            { name: 'Revenue', value: response.building.revenue },
+          ]
+        },
+        timestamp: Date.now()
+      } as BuildingDetailsResponse;
 
-      this.ui.log('Building', `Focused: ${response.building.buildingName}`);
+      ClientBridge.showBuildingPanel(displayDetails, this.currentCompanyName);
+
+      ClientBridge.log('Building', `Focused: ${response.building.buildingName}`);
 
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to focus building: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to focus building: ${toErrorMessage(err)}`);
     } finally {
       this.isFocusingBuilding = false;
     }
@@ -1265,7 +1156,7 @@ export class StarpeaceClient {
   private async unfocusBuilding() {
     if (!this.currentFocusedBuilding) return;
 
-    this.ui.log('Building', 'Unfocusing building');
+    ClientBridge.log('Building', 'Unfocusing building');
 
     try {
       const req: WsReqBuildingUnfocus = {
@@ -1273,11 +1164,11 @@ export class StarpeaceClient {
       };
       this.ws?.send(JSON.stringify(req));
 
-      this.ui.hideBuildingDetailsPanel();
+      ClientBridge.hideBuildingPanel();
       this.currentFocusedBuilding = null;
       this.currentFocusedVisualClass = null;
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to unfocus building: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to unfocus building: ${toErrorMessage(err)}`);
     }
   }
 
@@ -1301,7 +1192,7 @@ export class StarpeaceClient {
     y: number,
     visualClass: string
   ): Promise<BuildingDetailsResponse | null> {
-    this.ui.log('Building', `Requesting details at (${x}, ${y})`);
+    ClientBridge.log('Building', `Requesting details at (${x}, ${y})`);
 
     try {
       const req: WsReqBuildingDetails = {
@@ -1312,10 +1203,10 @@ export class StarpeaceClient {
       };
 
       const response = await this.sendRequest(req) as WsRespBuildingDetails;
-      this.ui.log('Building', `Got details: ${response.details.templateName}`);
+      ClientBridge.log('Building', `Got details: ${response.details.templateName}`);
       return response.details;
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to get building details: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to get building details: ${toErrorMessage(err)}`);
       return null;
     }
   }
@@ -1326,7 +1217,7 @@ export class StarpeaceClient {
   private async refreshBuildingDetails(x: number, y: number): Promise<void> {
     const details = await this.requestBuildingDetails(x, y, '0');
     if (details) {
-      this.ui.updateBuildingDetailsPanel(details);
+      ClientBridge.updateBuildingDetails(details);
     }
   }
 
@@ -1341,7 +1232,7 @@ export class StarpeaceClient {
     value: string,
     additionalParams?: Record<string, string>
   ): Promise<boolean> {
-    this.ui.log('Building', `Setting ${propertyName}=${value} at (${x}, ${y})`);
+    ClientBridge.log('Building', `Setting ${propertyName}=${value} at (${x}, ${y})`);
 
     try {
       const req: WsReqBuildingSetProperty = {
@@ -1356,14 +1247,14 @@ export class StarpeaceClient {
       const response = await this.sendRequest(req) as WsRespBuildingSetProperty;
 
       if (response.success) {
-        this.ui.log('Building', `Property ${propertyName} updated to ${response.newValue}`);
+        ClientBridge.log('Building', `Property ${propertyName} updated to ${response.newValue}`);
         return true;
       } else {
-        this.ui.log('Error', `Failed to set ${propertyName}`);
+        ClientBridge.log('Error', `Failed to set ${propertyName}`);
         return false;
       }
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to set property: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to set property: ${toErrorMessage(err)}`);
       return false;
     }
   }
@@ -1380,7 +1271,7 @@ export class StarpeaceClient {
     const actionName = action === 'DOWNGRADE' ? 'Downgrading' :
                        action === 'START_UPGRADE' ? `Starting ${count} upgrade(s)` :
                        'Stopping upgrade';
-    this.ui.log('Building', `${actionName} at (${x}, ${y})`);
+    ClientBridge.log('Building', `${actionName} at (${x}, ${y})`);
 
     try {
       const req: WsReqBuildingUpgrade = {
@@ -1394,14 +1285,14 @@ export class StarpeaceClient {
       const response = await this.sendRequest(req) as WsRespBuildingUpgrade;
 
       if (response.success) {
-        this.ui.log('Building', response.message || 'Upgrade action completed');
+        ClientBridge.log('Building', response.message || 'Upgrade action completed');
         return true;
       } else {
-        this.ui.log('Error', response.message || 'Failed to perform upgrade action');
+        ClientBridge.log('Error', response.message || 'Failed to perform upgrade action');
         return false;
       }
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to perform upgrade action: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to perform upgrade action: ${toErrorMessage(err)}`);
       return false;
     }
   }
@@ -1410,7 +1301,7 @@ export class StarpeaceClient {
    * Rename a facility (building)
    */
   public async renameFacility(x: number, y: number, newName: string): Promise<boolean> {
-    this.ui.log('Building', `Renaming building at (${x}, ${y}) to "${newName}"`);
+    ClientBridge.log('Building', `Renaming building at (${x}, ${y}) to "${newName}"`);
 
     try {
       const req: WsReqRenameFacility = {
@@ -1423,14 +1314,14 @@ export class StarpeaceClient {
       const response = await this.sendRequest(req) as WsRespRenameFacility;
 
       if (response.success) {
-        this.ui.log('Building', `Building renamed to "${response.newName}"`);
+        ClientBridge.log('Building', `Building renamed to "${response.newName}"`);
         return true;
       } else {
-        this.ui.log('Error', response.message || 'Failed to rename building');
+        ClientBridge.log('Error', response.message || 'Failed to rename building');
         return false;
       }
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to rename building: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to rename building: ${toErrorMessage(err)}`);
       return false;
     }
   }
@@ -1439,7 +1330,7 @@ export class StarpeaceClient {
    * Delete a facility (building)
    */
   public async deleteFacility(x: number, y: number): Promise<boolean> {
-    this.ui.log('Building', `Deleting building at (${x}, ${y})`);
+    ClientBridge.log('Building', `Deleting building at (${x}, ${y})`);
 
     try {
       const req: WsReqDeleteFacility = {
@@ -1451,16 +1342,16 @@ export class StarpeaceClient {
       const response = await this.sendRequest(req) as WsRespDeleteFacility;
 
       if (response.success) {
-        this.ui.log('Building', 'Building deleted successfully');
+        ClientBridge.log('Building', 'Building deleted successfully');
         // Refresh the map to remove the deleted building (use building coordinates as center)
         this.loadMapArea(x, y);
         return true;
       } else {
-        this.ui.log('Error', response.message || 'Failed to delete building');
+        ClientBridge.log('Error', response.message || 'Failed to delete building');
         return false;
       }
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to delete building: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to delete building: ${toErrorMessage(err)}`);
       return false;
     }
   }
@@ -1473,7 +1364,7 @@ export class StarpeaceClient {
     if (actionId === 'visitPolitics') {
       const townName = buildingDetails.groups['townGeneral']
         ?.find(p => p.name === 'Town')?.value || '';
-      this.ui.showPoliticsPanel(townName, buildingDetails.x, buildingDetails.y);
+      ClientBridge.showPoliticsPanel(townName, buildingDetails.x, buildingDetails.y);
     } else if (actionId === 'clone') {
       this.startCloneFacility(buildingDetails);
     } else if (actionId === 'launchMovie') {
@@ -1523,7 +1414,7 @@ export class StarpeaceClient {
       console.error('Failed to fetch facility dimensions for clone:', err);
     }
 
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (renderer) {
       renderer.setPlacementMode(true, `Clone: ${buildingDetails.buildingName}`, 0, 0, '', xsize, ysize);
     }
@@ -1546,7 +1437,7 @@ export class StarpeaceClient {
     this.isCloneMode = false;
     this.cloneSourceBuilding = null;
 
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (renderer) {
       renderer.setPlacementMode(false);
     }
@@ -1556,7 +1447,7 @@ export class StarpeaceClient {
     if (!this.cloneSourceBuilding) return;
 
     const source = this.cloneSourceBuilding;
-    this.ui.log('Clone', `Cloning ${source.buildingName} to (${targetX}, ${targetY})...`);
+    ClientBridge.log('Clone', `Cloning ${source.buildingName} to (${targetX}, ${targetY})...`);
 
     try {
       await this.setBuildingProperty(source.x, source.y, 'CloneFacility', '0', {
@@ -1569,7 +1460,7 @@ export class StarpeaceClient {
 
       this.showNotification(`${source.buildingName} cloned successfully!`, 'success');
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to clone facility: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to clone facility: ${toErrorMessage(err)}`);
       this.showNotification('Failed to clone facility', 'error');
     } finally {
       this.cancelCloneMode();
@@ -1757,40 +1648,6 @@ export class StarpeaceClient {
   // CONNECTION PICKER (Find Suppliers / Find Clients)
   // =========================================================================
 
-  private openConnectionPicker(
-    buildingX: number,
-    buildingY: number,
-    fluidId: string,
-    fluidName: string,
-    direction: 'input' | 'output'
-  ): void {
-    // Close any existing dialog
-    if (this.connectionPickerDialog) {
-      this.connectionPickerDialog.close();
-      this.connectionPickerDialog = null;
-    }
-
-    this.connectionPickerDialog = new ConnectionPickerDialog(
-      document.body,
-      {
-        fluidName,
-        fluidId,
-        direction,
-        buildingX,
-        buildingY,
-        onSearch: (searchFluidId, searchDirection, filters) => {
-          this.searchConnections(buildingX, buildingY, searchFluidId, searchDirection, filters);
-        },
-        onConnect: async (connectFluidId, connectDirection, selectedCoords) => {
-          await this.connectFacilities(buildingX, buildingY, connectFluidId, connectDirection, selectedCoords);
-        },
-        onClose: () => {
-          this.connectionPickerDialog = null;
-        },
-      }
-    );
-  }
-
   private searchConnections(
     buildingX: number,
     buildingY: number,
@@ -1838,10 +1695,10 @@ export class StarpeaceClient {
       const visualClass = this.currentFocusedVisualClass || '0';
       const refreshedDetails = await this.requestBuildingDetails(buildingX, buildingY, visualClass);
       if (refreshedDetails) {
-        this.ui.updateBuildingDetailsPanel(refreshedDetails);
+        ClientBridge.updateBuildingDetails(refreshedDetails);
       }
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to connect: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to connect: ${toErrorMessage(err)}`);
       this.showNotification('Failed to connect facilities', 'error');
     }
   }
@@ -1856,7 +1713,7 @@ export class StarpeaceClient {
   public toggleRoadBuildingMode(): void {
     this.isRoadBuildingMode = !this.isRoadBuildingMode;
 
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (renderer) {
       renderer.setRoadDrawingMode(this.isRoadBuildingMode);
 
@@ -1878,16 +1735,13 @@ export class StarpeaceClient {
         // Setup ESC key handler
         this.setupRoadBuildingKeyboardHandler();
 
-        this.ui.log('Road', 'Road building mode enabled. Click and drag to draw roads. Right-click or press ESC to cancel.');
+        ClientBridge.log('Road', 'Road building mode enabled. Click and drag to draw roads. Right-click or press ESC to cancel.');
       } else {
-        this.ui.log('Road', 'Road building mode disabled');
+        ClientBridge.log('Road', 'Road building mode disabled');
       }
     }
 
-    // Update toolbar button state if available
-    if (this.ui.toolbarUI) {
-      this.ui.toolbarUI.setRoadBuildingActive(this.isRoadBuildingMode);
-    }
+    ClientBridge.setRoadBuildingMode(this.isRoadBuildingMode);
   }
 
   /**
@@ -1896,17 +1750,14 @@ export class StarpeaceClient {
   private cancelRoadBuildingMode(): void {
     this.isRoadBuildingMode = false;
 
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (renderer) {
       renderer.setRoadDrawingMode(false);
     }
 
-    // Update toolbar button state
-    if (this.ui.toolbarUI) {
-      this.ui.toolbarUI.setRoadBuildingActive(false);
-    }
+    ClientBridge.setRoadBuildingMode(false);
 
-    this.ui.log('Road', 'Road building mode cancelled');
+    ClientBridge.log('Road', 'Road building mode cancelled');
   }
 
   /**
@@ -1919,18 +1770,18 @@ export class StarpeaceClient {
     }
 
     // Validate road path before sending to server
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (renderer) {
       const validation = renderer.validateRoadPath(x1, y1, x2, y2);
       if (!validation.valid) {
-        this.ui.log('Road', `Cannot build road: ${validation.error}`);
+        ClientBridge.log('Road', `Cannot build road: ${validation.error}`);
         this.showNotification(validation.error || 'Invalid road placement', 'error');
         return;
       }
     }
 
     this.isBuildingRoad = true;
-    this.ui.log('Road', `Building road from (${x1}, ${y1}) to (${x2}, ${y2})...`);
+    ClientBridge.log('Road', `Building road from (${x1}, ${y1}) to (${x2}, ${y2})...`);
 
     try {
       const req: WsReqBuildRoad = {
@@ -1944,14 +1795,14 @@ export class StarpeaceClient {
       const response = await this.sendRequest(req) as WsRespBuildRoad;
 
       if (response.success) {
-        this.ui.log('Road', `Road built: ${response.tileCount} tiles, cost $${response.cost}`);
+        ClientBridge.log('Road', `Road built: ${response.tileCount} tiles, cost $${response.cost}`);
         // Refresh the map to show the new road (use road start as center)
         this.loadMapArea(x1, y1);
       } else {
-        this.ui.log('Error', response.message || 'Failed to build road');
+        ClientBridge.log('Error', response.message || 'Failed to build road');
       }
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to build road: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to build road: ${toErrorMessage(err)}`);
     } finally {
       this.isBuildingRoad = false;
     }
@@ -1979,7 +1830,7 @@ export class StarpeaceClient {
       this.cancelRoadBuildingMode();
     }
 
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (renderer) {
       if (this.isRoadDemolishMode) {
         // Cancel any building placement
@@ -1991,16 +1842,14 @@ export class StarpeaceClient {
           this.demolishRoadAt(x, y);
         });
 
-        this.ui.log('Road', 'Road demolish mode enabled. Click on a road segment to demolish it. Press ESC to cancel.');
+        ClientBridge.log('Road', 'Road demolish mode enabled. Click on a road segment to demolish it. Press ESC to cancel.');
       } else {
         renderer.setRoadDemolishClickCallback(null);
-        this.ui.log('Road', 'Road demolish mode disabled');
+        ClientBridge.log('Road', 'Road demolish mode disabled');
       }
     }
 
-    if (this.ui.toolbarUI) {
-      this.ui.toolbarUI.setRoadDemolishActive(this.isRoadDemolishMode);
-    }
+    ClientBridge.setRoadDemolishMode(this.isRoadDemolishMode);
   }
 
   /**
@@ -2009,21 +1858,19 @@ export class StarpeaceClient {
   private cancelRoadDemolishMode(): void {
     this.isRoadDemolishMode = false;
 
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (renderer) {
       renderer.setRoadDemolishClickCallback(null);
     }
 
-    if (this.ui.toolbarUI) {
-      this.ui.toolbarUI.setRoadDemolishActive(false);
-    }
+    ClientBridge.setRoadDemolishMode(false);
   }
 
   /**
    * Demolish a road segment at (x, y)
    */
   private async demolishRoadAt(x: number, y: number): Promise<void> {
-    this.ui.log('Road', `Demolishing road at (${x}, ${y})...`);
+    ClientBridge.log('Road', `Demolishing road at (${x}, ${y})...`);
 
     try {
       const req: WsReqDemolishRoad = {
@@ -2035,16 +1882,16 @@ export class StarpeaceClient {
       const response = await this.sendRequest(req) as WsRespDemolishRoad;
 
       if (response.success) {
-        this.ui.log('Road', `Road demolished at (${x}, ${y})`);
+        ClientBridge.log('Road', `Road demolished at (${x}, ${y})`);
         this.showNotification('Road demolished', 'success');
         // Refresh the map to remove the demolished road
         this.loadMapArea(x, y);
       } else {
-        this.ui.log('Error', response.message || 'Failed to demolish road');
+        ClientBridge.log('Error', response.message || 'Failed to demolish road');
         this.showNotification(response.message || 'Failed to demolish road', 'error');
       }
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to demolish road: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to demolish road: ${toErrorMessage(err)}`);
       this.showNotification(`Failed to demolish road: ${toErrorMessage(err)}`, 'error');
     }
   }
@@ -2058,11 +1905,11 @@ export class StarpeaceClient {
    */
   private async openBuildMenu() {
     if (!this.currentCompanyName) {
-      this.ui.log('Error', 'No company selected');
+      ClientBridge.log('Error', 'No company selected');
       return;
     }
 
-    this.ui.log('Build', 'Opening build menu...');
+    ClientBridge.log('Build', 'Opening build menu...');
 
     try {
       const req: WsReqGetBuildingCategories = {
@@ -2073,13 +1920,11 @@ export class StarpeaceClient {
       const response = await this.sendRequest(req) as WsRespBuildingCategories;
       this.buildingCategories = response.categories;
 
-      if (this.ui.buildMenuUI) {
-        this.ui.buildMenuUI.show(response.categories);
-      }
+      ClientBridge.setBuildMenuCategories(response.categories);
 
-      this.ui.log('Build', `Loaded ${response.categories.length} building categories`);
+      ClientBridge.log('Build', `Loaded ${response.categories.length} building categories`);
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to load building categories: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to load building categories: ${toErrorMessage(err)}`);
     }
   }
 
@@ -2087,7 +1932,7 @@ export class StarpeaceClient {
    * Load facilities for a specific category
    */
   private async loadBuildingFacilities(category: BuildingCategory) {
-    this.ui.log('Build', `Loading facilities for ${category.kindName}...`);
+    ClientBridge.log('Build', `Loading facilities for ${category.kindName}...`);
 
     try {
       const req: WsReqGetBuildingFacilities = {
@@ -2101,22 +1946,47 @@ export class StarpeaceClient {
       };
 
       const response = await this.sendRequest(req) as WsRespBuildingFacilities;
+      this.lastLoadedFacilities = response.facilities;
 
-      if (this.ui.buildMenuUI) {
-        this.ui.buildMenuUI.showFacilities(category, response.facilities);
-      }
+      ClientBridge.setBuildMenuFacilities(response.facilities);
 
-      this.ui.log('Build', `Loaded ${response.facilities.length} facilities`);
+      ClientBridge.log('Build', `Loaded ${response.facilities.length} facilities`);
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to load facilities: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to load facilities: ${toErrorMessage(err)}`);
     }
+  }
+
+  /**
+   * Load facilities by kind/cluster (React build menu callback)
+   */
+  private async loadBuildingFacilitiesByKind(kind: number, cluster: string) {
+    const category = this.buildingCategories.find(c => c.kind === kind && c.cluster === cluster);
+    if (!category) {
+      ClientBridge.log('Error', `Category not found: kind=${kind}, cluster=${cluster}`);
+      return;
+    }
+    await this.loadBuildingFacilities(category);
+  }
+
+  /**
+   * Place a building from React build menu selection
+   */
+  private placeBuildingFromMenu(facilityClass: string, visualClassId: number) {
+    const facility = this.lastLoadedFacilities.find(
+      f => f.facilityClass === facilityClass && f.visualClassId === visualClassId
+    );
+    if (!facility) {
+      ClientBridge.log('Error', `Facility not found: ${facilityClass}`);
+      return;
+    }
+    this.startBuildingPlacement(facility);
   }
 
   /**
    * Preload all facility dimensions (called once on startup)
    */
   private async preloadFacilityDimensions(): Promise<void> {
-    this.ui.log('Cache', 'Preloading facility dimensions...');
+    ClientBridge.log('Cache', 'Preloading facility dimensions...');
 
     try {
       const req: WsReqGetAllFacilityDimensions = {
@@ -2129,10 +1999,10 @@ export class StarpeaceClient {
       const cache = getFacilityDimensionsCache();
       cache.initialize(response.dimensions);
 
-      this.ui.log('Cache', `Loaded ${cache.getSize()} facility dimensions`);
+      ClientBridge.log('Cache', `Loaded ${cache.getSize()} facility dimensions`);
     } catch (err: unknown) {
       console.error('[Client] Failed to preload facility dimensions:', err);
-      this.ui.log('Error', 'Failed to load facility dimensions. Building placement may not work correctly.');
+      ClientBridge.log('Error', 'Failed to load facility dimensions. Building placement may not work correctly.');
     }
   }
 
@@ -2155,7 +2025,7 @@ export class StarpeaceClient {
    */
   private async startBuildingPlacement(building: BuildingInfo) {
     this.currentBuildingToPlace = building;
-    this.ui.log('Build', `Placing ${building.name}. Click on map to build.`);
+    ClientBridge.log('Build', `Placing ${building.name}. Click on map to build.`);
 
     // Fetch facility dimensions using VisualClassId (numeric ID from CLASSES.BIN)
     // Per Voyager original: VisualClassId is the lookup key, facilityClass is only for the RDO call
@@ -2175,7 +2045,7 @@ export class StarpeaceClient {
     this.showNotification(`${building.name} placement mode - Click map to place, ESC to cancel`, 'info');
 
     // Enable placement mode in renderer
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (renderer) {
       renderer.setPlacementMode(
         true,
@@ -2189,7 +2059,7 @@ export class StarpeaceClient {
     }
 
     // Set cancel placement callback for right-click
-    const cancelRenderer = this.ui.mapNavigationUI?.getRenderer();
+    const cancelRenderer = this.mapNavigationUI?.getRenderer();
     if (cancelRenderer) {
       cancelRenderer.setCancelPlacementCallback(() => {
         this.cancelBuildingPlacement();
@@ -2243,7 +2113,7 @@ export class StarpeaceClient {
     if (!this.currentBuildingToPlace) return;
 
     const building = this.currentBuildingToPlace;
-    this.ui.log('Build', `Placing ${building.name} at (${x}, ${y})...`);
+    ClientBridge.log('Build', `Placing ${building.name} at (${x}, ${y})...`);
 
     try {
       const req: WsReqPlaceBuilding = {
@@ -2256,7 +2126,7 @@ export class StarpeaceClient {
       await this.sendRequest(req);
 
       // Show success message
-      this.ui.log('Build', `✓ Successfully placed ${building.name}!`);
+      ClientBridge.log('Build', `✓ Successfully placed ${building.name}!`);
       this.showNotification(`${building.name} built successfully!`, 'success');
 
       // Reload the map area to show the new building
@@ -2267,7 +2137,7 @@ export class StarpeaceClient {
     } catch (err: unknown) {
       // Show detailed error message
       const errorMsg = toErrorMessage(err);
-      this.ui.log('Error', `✗ Failed to place ${building.name}: ${errorMsg}`);
+      ClientBridge.log('Error', `✗ Failed to place ${building.name}: ${errorMsg}`);
       this.showNotification(`Failed to place building: ${errorMsg}`, 'error');
 
       // Don't exit placement mode on error - let user try again or cancel manually
@@ -2287,7 +2157,7 @@ export class StarpeaceClient {
     }
 
     // Disable placement mode in renderer
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (renderer) {
       renderer.setPlacementMode(false);
     }
@@ -2299,39 +2169,18 @@ export class StarpeaceClient {
    * Show a temporary notification to the user
    */
   private showNotification(message: string, type: 'success' | 'error' | 'info' = 'info') {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      top: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 12px 24px;
-      background: ${type === 'success' ? '#4ade80' : type === 'error' ? '#ff6b6b' : '#4dabf7'};
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      z-index: 10000;
-      animation: slideDown 0.3s ease-out;
-    `;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-
-    // Remove after 3 seconds
-    setTimeout(() => {
-      notification.style.animation = 'slideUp 0.3s ease-out';
-      setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    if (type === 'success') ClientBridge.showSuccess(message);
+    else if (type === 'error') ClientBridge.showError(message);
+    else ClientBridge.showInfo(message);
   }
 
   /**
    * Toggle zone overlay
    */
   private async toggleZoneOverlay(enabled: boolean, type: SurfaceType) {
-    this.ui.log('Zones', enabled ? `Enabling ${type} overlay` : 'Disabling overlay');
+    ClientBridge.log('Zones', enabled ? `Enabling ${type} overlay` : 'Disabling overlay');
 
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (!renderer) return;
 
     if (!enabled) {
@@ -2363,14 +2212,11 @@ export class StarpeaceClient {
       const response = await this.sendRequest(req) as WsRespSurfaceData;
       renderer.setZoneOverlay(true, response.data, x1, y1);
 
-      this.ui.log('Zones', `Loaded ${type} overlay data`);
+      ClientBridge.log('Zones', `Loaded ${type} overlay data`);
     } catch (err: unknown) {
-      this.ui.log('Error', `Failed to load zone overlay: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to load zone overlay: ${toErrorMessage(err)}`);
       // Disable overlay on error
       renderer.setZoneOverlay(false);
-      if (this.ui.zoneOverlayUI) {
-        this.ui.zoneOverlayUI.setEnabled(false);
-      }
     }
   }
 
@@ -2383,12 +2229,12 @@ export class StarpeaceClient {
    * Called when user clicks the refresh button
    */
   public refreshMapData(): void {
-    this.ui.log('Map', 'Refreshing map data...');
+    ClientBridge.log('Map', 'Refreshing map data...');
 
     // Get current camera position from renderer
-    const renderer = this.ui.mapNavigationUI?.getRenderer();
+    const renderer = this.mapNavigationUI?.getRenderer();
     if (!renderer || !renderer.getCameraPosition) {
-      this.ui.log('Error', 'Cannot refresh: renderer not available');
+      ClientBridge.log('Error', 'Cannot refresh: renderer not available');
       return;
     }
 
@@ -2467,7 +2313,7 @@ export class StarpeaceClient {
    */
   private refreshTycoonData(): void {
     this.getProfile().catch(err => {
-      this.ui.log('Error', `Failed to refresh tycoon data: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Failed to refresh tycoon data: ${toErrorMessage(err)}`);
     });
   }
 
@@ -2477,7 +2323,7 @@ export class StarpeaceClient {
     }
 
     this.isLoggingOut = true;
-    this.ui.log('System', 'Logging out...');
+    ClientBridge.log('System', 'Logging out...');
 
     try {
       const req: WsReqLogout = {
@@ -2487,14 +2333,14 @@ export class StarpeaceClient {
       const response = await this.sendRequest(req) as WsRespLogout;
 
       if (response.success) {
-        this.ui.log('System', 'Logged out successfully');
+        ClientBridge.log('System', 'Logged out successfully');
         // Server will close the WebSocket connection
         // onclose handler will update UI state
       } else {
-        this.ui.log('Error', response.message || 'Logout failed');
+        ClientBridge.log('Error', response.message || 'Logout failed');
       }
     } catch (err: unknown) {
-      this.ui.log('Error', `Logout error: ${toErrorMessage(err)}`);
+      ClientBridge.log('Error', `Logout error: ${toErrorMessage(err)}`);
       // Force close connection on error
       this.ws?.close();
     } finally {
@@ -2525,7 +2371,7 @@ export class StarpeaceClient {
 
   // [E2E-DEBUG] Expose full game state for programmatic E2E verification
   private getDebugState(): SpoDebugState {
-    const renderer = this.ui.mapNavigationUI?.getRenderer() ?? null;
+    const renderer = this.mapNavigationUI?.getRenderer() ?? null;
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement | null;
 
     let canvasHasContent = false;
@@ -2541,19 +2387,20 @@ export class StarpeaceClient {
       } catch (_) { /* security or empty canvas */ }
     }
 
-    // Panel visibility — query each panel's isVisible() or DOM display
+    // Panel visibility — query React ui-store for panel state
+    const uiState = useUiStore.getState();
     const panels: Record<string, boolean> = {
       login: document.getElementById('login-panel')?.style.display !== 'none',
       chat: document.getElementById('chat-panel')?.style.display !== 'none',
-      mail: this.ui.mailPanel?.isVisible() ?? false,
-      profile: this.ui.profilePanel?.isVisible() ?? false,
-      politics: this.ui.politicsPanel?.isVisible() ?? false,
-      settings: this.ui.settingsPanel?.isVisible() ?? false,
-      transport: this.ui.transportPanel?.isVisible() ?? false,
-      minimap: this.ui.minimapUI?.isVisible() ?? false,
-      buildMenu: document.getElementById('build-menu')?.style.display !== 'none',
-      buildingDetails: this.ui.buildingDetailsPanel?.isVisible() ?? false,
-      searchMenu: !!document.querySelector('.search-menu-panel'),
+      mail: uiState.rightPanel === 'mail',
+      profile: uiState.leftPanel === 'empire',
+      politics: uiState.rightPanel === 'politics',
+      settings: uiState.modal === 'settings',
+      transport: uiState.rightPanel === 'transport',
+      minimap: this.minimapUI?.isVisible() ?? false,
+      buildMenu: uiState.modal === 'buildMenu',
+      buildingDetails: uiState.rightPanel === 'building',
+      searchMenu: uiState.rightPanel === 'search',
     };
 
     // Tycoon stats from DOM data attributes
@@ -2576,23 +2423,21 @@ export class StarpeaceClient {
     const rotation = typeof terrainRenderer?.getRotation === 'function'
       ? String(terrainRenderer.getRotation()) : 'UNKNOWN';
 
-    // Building details panel introspection
-    const bdPanel = this.ui.buildingDetailsPanel as unknown as Record<string, unknown> | null;
-    const bdDetails = bdPanel?.currentDetails as Record<string, unknown> | undefined;
+    // Building details panel introspection (from Zustand store)
+    const bldState = useBuildingStore.getState();
+    const bdDetails = bldState.details;
     const buildingDetails = panels.buildingDetails && bdDetails ? {
-      buildingName: String(bdDetails.buildingName ?? ''),
-      ownerName: String(bdDetails.ownerName ?? ''),
-      templateName: String(bdDetails.templateName ?? ''),
-      currentTab: String(bdPanel?.currentTab ?? ''),
-      tabs: Array.isArray(bdDetails.tabs)
-        ? (bdDetails.tabs as Array<Record<string, unknown>>).map(t => ({ id: String(t.id), name: String(t.name) }))
-        : [],
-      isOwner: String(bdDetails.ownerName ?? '') === this.currentCompanyName,
-      coords: { x: Number(bdDetails.x ?? 0), y: Number(bdDetails.y ?? 0) },
+      buildingName: bdDetails.buildingName,
+      ownerName: bdDetails.ownerName,
+      templateName: bdDetails.templateName,
+      currentTab: bldState.currentTab,
+      tabs: bdDetails.tabs.map(t => ({ id: t.id, name: t.name })),
+      isOwner: bldState.isOwner,
+      coords: { x: bdDetails.x, y: bdDetails.y },
     } : null;
 
     // Settings values
-    const settingsValues = this.ui.settingsPanel?.getSettings() ?? null;
+    const settingsValues = ClientBridge.getSettings();
 
     return {
       session: {

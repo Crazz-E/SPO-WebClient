@@ -6,10 +6,12 @@
   "scripts": {
     "build:server": "tsc",
     "build:client": "esbuild src/client/client.ts --bundle --outfile=public/client.js --format=iife",
+    "build:client:react": "vite build",
     "build:terrain-test": "esbuild src/client/terrain-test.ts --bundle --outfile=public/terrain-test.js --format=iife",
-    "build": "npm run build:server && npm run build:client && npm run build:terrain-test",
+    "build": "npm run build:server && npm run build:client && npm run build:client:react && npm run build:terrain-test",
     "start": "node dist/server/server.js",
     "dev": "npm run build && npm start",
+    "dev:react": "vite",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -38,19 +40,31 @@
   "dependencies": {
     "7zip-min": "^2.1.0",
     "cheerio": "^1.1.2",
+    "lucide-react": "^0.575.0",
     "node-fetch": "^2.7.0",
-    "ws": "^8.19.0"
+    "react": "^19.2.4",
+    "react-aria-components": "^1.15.1",
+    "react-dom": "^19.2.4",
+    "ws": "^8.19.0",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@jest/globals": "^30.2.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.0.9",
     "@types/node-fetch": "^2.6.12",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^5.1.4",
     "esbuild": "^0.27.2",
     "jest": "^30.2.0",
     "jsdom": "^27.4.0",
     "ts-jest": "^29.4.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
   }
 }

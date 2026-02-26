@@ -1,0 +1,116 @@
+/* CommandPalette — floating search overlay */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 499;
+  background: rgba(0, 0, 0, 0.4);
+  animation: fadeIn var(--duration-fast) var(--ease-default);
+}
+
+.palette {
+  position: fixed;
+  top: 15vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  width: min(var(--palette-width), calc(100vw - var(--space-8)));
+  max-height: var(--palette-max-height);
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: dropIn 200ms var(--ease-out) both;
+}
+
+/* Input */
+.input {
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-family: var(--font-sans);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.input::placeholder {
+  color: var(--text-disabled);
+}
+
+/* Results list */
+.results {
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+
+.group {
+  padding: var(--space-1) 0;
+}
+
+.groupLabel {
+  padding: var(--space-2) var(--space-5) var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Command item */
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-5);
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-default);
+  text-align: left;
+}
+
+.item:hover,
+.item[data-selected='true'] {
+  background: var(--bg-tertiary);
+}
+
+.itemLabel {
+  flex: 1;
+}
+
+.shortcut {
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+  background: var(--bg-tertiary);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  font-family: var(--font-mono);
+}
+
+/* Empty state */
+.empty {
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .palette {
+    top: var(--space-4);
+    width: calc(100vw - var(--space-6));
+  }
+}

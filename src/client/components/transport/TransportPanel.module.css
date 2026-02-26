@@ -1,0 +1,103 @@
+/* TransportPanel — train list */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.loading {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: 100%;
+  color: var(--text-disabled);
+  font-size: var(--text-sm);
+  padding: var(--space-8);
+}
+
+.emptyIcon {
+  opacity: 0.3;
+}
+
+/* Train list */
+.trainList {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+.trainCard {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.trainCard:hover {
+  background: var(--bg-tertiary);
+}
+
+.selected {
+  background: var(--bg-tertiary);
+  border-left: 2px solid var(--accent-gold);
+}
+
+.trainHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.trainIcon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.trainName {
+  flex: 1;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.trainStatus {
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  text-transform: capitalize;
+}
+
+/* Route */
+.route {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: var(--space-2);
+  padding-left: 24px; /* align with name after icon */
+}
+
+.stop {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.arrow {
+  margin: 0 4px;
+  color: var(--text-disabled);
+}

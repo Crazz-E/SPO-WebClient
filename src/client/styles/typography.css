@@ -1,0 +1,38 @@
+/* ============================================================================
+ * Typography — Font loading & type scale
+ * ============================================================================ */
+
+/* Google Fonts are loaded in index.html via <link> for best performance.
+   This file defines type-related utility classes. */
+
+/* Tabular numbers for financial data alignment */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mono text for protocol/code data */
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Truncate with ellipsis */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Line clamp (multi-line truncate) */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

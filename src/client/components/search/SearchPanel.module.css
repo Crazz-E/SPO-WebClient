@@ -1,0 +1,94 @@
+/* SearchPanel — world directory */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.breadcrumbLink {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-sans);
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.breadcrumbLink:hover {
+  color: var(--accent-gold);
+}
+
+.breadcrumbSep {
+  color: var(--text-disabled);
+}
+
+.breadcrumbCurrent {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+/* Loading */
+.loading {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Category grid */
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.categoryCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.categoryIcon {
+  color: var(--accent-gold);
+}
+
+.categoryLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+/* Page content */
+.pageContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+.placeholder {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--text-disabled);
+  font-size: var(--text-sm);
+}

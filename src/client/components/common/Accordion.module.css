@@ -1,0 +1,52 @@
+/* Accordion — expandable section */
+
+.accordion {
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.trigger:hover {
+  color: var(--text-primary);
+}
+
+.chevron {
+  transition: transform var(--duration-base) var(--ease-default);
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.title {
+  flex: 1;
+  text-align: left;
+}
+
+.badge {
+  flex-shrink: 0;
+}
+
+.content {
+  overflow: hidden;
+  transition: height var(--duration-base) var(--ease-default);
+}
+
+.inner {
+  padding-bottom: var(--space-3);
+}

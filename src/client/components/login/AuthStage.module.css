@@ -1,0 +1,134 @@
+/* AuthStage — cinematic authentication */
+
+.stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-8);
+  animation: stageEnter 500ms var(--ease-out) both;
+  width: 100%;
+  max-width: 900px;
+}
+
+/* Logo — ornate gold gradient */
+.logo {
+  font-size: clamp(1.75rem, 4.5vw, 3rem);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.12em;
+  background: linear-gradient(
+    135deg,
+    var(--accent-gold-light),
+    var(--accent-gold),
+    var(--accent-gold-dark)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.tagline {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  margin: calc(-1 * var(--space-2)) 0 var(--space-2);
+  text-align: center;
+}
+
+/* Auth card */
+.authCard {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-family: var(--font-sans);
+  outline: none;
+  transition:
+    border-color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
+  box-sizing: border-box;
+}
+
+.input:focus {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 0 3px rgba(212, 168, 83, 0.15);
+}
+
+.input::placeholder {
+  color: var(--text-disabled);
+}
+
+/* Connect button — gold gradient */
+.connectBtn {
+  width: 100%;
+  padding: var(--space-3) var(--space-6);
+  background: linear-gradient(135deg, var(--accent-gold-dark), var(--accent-gold));
+  border: none;
+  border-radius: var(--radius-lg);
+  color: var(--bg-primary);
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  font-family: var(--font-sans);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    opacity var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
+}
+
+.connectBtn:hover:not(:disabled) {
+  opacity: 0.9;
+  box-shadow: var(--shadow-gold-glow);
+  transform: translateY(-1px);
+}
+
+.connectBtn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.connectBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Version tag */
+.version {
+  font-size: var(--text-xs);
+  color: var(--text-disabled);
+  position: fixed;
+  bottom: var(--space-4);
+  right: var(--space-4);
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .stage {
+    padding: var(--space-4) var(--space-4) var(--space-8);
+  }
+
+  .logo {
+    letter-spacing: 0.08em;
+  }
+}

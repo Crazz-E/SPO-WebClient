@@ -1,0 +1,169 @@
+/* CompanyStage — company selection */
+
+.stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-5);
+  padding: var(--space-8);
+  animation: stageEnter 500ms var(--ease-out) both;
+  width: 100%;
+  max-width: 960px;
+}
+
+/* Back link */
+.backLink {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  font-family: var(--font-sans);
+  transition: color var(--duration-fast) var(--ease-default);
+  align-self: flex-start;
+}
+
+.backLink:hover {
+  color: var(--text-primary);
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.worldTag {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--accent-gold);
+  background: var(--accent-gold-subtle);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+}
+
+/* Sections */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+/* Company grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-4);
+  width: 100%;
+}
+
+.companyCard {
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  transition:
+    border-color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+}
+
+.companyCard:hover {
+  transform: translateY(-1px);
+}
+
+.companyName {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.roleBadge {
+  display: inline-block;
+  font-size: var(--text-xs);
+  color: var(--accent-gold);
+  background: var(--accent-gold-subtle);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  align-self: flex-start;
+}
+
+.politicalBadge {
+  color: var(--primary);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.companyValue {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Create card — dashed border */
+.createCard {
+  padding: var(--space-5);
+  border-style: dashed;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 100px;
+  transition: border-color var(--duration-fast) var(--ease-default);
+}
+
+.createCard:hover {
+  border-color: var(--primary);
+}
+
+.createIcon {
+  color: var(--text-disabled);
+}
+
+.createLabel {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* Loading */
+.loadingText {
+  font-size: var(--text-sm);
+  color: var(--accent-gold);
+  text-align: center;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .stage {
+    padding: var(--space-4);
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
