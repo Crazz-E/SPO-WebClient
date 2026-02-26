@@ -353,9 +353,9 @@ export class PoliticsPanel {
     if (!this.politicsData) return [];
     switch (tab) {
       case 'popular': return this.politicsData.popularRatings;
-      case 'tycoons': return null; // Not yet implemented
+      case 'tycoons': return this.politicsData.tycoonsRatings || [];
       case 'ifel': return this.politicsData.ifelRatings;
-      case 'publicity': return null; // Not yet implemented
+      case 'publicity': return null; // Publicity page not available on this server version
       default: return [];
     }
   }

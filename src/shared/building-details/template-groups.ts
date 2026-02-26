@@ -143,11 +143,11 @@ export const RES_GENERAL_GROUP: PropertyGroup = {
     { rdoName: 'Beauty', displayName: 'Beauty', type: PropertyType.PERCENTAGE },
     { rdoName: 'Crime', displayName: 'Crime', type: PropertyType.PERCENTAGE },
     { rdoName: 'Pollution', displayName: 'Pollution', type: PropertyType.PERCENTAGE },
-    // Investment sliders (ResidentialSheet.pas xfer_ controls)
-    { rdoName: 'invCrimeRes', displayName: 'Crime Resistance', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
-    { rdoName: 'invPollutionRes', displayName: 'Pollution Resistance', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
-    { rdoName: 'invPrivacy', displayName: 'Privacy', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
-    { rdoName: 'InvBeauty', displayName: 'Beauty Investment', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
+    // Investment stats (read-only informational data)
+    { rdoName: 'invCrimeRes', displayName: 'Crime Resistance', type: PropertyType.PERCENTAGE },
+    { rdoName: 'invPollutionRes', displayName: 'Pollution Resistance', type: PropertyType.PERCENTAGE },
+    { rdoName: 'invPrivacy', displayName: 'Privacy', type: PropertyType.PERCENTAGE },
+    { rdoName: 'InvBeauty', displayName: 'Beauty Investment', type: PropertyType.PERCENTAGE },
     // Editable sliders
     { rdoName: 'Rent', displayName: 'Rent', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
     { rdoName: 'Maintenance', displayName: 'Maintenance', type: PropertyType.SLIDER, editable: true, min: 0, max: 500, unit: '%' },
@@ -161,10 +161,6 @@ export const RES_GENERAL_GROUP: PropertyGroup = {
   rdoCommands: {
     'Rent': { command: 'property' },
     'Maintenance': { command: 'property' },
-    'invCrimeRes': { command: 'property' },
-    'invPollutionRes': { command: 'property' },
-    'invPrivacy': { command: 'property' },
-    'InvBeauty': { command: 'property' },
   },
 };
 
@@ -530,6 +526,13 @@ export const PRODUCTS_GROUP: PropertyGroup = {
   },
 };
 
+/**
+ * compInputs — Company inputs (composite service demands)
+ * Voyager: CompanyServicesSheetForm.pas — registered as 'compInputs'
+ * Properties: cInputCount (count), then indexed cInput/cInputSup/cInputDem/etc.
+ * Note: cInput and cUnits use MLS suffix (.{ActiveLanguage} e.g. cInput0.0, cUnits0.0)
+ * RDO: RDOSetCompanyInputDemand(tabIndex, percValue) with BindTo(CurrBlock)
+ */
 export const ADVERTISEMENT_GROUP: PropertyGroup = {
   id: 'advertisement',
   name: 'Advertising',
@@ -542,8 +545,36 @@ export const ADVERTISEMENT_GROUP: PropertyGroup = {
     { rdoName: 'cInputRatio', displayName: 'Ratio', type: PropertyType.PERCENTAGE, indexed: true, countProperty: 'cInputCount' },
     { rdoName: 'cInputMax', displayName: 'Max', type: PropertyType.NUMBER, indexed: true, countProperty: 'cInputCount' },
     { rdoName: 'cEditable', displayName: 'Editable', type: PropertyType.BOOLEAN, indexed: true, countProperty: 'cInputCount' },
-    { rdoName: 'cUnits', displayName: 'Units', type: PropertyType.TEXT, indexed: true, countProperty: 'cInputCount' },
+    { rdoName: 'cUnits', displayName: 'Units', type: PropertyType.TEXT, indexed: true, indexSuffix: '.0', countProperty: 'cInputCount' },
   ],
+  rdoCommands: {
+    'RDOSetCompanyInputDemand': { command: 'RDOSetCompanyInputDemand' },
+  },
+};
+
+/**
+ * Ads — Advertisement input supply handler
+ * Voyager: AdvSheetForm.pas — registered as 'Ads'
+ * Specialized single-input handler: finds 'advertisement' input via GetInputNames,
+ * navigates via SetPath, shows percentage slider (nfActualMaxFluidValue/nfCapacity).
+ * Uses supply data fetching mechanism to display the advertisement input gate.
+ */
+export const ADS_GROUP: PropertyGroup = {
+  id: 'ads',
+  name: 'Advertising',
+  icon: 'A',
+  order: 25,
+  special: 'supplies',
+  properties: [
+    { rdoName: 'MetaFluid', displayName: 'Product', type: PropertyType.TEXT },
+    { rdoName: 'FluidValue', displayName: 'Current Value', type: PropertyType.TEXT },
+    { rdoName: 'LastCost', displayName: 'Last Cost', type: PropertyType.CURRENCY },
+    { rdoName: 'MaxPrice', displayName: 'Max Price', type: PropertyType.SLIDER, editable: true, min: 0, max: 1000 },
+    { rdoName: 'cnxCount', displayName: 'Connections', type: PropertyType.NUMBER },
+  ],
+  rdoCommands: {
+    'MaxPrice': { command: 'RDOSetInputMaxPrice' },
+  },
 };
 
 export const UPGRADE_GROUP: PropertyGroup = {
@@ -819,8 +850,10 @@ export const TOWN_RES_GROUP: PropertyGroup = {
 };
 
 /**
- * townServices — Town products/services table
- * Voyager: TownProdSheet.pas — indexed product table
+ * townServices — Town services overview table
+ * Voyager: TownProdxSheet.pas — registered as 'townServices'
+ * Properties: srvCount (count), GQOS, then indexed svr* properties
+ * Note: svrName (no language suffix), svrRatio is float 0-1 (multiply by 100 for %)
  */
 export const TOWN_SERVICES_GROUP: PropertyGroup = {
   id: 'townServices',
@@ -828,24 +861,56 @@ export const TOWN_SERVICES_GROUP: PropertyGroup = {
   icon: 'S',
   order: 10,
   properties: [
+    { rdoName: 'GQOS', displayName: 'Quality of Service', type: PropertyType.PERCENTAGE },
+    {
+      rdoName: 'svrName',
+      displayName: 'Services',
+      type: PropertyType.TABLE,
+      indexed: true,
+      countProperty: 'srvCount',
+      columns: [
+        { rdoSuffix: 'svrName', label: 'Service', type: PropertyType.TEXT, width: '18%' },
+        { rdoSuffix: 'svrDemand', label: 'Demand', type: PropertyType.NUMBER, width: '12%' },
+        { rdoSuffix: 'svrOffer', label: 'Offer', type: PropertyType.NUMBER, width: '12%' },
+        { rdoSuffix: 'svrCapacity', label: 'Capacity', type: PropertyType.NUMBER, width: '11%' },
+        { rdoSuffix: 'svrRatio', label: 'Ratio', type: PropertyType.PERCENTAGE, width: '11%' },
+        { rdoSuffix: 'svrMarketPrice', label: 'Market', type: PropertyType.CURRENCY, width: '12%' },
+        { rdoSuffix: 'svrPrice', label: 'Price', type: PropertyType.PERCENTAGE, width: '12%' },
+        { rdoSuffix: 'svrQuality', label: 'Quality', type: PropertyType.PERCENTAGE, width: '12%' },
+      ],
+    },
+  ],
+};
+
+/**
+ * townProducts — Town products table (input/output gate summary)
+ * Voyager: TownProdSheet.pas — registered as 'townProducts'
+ * Properties: prdCount (count), then indexed prd* properties
+ * Note: prdName uses MLS suffix (prdName{i}.{ActiveLanguage} e.g. prdName0.0)
+ */
+export const TOWN_PRODUCTS_GROUP: PropertyGroup = {
+  id: 'townProducts',
+  name: 'Products',
+  icon: 'P',
+  order: 15,
+  properties: [
     {
       rdoName: 'prdName',
       displayName: 'Products',
       type: PropertyType.TABLE,
       indexed: true,
-      indexSuffix: '.0',
       countProperty: 'prdCount',
       columns: [
-        { rdoSuffix: 'prdName', label: 'Product', type: PropertyType.TEXT, width: '12%' },
-        { rdoSuffix: 'prdInputValue', label: 'In Value', type: PropertyType.NUMBER, width: '10%' },
+        { rdoSuffix: 'prdName', columnSuffix: '.0', label: 'Product', type: PropertyType.TEXT, width: '12%' },
+        { rdoSuffix: 'prdOutputValue', label: 'Produced', type: PropertyType.NUMBER, width: '10%' },
+        { rdoSuffix: 'prdInputValue', label: 'Consumed', type: PropertyType.NUMBER, width: '10%' },
+        { rdoSuffix: 'prdOutputCapacity', label: 'Out Cap', type: PropertyType.NUMBER, width: '10%' },
         { rdoSuffix: 'prdInputCapacity', label: 'In Cap', type: PropertyType.NUMBER, width: '10%' },
-        { rdoSuffix: 'prdInputQuality', label: 'In Qual', type: PropertyType.PERCENTAGE, width: '10%' },
-        { rdoSuffix: 'prdInputPrice', label: 'In Price', type: PropertyType.CURRENCY, width: '9%' },
-        { rdoSuffix: 'prdInputMaxPrice', label: 'Max Price', type: PropertyType.CURRENCY, width: '9%' },
-        { rdoSuffix: 'prdOutputValue', label: 'Out Value', type: PropertyType.NUMBER, width: '9%' },
-        { rdoSuffix: 'prdOutputCapacity', label: 'Out Cap', type: PropertyType.NUMBER, width: '9%' },
+        { rdoSuffix: 'prdOutputPrice', label: 'Out Price', type: PropertyType.CURRENCY, width: '10%' },
         { rdoSuffix: 'prdOutputQuality', label: 'Out Qual', type: PropertyType.PERCENTAGE, width: '9%' },
-        { rdoSuffix: 'prdOutputPrice', label: 'Out Price', type: PropertyType.CURRENCY, width: '9%' },
+        { rdoSuffix: 'prdInputPrice', label: 'In Price', type: PropertyType.CURRENCY, width: '10%' },
+        { rdoSuffix: 'prdInputQuality', label: 'In Qual', type: PropertyType.PERCENTAGE, width: '9%' },
+        { rdoSuffix: 'prdInputMaxPrice', label: 'Max Price', type: PropertyType.CURRENCY, width: '10%' },
       ],
     },
   ],
@@ -853,7 +918,10 @@ export const TOWN_SERVICES_GROUP: PropertyGroup = {
 
 /**
  * townTaxes — Town tax table (uses columnSuffix for mid-index pattern)
- * Voyager: TownTaxesSheet.pas — Tax{idx}Name, Tax{idx}Percent
+ * Voyager: TownTaxesSheet.pas — Tax{idx}Id, Tax{idx}Name{lang}, Tax{idx}Kind,
+ *   Tax{idx}Percent, Tax{idx}LastYear
+ * RDO: RDOSetTaxValue(TaxId, valueString) with BindTo(CurrBlock)
+ *   Subsidize = negative value (e.g., '-10'), tkPercent=0, tkValue=1
  */
 export const TOWN_TAXES_GROUP: PropertyGroup = {
   id: 'townTaxes',
@@ -868,15 +936,16 @@ export const TOWN_TAXES_GROUP: PropertyGroup = {
       indexed: true,
       countProperty: 'TaxCount',
       columns: [
-        { rdoSuffix: 'Tax', columnSuffix: 'Name', label: 'Tax', type: PropertyType.TEXT, width: '30%' },
-        { rdoSuffix: 'Tax', columnSuffix: 'Kind', label: 'Kind', type: PropertyType.TEXT, width: '20%' },
+        { rdoSuffix: 'Tax', columnSuffix: 'Id', label: 'ID', type: PropertyType.TEXT, width: '0%' },
+        { rdoSuffix: 'Tax', columnSuffix: 'Name0', label: 'Tax', type: PropertyType.TEXT, width: '30%' },
+        { rdoSuffix: 'Tax', columnSuffix: 'Kind', label: 'Kind', type: PropertyType.TEXT, width: '15%' },
         { rdoSuffix: 'Tax', columnSuffix: 'Percent', label: 'Rate', type: PropertyType.SLIDER, width: '25%', editable: true, min: 0, max: 100, step: 1 },
-        { rdoSuffix: 'Tax', columnSuffix: 'LastYear', label: 'Last Year', type: PropertyType.CURRENCY, width: '25%' },
+        { rdoSuffix: 'Tax', columnSuffix: 'LastYear', label: 'Last Year', type: PropertyType.CURRENCY, width: '30%' },
       ],
     },
   ],
   rdoCommands: {
-    'TaxPercent': { command: 'RDOSetTaxPercent', indexed: true },
+    'TaxPercent': { command: 'RDOSetTaxValue', indexed: true },
   },
 };
 
@@ -997,6 +1066,7 @@ export const GROUP_BY_ID: Record<string, PropertyGroup> = {
   'upgrade': UPGRADE_GROUP,
   'finances': FINANCES_GROUP,
   'advertisement': ADVERTISEMENT_GROUP,
+  'ads': ADS_GROUP,
   'town': TOWN_GROUP,
   'coverage': COVERAGE_GROUP,
   'trade': TRADE_GROUP,
@@ -1011,6 +1081,7 @@ export const GROUP_BY_ID: Record<string, PropertyGroup> = {
   'townJobs': TOWN_JOBS_GROUP,
   'townRes': TOWN_RES_GROUP,
   'townServices': TOWN_SERVICES_GROUP,
+  'townProducts': TOWN_PRODUCTS_GROUP,
   'townTaxes': TOWN_TAXES_GROUP,
 };
 
@@ -1054,6 +1125,7 @@ export const HANDLER_TO_GROUP: Record<string, PropertyGroup> = {
   'Supplies': SUPPLIES_GROUP,
   'Products': PRODUCTS_GROUP,
   'compInputs': ADVERTISEMENT_GROUP,
+  'Ads': ADS_GROUP,
   'Workforce': WORKFORCE_GROUP,
   'facManagement': UPGRADE_GROUP,
   'Chart': FINANCES_GROUP,
@@ -1069,5 +1141,6 @@ export const HANDLER_TO_GROUP: Record<string, PropertyGroup> = {
   'townJobs': TOWN_JOBS_GROUP,
   'townRes': TOWN_RES_GROUP,
   'townServices': TOWN_SERVICES_GROUP,
+  'townProducts': TOWN_PRODUCTS_GROUP,
   'townTaxes': TOWN_TAXES_GROUP,
 };

@@ -394,6 +394,7 @@ export class IsometricMapRenderer {
   private hoveredBuilding: MapBuilding | null = null;
   private mouseMapI: number = 0;
   private mouseMapJ: number = 0;
+  private mouseHasEnteredCanvas: boolean = false;
 
   // Zone loading - managed by ZoneRequestManager
   private zoneRequestManager: ZoneRequestManager | null = null;
@@ -1915,6 +1916,7 @@ export class IsometricMapRenderer {
     this.drawZoneOverlay(bounds);
     this.drawPlacementPreview();
     this.drawRoadDrawingPreview();
+    this.drawRoadDemolishPreview();
 
     // Draw debug overlay if enabled
     if (this.debugMode) {
@@ -2894,6 +2896,8 @@ export class IsometricMapRenderer {
    */
   private drawPlacementPreview() {
     if (!this.placementMode || !this.placementPreview) return;
+    // Don't draw until mouse has entered the canvas (avoids (0,0) ghost preview)
+    if (!this.mouseHasEnteredCanvas) return;
 
     const ctx = this.ctx;
     const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
@@ -3156,6 +3160,45 @@ export class IsometricMapRenderer {
       ctx.fillStyle = '#ff6666';
       ctx.fillText(`Must connect to road (${roadTileCount} tiles)`, screenPos.x + 25, screenPos.y + 8);
     }
+  }
+
+  /**
+   * Draw demolish hover indicator for road demolish mode.
+   * Shows a red semi-transparent diamond on tiles that contain a road,
+   * or a gray indicator on tiles without a road.
+   */
+  private drawRoadDemolishPreview() {
+    if (!this.onRoadDemolishClick) return;
+
+    const ctx = this.ctx;
+    const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
+    const halfWidth = config.tileWidth / 2;
+    const halfHeight = config.tileHeight / 2;
+
+    const x = this.mouseMapJ;
+    const y = this.mouseMapI;
+
+    const hasRoad = this.hasRoadAt(x, y);
+
+    // Red for tiles with roads (demolish target), gray for empty tiles
+    const fillColor = hasRoad ? 'rgba(255, 50, 50, 0.5)' : 'rgba(150, 150, 150, 0.3)';
+    const strokeColor = hasRoad ? '#ff3333' : '#999999';
+
+    const screenPos = this.terrainRenderer.mapToScreen(y, x);
+
+    ctx.beginPath();
+    ctx.moveTo(screenPos.x, screenPos.y);
+    ctx.lineTo(screenPos.x - halfWidth, screenPos.y + halfHeight);
+    ctx.lineTo(screenPos.x, screenPos.y + config.tileHeight);
+    ctx.lineTo(screenPos.x + halfWidth, screenPos.y + halfHeight);
+    ctx.closePath();
+
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   /**
@@ -3860,6 +3903,7 @@ export class IsometricMapRenderer {
     const mapPos = this.screenToMap(e.clientX, e.clientY);
     this.mouseMapI = mapPos.i;
     this.mouseMapJ = mapPos.j;
+    this.mouseHasEnteredCanvas = true;
 
     if (this.isDragging) {
       const dx = e.clientX - this.lastMouseX;
@@ -4000,7 +4044,7 @@ export class IsometricMapRenderer {
   }
 
   private updateCursor() {
-    if (this.placementMode || this.roadDrawingMode) {
+    if (this.placementMode || this.roadDrawingMode || this.onRoadDemolishClick) {
       this.canvas.style.cursor = 'crosshair';
     } else if (this.hoveredBuilding) {
       this.canvas.style.cursor = 'pointer';

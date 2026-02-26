@@ -212,6 +212,8 @@ export class StarpeaceClient {
   private currentWorldName: string = '';
   private worldXSize: number | null = null;
   private worldYSize: number | null = null;
+  private savedPlayerX: number | undefined;
+  private savedPlayerY: number | undefined;
   private worldSeason: number | null = null;
 
   // Building focus state
@@ -843,8 +845,17 @@ export class StarpeaceClient {
           companyId
         };
 
-        await this.sendRequest(req);
+        const selectResp = await this.sendRequest(req);
         this.ui.log('Company', 'Company selected successfully');
+
+        // Restore camera to player's last saved position (Bug 14)
+        const respAny = selectResp as Record<string, unknown>;
+        if (typeof respAny.playerX === 'number' && typeof respAny.playerY === 'number'
+            && (respAny.playerX !== 0 || respAny.playerY !== 0)) {
+          this.savedPlayerX = respAny.playerX;
+          this.savedPlayerY = respAny.playerY;
+          this.ui.log('Map', `Restoring camera to saved position (${this.savedPlayerX}, ${this.savedPlayerY})`);
+        }
       }
 
       // Store company name for building construction
@@ -861,6 +872,14 @@ export class StarpeaceClient {
         const renderer = this.ui.mapNavigationUI?.getRenderer();
         if (renderer) {
           renderer.setSeason(this.worldSeason as Season);
+        }
+      }
+
+      // Center camera on saved position if available
+      if (this.savedPlayerX !== undefined && this.savedPlayerY !== undefined) {
+        const renderer = this.ui.mapNavigationUI?.getRenderer();
+        if (renderer) {
+          renderer.centerOn(this.savedPlayerX, this.savedPlayerY);
         }
       }
 

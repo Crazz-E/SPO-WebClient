@@ -11,6 +11,7 @@ import {
   GENERIC_GROUP,
   WORKFORCE_GROUP,
   UPGRADE_GROUP,
+  HQ_INVENTIONS_GROUP,
   HANDLER_TO_GROUP,
 } from './template-groups';
 
@@ -51,7 +52,8 @@ const dataDrivenTemplateCache: Map<string, BuildingTemplate> = new Map();
  */
 export function registerInspectorTabs(
   visualClassId: string,
-  inspectorTabs: { tabName: string; tabHandler: string }[]
+  inspectorTabs: { tabName: string; tabHandler: string }[],
+  buildingClassName?: string
 ): void {
   if (!inspectorTabs.length) return;
 
@@ -82,10 +84,21 @@ export function registerInspectorTabs(
     });
   }
 
+  // Runtime-inject hdqInventions for HQ buildings (not in CLASSES.BIN [InspectorInfo])
+  const hasHqGeneral = inspectorTabs.some(t => t.tabHandler === 'HqGeneral');
+  const hasInventions = usedIds.has('hqInventions');
+  if (hasHqGeneral && !hasInventions) {
+    groups.push({
+      ...HQ_INVENTIONS_GROUP,
+      order: groups.length * 10,
+      handlerName: 'hdqInventions',
+    });
+  }
+
   if (groups.length > 0) {
     dataDrivenTemplateCache.set(visualClassId, {
       visualClassIds: [visualClassId],
-      name: 'Building',
+      name: buildingClassName || 'Building',
       groups,
     });
   }

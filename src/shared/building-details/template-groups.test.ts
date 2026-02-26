@@ -39,7 +39,9 @@ import {
   TOWN_JOBS_GROUP,
   TOWN_RES_GROUP,
   TOWN_SERVICES_GROUP,
+  TOWN_PRODUCTS_GROUP,
   TOWN_TAXES_GROUP,
+  ADS_GROUP,
 } from './template-groups';
 import {
   collectTemplatePropertyNamesStructured,
@@ -49,15 +51,15 @@ import {
 } from './property-templates';
 
 describe('HANDLER_TO_GROUP mapping', () => {
-  it('should map all 27 CLASSES.BIN handler names', () => {
+  it('should map all 29 CLASSES.BIN handler names', () => {
     const expectedHandlers = [
       'unkGeneral', 'ResGeneral', 'IndGeneral', 'SrvGeneral',
       'HqGeneral', 'BankGeneral', 'WHGeneral', 'TVGeneral',
       'capitolGeneral', 'townGeneral',
-      'Supplies', 'Products', 'compInputs', 'Workforce', 'facManagement', 'Chart',
+      'Supplies', 'Products', 'compInputs', 'Ads', 'Workforce', 'facManagement', 'Chart',
       'BankLoans', 'Antennas', 'Films', 'Mausoleum',
       'Votes', 'CapitolTowns', 'Ministeries',
-      'townJobs', 'townRes', 'townServices', 'townTaxes',
+      'townJobs', 'townRes', 'townServices', 'townProducts', 'townTaxes',
     ];
     for (const handler of expectedHandlers) {
       expect(HANDLER_TO_GROUP[handler]).toBeDefined();
@@ -191,22 +193,26 @@ describe('General handler RDO properties', () => {
     expect(rdoNames).toContain('Pollution');
   });
 
-  it('ResGeneral should have investment sliders from ResidentialSheet.pas', () => {
+  it('ResGeneral should have investment properties as read-only PERCENTAGE (not editable)', () => {
     const investmentProps = ['invCrimeRes', 'invPollutionRes', 'invPrivacy', 'InvBeauty'];
     for (const propName of investmentProps) {
       const prop = RES_GENERAL_GROUP.properties.find(p => p.rdoName === propName);
       expect(prop).toBeDefined();
-      expect(prop!.type).toBe(PropertyType.SLIDER);
-      expect(prop!.editable).toBe(true);
-      expect(prop!.max).toBe(500);
+      expect(prop!.type).toBe(PropertyType.PERCENTAGE);
+      expect(prop!.editable).toBeUndefined();
     }
   });
 
-  it('ResGeneral should have rdoCommands for all editable sliders', () => {
-    const editableSliders = ['Rent', 'Maintenance', 'invCrimeRes', 'invPollutionRes', 'invPrivacy', 'InvBeauty'];
+  it('ResGeneral should have rdoCommands for editable sliders (Rent, Maintenance only)', () => {
+    const editableSliders = ['Rent', 'Maintenance'];
     for (const name of editableSliders) {
       expect(RES_GENERAL_GROUP.rdoCommands![name]).toBeDefined();
       expect(RES_GENERAL_GROUP.rdoCommands![name].command).toBe('property');
+    }
+    // Investment properties are read-only — no rdoCommands
+    const readOnlyProps = ['invCrimeRes', 'invPollutionRes', 'invPrivacy', 'InvBeauty'];
+    for (const name of readOnlyProps) {
+      expect(RES_GENERAL_GROUP.rdoCommands![name]).toBeUndefined();
     }
   });
 
@@ -370,13 +376,24 @@ describe('Specialized handler RDO properties', () => {
     expect(rdoNames).toContain('loActualMinSalary');
   });
 
-  it('townServices should have product TABLE with 10 columns (including prdInputMaxPrice)', () => {
+  it('townServices should have svr* TABLE with 8 columns (from TownProdxSheet.pas)', () => {
     const tableProp = TOWN_SERVICES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
     expect(tableProp).toBeDefined();
-    expect(tableProp!.countProperty).toBe('prdCount');
-    expect(tableProp!.columns).toHaveLength(10);
+    expect(tableProp!.countProperty).toBe('srvCount');
+    expect(tableProp!.columns).toHaveLength(8);
     const colNames = tableProp!.columns!.map(c => c.rdoSuffix);
-    expect(colNames).toContain('prdInputMaxPrice');
+    expect(colNames).toContain('svrName');
+    expect(colNames).toContain('svrDemand');
+    expect(colNames).toContain('svrOffer');
+    expect(colNames).toContain('svrCapacity');
+    expect(colNames).toContain('svrRatio');
+    expect(colNames).toContain('svrMarketPrice');
+    expect(colNames).toContain('svrPrice');
+    expect(colNames).toContain('svrQuality');
+    // GQOS should be a standalone property
+    const gqos = TOWN_SERVICES_GROUP.properties.find(p => p.rdoName === 'GQOS');
+    expect(gqos).toBeDefined();
+    expect(gqos!.type).toBe(PropertyType.PERCENTAGE);
   });
 
   it('townRes should have 9 residential properties (3 classes × 3 metrics)', () => {
@@ -431,23 +448,29 @@ describe('ENUM type properties', () => {
 });
 
 describe('townTaxes columnSuffix pattern', () => {
-  it('should have Tax columns with columnSuffix', () => {
+  it('should have Tax columns with columnSuffix (Name0 includes language code)', () => {
     const tableProp = TOWN_TAXES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
     expect(tableProp).toBeDefined();
     expect(tableProp!.countProperty).toBe('TaxCount');
 
-    const nameSuffixCol = tableProp!.columns!.find(c => c.columnSuffix === 'Name');
+    // Name column includes language code '0' in suffix: Tax{i}Name0
+    const nameSuffixCol = tableProp!.columns!.find(c => c.columnSuffix === 'Name0');
     expect(nameSuffixCol).toBeDefined();
     expect(nameSuffixCol!.rdoSuffix).toBe('Tax');
+
+    // Hidden Id column for RDO command reference
+    const idCol = tableProp!.columns!.find(c => c.columnSuffix === 'Id');
+    expect(idCol).toBeDefined();
+    expect(idCol!.width).toBe('0%');
 
     const percentCol = tableProp!.columns!.find(c => c.columnSuffix === 'Percent');
     expect(percentCol).toBeDefined();
     expect(percentCol!.editable).toBe(true);
   });
 
-  it('should have rdoCommands for tax percent', () => {
+  it('should have rdoCommands for RDOSetTaxValue (not RDOSetTaxPercent)', () => {
     expect(TOWN_TAXES_GROUP.rdoCommands).toBeDefined();
-    expect(TOWN_TAXES_GROUP.rdoCommands!['TaxPercent']?.command).toBe('RDOSetTaxPercent');
+    expect(TOWN_TAXES_GROUP.rdoCommands!['TaxPercent']?.command).toBe('RDOSetTaxValue');
     expect(TOWN_TAXES_GROUP.rdoCommands!['TaxPercent']?.indexed).toBe(true);
   });
 });
@@ -490,8 +513,8 @@ describe('collectTemplatePropertyNamesStructured with TABLE columns', () => {
     const tableDef = indexedDefs.find(d => d.columns && d.columns.length > 0);
     expect(tableDef).toBeDefined();
 
-    // Verify columnSuffix is preserved
-    const nameCol = tableDef!.columns!.find(c => c.columnSuffix === 'Name');
+    // Verify columnSuffix is preserved (Name0 includes language code)
+    const nameCol = tableDef!.columns!.find(c => c.columnSuffix === 'Name0');
     expect(nameCol).toBeDefined();
     expect(nameCol!.rdoSuffix).toBe('Tax');
   });

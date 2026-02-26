@@ -129,7 +129,7 @@ export class BuildingDataService implements Service {
 
       // Register inspector tabs for data-driven template selection
       if (cls.inspectorTabs.length > 0) {
-        registerInspectorTabs(visualClass, cls.inspectorTabs);
+        registerInspectorTabs(visualClass, cls.inspectorTabs, building.name);
       }
     }
 

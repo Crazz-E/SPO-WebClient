@@ -49,6 +49,11 @@ const MOCK_POLITICS_DATA: PoliticsData = {
     { name: 'Security', value: 78 },
     { name: 'Environment', value: 55 },
   ],
+  tycoonsRatings: [
+    { name: 'Mayor Chen', value: 68 },
+    { name: 'SPO_test3', value: 45 },
+    { name: 'TradeMaster', value: 32 },
+  ],
   campaigns: [],
   canLaunchCampaign: true,
   campaignMessage: 'You are not participating in the coming elections. Click on the button below to launch your political campaign. To be accepted, your prestige should be higher than 200 points.',

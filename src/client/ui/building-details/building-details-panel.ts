@@ -74,6 +74,20 @@ export class BuildingDetailsPanel {
     return match;
   }
 
+  /**
+   * Whether the current player is the mayor of the currently displayed Town Hall.
+   * Town Hall buildings use ActualRuler (in the townGeneral group) instead of
+   * ownerName to determine who has editing privileges on town tabs.
+   */
+  private get isMayor(): boolean {
+    if (!this.currentDetails || !this.options.currentCompanyName) return false;
+    const townGeneralGroup = this.currentDetails.groups['townGeneral'];
+    if (!townGeneralGroup) return false;
+    const rulerProp = townGeneralGroup.find(p => p.name === 'ActualRuler');
+    if (!rulerProp) return false;
+    return rulerProp.value === this.options.currentCompanyName;
+  }
+
   constructor(container: HTMLElement, options: BuildingDetailsPanelOptions = {}) {
     this.container = container;
     this.options = options;
@@ -724,8 +738,12 @@ export class BuildingDetailsPanel {
 	  // Look up the PropertyGroup for property definitions (rendering types, etc.)
 	  const group = getGroupById(tab.id);
 
-	  // Security: only pass change callback if player owns this building
-	  const changeCallback = this.isOwner ? this.handlePropertyChange.bind(this) : undefined;
+	  // Security: only pass change callback if player has edit rights.
+	  // For town hall tabs, editing is gated by mayor status (ActualRuler)
+	  // instead of building ownership.
+	  const isTownTab = tab.id.startsWith('town');
+	  const canEdit = isTownTab ? this.isMayor : this.isOwner;
+	  const changeCallback = canEdit ? this.handlePropertyChange.bind(this) : undefined;
 
 	  // Special handling for certain tab types (based on tab.special or well-known IDs)
 	  const isSupplies = tab.special === 'supplies';

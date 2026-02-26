@@ -2281,8 +2281,27 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       const ifelHtml = await ifelResp.text();
       const ifelRatings = this.parsePoliticsRatings(ifelHtml);
 
+      // Fetch tycoons ratings page
+      let tycoonsRatings: PoliticsRatingEntry[] = [];
+      try {
+        const tycoonsUrl = `${baseUrl}/tycoonsratings.asp?${queryParams.toString().replace(/\+/g, '%20')}`;
+        this.log.debug(`[Politics] Fetching tycoons ratings from ${tycoonsUrl}`);
+        const tycoonsResp = await fetch(tycoonsUrl, { redirect: 'follow' });
+        const tycoonsHtml = await tycoonsResp.text();
+        tycoonsRatings = this.parsePoliticsRatings(tycoonsHtml);
+      } catch (e) {
+        this.log.debug(`[Politics] Tycoons ratings fetch failed: ${toErrorMessage(e)}`);
+      }
+
       // Fetch mayor data from the town hall building properties
       const mayorData = await this.fetchMayorDataFromBuilding(buildingX, buildingY);
+
+      // Prestige-based campaign validation (Delphi: prestige >= 200 to run for mayor)
+      const canLaunchCampaign = mayorData.mayorPrestige >= 200
+        || (mayorData.mayorName === '' && mayorData.campaignCount === 0);
+      const campaignMessage = canLaunchCampaign
+        ? ''
+        : `Prestige of ${mayorData.mayorPrestige} is below the minimum 200 required to launch a campaign.`;
 
       return {
         townName,
@@ -2294,9 +2313,10 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
         campaignCount: mayorData.campaignCount,
         popularRatings,
         ifelRatings,
+        tycoonsRatings,
         campaigns: [],
-        canLaunchCampaign: true,
-        campaignMessage: '',
+        canLaunchCampaign,
+        campaignMessage,
       };
     } catch (e) {
       this.log.warn(`[Politics] Failed to fetch politics data: ${toErrorMessage(e)}`);
@@ -2468,15 +2488,36 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
   /**
    * Parse HTML search results from outputSearch.asp / inputSearch.asp.
    * Results are in a table with rows containing facility data.
+   *
+   * Voyager ASP format (multiple patterns):
+   *  - <tr><td>FacilityName</td><td>Company</td>...</tr> with x=N&y=M in links
+   *  - <input type=hidden name="xPos" value="N"> inside rows
+   *  - javascript:Select(x,y) onclick handlers
+   *  - Semicolon-delimited text: "FacilityName;Company;x;y;price;quality"
    */
   private parseConnectionSearchResults(html: string): ConnectionSearchResult[] {
     const results: ConnectionSearchResult[] = [];
-    // Pattern: each result row has coordinates, facility name, company name
-    // Format varies but typically: <tr>...<td>FacilityName</td><td>CompanyName</td>...<a href="...x=123&y=456...">
+
+    if (!html || html.trim().length === 0) {
+      this.log.debug('[Connections] Empty search response');
+      return results;
+    }
+
+    this.log.debug(`[Connections] Parsing search response (${html.length} chars)`);
+
+    // Strategy 1: HTML table rows
     const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
     let match: RegExpExecArray | null;
+    let rowIndex = 0;
     while ((match = rowRegex.exec(html)) !== null) {
       const row = match[1];
+      rowIndex++;
+
+      // Skip header rows (contain <th> elements)
+      if (/<th[\s>]/i.test(row)) continue;
+      // Skip rows with no <td> elements
+      if (!/<td[\s>]/i.test(row)) continue;
+
       // Extract cell values
       const cells: string[] = [];
       const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
@@ -2484,9 +2525,14 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       while ((cellMatch = cellRegex.exec(row)) !== null) {
         cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
       }
-      // Extract coordinates from links or hidden inputs
-      const xMatch = row.match(/[?&]x=(\d+)/i) || row.match(/xPos[=:](\d+)/i);
-      const yMatch = row.match(/[?&]y=(\d+)/i) || row.match(/yPos[=:](\d+)/i);
+
+      // Extract coordinates — try multiple patterns
+      const xMatch = row.match(/[?&]x=(\d+)/i)
+        || row.match(/name=["']?xPos["']?\s+value=["']?(\d+)/i)
+        || row.match(/Select\s*\(\s*(\d+)/i);
+      const yMatch = row.match(/[?&]y=(\d+)/i)
+        || row.match(/name=["']?yPos["']?\s+value=["']?(\d+)/i)
+        || row.match(/Select\s*\(\s*\d+\s*,\s*(\d+)/i);
 
       if (cells.length >= 2 && xMatch && yMatch) {
         results.push({
@@ -2498,6 +2544,33 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
           quality: cells[3] || undefined,
         });
       }
+    }
+
+    // Strategy 2: Semicolon-delimited lines (fallback for non-HTML responses)
+    if (results.length === 0 && !html.includes('<table')) {
+      const lines = html.split('\n').filter(l => l.trim().length > 0);
+      for (const line of lines) {
+        const parts = line.split(';').map(s => s.trim());
+        if (parts.length >= 4) {
+          const x = parseInt(parts[2]);
+          const y = parseInt(parts[3]);
+          if (!isNaN(x) && !isNaN(y)) {
+            results.push({
+              facilityName: parts[0] || 'Unknown',
+              companyName: parts[1] || '',
+              x, y,
+              price: parts[4] || undefined,
+              quality: parts[5] || undefined,
+            });
+          }
+        }
+      }
+    }
+
+    this.log.debug(`[Connections] Parsed ${results.length} results from ${rowIndex} rows`);
+    if (results.length === 0 && html.length > 0) {
+      // Log first 500 chars for debugging when no results parsed
+      this.log.debug(`[Connections] No results parsed. HTML preview: ${html.substring(0, 500)}`);
     }
     return results;
   }
@@ -2513,6 +2586,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       campaignCount: 0,
       popularRatings: [],
       ifelRatings: [],
+      tycoonsRatings: [],
       campaigns: [],
       canLaunchCampaign: false,
       campaignMessage: 'Politics data is not available.',
@@ -2524,6 +2598,12 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
 
     const targetX = x !== undefined ? x : this.lastPlayerX;
     const targetY = y !== undefined ? y : this.lastPlayerY;
+
+    // Track current camera position for save on disconnect
+    if (x !== undefined && y !== undefined) {
+      this.lastPlayerX = targetX;
+      this.lastPlayerY = targetY;
+    }
 
     // --- DEDUPLICATION: Check if already pending ---
     const requestKey = `${targetX},${targetY}`;
@@ -3150,15 +3230,16 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
           totalCost += segCost;
           totalTiles += segTiles;
         } else {
-          // Map error codes
+          // Map error codes to user-friendly messages
           const errorMessages: Record<number, string> = {
-            1: 'Unknown error',
-            2: 'Invalid segment coordinates',
-            3: 'Access denied - insufficient permissions or funds',
-            5: 'Unknown company',
-            21: 'Unknown circuit type',
-            22: 'Cannot create segment at this location',
-            23: 'Cannot break existing segment'
+            1: 'Road construction failed — please try a different location',
+            2: 'Invalid road segment — check your coordinates',
+            3: 'Permission denied — you may not have sufficient funds or rights to build here',
+            4: 'Insufficient funds to build this road segment',
+            5: 'Your company was not recognized — please reconnect',
+            21: 'Unsupported road type',
+            22: 'Cannot build a road at this location — area may be occupied or restricted',
+            23: 'Cannot modify an existing road segment here',
           };
 
           failedSegment = {
@@ -3285,9 +3366,11 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       }
 
       const errorMessages: Record<number, string> = {
-        1: 'Unknown error',
+        1: 'Road demolition failed — please try a different location',
         2: 'No road segment found at this location',
-        3: 'Access denied - insufficient permissions',
+        3: 'Permission denied — you do not have rights to demolish roads here',
+        4: 'Insufficient funds for road demolition',
+        23: 'Cannot remove this road segment — it may be protected',
       };
 
       const message = errorMessages[resultCode] || `Failed with code ${resultCode}`;
@@ -4036,12 +4119,55 @@ private handlePush(socketName: string, packet: RdoPacket) {
   // =========================================================================
 
   /**
+   * Save the player's current camera position to tycoon cookies.
+   * Delphi: SetTycoonCookie(TycoonId, 'LastX.0', x) / SetTycoonCookie(TycoonId, 'LastY.0', y)
+   * Called before endSession to persist position across sessions.
+   */
+  public async savePlayerPosition(): Promise<void> {
+    if (!this.worldContextId || !this.tycoonId) {
+      this.log.debug('[Session] Cannot save position — not connected to world');
+      return;
+    }
+    if (this.lastPlayerX === 0 && this.lastPlayerY === 0) {
+      this.log.debug('[Session] Skipping position save — position is (0, 0)');
+      return;
+    }
+
+    try {
+      this.log.debug(`[Session] Saving player position: (${this.lastPlayerX}, ${this.lastPlayerY})`);
+
+      const socket = this.sockets.get('world');
+      if (!socket || socket.destroyed) return;
+
+      // SetTycoonCookie(TycoonId, CookieName, CookieValue) — void push
+      const cmdX = RdoCommand.sel(this.worldContextId)
+        .call('SetTycoonCookie').push()
+        .args(RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastX.0'), RdoValue.string(String(this.lastPlayerX)))
+        .build();
+      socket.write(cmdX);
+
+      const cmdY = RdoCommand.sel(this.worldContextId)
+        .call('SetTycoonCookie').push()
+        .args(RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastY.0'), RdoValue.string(String(this.lastPlayerY)))
+        .build();
+      socket.write(cmdY);
+
+      this.log.debug('[Session] Player position saved');
+    } catch (e) {
+      this.log.debug(`[Session] Failed to save position: ${toErrorMessage(e)}`);
+    }
+  }
+
+  /**
    * Send RDOEndSession to gracefully close the game server session
    * Should be called before destroy() when user logs out
    * RDO Command: C <RID> sel <interfaceServerId> call RDOEndSession "*" ;
    * Schedules socket closure 2 seconds after RDOEndSession is sent
    */
   public async endSession(): Promise<void> {
+    // Save camera position before ending session
+    await this.savePlayerPosition();
+
     if (!this.interfaceServerId) {
       this.log.debug('[Session] No active world session to end (no interfaceServerId)');
       return;
@@ -4676,16 +4802,19 @@ private handlePush(socketName: string, packet: RdoPacket) {
 
       // Fetch indexed properties
       if (indexedProps.length > 0) {
-        //this.log.debug(`[BuildingDetails] Fetching indexed properties: ${indexedProps.join(', ')}`);
+        this.log.debug(`[BuildingDetails] Fetching ${indexedProps.length} indexed properties: ${indexedProps.slice(0, 20).join(', ')}${indexedProps.length > 20 ? '...' : ''}`);
         for (let i = 0; i < indexedProps.length; i += BATCH_SIZE) {
           const batch = indexedProps.slice(i, i + BATCH_SIZE);
           const values = await this.cacherGetPropertyList(tempObjectId, batch);
 
           for (let j = 0; j < batch.length; j++) {
             const value = j < values.length ? values[j] : '';
-            //this.log.debug(`[BuildingDetails] ${batch[j]} = "${value}"`);
             if (value && value.trim() && value !== 'error') {
               allValues.set(batch[j], value);
+              // Log TABLE column values for debugging (srvNames/srvPrices/etc.)
+              if (batch[j].startsWith('srv')) {
+                this.log.debug(`[BuildingDetails] TABLE: ${batch[j]} = "${value}"`);
+              }
             }
           }
         }
@@ -4905,8 +5034,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
    */
   private async fetchBuildingSupplies(
     tempObjectId: string,
-    _x: number,
-    _y: number
+    x: number,
+    y: number
   ): Promise<BuildingSupplyData[]> {
     const supplies: BuildingSupplyData[] = [];
 
@@ -4944,6 +5073,9 @@ private handlePush(socketName: string, packet: RdoPacket) {
         const supplyTempId = await this.cacherCreateObject();
 
         try {
+          // Position object at building coordinates first (required for SetPath to work)
+          await this.cacherSetObject(supplyTempId, x, y);
+
           // Navigate to supply path
           const setPathPacket = await this.sendRdoRequest('map', {
             verb: RdoVerb.SEL,
@@ -4954,6 +5086,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
           });
 
           const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
+          this.log.debug(`[BuildingDetails] SetPath('${path}') result: "${setPathResult}"`);
           if (setPathResult === '-1' || setPathResult === '0') {
             // Successfully navigated, now get properties
             const supplyProps = await this.cacherGetPropertyList(supplyTempId, [
@@ -5032,8 +5165,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
    */
   private async fetchBuildingProducts(
     tempObjectId: string,
-    _x: number,
-    _y: number
+    x: number,
+    y: number
   ): Promise<BuildingProductData[]> {
     const products: BuildingProductData[] = [];
 
@@ -5071,6 +5204,9 @@ private handlePush(socketName: string, packet: RdoPacket) {
         const productTempId = await this.cacherCreateObject();
 
         try {
+          // Position object at building coordinates first (required for SetPath to work)
+          await this.cacherSetObject(productTempId, x, y);
+
           // Navigate to output path
           const setPathPacket = await this.sendRdoRequest('map', {
             verb: RdoVerb.SEL,
@@ -5081,6 +5217,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
           });
 
           const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
+          this.log.debug(`[BuildingDetails] Product SetPath('${path}') result: "${setPathResult}"`);
           if (setPathResult === '-1' || setPathResult === '0') {
             // Successfully navigated — fetch output gate properties
             const outputProps = await this.cacherGetPropertyList(productTempId, [
@@ -5326,22 +5463,24 @@ private handlePush(socketName: string, packet: RdoPacket) {
       }
 
       case 'RDOSetInputMaxPrice': {
-        // Args: MetaFluid value, new MaxPrice value
-        const metaFluid = params.metaFluid;
-        if (!metaFluid) {
-          throw new Error('RDOSetInputMaxPrice requires metaFluid parameter');
+        // Args: MetaFluid (WideString), new MaxPrice value (integer)
+        // Voyager: SupplySheetForm.pas — Proxy.RDOSetInputMaxPrice(fCurrFluidId, maxPrice)
+        const fluidId = params.fluidId || params.metaFluid;
+        if (!fluidId) {
+          throw new Error('RDOSetInputMaxPrice requires fluidId parameter');
         }
-        args.push(RdoValue.int(parseInt(metaFluid, 10)), RdoValue.int(parseInt(value, 10)));
+        args.push(RdoValue.string(fluidId), RdoValue.int(parseInt(value, 10)));
         break;
       }
 
       case 'RDOSetInputMinK': {
-        // Args: MetaFluid value, new minK value
-        const metaFluid = params.metaFluid;
-        if (!metaFluid) {
-          throw new Error('RDOSetInputMinK requires metaFluid parameter');
+        // Args: MetaFluid (WideString), new minK value (integer)
+        // Voyager: SupplySheetForm.pas — Proxy.RDOSetInputMinK(fCurrFluidId, minK)
+        const fluidId = params.fluidId || params.metaFluid;
+        if (!fluidId) {
+          throw new Error('RDOSetInputMinK requires fluidId parameter');
         }
-        args.push(RdoValue.int(parseInt(metaFluid, 10)), RdoValue.int(parseInt(value, 10)));
+        args.push(RdoValue.string(fluidId), RdoValue.int(parseInt(value, 10)));
         break;
       }
 

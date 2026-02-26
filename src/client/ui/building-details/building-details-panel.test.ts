@@ -130,6 +130,13 @@ jest.mock('./property-graph', () => ({
 // Now import the class under test
 import { BuildingDetailsPanel, BuildingDetailsPanelOptions } from './building-details-panel';
 
+// Import mocked modules so we can inspect calls
+import { getGroupById } from '../../../shared/building-details';
+import { renderPropertyGroup } from './property-renderers';
+
+const mockGetGroupById = getGroupById as jest.Mock;
+const mockRenderPropertyGroup = renderPropertyGroup as jest.Mock;
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
@@ -229,6 +236,8 @@ describe('BuildingDetailsPanel', () => {
     elementsById.clear();
     mockDocument.createElement.mockImplementation((tag: string) => createMockElement(tag));
     mockDocument.getElementById.mockImplementation((id: string) => elementsById.get(id) || null);
+    mockGetGroupById.mockReset().mockReturnValue(undefined);
+    mockRenderPropertyGroup.mockReset().mockReturnValue(createMockElement());
   });
 
   afterEach(() => {
@@ -545,6 +554,178 @@ describe('BuildingDetailsPanel', () => {
 
       isOwner = (panel as unknown as { isOwner: boolean }).isOwner;
       expect(isOwner).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // isMayor security gating (Town Hall tabs)
+  // =========================================================================
+
+  describe('isMayor security gating', () => {
+    /** Build a Town Hall details response with ActualRuler */
+    function makeTownHallDetails(mayor: string, companyOwner = 'TownAdmin'): BuildingDetailsResponse {
+      return makeDetails({
+        ownerName: companyOwner,
+        tabs: [
+          { id: 'townGeneral', name: 'General', icon: 'G', order: 0, handlerName: 'townGeneral' },
+          { id: 'townJobs', name: 'Jobs', icon: 'J', order: 10, handlerName: 'townJobs' },
+        ],
+        groups: {
+          townGeneral: [
+            { name: 'ActualRuler', value: mayor },
+            { name: 'Town', value: 'Smallville' },
+          ],
+          townJobs: [
+            { name: 'hiActualMinSalary', value: '100' },
+            { name: 'midActualMinSalary', value: '80' },
+            { name: 'loActualMinSalary', value: '60' },
+          ],
+        },
+      });
+    }
+
+    it('should return true for isMayor when ActualRuler matches currentCompanyName', () => {
+      registerMockElements();
+      const panel = createPanel({ currentCompanyName: 'MayorCorp' });
+
+      panel.show(makeTownHallDetails('MayorCorp'));
+
+      const isMayor = (panel as unknown as { isMayor: boolean }).isMayor;
+      expect(isMayor).toBe(true);
+    });
+
+    it('should return false for isMayor when ActualRuler does not match', () => {
+      registerMockElements();
+      const panel = createPanel({ currentCompanyName: 'OtherCorp' });
+
+      panel.show(makeTownHallDetails('MayorCorp'));
+
+      const isMayor = (panel as unknown as { isMayor: boolean }).isMayor;
+      expect(isMayor).toBe(false);
+    });
+
+    it('should return false for isMayor when no townGeneral group exists', () => {
+      registerMockElements();
+      const panel = createPanel({ currentCompanyName: 'MayorCorp' });
+
+      // Standard building with no townGeneral group
+      panel.show(makeDetails({ ownerName: 'MayorCorp' }));
+
+      const isMayor = (panel as unknown as { isMayor: boolean }).isMayor;
+      expect(isMayor).toBe(false);
+    });
+
+    it('should return false for isMayor when currentCompanyName is not set', () => {
+      registerMockElements();
+      const panel = createPanel({ currentCompanyName: undefined });
+
+      panel.show(makeTownHallDetails('MayorCorp'));
+
+      const isMayor = (panel as unknown as { isMayor: boolean }).isMayor;
+      expect(isMayor).toBe(false);
+    });
+
+    it('should return false for isMayor when ActualRuler property is missing', () => {
+      registerMockElements();
+      const panel = createPanel({ currentCompanyName: 'MayorCorp' });
+
+      const details = makeDetails({
+        groups: {
+          townGeneral: [
+            { name: 'Town', value: 'Smallville' },
+            // ActualRuler intentionally omitted
+          ],
+        },
+      });
+
+      panel.show(details);
+
+      const isMayor = (panel as unknown as { isMayor: boolean }).isMayor;
+      expect(isMayor).toBe(false);
+    });
+
+    it('should pass changeCallback for town tab when user is mayor', () => {
+      registerMockElements();
+      const onPropertyChange = jest.fn(async () => {});
+      const panel = createPanel({ currentCompanyName: 'MayorCorp', onPropertyChange });
+
+      // Mock getGroupById to return a group with properties for townJobs
+      mockGetGroupById.mockReturnValue({
+        id: 'townJobs',
+        name: 'Jobs',
+        properties: [
+          { rdoName: 'hiActualMinSalary', displayName: 'Executive Min Salary', type: 'slider', editable: true },
+        ],
+      });
+
+      const details = makeTownHallDetails('MayorCorp');
+      panel.show(details);
+
+      // Switch to townJobs tab by setting currentTab and calling renderTabContent
+      (panel as unknown as { currentTab: string }).currentTab = 'townJobs';
+      (panel as unknown as { renderTabContent: () => void }).renderTabContent();
+
+      // renderPropertyGroup should have been called with a defined changeCallback (3rd arg)
+      expect(mockRenderPropertyGroup).toHaveBeenCalled();
+      const lastCall = mockRenderPropertyGroup.mock.calls[mockRenderPropertyGroup.mock.calls.length - 1];
+      expect(lastCall[2]).toBeDefined(); // changeCallback should be a function
+    });
+
+    it('should pass undefined changeCallback for town tab when user is not mayor', () => {
+      registerMockElements();
+      const onPropertyChange = jest.fn(async () => {});
+      const panel = createPanel({ currentCompanyName: 'NotTheMayor', onPropertyChange });
+
+      mockGetGroupById.mockReturnValue({
+        id: 'townJobs',
+        name: 'Jobs',
+        properties: [
+          { rdoName: 'hiActualMinSalary', displayName: 'Executive Min Salary', type: 'slider', editable: true },
+        ],
+      });
+
+      const details = makeTownHallDetails('MayorCorp');
+      panel.show(details);
+
+      // Switch to townJobs tab
+      (panel as unknown as { currentTab: string }).currentTab = 'townJobs';
+      (panel as unknown as { renderTabContent: () => void }).renderTabContent();
+
+      // renderPropertyGroup should have been called with undefined changeCallback
+      expect(mockRenderPropertyGroup).toHaveBeenCalled();
+      const lastCall = mockRenderPropertyGroup.mock.calls[mockRenderPropertyGroup.mock.calls.length - 1];
+      expect(lastCall[2]).toBeUndefined(); // changeCallback should be undefined
+    });
+
+    it('should still use isOwner for non-town tabs on a Town Hall building', () => {
+      registerMockElements();
+      const onPropertyChange = jest.fn(async () => {});
+      // User is mayor but NOT owner — non-town tab should use isOwner
+      const panel = createPanel({ currentCompanyName: 'MayorCorp', onPropertyChange });
+
+      mockGetGroupById.mockReturnValue({
+        id: 'generic',
+        name: 'General',
+        properties: [
+          { rdoName: 'Name', displayName: 'Name', type: 'text' },
+        ],
+      });
+
+      const details = makeTownHallDetails('MayorCorp', 'SomeOtherOwner');
+      // Add a non-town tab
+      details.tabs.push({ id: 'generic', name: 'General', icon: 'G', order: 20, handlerName: 'IndGeneral' });
+      details.groups['generic'] = [{ name: 'Name', value: 'Town Hall' }];
+
+      panel.show(details);
+
+      // Switch to non-town tab
+      (panel as unknown as { currentTab: string }).currentTab = 'generic';
+      (panel as unknown as { renderTabContent: () => void }).renderTabContent();
+
+      // Not owner (MayorCorp !== SomeOtherOwner), so changeCallback should be undefined
+      expect(mockRenderPropertyGroup).toHaveBeenCalled();
+      const lastCall = mockRenderPropertyGroup.mock.calls[mockRenderPropertyGroup.mock.calls.length - 1];
+      expect(lastCall[2]).toBeUndefined();
     });
   });
 });

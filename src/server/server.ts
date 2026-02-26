@@ -1100,10 +1100,13 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
         console.log(`[Gateway] Selecting company: ${req.companyId}`);
         await session.selectCompany(req.companyId);
 
-        // Send success response
-        const response: WsMessage = {
+        // Send success response with player's saved position
+        const playerPos = session.getPlayerPosition();
+        const response: WsMessage & { playerX?: number; playerY?: number } = {
           type: WsMessageType.RESP_RDO_RESULT,
-          wsRequestId: msg.wsRequestId
+          wsRequestId: msg.wsRequestId,
+          playerX: playerPos.x || undefined,
+          playerY: playerPos.y || undefined,
         };
         ws.send(JSON.stringify(response));
         break;

@@ -640,6 +640,7 @@ export interface PoliticsData {
   campaignCount: number;
   popularRatings: PoliticsRatingEntry[];
   ifelRatings: PoliticsRatingEntry[];
+  tycoonsRatings: PoliticsRatingEntry[];
   campaigns: PoliticsCampaignEntry[];
   canLaunchCampaign: boolean;
   campaignMessage: string;
