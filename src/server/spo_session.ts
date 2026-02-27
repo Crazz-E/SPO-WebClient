@@ -4562,6 +4562,21 @@ private handlePush(socketName: string, packet: RdoPacket) {
   private parseBuildingFacilities(html: string): BuildingInfo[] {
     const facilities: BuildingInfo[] = [];
 
+    // Pre-scan: extract ALL FacilityClass→VisualClassId pairs from "info" attribute URLs.
+    // The real server HTML has nested <table>/<tr> inside each Cell_N, and VisualClassId
+    // lives in the "Build now" button's info attribute deep in the second inner <tr>.
+    // The cellRegex below only captures up to the first inner </tr> (non-greedy),
+    // so we must extract VisualClassId from the full HTML before cell-level processing.
+    const visualClassMap = new Map<string, string>();
+    const infoRegex = /FacilityClass=([A-Za-z0-9]+)[^"']*VisualClassId=(\d+)/gi;
+    let infoMatch;
+    while ((infoMatch = infoRegex.exec(html)) !== null) {
+      visualClassMap.set(infoMatch[1], infoMatch[2]);
+    }
+    if (visualClassMap.size > 0) {
+      this.log.debug(`[BuildConstruction] Pre-scanned ${visualClassMap.size} FacilityClass→VisualClassId pairs from info attributes`);
+    }
+
     // Match each building's detail cell (Cell_N) - handle both quoted and unquoted id
     const cellRegex = /<tr[^>]*\sid\s*=\s*["']?Cell_(\d+)["']?[^>]*>([\s\S]*?)<\/tr>/gi;
     let match;
@@ -4571,9 +4586,9 @@ private handlePush(socketName: string, packet: RdoPacket) {
       const cellContent = match[2];
 
       // Find corresponding LinkText div for building name and availability
-      // Handle both quoted and unquoted attributes
+      // Handle both quoted and unquoted attributes, in any order
       const linkTextRegex = new RegExp(
-        `<div[^>]*id\\s*=\\s*["']?LinkText_${cellIndex}["']?[^>]*class\\s*=\\s*["']?listItem["']?[^>]*available\\s*=\\s*["']?(\\d+)["']?[^>]*>([^<]+)<`,
+        `<div[^>]*id\\s*=\\s*["']?LinkText_${cellIndex}["']?[^>]*available\\s*=\\s*["']?(\\d+)["']?[^>]*>([^<]+)<`,
         'i'
       );
       const linkMatch = linkTextRegex.exec(html);
@@ -4604,11 +4619,18 @@ private handlePush(socketName: string, packet: RdoPacket) {
         }
       }
 
-      // Extract VisualClassId from URL parameter (required — sole key for CLASSES.BIN lookup)
-      const visualIdMatch = /VisualClassId[=:](\d+)/i.exec(cellContent);
-      if (visualIdMatch) {
-        visualClassId = visualIdMatch[1];
+      // Look up VisualClassId from pre-scanned info attributes (handles nested-table HTML),
+      // then fall back to searching cellContent directly (handles simplified/mock HTML)
+      if (facilityClass && visualClassMap.has(facilityClass)) {
+        visualClassId = visualClassMap.get(facilityClass)!;
       } else {
+        const visualIdMatch = /VisualClassId[=:](\d+)/i.exec(cellContent);
+        if (visualIdMatch) {
+          visualClassId = visualIdMatch[1];
+        }
+      }
+
+      if (!visualClassId) {
         this.log.warn(`[BuildConstruction] No VisualClassId found for "${facilityClass}" — building dimensions will be unavailable`);
       }
 

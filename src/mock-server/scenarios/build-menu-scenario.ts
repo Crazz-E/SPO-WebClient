@@ -53,35 +53,73 @@ function buildBuildAspHtml(vars: ScenarioVariables): string {
 }
 
 function buildFacilityListHtml(): string {
-  return `<html>
+  // Matches real server FacilityList.asp HTML structure (based on live captures).
+  // Key structural elements: LinkFrame_N/LinkText_N rows + nested Cell_N detail rows
+  // with the info attribute (FacilityClass + VisualClassId) deep in a "Build now" button.
+  return `<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
 <head><title>Facility List</title>
 <link rel="STYLESHEET" href="../voyager.css" type="text/css">
 </head>
 <body>
-<div class="header2" style="color: #FF9900; margin-left: 10px">Headquarters</div>
-<table cellspacing="0" cellpadding="0" width="95%" style="margin-left: 10px">
-<tr>
-<td align="center" valign="bottom"
-  style="border-style: solid; border-width: 1px; border-color: #333333; padding: 5px"
-  info="http://local.asp?frame_Id=MapIsoView&frame_Action=Build&FacilityClass=PGIGeneralHeadquarterSTA&VisualClassId=602"
-  command="build">
-<img src="images/fac-PGIGeneralHeadquarterSTA.gif" border="0">
-<div class="header3">General Headquarter</div>
-<div class="data">Cost: $5,000,000</div>
-<div class="link" style="color: white">Build now</div>
-</td>
-</tr>
-<tr>
-<td align="center" valign="bottom"
-  style="border-style: solid; border-width: 1px; border-color: #333333; padding: 5px"
-  info="http://local.asp?frame_Id=MapIsoView&frame_Action=Build&FacilityClass=PGISupermarketC&VisualClassId=610"
-  command="build">
-<img src="images/fac-PGISupermarketC.gif" border="0">
-<div class="header3">Supermarket</div>
-<div class="data">Cost: $500,000</div>
-<div class="link" style="color: white">Build now</div>
-</td>
-</tr>
+<table cellspacing="7" width="100%">
+<tr><td><div class=header2 style="color: #FF9900">Headquarters</div></td></tr>
+<tr><td>
+<table cellspacing="0" cellpadding="0" border="0" width="100%">
+
+    <tr>
+      <td width="100%" id="LinkFrame_0" background="images/itemgradient.jpg" altid="0">
+        <div id="LinkText_0" class=listItem available="1" style="margin-left: 5px" altid="0">
+        General Headquarter
+        </div>
+      </td>
+    </tr>
+    <tr id="Cell_0" style="display:none">
+      <td width="100%"><table cellpadding="3" cellspacing="0" width="100%">
+      <tr>
+      <td align="center" valign="middle" width="64">
+        <img src=/five/icons/MapPGIHQ1.gif border="0" title="" width="120" height="80">
+      </td>
+      <td align="left" valign="middle">
+        <div class=comment style="font-size: 9px">$8,000K<br><nobr>3600 m.</nobr></div>
+        <img src="images/zone-commerce.gif" title="Building must be located in blue zone or no zone at all.">
+      </td>
+      </tr>
+      <tr><td colspan="2"><table style="text-align: center"><tr>
+              <td class=button align="center" width="100"
+                  info="http://local.asp?frame_Id=MapIsoView&frame_Action=Build&FacilityClass=PGIGeneralHeadquarterSTA&VisualClassId=602"
+                  command="build">Build now</td>
+      </tr></table></td></tr>
+      </table></td>
+    </tr>
+
+    <tr>
+      <td width="100%" id="LinkFrame_1" background="images/itemgradient.jpg" altid="1">
+        <div id="LinkText_1" class=listItem available="1" style="margin-left: 5px" altid="1">
+        Supermarket
+        </div>
+      </td>
+    </tr>
+    <tr id="Cell_1" style="display:none">
+      <td width="100%"><table cellpadding="3" cellspacing="0" width="100%">
+      <tr>
+      <td align="center" valign="middle" width="64">
+        <img src=/five/icons/MapPGISupermarketC64x32x0.gif border="0" title="" width="120" height="80">
+      </td>
+      <td align="left" valign="middle">
+        <div class=comment style="font-size: 9px">$500K<br><nobr>400 m.</nobr></div>
+      </td>
+      </tr>
+      <tr><td colspan="2"><table style="text-align: center"><tr>
+              <td class=button align="center" width="100"
+                  info="http://local.asp?frame_Id=MapIsoView&frame_Action=Build&FacilityClass=PGISupermarketC&VisualClassId=610"
+                  command="build">Build now</td>
+      </tr></table></td></tr>
+      </table></td>
+    </tr>
+
+</table>
+</td></tr>
 </table>
 </body>
 </html>`;
