@@ -92,6 +92,8 @@ import {
   // Company Creation
   WsReqCreateCompany,
   WsRespCreateCompany,
+  // Date
+  WsEventRefreshDate,
 } from '../shared/types';
 import { getErrorMessage } from '../shared/error-codes';
 import { toErrorMessage } from '../shared/error-utils';
@@ -99,7 +101,7 @@ import { Season } from '../shared/map-config';
 import { MapNavigationUI } from './ui/map-navigation-ui';
 import { MinimapUI } from './ui/minimap-ui';
 import { ClientBridge, type ClientCallbacks } from './bridge/client-bridge';
-import { useGameStore } from './store/game-store';
+import { useGameStore, delphiTDateTimeToJsDate } from './store/game-store';
 import type { GameSettings } from './store/game-store';
 import { useUiStore } from './store/ui-store';
 import { useChatStore } from './store/chat-store';
@@ -277,7 +279,7 @@ export class StarpeaceClient {
       onRefreshMap: () => this.refreshMapData(),
       onZoomIn: () => this.mapNavigationUI?.getRenderer()?.zoomIn(),
       onZoomOut: () => this.mapNavigationUI?.getRenderer()?.zoomOut(),
-      onToggleMinimap: () => this.minimapUI?.toggle(),
+      onToggleMinimap: () => { /* minimap is always visible */ },
       onToggleDebugOverlay: () => {
         const renderer = this.mapNavigationUI?.getRenderer();
         if (renderer) {
@@ -671,6 +673,12 @@ export class StarpeaceClient {
         // Refresh tycoon stats to reflect latest P&L
         this.refreshTycoonData();
         break;
+
+      case WsMessageType.EVENT_REFRESH_DATE: {
+        const dateEvent = msg as WsEventRefreshDate;
+        useGameStore.getState().setGameDate(delphiTDateTimeToJsDate(dateEvent.dateDouble));
+        break;
+      }
 
       // Mail Events
       case WsMessageType.EVENT_NEW_MAIL: {

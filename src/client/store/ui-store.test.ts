@@ -62,6 +62,22 @@ describe('ui-store existing state', () => {
     expect(useUiStore.getState().rightPanel).toBeNull();
   });
 
+  it('should toggle left panel with facilities type', () => {
+    useUiStore.getState().toggleLeftPanel('facilities');
+    expect(useUiStore.getState().leftPanel).toBe('facilities');
+
+    useUiStore.getState().toggleLeftPanel('facilities');
+    expect(useUiStore.getState().leftPanel).toBeNull();
+  });
+
+  it('should switch left panel between empire and facilities', () => {
+    useUiStore.getState().openLeftPanel('empire');
+    expect(useUiStore.getState().leftPanel).toBe('empire');
+
+    useUiStore.getState().openLeftPanel('facilities');
+    expect(useUiStore.getState().leftPanel).toBe('facilities');
+  });
+
   it('should preserve dismissTopmost priority order', () => {
     useUiStore.getState().openRightPanel('building');
     useUiStore.getState().openModal('settings');

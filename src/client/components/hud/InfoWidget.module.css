@@ -1,0 +1,110 @@
+/* InfoWidget — top-right glass card with tycoon stats + game date */
+
+.widget {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 300;
+  min-width: 180px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-xs);
+  pointer-events: auto;
+  transition: background var(--duration-base) var(--ease-default);
+}
+
+/* Debt warning tint */
+.debtTint {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+/* Critical alert — pulsing red */
+.alertPulse {
+  animation: debtPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes debtPulse {
+  0%, 100% {
+    background: rgba(220, 38, 38, 0.12);
+  }
+  50% {
+    background: rgba(220, 38, 38, 0.25);
+  }
+}
+
+/* Rows */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.date {
+  color: var(--accent-gold);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.rank {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.name {
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.company {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-default);
+}
+
+.company:hover {
+  color: var(--text-primary);
+}
+
+.facilities {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cash {
+  color: var(--accent-gold);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.income {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.separator {
+  color: var(--text-disabled);
+  margin: 0 1px;
+}
+
+/* Mobile — compact */
+@media (max-width: 767px) {
+  .widget {
+    min-width: 140px;
+    right: var(--space-2);
+    top: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+  }
+}

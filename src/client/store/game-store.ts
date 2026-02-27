@@ -6,6 +6,15 @@
 import { create } from 'zustand';
 import type { CompanyInfo, WorldInfo } from '@/shared/types';
 
+/* ---- Utilities ---- */
+
+/** Delphi TDateTime epoch: Dec 30, 1899. TDateTime is days since epoch as a float. */
+const DELPHI_EPOCH_MS = new Date(1899, 11, 30).getTime();
+
+export function delphiTDateTimeToJsDate(dDate: number): Date {
+  return new Date(DELPHI_EPOCH_MS + dDate * 86_400_000);
+}
+
 /* ---- Types ---- */
 
 export interface TycoonStats {
@@ -57,6 +66,9 @@ interface GameState {
   // Tycoon stats (updated by EVENT_TYCOON_UPDATE)
   tycoonStats: TycoonStats | null;
 
+  // Game date (from server RefreshDate push)
+  gameDate: Date | null;
+
   // Tool modes
   isRoadBuildingMode: boolean;
   isRoadDemolishMode: boolean;
@@ -79,6 +91,7 @@ interface GameState {
   setCompany: (name: string, id: string) => void;
   setCompanies: (companies: CompanyInfo[]) => void;
   setTycoonStats: (stats: TycoonStats) => void;
+  setGameDate: (date: Date) => void;
   setRoadBuildingMode: (active: boolean) => void;
   setRoadDemolishMode: (active: boolean) => void;
   setLoginWorlds: (worlds: WorldInfo[]) => void;
@@ -99,6 +112,7 @@ export const useGameStore = create<GameState>((set) => ({
   companyId: '',
   companies: [],
   tycoonStats: null,
+  gameDate: null,
   isRoadBuildingMode: false,
   isRoadDemolishMode: false,
   loginWorlds: [],
@@ -115,6 +129,7 @@ export const useGameStore = create<GameState>((set) => ({
   setCompanies: (companies) => set({ companies }),
 
   setTycoonStats: (stats) => set({ tycoonStats: stats }),
+  setGameDate: (date) => set({ gameDate: date }),
 
   setRoadBuildingMode: (active) => set({ isRoadBuildingMode: active }),
   setRoadDemolishMode: (active) => set({ isRoadDemolishMode: active }),
@@ -140,6 +155,7 @@ export const useGameStore = create<GameState>((set) => ({
       companyId: '',
       companies: [],
       tycoonStats: null,
+      gameDate: null,
       isRoadBuildingMode: false,
       isRoadDemolishMode: false,
       loginWorlds: [],

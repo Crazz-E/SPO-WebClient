@@ -1,16 +1,17 @@
-/* ChatStrip — bottom-edge persistent chat */
+/* ChatStrip — bottom-left chat box */
 
 .strip {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: var(--space-2);
+  left: var(--space-2);
   z-index: 150;
+  width: var(--chat-box-width);
   height: var(--chatstrip-collapsed);
   background: var(--topbar-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid var(--glass-border);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
   display: flex;
   flex-direction: column;
   transition: height var(--duration-base) var(--ease-default);

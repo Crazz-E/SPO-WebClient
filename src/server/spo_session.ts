@@ -17,6 +17,7 @@ import {
   MapData,
   WsEventRdoPush,
   WsEventEndOfPeriod,
+  WsEventRefreshDate,
   ChatUser,
   WsEventChatUserTyping,
   WsEventChatChannelChange,
@@ -3976,6 +3977,14 @@ private handlePush(socketName: string, packet: RdoPacket) {
           this.fTycoonProxyId = RdoParser.asInt(packet.args[3]);
 
           this.log.debug(`[Session] InitClient parsed - Date: ${this.virtualDate}, Money: ${this.accountMoney}, FailureLevel: ${this.failureLevel}, fTycoonProxyId: ${this.fTycoonProxyId}`);
+
+          // Forward initial game date to client
+          if (this.virtualDate !== null) {
+            this.emit('ws_event', {
+              type: WsMessageType.EVENT_REFRESH_DATE,
+              dateDouble: this.virtualDate,
+            } as WsEventRefreshDate);
+          }
         } catch (error) {
           this.log.error(`[Session] Failed to parse InitClient data:`, error);
           this.log.debug(`[Session] Raw args:`, packet.args);
@@ -4147,7 +4156,20 @@ private handlePush(socketName: string, packet: RdoPacket) {
     return;
   }
 
-  // 7. Generic push fallback (for unhandled events)
+  // 7. RefreshDate — server sends updated virtual date periodically
+  if (packet.member === 'RefreshDate' && packet.args && packet.args.length >= 1) {
+    const dateDouble = RdoParser.asFloat(packet.args[0]);
+    this.virtualDate = dateDouble;
+    this.log.debug(`[Push] RefreshDate: ${dateDouble}`);
+    const dateEvent: WsEventRefreshDate = {
+      type: WsMessageType.EVENT_REFRESH_DATE,
+      dateDouble,
+    };
+    this.emit('ws_event', dateEvent);
+    return;
+  }
+
+  // 8. Generic push fallback (for unhandled events)
   const event: WsEventRdoPush = {
     type: WsMessageType.EVENT_RDO_PUSH,
     rawPacket: packet.raw

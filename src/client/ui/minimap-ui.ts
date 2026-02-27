@@ -21,7 +21,9 @@ export interface MinimapRendererAPI {
   getZoom(): number;
 }
 
-const MINIMAP_SIZE = 200;
+const DEFAULT_SIZE = 200;
+const MIN_SIZE = 120;
+const MAX_SIZE = 500;
 const MINIMAP_PADDING = 12;
 const UPDATE_INTERVAL_MS = 500;
 
@@ -32,10 +34,11 @@ export class MinimapUI {
   private renderer: MinimapRendererAPI | null = null;
   private visible = false;
   private updateTimer: ReturnType<typeof setInterval> | null = null;
+  private currentWidth = DEFAULT_SIZE;
+  private currentHeight = DEFAULT_SIZE;
 
   constructor() {
-    // Keyboard toggle removed — M key is handled by useKeyboardShortcuts (mail panel).
-    // Minimap toggle is via the RightRail button → client.onToggleMinimap().
+    // Minimap is always visible once renderer is attached — no toggle needed.
   }
 
   /**
@@ -43,6 +46,7 @@ export class MinimapUI {
    */
   public setRenderer(renderer: MinimapRendererAPI): void {
     this.renderer = renderer;
+    this.show();
   }
 
   /**
@@ -116,8 +120,8 @@ export class MinimapUI {
       position: fixed;
       bottom: ${MINIMAP_PADDING}px;
       right: ${MINIMAP_PADDING}px;
-      width: ${MINIMAP_SIZE}px;
-      height: ${MINIMAP_SIZE}px;
+      width: ${this.currentWidth}px;
+      height: ${this.currentHeight}px;
       border: 2px solid rgba(148, 163, 184, 0.6);
       border-radius: 8px;
       overflow: hidden;
@@ -129,12 +133,27 @@ export class MinimapUI {
 
     // Canvas
     this.canvas = document.createElement('canvas');
-    this.canvas.width = MINIMAP_SIZE;
-    this.canvas.height = MINIMAP_SIZE;
+    this.canvas.width = this.currentWidth;
+    this.canvas.height = this.currentHeight;
     this.canvas.style.cssText = 'display: block; width: 100%; height: 100%;';
     this.ctx = this.canvas.getContext('2d');
 
     this.container.appendChild(this.canvas);
+
+    // Resize handle — SE corner
+    const handle = document.createElement('div');
+    handle.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 14px;
+      height: 14px;
+      cursor: nw-resize;
+      z-index: 1;
+    `;
+    this.container.appendChild(handle);
+    this.attachResizeListeners(handle);
+
     document.body.appendChild(this.container);
 
     // Click-to-navigate
@@ -143,6 +162,46 @@ export class MinimapUI {
       e.stopPropagation();
       this.handleClick(e.offsetX, e.offsetY);
     };
+  }
+
+  private attachResizeListeners(handle: HTMLElement): void {
+    let startX = 0;
+    let startY = 0;
+    let startW = 0;
+
+    const onMouseMove = (e: MouseEvent) => {
+      // Dragging NW handle: moving left/up = bigger, right/down = smaller
+      const dx = startX - e.clientX;
+      const dy = startY - e.clientY;
+      const delta = Math.max(dx, dy);
+      const newSize = Math.max(MIN_SIZE, Math.min(MAX_SIZE, startW + delta));
+      this.currentWidth = newSize;
+      this.currentHeight = newSize;
+      if (this.container) {
+        this.container.style.width = `${newSize}px`;
+        this.container.style.height = `${newSize}px`;
+      }
+      if (this.canvas) {
+        this.canvas.width = newSize;
+        this.canvas.height = newSize;
+      }
+      this.render();
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    handle.addEventListener('mousedown', (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      startX = e.clientX;
+      startY = e.clientY;
+      startW = this.currentWidth;
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -174,12 +233,12 @@ export class MinimapUI {
     if (dims.width === 0 || dims.height === 0) return;
 
     // Scale factor: map coordinates → minimap pixels
-    const scaleX = MINIMAP_SIZE / dims.width;
-    const scaleY = MINIMAP_SIZE / dims.height;
+    const scaleX = this.currentWidth / dims.width;
+    const scaleY = this.currentHeight / dims.height;
 
     // Clear
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+    ctx.fillRect(0, 0, this.currentWidth, this.currentHeight);
 
     // Draw road segments
     this.drawRoads(ctx, scaleX, scaleY);
@@ -252,8 +311,8 @@ export class MinimapUI {
     if (dims.width === 0 || dims.height === 0) return;
 
     // Convert minimap pixel → map coordinates (x=col, y=row)
-    const mapX = Math.round((pixelX / MINIMAP_SIZE) * dims.width);
-    const mapY = Math.round((pixelY / MINIMAP_SIZE) * dims.height);
+    const mapX = Math.round((pixelX / this.currentWidth) * dims.width);
+    const mapY = Math.round((pixelY / this.currentHeight) * dims.height);
 
     this.renderer.centerOn(mapX, mapY);
   }

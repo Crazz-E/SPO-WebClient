@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import type { BuildingCategory, BuildingInfo } from '@/shared/types';
 
 export type RightPanelType = 'building' | 'mail' | 'search' | 'politics' | 'transport';
-export type LeftPanelType = 'empire';
+export type LeftPanelType = 'empire' | 'facilities';
 export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'createCompany' | 'connectionPicker';
 export type MobileTab = 'map' | 'empire' | 'build' | 'mail' | 'more';
 

@@ -113,6 +113,7 @@ export type {
   WsEventTycoonUpdate,
   WsEventRdoPush,
   WsEventEndOfPeriod,
+  WsEventRefreshDate,
   // Chat messages
   WsReqChatGetUsers,
   WsReqChatGetChannels,

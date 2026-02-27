@@ -68,6 +68,7 @@ export enum WsMessageType {
   EVENT_TYCOON_UPDATE = 'EVENT_TYCOON_UPDATE',
   EVENT_RDO_PUSH = 'EVENT_RDO_PUSH',
   EVENT_END_OF_PERIOD = 'EVENT_END_OF_PERIOD',
+  EVENT_REFRESH_DATE = 'EVENT_REFRESH_DATE',
 
   // Chat functionality
   REQ_CHAT_GET_USERS = 'REQ_CHAT_GET_USERS',
@@ -357,6 +358,11 @@ export interface WsEventRdoPush extends WsMessage {
 
 export interface WsEventEndOfPeriod extends WsMessage {
   type: WsMessageType.EVENT_END_OF_PERIOD;
+}
+
+export interface WsEventRefreshDate extends WsMessage {
+  type: WsMessageType.EVENT_REFRESH_DATE;
+  dateDouble: number;
 }
 
 // =============================================================================

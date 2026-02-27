@@ -7,7 +7,7 @@
  * Tertiary: Mail (with badge), Settings
  */
 
-import { Hammer, Search, User, Route, Trash2, Mail, Settings } from 'lucide-react';
+import { Hammer, Search, User, Milestone, Tractor, Mail, Settings, Globe, Heart } from 'lucide-react';
 import { IconButton } from '../common';
 import { useUiStore } from '../../store/ui-store';
 import { useGameStore } from '../../store/game-store';
@@ -61,7 +61,7 @@ export function LeftRail() {
       {/* Secondary — tools */}
       <div className={styles.group}>
         <IconButton
-          icon={<Route size={20} />}
+          icon={<Milestone size={20} />}
           label="Build Road"
           size="lg"
           variant="glass"
@@ -69,7 +69,7 @@ export function LeftRail() {
           onClick={() => client.onBuildRoad()}
         />
         <IconButton
-          icon={<Trash2 size={20} />}
+          icon={<Tractor size={20} />}
           label="Demolish"
           size="lg"
           variant="glass"
@@ -97,6 +97,27 @@ export function LeftRail() {
           size="lg"
           variant="glass"
           onClick={() => openModal('settings')}
+        />
+      </div>
+
+      <div className={styles.divider} />
+
+      {/* Quaternary — server & facilities */}
+      <div className={styles.group}>
+        <IconButton
+          icon={<Globe size={20} />}
+          label="Switch Server"
+          size="lg"
+          variant="glass"
+          onClick={() => openModal('connectionPicker')}
+        />
+        <IconButton
+          icon={<Heart size={20} />}
+          label="Facilities"
+          size="lg"
+          variant="glass"
+          active={leftPanel === 'facilities'}
+          onClick={() => toggleLeftPanel('facilities')}
         />
       </div>
     </nav>

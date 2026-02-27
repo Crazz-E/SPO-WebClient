@@ -2,7 +2,7 @@
  * Tests for game-store — login flow state.
  */
 
-import { useGameStore } from './game-store';
+import { useGameStore, delphiTDateTimeToJsDate } from './game-store';
 
 describe('game-store login flow state', () => {
   beforeEach(() => {
@@ -90,5 +90,58 @@ describe('game-store existing state', () => {
 
     useGameStore.getState().setStatus('connected');
     expect(useGameStore.getState().status).toBe('connected');
+  });
+});
+
+describe('game-store gameDate', () => {
+  beforeEach(() => {
+    useGameStore.getState().reset();
+  });
+
+  it('should start with null gameDate', () => {
+    expect(useGameStore.getState().gameDate).toBeNull();
+  });
+
+  it('setGameDate should store the date', () => {
+    const date = new Date(2050, 0, 1);
+    useGameStore.getState().setGameDate(date);
+    expect(useGameStore.getState().gameDate).toEqual(date);
+  });
+
+  it('reset should clear gameDate', () => {
+    useGameStore.getState().setGameDate(new Date());
+    useGameStore.getState().reset();
+    expect(useGameStore.getState().gameDate).toBeNull();
+  });
+});
+
+describe('delphiTDateTimeToJsDate', () => {
+  it('should convert 0 to Dec 30, 1899', () => {
+    const result = delphiTDateTimeToJsDate(0);
+    expect(result.getFullYear()).toBe(1899);
+    expect(result.getMonth()).toBe(11); // December
+    expect(result.getDate()).toBe(30);
+  });
+
+  it('should convert 1 to Dec 31, 1899', () => {
+    const result = delphiTDateTimeToJsDate(1);
+    expect(result.getFullYear()).toBe(1899);
+    expect(result.getMonth()).toBe(11);
+    expect(result.getDate()).toBe(31);
+  });
+
+  it('should convert 2 to Jan 1, 1900', () => {
+    const result = delphiTDateTimeToJsDate(2);
+    expect(result.getFullYear()).toBe(1900);
+    expect(result.getMonth()).toBe(0); // January
+    expect(result.getDate()).toBe(1);
+  });
+
+  it('should convert a known game date (78006) to a reasonable date', () => {
+    // 78006 days after Dec 30, 1899 ≈ year 2113
+    const result = delphiTDateTimeToJsDate(78006);
+    expect(result.getFullYear()).toBeGreaterThan(2000);
+    expect(result instanceof Date).toBe(true);
+    expect(isNaN(result.getTime())).toBe(false);
   });
 });

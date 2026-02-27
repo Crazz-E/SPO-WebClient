@@ -20,6 +20,7 @@ interface MockElement {
   parentElement: MockElement | null;
   appendChild: jest.Mock;
   removeChild: jest.Mock;
+  addEventListener: jest.Mock;
   onmousedown: ((e: unknown) => void) | null;
   getContext: jest.Mock;
 }
@@ -57,6 +58,7 @@ function createMockElement(): MockElement {
       child.parentElement = null;
       return child;
     }),
+    addEventListener: jest.fn(),
     onmousedown: null,
     getContext: jest.fn(() => mockCtx),
   };
@@ -124,26 +126,41 @@ describe('MinimapUI', () => {
     expect(minimap.isVisible()).toBe(false);
   });
 
+  it('should auto-show when setRenderer is called', () => {
+    const minimap = new MinimapUI();
+    minimap.setRenderer(createMockRenderer());
+
+    // setRenderer() auto-calls show()
+    expect(minimap.isVisible()).toBe(true);
+
+    minimap.destroy();
+  });
+
   it('should show/hide via toggle', () => {
     const minimap = new MinimapUI();
     minimap.setRenderer(createMockRenderer());
 
-    minimap.toggle();
+    // Already visible from setRenderer()
     expect(minimap.isVisible()).toBe(true);
 
     minimap.toggle();
     expect(minimap.isVisible()).toBe(false);
+
+    minimap.toggle();
+    expect(minimap.isVisible()).toBe(true);
+
+    minimap.destroy();
   });
 
-  it('should create canvas on show', () => {
+  it('should create canvas on setRenderer (auto-show)', () => {
     const minimap = new MinimapUI();
     minimap.setRenderer(createMockRenderer());
-
-    minimap.show();
 
     // Should have created container + canvas
     const container = allElements.find(el => el.id === 'minimap-container');
     expect(container).toBeDefined();
+
+    minimap.destroy();
   });
 
   it('should render buildings and roads when visible', () => {
@@ -151,9 +168,7 @@ describe('MinimapUI', () => {
     const minimap = new MinimapUI();
     minimap.setRenderer(renderer);
 
-    minimap.show();
-
-    // Initial render is called on show()
+    // Initial render is called on setRenderer() → show()
     expect(renderer.getAllBuildings).toHaveBeenCalled();
     expect(renderer.getAllSegments).toHaveBeenCalled();
     expect(renderer.getMapDimensions).toHaveBeenCalled();
@@ -167,9 +182,7 @@ describe('MinimapUI', () => {
     const minimap = new MinimapUI();
     minimap.setRenderer(renderer);
 
-    minimap.show();
-
-    // Find the canvas (second element — first is container)
+    // Find the canvas (element with onmousedown and width=200)
     const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
     expect(canvas).toBeDefined();
 
@@ -187,26 +200,9 @@ describe('MinimapUI', () => {
     const minimap = new MinimapUI();
     minimap.setRenderer(renderer);
 
-    minimap.show();
-
     // fillRect should only be called if dimensions are non-zero (for background clear)
     // With zero dimensions, render() returns early before drawing
     expect(mockCtx.beginPath).not.toHaveBeenCalled();
-
-    minimap.destroy();
-  });
-
-  it('should toggle via external toggle() call', () => {
-    const minimap = new MinimapUI();
-    minimap.setRenderer(createMockRenderer());
-
-    expect(minimap.isVisible()).toBe(false);
-
-    minimap.toggle();
-    expect(minimap.isVisible()).toBe(true);
-
-    minimap.toggle();
-    expect(minimap.isVisible()).toBe(false);
 
     minimap.destroy();
   });
@@ -215,7 +211,6 @@ describe('MinimapUI', () => {
     const minimap = new MinimapUI();
     minimap.setRenderer(createMockRenderer());
 
-    minimap.show();
     expect(minimap.isVisible()).toBe(true);
 
     minimap.destroy();
