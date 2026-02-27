@@ -1,5 +1,5 @@
 /**
- * Tests for ui-store — build menu state (Phase 2 bridge migration).
+ * Tests for ui-store — build menu state.
  */
 
 import { useUiStore } from './ui-store';

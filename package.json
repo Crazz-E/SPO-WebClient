@@ -5,10 +5,9 @@
   "main": "dist/server/server.js",
   "scripts": {
     "build:server": "tsc",
-    "build:client": "esbuild src/client/client.ts --bundle --outfile=public/client.js --format=iife",
-    "build:client:react": "vite build",
+    "build:client": "vite build",
     "build:terrain-test": "esbuild src/client/terrain-test.ts --bundle --outfile=public/terrain-test.js --format=iife",
-    "build": "npm run build:server && npm run build:client && npm run build:client:react && npm run build:terrain-test",
+    "build": "npm run build:server && npm run build:client && npm run build:terrain-test",
     "start": "node --disable-warning=DEP0040 dist/server/server.js",
     "dev": "npm run build && npm start",
     "dev:react": "vite",

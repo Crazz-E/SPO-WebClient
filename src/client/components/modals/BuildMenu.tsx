@@ -11,7 +11,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, ArrowLeft } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
-import { useLegacyBridge } from '../../context';
+import { useClient } from '../../context';
 import { GlassCard, Skeleton } from '../common';
 import type { BuildingCategory } from '@/shared/types';
 import styles from './BuildMenu.module.css';
@@ -24,7 +24,7 @@ export function BuildMenu() {
   const categories = useUiStore((s) => s.buildMenuCategories);
   const facilities = useUiStore((s) => s.buildMenuFacilities);
 
-  const bridge = useLegacyBridge();
+  const client = useClient();
   const [phase, setPhase] = useState<Phase>('categories');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -34,8 +34,8 @@ export function BuildMenu() {
     if (modal !== 'buildMenu') return;
     setPhase('categories');
     setIsLoading(true);
-    bridge.current?.onRequestBuildingCategories();
-  }, [modal, bridge]);
+    client.onRequestBuildingCategories();
+  }, [modal, client]);
 
   // Stop loading when store receives data
   useEffect(() => {
@@ -51,17 +51,17 @@ export function BuildMenu() {
       setSelectedCategory(category.kindName);
       setPhase('facilities');
       setIsLoading(true);
-      bridge.current?.onRequestBuildingFacilities(category.kind, category.cluster);
+      client.onRequestBuildingFacilities(category.kind, category.cluster);
     },
-    [bridge],
+    [client],
   );
 
   const handleFacilitySelect = useCallback(
     (facility: { facilityClass: string; visualClassId: number; available: boolean }) => {
       closeModal();
-      bridge.current?.onPlaceBuilding(facility.facilityClass, facility.visualClassId);
+      client.onPlaceBuilding(facility.facilityClass, facility.visualClassId);
     },
-    [closeModal, bridge],
+    [closeModal, client],
   );
 
   if (modal !== 'buildMenu') return null;

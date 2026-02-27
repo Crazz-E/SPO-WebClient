@@ -118,6 +118,26 @@
   animation: pulse 1.5s ease-in-out infinite;
 }
 
+/* Back button */
+.backBtn {
+  background: none;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.backBtn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
 /* Mobile */
 @media (max-width: 767px) {
   .stage {

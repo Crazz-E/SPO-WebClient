@@ -1,7 +1,7 @@
 /**
  * GameScreen — Map-first HUD overlay system.
  *
- * The canvas fills 100% of the viewport (managed by legacy client.ts).
+ * The canvas fills 100% of the viewport (managed by client.ts).
  * All UI is absolutely positioned overlays:
  * - TopBar (z-300): translucent stats strip
  * - LeftRail (z-200): action buttons
@@ -64,7 +64,7 @@ export function GameScreen() {
 
   return (
     <div className={styles.screen}>
-      {/* Canvas fills viewport — managed by legacy client.ts outside React */}
+      {/* Canvas fills viewport — managed by client.ts outside React */}
 
       {/* TopBar — translucent stats strip */}
       <TopBar />

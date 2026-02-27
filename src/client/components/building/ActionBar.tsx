@@ -7,7 +7,7 @@ import { useState, useCallback } from 'react';
 import { Edit3, Trash2, RefreshCw, Check, X } from 'lucide-react';
 import { IconButton } from '../common';
 import { useBuildingStore } from '../../store/building-store';
-import { useLegacyBridge } from '../../context';
+import { useClient } from '../../context';
 import styles from './ActionBar.module.css';
 
 interface ActionBarProps {
@@ -19,19 +19,19 @@ interface ActionBarProps {
 export function ActionBar({ buildingX, buildingY }: ActionBarProps) {
   const isOwner = useBuildingStore((s) => s.isOwner);
   const details = useBuildingStore((s) => s.details);
-  const bridge = useLegacyBridge();
+  const client = useClient();
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState('');
 
   const handleRefresh = useCallback(() => {
-    bridge.current?.onRefreshBuilding(buildingX, buildingY);
-  }, [buildingX, buildingY, bridge]);
+    client.onRefreshBuilding(buildingX, buildingY);
+  }, [buildingX, buildingY, client]);
 
   const handleDelete = useCallback(() => {
     if (confirm('Are you sure you want to delete this building?')) {
-      bridge.current?.onDeleteBuilding(buildingX, buildingY);
+      client.onDeleteBuilding(buildingX, buildingY);
     }
-  }, [buildingX, buildingY, bridge]);
+  }, [buildingX, buildingY, client]);
 
   const handleStartRename = useCallback(() => {
     setNewName(details?.buildingName ?? '');
@@ -40,10 +40,10 @@ export function ActionBar({ buildingX, buildingY }: ActionBarProps) {
 
   const handleConfirmRename = useCallback(() => {
     if (newName.trim()) {
-      bridge.current?.onRenameBuilding(buildingX, buildingY, newName.trim());
+      client.onRenameBuilding(buildingX, buildingY, newName.trim());
     }
     setIsRenaming(false);
-  }, [buildingX, buildingY, newName, bridge]);
+  }, [buildingX, buildingY, newName, client]);
 
   const handleCancelRename = useCallback(() => {
     setIsRenaming(false);

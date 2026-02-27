@@ -21,7 +21,7 @@ interface UiState {
   /** Payload for confirmation dialogs */
   confirmPayload: { title: string; message: string; onConfirm: () => void } | null;
 
-  // Build menu data (replaces window.__spoBuildMenuHandlers)
+  // Build menu data
   buildMenuCategories: BuildingCategory[];
   buildMenuFacilities: BuildingInfo[];
 

@@ -1,0 +1,79 @@
+/* ZoneStage — region/zone selection */
+
+.stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-8);
+  animation: stageEnter 500ms var(--ease-out) both;
+  width: 100%;
+  max-width: 720px;
+}
+
+.title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0;
+  text-align: center;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin: calc(-1 * var(--space-2)) 0 0;
+  text-align: center;
+}
+
+/* Zone card grid */
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.zoneCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  transition:
+    border-color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default),
+    transform var(--duration-fast) var(--ease-default);
+}
+
+.zoneCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-gold);
+  box-shadow: var(--shadow-gold-glow);
+}
+
+.zoneName {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.zoneDesc {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* Loading indicator */
+.loadingText {
+  font-size: var(--text-sm);
+  color: var(--accent-gold);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .stage {
+    padding: var(--space-4);
+  }
+}

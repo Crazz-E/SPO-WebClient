@@ -4,7 +4,7 @@
  */
 
 import { useUiStore } from '../../store/ui-store';
-import { useLegacyBridge } from '../../context';
+import { useClient } from '../../context';
 import type { OwnedFacility } from '../../store/empire-store';
 import styles from './FacilityList.module.css';
 
@@ -21,11 +21,11 @@ const STATUS_ICONS: Record<string, string> = {
 
 export function FacilityList({ facilities }: FacilityListProps) {
   const openRightPanel = useUiStore((s) => s.openRightPanel);
-  const bridge = useLegacyBridge();
+  const client = useClient();
 
   const handleClick = (facility: OwnedFacility) => {
     openRightPanel('building');
-    bridge.current?.onNavigateToBuilding(facility.x, facility.y);
+    client.onNavigateToBuilding(facility.x, facility.y);
   };
 
   if (facilities.length === 0) {

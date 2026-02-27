@@ -8,7 +8,7 @@ import { useCallback } from 'react';
 import { X } from 'lucide-react';
 import { useGameStore, type GameSettings } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
-import { useLegacyBridge } from '../../context';
+import { useClient } from '../../context';
 import styles from './SettingsDialog.module.css';
 
 export function SettingsDialog() {
@@ -17,7 +17,7 @@ export function SettingsDialog() {
   const settings = useGameStore((s) => s.settings);
   const updateSettings = useGameStore((s) => s.updateSettings);
 
-  const bridge = useLegacyBridge();
+  const client = useClient();
 
   // Update store + notify client.ts to apply to renderer/sound/localStorage
   const handleSettingChange = useCallback(
@@ -25,16 +25,16 @@ export function SettingsDialog() {
       updateSettings(partial);
       // Read the merged settings from the store after update
       const merged = { ...useGameStore.getState().settings, ...partial };
-      bridge.current?.onSettingsChange(merged);
+      client.onSettingsChange(merged);
     },
-    [updateSettings, bridge],
+    [updateSettings, client],
   );
 
   if (modal !== 'settings') return null;
 
   const handleLogout = () => {
     closeModal();
-    bridge.current?.onLogout();
+    client.onLogout();
   };
 
   return (

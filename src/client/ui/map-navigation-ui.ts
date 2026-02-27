@@ -19,7 +19,7 @@ export class MapNavigationUI {
   private onBuildingClick: ((x: number, y: number, visualClass?: string) => void) | null = null;
   private onFetchFacilityDimensions: ((visualClass: string) => Promise<FacilityDimensions | null>) | null = null;
 
-  constructor(private gamePanel: HTMLElement) {}
+  constructor(private gamePanel: HTMLElement, private worldName: string = 'Shamba') {}
 
   /**
    * Set callback for loading new zones
@@ -64,8 +64,10 @@ export class MapNavigationUI {
     // Create canvas
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'game-canvas';
-    this.canvas.style.flex = '1';
+    this.canvas.style.position = 'absolute';
+    this.canvas.style.inset = '0';
     this.canvas.style.width = '100%';
+    this.canvas.style.height = '100%';
     this.canvas.style.backgroundColor = '#111';
     this.gamePanel.appendChild(this.canvas);
 
@@ -79,7 +81,7 @@ export class MapNavigationUI {
     this.createVegetationControls();
 
     // Load map
-    this.renderer.loadMap('Shamba').then(() => {
+    this.renderer.loadMap(this.worldName).then(() => {
       console.log('[MapNavigationUI] Terrain loaded successfully');
     }).catch((err) => {
       console.error('[MapNavigationUI] Failed to load terrain:', err);
@@ -143,7 +145,6 @@ export class MapNavigationUI {
     moveLabel.appendChild(document.createTextNode('Hide vegetation on move'));
     panel.appendChild(moveLabel);
 
-    this.gamePanel.style.position = 'relative';
     this.gamePanel.appendChild(panel);
   }
 

@@ -12,10 +12,11 @@ import styles from './WorldStage.module.css';
 interface WorldStageProps {
   worlds: WorldInfo[];
   onSelect: (worldName: string) => void;
+  onBack?: () => void;
   isLoading: boolean;
 }
 
-export function WorldStage({ worlds, onSelect, isLoading }: WorldStageProps) {
+export function WorldStage({ worlds, onSelect, onBack, isLoading }: WorldStageProps) {
   const available = worlds.filter((w) => w.running3 !== false);
   const offline = worlds.filter((w) => w.running3 === false);
 
@@ -78,6 +79,12 @@ export function WorldStage({ worlds, onSelect, isLoading }: WorldStageProps) {
       </div>
 
       {isLoading && <div className={styles.loadingText}>Connecting to world...</div>}
+
+      {onBack && !isLoading && (
+        <button className={styles.backBtn} onClick={onBack}>
+          Back to Regions
+        </button>
+      )}
     </div>
   );
 }

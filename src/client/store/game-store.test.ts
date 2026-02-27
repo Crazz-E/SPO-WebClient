@@ -1,5 +1,5 @@
 /**
- * Tests for game-store — login flow state (Phase 2 bridge migration).
+ * Tests for game-store — login flow state.
  */
 
 import { useGameStore } from './game-store';

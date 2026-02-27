@@ -9,7 +9,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { ChevronUp, ChevronDown, Send } from 'lucide-react';
 import { useChatStore } from '../../store/chat-store';
-import { useLegacyBridge } from '../../context';
+import { useClient } from '../../context';
 import styles from './ChatStrip.module.css';
 
 export function ChatStrip() {
@@ -21,7 +21,7 @@ export function ChatStrip() {
   const toggleExpanded = useChatStore((s) => s.toggleExpanded);
   const setCurrentChannel = useChatStore((s) => s.setCurrentChannel);
 
-  const bridge = useLegacyBridge();
+  const client = useClient();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,8 +40,8 @@ export function ChatStrip() {
     const text = input.trim();
     if (!text) return;
     setInput('');
-    bridge.current?.onSendChatMessage(text);
-  }, [input, bridge]);
+    client.onSendChatMessage(text);
+  }, [input, client]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

@@ -4,7 +4,13 @@
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: var(--bg-primary);
+  background: transparent;
+  pointer-events: none;
+}
+
+/* Re-enable pointer events for all HUD children (TopBar, LeftRail, panels, modals, etc.) */
+.screen > * {
+  pointer-events: auto;
 }
 
 /* On mobile, adjust for BottomNav */

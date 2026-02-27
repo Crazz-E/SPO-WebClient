@@ -9,7 +9,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { X, Search } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useBuildingStore } from '../../store/building-store';
-import { useLegacyBridge } from '../../context';
+import { useClient } from '../../context';
 import styles from './ConnectionPickerModal.module.css';
 
 /** Facility role bitmask values (from Voyager TFacilityRoleSet) */
@@ -37,7 +37,7 @@ export function ConnectionPickerModal() {
   });
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
 
-  const bridge = useLegacyBridge();
+  const client = useClient();
   const companyRef = useRef<HTMLInputElement>(null);
 
   // Reset form when modal opens
@@ -72,7 +72,7 @@ export function ConnectionPickerModal() {
     if (roles.buyer) rolesMask |= ROLE_BUYER;
     if (roles.exporter) rolesMask |= ROLE_EXPORTER;
 
-    bridge.current?.onConnectionSearch(
+    client.onConnectionSearch(
       picker.buildingX,
       picker.buildingY,
       picker.fluidId,
@@ -84,7 +84,7 @@ export function ConnectionPickerModal() {
         roles: rolesMask || 255,
       },
     );
-  }, [picker, company, town, maxResults, roles, bridge]);
+  }, [picker, company, town, maxResults, roles, client]);
 
   const toggleIndex = useCallback((index: number) => {
     setSelectedIndices((prev) => {
@@ -117,9 +117,9 @@ export function ConnectionPickerModal() {
       .filter(Boolean)
       .map((r) => ({ x: r.x, y: r.y }));
 
-    bridge.current?.onConnectionConnect(picker.fluidId, picker.direction, coords);
+    client.onConnectionConnect(picker.fluidId, picker.direction, coords);
     handleClose();
-  }, [picker, selectedIndices, handleClose, bridge]);
+  }, [picker, selectedIndices, handleClose, client]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

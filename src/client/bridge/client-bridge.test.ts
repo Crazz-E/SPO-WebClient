@@ -1,7 +1,5 @@
 /**
  * Tests for ClientBridge — verifies store-pushing methods write to correct stores.
- * Phase 2: validates that login handlers and build menu handlers now use stores
- * instead of window globals.
  */
 
 import { ClientBridge } from './client-bridge';

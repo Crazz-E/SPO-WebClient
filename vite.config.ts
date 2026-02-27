@@ -14,12 +14,8 @@ export default defineConfig({
     rollupOptions: {
       input: 'src/client/main.tsx',
       output: {
-        // Phase 0: Output as react-app.js alongside old client.js
-        // Phase 6: Rename to client.js once old code is removed
-        entryFileNames: 'react-app.js',
-        // CSS in a predictable location (no hash)
-        assetFileNames: 'react-app.[ext]',
-        // No code splitting in Phase 0
+        entryFileNames: 'app.js',
+        assetFileNames: 'app.[ext]',
         manualChunks: undefined,
       },
     },

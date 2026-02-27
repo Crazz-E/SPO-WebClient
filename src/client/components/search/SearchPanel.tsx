@@ -8,7 +8,7 @@
 import { useEffect } from 'react';
 import { ChevronRight, Building2, Users, UserSearch, Trophy, Landmark } from 'lucide-react';
 import { useSearchStore, type SearchPage } from '../../store/search-store';
-import { useLegacyBridge } from '../../context';
+import { useClient } from '../../context';
 import { GlassCard, Skeleton } from '../common';
 import styles from './SearchPanel.module.css';
 
@@ -26,12 +26,12 @@ export function SearchPanel() {
   const navigateTo = useSearchStore((s) => s.navigateTo);
   const goBack = useSearchStore((s) => s.goBack);
   const pageHistory = useSearchStore((s) => s.pageHistory);
-  const bridge = useLegacyBridge();
+  const client = useClient();
 
   // Request home data when opened
   useEffect(() => {
-    bridge.current?.onSearchMenuHome();
-  }, [bridge]);
+    client.onSearchMenuHome();
+  }, [client]);
 
   return (
     <div className={styles.panel}>
