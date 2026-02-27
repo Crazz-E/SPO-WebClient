@@ -62,7 +62,6 @@ import {
   getConcreteId,
   buildNeighborConfig,
   canReceiveConcrete,
-  rotateConcreteId,
   CONCRETE_NONE,
   CONCRETE_FULL,
   PLATFORM_IDS,
@@ -2076,13 +2075,10 @@ export class IsometricMapRenderer {
         // Skip tiles without concrete
         if (!mapData.hasConcrete(i, j)) continue;
 
-        // Calculate concrete ID based on neighbors, then rotate for current view
-        let concreteId = getConcreteId(i, j, mapData);
-        if (concreteId === CONCRETE_NONE) continue;
+        // Calculate concrete ID with rotation-aware neighbor config
         const concreteRotation = this.terrainRenderer.getRotation() as number;
-        if (concreteRotation !== 0) {
-          concreteId = rotateConcreteId(concreteId, concreteRotation);
-        }
+        const concreteId = getConcreteId(i, j, mapData, concreteRotation);
+        if (concreteId === CONCRETE_NONE) continue;
 
         // Get screen position
         const screenPos = this.terrainRenderer.mapToScreen(i, j);

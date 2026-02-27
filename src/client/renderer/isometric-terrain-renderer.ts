@@ -14,7 +14,7 @@ import { CoordinateMapper } from './coordinate-mapper';
 import { TextureCache, getFallbackColor } from './texture-cache';
 import { TextureAtlasCache } from './texture-atlas-cache';
 import { ChunkCache, CHUNK_SIZE } from './chunk-cache';
-import { isSpecialTile } from '../../shared/land-utils';
+import { isSpecialTile, rotateLandId } from '../../shared/land-utils';
 import {
   Point,
   Rect,
@@ -497,6 +497,10 @@ export class IsometricTerrainRenderer {
         if (isSpecialTile(textureId)) {
           textureId = textureId & FLAT_MASK;
         }
+        // Rotate directional border textures so edges align with the rotated view
+        if (this.rotation !== Rotation.NORTH) {
+          textureId = rotateLandId(textureId, this.rotation);
+        }
 
         const screenPos = this.coordMapper.mapToScreen(
           i, j,
@@ -558,6 +562,10 @@ export class IsometricTerrainRenderer {
         // Flatten special tiles to their base center equivalent
         if (isSpecialTile(textureId)) {
           textureId = textureId & FLAT_MASK;
+        }
+        // Rotate directional border textures so edges align with the rotated view
+        if (this.rotation !== Rotation.NORTH) {
+          textureId = rotateLandId(textureId, this.rotation);
         }
 
         const screenPos = this.coordMapper.mapToScreen(

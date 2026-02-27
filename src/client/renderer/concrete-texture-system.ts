@@ -351,6 +351,47 @@ export const WATER_CONCRETE_ROTATION: readonly number[][] = [
 ] as const;
 
 // =============================================================================
+// CONFIG ROTATION
+// =============================================================================
+
+/**
+ * Neighbor index remapping for one 90° CW rotation.
+ *
+ * Under EAST rotation the coordinate transform is (relI,relJ) → (relJ, -relI).
+ * Each neighbor direction maps to a new visual position:
+ *   Physical BL → Visual TL,  Physical L → Visual T,  Physical TL → Visual TR,
+ *   Physical B  → Visual L,   Physical T → Visual R,
+ *   Physical BR → Visual BL,  Physical R → Visual B,  Physical TR → Visual BR.
+ *
+ * So rotated[visualIdx] = original[sourceIdx]:
+ *   [0]=TL←BL(5), [1]=T←L(3), [2]=TR←TL(0), [3]=L←B(6),
+ *   [4]=R←T(1), [5]=BL←BR(7), [6]=B←R(4), [7]=BR←TR(2)
+ */
+const CW_SOURCE: readonly number[] = [5, 3, 0, 6, 1, 7, 4, 2];
+
+/**
+ * Rotate a ConcreteCfg (8-neighbor bool array) by the given rotation.
+ * This remaps which physical neighbor appears at each visual diamond position,
+ * so the decision tree produces the texture matching the rotated view.
+ *
+ * @param cfg  Original neighbor configuration (unrotated)
+ * @param rotation  Number of 90° CW steps (0-3)
+ * @returns Rotated configuration
+ */
+export function rotateConcreteCfg(cfg: ConcreteCfg, rotation: number): ConcreteCfg {
+  if (rotation === 0) return cfg;
+
+  let current: ConcreteCfg = [...cfg] as ConcreteCfg;
+  for (let r = 0; r < rotation; r++) {
+    const prev = [...current] as ConcreteCfg;
+    for (let idx = 0; idx < 8; idx++) {
+      current[idx] = prev[CW_SOURCE[idx]];
+    }
+  }
+  return current;
+}
+
+// =============================================================================
 // CORE FUNCTIONS
 // =============================================================================
 
@@ -435,12 +476,17 @@ export function canReceiveConcrete(landId: number): boolean {
  * @param row - Map row (i coordinate)
  * @param col - Map column (j coordinate)
  * @param mapData - Map data interface for querying tiles
+ * @param rotation - Optional view rotation (0-3). When set, the neighbor
+ *   configuration is rotated before computing the concrete ID so the
+ *   selected texture matches the rotated view.  This replaces the old
+ *   rotateConcreteId() lookup-table approach which had incorrect tables.
  * @returns Concrete texture ID (0-15, or with flags, or CONCRETE_NONE)
  */
 export function getConcreteId(
   row: number,
   col: number,
-  mapData: ConcreteMapData
+  mapData: ConcreteMapData,
+  rotation?: number
 ): number {
   // Step 1: Check if tile has concrete
   if (!mapData.hasConcrete(row, col)) {
@@ -459,8 +505,11 @@ export function getConcreteId(
     return CONCRETE_FULL;
   }
 
-  // Step 4: Build neighbor configuration
-  const cfg = buildNeighborConfig(row, col, mapData);
+  // Step 4: Build neighbor configuration, then rotate for current view
+  let cfg = buildNeighborConfig(row, col, mapData);
+  if (rotation && rotation !== 0) {
+    cfg = rotateConcreteCfg(cfg, rotation);
+  }
 
   // Step 5: Water platform - use cardinal-only lookup (plat*.bmp textures)
   // getWaterConcreteId returns the full INI platform ID ($80-$88) directly

@@ -35,6 +35,7 @@ import {
   getWaterConcreteId,
   getConcreteId,
   rotateConcreteId,
+  rotateConcreteCfg,
   canReceiveConcrete,
   LAND_CONCRETE_ROTATION,
   WATER_CONCRETE_ROTATION
@@ -454,6 +455,7 @@ describe('Concrete Texture System', () => {
   // ===========================================================================
 
   describe('Rotation', () => {
+    // --- Legacy rotateConcreteId tests (lookup-table based, kept for reference) ---
     it('should preserve CONCRETE_NONE under rotation', () => {
       expect(rotateConcreteId(CONCRETE_NONE, Rotation.North)).toBe(CONCRETE_NONE);
       expect(rotateConcreteId(CONCRETE_NONE, Rotation.East)).toBe(CONCRETE_NONE);
@@ -475,39 +477,134 @@ describe('Concrete Texture System', () => {
       expect(rotateConcreteId(CONCRETE_SPECIAL, Rotation.West)).toBe(CONCRETE_SPECIAL);
     });
 
-    it('should return same ID for Rotation.North (identity)', () => {
-      for (let id = 0; id <= 12; id++) {
-        expect(rotateConcreteId(id, Rotation.North)).toBe(id);
+    // --- rotateConcreteCfg tests (config-rotation approach) ---
+
+    it('rotateConcreteCfg: identity for rotation 0', () => {
+      const cfg: ConcreteCfg = [true, false, true, false, true, false, true, false];
+      expect(rotateConcreteCfg(cfg, 0)).toEqual(cfg);
+    });
+
+    it('rotateConcreteCfg: 4 rotations return to original', () => {
+      const cfg: ConcreteCfg = [true, false, true, false, true, false, true, false];
+      expect(rotateConcreteCfg(cfg, 4)).toEqual(cfg);
+    });
+
+    it('rotateConcreteCfg: EAST rotation remaps indices correctly', () => {
+      // Only T (index 1) is true, all others false
+      const cfg: ConcreteCfg = [false, true, false, false, false, false, false, false];
+      const rotated = rotateConcreteCfg(cfg, 1);
+      // After EAST: physical T appears at visual R (index 4)
+      expect(rotated).toEqual([false, false, false, false, true, false, false, false]);
+    });
+
+    it('rotateConcreteCfg: EAST edge cycle T→R→B→L→T', () => {
+      // Only L (index 3) set
+      const cfg: ConcreteCfg = [false, false, false, true, false, false, false, false];
+      const rotated = rotateConcreteCfg(cfg, 1);
+      // Physical L appears at visual T (index 1) after EAST
+      expect(rotated[1]).toBe(true);
+      // All other cardinals should be false
+      expect(rotated[3]).toBe(false);
+      expect(rotated[4]).toBe(false);
+      expect(rotated[6]).toBe(false);
+    });
+
+    it('rotateConcreteCfg: SOUTH is double EAST', () => {
+      const cfg: ConcreteCfg = [true, false, true, false, true, false, true, false];
+      const singleEast = rotateConcreteCfg(cfg, 1);
+      const doubleEast = rotateConcreteCfg(singleEast, 1);
+      const directSouth = rotateConcreteCfg(cfg, 2);
+      expect(directSouth).toEqual(doubleEast);
+    });
+
+    // --- Config-rotation concrete ID correctness tests ---
+
+    it('getConcreteId with rotation: B missing → ID 7 under EAST', () => {
+      // Config: all 4 cardinals present, B (row+1) missing, all diags present
+      // NORTH: B missing → ID 6
+      // EAST: B→L visually, so L missing → ID 7
+      const mapData = makeMockMapData([
+        [true, true, true],
+        [true, true, true],
+        [true, false, true],  // B (row+1) is false
+      ]);
+      const northId = getConcreteId(1, 1, mapData, 0);
+      const eastId = getConcreteId(1, 1, mapData, 1);
+      expect(northId).toBe(6);
+      expect(eastId).toBe(7);
+    });
+
+    it('getConcreteId with rotation: R missing → ID 6 under EAST', () => {
+      // R (col+1) missing
+      const mapData = makeMockMapData([
+        [true, true, true],
+        [true, true, false],  // R (col+1) is false
+        [true, true, true],
+      ]);
+      const northId = getConcreteId(1, 1, mapData, 0);
+      const eastId = getConcreteId(1, 1, mapData, 1);
+      expect(northId).toBe(5);  // R missing in NORTH
+      expect(eastId).toBe(6);   // R→B visually, B missing → ID 6
+    });
+
+    it('getConcreteId with rotation: full concrete is rotation-invariant', () => {
+      const mapData = makeMockMapData([
+        [true, true, true],
+        [true, true, true],
+        [true, true, true],
+      ]);
+      for (let rot = 0; rot <= 3; rot++) {
+        expect(getConcreteId(1, 1, mapData, rot)).toBe(CONCRETE_FULL);
       }
     });
 
-    it('should rotate land concrete IDs correctly', () => {
-      // Test a few specific rotations based on rotation table
-      expect(rotateConcreteId(1, Rotation.East)).toBe(LAND_CONCRETE_ROTATION[Rotation.East][1]);
-      expect(rotateConcreteId(3, Rotation.South)).toBe(LAND_CONCRETE_ROTATION[Rotation.South][3]);
-      expect(rotateConcreteId(5, Rotation.West)).toBe(LAND_CONCRETE_ROTATION[Rotation.West][5]);
-    });
-
-    it('should preserve platform flag through rotation', () => {
-      const platformId = 0 | CONCRETE_PLATFORM_FLAG; // Platform center
-
-      const rotated = rotateConcreteId(platformId, Rotation.East);
-
-      expect(rotated & CONCRETE_PLATFORM_FLAG).toBe(CONCRETE_PLATFORM_FLAG);
-    });
-
-    it('should preserve road flag through rotation when applicable', () => {
-      const roadId = 1 | CONCRETE_ROAD_FLAG; // ID 1 with road flag
-
-      const rotated = rotateConcreteId(roadId, Rotation.East);
-      const rotatedBase = rotated & 0x0F;
-
-      // If rotated ID is less than 12, road flag should be preserved
-      if (rotatedBase < CONCRETE_FULL) {
-        expect(rotated & CONCRETE_ROAD_FLAG).toBe(CONCRETE_ROAD_FLAG);
+    it('getConcreteId with rotation: no concrete returns NONE regardless', () => {
+      const mapData: ConcreteMapData = {
+        getLandId: () => 0,
+        hasConcrete: () => false,
+        hasRoad: () => false,
+        hasBuilding: () => false,
+      };
+      for (let rot = 0; rot <= 3; rot++) {
+        expect(getConcreteId(5, 5, mapData, rot)).toBe(CONCRETE_NONE);
       }
+    });
+
+    it('getConcreteId with rotation: edge cycle 0→5→6→7→0', () => {
+      // T (row-1) missing = ID 0 in NORTH
+      // Under successive CW rotations: T→R→B→L visual position
+      const mapData = makeMockMapData([
+        [true, false, true],   // T (row-1) is false
+        [true, true, true],
+        [true, true, true],
+      ]);
+      const north = getConcreteId(1, 1, mapData, 0);
+      const east = getConcreteId(1, 1, mapData, 1);
+      const south = getConcreteId(1, 1, mapData, 2);
+      const west = getConcreteId(1, 1, mapData, 3);
+      // T missing: NORTH→ID 0, visually T→R→B→L
+      expect(north).toBe(0);   // T missing (north edge)
+      expect(east).toBe(5);    // Visual R missing → ID 5
+      expect(south).toBe(6);   // Visual B missing → ID 6
+      expect(west).toBe(7);    // Visual L missing → ID 7
     });
   });
+
+  /**
+   * Helper: create a mock ConcreteMapData from a 3×3 boolean grid
+   * centered at (1,1). True = has concrete.
+   */
+  function makeMockMapData(grid: boolean[][]): ConcreteMapData {
+    return {
+      getLandId: () => 0,  // Land zone (not water)
+      hasConcrete: (row: number, col: number) => {
+        if (row < 0 || row >= grid.length || col < 0 || col >= grid[0].length) return false;
+        return grid[row][col];
+      },
+      hasRoad: () => false,
+      hasBuilding: () => false,
+    };
+  }
 
   // ===========================================================================
   // INI FILE PARSING TESTS
