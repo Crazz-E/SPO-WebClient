@@ -88,10 +88,6 @@ import {
   WsRespSearchMenuHome,
   WsReqSearchMenuTowns,
   WsRespSearchMenuTowns,
-  WsReqSearchMenuTycoonProfile,
-  WsRespSearchMenuTycoonProfile,
-  WsReqSearchMenuPeople,
-  WsRespSearchMenuPeople,
   WsReqSearchMenuPeopleSearch,
   WsRespSearchMenuPeopleSearch,
   WsReqSearchMenuRankings,
@@ -1867,86 +1863,10 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
         break;
       }
 
-      case WsMessageType.REQ_SEARCH_MENU_TYCOON_PROFILE: {
-        if (!searchMenuService) {
-          const errorResp: WsRespError = {
-            type: WsMessageType.RESP_ERROR,
-            wsRequestId: msg.wsRequestId,
-            errorMessage: 'Search menu not available. Please log in first.',
-            code: ErrorCodes.ERROR_AccessDenied
-          };
-          ws.send(JSON.stringify(errorResp));
-          return;
-        }
-
-        const req = msg as WsReqSearchMenuTycoonProfile;
-        try {
-          const profile = await searchMenuService.getTycoonProfile(req.tycoonName);
-          const response: WsRespSearchMenuTycoonProfile = {
-            type: WsMessageType.RESP_SEARCH_MENU_TYCOON_PROFILE,
-            wsRequestId: msg.wsRequestId,
-            profile
-          };
-          ws.send(JSON.stringify(response));
-        } catch (err: unknown) {
-          console.error('[Gateway] Failed to fetch tycoon profile:', err);
-          const errorResp: WsRespError = {
-            type: WsMessageType.RESP_ERROR,
-            wsRequestId: msg.wsRequestId,
-            errorMessage: toErrorMessage(err) || 'Failed to fetch tycoon profile',
-            code: ErrorCodes.ERROR_Unknown
-          };
-          ws.send(JSON.stringify(errorResp));
-        }
-        break;
-      }
-
-      case WsMessageType.REQ_SEARCH_MENU_PEOPLE: {
-        if (!searchMenuService) {
-          const errorResp: WsRespError = {
-            type: WsMessageType.RESP_ERROR,
-            wsRequestId: msg.wsRequestId,
-            errorMessage: 'Search menu not available. Please log in first.',
-            code: ErrorCodes.ERROR_AccessDenied
-          };
-          ws.send(JSON.stringify(errorResp));
-          return;
-        }
-
-        try {
-          const response: WsRespSearchMenuPeople = {
-            type: WsMessageType.RESP_SEARCH_MENU_PEOPLE,
-            wsRequestId: msg.wsRequestId
-          };
-          ws.send(JSON.stringify(response));
-        } catch (err: unknown) {
-          console.error('[Gateway] Failed to fetch people page:', err);
-          const errorResp: WsRespError = {
-            type: WsMessageType.RESP_ERROR,
-            wsRequestId: msg.wsRequestId,
-            errorMessage: toErrorMessage(err) || 'Failed to fetch people page',
-            code: ErrorCodes.ERROR_Unknown
-          };
-          ws.send(JSON.stringify(errorResp));
-        }
-        break;
-      }
-
       case WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH: {
-        if (!searchMenuService) {
-          const errorResp: WsRespError = {
-            type: WsMessageType.RESP_ERROR,
-            wsRequestId: msg.wsRequestId,
-            errorMessage: 'Search menu not available. Please log in first.',
-            code: ErrorCodes.ERROR_AccessDenied
-          };
-          ws.send(JSON.stringify(errorResp));
-          return;
-        }
-
         const req = msg as WsReqSearchMenuPeopleSearch;
         try {
-          const results = await searchMenuService.searchPeople(req.searchStr);
+          const results = await session.searchPeople(req.searchStr);
           const response: WsRespSearchMenuPeopleSearch = {
             type: WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH,
             wsRequestId: msg.wsRequestId,

@@ -133,6 +133,7 @@ export type {
   WsReqBuildingUnfocus,
   WsRespBuildingFocus,
   WsEventBuildingRefresh,
+  WsEventAreaRefresh,
   // Building construction messages
   WsReqGetBuildingCategories,
   WsReqGetBuildingFacilities,

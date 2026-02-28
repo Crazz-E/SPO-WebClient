@@ -107,6 +107,8 @@ export function ChatStrip() {
                       e.stopPropagation();
                       setCurrentChannel(ch);
                       setChannelDropdownOpen(false);
+                      // Tell server to join this channel ("Lobby" maps to "" for the server)
+                      client.onJoinChannel(ch === 'Lobby' ? '' : ch);
                     }}
                   >
                     {ch}
@@ -173,25 +175,29 @@ export function ChatStrip() {
 
       {/* ================= REDUCED: Preview row ================= */}
       {!isExpanded && (
-        <div className={styles.reducedRow}>
+        <div className={styles.reducedRow} onClick={toggleExpanded}>
           {/* Online badge */}
           <div
             className={styles.onlineBadge}
-            onClick={toggleExpanded}
             title="View online users"
           >
             <span className={styles.onlineDot} />
             <span>{onlineCount}</span>
           </div>
 
+          {/* Channel indicator */}
+          {currentChannel && (
+            <span className={styles.channelTag}>{currentChannel}</span>
+          )}
+
           {/* Last message preview */}
           {lastMessage ? (
-            <div className={styles.preview} onClick={toggleExpanded}>
+            <div className={styles.preview}>
               <span className={styles.previewSender}>{lastMessage.from}:</span>
               <span className={styles.previewText}>{lastMessage.text}</span>
             </div>
           ) : (
-            <div className={styles.preview} onClick={toggleExpanded}>
+            <div className={styles.preview}>
               <span className={styles.previewText}>No messages yet</span>
             </div>
           )}
@@ -199,7 +205,6 @@ export function ChatStrip() {
           {/* Expand button */}
           <button
             className={styles.expandBtn}
-            onClick={toggleExpanded}
             aria-label="Expand chat"
           >
             <ChevronUp size={14} />

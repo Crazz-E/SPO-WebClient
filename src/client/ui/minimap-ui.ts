@@ -9,6 +9,7 @@
  */
 
 import { MapBuilding, MapSegment } from '../../shared/types';
+import { useUiStore } from '../store/ui-store';
 
 /** Renderer interface — only the subset MinimapUI needs */
 export interface MinimapRendererAPI {
@@ -36,6 +37,7 @@ export class MinimapUI {
   private updateTimer: ReturnType<typeof setInterval> | null = null;
   private currentWidth = DEFAULT_SIZE;
   private currentHeight = DEFAULT_SIZE;
+  private unsubPanel: (() => void) | null = null;
 
   constructor() {
     // Minimap is always visible once renderer is attached — no toggle needed.
@@ -98,12 +100,33 @@ export class MinimapUI {
   public destroy(): void {
     this.visible = false;
     this.stopUpdating();
+    if (this.unsubPanel) {
+      this.unsubPanel();
+      this.unsubPanel = null;
+    }
     if (this.container && this.container.parentElement) {
       this.container.parentElement.removeChild(this.container);
     }
     this.container = null;
     this.canvas = null;
     this.ctx = null;
+  }
+
+  /**
+   * Shift the minimap container to avoid an open left panel.
+   */
+  private applyPanelOffset(panelOpen: boolean): void {
+    if (!this.container) return;
+    if (panelOpen) {
+      // Read the CSS custom property so we stay in sync with the design tokens
+      const panelWidth =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue('--panel-width-desktop')
+          .trim() || '420px';
+      this.container.style.left = `calc(${panelWidth} + ${MINIMAP_PADDING}px)`;
+    } else {
+      this.container.style.left = `${MINIMAP_PADDING}px`;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -129,7 +152,16 @@ export class MinimapUI {
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
       cursor: crosshair;
       background: #0f172a;
+      transition: left 250ms cubic-bezier(0.16, 1, 0.3, 1);
     `;
+
+    // Shift minimap when left panel opens (matches LeftRail behavior)
+    this.applyPanelOffset(useUiStore.getState().leftPanel !== null);
+    this.unsubPanel = useUiStore.subscribe(
+      (state) => {
+        this.applyPanelOffset(state.leftPanel !== null);
+      },
+    );
 
     // Canvas
     this.canvas = document.createElement('canvas');

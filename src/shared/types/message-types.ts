@@ -94,6 +94,7 @@ export enum WsMessageType {
   REQ_BUILDING_UNFOCUS = 'REQ_BUILDING_UNFOCUS',
   RESP_BUILDING_FOCUS = 'RESP_BUILDING_FOCUS',
   EVENT_BUILDING_REFRESH = 'EVENT_BUILDING_REFRESH',
+  EVENT_AREA_REFRESH = 'EVENT_AREA_REFRESH',
 
   // Building Construction
   REQ_GET_BUILDING_CATEGORIES = 'REQ_GET_BUILDING_CATEGORIES',
@@ -464,6 +465,16 @@ export interface WsRespBuildingFocus extends WsMessage {
 export interface WsEventBuildingRefresh extends WsMessage {
   type: WsMessageType.EVENT_BUILDING_REFRESH;
   building: BuildingFocusInfo;
+  /** 0=fchStatus (text only), 1=fchStructure (visual changed), 2=fchDestruction */
+  kindOfChange: number;
+}
+
+export interface WsEventAreaRefresh extends WsMessage {
+  type: WsMessageType.EVENT_AREA_REFRESH;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 // =============================================================================

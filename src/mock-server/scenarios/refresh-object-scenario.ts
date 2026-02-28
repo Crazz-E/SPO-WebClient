@@ -129,6 +129,7 @@ export function createRefreshObjectScenario(
             x: 0,
             y: 0,
           },
+          kindOfChange: 0,
         } as WsMessage,
         repeat: { intervalMs: 15000, count: 10 },
       },

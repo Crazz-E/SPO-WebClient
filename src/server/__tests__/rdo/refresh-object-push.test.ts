@@ -17,9 +17,10 @@ import {
 } from '../../../mock-server/scenarios/refresh-object-scenario';
 import { cleanPayload } from '../../rdo-helpers';
 import { parseBuildingFocusResponse } from '../../map-parsers';
+import { RdoParser } from '../../../shared/rdo-types';
 
 // ==========================================================================
-// Replicate isRefreshObjectPush logic (spo_session.ts:723-727)
+// Replicate isRefreshObjectPush logic
 // ==========================================================================
 function isRefreshObjectPush(packet: RdoPacket): boolean {
   return packet.type === 'PUSH' &&
@@ -28,38 +29,42 @@ function isRefreshObjectPush(packet: RdoPacket): boolean {
 }
 
 // ==========================================================================
-// Replicate parseRefreshObjectPush logic (spo_session.ts:733-770)
+// Replicate parseRefreshObjectPush logic (matches updated spo_session.ts)
+// Returns { buildingId, kindOfChange, buildingInfo } — never null just
+// because no building is focused.
 // ==========================================================================
 function parseRefreshObjectPush(
   packet: RdoPacket,
   currentFocusedCoords: { x: number; y: number } | null
-): BuildingFocusInfo | null {
-  if (!currentFocusedCoords) return null;
-
+): { buildingId: string; kindOfChange: number; buildingInfo: BuildingFocusInfo | null } | null {
   try {
-    if (!packet.args || packet.args.length < 3) {
+    if (!packet.args || packet.args.length < 2) {
       return null;
     }
 
-    // Extract building ID from args[0] — format: "#202334236"
-    const buildingIdWithPrefix = packet.args[0];
-    const buildingId = buildingIdWithPrefix.replace(/[#@%]/g, '');
+    const buildingId = RdoParser.getValue(packet.args[0]);
+    const kindOfChange = RdoParser.asInt(packet.args[1]);
 
-    // Extract and clean data from args[2]
-    let dataString = packet.args[2];
-    dataString = cleanPayload(dataString);
-    if (dataString.startsWith('%')) {
-      dataString = dataString.substring(1);
+    let buildingInfo: BuildingFocusInfo | null = null;
+    if (currentFocusedCoords && packet.args.length >= 3) {
+      let dataString = packet.args[2];
+      dataString = cleanPayload(dataString);
+      if (dataString.startsWith('%')) {
+        dataString = dataString.substring(1);
+      }
+      const fullPayload = buildingId + '\n' + dataString;
+      try {
+        buildingInfo = parseBuildingFocusResponse(
+          fullPayload,
+          currentFocusedCoords.x,
+          currentFocusedCoords.y
+        );
+      } catch {
+        buildingInfo = null;
+      }
     }
 
-    // Prepend building ID for consistent parsing
-    const fullPayload = buildingId + '\n' + dataString;
-
-    return parseBuildingFocusResponse(
-      fullPayload,
-      currentFocusedCoords.x,
-      currentFocusedCoords.y
-    );
+    return { buildingId, kindOfChange, buildingInfo };
   } catch {
     return null;
   }
@@ -172,9 +177,13 @@ describe('isRefreshObjectPush', () => {
 describe('parseRefreshObjectPush', () => {
   const FOCUSED_COORDS = { x: 100, y: 200 };
 
-  it('should return null when currentFocusedCoords is null', () => {
+  it('should return buildingId and kindOfChange even when no focused coords', () => {
     const packet = makeRefreshObjectPacket(CAPTURED_REFRESH_OBJECT);
-    expect(parseRefreshObjectPush(packet, null)).toBeNull();
+    const result = parseRefreshObjectPush(packet, null);
+    expect(result).not.toBeNull();
+    expect(result!.buildingId).toBe(CAPTURED_REFRESH_OBJECT.buildingId);
+    expect(result!.kindOfChange).toBe(0);
+    expect(result!.buildingInfo).toBeNull();
   });
 
   it('should return null when args are missing', () => {
@@ -187,15 +196,19 @@ describe('parseRefreshObjectPush', () => {
     expect(parseRefreshObjectPush(packet, FOCUSED_COORDS)).toBeNull();
   });
 
-  it('should return null when args has fewer than 3 elements', () => {
+  it('should parse with only 2 args (no ExtraInfo) returning null buildingInfo', () => {
     const packet: RdoPacket = {
       raw: '',
       type: 'PUSH',
       member: 'RefreshObject',
       separator: '"*"',
-      args: ['#127839460', '#0'],
+      args: ['#127839460', '#1'],
     };
-    expect(parseRefreshObjectPush(packet, FOCUSED_COORDS)).toBeNull();
+    const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
+    expect(result).not.toBeNull();
+    expect(result!.buildingId).toBe('127839460');
+    expect(result!.kindOfChange).toBe(1);
+    expect(result!.buildingInfo).toBeNull();
   });
 
   it('should parse captured RefreshObject data correctly', () => {
@@ -204,6 +217,8 @@ describe('parseRefreshObjectPush', () => {
 
     expect(result).not.toBeNull();
     expect(result!.buildingId).toBe(CAPTURED_REFRESH_OBJECT.buildingId);
+    expect(result!.buildingInfo).not.toBeNull();
+    expect(result!.buildingInfo!.buildingId).toBe(CAPTURED_REFRESH_OBJECT.buildingId);
   });
 
   it('should extract company name from parsed result', () => {
@@ -211,10 +226,7 @@ describe('parseRefreshObjectPush', () => {
     const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
 
     expect(result).not.toBeNull();
-    // In the ExtraInfo format, line after shortName is companyName
-    // parseBuildingFocusResponse sees: buildingId, 10, Yellow Inc., salesSummary, revenue...
-    // headerLines[0] = buildingId, [1] = 10 (shortName), [2] = Yellow Inc., [3] = salesSummary, [4] = revenue
-    expect(result!.ownerName).toBe(CAPTURED_REFRESH_OBJECT.companyName);
+    expect(result!.buildingInfo!.ownerName).toBe(CAPTURED_REFRESH_OBJECT.companyName);
   });
 
   it('should extract revenue from parsed result', () => {
@@ -222,8 +234,7 @@ describe('parseRefreshObjectPush', () => {
     const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
 
     expect(result).not.toBeNull();
-    // extractRevenue strips parentheses: "(-$36/h)" → "-$36/h"
-    expect(result!.revenue).toContain('$');
+    expect(result!.buildingInfo!.revenue).toContain('$');
   });
 
   it('should extract details text from parsed result', () => {
@@ -231,8 +242,8 @@ describe('parseRefreshObjectPush', () => {
     const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
 
     expect(result).not.toBeNull();
-    expect(result!.detailsText).toContain('Drug Store');
-    expect(result!.detailsText).toContain('Upgrade Level');
+    expect(result!.buildingInfo!.detailsText).toContain('Drug Store');
+    expect(result!.buildingInfo!.detailsText).toContain('Upgrade Level');
   });
 
   it('should extract hints text from parsed result', () => {
@@ -240,7 +251,7 @@ describe('parseRefreshObjectPush', () => {
     const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
 
     expect(result).not.toBeNull();
-    expect(result!.hintsText).toContain('Hint');
+    expect(result!.buildingInfo!.hintsText).toContain('Hint');
   });
 
   it('should use focused coordinates for x and y', () => {
@@ -248,8 +259,8 @@ describe('parseRefreshObjectPush', () => {
     const result = parseRefreshObjectPush(packet, { x: 300, y: 400 });
 
     expect(result).not.toBeNull();
-    expect(result!.x).toBe(300);
-    expect(result!.y).toBe(400);
+    expect(result!.buildingInfo!.x).toBe(300);
+    expect(result!.buildingInfo!.y).toBe(400);
   });
 
   it('should strip # prefix from building ID arg', () => {
@@ -257,7 +268,6 @@ describe('parseRefreshObjectPush', () => {
     const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
 
     expect(result).not.toBeNull();
-    // Should be numeric string without prefix
     expect(result!.buildingId).not.toContain('#');
     expect(result!.buildingId).toMatch(/^\d+$/);
   });
@@ -267,10 +277,8 @@ describe('parseRefreshObjectPush', () => {
     const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
 
     expect(result).not.toBeNull();
-    // :-: separates header from details and hints
-    // detailsText should NOT contain the :-: separator itself
-    expect(result!.detailsText).not.toContain(':-:');
-    expect(result!.hintsText).not.toContain(':-:');
+    expect(result!.buildingInfo!.detailsText).not.toContain(':-:');
+    expect(result!.buildingInfo!.hintsText).not.toContain(':-:');
   });
 
   it('should handle building with minimal data (just ID and name)', () => {
@@ -300,6 +308,59 @@ describe('parseRefreshObjectPush', () => {
     const result = parseRefreshObjectPush(emptyDataPacket, FOCUSED_COORDS);
     expect(result).not.toBeNull();
     expect(result!.buildingId).toBe('555');
+  });
+});
+
+describe('kindOfChange parsing', () => {
+  const FOCUSED_COORDS = { x: 100, y: 200 };
+
+  it('should extract kindOfChange=0 (fchStatus)', () => {
+    const packet = makeRefreshObjectPacket(CAPTURED_REFRESH_OBJECT);
+    const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
+    expect(result).not.toBeNull();
+    expect(result!.kindOfChange).toBe(0);
+  });
+
+  it('should extract kindOfChange=1 (fchStructure)', () => {
+    const packet: RdoPacket = {
+      raw: '',
+      type: 'PUSH',
+      member: 'RefreshObject',
+      separator: '"*"',
+      args: ['#999', '#1', '%SomeBuilding\nSomeCo\nSales\n$0:-:details:-:hints:-:'],
+    };
+    const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
+    expect(result).not.toBeNull();
+    expect(result!.kindOfChange).toBe(1);
+  });
+
+  it('should extract kindOfChange=2 (fchDestruction)', () => {
+    const packet: RdoPacket = {
+      raw: '',
+      type: 'PUSH',
+      member: 'RefreshObject',
+      separator: '"*"',
+      args: ['#999', '#2', '%'],
+    };
+    const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
+    expect(result).not.toBeNull();
+    expect(result!.kindOfChange).toBe(2);
+  });
+
+  it('should still parse building info when coords are available', () => {
+    const packet = makeRefreshObjectPacket(CAPTURED_REFRESH_OBJECT);
+    const result = parseRefreshObjectPush(packet, FOCUSED_COORDS);
+    expect(result!.buildingInfo).not.toBeNull();
+    expect(result!.buildingInfo!.buildingId).toBe(CAPTURED_REFRESH_OBJECT.buildingId);
+  });
+
+  it('should return buildingInfo=null when no focused coords', () => {
+    const packet = makeRefreshObjectPacket(CAPTURED_REFRESH_OBJECT);
+    const result = parseRefreshObjectPush(packet, null);
+    expect(result).not.toBeNull();
+    expect(result!.buildingId).toBe(CAPTURED_REFRESH_OBJECT.buildingId);
+    expect(result!.kindOfChange).toBe(0);
+    expect(result!.buildingInfo).toBeNull();
   });
 });
 

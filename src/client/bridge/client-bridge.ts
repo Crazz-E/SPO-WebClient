@@ -53,7 +53,6 @@ import {
   type WsRespProfileCurriculumAction,
   type WsRespSearchMenuHome,
   type WsRespSearchMenuTowns,
-  type WsRespSearchMenuTycoonProfile,
   type WsRespSearchMenuPeopleSearch,
   type WsRespSearchMenuRankings,
   type WsRespSearchMenuRankingDetail,
@@ -118,8 +117,6 @@ export interface ClientCallbacks {
   // Search menu
   onSearchMenuHome: () => void;
   onSearchMenuTowns: () => void;
-  onSearchMenuTycoonProfile: (tycoonName: string) => void;
-  onSearchMenuPeople: () => void;
   onSearchMenuPeopleSearch: (searchStr: string) => void;
   onSearchMenuRankings: () => void;
   onSearchMenuRankingDetail: (rankingPath: string) => void;
@@ -426,9 +423,6 @@ export const ClientBridge = {
         break;
       case WsMessageType.RESP_SEARCH_MENU_TOWNS:
         search.setTownsData(msg as WsRespSearchMenuTowns);
-        break;
-      case WsMessageType.RESP_SEARCH_MENU_TYCOON_PROFILE:
-        search.setTycoonData(msg as WsRespSearchMenuTycoonProfile);
         break;
       case WsMessageType.RESP_SEARCH_MENU_PEOPLE:
         // Acknowledges page ready — no data to store

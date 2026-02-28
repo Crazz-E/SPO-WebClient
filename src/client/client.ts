@@ -25,6 +25,7 @@ import {
   WsReqBuildingUnfocus,
   WsRespBuildingFocus,
   WsEventBuildingRefresh,
+  WsEventAreaRefresh,
   BuildingFocusInfo,
   WsEventTycoonUpdate,
   WsReqGetBuildingCategories,
@@ -274,6 +275,7 @@ export class StarpeaceClient {
       },
       onLogout: () => this.logout(),
       onSendChatMessage: (message: string) => this.sendChatMessage(message),
+      onJoinChannel: (channelName: string) => this.joinChannel(channelName),
       onDirectoryConnect: (username: string, password: string, zonePath?: string) =>
         this.performDirectoryLogin(username, password, zonePath),
       onWorldSelect: (worldName: string) => this.login(worldName),
@@ -337,10 +339,6 @@ export class StarpeaceClient {
       // Search menu
       onSearchMenuHome: () => this.sendMessage({ type: WsMessageType.REQ_SEARCH_MENU_HOME }),
       onSearchMenuTowns: () => this.sendMessage({ type: WsMessageType.REQ_SEARCH_MENU_TOWNS }),
-      onSearchMenuTycoonProfile: (tycoonName) => this.sendMessage({
-        type: WsMessageType.REQ_SEARCH_MENU_TYCOON_PROFILE, tycoonName,
-      }),
-      onSearchMenuPeople: () => this.sendMessage({ type: WsMessageType.REQ_SEARCH_MENU_PEOPLE }),
       onSearchMenuPeopleSearch: (searchStr) => this.sendMessage({
         type: WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH, searchStr,
       }),
@@ -607,11 +605,40 @@ export class StarpeaceClient {
         this.mapNavigationUI?.getRenderer()?.updateMapData(mapMsg.data);
         break;
 
+      case WsMessageType.EVENT_AREA_REFRESH: {
+        const areaEvt = msg as WsEventAreaRefresh;
+        ClientBridge.log('Map', `Area refresh at (${areaEvt.x}, ${areaEvt.y}) ${areaEvt.width}x${areaEvt.height}`);
+        const areaRenderer = this.mapNavigationUI?.getRenderer();
+        if (areaRenderer) {
+          areaRenderer.invalidateArea(
+            areaEvt.x,
+            areaEvt.y,
+            areaEvt.x + areaEvt.width,
+            areaEvt.y + areaEvt.height
+          );
+        }
+        break;
+      }
+
       case WsMessageType.EVENT_BUILDING_REFRESH: {
         const refreshEvt = msg as WsEventBuildingRefresh;
+        const kind = refreshEvt.kindOfChange;
+
+        // If structure changed (1) or destroyed (2), invalidate the renderer zone
+        if (kind === 1 || kind === 2) {
+          const renderer = this.mapNavigationUI?.getRenderer();
+          if (renderer) {
+            ClientBridge.log('Map', `Building ${refreshEvt.building.buildingId} ${kind === 1 ? 'structure changed' : 'destroyed'}, invalidating zone at (${refreshEvt.building.x}, ${refreshEvt.building.y})`);
+            renderer.invalidateZone(refreshEvt.building.x, refreshEvt.building.y);
+          }
+        }
+
         // If the refreshed building matches the one currently viewed, re-fetch details
         if (this.currentFocusedBuilding &&
             this.currentFocusedBuilding.buildingId === refreshEvt.building.buildingId) {
+          // Propagate refreshed focus info to React store immediately
+          this.currentFocusedBuilding = refreshEvt.building;
+          ClientBridge.setFocusedBuilding(refreshEvt.building);
           this.requestBuildingDetails(
             this.currentFocusedBuilding.x,
             this.currentFocusedBuilding.y,
@@ -694,8 +721,6 @@ export class StarpeaceClient {
       // Search Menu Responses
       case WsMessageType.RESP_SEARCH_MENU_HOME:
       case WsMessageType.RESP_SEARCH_MENU_TOWNS:
-      case WsMessageType.RESP_SEARCH_MENU_TYCOON_PROFILE:
-      case WsMessageType.RESP_SEARCH_MENU_PEOPLE:
       case WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH:
       case WsMessageType.RESP_SEARCH_MENU_RANKINGS:
       case WsMessageType.RESP_SEARCH_MENU_RANKING_DETAIL:
@@ -1121,10 +1146,10 @@ export class StarpeaceClient {
 
   private async initChatChannels(): Promise<void> {
     await this.requestChannelList();
-    const { channels } = useChatStore.getState();
-    if (channels.length > 0) {
-      await this.joinChannel(channels[0]);
-    }
+    // Join the Lobby (empty string) by default — this is the main/world channel.
+    // Named channels are town-specific. The Delphi server treats "" as the Lobby.
+    await this.joinChannel('');
+    ClientBridge.setCurrentChannel('Lobby');
   }
 
   private async requestChannelList() {

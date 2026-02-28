@@ -51,7 +51,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
   users: {},
   typingUsers: new Set(),
-  isExpanded: false,
+  isExpanded: true,
   activeTab: 'chat' as ChatTab,
 
   setCurrentChannel: (channel) => set({ currentChannel: channel }),

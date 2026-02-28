@@ -6,14 +6,13 @@ import { create } from 'zustand';
 import type {
   WsRespSearchMenuHome,
   WsRespSearchMenuTowns,
-  WsRespSearchMenuTycoonProfile,
   WsRespSearchMenuPeopleSearch,
   WsRespSearchMenuRankings,
   WsRespSearchMenuRankingDetail,
   WsRespSearchMenuBanks,
 } from '@/shared/types';
 
-export type SearchPage = 'home' | 'towns' | 'tycoon' | 'people' | 'rankings' | 'ranking-detail' | 'banks';
+export type SearchPage = 'home' | 'towns' | 'people' | 'rankings' | 'ranking-detail' | 'banks';
 
 interface SearchState {
   // Navigation
@@ -24,7 +23,6 @@ interface SearchState {
   // Page data
   homeData: WsRespSearchMenuHome | null;
   townsData: WsRespSearchMenuTowns | null;
-  tycoonData: WsRespSearchMenuTycoonProfile | null;
   peopleData: WsRespSearchMenuPeopleSearch | null;
   rankingsData: WsRespSearchMenuRankings | null;
   rankingDetailData: WsRespSearchMenuRankingDetail | null;
@@ -36,7 +34,6 @@ interface SearchState {
   setLoading: (loading: boolean) => void;
   setHomeData: (data: WsRespSearchMenuHome) => void;
   setTownsData: (data: WsRespSearchMenuTowns) => void;
-  setTycoonData: (data: WsRespSearchMenuTycoonProfile) => void;
   setPeopleData: (data: WsRespSearchMenuPeopleSearch) => void;
   setRankingsData: (data: WsRespSearchMenuRankings) => void;
   setRankingDetailData: (data: WsRespSearchMenuRankingDetail) => void;
@@ -52,7 +49,6 @@ export const useSearchStore = create<SearchState>((set, get) => ({
 
   homeData: null,
   townsData: null,
-  tycoonData: null,
   peopleData: null,
   rankingsData: null,
   rankingDetailData: null,
@@ -78,7 +74,6 @@ export const useSearchStore = create<SearchState>((set, get) => ({
   setLoading: (loading) => set({ isLoading: loading }),
   setHomeData: (data) => set({ homeData: data, isLoading: false }),
   setTownsData: (data) => set({ townsData: data, isLoading: false }),
-  setTycoonData: (data) => set({ tycoonData: data, isLoading: false }),
   setPeopleData: (data) => set({ peopleData: data, isLoading: false }),
   setRankingsData: (data) => set({ rankingsData: data, isLoading: false }),
   setRankingDetailData: (data) => set({ rankingDetailData: data, isLoading: false }),
@@ -92,7 +87,6 @@ export const useSearchStore = create<SearchState>((set, get) => ({
       isLoading: false,
       homeData: null,
       townsData: null,
-      tycoonData: null,
       peopleData: null,
       rankingsData: null,
       rankingDetailData: null,

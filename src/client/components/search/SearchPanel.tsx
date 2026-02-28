@@ -7,19 +7,18 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
-  ChevronRight, Building2, Users, UserSearch, Trophy, Landmark, Search,
+  ChevronRight, Building2, UserSearch, Trophy, Landmark, Search,
 } from 'lucide-react';
 import { useSearchStore, type SearchPage } from '../../store/search-store';
 import { useClient } from '../../context';
 import { GlassCard, Skeleton, ErrorBoundary } from '../common';
 import type {
-  TownInfo, TycoonProfile, RankingCategory, RankingEntry,
+  TownInfo, RankingCategory, RankingEntry,
 } from '@/shared/types';
 import styles from './SearchPanel.module.css';
 
 const CATEGORIES: { id: SearchPage; label: string; icon: React.ReactNode }[] = [
   { id: 'towns', label: 'Towns', icon: <Building2 size={20} /> },
-  { id: 'tycoon', label: 'Tycoons', icon: <Users size={20} /> },
   { id: 'people', label: 'People', icon: <UserSearch size={20} /> },
   { id: 'rankings', label: 'Rankings', icon: <Trophy size={20} /> },
   { id: 'banks', label: 'Banks', icon: <Landmark size={20} /> },
@@ -62,146 +61,22 @@ function TownsPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Shared tycoon profile card
-// ---------------------------------------------------------------------------
-
-function TycoonProfileCard({ profile }: { profile: TycoonProfile }) {
-  return (
-    <GlassCard className={styles.profileCard} light>
-      <div className={styles.listItemHeader}>
-        <Users size={16} className={styles.listItemIcon} />
-        <span className={styles.listItemTitle}>{profile.name}</span>
-      </div>
-      <div className={styles.listItemDetails}>
-        <span>Fortune: ${profile.fortune.toLocaleString()}</span>
-        <span>Profit: ${profile.thisYearProfit.toLocaleString()}</span>
-        <span>Level: {profile.level}</span>
-        <span>Prestige: {profile.prestige}</span>
-      </div>
-    </GlassCard>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Tycoon search sub-page (fuzzy search → results → profile)
-// ---------------------------------------------------------------------------
-
-function TycoonPage() {
-  const results = useSearchStore((s) => s.peopleData?.results ?? []);
-  const profile = useSearchStore((s) => s.tycoonData?.profile ?? null);
-  const isLoading = useSearchStore((s) => s.isLoading);
-  const client = useClient();
-  const [searchName, setSearchName] = useState('');
-  const [viewMode, setViewMode] = useState<'search' | 'profile'>('search');
-  const [loadingProfile, setLoadingProfile] = useState(false);
-
-  // When profile data arrives while viewing profile, stop local loading
-  useEffect(() => {
-    if (profile && viewMode === 'profile') {
-      setLoadingProfile(false);
-    }
-  }, [profile, viewMode]);
-
-  const handleSearch = useCallback(() => {
-    const trimmed = searchName.trim();
-    if (trimmed) {
-      useSearchStore.getState().setLoading(true);
-      setViewMode('search');
-      client.onSearchMenuPeopleSearch(trimmed);
-    }
-  }, [searchName, client]);
-
-  const handleSelectTycoon = useCallback((name: string) => {
-    setLoadingProfile(true);
-    setViewMode('profile');
-    client.onSearchMenuTycoonProfile(name);
-  }, [client]);
-
-  return (
-    <div className={styles.listContainer}>
-      <div className={styles.searchRow}>
-        <input
-          className={styles.searchInput}
-          type="text"
-          placeholder="Search tycoon name..."
-          value={searchName}
-          onChange={(e) => setSearchName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-        />
-        <button className={styles.searchBtn} onClick={handleSearch} disabled={isLoading || loadingProfile}>
-          <Search size={14} />
-        </button>
-      </div>
-
-      {/* Profile view */}
-      {viewMode === 'profile' && (
-        <>
-          <button className={styles.backLink} onClick={() => setViewMode('search')}>
-            ← Back to results
-          </button>
-          {loadingProfile && <Skeleton width="100%" height="80px" />}
-          {!loadingProfile && profile && <TycoonProfileCard profile={profile} />}
-        </>
-      )}
-
-      {/* Search results list */}
-      {viewMode === 'search' && results.length > 0 && !isLoading && (
-        <div className={styles.simpleList}>
-          {results.map((name: string) => (
-            <div
-              key={name}
-              className={styles.clickableListItem}
-              onClick={() => handleSelectTycoon(name)}
-            >
-              <UserSearch size={14} className={styles.listItemIcon} />
-              <span>{name}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {viewMode === 'search' && results.length === 0 && !isLoading && (
-        <div className={styles.emptyState}>Search for a tycoon by name.</div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// People search sub-page (clickable results → profile)
+// People search sub-page (RDO-based directory search)
 // ---------------------------------------------------------------------------
 
 function PeoplePage() {
   const results = useSearchStore((s) => s.peopleData?.results ?? []);
-  const profile = useSearchStore((s) => s.tycoonData?.profile ?? null);
   const isLoading = useSearchStore((s) => s.isLoading);
   const client = useClient();
   const [searchStr, setSearchStr] = useState('');
-  const [selectedName, setSelectedName] = useState<string | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(false);
-
-  // When profile data arrives for selected tycoon, stop loading
-  useEffect(() => {
-    if (profile && selectedName) {
-      setLoadingProfile(false);
-    }
-  }, [profile, selectedName]);
 
   const handleSearch = useCallback(() => {
     const trimmed = searchStr.trim();
     if (trimmed) {
       useSearchStore.getState().setLoading(true);
-      setSelectedName(null);
       client.onSearchMenuPeopleSearch(trimmed);
     }
   }, [searchStr, client]);
-
-  const handleSelectTycoon = useCallback((name: string) => {
-    setSelectedName(name);
-    setLoadingProfile(true);
-    client.onSearchMenuTycoonProfile(name);
-  }, [client]);
 
   return (
     <div className={styles.listContainer}>
@@ -214,31 +89,16 @@ function PeoplePage() {
           onChange={(e) => setSearchStr(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
         />
-        <button className={styles.searchBtn} onClick={handleSearch} disabled={isLoading || loadingProfile}>
+        <button className={styles.searchBtn} onClick={handleSearch} disabled={isLoading}>
           <Search size={14} />
         </button>
       </div>
 
-      {/* Profile view */}
-      {selectedName && (
-        <>
-          <button className={styles.backLink} onClick={() => setSelectedName(null)}>
-            ← Back to results
-          </button>
-          {loadingProfile && <Skeleton width="100%" height="80px" />}
-          {!loadingProfile && profile && <TycoonProfileCard profile={profile} />}
-        </>
-      )}
-
       {/* Search results list */}
-      {!selectedName && results.length > 0 && !isLoading && (
+      {results.length > 0 && !isLoading && (
         <div className={styles.simpleList}>
           {results.map((name: string) => (
-            <div
-              key={name}
-              className={styles.clickableListItem}
-              onClick={() => handleSelectTycoon(name)}
-            >
+            <div key={name} className={styles.clickableListItem}>
               <UserSearch size={14} className={styles.listItemIcon} />
               <span>{name}</span>
             </div>
@@ -247,7 +107,7 @@ function PeoplePage() {
       )}
 
       {/* Empty state */}
-      {!selectedName && results.length === 0 && !isLoading && (
+      {results.length === 0 && !isLoading && (
         <div className={styles.emptyState}>Search for people by name.</div>
       )}
     </div>
@@ -371,7 +231,6 @@ function BanksPage() {
 
 const PAGE_COMPONENTS: Record<string, React.FC> = {
   towns: TownsPage,
-  tycoon: TycoonPage,
   people: PeoplePage,
   rankings: RankingsPage,
   banks: BanksPage,
@@ -399,10 +258,6 @@ export function SearchPanel() {
     if (currentPage === 'home' || currentPage === 'ranking-detail') return;
     const fetchers: Record<string, () => void> = {
       towns: () => client.onSearchMenuTowns(),
-      tycoon: () => {
-        // Tycoon page shows a search field — just stop loading
-        useSearchStore.getState().setLoading(false);
-      },
       people: () => {
         // People page shows a search field — just stop loading (no server roundtrip needed)
         useSearchStore.getState().setLoading(false);

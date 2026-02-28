@@ -26,6 +26,7 @@ module.exports = {
     }
   },
   moduleNameMapper: {
+    '\\.module\\.css$': '<rootDir>/src/__mocks__/css-module.js',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@shared/(.*)$': '<rootDir>/src/shared/$1',
     '^@server/(.*)$': '<rootDir>/src/server/$1',

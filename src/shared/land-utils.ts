@@ -344,7 +344,10 @@ export function formatLandId(landId: number): string {
  * directional LandType component so the border stays on the correct
  * diamond edge for the current view.
  *
- * Rotation direction (CW): N→E→S→W→N,  NEo→SEo→SWo→NWo→NEo (same for inner)
+ * Derived from Delphi Land.pas LandRotate() + ImageCache.pas RotateLandId():
+ *   drEast  = ang90  (view CW → features shift CCW)
+ *   drSouth = ang90×2
+ *   drWest  = ang270 (view CCW → features shift CW)
  *
  * Index = original LandType, value = rotated LandType.
  * [rotation][originalLandType] → rotatedLandType
@@ -352,12 +355,12 @@ export function formatLandId(landId: number): string {
 const LAND_TYPE_ROTATION: readonly number[][] = [
   // NORTH (identity)
   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-  // EAST (90° CW): N→E, E→S, S→W, W→N, NEo→SEo, SEo→SWo, SWo→NWo, NWo→NEo, same inner
-  [0, 2, 3, 4, 1, 6, 7, 8, 5, 10, 11, 12, 9, 13],
+  // EAST (view CW): N→W, E→N, S→E, W→S, NEo→NWo, SEo→NEo, SWo→SEo, NWo→SWo, same inner
+  [0, 4, 1, 2, 3, 8, 5, 6, 7, 12, 9, 10, 11, 13],
   // SOUTH (180°): N→S, E→W, S→N, W→E, NEo→SWo, SEo→NWo, SWo→NEo, NWo→SEo, same inner
   [0, 3, 4, 1, 2, 7, 8, 5, 6, 11, 12, 9, 10, 13],
-  // WEST (270° CW): N→W, E→N, S→E, W→S, NEo→NWo, SEo→NEo, SWo→SEo, NWo→SWo, same inner
-  [0, 4, 1, 2, 3, 8, 5, 6, 7, 12, 9, 10, 11, 13],
+  // WEST (view CCW): N→E, E→S, S→W, W→N, NEo→SEo, SEo→SWo, SWo→NWo, NWo→NEo, same inner
+  [0, 2, 3, 4, 1, 6, 7, 8, 5, 10, 11, 12, 9, 13],
 ];
 
 /**

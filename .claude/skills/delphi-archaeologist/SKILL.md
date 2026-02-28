@@ -26,6 +26,7 @@ Reverse-engineer the SPO-Original Delphi 5 codebase efficiently. Two modes: **Ex
 | document / write docs / knowledge base / spec | Document | "Document the RDO protocol layer for the knowledge base" |
 | RDO archaeology / reverse-engineer RDO method | Explore | "Reverse-engineer RDOSetPrice on the Model Server" |
 | map dependencies / trace uses | Explore | "What units does Kernel.pas depend on?" |
+| legacy client / legacy server / delphi / original client / original server | Explore | "Check the legacy client to see how taxes work" |
 
 ## Safety Rules
 

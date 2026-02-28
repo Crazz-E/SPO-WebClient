@@ -24,6 +24,7 @@ import {
   WsEventChatUserListChange,
   BuildingFocusInfo,
   WsEventBuildingRefresh,
+  WsEventAreaRefresh,
   BuildingCategory,
   BuildingInfo,
   SurfaceData,
@@ -201,6 +202,7 @@ export class StarpeaceSession extends EventEmitter {
   // Credentials cache
   private cachedUsername: string | null = null;
   private cachedPassword: string | null = null;
+  private cachedZonePath: string = 'Root/Areas/Asia/Worlds';
 
   // Current company info (for role-based switching)
   private currentCompany: CompanyInfo | null = null;
@@ -324,6 +326,7 @@ export class StarpeaceSession extends EventEmitter {
     this.phase = SessionPhase.DIRECTORY_CONNECTED;
     this.cachedUsername = username;
     this.cachedPassword = pass;
+    this.cachedZonePath = zonePath || 'Root/Areas/Asia/Worlds';
 
     // Run auth and world query in parallel (independent sockets & sessions)
     this.log.info('Directory: connecting...');
@@ -408,6 +411,87 @@ export class StarpeaceSession extends EventEmitter {
 
   public getWorldInfo(name: string): WorldInfo | undefined {
     return this.availableWorlds.get(name);
+  }
+
+  /**
+   * Search for people/tycoons via RDOSearchKey on the Directory Server.
+   * Opens an ephemeral directory session, searches, and closes.
+   */
+  public async searchPeople(searchStr: string): Promise<string[]> {
+    const socket = await this.createSocket('directory_search', config.rdo.directoryHost, config.rdo.ports.directory);
+    try {
+      // 1. Resolve DirectoryServer object
+      const idPacket = await this.sendRdoRequest('directory_search', {
+        verb: RdoVerb.IDOF, targetId: 'DirectoryServer'
+      });
+      const directoryServerId = parseIdOfResponseHelper(idPacket.payload);
+
+      // 2. Open Session
+      const sessionPacket = await this.sendRdoRequest('directory_search', {
+        verb: RdoVerb.SEL, targetId: directoryServerId, action: RdoAction.GET, member: 'RDOOpenSession'
+      });
+      const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');
+
+      // 3. Navigate to the world's directory root
+      const worldName = this.currentWorldInfo?.name || '';
+      const worldPath = `${this.cachedZonePath}/${worldName}`;
+      await this.sendRdoRequest('directory_search', {
+        verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOSetCurrentKey',
+        args: [worldPath]
+      });
+
+      // 4. Search for matching keys under the world
+      const searchPacket = await this.sendRdoRequest('directory_search', {
+        verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOSearchKey',
+        args: [`*${searchStr}*`, '']
+      });
+      const resValue = parsePropertyResponseHelper(searchPacket.payload || '', 'res');
+
+      // 5. Parse results (Count=N, Key0=name0, Key1=name1, ...)
+      const names = this.parseSearchKeyResults(resValue);
+
+      // 6. End Session (fire-and-forget — void push, no RID)
+      socket.write(`C sel ${sessionId} call RDOEndSession "*";`);
+
+      return names;
+    } catch (err: unknown) {
+      this.log.error('[Session] searchPeople failed:', toErrorMessage(err));
+      return [];
+    } finally {
+      socket.end();
+      this.sockets.delete('directory_search');
+    }
+  }
+
+  private parseSearchKeyResults(payload: string): string[] {
+    let raw = payload.trim();
+    raw = raw.replace(/^[%#$@]/, '');
+    const lines = raw.split(/\n/);
+    const data: Map<string, string> = new Map();
+
+    for (const line of lines) {
+      if (!line.includes('=')) continue;
+      const parts = line.split('=');
+      const key = parts[0].trim().toLowerCase();
+      const value = parts.slice(1).join('=').trim();
+      data.set(key, value);
+    }
+
+    const countStr = data.get('count');
+    if (!countStr) {
+      this.log.warn('[Session] SearchKey: no "count" key in response');
+      return [];
+    }
+
+    const count = parseInt(countStr, 10);
+    const names: string[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const name = data.get(`key${i}`);
+      if (name) names.push(name);
+    }
+
+    return names;
   }
 
 public async loginWorld(username: string, pass: string, world: WorldInfo): Promise<{
@@ -866,53 +950,98 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
    * Called from handleIncomingMessage when detecting push commands
    */
   public isRefreshObjectPush(packet: RdoPacket): boolean {
-    return packet.type === 'PUSH' && 
+    return packet.type === 'PUSH' &&
            packet.member === 'RefreshObject' &&
            packet.separator === '"*"';
   }
 
-	/**
-	 * NEW: Parse RefreshObject push payload
-	 * Format similar to SwitchFocusEx response but WITHOUT building ID in payload
-	 */
-	public parseRefreshObjectPush(packet: RdoPacket): BuildingFocusInfo | null {
-	  if (!this.currentFocusedCoords) return null;
+  /**
+   * Check if a push command is a RefreshArea notification (map visual update).
+   * Server format: C sel <tycoonProxy> call RefreshArea "*" "#x","#y","#dx","#dy","%data"
+   */
+  public isRefreshAreaPush(packet: RdoPacket): boolean {
+    return packet.type === 'PUSH' &&
+           packet.member === 'RefreshArea' &&
+           packet.separator === '"*"';
+  }
 
-	  try {
-		// Args format: [buildingId, "0", fullData]
-		if (!packet.args || packet.args.length < 3) {
-		  this.log.warn(`[Session] RefreshObject missing args`);
-		  return null;
-		}
+  /**
+   * Parse RefreshArea push payload to extract the affected rectangular area.
+   * Args: [x, y, dx, dy, data] where x/y are top-left coords and dx/dy are dimensions.
+   */
+  public parseRefreshAreaPush(packet: RdoPacket): { x: number; y: number; width: number; height: number } | null {
+    try {
+      if (!packet.args || packet.args.length < 4) {
+        this.log.warn(`[Session] RefreshArea missing args (got ${packet.args?.length ?? 0}, need 4)`);
+        return null;
+      }
 
-		// Extract building ID from args[0]
-		const buildingIdWithPrefix = packet.args[0]; // Format: "#202334236"
-		const buildingId = buildingIdWithPrefix.replace(/[#@%]/g, '');
+      const x = RdoParser.asInt(packet.args[0]);
+      const y = RdoParser.asInt(packet.args[1]);
+      const width = RdoParser.asInt(packet.args[2]);
+      const height = RdoParser.asInt(packet.args[3]);
 
-		// Extract and clean data from args[2]
-		let dataString = packet.args[2]; // Format: "%School..." or "School..."
+      if (isNaN(x) || isNaN(y) || isNaN(width) || isNaN(height)) {
+        this.log.warn(`[Session] RefreshArea has non-numeric coords: x=${x}, y=${y}, w=${width}, h=${height}`);
+        return null;
+      }
 
-		// Use cleanPayload to remove quotes
-		dataString = cleanPayloadHelper(dataString);
+      return { x, y, width, height };
+    } catch (e: unknown) {
+      this.log.warn(`[Session] Failed to parse RefreshArea:`, toErrorMessage(e));
+      return null;
+    }
+  }
 
-		// Remove leading '%' if present
-		if (dataString.startsWith('%')) {
-		  dataString = dataString.substring(1);
-		}
+  /**
+   * Parse RefreshObject push payload.
+   * Returns buildingId, kindOfChange, and optionally buildingInfo (only when focused coords available).
+   * Format: C sel <proxy> call RefreshObject "*" "#buildingId","#kindOfChange","%extraInfo"
+   *   kindOfChange: 0=fchStatus, 1=fchStructure (visual changed), 2=fchDestruction
+   */
+  public parseRefreshObjectPush(packet: RdoPacket): {
+    buildingId: string;
+    kindOfChange: number;
+    buildingInfo: BuildingFocusInfo | null;
+  } | null {
+    try {
+      if (!packet.args || packet.args.length < 2) {
+        this.log.warn(`[Session] RefreshObject missing args`);
+        return null;
+      }
 
-		// CRITICAL: Prepend the building ID to the payload for consistent parsing
-		const fullPayload = buildingId + '\n' + dataString;
+      // Extract building ID from args[0] — format: "#202334236"
+      const buildingId = RdoParser.getValue(packet.args[0]);
 
-		return parseBuildingFocusResponseHelper(
-		  fullPayload,
-		  this.currentFocusedCoords.x,
-		  this.currentFocusedCoords.y
-		);
-	  } catch (e: unknown) {
-		this.log.warn(`[Session] Failed to parse RefreshObject:`, toErrorMessage(e));
-		return null;
-	  }
-	}
+      // Extract kindOfChange from args[1] — format: "#0", "#1", or "#2"
+      const kindOfChange = RdoParser.asInt(packet.args[1]);
+
+      // Parse building focus info only if we have coords and full data (args[2])
+      let buildingInfo: BuildingFocusInfo | null = null;
+      if (this.currentFocusedCoords && packet.args.length >= 3) {
+        let dataString = packet.args[2];
+        dataString = cleanPayloadHelper(dataString);
+        if (dataString.startsWith('%')) {
+          dataString = dataString.substring(1);
+        }
+        const fullPayload = buildingId + '\n' + dataString;
+        try {
+          buildingInfo = parseBuildingFocusResponseHelper(
+            fullPayload,
+            this.currentFocusedCoords.x,
+            this.currentFocusedCoords.y
+          );
+        } catch {
+          this.log.debug(`[Session] Could not parse RefreshObject ExtraInfo for building ${buildingId}`);
+        }
+      }
+
+      return { buildingId, kindOfChange, buildingInfo };
+    } catch (e: unknown) {
+      this.log.warn(`[Session] Failed to parse RefreshObject:`, toErrorMessage(e));
+      return null;
+    }
+  }
 
 
 
@@ -3979,17 +4108,45 @@ private handleIncomingMessage(socketName: string, raw: string) {
 	private processSingleCommand(socketName: string, raw: string) {
 	  const packet = RdoProtocol.parse(raw);
 
-	  // NEW: Check if this is a RefreshObject push
+	  // Check if this is a RefreshArea push (map visual update — buildings/roads changed)
+	  if (this.isRefreshAreaPush(packet)) {
+		const area = this.parseRefreshAreaPush(packet);
+		if (area) {
+		  this.log.debug(`[Session] RefreshArea at (${area.x}, ${area.y}) ${area.width}x${area.height}`);
+		  this.emit('ws_event', {
+			type: WsMessageType.EVENT_AREA_REFRESH,
+			x: area.x,
+			y: area.y,
+			width: area.width,
+			height: area.height,
+		  } as WsEventAreaRefresh);
+		}
+		return;
+	  }
+
+	  // Check if this is a RefreshObject push (building state changed)
 	  if (this.isRefreshObjectPush(packet)) {
-		const buildingInfo = this.parseRefreshObjectPush(packet);
-		if (buildingInfo) {
-		  this.log.debug(`[Session] RefreshObject for building ${buildingInfo.buildingId}`);
+		const result = this.parseRefreshObjectPush(packet);
+		if (result) {
+		  this.log.debug(`[Session] RefreshObject for building ${result.buildingId}, kindOfChange=${result.kindOfChange}`);
+		  const building = result.buildingInfo ?? {
+			buildingId: result.buildingId,
+			buildingName: '',
+			ownerName: '',
+			salesInfo: '',
+			revenue: '',
+			detailsText: '',
+			hintsText: '',
+			x: this.currentFocusedCoords?.x ?? 0,
+			y: this.currentFocusedCoords?.y ?? 0,
+		  };
 		  this.emit('ws_event', {
 			type: WsMessageType.EVENT_BUILDING_REFRESH,
-			building: buildingInfo
+			building,
+			kindOfChange: result.kindOfChange,
 		  } as WsEventBuildingRefresh);
 		}
-		return; // Don't process as regular response
+		return;
 	  }
 
 	  // Handle server requests (IDOF, etc.)
@@ -4644,16 +4801,24 @@ private handlePush(socketName: string, packet: RdoPacket) {
   }
 
   /**
-   * Parse channel list format: "channelName\n..."
+   * Parse channel list format: "channelName\npassword\n..." (alternating name/password pairs).
+   * Server returns pairs: line 0=name, line 1=password, line 2=name, line 3=password, etc.
+   * Returns channel names only, with "Lobby" prepended as the default main channel.
    */
   private parseChatChannelList(rawData: string): string[] {
-    const channels = rawData
+    const lines = rawData
       .split(/\r?\n/)
       .map(l => l.trim())
       .filter(l => l.length > 0);
 
-    this.log.debug(`[Chat] Parsed ${channels.length} channels`);
-    return channels;
+    // Extract only channel names (even-indexed lines: 0, 2, 4, ...)
+    const channelNames: string[] = ['Lobby'];
+    for (let i = 0; i < lines.length; i += 2) {
+      channelNames.push(lines[i]);
+    }
+
+    this.log.debug(`[Chat] Parsed ${channelNames.length} channels (including Lobby)`);
+    return channelNames;
   }
 
   // =========================================================================

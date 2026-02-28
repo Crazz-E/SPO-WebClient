@@ -126,12 +126,12 @@
   var LAND_TYPE_ROTATION = [
     // NORTH (identity)
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-    // EAST (90° CW): N→E, E→S, S→W, W→N, NEo→SEo, SEo→SWo, SWo→NWo, NWo→NEo, same inner
-    [0, 2, 3, 4, 1, 6, 7, 8, 5, 10, 11, 12, 9, 13],
+    // EAST (view CW): N→W, E→N, S→E, W→S, NEo→NWo, SEo→NEo, SWo→SEo, NWo→SWo, same inner
+    [0, 4, 1, 2, 3, 8, 5, 6, 7, 12, 9, 10, 11, 13],
     // SOUTH (180°): N→S, E→W, S→N, W→E, NEo→SWo, SEo→NWo, SWo→NEo, NWo→SEo, same inner
     [0, 3, 4, 1, 2, 7, 8, 5, 6, 11, 12, 9, 10, 13],
-    // WEST (270° CW): N→W, E→N, S→E, W→S, NEo→NWo, SEo→NEo, SWo→SEo, NWo→SWo, same inner
-    [0, 4, 1, 2, 3, 8, 5, 6, 7, 12, 9, 10, 11, 13]
+    // WEST (view CCW): N→E, E→S, S→W, W→N, NEo→SEo, SEo→SWo, SWo→NWo, NWo→NEo, same inner
+    [0, 2, 3, 4, 1, 6, 7, 8, 5, 10, 11, 12, 9, 13]
   ];
   function rotateLandId(landId, rotation) {
     if (rotation === 0) return landId;
