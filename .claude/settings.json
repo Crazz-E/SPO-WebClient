@@ -1,47 +1,27 @@
 {
   "hooks": {
-    "postToolUse": [
+    "PreToolUse": [
       {
-        "tool": "Edit",
-        "command": "npx tsc --noEmit",
-        "description": "Type-check TypeScript after editing files",
-        "continueOnError": true
-      },
-      {
-        "tool": "Write",
-        "command": "npx tsc --noEmit",
-        "description": "Type-check TypeScript after creating files",
-        "continueOnError": true
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/protect-critical-files.js",
+            "timeout": 10
+          }
+        ]
       }
     ],
-    "preToolUse": [
+    "PostToolUse": [
       {
-        "tool": "Edit",
-        "filter": {
-          "file_path": [
-            "**/rdo-types.ts",
-            "**/rdo.ts",
-            "**/facility_db.csv",
-            "**/__fixtures__/**"
-          ]
-        },
-        "command": "echo '⚠️  WARNING: This file is protected per CLAUDE.md. Confirm before editing: rdo-types.ts, rdo.ts, facility_db.csv, or __fixtures__/*'",
-        "requireConfirmation": true,
-        "description": "Protect critical files from accidental modification"
-      },
-      {
-        "tool": "Write",
-        "filter": {
-          "file_path": [
-            "**/rdo-types.ts",
-            "**/rdo.ts",
-            "**/facility_db.csv",
-            "**/__fixtures__/**"
-          ]
-        },
-        "command": "echo '⚠️  WARNING: Attempting to overwrite a protected file. Confirm before proceeding.'",
-        "requireConfirmation": true,
-        "description": "Protect critical files from being overwritten"
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx tsc --noEmit",
+            "timeout": 30
+          }
+        ]
       }
     ]
   },
