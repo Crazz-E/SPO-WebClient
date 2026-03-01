@@ -284,5 +284,8 @@ export function parseBuildingFocusResponse(
     hintsText,
     x,
     y,
+    xsize: 1,        // Enriched client-side from FacilityDimensionsCache
+    ysize: 1,        // Enriched client-side from FacilityDimensionsCache
+    visualClass: '0', // Enriched client-side from renderer hit data
   };
 }

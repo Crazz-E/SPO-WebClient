@@ -17,7 +17,7 @@ jest.mock('./StatusOverlay.module.css', () => ({
 }));
 
 // Import after mock
-import { revenueClass, OVERLAY_OFFSET_Y } from './StatusOverlay';
+import { revenueClass, revenueDirection } from './StatusOverlay';
 
 const mockBuilding: BuildingFocusInfo = {
   buildingId: '12345',
@@ -29,6 +29,9 @@ const mockBuilding: BuildingFocusInfo = {
   hintsText: 'Consider raising prices',
   x: 100,
   y: 200,
+  xsize: 2,
+  ysize: 2,
+  visualClass: '1234',
 };
 
 describe('StatusOverlay — revenueClass()', () => {
@@ -54,9 +57,21 @@ describe('StatusOverlay — revenueClass()', () => {
   });
 });
 
-describe('StatusOverlay — constants', () => {
-  it('OVERLAY_OFFSET_Y is a positive number', () => {
-    expect(OVERLAY_OFFSET_Y).toBeGreaterThan(0);
+describe('StatusOverlay — revenueDirection()', () => {
+  it('returns down for negative revenue', () => {
+    expect(revenueDirection('(-$36/h)')).toBe('down');
+    expect(revenueDirection('-$500/h')).toBe('down');
+  });
+
+  it('returns up for positive revenue', () => {
+    expect(revenueDirection('($120/h)')).toBe('up');
+    expect(revenueDirection('$5,000/h')).toBe('up');
+  });
+
+  it('returns neutral for zero, empty, or text-only revenue', () => {
+    expect(revenueDirection('')).toBe('neutral');
+    expect(revenueDirection('$0')).toBe('neutral');
+    expect(revenueDirection('N/A')).toBe('neutral');
   });
 });
 
@@ -131,6 +146,14 @@ describe('StatusOverlay — visibility logic via store', () => {
     const state = useBuildingStore.getState();
     expect(state.focusedBuilding?.salesInfo).toBe('Pharmaceutics sales at 95%');
     expect(state.isOverlayMode).toBe(true);
+  });
+
+  it('focused building has footprint dimensions', () => {
+    useBuildingStore.getState().setFocus(mockBuilding);
+    const state = useBuildingStore.getState();
+    expect(state.focusedBuilding?.xsize).toBe(2);
+    expect(state.focusedBuilding?.ysize).toBe(2);
+    expect(state.focusedBuilding?.visualClass).toBe('1234');
   });
 
   it('detailsText splits into lines correctly', () => {

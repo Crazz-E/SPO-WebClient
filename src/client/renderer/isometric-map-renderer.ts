@@ -392,6 +392,8 @@ export class IsometricMapRenderer {
   private lastMouseX: number = 0;
   private lastMouseY: number = 0;
   private hoveredBuilding: MapBuilding | null = null;
+  private selectedBuilding: MapBuilding | null = null;
+  private selectionPulseTime: number = 0;
   private mouseMapI: number = 0;
   private mouseMapJ: number = 0;
   private mouseHasEnteredCanvas: boolean = false;
@@ -1406,6 +1408,48 @@ export class IsometricMapRenderer {
     return this.terrainRenderer.mapToScreen(worldY, worldX);
   }
 
+  /**
+   * Convert a building footprint center to screen position, plus its texture height.
+   * Used by StatusOverlay for centered positioning with dynamic vertical offset.
+   */
+  public worldToScreenCentered(
+    worldX: number, worldY: number,
+    xsize: number, ysize: number
+  ): { x: number; y: number; textureHeight: number } {
+    // Footprint center in tile coords
+    const centerI = worldY + ysize / 2;
+    const centerJ = worldX + xsize / 2;
+    const screenPos = this.terrainRenderer.mapToScreen(centerI, centerJ);
+
+    // Look up texture height for dynamic offset
+    const building = this.getBuildingAt(worldX, worldY);
+    let textureHeight = 80; // fallback
+    if (building) {
+      const textureFilename = GameObjectTextureCache.getBuildingTextureFilename(building.visualClass);
+      const texture = this.gameObjectTextureCache.getTextureSync('BuildingImages', textureFilename);
+      if (texture) {
+        const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
+        const scaleFactor = config.tileWidth / 64;
+        textureHeight = texture.height * scaleFactor;
+      }
+    }
+
+    return { x: screenPos.x, y: screenPos.y, textureHeight };
+  }
+
+  /** Mark a building as selected (focused) — shows gold pulsing footprint. */
+  public setSelectedBuilding(x: number, y: number): void {
+    this.selectedBuilding = this.getBuildingAt(x, y);
+    this.selectionPulseTime = performance.now();
+    this.requestRender();
+  }
+
+  /** Clear building selection. */
+  public clearSelectedBuilding(): void {
+    this.selectedBuilding = null;
+    this.requestRender();
+  }
+
   public setCancelPlacementCallback(callback: () => void) {
     this.onCancelPlacement = callback;
   }
@@ -1957,6 +2001,11 @@ export class IsometricMapRenderer {
     }
 
     // Game info overlay removed — stats available via debug mode (D key)
+
+    // Keep rendering while a building is selected (for pulse animation)
+    if (this.selectedBuilding) {
+      this.requestRender();
+    }
   }
 
   /**
@@ -2742,16 +2791,17 @@ export class IsometricMapRenderer {
           return;
         }
 
-        if (isHovered) {
-          // Draw highlight behind the texture
-          ctx.globalAlpha = 0.3;
-          ctx.fillStyle = '#5fadff';
-          this.drawBuildingFootprint(building, xsize, ysize, config, halfWidth, halfHeight);
-          ctx.globalAlpha = 1.0;
-        }
-
         // Draw texture scaled to match current zoom level
         ctx.drawImage(texture, drawX, drawY, scaledWidth, scaledHeight);
+
+        // Draw hover/selection effect ON TOP of texture (visible for tall buildings)
+        const isSelected = this.selectedBuilding === building;
+        if (isHovered || isSelected) {
+          this.drawBuildingSelectionEffect(
+            building, xsize, ysize, config, halfWidth, halfHeight,
+            isSelected, isHovered
+          );
+        }
 
         // Draw construction indicator if building is under construction
         if (textureFilename.startsWith('Construction')) {
@@ -2834,7 +2884,7 @@ export class IsometricMapRenderer {
   }
 
   /**
-   * Draw building footprint outline (used for hover highlighting)
+   * Draw building footprint as individual tile diamonds (fill only).
    */
   private drawBuildingFootprint(
     building: MapBuilding,
@@ -2861,6 +2911,102 @@ export class IsometricMapRenderer {
         ctx.fill();
       }
     }
+  }
+
+  /**
+   * Draw selection/hover effect on top of a building texture.
+   * - Selected: gold pulsing footprint with glowing outline
+   * - Hover: green semi-transparent footprint with subtle outline
+   */
+  private drawBuildingSelectionEffect(
+    building: MapBuilding,
+    xsize: number,
+    ysize: number,
+    config: ZoomConfig,
+    halfWidth: number,
+    halfHeight: number,
+    isSelected: boolean,
+    isHovered: boolean
+  ): void {
+    const ctx = this.ctx;
+    const now = performance.now();
+
+    // Pulsing alpha for selected buildings (0.15 to 0.35 over ~1.5s cycle)
+    const pulseAlpha = isSelected
+      ? 0.15 + 0.2 * (0.5 + 0.5 * Math.sin((now - this.selectionPulseTime) * 0.004))
+      : 0.2;
+
+    // Color: gold for selected, green for hover-only
+    const fillColor = isSelected ? '#D4A853' : '#10B981';
+    const strokeColor = isSelected ? '#D4A853' : '#10B981';
+
+    // 1. Semi-transparent fill over the footprint
+    ctx.globalAlpha = pulseAlpha;
+    ctx.fillStyle = fillColor;
+    this.drawBuildingFootprint(building, xsize, ysize, config, halfWidth, halfHeight);
+
+    // 2. Glowing outline around the entire footprint perimeter
+    ctx.globalAlpha = isSelected ? 0.8 : 0.5;
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = isSelected ? 2 : 1.5;
+    ctx.shadowColor = strokeColor;
+    ctx.shadowBlur = isSelected ? 8 : 4;
+
+    this.drawFootprintOutline(building, xsize, ysize, config, halfWidth, halfHeight);
+
+    // Reset context state
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1.0;
+    ctx.lineWidth = 1;
+  }
+
+  /**
+   * Draw the outer outline of a building footprint as a single isometric polygon.
+   * Traces the 4 edges of the footprint: NE → SE → SW → NW.
+   */
+  private drawFootprintOutline(
+    building: MapBuilding,
+    xsize: number,
+    ysize: number,
+    config: ZoomConfig,
+    halfWidth: number,
+    halfHeight: number
+  ): void {
+    const ctx = this.ctx;
+
+    ctx.beginPath();
+
+    // North vertex: top of tile (y, x)
+    const topTile = this.terrainRenderer.mapToScreen(building.y, building.x);
+    ctx.moveTo(Math.round(topTile.x), Math.round(topTile.y));
+
+    // Trace NE edge: right vertices of tiles along x-axis
+    for (let dx = 0; dx < xsize; dx++) {
+      const pos = this.terrainRenderer.mapToScreen(building.y, building.x + dx);
+      ctx.lineTo(Math.round(pos.x + halfWidth), Math.round(pos.y + halfHeight));
+    }
+
+    // Trace SE edge: bottom vertices of tiles along y-axis at x=xsize-1
+    for (let dy = 0; dy < ysize; dy++) {
+      const pos = this.terrainRenderer.mapToScreen(building.y + dy, building.x + xsize - 1);
+      ctx.lineTo(Math.round(pos.x), Math.round(pos.y + config.tileHeight));
+    }
+
+    // Trace SW edge: left vertices of tiles along x-axis (reverse) at y=ysize-1
+    for (let dx = xsize - 1; dx >= 0; dx--) {
+      const pos = this.terrainRenderer.mapToScreen(building.y + ysize - 1, building.x + dx);
+      ctx.lineTo(Math.round(pos.x - halfWidth), Math.round(pos.y + halfHeight));
+    }
+
+    // Trace NW edge: top vertices back to start along y-axis (reverse) at x=0
+    for (let dy = ysize - 1; dy >= 0; dy--) {
+      const pos = this.terrainRenderer.mapToScreen(building.y + dy, building.x);
+      ctx.lineTo(Math.round(pos.x), Math.round(pos.y));
+    }
+
+    ctx.closePath();
+    ctx.stroke();
   }
 
   /**
@@ -4205,6 +4351,8 @@ export class IsometricMapRenderer {
     this.roadTilesMap.clear();
     this.concreteTilesSet.clear();
     this.facilityDimensionsCache.clear();
+    this.selectedBuilding = null;
+    this.hoveredBuilding = null;
 
     // Clear zone request manager
     if (this.zoneRequestManager) {

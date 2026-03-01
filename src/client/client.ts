@@ -103,7 +103,7 @@ import { toErrorMessage } from '../shared/error-utils';
 import { Season } from '../shared/map-config';
 import { MapNavigationUI } from './ui/map-navigation-ui';
 import { MinimapUI } from './ui/minimap-ui';
-import { ClientBridge, setWorldToScreenFn, type ClientCallbacks } from './bridge/client-bridge';
+import { ClientBridge, setWorldToScreenFn, setWorldToScreenCenteredFn, type ClientCallbacks } from './bridge/client-bridge';
 import { useGameStore, delphiTDateTimeToJsDate } from './store/game-store';
 import type { GameSettings } from './store/game-store';
 import { useUiStore } from './store/ui-store';
@@ -468,10 +468,13 @@ export class StarpeaceClient {
         this.unfocusBuilding();
       });
 
-      // Expose world-to-screen converter for StatusOverlay positioning
+      // Expose world-to-screen converters for StatusOverlay positioning
       const renderer = this.mapNavigationUI.getRenderer();
       if (renderer) {
         setWorldToScreenFn((worldX, worldY) => renderer.worldToScreen(worldX, worldY));
+        setWorldToScreenCenteredFn((worldX, worldY, xsize, ysize) =>
+          renderer.worldToScreenCentered(worldX, worldY, xsize, ysize)
+        );
       }
 
       this.mapNavigationUI.setOnFetchFacilityDimensions(async (visualClass) => {
@@ -658,6 +661,13 @@ export class StarpeaceClient {
         // If the refreshed building matches the one currently viewed, re-fetch details
         if (this.currentFocusedBuilding &&
             this.currentFocusedBuilding.buildingId === refreshEvt.building.buildingId) {
+          // Enrich with footprint dimensions from local cache
+          const refreshVc = this.currentFocusedVisualClass || '0';
+          const refreshDims = getFacilityDimensionsCache().getFacility(refreshVc);
+          refreshEvt.building.xsize = refreshDims?.xsize ?? 1;
+          refreshEvt.building.ysize = refreshDims?.ysize ?? 1;
+          refreshEvt.building.visualClass = refreshVc;
+
           // Propagate refreshed focus info to React store immediately
           this.currentFocusedBuilding = refreshEvt.building;
           ClientBridge.setFocusedBuilding(refreshEvt.building);
@@ -1270,7 +1280,21 @@ export class StarpeaceClient {
       this.currentFocusedBuilding = response.building;
       this.currentFocusedVisualClass = visualClass || null;
 
+      // Enrich with footprint dimensions from local cache
+      const vc = visualClass || '0';
+      const dims = getFacilityDimensionsCache().getFacility(vc);
+      response.building.xsize = dims?.xsize ?? 1;
+      response.building.ysize = dims?.ysize ?? 1;
+      response.building.visualClass = vc;
+
       ClientBridge.showBuildingOverlay(response.building);
+
+      // Tell renderer which building is selected (gold footprint highlight)
+      const selRenderer = this.mapNavigationUI?.getRenderer();
+      if (selRenderer) {
+        selRenderer.setSelectedBuilding(x, y);
+      }
+
       ClientBridge.log('Building', `Overlay: ${response.building.buildingName}`);
     } catch (err: unknown) {
       ClientBridge.log('Error', `Failed to show overlay: ${toErrorMessage(err)}`);
@@ -1396,6 +1420,12 @@ export class StarpeaceClient {
       ClientBridge.hideBuildingPanel();
       this.currentFocusedBuilding = null;
       this.currentFocusedVisualClass = null;
+
+      // Clear renderer selection highlight
+      const unfocusRenderer = this.mapNavigationUI?.getRenderer();
+      if (unfocusRenderer) {
+        unfocusRenderer.clearSelectedBuilding();
+      }
     } catch (err: unknown) {
       ClientBridge.log('Error', `Failed to unfocus building: ${toErrorMessage(err)}`);
     }

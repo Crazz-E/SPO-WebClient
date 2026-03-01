@@ -130,6 +130,9 @@ export interface BuildingFocusInfo {
   hintsText: string;   // Ticker section 2 (status/hints)
   x: number;
   y: number;
+  xsize: number;       // Footprint width in tiles (enriched client-side)
+  ysize: number;       // Footprint height in tiles (enriched client-side)
+  visualClass: string; // Building type ID (enriched client-side)
 }
 
 // =============================================================================

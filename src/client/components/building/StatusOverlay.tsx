@@ -1,19 +1,21 @@
 /**
- * StatusOverlay — Floating building status preview.
+ * StatusOverlay — Compact floating building info bubble.
  *
  * Shown above a building after the first map click (overlay mode).
  * A second click on the same building opens the full inspector panel.
  * Uses requestAnimationFrame to track the building's screen position
- * during scroll/zoom via the worldToScreen bridge utility.
+ * during scroll/zoom via the worldToScreenCentered bridge utility.
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { useBuildingStore } from '../../store/building-store';
-import { worldToScreen } from '../../bridge/client-bridge';
+import { worldToScreenCentered } from '../../bridge/client-bridge';
 import styles from './StatusOverlay.module.css';
 
-/** Vertical offset above the building's screen position (pixels). */
-export const OVERLAY_OFFSET_Y = 60;
+/** Minimum gap above the building texture top (pixels). */
+const MIN_OFFSET_ABOVE_TEXTURE = 12;
+/** Fallback texture height when not yet loaded. */
+const FALLBACK_TEXTURE_HEIGHT = 80;
 
 export function revenueClass(revenue: string): string {
   if (!revenue) return styles.revenueNeutral;
@@ -22,10 +24,20 @@ export function revenueClass(revenue: string): string {
   return styles.revenueNeutral;
 }
 
+/** Determine revenue direction for arrow indicator. */
+export function revenueDirection(revenue: string): 'up' | 'down' | 'neutral' {
+  if (!revenue) return 'neutral';
+  if (revenue.includes('-')) return 'down';
+  if (revenue.includes('$') && !revenue.includes('$0')) return 'up';
+  return 'neutral';
+}
+
 export function StatusOverlay() {
   const building = useBuildingStore((s) => s.focusedBuilding);
   const isOverlay = useBuildingStore((s) => s.isOverlayMode);
-  const [screenPos, setScreenPos] = useState<{ x: number; y: number } | null>(null);
+  const [screenPos, setScreenPos] = useState<{
+    x: number; y: number; textureHeight: number;
+  } | null>(null);
   const rafRef = useRef<number>(0);
 
   // Track building position on screen via rAF
@@ -36,7 +48,10 @@ export function StatusOverlay() {
     }
 
     const update = () => {
-      const pos = worldToScreen(building.x, building.y);
+      const pos = worldToScreenCentered(
+        building.x, building.y,
+        building.xsize ?? 1, building.ysize ?? 1
+      );
       if (pos) {
         setScreenPos(pos);
       }
@@ -53,26 +68,37 @@ export function StatusOverlay() {
     ? building.detailsText.split('\n').filter(Boolean)
     : [];
 
+  // Dynamic offset: half texture height + gap
+  const textureH = screenPos.textureHeight || FALLBACK_TEXTURE_HEIGHT;
+  const offsetY = textureH / 2 + MIN_OFFSET_ABOVE_TEXTURE;
+  const direction = revenueDirection(building.revenue);
+
   return (
     <div
       className={styles.overlay}
       style={{
         left: screenPos.x,
-        top: screenPos.y - OVERLAY_OFFSET_Y,
+        top: screenPos.y - offsetY,
       }}
       data-testid="status-overlay"
     >
-      <div className={styles.header}>
-        <span className={styles.name}>{building.buildingName}</span>
-        {building.revenue && (
-          <span className={`${styles.revenue} ${revenueClass(building.revenue)}`}>
-            {building.revenue}
-          </span>
-        )}
-      </div>
+      <div className={styles.buildingName}>{building.buildingName}</div>
+
+      {building.ownerName && (
+        <div className={styles.ownerName}>{building.ownerName}</div>
+      )}
 
       {building.salesInfo && (
-        <div className={styles.salesInfo}>{building.salesInfo}</div>
+        <div className={styles.salesLine}>{building.salesInfo}</div>
+      )}
+
+      {building.revenue && (
+        <div className={`${styles.revenueLine} ${revenueClass(building.revenue)}`}>
+          <span className={styles.revenueArrow}>
+            {direction === 'up' ? '\u25B2' : direction === 'down' ? '\u25BC' : '\u25CF'}
+          </span>
+          <span className={styles.revenueText}>{building.revenue}</span>
+        </div>
       )}
 
       {detailLines.length > 0 && (
@@ -86,6 +112,8 @@ export function StatusOverlay() {
       {building.hintsText && (
         <div className={styles.hints}>{building.hintsText}</div>
       )}
+
+      <div className={styles.caret} />
     </div>
   );
 }

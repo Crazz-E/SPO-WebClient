@@ -16,6 +16,9 @@ const mockFocusInfo: BuildingFocusInfo = {
   hintsText: 'Consider raising prices',
   x: 100,
   y: 200,
+  xsize: 2,
+  ysize: 2,
+  visualClass: '1234',
 };
 
 const mockInventory: ResearchCategoryData = {

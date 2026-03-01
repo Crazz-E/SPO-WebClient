@@ -77,6 +77,31 @@ export function worldToScreen(worldX: number, worldY: number): { x: number; y: n
 }
 
 /**
+ * Centered world-to-screen converter — computes screen position at
+ * the footprint center of a multi-tile building, plus its texture height
+ * for dynamic vertical offset in the StatusOverlay.
+ */
+let worldToScreenCenteredFn: ((
+  worldX: number, worldY: number,
+  xsize: number, ysize: number
+) => { x: number; y: number; textureHeight: number }) | null = null;
+
+export function setWorldToScreenCenteredFn(
+  fn: (worldX: number, worldY: number, xsize: number, ysize: number) => { x: number; y: number; textureHeight: number }
+): void {
+  worldToScreenCenteredFn = fn;
+}
+
+export function worldToScreenCentered(
+  worldX: number, worldY: number,
+  xsize: number, ysize: number
+): { x: number; y: number; textureHeight: number } | null {
+  return worldToScreenCenteredFn
+    ? worldToScreenCenteredFn(worldX, worldY, xsize, ysize)
+    : null;
+}
+
+/**
  * Callbacks that React UI can invoke on client.ts.
  * Registered during initialization.
  */
