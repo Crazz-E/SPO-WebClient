@@ -20,6 +20,11 @@
             "type": "command",
             "command": "npx tsc --noEmit",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/post-edit-test-runner.js",
+            "timeout": 60
           }
         ]
       }

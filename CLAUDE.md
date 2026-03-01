@@ -9,6 +9,14 @@
 - Skip tests — all code changes require tests, coverage >= 93%
 - Modify these files without discussion: `src/shared/rdo-types.ts`, `src/server/rdo.ts`, `src/__fixtures__/*`
 - Load screenshots directly in the main context during debug/E2E sessions — use sub-agent delegation (see below)
+- Add UI elements without wiring their actions — every button, toggle, or control must be fully functional, not just visible (see below)
+
+**UI change = full-stack verification (MANDATORY):**
+When any UI component is added or modified, verify **both** the visual layer and the backing logic:
+1. **Visual**: The element renders correctly and is interactive (hover, focus, disabled states)
+2. **Action**: Clicking/interacting triggers the intended effect — store update, RDO command, navigation, etc.
+3. **Wiring**: Trace the handler chain end-to-end: `onClick` → store action / bridge call → server request → expected side effect
+4. If the backing logic (store method, RDO call, WebSocket message) does not exist yet, **implement it** — do not leave dead buttons or placeholder handlers like `() => {}` or `console.log('TODO')`
 
 **RDO conformity:** When adding/modifying RDO requests, the `rdo-protocol` skill auto-loads with the 8-step conformity checklist, dispatch rules, and Delphi type mappings.
 
@@ -18,6 +26,12 @@ Never read screenshot images in the main conversation context — each costs ~3-
 2. Save to `screenshots/` directory (git-ignored): `browser_take_screenshot(filename: "screenshots/descriptive-name.png")`
 3. Delegate to sub-agent: `Task(subagent_type: "general-purpose", prompt: "Read screenshots/<name>.png. Debug overlay active: [describe toggles]. Check: 1. <criterion>... Reply PASS/FAIL per criterion.")` — color legend: Green=building, Blue=junction, Orange=road.
 4. Only the text verdict returns (~100 bytes vs ~3-5MB per image)
+
+**Validated modules:** Files listed in `.claude/validated-modules.json` are stable and protected.
+- Edits trigger a confirmation prompt (PreToolUse) + automatic targeted test run (PostToolUse)
+- Do NOT weaken, skip, or delete tests for validated modules — if tests fail after your edit, fix your regression
+- When the user says "approved", "stable", "lock this down", or "protect this", invoke the `validation-ceremony` skill
+- When committing changes that touched validated modules, mention it and offer a visual spot-check
 
 **Critical patterns & gotchas:**
 - **`sendRdoRequest()` + `"*"` separator = SERVER CRASH** — `sendRdoRequest()` adds a QueryId; void push (`"*"`) with QueryId crashes the Delphi server. Void push → `socket.write(RdoCommand.build())`. Synchronous → `sendRdoRequest()` with `"^"`.
@@ -120,7 +134,7 @@ src/
 
 ## Project Skills
 
-11 project-specific skills auto-load contextually when working on relevant files. Each skill contains the key rules, gotchas, and references for its subsystem — no need to manually consult docs.
+12 project-specific skills auto-load contextually when working on relevant files. Each skill contains the key rules, gotchas, and references for its subsystem — no need to manually consult docs.
 
 | Skill | Auto-loads for |
 |-------|---------------|
@@ -135,6 +149,7 @@ src/
 | `e2e-test` | E2E testing with Playwright MCP |
 | `dependency-audit` | Vulnerability scanning, license compliance |
 | `dependency-updater` | Dependency updates, outdated packages |
+| `validation-ceremony` | `/validate` command, validated-modules.json, baseline screenshots |
 
 ## SkillsMP Marketplace Skills (MANDATORY)
 
