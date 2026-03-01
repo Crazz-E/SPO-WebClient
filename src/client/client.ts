@@ -1341,6 +1341,7 @@ export class StarpeaceClient {
         visualClass: vc,
         templateName: 'Building',
         securityId: '',
+        tabs: [],
         groups: {
           generic: [
             { name: 'Name', value: focusInfo?.buildingName },
@@ -1403,6 +1404,7 @@ export class StarpeaceClient {
         visualClass: visualClass || '0',
         templateName: 'Building',
         securityId: '',
+        tabs: [],
         groups: {
           generic: [
             { name: 'Name', value: response.building.buildingName },

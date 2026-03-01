@@ -112,7 +112,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
     set((state) => ({
       details,
       isLoading: false,
-      isOwner: details.ownerName === state.currentCompanyName,
+      isOwner: (details.ownerName || state.focusedBuilding?.ownerName || '') === state.currentCompanyName,
     }));
   },
 
@@ -123,7 +123,9 @@ export const useBuildingStore = create<BuildingState>((set) => ({
   setCurrentCompanyName: (name) =>
     set((state) => ({
       currentCompanyName: name,
-      isOwner: state.details ? state.details.ownerName === name : false,
+      isOwner: state.details
+        ? (state.details.ownerName || state.focusedBuilding?.ownerName || '') === name
+        : false,
     })),
 
   clearFocus: () =>

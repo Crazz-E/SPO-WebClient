@@ -5372,6 +5372,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
 
 		for (const group of template.groups) {
 		  const groupValues: BuildingPropertyValue[] = [];
+		  const includedCountProps = new Set<string>();
 
 		  for (const prop of group.properties) {
 			const suffix = prop.indexSuffix || '';
@@ -5427,6 +5428,15 @@ private handlePush(socketName: string, packet: RdoPacket) {
 			} else if (prop.indexed && prop.countProperty) {
 			  // Handle indexed properties using the count value
 			  const count = countValues.get(prop.countProperty) || 0;
+
+			  // Include the count property so the client knows how many items exist
+			  if (!includedCountProps.has(prop.countProperty)) {
+				includedCountProps.add(prop.countProperty);
+				const countVal = allValues.get(prop.countProperty);
+				if (countVal) {
+				  groupValues.push({ name: prop.countProperty, value: countVal });
+				}
+			  }
 
 			  for (let idx = 0; idx < count; idx++) {
 				const propName = `${prop.rdoName}${idx}${suffix}`;

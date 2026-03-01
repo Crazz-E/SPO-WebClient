@@ -393,6 +393,7 @@ export class IsometricMapRenderer {
   private lastMouseY: number = 0;
   private hoveredBuilding: MapBuilding | null = null;
   private selectedBuilding: MapBuilding | null = null;
+  private selectedBuildingDrawnTop: { x: number; y: number; textureHeight: number } | null = null;
   private selectionPulseTime: number = 0;
   private mouseMapI: number = 0;
   private mouseMapJ: number = 0;
@@ -1416,33 +1417,45 @@ export class IsometricMapRenderer {
     worldX: number, worldY: number,
     xsize: number, ysize: number
   ): { x: number; y: number; textureHeight: number } {
-    // North corner of the footprint (highest tile on screen) — rotation-aware.
-    // This positions the StatusOverlay above the building, not over it.
-    const rotation = this.terrainRenderer.getRotation();
-    let northI: number, northJ: number;
-    switch (rotation) {
-      case Rotation.NORTH: northI = worldY + ysize - 1; northJ = worldX + xsize - 1; break;
-      case Rotation.EAST:  northI = worldY + ysize - 1; northJ = worldX;              break;
-      case Rotation.SOUTH: northI = worldY;              northJ = worldX;              break;
-      case Rotation.WEST:  northI = worldY;              northJ = worldX + xsize - 1;  break;
-      default:             northI = worldY + ysize - 1; northJ = worldX + xsize - 1;  break;
+    // Prefer the pixel-exact position recorded during drawBuildings().
+    // This guarantees the overlay aligns with the actual drawn texture.
+    if (this.selectedBuildingDrawnTop) {
+      return this.selectedBuildingDrawnTop;
     }
-    const screenPos = this.terrainRenderer.mapToScreen(northI, northJ);
 
-    // Look up texture height for dynamic offset
+    // Fallback: compute from south-corner anchor (same formula as drawBuildings).
+    // Used on the first frame before the renderer has drawn the selected building.
+    const rotation = this.terrainRenderer.getRotation();
+    let anchorI: number, anchorJ: number;
+    switch (rotation) {
+      case Rotation.NORTH: anchorI = worldY;              anchorJ = worldX;              break;
+      case Rotation.EAST:  anchorI = worldY + ysize - 1;  anchorJ = worldX;              break;
+      case Rotation.SOUTH: anchorI = worldY + ysize - 1;  anchorJ = worldX + xsize - 1;  break;
+      case Rotation.WEST:  anchorI = worldY;              anchorJ = worldX + xsize - 1;  break;
+      default:             anchorI = worldY;              anchorJ = worldX;              break;
+    }
+    const southCornerScreenPos = this.terrainRenderer.mapToScreen(anchorI, anchorJ);
+
+    const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
+    const scaleFactor = config.tileWidth / 64;
+    let scaledHeight = 80 * scaleFactor; // fallback
+
     const building = this.getBuildingAt(worldX, worldY);
-    let textureHeight = 80; // fallback
     if (building) {
       const textureFilename = GameObjectTextureCache.getBuildingTextureFilename(building.visualClass);
       const texture = this.gameObjectTextureCache.getTextureSync('BuildingImages', textureFilename);
       if (texture) {
-        const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
-        const scaleFactor = config.tileWidth / 64;
-        textureHeight = texture.height * scaleFactor;
+        scaledHeight = texture.height * scaleFactor;
       }
     }
 
-    return { x: screenPos.x, y: screenPos.y, textureHeight };
+    let textureTopY = southCornerScreenPos.y + config.tileHeight - scaledHeight;
+
+    if (this.isOnWaterPlatform(anchorJ, anchorI)) {
+      textureTopY -= Math.round(PLATFORM_SHIFT * scaleFactor);
+    }
+
+    return { x: southCornerScreenPos.x, y: textureTopY, textureHeight: scaledHeight };
   }
 
   /** Mark a building as selected (focused) — shows gold pulsing footprint. */
@@ -1455,6 +1468,7 @@ export class IsometricMapRenderer {
   /** Clear building selection. */
   public clearSelectedBuilding(): void {
     this.selectedBuilding = null;
+    this.selectedBuildingDrawnTop = null;
     this.requestRender();
   }
 
@@ -2660,7 +2674,7 @@ export class IsometricMapRenderer {
 
       if (nearX && nearY) {
         // Check if building is urban (simplified check)
-        const name = dims?.Name?.toLowerCase() || '';
+        const name = dims?.name?.toLowerCase() || '';
         if (this.isUrbanBuilding(name)) {
           return true;
         }
@@ -2804,6 +2818,14 @@ export class IsometricMapRenderer {
 
         // Draw hover/selection effect ON TOP of texture (visible for tall buildings)
         const isSelected = this.selectedBuilding === building;
+        if (isSelected) {
+          // Record exact drawn position for StatusOverlay positioning
+          this.selectedBuildingDrawnTop = {
+            x: southCornerScreenPos.x,
+            y: drawY,
+            textureHeight: scaledHeight,
+          };
+        }
         if (isHovered || isSelected) {
           this.drawBuildingSelectionEffect(
             building, xsize, ysize, config, halfWidth, halfHeight,

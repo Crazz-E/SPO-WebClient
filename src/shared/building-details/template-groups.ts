@@ -503,6 +503,7 @@ export const ADVERTISEMENT_GROUP: PropertyGroup = {
   name: 'Advertising',
   icon: 'A',
   order: 25,
+  special: 'compInputs',
   properties: [
     { rdoName: 'cInput', displayName: 'Services', type: PropertyType.TEXT, indexed: true, indexSuffix: '.0', countProperty: 'cInputCount' },
     { rdoName: 'cInputSup', displayName: 'Receiving', type: PropertyType.NUMBER, indexed: true, countProperty: 'cInputCount' },

@@ -12,10 +12,8 @@ import { useBuildingStore } from '../../store/building-store';
 import { worldToScreenCentered } from '../../bridge/client-bridge';
 import styles from './StatusOverlay.module.css';
 
-/** Minimum gap above the building texture top (pixels). */
-const MIN_OFFSET_ABOVE_TEXTURE = 12;
-/** Fallback texture height when not yet loaded. */
-const FALLBACK_TEXTURE_HEIGHT = 80;
+/** Gap between caret tip and texture top (pixels). */
+const CARET_GAP = 8;
 
 export function revenueClass(revenue: string): string {
   if (!revenue) return styles.revenueNeutral;
@@ -68,9 +66,6 @@ export function StatusOverlay() {
     ? building.detailsText.split('\n').filter(Boolean)
     : [];
 
-  // Dynamic offset: half texture height + gap
-  const textureH = screenPos.textureHeight || FALLBACK_TEXTURE_HEIGHT;
-  const offsetY = textureH / 2 + MIN_OFFSET_ABOVE_TEXTURE;
   const direction = revenueDirection(building.revenue);
 
   return (
@@ -78,7 +73,7 @@ export function StatusOverlay() {
       className={styles.overlay}
       style={{
         left: screenPos.x,
-        top: screenPos.y - offsetY,
+        top: screenPos.y - CARET_GAP,
       }}
       data-testid="status-overlay"
     >

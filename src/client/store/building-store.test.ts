@@ -130,6 +130,86 @@ describe('Building Store — Overlay state', () => {
   });
 });
 
+describe('Building Store — Ownership for under-construction buildings', () => {
+  beforeEach(resetStore);
+
+  it('isOwner true when details.ownerName matches currentCompanyName', () => {
+    const store = useBuildingStore.getState();
+    store.setCurrentCompanyName('TestCorp');
+    store.setFocus(mockFocusInfo);
+    store.setDetails({
+      buildingId: '12345', buildingName: 'Drug Store', ownerName: 'TestCorp',
+      x: 100, y: 200, visualClass: '1234', templateName: 'Building',
+      securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+    });
+    expect(useBuildingStore.getState().isOwner).toBe(true);
+  });
+
+  it('isOwner false when details.ownerName does not match', () => {
+    const store = useBuildingStore.getState();
+    store.setCurrentCompanyName('TestCorp');
+    store.setFocus(mockFocusInfo);
+    store.setDetails({
+      buildingId: '12345', buildingName: 'Drug Store', ownerName: 'OtherCorp',
+      x: 100, y: 200, visualClass: '1234', templateName: 'Building',
+      securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+    });
+    expect(useBuildingStore.getState().isOwner).toBe(false);
+  });
+
+  it('isOwner falls back to focusedBuilding.ownerName when details.ownerName is empty', () => {
+    const store = useBuildingStore.getState();
+    store.setCurrentCompanyName('TestCorp');
+    store.setFocus(mockFocusInfo); // ownerName = 'TestCorp'
+    store.setDetails({
+      buildingId: '12345', buildingName: 'Drug Store', ownerName: '',
+      x: 100, y: 200, visualClass: '1234', templateName: 'Building',
+      securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+    });
+    expect(useBuildingStore.getState().isOwner).toBe(true);
+  });
+
+  it('isOwner false when both details and focus owner are empty', () => {
+    const store = useBuildingStore.getState();
+    store.setCurrentCompanyName('TestCorp');
+    store.setFocus({ ...mockFocusInfo, ownerName: '' });
+    store.setDetails({
+      buildingId: '12345', buildingName: 'Drug Store', ownerName: '',
+      x: 100, y: 200, visualClass: '1234', templateName: 'Building',
+      securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+    });
+    expect(useBuildingStore.getState().isOwner).toBe(false);
+  });
+
+  it('isOwner false when focus owner does not match (fallback path)', () => {
+    const store = useBuildingStore.getState();
+    store.setCurrentCompanyName('TestCorp');
+    store.setFocus({ ...mockFocusInfo, ownerName: 'OtherCorp' });
+    store.setDetails({
+      buildingId: '12345', buildingName: 'Drug Store', ownerName: '',
+      x: 100, y: 200, visualClass: '1234', templateName: 'Building',
+      securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+    });
+    expect(useBuildingStore.getState().isOwner).toBe(false);
+  });
+
+  it('setCurrentCompanyName recomputes isOwner with focus fallback', () => {
+    const store = useBuildingStore.getState();
+    store.setFocus(mockFocusInfo); // ownerName = 'TestCorp'
+    store.setDetails({
+      buildingId: '12345', buildingName: 'Drug Store', ownerName: '',
+      x: 100, y: 200, visualClass: '1234', templateName: 'Building',
+      securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+    });
+    // Initially no company name set
+    expect(useBuildingStore.getState().isOwner).toBe(false);
+
+    // Set matching company name
+    useBuildingStore.getState().setCurrentCompanyName('TestCorp');
+    expect(useBuildingStore.getState().isOwner).toBe(true);
+  });
+});
+
 describe('Building Store — Research state', () => {
   beforeEach(resetStore);
 

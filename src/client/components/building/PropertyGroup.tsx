@@ -22,6 +22,8 @@ import {
 import { useBuildingStore } from '../../store/building-store';
 import { useClient } from '../../context';
 import { ResearchPanel } from './ResearchPanel';
+import { parseCompInputServices, getDemandStatus, getFulfillmentStatus } from './comp-inputs-utils';
+import type { CompInputService } from './comp-inputs-utils';
 import styles from './PropertyGroup.module.css';
 
 interface PropertyGroupProps {
@@ -67,6 +69,22 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
       <div className={styles.group}>
         <ProductsPanel
           products={details?.products ?? []}
+          canEdit={canEdit}
+          buildingX={buildingX}
+          buildingY={buildingY}
+        />
+      </div>
+    );
+  }
+
+  // Special: compInputs tab — render structured company inputs UI (services consumed)
+  if (activeGroup?.special === 'compInputs') {
+    const ciValueMap = new Map<string, string>();
+    for (const prop of properties) ciValueMap.set(prop.name, prop.value);
+    return (
+      <div className={styles.group}>
+        <CompInputsPanel
+          valueMap={ciValueMap}
           canEdit={canEdit}
           buildingX={buildingX}
           buildingY={buildingY}
@@ -1625,6 +1643,161 @@ function ProductCard({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// =============================================================================
+// COMPANY INPUTS PANEL (special === 'compInputs')
+// =============================================================================
+
+function CompInputsPanel({
+  valueMap,
+  canEdit,
+  buildingX,
+  buildingY,
+}: {
+  valueMap: Map<string, string>;
+  canEdit: boolean;
+  buildingX: number;
+  buildingY: number;
+}) {
+  const client = useClient();
+  const services = parseCompInputServices(valueMap);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  if (services.length === 0) {
+    return <div className={styles.empty}>No company services</div>;
+  }
+
+  const safeIdx = Math.min(activeIdx, services.length - 1);
+  const active = services[safeIdx];
+
+  return (
+    <div className={styles.ciPanel}>
+      {services.length > 1 && (
+        <div className={styles.ciTabs}>
+          {services.map((svc, i) => {
+            const demandPerc = svc.max > 0 ? Math.round((svc.requesting / svc.max) * 100) : 0;
+            const dotStatus = getDemandStatus(demandPerc);
+            return (
+              <button
+                key={i}
+                className={`${styles.ciTab} ${i === safeIdx ? styles.ciTabActive : ''}`}
+                onClick={() => setActiveIdx(i)}
+              >
+                <span className={`${styles.ciDot} ${styles[dotStatus]}`} />
+                {svc.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {services.length === 1 && (
+        <div className={styles.ciHeader}>{active.name}</div>
+      )}
+
+      <CompInputServiceDetail
+        service={active}
+        canEdit={canEdit}
+        buildingX={buildingX}
+        buildingY={buildingY}
+        client={client}
+      />
+    </div>
+  );
+}
+
+function CompInputServiceDetail({
+  service,
+  canEdit,
+  buildingX,
+  buildingY,
+  client,
+}: {
+  service: CompInputService;
+  canEdit: boolean;
+  buildingX: number;
+  buildingY: number;
+  client: ReturnType<typeof useClient>;
+}) {
+  const demandPerc = service.max > 0
+    ? Math.round((service.requesting / service.max) * 100)
+    : 0;
+  const [localPerc, setLocalPerc] = useState(isNaN(demandPerc) ? 0 : demandPerc);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const isEditable = canEdit && service.editable;
+  const demandStatus = getDemandStatus(localPerc);
+  const fulfillmentStatus = getFulfillmentStatus(service.ratio);
+  const clampedRatio = Math.min(100, Math.max(0, service.ratio));
+  const unitsLabel = service.units ? ` ${service.units}` : '';
+
+  const handleSliderChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newVal = parseInt(e.target.value, 10);
+      setLocalPerc(newVal);
+
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => {
+        client.onSetBuildingProperty(
+          buildingX, buildingY,
+          'RDOSetCompanyInputDemand', String(newVal),
+          { index: String(service.index) },
+        );
+      }, 300);
+    },
+    [client, buildingX, buildingY, service.index],
+  );
+
+  return (
+    <div className={styles.ciCard}>
+      {/* Demand slider — the hero element */}
+      <div className={styles.ciDemandRow}>
+        <span className={styles.ciDemandLabel}>Demand</span>
+        {isEditable ? (
+          <>
+            <input
+              type="range"
+              className={`${styles.slider} ${styles[demandStatus]}`}
+              min={0}
+              max={100}
+              step={1}
+              value={localPerc}
+              onChange={handleSliderChange}
+            />
+            <span className={`${styles.ciDemandPerc} ${styles[demandStatus]}`}>
+              {localPerc}%
+            </span>
+          </>
+        ) : (
+          <span className={styles.ciDemandPerc}>{demandPerc}%</span>
+        )}
+      </div>
+
+      {/* Warning hint — only when demand < 100% */}
+      {localPerc < 100 && (
+        <div className={styles.ciWarning}>Not at full capacity</div>
+      )}
+
+      {/* Fulfillment ratio bar */}
+      <div className={styles.ciRatioHero}>
+        <div className={`${styles.ciRatioTrack} ${styles[fulfillmentStatus]}`}>
+          <div
+            className={styles.ciRatioFill}
+            style={{ width: `${clampedRatio}%` }}
+          />
+        </div>
+        <span className={`${styles.ciRatioPerc} ${styles[fulfillmentStatus]}`}>
+          {service.ratio}%
+        </span>
+      </div>
+
+      {/* Summary line */}
+      <div className={styles.ciSummary}>
+        Receiving {formatNumber(service.receiving)} of {formatNumber(service.requesting)}{unitsLabel}
+      </div>
     </div>
   );
 }

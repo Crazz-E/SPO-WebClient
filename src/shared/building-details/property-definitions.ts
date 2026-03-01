@@ -159,7 +159,7 @@ export interface PropertyGroup {
   /** Nested sub-groups (tabs within tabs) */
   subGroups?: PropertyGroup[];
   /** Whether this group requires special handling (e.g., supplies need SetPath) */
-  special?: 'supplies' | 'services' | 'products' | 'workforce' | 'connections' | 'town';
+  special?: 'supplies' | 'services' | 'products' | 'workforce' | 'connections' | 'town' | 'compInputs';
   /** Original CLASSES.BIN handler name (set by registerInspectorTabs) */
   handlerName?: string;
   /** Maps editable property base names → RDO write commands */

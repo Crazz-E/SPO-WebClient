@@ -5,7 +5,7 @@
   position: fixed;
   z-index: 250;
   pointer-events: none;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(-100%);
   max-width: 300px;
   min-width: 160px;
   padding: var(--space-2) var(--space-3);
@@ -24,11 +24,11 @@
 @keyframes overlayAppear {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(6px) scale(0.97);
+    transform: translateX(-50%) translateY(-100%) translateY(6px) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translateX(-50%) translateY(-100%) scale(1);
   }
 }
 
