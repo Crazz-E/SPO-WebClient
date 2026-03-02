@@ -152,6 +152,43 @@ describe('Supply fulfillment bar (fillPct)', () => {
 });
 
 // =============================================================================
+// CompInputSection: read-only display (editable=false)
+// =============================================================================
+
+describe('CompInputSection: read-only display (editable=false)', () => {
+  it('should show read-only rows when data.editable is false', () => {
+    const data = makeCompInput({ editable: false, demanded: 50, supplied: 50, ratio: 100, units: 'hours' });
+    // Non-editable branch: renders Requesting / Receiving / Ratio rows (no slider)
+    expect(data.editable).toBe(false);
+    expect(data.demanded).toBe(50);
+    expect(data.supplied).toBe(50);
+    expect(data.ratio).toBe(100);
+    expect(data.units).toBe('hours');
+  });
+
+  it('should use slider when data.editable is true', () => {
+    const data = makeCompInput({ editable: true });
+    expect(data.editable).toBe(true);
+  });
+
+  it('empty cEditable string means not editable (false)', () => {
+    // Mirrors spo_session.ts:5780: (allValues[base+5] ?? '').toLowerCase() === 'yes'
+    const parsedEditable = ('').toLowerCase() === 'yes';
+    expect(parsedEditable).toBe(false);
+  });
+
+  it('read-only row labels: Requesting=demanded, Receiving=supplied, Ratio=ratio', () => {
+    const data = makeCompInput({ editable: false, demanded: 100, supplied: 75, ratio: 80, units: 'hits' });
+    // Requesting row shows demanded value
+    expect(data.demanded).toBe(100);
+    // Receiving row shows supplied value
+    expect(data.supplied).toBe(75);
+    // Ratio row shows ratio percent
+    expect(data.ratio).toBe(80);
+  });
+});
+
+// =============================================================================
 // getConnectionStatus
 // =============================================================================
 

@@ -1840,36 +1840,56 @@ function CompInputSection({
         <span className={styles.ciAccordionName}>{data.name.toUpperCase()}</span>
       </div>
       <div className={styles.ciAccordionBody}>
-        {/* Row 1: Demand slider */}
-        <div className={styles.ciDemandRow}>
-          <span className={styles.ciDemandLabel}>Demand</span>
-          <input
-            type="range"
-            className={styles.slider}
-            min={0}
-            max={100}
-            step={1}
-            value={localDemand}
-            disabled={!canEdit}
-            onChange={handleDemandChange}
-          />
-          <span className={styles.ciDemandPerc}>{localDemand}%</span>
-        </div>
+        {data.editable ? (
+          <>
+            {/* Row 1: Demand slider */}
+            <div className={styles.ciDemandRow}>
+              <span className={styles.ciDemandLabel}>Demand</span>
+              <input
+                type="range"
+                className={styles.slider}
+                min={0}
+                max={100}
+                step={1}
+                value={localDemand}
+                disabled={!canEdit}
+                onChange={handleDemandChange}
+              />
+              <span className={styles.ciDemandPerc}>{localDemand}%</span>
+            </div>
 
-        {/* Row 2: Supply fulfillment bar */}
-        <div className={styles.ciSupplyBarRow}>
-          <div className={styles.ciSupplyBar}>
-            <div className={styles.ciSupplyBarFill} style={{ width: `${fillPct}%` }} />
+            {/* Row 2: Supply fulfillment bar */}
+            <div className={styles.ciSupplyBarRow}>
+              <div className={styles.ciSupplyBar}>
+                <div className={styles.ciSupplyBarFill} style={{ width: `${fillPct}%` }} />
+              </div>
+              <span className={styles.ciDemandPerc}>{Math.round(fillPct)}%</span>
+            </div>
+
+            {/* Row 3: Supplied / Demanded summary */}
+            <div className={styles.ciSummary}>
+              <span className={styles.ciFluidLabel}>
+                Supplied {formatNumber(data.supplied)} / Demanded {formatNumber(data.demanded)} {data.units}
+              </span>
+            </div>
+          </>
+        ) : (
+          /* Non-editable: read-only info rows (Requesting / Receiving / Ratio) */
+          <div className={styles.ciReadOnlyGrid}>
+            <div className={styles.ciReadOnlyRow}>
+              <span className={styles.ciReadOnlyLabel}>Requesting</span>
+              <span className={styles.ciReadOnlyValue}>{formatNumber(data.demanded)} {data.units}</span>
+            </div>
+            <div className={styles.ciReadOnlyRow}>
+              <span className={styles.ciReadOnlyLabel}>Receiving</span>
+              <span className={styles.ciReadOnlyValue}>{formatNumber(data.supplied)} {data.units}</span>
+            </div>
+            <div className={styles.ciReadOnlyRow}>
+              <span className={styles.ciReadOnlyLabel}>Ratio</span>
+              <span className={styles.ciReadOnlyValue}>{data.ratio}%</span>
+            </div>
           </div>
-          <span className={styles.ciDemandPerc}>{Math.round(fillPct)}%</span>
-        </div>
-
-        {/* Row 3: Supplied / Demanded summary */}
-        <div className={styles.ciSummary}>
-          <span className={styles.ciFluidLabel}>
-            Supplied {formatNumber(data.supplied)} / Demanded {formatNumber(data.demanded)} {data.units}
-          </span>
-        </div>
+        )}
       </div>
     </div>
   );
