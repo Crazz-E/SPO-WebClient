@@ -5305,7 +5305,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
 
         for (let j = 0; j < batch.length; j++) {
           const value = j < values.length ? values[j] : '';
-          if (value && value.trim() && value !== 'error') {
+          // Allow empty strings — server returns '' for unset properties (e.g. blank Name field)
+          if (value !== 'error') {
             allValues.set(batch[j], value);
           }
         }
@@ -5356,7 +5357,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
 
           for (let j = 0; j < batch.length; j++) {
             const value = j < values.length ? values[j] : '';
-            if (value && value.trim() && value !== 'error') {
+            // Allow empty strings — server returns '' for unset properties (e.g. blank Name field)
+            if (value !== 'error') {
               allValues.set(batch[j], value);
               // Log TABLE column values for debugging (srvNames/srvPrices/etc.)
               if (batch[j].startsWith('srv')) {
@@ -6643,7 +6645,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
         const batch = itemProps.slice(i, i + BATCH_SIZE);
         const values = await this.cacherGetPropertyList(tempObjectId, batch);
         for (let j = 0; j < batch.length; j++) {
-          if (j < values.length && values[j] && values[j] !== 'error') {
+          // Allow empty strings — server returns '' for unset properties
+          if (j < values.length && values[j] !== 'error') {
             allItemValues.set(batch[j], values[j]);
           }
         }

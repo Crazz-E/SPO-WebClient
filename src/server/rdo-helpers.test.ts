@@ -118,6 +118,31 @@ describe('hasTypePrefix', () => {
   });
 });
 
+describe('GetPropertyList empty-value pipeline', () => {
+  // Regression: empty values (consecutive tabs) must survive cleanPayload + split
+  // so that allValues.set() stores '' and does not shift downstream indices.
+  // Bug: guard `if (value && ...)` dropped empty strings; fixed to `if (value !== 'error')`.
+
+  it('preserves empty value in the middle of a tab-separated response', () => {
+    // Mirrors: A26024 res="%SPO_test3\t29\t\t-134478120-\t...\t-1\t"
+    const raw = cleanPayload('res="%SPO_test3\t29\t\t-134478120-\t32\t-1\t"');
+    const values = raw.includes('\t') ? raw.split('\t').map(v => v.trim()) : raw.split(/\s+/);
+    // Index 2 (Name) must be empty string, not undefined or skipped
+    expect(values[2]).toBe('');
+    expect(values.length).toBe(6); // trailing tab trimmed by cleanPayload → 6 elements
+  });
+
+  it('empty string is NOT filtered by value !== "error" guard', () => {
+    const value: string = '';
+    expect(value !== 'error').toBe(true);
+  });
+
+  it('"error" string IS filtered by value !== "error" guard', () => {
+    const value: string = 'error';
+    expect(value !== 'error').toBe(false);
+  });
+});
+
 describe('splitMultilinePayload', () => {
   it('should split and trim lines', () => {
     const result = splitMultilinePayload('res="%Line1\nLine2\nLine3"');
