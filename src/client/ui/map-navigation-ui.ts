@@ -60,9 +60,10 @@ export class MapNavigationUI {
   }
 
   /**
-   * Initialize the canvas and renderer
+   * Initialize the canvas and renderer.
+   * Resolves after terrain data is loaded so callers can safely use centerOn().
    */
-  public init() {
+  public async init(): Promise<void> {
     // Remove placeholder
     const placeholder = this.gamePanel.querySelector('div');
     if (placeholder) {
@@ -85,12 +86,9 @@ export class MapNavigationUI {
     this.renderer = new IsometricMapRenderer('game-canvas');
     this.setupRendererCallbacks();
 
-    // Load map
-    this.renderer.loadMap(this.worldName).then(() => {
-      console.log('[MapNavigationUI] Terrain loaded successfully');
-    }).catch((err) => {
-      console.error('[MapNavigationUI] Failed to load terrain:', err);
-    });
+    // Load map — await so callers know terrain dimensions are available
+    await this.renderer.loadMap(this.worldName);
+    console.log('[MapNavigationUI] Terrain loaded successfully');
   }
 
   /**

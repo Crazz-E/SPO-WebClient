@@ -331,6 +331,83 @@ describe('IsometricTerrainRenderer', () => {
   });
 });
 
+describe('centerOn timing (pre-loadMap vs post-loadMap)', () => {
+  /**
+   * Validates that centerOn() must be called AFTER loadMap() for correct
+   * camera positioning. Before terrain is loaded, getDimensions() returns
+   * {width: 0, height: 0} and centerOn() clamps everything to (0, 0).
+   */
+  let renderer: IsometricTerrainRenderer;
+  let mockDimensions: { width: number; height: number };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDimensions = { width: 0, height: 0 };
+
+    (TerrainLoader as jest.Mock).mockImplementation(() => ({
+      loadMap: jest.fn().mockImplementation(async () => {
+        // After loadMap completes, dimensions become available
+        mockDimensions = { width: 1000, height: 1000 };
+        return {
+          width: 1000,
+          height: 1000,
+          pixelData: new Uint8Array(1000 * 1000),
+          metadata: { name: 'TestMap', width: 1000, height: 1000 }
+        };
+      }),
+      getTextureId: jest.fn().mockReturnValue(21),
+      getDimensions: jest.fn().mockImplementation(() => mockDimensions),
+      unload: jest.fn(),
+    }));
+
+    (CoordinateMapper as jest.Mock).mockImplementation(() => ({
+      mapToScreen: jest.fn().mockReturnValue({ x: 0, y: 0 }),
+      screenToMap: jest.fn().mockReturnValue({ x: 500, y: 500 }),
+      getVisibleBounds: jest.fn().mockReturnValue({
+        minI: 490, maxI: 510, minJ: 490, maxJ: 510
+      }),
+    }));
+
+    renderer = new IsometricTerrainRenderer(mockCanvas as unknown as HTMLCanvasElement);
+  });
+
+  it('should clamp centerOn to (0, 0) before loadMap', () => {
+    // Before loadMap, dimensions are (0, 0) — any position is clamped
+    renderer.centerOn(395, 467);
+    const pos = renderer.getCameraPosition();
+    expect(pos.i).toBe(0);
+    expect(pos.j).toBe(0);
+  });
+
+  it('should correctly position camera when centerOn is called after loadMap', async () => {
+    await renderer.loadMap('TestMap');
+    renderer.centerOn(395, 467);
+    const pos = renderer.getCameraPosition();
+    expect(pos.i).toBe(395);
+    expect(pos.j).toBe(467);
+  });
+
+  it('should reset camera to map center during loadMap', async () => {
+    await renderer.loadMap('TestMap');
+    const pos = renderer.getCameraPosition();
+    // loadMap sets camera to height/2, width/2
+    expect(pos.i).toBe(500);
+    expect(pos.j).toBe(500);
+  });
+
+  it('should allow centerOn to override loadMap default after terrain loads', async () => {
+    await renderer.loadMap('TestMap');
+    // Camera is at map center (500, 500) after loadMap
+    expect(renderer.getCameraPosition().i).toBe(500);
+
+    // Override with saved player position
+    renderer.centerOn(395, 467);
+    const pos = renderer.getCameraPosition();
+    expect(pos.i).toBe(395);
+    expect(pos.j).toBe(467);
+  });
+});
+
 describe('ZOOM_LEVELS configuration', () => {
   it('should have 4 zoom levels', () => {
     expect(ZOOM_LEVELS).toHaveLength(4);

@@ -1186,44 +1186,35 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
         console.log(`[Gateway] Switching company: ${req.company.name} (role: ${req.company.ownerRole})`);
         await session.switchCompany(req.company);
 
-        // Send success response
-        const response: WsMessage = {
+        // Send success response with player's saved position
+        const switchPlayerPos = session.getPlayerPosition();
+        const switchResponse: WsMessage & { playerX?: number; playerY?: number } = {
           type: WsMessageType.RESP_RDO_RESULT,
-          wsRequestId: msg.wsRequestId
+          wsRequestId: msg.wsRequestId,
+          playerX: switchPlayerPos.x || undefined,
+          playerY: switchPlayerPos.y || undefined,
         };
-        ws.send(JSON.stringify(response));
+        ws.send(JSON.stringify(switchResponse));
         break;
       }
 
       case WsMessageType.REQ_MAP_LOAD: {
-		  const mapReq = msg as WsReqMapLoad;
-		  
-		  // If coordinates are 0,0, use player's last known position
-		  let targetX = mapReq.x;
-		  let targetY = mapReq.y;
-		  
-		  if (targetX === 0 && targetY === 0) {
-			const playerPos = session.getPlayerPosition();
-			targetX = playerPos.x;
-			targetY = playerPos.y;
-			console.log(`[Gateway] Using player spawn position: (${targetX}, ${targetY})`);
-		  }
-		  
-		  const mapData = await session.loadMapArea(
-			targetX,
-			targetY,
-			mapReq.width,
-			mapReq.height
-		  );
-		  
-		  const response: WsRespMapData = {
-			type: WsMessageType.RESP_MAP_DATA,
-			wsRequestId: msg.wsRequestId,
-			data: mapData
-		  };
-		  ws.send(JSON.stringify(response));
-		  break;
-		}
+        const mapReq = msg as WsReqMapLoad;
+        const mapData = await session.loadMapArea(
+          mapReq.x,
+          mapReq.y,
+          mapReq.width,
+          mapReq.height
+        );
+
+        const mapResponse: WsRespMapData = {
+          type: WsMessageType.RESP_MAP_DATA,
+          wsRequestId: msg.wsRequestId,
+          data: mapData
+        };
+        ws.send(JSON.stringify(mapResponse));
+        break;
+      }
 
       case WsMessageType.REQ_RDO_DIRECT: {
         const req = msg as WsReqRdoDirect;

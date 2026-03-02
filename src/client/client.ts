@@ -956,8 +956,17 @@ export class StarpeaceClient {
           company: company
         };
 
-        await this.sendRequest(req);
+        const switchResp = await this.sendRequest(req);
         ClientBridge.log('Company', 'Company switch successful');
+
+        // Restore camera to player's last saved position
+        const switchRespAny = switchResp as Record<string, unknown>;
+        if (typeof switchRespAny.playerX === 'number' && typeof switchRespAny.playerY === 'number'
+            && (switchRespAny.playerX !== 0 || switchRespAny.playerY !== 0)) {
+          this.savedPlayerX = switchRespAny.playerX;
+          this.savedPlayerY = switchRespAny.playerY;
+          ClientBridge.log('Map', `Restoring camera to saved position (${this.savedPlayerX}, ${this.savedPlayerY})`);
+        }
       } else {
         // Normal company selection
         const req: WsReqSelectCompany = {
@@ -989,7 +998,7 @@ export class StarpeaceClient {
       ClientBridge.setConnected();
       ClientBridge.setWorld(this.currentWorldName);
       ClientBridge.setCompany(company.name, company.id);
-      this.switchToGameView();
+      await this.switchToGameView();
 
       // Apply server WorldSeason to renderer (overrides default SUMMER)
       if (this.worldSeason !== null) {
@@ -1117,14 +1126,14 @@ export class StarpeaceClient {
     }
   }
 
-  private switchToGameView() {
+  private async switchToGameView(): Promise<void> {
     // React App.tsx switches to GameScreen when status becomes 'connected'
     this.uiGamePanel.style.display = 'flex';
     this.uiGamePanel.style.flexDirection = 'column';
 
     // Initialize Map & Navigation
     this.mapNavigationUI = new MapNavigationUI(this.uiGamePanel, this.currentWorldName);
-    this.mapNavigationUI.init();
+    await this.mapNavigationUI.init();
     this.setupGameUICallbacks();
 
     // Tycoon stats: push initial username to React TopBar via Zustand
