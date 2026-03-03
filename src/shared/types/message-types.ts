@@ -37,6 +37,8 @@ import type {
   PolicyData,
   PoliticsData,
   TransportData,
+  ClusterInfo,
+  ClusterFacilityPreview,
 } from './domain-types';
 
 import type { RdoVerb, RdoAction } from './protocol-types';
@@ -222,6 +224,12 @@ export enum WsMessageType {
   // Company Creation
   REQ_CREATE_COMPANY = 'REQ_CREATE_COMPANY',
   RESP_CREATE_COMPANY = 'RESP_CREATE_COMPANY',
+
+  // Cluster Browsing (company creation)
+  REQ_CLUSTER_INFO = 'REQ_CLUSTER_INFO',
+  RESP_CLUSTER_INFO = 'RESP_CLUSTER_INFO',
+  REQ_CLUSTER_FACILITIES = 'REQ_CLUSTER_FACILITIES',
+  RESP_CLUSTER_FACILITIES = 'RESP_CLUSTER_FACILITIES',
 
   // Transport (Railroad/Train)
   REQ_TRANSPORT_DATA = 'REQ_TRANSPORT_DATA',
@@ -1095,6 +1103,31 @@ export interface WsRespCreateCompany extends WsMessage {
   companyName: string;
   companyId: string;
   message?: string;
+}
+
+// =============================================================================
+// CLUSTER BROWSING MESSAGES (COMPANY CREATION)
+// =============================================================================
+
+export interface WsReqClusterInfo extends WsMessage {
+  type: WsMessageType.REQ_CLUSTER_INFO;
+  clusterName: string;
+}
+
+export interface WsRespClusterInfo extends WsMessage {
+  type: WsMessageType.RESP_CLUSTER_INFO;
+  clusterInfo: ClusterInfo;
+}
+
+export interface WsReqClusterFacilities extends WsMessage {
+  type: WsMessageType.REQ_CLUSTER_FACILITIES;
+  cluster: string;
+  folder: string;
+}
+
+export interface WsRespClusterFacilities extends WsMessage {
+  type: WsMessageType.RESP_CLUSTER_FACILITIES;
+  facilities: ClusterFacilityPreview[];
 }
 
 // =============================================================================

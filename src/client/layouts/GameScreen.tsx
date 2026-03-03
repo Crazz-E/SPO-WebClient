@@ -23,7 +23,7 @@ import { MailPanel } from '../components/mail';
 import { SearchPanel } from '../components/search';
 import { PoliticsPanel } from '../components/politics';
 import { TransportPanel } from '../components/transport';
-import { BuildMenu, CompanyCreationModal, ConnectionPickerModal, SettingsDialog } from '../components/modals';
+import { BuildMenu, ConnectionPickerModal, SettingsDialog } from '../components/modals';
 import { CommandPalette } from '../components/command-palette';
 import { MobileShell } from '../components/mobile';
 import { ErrorBoundary } from '../components/common';
@@ -118,7 +118,6 @@ export function GameScreen() {
 
       {/* Modals — z-400 */}
       <BuildMenu />
-      <CompanyCreationModal />
       <ConnectionPickerModal />
       <SettingsDialog />
 

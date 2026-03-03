@@ -321,3 +321,93 @@ describe('worldToScreenCentered', () => {
     });
   });
 });
+
+describe('addCachedZone — bounds clipping', () => {
+  /**
+   * The Delphi game server's GetObjectsInArea uses inclusive for-loop bounds,
+   * which can return buildings slightly outside the requested rectangle.
+   * The legacy Delphi client clips results with a post-filter bounds check:
+   *   if (obj.r >= imin) and (obj.r <= imax) and (obj.c >= jmin) and (obj.c <= jmax)
+   * addCachedZone() must do the same: clip buildings to [x, x+w) × [y, y+h).
+   */
+
+  function createRendererForZone() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const renderer = Object.create(IsometricMapRenderer.prototype) as any;
+
+    // Minimal state that addCachedZone + rebuildAggregatedData touch
+    renderer.allBuildings = [];
+    renderer.allSegments = [];
+    renderer.roadTilesMap = new Map();
+    renderer.cachedOccupiedTiles = null;
+    renderer.cachedZones = new Map();
+    renderer.concreteTilesSet = new Set();
+    renderer.debugConcreteSourceMap = new Map();
+    renderer.roadsRendering = null;
+
+    // Stubs for downstream methods
+    renderer.terrainRenderer = { getTerrainLoader: () => null };
+    renderer.vegetationMapper = { updateDynamicContent: () => {} };
+    renderer.addWaterRoadJunctionConcrete = () => {};
+    renderer.zoneRequestManager = null;
+    renderer.facilityDimensionsCache = { get: () => ({ xsize: 1, ysize: 1 }) };
+    renderer.fetchDimensionsForBuildings = () => {};
+    renderer.invalidateGroundCache = () => {};
+    renderer.requestRender = () => {};
+
+    return renderer;
+  }
+
+  it('keeps buildings inside zone bounds', () => {
+    const renderer = createRendererForZone();
+    const inside = makeBuilding({ x: 460, y: 330, visualClass: '2852' });
+
+    renderer.addCachedZone(448, 320, 64, 64, [inside], []);
+
+    expect(renderer.cachedZones.get('448,320').buildings).toHaveLength(1);
+    expect(renderer.cachedZones.get('448,320').buildings[0]).toBe(inside);
+  });
+
+  it('clips buildings outside zone bounds (y overflow — the bugged building case)', () => {
+    const renderer = createRendererForZone();
+    const inside = makeBuilding({ x: 460, y: 330, visualClass: '2852' });
+    const outside = makeBuilding({ x: 469, y: 384, visualClass: '2851' }); // y=384 >= 320+64
+
+    renderer.addCachedZone(448, 320, 64, 64, [inside, outside], []);
+
+    const cached = renderer.cachedZones.get('448,320');
+    expect(cached.buildings).toHaveLength(1);
+    expect(cached.buildings[0]).toBe(inside);
+  });
+
+  it('clips buildings at exact exclusive boundary (x = alignedX + w)', () => {
+    const renderer = createRendererForZone();
+    const atBoundary = makeBuilding({ x: 512, y: 330, visualClass: '100' }); // x=512 = 448+64
+
+    renderer.addCachedZone(448, 320, 64, 64, [atBoundary], []);
+
+    expect(renderer.cachedZones.get('448,320').buildings).toHaveLength(0);
+  });
+
+  it('keeps buildings at inclusive start boundary', () => {
+    const renderer = createRendererForZone();
+    const atStart = makeBuilding({ x: 448, y: 320, visualClass: '100' }); // exact zone origin
+
+    renderer.addCachedZone(448, 320, 64, 64, [atStart], []);
+
+    expect(renderer.cachedZones.get('448,320').buildings).toHaveLength(1);
+  });
+
+  it('passes segments through without clipping', () => {
+    const renderer = createRendererForZone();
+    const outsideBuilding = makeBuilding({ x: 469, y: 384, visualClass: '2851' });
+    const segment = { x1: 500, y1: 500, x2: 501, y2: 500, unknown1: 0, unknown2: 0, unknown3: 0, unknown4: 0, unknown5: 0, unknown6: 0 };
+
+    renderer.addCachedZone(448, 320, 64, 64, [outsideBuilding], [segment]);
+
+    const cached = renderer.cachedZones.get('448,320');
+    expect(cached.buildings).toHaveLength(0);
+    expect(cached.segments).toHaveLength(1);
+    expect(cached.segments[0]).toBe(segment);
+  });
+});

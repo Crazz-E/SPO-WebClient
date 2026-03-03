@@ -10,6 +10,7 @@ import { useGameStore } from './store';
 import { LoginScreen } from './layouts/LoginScreen';
 import { GameScreen } from './layouts/GameScreen';
 import { ToastContainer } from './components/common';
+import { CompanyCreationModal } from './components/modals';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useClient } from './context';
 
@@ -20,20 +21,10 @@ export function App() {
   // Register global keyboard shortcuts (B, E, M, R, D, Escape, Cmd+K)
   useKeyboardShortcuts(client);
 
-  // Cinematic login when not connected
-  if (status !== 'connected') {
-    return (
-      <>
-        <LoginScreen />
-        <ToastContainer />
-      </>
-    );
-  }
-
-  // Game HUD overlay when connected
   return (
     <>
-      <GameScreen />
+      {status !== 'connected' ? <LoginScreen /> : <GameScreen />}
+      <CompanyCreationModal />
       <ToastContainer />
     </>
   );

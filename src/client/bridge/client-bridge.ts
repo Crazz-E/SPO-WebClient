@@ -28,11 +28,14 @@ import type {
   BuildingInfo,
   MailFolder,
   ConnectionSearchResult,
+  ClusterInfo,
+  ClusterFacilityPreview,
 
   BankActionType,
   AutoConnectionActionType,
   CurriculumActionType,
 } from '@/shared/types';
+import { CLUSTER_IDS } from '@/shared/cluster-data';
 import {
   WsMessageType,
   type WsMessage,
@@ -113,6 +116,8 @@ export interface ClientCallbacks {
   onCompanySelect: (companyId: string) => void;
   onCreateCompany: () => void;
   onCreateCompanySubmit: (companyName: string, cluster: string) => Promise<void>;
+  onRequestClusterInfo: (clusterName: string) => void;
+  onRequestClusterFacilities: (cluster: string, folder: string) => void;
 
   // Game actions
   onBuildRoad: () => void;
@@ -634,11 +639,19 @@ export const ClientBridge = {
     }
   },
 
-  // ---- Company creation ----
+  // ---- Company creation / cluster browsing ----
 
-  showCompanyCreationDialog(clusters: string[]): void {
-    useGameStore.getState().setCompanyCreationClusters(clusters);
+  showCompanyCreationDialog(): void {
+    useGameStore.getState().setCompanyCreationClusters([...CLUSTER_IDS]);
     useUiStore.getState().openModal('createCompany');
+  },
+
+  handleClusterInfoResponse(info: ClusterInfo): void {
+    useGameStore.getState().setClusterInfo(info);
+  },
+
+  handleClusterFacilitiesResponse(facilities: ClusterFacilityPreview[]): void {
+    useGameStore.getState().setClusterFacilities(facilities);
   },
 
   // ---- Reset ----

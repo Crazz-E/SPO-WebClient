@@ -115,6 +115,90 @@ describe('game-store gameDate', () => {
   });
 });
 
+describe('game-store cluster browsing state', () => {
+  beforeEach(() => {
+    useGameStore.getState().reset();
+  });
+
+  it('should start with empty cluster browsing state', () => {
+    const state = useGameStore.getState();
+    expect(state.companyCreationClusters).toEqual([]);
+    expect(state.clusterInfo).toBeNull();
+    expect(state.clusterInfoLoading).toBe(false);
+    expect(state.clusterFacilities).toEqual([]);
+    expect(state.clusterFacilitiesLoading).toBe(false);
+  });
+
+  it('setCompanyCreationClusters should store cluster IDs', () => {
+    useGameStore.getState().setCompanyCreationClusters(['PGI', 'Moab']);
+    expect(useGameStore.getState().companyCreationClusters).toEqual(['PGI', 'Moab']);
+  });
+
+  it('setClusterInfoLoading should set loading flag', () => {
+    useGameStore.getState().setClusterInfoLoading(true);
+    expect(useGameStore.getState().clusterInfoLoading).toBe(true);
+  });
+
+  it('setClusterInfo should store info and clear loading', () => {
+    useGameStore.getState().setClusterInfoLoading(true);
+    const info = {
+      id: 'Dissidents',
+      displayName: 'Dissidents',
+      description: 'A rebel cluster.',
+      categories: [{ name: 'Farms', folder: '00000003.DissidentsFarms.five' }],
+    };
+    useGameStore.getState().setClusterInfo(info);
+
+    const state = useGameStore.getState();
+    expect(state.clusterInfo).toEqual(info);
+    expect(state.clusterInfoLoading).toBe(false);
+  });
+
+  it('setClusterInfo(null) should clear info', () => {
+    useGameStore.getState().setClusterInfo({
+      id: 'PGI', displayName: 'PGI', description: 'test', categories: [],
+    });
+    useGameStore.getState().setClusterInfo(null);
+    expect(useGameStore.getState().clusterInfo).toBeNull();
+  });
+
+  it('setClusterFacilitiesLoading should set loading flag', () => {
+    useGameStore.getState().setClusterFacilitiesLoading(true);
+    expect(useGameStore.getState().clusterFacilitiesLoading).toBe(true);
+  });
+
+  it('setClusterFacilities should store facilities and clear loading', () => {
+    useGameStore.getState().setClusterFacilitiesLoading(true);
+    const facilities = [
+      { name: 'Farm A', iconUrl: '/icon.gif', cost: '$500K', buildTime: '100 m.', zoneType: 'Rural', description: '' },
+    ];
+    useGameStore.getState().setClusterFacilities(facilities);
+
+    const state = useGameStore.getState();
+    expect(state.clusterFacilities).toEqual(facilities);
+    expect(state.clusterFacilitiesLoading).toBe(false);
+  });
+
+  it('reset should clear all cluster browsing state', () => {
+    useGameStore.getState().setCompanyCreationClusters(['PGI']);
+    useGameStore.getState().setClusterInfo({
+      id: 'PGI', displayName: 'PGI', description: 'test', categories: [],
+    });
+    useGameStore.getState().setClusterFacilities([
+      { name: 'X', iconUrl: '', cost: '', buildTime: '', zoneType: '', description: '' },
+    ]);
+
+    useGameStore.getState().reset();
+
+    const state = useGameStore.getState();
+    expect(state.companyCreationClusters).toEqual([]);
+    expect(state.clusterInfo).toBeNull();
+    expect(state.clusterInfoLoading).toBe(false);
+    expect(state.clusterFacilities).toEqual([]);
+    expect(state.clusterFacilitiesLoading).toBe(false);
+  });
+});
+
 describe('delphiTDateTimeToJsDate', () => {
   it('should convert 0 to Dec 30, 1899', () => {
     const result = delphiTDateTimeToJsDate(0);

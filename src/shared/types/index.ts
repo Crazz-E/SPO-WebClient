@@ -82,6 +82,10 @@ export type {
   TrainInfo,
   TrainRouteStop,
   TransportData,
+  // Cluster / company creation types
+  ClusterInfo,
+  ClusterCategory,
+  ClusterFacilityPreview,
 } from './domain-types';
 
 export type { MailFolder, BankActionType, AutoConnectionActionType, CurriculumActionType, TrainStatus } from './domain-types';
@@ -240,6 +244,11 @@ export type {
   // Company Creation
   WsReqCreateCompany,
   WsRespCreateCompany,
+  // Cluster Browsing
+  WsReqClusterInfo,
+  WsRespClusterInfo,
+  WsReqClusterFacilities,
+  WsRespClusterFacilities,
   // GM Chat
   WsReqGmChatSend,
   // Transport

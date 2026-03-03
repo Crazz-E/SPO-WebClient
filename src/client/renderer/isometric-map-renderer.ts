@@ -987,18 +987,27 @@ export class IsometricMapRenderer {
     const alignedY = Math.floor(y / zoneSize) * zoneSize;
     const key = `${alignedX},${alignedY}`;
 
+    // Clip buildings to query bounds — matches Delphi client's post-filter on ObjectsInArea.
+    // The game server's GetObjectsInArea (Kernel/World.pas) uses inclusive Delphi for-loops
+    // that can return buildings slightly outside the requested rectangle. The legacy client
+    // clips with: if (obj.r >= imin) and (obj.r <= imax) and (obj.c >= jmin) and (obj.c <= jmax)
+    const clipped = buildings.filter(b =>
+      b.x >= alignedX && b.x < alignedX + w &&
+      b.y >= alignedY && b.y < alignedY + h
+    );
+
     // Check if zone data actually changed (avoid redundant ground cache rebuilds)
     const existing = this.cachedZones.get(key);
     const segmentsChanged = !existing ||
       existing.segments.length !== segments.length ||
-      existing.buildings.length !== buildings.length;
+      existing.buildings.length !== clipped.length;
 
     this.cachedZones.set(key, {
       x: alignedX,
       y: alignedY,
       w,
       h,
-      buildings,
+      buildings: clipped,
       segments,
       lastLoadTime: Date.now(),
       forceRefresh: false
@@ -1013,7 +1022,7 @@ export class IsometricMapRenderer {
     this.rebuildAggregatedData();
 
     // Fetch dimensions for new buildings
-    this.fetchDimensionsForBuildings(buildings);
+    this.fetchDimensionsForBuildings(clipped);
 
     // Only invalidate ground cache if zone content actually changed
     if (segmentsChanged) {

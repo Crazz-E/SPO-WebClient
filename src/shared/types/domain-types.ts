@@ -161,6 +161,31 @@ export interface BuildingInfo {
 }
 
 // =============================================================================
+// CLUSTER / COMPANY CREATION
+// =============================================================================
+
+export interface ClusterInfo {
+  id: string;                      // 'PGI', 'Moab', 'Dissidents', 'Magna', 'Mariko'
+  displayName: string;             // 'Mariko Enterprises', 'The Moab', etc.
+  description: string;             // Lore text from info.asp
+  categories: ClusterCategory[];
+}
+
+export interface ClusterCategory {
+  name: string;                    // 'Headquarters', 'Farms', etc.
+  folder: string;                  // '00000003.DissidentsFarms.five'
+}
+
+export interface ClusterFacilityPreview {
+  name: string;                    // 'Company Headquarters'
+  iconUrl: string;                 // Proxy URL for icon
+  cost: string;                    // '$8,000K'
+  buildTime: string;               // '3600 m.'
+  zoneType: string;                // Zone tooltip text
+  description: string;             // Optional description
+}
+
+// =============================================================================
 // SURFACE / ZONE OVERLAYS
 // =============================================================================
 

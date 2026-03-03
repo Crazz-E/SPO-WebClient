@@ -1,7 +1,7 @@
 /**
- * CompanyCreationModal — Modal dialog for creating a new company.
+ * CompanyCreationModal — Multi-panel cluster browser + company creation form.
  *
- * Allows the user to enter a company name and select an industry cluster.
+ * Shows cluster tabs, description, building categories, and facility previews.
  * Managed by ui-store modal state ('createCompany').
  */
 
@@ -10,6 +10,10 @@ import { X } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useGameStore } from '../../store/game-store';
 import { useClient } from '../../context';
+import { CLUSTER_DISPLAY_NAMES, INVALID_COMPANY_NAME_CHARS } from '@/shared/cluster-data';
+import type { ClusterId } from '@/shared/cluster-data';
+import type { ClusterCategory } from '@/shared/types';
+import { Skeleton } from '../common/Skeleton';
 import styles from './CompanyCreationModal.module.css';
 
 const MAX_NAME_LENGTH = 50;
@@ -18,9 +22,14 @@ export function CompanyCreationModal() {
   const modal = useUiStore((s) => s.modal);
   const closeModal = useUiStore((s) => s.closeModal);
   const clusters = useGameStore((s) => s.companyCreationClusters);
+  const clusterInfo = useGameStore((s) => s.clusterInfo);
+  const clusterInfoLoading = useGameStore((s) => s.clusterInfoLoading);
+  const facilities = useGameStore((s) => s.clusterFacilities);
+  const facilitiesLoading = useGameStore((s) => s.clusterFacilitiesLoading);
 
+  const [selectedCluster, setSelectedCluster] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<ClusterCategory | null>(null);
   const [name, setName] = useState('');
-  const [cluster, setCluster] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const client = useClient();
@@ -29,14 +38,47 @@ export function CompanyCreationModal() {
   // Reset form when modal opens
   useEffect(() => {
     if (modal === 'createCompany') {
+      const firstCluster = clusters[0] ?? '';
+      setSelectedCluster(firstCluster);
+      setSelectedCategory(null);
       setName('');
-      setCluster(clusters[0] ?? '');
       setLoading(false);
       setError('');
-      // Focus the name input after render
-      requestAnimationFrame(() => inputRef.current?.focus());
+      // Request info for the first cluster
+      if (firstCluster && client.onRequestClusterInfo) {
+        client.onRequestClusterInfo(firstCluster);
+      }
     }
-  }, [modal, clusters]);
+  }, [modal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When cluster info arrives and we have no selected category, pick the first one
+  useEffect(() => {
+    if (clusterInfo && clusterInfo.categories.length > 0 && !selectedCategory) {
+      const first = clusterInfo.categories[0];
+      setSelectedCategory(first);
+      if (client.onRequestClusterFacilities) {
+        client.onRequestClusterFacilities(selectedCluster, first.folder);
+      }
+    }
+  }, [clusterInfo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleClusterTabClick = useCallback((clusterId: string) => {
+    if (clusterId === selectedCluster) return;
+    setSelectedCluster(clusterId);
+    setSelectedCategory(null);
+    useGameStore.getState().setClusterFacilities([]);
+    if (client.onRequestClusterInfo) {
+      client.onRequestClusterInfo(clusterId);
+    }
+  }, [selectedCluster, client]);
+
+  const handleCategoryClick = useCallback((category: ClusterCategory) => {
+    if (category.folder === selectedCategory?.folder) return;
+    setSelectedCategory(category);
+    if (client.onRequestClusterFacilities) {
+      client.onRequestClusterFacilities(selectedCluster, category.folder);
+    }
+  }, [selectedCluster, selectedCategory, client]);
 
   const handleCancel = useCallback(() => {
     closeModal();
@@ -45,7 +87,6 @@ export function CompanyCreationModal() {
   const handleSubmit = useCallback(async () => {
     if (loading) return;
 
-    // Validate
     const trimmed = name.trim();
     if (trimmed.length === 0) {
       setError('Company name cannot be empty');
@@ -55,7 +96,11 @@ export function CompanyCreationModal() {
       setError(`Company name must be ${MAX_NAME_LENGTH} characters or less`);
       return;
     }
-    if (!cluster) {
+    if (INVALID_COMPANY_NAME_CHARS.test(trimmed)) {
+      setError('Company name cannot contain: \\ / : * ? " < > | & + %');
+      return;
+    }
+    if (!selectedCluster) {
       setError('Please select a cluster');
       return;
     }
@@ -65,7 +110,7 @@ export function CompanyCreationModal() {
 
     try {
       if (client.onCreateCompanySubmit) {
-        await client.onCreateCompanySubmit(trimmed, cluster);
+        await client.onCreateCompanySubmit(trimmed, selectedCluster);
       }
       closeModal();
     } catch (err: unknown) {
@@ -74,7 +119,7 @@ export function CompanyCreationModal() {
     } finally {
       setLoading(false);
     }
-  }, [name, cluster, loading, closeModal]);
+  }, [name, selectedCluster, loading, closeModal, client]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -95,6 +140,7 @@ export function CompanyCreationModal() {
     <>
       <div className={styles.backdrop} onClick={handleCancel} aria-hidden="true" />
       <div className={styles.modal} role="dialog" aria-label="Create New Company" onKeyDown={handleKeyDown}>
+        {/* Header */}
         <div className={styles.header}>
           <h2 className={styles.title}>Create New Company</h2>
           <button className={styles.closeBtn} onClick={handleCancel} aria-label="Close">
@@ -102,13 +148,103 @@ export function CompanyCreationModal() {
           </button>
         </div>
 
-        <div className={styles.content}>
-          {/* Company name */}
-          <div className={styles.fieldGroup}>
-            <label className={styles.label}>Company Name</label>
+        {/* Cluster tabs */}
+        <div className={styles.clusterTabs}>
+          {clusters.map((id) => (
+            <button
+              key={id}
+              className={`${styles.clusterTab} ${id === selectedCluster ? styles.clusterTabActive : ''}`}
+              onClick={() => handleClusterTabClick(id)}
+            >
+              {CLUSTER_DISPLAY_NAMES[id as ClusterId] ?? id}
+            </button>
+          ))}
+        </div>
+
+        {/* Two-column body */}
+        <div className={styles.body}>
+          {/* Left sidebar: description + categories */}
+          <div className={styles.sidebar}>
+            {clusterInfoLoading ? (
+              <div className={styles.descriptionLoading}>
+                <Skeleton width="100%" height="12px" />
+                <Skeleton width="90%" height="12px" />
+                <Skeleton width="75%" height="12px" />
+                <Skeleton width="85%" height="12px" />
+              </div>
+            ) : clusterInfo ? (
+              <>
+                <div className={styles.description}>{clusterInfo.description}</div>
+                <div className={styles.categoriesHeader}>Categories</div>
+                <div className={styles.categoryList}>
+                  {clusterInfo.categories.map((cat) => (
+                    <button
+                      key={cat.folder}
+                      className={`${styles.categoryItem} ${cat.folder === selectedCategory?.folder ? styles.categoryItemActive : ''}`}
+                      onClick={() => handleCategoryClick(cat)}
+                    >
+                      <span className={styles.categoryIndicator} />
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className={styles.descriptionLoading}>
+                <Skeleton width="100%" height="12px" />
+                <Skeleton width="80%" height="12px" />
+              </div>
+            )}
+          </div>
+
+          {/* Right panel: facility list */}
+          <div className={styles.facilityPanel}>
+            {facilitiesLoading ? (
+              <div className={styles.facilityLoadingGrid}>
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Skeleton key={i} width="100%" height="56px" />
+                ))}
+              </div>
+            ) : facilities.length > 0 ? (
+              facilities.map((fac, i) => (
+                <div key={i} className={styles.facilityCard}>
+                  {fac.iconUrl && (
+                    <img
+                      src={fac.iconUrl}
+                      alt={fac.name}
+                      className={styles.facilityIcon}
+                    />
+                  )}
+                  <div className={styles.facilityInfo}>
+                    <span className={styles.facilityName}>{fac.name}</span>
+                    {fac.description && (
+                      <span className={styles.facilityDesc}>{fac.description}</span>
+                    )}
+                    {fac.zoneType && (
+                      <span className={styles.facilityDesc}>{fac.zoneType}</span>
+                    )}
+                  </div>
+                  <div className={styles.facilityMeta}>
+                    {fac.cost && <span className={styles.facilityCost}>{fac.cost}</span>}
+                    {fac.buildTime && <span className={styles.facilityTime}>{fac.buildTime}</span>}
+                  </div>
+                </div>
+              ))
+            ) : selectedCategory ? (
+              <div className={styles.facilityEmpty}>No facilities in this category</div>
+            ) : (
+              <div className={styles.facilityEmpty}>Select a category to browse facilities</div>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom bar: error + name input + submit */}
+        <div className={styles.bottomSection}>
+          {error && <div className={styles.error} style={{ margin: '0 var(--space-5)' }}>{error}</div>}
+          <div className={styles.bottomBar}>
             <input
               ref={inputRef}
-              className={styles.input}
+              className={styles.nameInput}
               type="text"
               maxLength={MAX_NAME_LENGTH}
               placeholder="Enter company name..."
@@ -116,34 +252,11 @@ export function CompanyCreationModal() {
               onChange={(e) => setName(e.target.value)}
               disabled={loading}
             />
-          </div>
-
-          {/* Industry cluster */}
-          <div className={styles.fieldGroup}>
-            <label className={styles.label}>Industry Cluster</label>
-            <select
-              className={styles.select}
-              value={cluster}
-              onChange={(e) => setCluster(e.target.value)}
-              disabled={loading}
+            <button
+              className={styles.submitBtn}
+              onClick={handleSubmit}
+              disabled={loading || !selectedCluster}
             >
-              {clusters.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Error message */}
-          {error && <div className={styles.error}>{error}</div>}
-
-          {/* Buttons */}
-          <div className={styles.buttonRow}>
-            <button className={styles.cancelBtn} onClick={handleCancel} disabled={loading}>
-              Cancel
-            </button>
-            <button className={styles.submitBtn} onClick={handleSubmit} disabled={loading}>
               {loading ? 'Creating...' : 'Create Company'}
             </button>
           </div>

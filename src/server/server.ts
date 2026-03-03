@@ -142,6 +142,10 @@ import {
   WsRespSearchConnections,
   WsReqCreateCompany,
   WsRespCreateCompany,
+  WsReqClusterInfo,
+  WsRespClusterInfo,
+  WsReqClusterFacilities,
+  WsRespClusterFacilities,
   // Empire
   WsRespEmpireFacilities,
   BankActionType,
@@ -1912,6 +1916,54 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
             type: WsMessageType.RESP_ERROR,
             wsRequestId: msg.wsRequestId,
             errorMessage: toErrorMessage(err) || 'Failed to create company',
+            code: ErrorCodes.ERROR_Unknown
+          };
+          ws.send(JSON.stringify(errorResp));
+        }
+        break;
+      }
+
+      // ========================================================================
+      // CLUSTER BROWSING (company creation)
+      // ========================================================================
+
+      case WsMessageType.REQ_CLUSTER_INFO: {
+        const req = msg as WsReqClusterInfo;
+        try {
+          const clusterInfo = await session.fetchClusterInfo(req.clusterName);
+          const response: WsRespClusterInfo = {
+            type: WsMessageType.RESP_CLUSTER_INFO,
+            wsRequestId: msg.wsRequestId,
+            clusterInfo,
+          };
+          ws.send(JSON.stringify(response));
+        } catch (err: unknown) {
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: toErrorMessage(err) || 'Failed to fetch cluster info',
+            code: ErrorCodes.ERROR_Unknown
+          };
+          ws.send(JSON.stringify(errorResp));
+        }
+        break;
+      }
+
+      case WsMessageType.REQ_CLUSTER_FACILITIES: {
+        const req = msg as WsReqClusterFacilities;
+        try {
+          const facilities = await session.fetchClusterFacilities(req.cluster, req.folder);
+          const response: WsRespClusterFacilities = {
+            type: WsMessageType.RESP_CLUSTER_FACILITIES,
+            wsRequestId: msg.wsRequestId,
+            facilities,
+          };
+          ws.send(JSON.stringify(response));
+        } catch (err: unknown) {
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: toErrorMessage(err) || 'Failed to fetch cluster facilities',
             code: ErrorCodes.ERROR_Unknown
           };
           ws.send(JSON.stringify(errorResp));

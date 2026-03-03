@@ -62,6 +62,9 @@ import {
   ResearchInventionDetails,
   WsEventShowNotification,
   WsEventCacheRefresh,
+  ClusterInfo,
+  ClusterCategory,
+  ClusterFacilityPreview,
 } from '../shared/types';
 import {
   getTemplateForVisualClass,
@@ -756,9 +759,20 @@ public async selectCompany(companyId: string): Promise<void> {
 }
 
 /**
- * Create a new company via RDO NewCompany.
- * Delphi: function RDONewCompany(username, name, clustername: widestring): OleVariant;
- * Returns "[CompanyName,CompanyId]" on success.
+ * Create a new company via RDO on the InterfaceServer.
+ *
+ * The legacy client calls rdoCreateCompany.asp which internally calls:
+ *   InterfaceServer.NewCompany(name, cluster) — 2 params, username from IS session.
+ *
+ * Our gateway calls the same method directly via RDO socket:
+ *   sel <worldContextId> call NewCompany "^" "%<name>","%<cluster>"
+ *
+ * The InterfaceServer internally calls:
+ *   World.RDONewCompany(username, name, cluster) — 3 params, adds username.
+ *
+ * Response is always a widestring (IS casts to widestring):
+ *   Success: res="%[CompanyName,CompanyId]"
+ *   Error:   res="%<errorCode>"  (e.g. "%6" for unknown cluster)
  */
 public async createCompany(
   companyName: string,
@@ -772,21 +786,28 @@ public async createCompany(
   this.log.debug(`[Session] Creating company: "${companyName}" in cluster "${cluster}" for user "${username}"`);
 
   try {
+    // InterfaceServer.NewCompany(name, cluster) — only 2 args.
+    // Username is filled from the IS session automatically.
     const packet = await this.sendRdoRequest('world', {
       verb: RdoVerb.SEL,
       targetId: this.worldContextId,
       action: RdoAction.CALL,
       member: 'NewCompany',
       separator: '"^"',
-      args: [RdoValue.string(username).format(), RdoValue.string(companyName).format(), RdoValue.string(cluster).format()]
+      args: [RdoValue.string(companyName).format(), RdoValue.string(cluster).format()]
     });
 
     const payload = packet.payload || '';
+    this.log.debug(`[Session] NewCompany response: ${payload}`);
 
-    // Success: res="%[CompanyName,CompanyId]"
+    // Response is always a widestring (InterfaceServer casts to widestring):
+    //   Success: res="%[CompanyName,CompanyId]"
+    //   Error:   res="%<errorCode>"
     const resMatch = /res="%(.*)"/.exec(payload);
     if (resMatch) {
       const resultStr = resMatch[1];
+
+      // Success: "[Name,Id]"
       const companyMatch = /^\[(.+),(\d+)]$/.exec(resultStr);
       if (companyMatch) {
         const newName = companyMatch[1];
@@ -795,23 +816,35 @@ public async createCompany(
         this.availableCompanies.push({ id: newId, name: newName, ownerRole: username });
         return { success: true, companyName: newName, companyId: newId };
       }
+
+      // Error: numeric error code as string (e.g. "6", "11")
+      const errorCode = parseInt(resultStr, 10);
+      if (!isNaN(errorCode)) {
+        const errorMessages: Record<number, string> = {
+          6: 'Unknown cluster',
+          11: 'Company name already taken',
+          28: 'Zone tier mismatch',
+          33: 'Maximum number of companies reached',
+        };
+        const msg = errorMessages[errorCode] || `Failed with error code ${errorCode}`;
+        this.log.warn(`[Session] Company creation failed: ${msg}`);
+        return { success: false, companyName: '', companyId: '', message: msg };
+      }
+
+      // Non-numeric, non-bracket string — unexpected
+      this.log.warn(`[Session] Unexpected NewCompany result: "${resultStr}"`);
+      return { success: false, companyName: '', companyId: '', message: `Unexpected result: ${resultStr}` };
     }
 
-    // Error: res="#errorCode"
-    const errorMatch = /res="#(-?\d+)"/.exec(payload);
-    if (errorMatch) {
-      const errorCode = parseInt(errorMatch[1], 10);
-      const errorMessages: Record<number, string> = {
-        6: 'Unknown cluster',
-        11: 'Company name already taken',
-        28: 'Zone tier mismatch',
-        33: 'Maximum number of companies reached',
-      };
-      const msg = errorMessages[errorCode] || `Failed with error code ${errorCode}`;
-      this.log.warn(`[Session] Company creation failed: ${msg}`);
-      return { success: false, companyName: '', companyId: '', message: msg };
+    // Fallback: integer-typed error
+    const intMatch = /res="#(-?\d+)"/.exec(payload);
+    if (intMatch) {
+      const errorCode = parseInt(intMatch[1], 10);
+      this.log.warn(`[Session] Company creation failed with integer error: ${errorCode}`);
+      return { success: false, companyName: '', companyId: '', message: `Failed with error code ${errorCode}` };
     }
 
+    this.log.warn(`[Session] Unexpected NewCompany payload: ${payload}`);
     return { success: false, companyName: '', companyId: '', message: 'Unexpected response from server' };
   } catch (e: unknown) {
     this.log.error('[Session] Failed to create company:', e);
@@ -4993,6 +5026,166 @@ private handlePush(socketName: string, packet: RdoPacket) {
   // =========================================================================
   // BUILDING CONSTRUCTION FEATURE
   // =========================================================================
+
+  // ===========================================================================
+  // CLUSTER BROWSING (company creation)
+  // ===========================================================================
+
+  /**
+   * Fetch cluster info (description + building categories) from NewLogon/info.asp.
+   * This ASP page does not require a company — suitable for pre-creation browsing.
+   */
+  public async fetchClusterInfo(clusterName: string): Promise<ClusterInfo> {
+    if (!this.currentWorldInfo) {
+      throw new Error('Not logged into world - cannot fetch cluster info');
+    }
+
+    const url = `http://${this.currentWorldInfo.ip}/Five/0/Visual/Voyager/NewLogon/info.asp?ClusterName=${encodeURIComponent(clusterName)}`;
+    this.log.debug(`[ClusterBrowse] Fetching cluster info: ${clusterName}`);
+
+    try {
+      const response = await fetch(url, { redirect: 'follow' });
+      const html = await response.text();
+      return this.parseClusterInfo(clusterName, html);
+    } catch (e) {
+      this.log.error(`[ClusterBrowse] Failed to fetch cluster info for ${clusterName}:`, e);
+      return { id: clusterName, displayName: clusterName, description: '', categories: [] };
+    }
+  }
+
+  /**
+   * Parse info.asp HTML to extract cluster description and building categories.
+   *
+   * HTML structure (from trace):
+   *   <div class="sealExpln" ...>description text</div>
+   *   <td id="finger0" ... folder="00000002.DissidentsDirectionFacilities.five" ...>
+   *     <div class="hiLabel"><nobr>Headquarters</nobr></div>
+   *   </td>
+   */
+  private parseClusterInfo(clusterName: string, html: string): ClusterInfo {
+    // Extract display name from cluster attribute on main table
+    const clusterAttrMatch = /cluster\s*=\s*["']?([^"'\s>]+)/i.exec(html);
+    const displayName = clusterAttrMatch?.[1] || clusterName;
+
+    // Extract description from sealExpln div
+    const descMatch = /<div[^>]*class\s*=\s*["']?sealExpln["']?[^>]*>([\s\S]*?)<\/div>/i.exec(html);
+    let description = '';
+    if (descMatch) {
+      description = descMatch[1]
+        .replace(/<p>/gi, '\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .trim();
+    }
+
+    // Extract categories from finger elements with folder attribute
+    const categories: ClusterCategory[] = [];
+    const fingerRegex = /<td[^>]*\sfolder\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/td>/gi;
+    let match;
+    while ((match = fingerRegex.exec(html)) !== null) {
+      const folder = match[1];
+      const content = match[2];
+      const nameMatch = /<nobr>([\s\S]*?)<\/nobr>/i.exec(content);
+      const name = nameMatch ? nameMatch[1].trim() : '';
+      if (name && folder) {
+        categories.push({ name, folder });
+      }
+    }
+
+    this.log.debug(`[ClusterBrowse] Parsed cluster "${clusterName}": ${categories.length} categories`);
+    return { id: clusterName, displayName, description, categories };
+  }
+
+  /**
+   * Fetch facility previews for a cluster/folder from NewLogon/facilityList.asp.
+   * This ASP page does not require a company — suitable for pre-creation browsing.
+   */
+  public async fetchClusterFacilities(cluster: string, folder: string): Promise<ClusterFacilityPreview[]> {
+    if (!this.currentWorldInfo) {
+      throw new Error('Not logged into world - cannot fetch cluster facilities');
+    }
+
+    const params = new URLSearchParams({ Cluster: cluster, Folder: folder });
+    const url = `http://${this.currentWorldInfo.ip}/Five/0/Visual/Voyager/NewLogon/facilityList.asp?${params.toString().replace(/\+/g, '%20')}`;
+    this.log.debug(`[ClusterBrowse] Fetching facilities: ${cluster}/${folder}`);
+
+    try {
+      const response = await fetch(url, { redirect: 'follow' });
+      const html = await response.text();
+      return this.parseClusterFacilities(html);
+    } catch (e) {
+      this.log.error(`[ClusterBrowse] Failed to fetch facilities for ${cluster}/${folder}:`, e);
+      return [];
+    }
+  }
+
+  /**
+   * Parse facilityList.asp HTML to extract facility previews.
+   *
+   * HTML structure (from trace):
+   *   <span ...>
+   *     <div class=comment ...>Company Headquarters</div>
+   *     <table><tr height=80>
+   *       <td><img src=/five/icons/MapDisHQ1.gif /></td>
+   *       <td>
+   *         <img src="images/zone-commerce.gif" title="Building must be located in...">
+   *         <div class=comment ...>$8,000K<br><nobr>3600 m.</nobr></div>
+   *       </td>
+   *     </tr></table>
+   *     <div class="description" ...>optional description</div>
+   *   </span>
+   */
+  private parseClusterFacilities(html: string): ClusterFacilityPreview[] {
+    const facilities: ClusterFacilityPreview[] = [];
+
+    // Split on <span> blocks — each facility is wrapped in a <span>
+    const spanRegex = /<span[^>]*>([\s\S]*?)<\/span>/gi;
+    let match;
+    while ((match = spanRegex.exec(html)) !== null) {
+      const block = match[1];
+
+      // Extract facility name from first comment div
+      const nameMatch = /<div[^>]*class\s*=\s*["']?comment["']?[^>]*font-size:\s*11px[^>]*>([\s\S]*?)<\/div>/i.exec(block);
+      const name = nameMatch ? nameMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+      if (!name) continue;
+
+      // Extract icon URL (first <img src=...> pointing to /five/icons/ or similar)
+      const iconMatch = /<img\s+src\s*=\s*["']?([^"'\s>]*icons[^"'\s>]*)["']?/i.exec(block);
+      const iconUrl = iconMatch ? this.convertToProxyUrl(iconMatch[1]) : '';
+
+      // Extract zone type from zone image title
+      const zoneMatch = /<img[^>]*zone[^>]*title\s*=\s*["']([^"']+)["']/i.exec(block);
+      const zoneType = zoneMatch?.[1] || '';
+
+      // Extract cost and build time from the second comment div (smaller font)
+      const metaMatch = /<div[^>]*class\s*=\s*["']?comment["']?[^>]*font-size:\s*9px[^>]*>([\s\S]*?)<\/div>/i.exec(block);
+      let cost = '';
+      let buildTime = '';
+      if (metaMatch) {
+        const metaText = metaMatch[1];
+        const costMatch = /(\$[\d,]+\.?\d*\s*[KM]?)/i.exec(metaText);
+        cost = costMatch?.[1] || '';
+        const timeMatch = /<nobr>([\d,]+\s*m\.)<\/nobr>/i.exec(metaText);
+        buildTime = timeMatch?.[1] || '';
+      }
+
+      // Extract description
+      const descMatch = /<div[^>]*class\s*=\s*["']?description["']?[^>]*>([\s\S]*?)<\/div>/i.exec(block);
+      let description = '';
+      if (descMatch) {
+        description = descMatch[1].replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').trim();
+      }
+
+      facilities.push({ name, iconUrl, cost, buildTime, zoneType, description });
+    }
+
+    this.log.debug(`[ClusterBrowse] Parsed ${facilities.length} facility previews`);
+    return facilities;
+  }
+
+  // ===========================================================================
+  // BUILD CONSTRUCTION
+  // ===========================================================================
 
   /**
    * Fetch building categories via HTTP (KindList.asp)

@@ -92,6 +92,11 @@ import {
   // Company Creation
   WsReqCreateCompany,
   WsRespCreateCompany,
+  // Cluster Browsing
+  WsReqClusterInfo,
+  WsRespClusterInfo,
+  WsReqClusterFacilities,
+  WsRespClusterFacilities,
   // Date
   WsEventRefreshDate,
   // Research / Inventions
@@ -294,6 +299,9 @@ export class StarpeaceClient {
       onCreateCompany: () => this.showCompanyCreationDialog(),
       onCreateCompanySubmit: (companyName: string, cluster: string) =>
         this.handleCreateCompany(companyName, cluster),
+      onRequestClusterInfo: (clusterName: string) => this.requestClusterInfo(clusterName),
+      onRequestClusterFacilities: (cluster: string, folder: string) =>
+        this.requestClusterFacilities(cluster, folder),
       onRequestBuildingCategories: () => this.openBuildMenu(),
       onRequestBuildingFacilities: (kind: number, cluster: string) =>
         this.loadBuildingFacilitiesByKind(kind, cluster),
@@ -899,6 +907,18 @@ export class StarpeaceClient {
         break;
       }
 
+      // Cluster Browsing Responses
+      case WsMessageType.RESP_CLUSTER_INFO: {
+        const clusterResp = msg as WsRespClusterInfo;
+        ClientBridge.handleClusterInfoResponse(clusterResp.clusterInfo);
+        break;
+      }
+      case WsMessageType.RESP_CLUSTER_FACILITIES: {
+        const facResp = msg as WsRespClusterFacilities;
+        ClientBridge.handleClusterFacilitiesResponse(facResp.facilities);
+        break;
+      }
+
       // Profile Response
       case WsMessageType.RESP_GET_PROFILE: {
         const profile = (msg as WsRespGetProfile).profile;
@@ -1118,9 +1138,7 @@ export class StarpeaceClient {
   }
 
   private showCompanyCreationDialog(): void {
-    // Known clusters — could be fetched from server in future
-    const defaultClusters = ['PGI', 'Moab', 'Dissidents', 'Magna', 'Mariko'];
-    ClientBridge.showCompanyCreationDialog(defaultClusters);
+    ClientBridge.showCompanyCreationDialog();
   }
 
   private async handleCreateCompany(companyName: string, cluster: string): Promise<void> {
@@ -1135,13 +1153,45 @@ export class StarpeaceClient {
     this.showNotification(`Company "${resp.companyName}" created!`, 'success');
     this.soundManager.play('notification');
 
-    // Add new company to list and auto-select it
-    this.availableCompanies.push({
+    // Add new company to local list
+    const newCompany: CompanyInfo = {
       id: resp.companyId,
       name: resp.companyName,
       ownerRole: this.storedUsername,
-    });
+    };
+    this.availableCompanies.push(newCompany);
+
+    // If already in-game (created from ProfilePanel), just update the store
+    // without reinitializing the entire game view.
+    if (this.mapNavigationUI) {
+      ClientBridge.setCompany(resp.companyName, resp.companyId);
+      this.currentCompanyName = resp.companyName;
+      // Refresh profile companies tab if open
+      useProfileStore.getState().reset();
+      return;
+    }
+
+    // During login flow: auto-select and enter game
     this.selectCompanyAndStart(resp.companyId);
+  }
+
+  private requestClusterInfo(clusterName: string): void {
+    useGameStore.getState().setClusterInfoLoading(true);
+    const req: WsReqClusterInfo = {
+      type: WsMessageType.REQ_CLUSTER_INFO,
+      clusterName,
+    };
+    this.ws?.send(JSON.stringify(req));
+  }
+
+  private requestClusterFacilities(cluster: string, folder: string): void {
+    useGameStore.getState().setClusterFacilitiesLoading(true);
+    const req: WsReqClusterFacilities = {
+      type: WsMessageType.REQ_CLUSTER_FACILITIES,
+      cluster,
+      folder,
+    };
+    this.ws?.send(JSON.stringify(req));
   }
 
   private loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64) {
@@ -1205,6 +1255,16 @@ export class StarpeaceClient {
     // React App.tsx switches to GameScreen when status becomes 'connected'
     this.uiGamePanel.style.display = 'flex';
     this.uiGamePanel.style.flexDirection = 'column';
+
+    // Tear down existing map/minimap to prevent duplicate canvases
+    if (this.mapNavigationUI) {
+      this.mapNavigationUI.destroy();
+      this.mapNavigationUI = null;
+    }
+    if (this.minimapUI) {
+      this.minimapUI.destroy();
+      this.minimapUI = null;
+    }
 
     // Initialize Map & Navigation
     this.mapNavigationUI = new MapNavigationUI(this.uiGamePanel, this.currentWorldName);
