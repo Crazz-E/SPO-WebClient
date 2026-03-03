@@ -248,6 +248,8 @@ export class StarpeaceSession extends EventEmitter {
   private isServerBusy: boolean = false;
   private serverBusyCheckInterval: NodeJS.Timeout | null = null;
   private readonly SERVER_BUSY_CHECK_INTERVAL_MS = 10000; // Check every 10 seconds
+  private keepAliveInterval: NodeJS.Timeout | null = null;
+  private readonly KEEP_ALIVE_INTERVAL_MS = 60000; // Matches Delphi CacheConnectionTimeOut
 
   // Map-specific throttling
   private activeMapRequests: number = 0;
@@ -837,6 +839,9 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     this.log.debug(`[Session] Role-based login detected: switching from "${this.cachedUsername}" to role "${company.ownerRole}"`);
   }
 
+  // Stop cacher KeepAlive before closing sockets
+  this.stopCacherKeepAlive();
+
   // Close existing sockets except directory
   this.log.debug('[Session] Closing existing world connections for company switch...');
   const socketsToClose = Array.from(this.sockets.keys()).filter(name => name !== 'directory_auth' && name !== 'directory_query');
@@ -1194,6 +1199,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     });
     this.cacherId = parseIdOfResponseHelper(idPacket.payload);
     this.log.debug(`[Session] Map Service Ready. CacherID: ${this.cacherId}`);
+    this.startCacherKeepAlive();
   }
 
   /**
@@ -3973,6 +3979,57 @@ private createSocket(name: string, host: string, port: number): Promise<net.Sock
   }
 
   /**
+   * Start KeepAlive timer for the Map Service cacher proxy.
+   * Sends a void push every 60s to prevent the server from releasing
+   * the WSObjectCacher RDO reference due to inactivity.
+   *
+   * Delphi reference: ObjectInspectorHandleViewer.pas:1172-1180
+   *   fCacheObj.KeepAlive — CacheConnectionTimeOut = 60000ms
+   *
+   * CRITICAL: Uses socket.write() directly (void push with "*" separator).
+   * Must NOT use sendRdoRequest() — that adds a QueryId, and combining
+   * QueryId + "*" separator crashes the Delphi server.
+   */
+  private startCacherKeepAlive(): void {
+    if (this.keepAliveInterval) return;
+    if (!this.cacherId) {
+      this.log.warn('[KeepAlive] Cannot start: no cacherId');
+      return;
+    }
+
+    this.log.debug(`[KeepAlive] Starting 60s timer for cacherId ${this.cacherId}`);
+    this.keepAliveInterval = setInterval(() => {
+      const socket = this.sockets.get('map');
+      if (!socket || !this.cacherId) {
+        this.log.debug('[KeepAlive] Map socket or cacherId gone — stopping');
+        this.stopCacherKeepAlive();
+        return;
+      }
+      try {
+        const cmd = RdoCommand.sel(this.cacherId)
+          .call('KeepAlive')
+          .push()
+          .build();
+        socket.write(cmd);
+        this.log.debug('[KeepAlive] Sent to cacher');
+      } catch (e: unknown) {
+        this.log.warn('[KeepAlive] Failed:', toErrorMessage(e));
+      }
+    }, this.KEEP_ALIVE_INTERVAL_MS);
+  }
+
+  /**
+   * Stop the KeepAlive timer for the Map Service cacher.
+   */
+  private stopCacherKeepAlive(): void {
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+      this.keepAliveInterval = null;
+      this.log.debug('[KeepAlive] Timer stopped');
+    }
+  }
+
+  /**
    * NEW: Process buffered requests when server becomes available
    */
   private async processBufferedRequests(): Promise<void> {
@@ -4711,6 +4768,9 @@ private handlePush(socketName: string, packet: RdoPacket) {
 
     // Stop ServerBusy polling
     this.stopServerBusyPolling();
+
+    // Stop cacher KeepAlive timer
+    this.stopCacherKeepAlive();
 
     // Close all TCP sockets
     for (const [name, socket] of this.sockets.entries()) {
