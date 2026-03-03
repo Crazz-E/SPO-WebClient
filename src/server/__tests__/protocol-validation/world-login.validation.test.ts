@@ -405,15 +405,17 @@ describe('Protocol Validation: loginWorld()', () => {
       expect(setLangWrite).toContain(`sel ${CONTEXT_ID}`);
     });
 
-    it('should send SetLanguage with integer 0 argument (LangId=0)', async () => {
+    it('should send SetLanguage with string "0" argument (LangId="0")', async () => {
       await runFullLoginFlow();
 
       const worldSocket = harness.getSockets()[2];
       const allWrites = worldSocket.getCapturedWrites();
       const setLangWrite = allWrites.find(w => w.includes('SetLanguage'));
       expect(setLangWrite).toBeDefined();
-      // Should contain "#0" (integer 0)
-      expect(setLangWrite).toContain('#0');
+      // Should contain "%0" (widestring "0") — Delphi SetLanguage(langid: widestring)
+      // expects a string, not integer. Integer #0 causes nil widestring → empty Language
+      // which breaks all MLS hint string lookups.
+      expect(setLangWrite).toContain('%0');
     });
   });
 

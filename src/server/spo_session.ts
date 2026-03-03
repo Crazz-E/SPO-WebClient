@@ -623,7 +623,7 @@ public async loginWorld(username: string, pass: string, world: WorldInfo): Promi
     const setLangCmd = RdoCommand.sel(this.worldContextId!)
       .call('SetLanguage')
       .push()
-      .args(RdoValue.int(0))
+      .args(RdoValue.string('0'))
       .build();
     socket.write(setLangCmd);
     this.log.debug(`[Session] Sent SetLanguage push command`);
