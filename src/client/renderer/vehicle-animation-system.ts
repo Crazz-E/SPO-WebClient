@@ -2,15 +2,18 @@
  * Vehicle Animation System
  *
  * Animates vehicles on road tiles using pre-defined CarPaths from road block INI files.
- * Vehicles move tile-by-tile following path segments, spawning at viewport edges
- * and despawning when they leave the visible area or reach a dead end.
+ * Matches the Delphi legacy client (Car.pas) behavior:
+ * - Lane system: up to 4 cars per tile (one per road side: N/S/E/W)
+ * - Viewport-margin spawning: cars appear at scene edges and drive inward
+ * - Collision avoidance with direction prediction at intersections
+ * - Stuck timeout: cars blocked for 6s are killed
+ * - Lifetime system: 32 blocks initial, extend by 5 if visible and < 5 turns
  *
  * Performance guarantees:
  * - Active only at Z2/Z3 (zero cost at Z0/Z1)
  * - Max 40 vehicles rendered per frame
  * - Viewport culling: only visible vehicles are drawn
  * - Pre-cached textures: no fetching during render
- * - Paused during camera movement
  * - deltaTime-based animation (frame-rate independent)
  */
 
@@ -24,7 +27,10 @@ import { TileBounds, ZoomConfig } from '../../shared/map-config';
 // TYPES
 // =============================================================================
 
-interface AnimatedVehicle {
+/** Road side / lane a vehicle occupies within a tile (matches Delphi TRoadSide) */
+export type RoadSide = 'N' | 'S' | 'E' | 'W';
+
+export interface AnimatedVehicle {
   id: number;
   carClassId: number;
   // Current tile in the world (col, row)
@@ -40,34 +46,59 @@ interface AnimatedVehicle {
   pixelY: number;    // Pixel offset Y within tile
   speed: number;     // Tiles per second (how fast the vehicle crosses one tile)
   alive: boolean;
+  // Lane tracking (Delphi: TRoadSide)
+  roadSide: RoadSide;
+  // Stuck detection (Delphi: cStoppedCarDeathDelay)
+  stoppedSince: number | null;
+  // Lifetime tracking (Delphi: fBlocksToMove, fTurnsMade)
+  blocksRemaining: number;
+  turnCount: number;
+  isVisible: boolean;
 }
+
+// =============================================================================
+// CONSTANTS (matching Delphi Car.pas)
+// =============================================================================
+
+/** Vehicle speed in tiles per second (Delphi: cCarSpeed = 0.5 blocks/sec) */
+const CAR_SPEED = 0.5;
+
+/** Max vehicles in viewport (Delphi: cMaxViewCars = 40) */
+const MAX_VIEW_CARS = 40;
+
+/** Seconds between spawn attempts (compromise between Delphi's ~10s and responsive feel) */
+const SPAWN_COOLDOWN = 2.0;
+
+/** Kill stuck cars after this many ms (Delphi: cStoppedCarDeathDelay = 6000) */
+const STOPPED_CAR_DEATH_DELAY_MS = 6000;
+
+/** Initial blocks a car can travel (Delphi: cBlocksToMove = 32) */
+const BLOCKS_TO_MOVE_INITIAL = 32;
+
+/** Blocks added when lifetime is extended (Delphi: cBlocksToMoveInc = 5) */
+const BLOCKS_TO_MOVE_INCREMENT = 5;
+
+/** Max turns before car won't get lifetime extension (Delphi: cMaxTurnsAllowed = 5) */
+const MAX_TURNS_ALLOWED = 5;
+
+/** Spawn margin in tiles outside viewport (Delphi: cCarsXMargin/cCarsYMargin = 3) */
+const VIEWPORT_MARGIN = 3;
+
+/** Minimum tiles a vehicle must be able to travel from spawn point */
+const MIN_SPAWN_PATH_LENGTH = 3;
 
 /**
  * Direction offsets for tile adjacency.
- * When a vehicle exits a tile going "N", it moves to tile (row-1, col-1) in isometric map coords.
  *
  * In the CarPaths system:
  * - N/S are the "vertical" road direction (Roadvert = NS)
  * - E/W are the "horizontal" road direction (Roadhorz = WE)
- *
- * Mapping exit direction to tile offset (row, col):
- * - Exit N: the vehicle moves toward smaller row AND smaller col → tile at (row, col-1) or (row-1, col)
- * - Exit S: opposite of N
- * - Exit E: toward smaller row, larger col
- * - Exit W: toward larger row, smaller col
- *
- * Based on the isometric road orientation:
- * - Roadhorz (WE road): N.GW means entering from N side going W, S.GE means entering from S going E
- *   This is a road that runs along the isometric "horizontal" axis
- * - Roadvert (NS road): road runs along the isometric "vertical" axis
- *
- * The exit direction maps to adjacent tiles as:
  */
 const EXIT_DIRECTION_OFFSETS: Record<string, { dRow: number; dCol: number }> = {
-  'N': { dRow: -1, dCol: 0 },  // North: previous row
-  'S': { dRow: 1, dCol: 0 },   // South: next row
-  'E': { dRow: 0, dCol: 1 },   // East: next column
-  'W': { dRow: 0, dCol: -1 },  // West: previous column
+  'N': { dRow: -1, dCol: 0 },
+  'S': { dRow: 1, dCol: 0 },
+  'E': { dRow: 0, dCol: 1 },
+  'W': { dRow: 0, dCol: -1 },
 };
 
 /**
@@ -88,11 +119,14 @@ const OPPOSITE_DIRECTION: Record<string, string> = {
 export class VehicleAnimationSystem {
   private vehicles: AnimatedVehicle[] = [];
   private nextVehicleId: number = 0;
-  private maxVehicles: number = 40;
   private spawnCooldownRemaining: number = 0;
-  private readonly SPAWN_COOLDOWN: number = 0.8; // seconds between spawn attempts
-  private readonly VEHICLE_SPEED: number = 1.2;  // tiles per second
-  private readonly MIN_SPAWN_PATH_LENGTH: number = 3; // minimum tiles a vehicle must be able to travel
+
+  // Lane occupancy: "col,row" → set of occupied road sides
+  private laneOccupancy: Map<string, Set<RoadSide>> = new Map();
+
+  // Cached margin road tiles for spawning (invalidated on bounds change)
+  private marginCandidateCache: Array<{ col: number; row: number }> | null = null;
+  private lastBoundsKey: string = '';
 
   // State
   private paused: boolean = false;
@@ -107,11 +141,8 @@ export class VehicleAnimationSystem {
   private getLandId: ((col: number, row: number) => number) | null = null;
   private hasConcrete: ((col: number, row: number) => boolean) | null = null;
 
-  // Building positions for proximity-based spawning
-  private buildingTiles: Set<string> = new Set();
-  // Cached road tiles near buildings (within BUILDING_PROXIMITY radius)
-  private nearBuildingRoadTiles: Array<{ col: number; row: number }> | null = null;
-  private readonly BUILDING_PROXIMITY: number = 5;
+  // Injectable time source for testability (defaults to performance.now)
+  private getNow: () => number = () => performance.now();
 
   // ==========================================================================
   // INITIALIZATION
@@ -135,9 +166,8 @@ export class VehicleAnimationSystem {
     getLandId: (col: number, row: number) => number,
     hasConcrete: (col: number, row: number) => boolean
   ): void {
-    // Invalidate cache if road data changed
     if (this.roadTilesMap !== roadTilesMap) {
-      this.nearBuildingRoadTiles = null;
+      this.marginCandidateCache = null;
     }
     this.roadTilesMap = roadTilesMap;
     this.roadsRendering = roadsRendering;
@@ -146,23 +176,28 @@ export class VehicleAnimationSystem {
   }
 
   /**
-   * Set building tile positions for proximity-based vehicle spawning.
-   * Buildings are passed as a Set of "col,row" strings.
+   * Legacy API — kept as no-op for backward compatibility.
+   * Viewport-margin spawning replaced building-proximity spawning.
    */
-  setBuildingTiles(tiles: Set<string>): void {
-    if (tiles.size !== this.buildingTiles.size) {
-      this.nearBuildingRoadTiles = null; // Invalidate cache
-    }
-    this.buildingTiles = tiles;
+  setBuildingTiles(_tiles: Set<string>): void {
+    // No-op: spawning now uses viewport margins instead of building proximity
   }
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (!enabled) this.vehicles = [];
+    if (!enabled) {
+      this.vehicles = [];
+      this.laneOccupancy.clear();
+    }
   }
 
   setPaused(paused: boolean): void {
     this.paused = paused;
+  }
+
+  /** Override the time source (for deterministic tests) */
+  setTimeSource(getNow: () => number): void {
+    this.getNow = getNow;
   }
 
   isActive(): boolean {
@@ -173,10 +208,61 @@ export class VehicleAnimationSystem {
     return this.vehicles.length;
   }
 
+  /** Get a snapshot of vehicles (for testing) */
+  getVehicles(): ReadonlyArray<Readonly<AnimatedVehicle>> {
+    return this.vehicles;
+  }
+
   clear(): void {
     this.vehicles = [];
+    this.laneOccupancy.clear();
     this.spawnCooldownRemaining = 0;
-    this.nearBuildingRoadTiles = null;
+    this.marginCandidateCache = null;
+  }
+
+  // ==========================================================================
+  // LANE OCCUPANCY
+  // ==========================================================================
+
+  private tileKey(col: number, row: number): string {
+    return `${col},${row}`;
+  }
+
+  private isLaneFree(col: number, row: number, lane: RoadSide): boolean {
+    const lanes = this.laneOccupancy.get(this.tileKey(col, row));
+    return !lanes || !lanes.has(lane);
+  }
+
+  private occupyLane(col: number, row: number, lane: RoadSide): void {
+    const key = this.tileKey(col, row);
+    let lanes = this.laneOccupancy.get(key);
+    if (!lanes) {
+      lanes = new Set();
+      this.laneOccupancy.set(key, lanes);
+    }
+    lanes.add(lane);
+  }
+
+  private releaseLane(col: number, row: number, lane: RoadSide): void {
+    const key = this.tileKey(col, row);
+    const lanes = this.laneOccupancy.get(key);
+    if (lanes) {
+      lanes.delete(lane);
+      if (lanes.size === 0) this.laneOccupancy.delete(key);
+    }
+  }
+
+  private rebuildLaneOccupancy(): void {
+    this.laneOccupancy.clear();
+    for (const v of this.vehicles) {
+      if (v.alive) this.occupyLane(v.tileX, v.tileY, v.roadSide);
+    }
+  }
+
+  /** Get occupied lane count for a tile (for testing) */
+  getLaneCount(col: number, row: number): number {
+    const lanes = this.laneOccupancy.get(this.tileKey(col, row));
+    return lanes ? lanes.size : 0;
   }
 
   // ==========================================================================
@@ -189,20 +275,25 @@ export class VehicleAnimationSystem {
 
     // Cap deltaTime to prevent huge jumps after tab switch
     const dt = Math.min(deltaTime, 0.1);
+    const now = this.getNow();
 
     // Update existing vehicles
     for (const vehicle of this.vehicles) {
-      this.updateVehicle(vehicle, dt);
+      this.updateVehicle(vehicle, dt, bounds, now);
     }
 
-    // Remove dead vehicles
+    // Remove dead vehicles and rebuild lane occupancy
+    const prevCount = this.vehicles.length;
     this.vehicles = this.vehicles.filter(v => v.alive);
+    if (this.vehicles.length !== prevCount) {
+      this.rebuildLaneOccupancy();
+    }
 
     // Try to spawn new vehicles
     this.spawnCooldownRemaining -= dt;
-    if (this.spawnCooldownRemaining <= 0 && this.vehicles.length < this.maxVehicles) {
+    if (this.spawnCooldownRemaining <= 0 && this.vehicles.length < MAX_VIEW_CARS) {
       this.trySpawnVehicle(bounds);
-      this.spawnCooldownRemaining = this.SPAWN_COOLDOWN;
+      this.spawnCooldownRemaining = SPAWN_COOLDOWN;
     }
   }
 
@@ -221,7 +312,7 @@ export class VehicleAnimationSystem {
     if (!this.enabled || this.vehicles.length === 0) return;
     if (!this.gameObjectTextureCache) return;
 
-    // CarPaths coordinates are in 64×32 tile image space.
+    // CarPaths coordinates are in 64x32 tile image space.
     // scaleFactor converts from that space to the current zoom's screen space.
     const scaleFactor = zoomConfig.tileWidth / 64;
     const halfWidth = zoomConfig.tileWidth / 2;
@@ -231,19 +322,16 @@ export class VehicleAnimationSystem {
       // mapToScreen returns the tile's top diamond vertex (screen position).
       // CarPaths coordinates are in tile image space: (0,0) = top-left of 64x32 tile image.
       // The tile image is drawn at (sx - halfWidth, sy), so:
-      //   tile image (px, py) → screen (sx - halfWidth + px*scale, sy + py*scale)
+      //   tile image (px, py) -> screen (sx - halfWidth + px*scale, sy + py*scale)
       const screenPos = mapToScreen(vehicle.tileY, vehicle.tileX);
       const screenX = screenPos.x - halfWidth + vehicle.pixelX * scaleFactor;
-      // Vehicles on water platforms are elevated to match the platform
       const onPlatform = isOnWaterPlatform ? isOnWaterPlatform(vehicle.tileX, vehicle.tileY) : false;
       const screenY = screenPos.y + vehicle.pixelY * scaleFactor - (onPlatform ? platformYShift : 0);
 
-      // Get sprite texture filename
       const filename = this.carClassManager!.getImageFilename(vehicle.carClassId, vehicle.direction);
       if (!filename) continue;
 
-      // Car sprites are small (15-33px wide) — draw at their NATIVE pixel size,
-      // centered on the CarPath screen position. No zoom scaling applied to sprite.
+      // Car sprites are small (15-33px wide) -- draw at NATIVE pixel size, centered on path position
       const atlasRect = this.gameObjectTextureCache.getAtlasRect('CarImages', filename);
       if (atlasRect) {
         const sw = atlasRect.sw;
@@ -251,7 +339,6 @@ export class VehicleAnimationSystem {
         const drawX = Math.round(screenX - sw / 2);
         const drawY = Math.round(screenY - sh / 2);
 
-        // Viewport culling
         if (drawX + sw < 0 || drawX > canvasWidth || drawY + sh < 0 || drawY > canvasHeight) continue;
 
         ctx.drawImage(
@@ -278,7 +365,21 @@ export class VehicleAnimationSystem {
   // VEHICLE UPDATE LOGIC
   // ==========================================================================
 
-  private updateVehicle(vehicle: AnimatedVehicle, dt: number): void {
+  private updateVehicle(vehicle: AnimatedVehicle, dt: number, bounds: TileBounds, now: number): void {
+    // Update visibility
+    vehicle.isVisible = vehicle.tileX >= bounds.minJ && vehicle.tileX <= bounds.maxJ &&
+                        vehicle.tileY >= bounds.minI && vehicle.tileY <= bounds.maxI;
+
+    // Check lifetime expiry
+    if (vehicle.blocksRemaining <= 0) {
+      if (vehicle.isVisible && vehicle.turnCount < MAX_TURNS_ALLOWED) {
+        vehicle.blocksRemaining += BLOCKS_TO_MOVE_INCREMENT;
+      } else {
+        vehicle.alive = false;
+        return;
+      }
+    }
+
     const segment = vehicle.currentPath.segments[vehicle.segmentIndex];
     if (!segment) {
       vehicle.alive = false;
@@ -286,22 +387,34 @@ export class VehicleAnimationSystem {
     }
 
     // Advance progress based on speed and segment steps
-    // Speed = tiles/sec, each segment has N steps within a tile
     const totalSteps = this.getTotalPathSteps(vehicle.currentPath);
     const segmentFraction = segment.steps / totalSteps;
     const progressPerSecond = vehicle.speed / segmentFraction;
     vehicle.progress += progressPerSecond * dt / segment.steps;
 
     if (vehicle.progress >= 1) {
-      // Move to next segment
       vehicle.segmentIndex++;
       vehicle.progress = 0;
 
       if (vehicle.segmentIndex >= vehicle.currentPath.segments.length) {
-        // Reached end of path → transition to next tile
+        // Reached end of path -> transition to next tile
         if (!this.transitionToNextTile(vehicle)) {
-          vehicle.alive = false;
-          return;
+          // Check if dead end or just blocked
+          if (!this.hasAnyValidExit(vehicle)) {
+            // Dead end -- kill immediately
+            vehicle.alive = false;
+            return;
+          }
+          // Blocked at intersection -- start/check stuck timeout
+          if (vehicle.stoppedSince === null) {
+            vehicle.stoppedSince = now;
+          } else if (now - vehicle.stoppedSince >= STOPPED_CAR_DEATH_DELAY_MS) {
+            vehicle.alive = false;
+            return;
+          }
+          // Wait at end of current path
+          vehicle.segmentIndex = vehicle.currentPath.segments.length - 1;
+          vehicle.progress = 1;
         }
       }
     }
@@ -324,6 +437,35 @@ export class VehicleAnimationSystem {
     return total || 1;
   }
 
+  /** Check if the vehicle's current exit direction leads to any road tile */
+  private hasAnyValidExit(vehicle: AnimatedVehicle): boolean {
+    const exitDir = vehicle.currentPath.exitDirection;
+    const offset = EXIT_DIRECTION_OFFSETS[exitDir];
+    if (!offset) return false;
+    const newRow = vehicle.tileY + offset.dRow;
+    const newCol = vehicle.tileX + offset.dCol;
+    return this.roadTilesMap?.has(`${newCol},${newRow}`) ?? false;
+  }
+
+  /**
+   * Check if a vehicle in an adjacent lane on the target tile has an exit direction
+   * that would cross the target lane (Delphi's PredictDir deadlock prevention).
+   */
+  private hasCollisionRisk(col: number, row: number, targetLane: RoadSide): boolean {
+    for (const other of this.vehicles) {
+      if (!other.alive) continue;
+      if (other.tileX !== col || other.tileY !== row) continue;
+      if (other.roadSide === targetLane) continue;
+
+      // Risk if the other vehicle's exit direction is opposite to our entry
+      const otherExit = other.currentPath.exitDirection;
+      if (OPPOSITE_DIRECTION[otherExit] === targetLane) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private transitionToNextTile(vehicle: AnimatedVehicle): boolean {
     const exitDir = vehicle.currentPath.exitDirection;
     const offset = EXIT_DIRECTION_OFFSETS[exitDir];
@@ -332,54 +474,65 @@ export class VehicleAnimationSystem {
     const newRow = vehicle.tileY + offset.dRow;
     const newCol = vehicle.tileX + offset.dCol;
 
-    // Check if the next tile has a road
     if (!this.roadTilesMap?.has(`${newCol},${newRow}`)) return false;
 
-    // Find a matching CarPath on the next tile
-    const entryDir = OPPOSITE_DIRECTION[exitDir];
+    const entryDir = OPPOSITE_DIRECTION[exitDir] as RoadSide;
+
+    // Lane collision check
+    if (!this.isLaneFree(newCol, newRow, entryDir)) return false;
+
+    // Direction prediction at intersections
+    if (this.hasCollisionRisk(newCol, newRow, entryDir)) return false;
+
     const nextPath = this.findCarPathForTile(newCol, newRow, entryDir);
     if (!nextPath) return false;
 
-    // Transition
+    // Track direction changes
+    if (nextPath.exitDirection !== vehicle.currentPath.exitDirection) {
+      vehicle.turnCount++;
+    }
+
+    // Release old lane, occupy new lane
+    this.releaseLane(vehicle.tileX, vehicle.tileY, vehicle.roadSide);
+
     vehicle.tileX = newCol;
     vehicle.tileY = newRow;
     vehicle.currentPath = nextPath;
+    vehicle.roadSide = entryDir;
     vehicle.segmentIndex = 0;
     vehicle.progress = 0;
+    vehicle.stoppedSince = null; // Moving again
+    vehicle.blocksRemaining--;
 
+    this.occupyLane(newCol, newRow, entryDir);
     return true;
   }
 
   // ==========================================================================
-  // SPAWNING
+  // SPAWNING (viewport-margin, matching Delphi cCarsXMargin/cCarsYMargin)
   // ==========================================================================
 
   /**
-   * Build cached list of road tiles near buildings (within BUILDING_PROXIMITY tiles).
-   * This is cached and only rebuilt when buildings or roads change.
+   * Build cached list of road tiles in the viewport margin band.
+   * These are tiles within VIEWPORT_MARGIN tiles outside the visible area.
    */
-  private buildNearBuildingRoadTiles(): Array<{ col: number; row: number }> {
+  private buildMarginCandidates(bounds: TileBounds): Array<{ col: number; row: number }> {
     const result: Array<{ col: number; row: number }> = [];
-    if (!this.roadTilesMap || this.buildingTiles.size === 0) return result;
+    if (!this.roadTilesMap) return result;
 
-    const radius = this.BUILDING_PROXIMITY;
+    const margin = VIEWPORT_MARGIN;
 
     for (const [key] of this.roadTilesMap) {
       const [colStr, rowStr] = key.split(',');
       const col = parseInt(colStr, 10);
       const row = parseInt(rowStr, 10);
 
-      // Check if any building tile is within radius
-      let nearBuilding = false;
-      for (let dr = -radius; dr <= radius && !nearBuilding; dr++) {
-        for (let dc = -radius; dc <= radius && !nearBuilding; dc++) {
-          if (this.buildingTiles.has(`${col + dc},${row + dr}`)) {
-            nearBuilding = true;
-          }
-        }
-      }
+      const inViewport = col >= bounds.minJ && col <= bounds.maxJ &&
+                         row >= bounds.minI && row <= bounds.maxI;
+      const inMargin = col >= bounds.minJ - margin && col <= bounds.maxJ + margin &&
+                       row >= bounds.minI - margin && row <= bounds.maxI + margin;
 
-      if (nearBuilding) {
+      if (inMargin && !inViewport) {
         result.push({ col, row });
       }
     }
@@ -390,47 +543,42 @@ export class VehicleAnimationSystem {
   private trySpawnVehicle(bounds: TileBounds): void {
     if (!this.roadTilesMap || !this.carClassManager) return;
 
-    // Build/use cached list of road tiles near buildings
-    if (!this.nearBuildingRoadTiles) {
-      this.nearBuildingRoadTiles = this.buildNearBuildingRoadTiles();
+    // Cache margin candidates, invalidate when bounds change
+    const boundsKey = `${bounds.minI},${bounds.maxI},${bounds.minJ},${bounds.maxJ}`;
+    if (this.lastBoundsKey !== boundsKey) {
+      this.marginCandidateCache = null;
+      this.lastBoundsKey = boundsKey;
+    }
+    if (!this.marginCandidateCache) {
+      this.marginCandidateCache = this.buildMarginCandidates(bounds);
     }
 
-    // Filter to visible tiles only
-    const visibleCandidates = this.nearBuildingRoadTiles.filter(t =>
-      t.col >= bounds.minJ && t.col <= bounds.maxJ &&
-      t.row >= bounds.minI && t.row <= bounds.maxI
-    );
+    if (this.marginCandidateCache.length === 0) return;
 
-    if (visibleCandidates.length === 0) return;
-
-    // Try a few random candidates to find one with a long enough path
-    const maxAttempts = Math.min(5, visibleCandidates.length);
+    const maxAttempts = Math.min(5, this.marginCandidateCache.length);
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const idx = Math.floor(Math.random() * visibleCandidates.length);
-      const tile = visibleCandidates[idx];
+      const idx = Math.floor(Math.random() * this.marginCandidateCache.length);
+      const tile = this.marginCandidateCache[idx];
 
-      // Check if there's already a vehicle on this tile
-      if (this.vehicles.some(v => v.tileX === tile.col && v.tileY === tile.row)) continue;
-
-      // Try all 4 entry directions to find a valid CarPath with enough road ahead
-      const directions = ['N', 'S', 'E', 'W'];
-      const shuffled = directions.sort(() => Math.random() - 0.5);
+      // Try all 4 entry directions
+      const directions: RoadSide[] = ['N', 'S', 'E', 'W'];
+      const shuffled = [...directions].sort(() => Math.random() - 0.5);
 
       for (const entryDir of shuffled) {
+        // Lane-based check: only this specific lane needs to be free
+        if (!this.isLaneFree(tile.col, tile.row, entryDir)) continue;
+
         const carPath = this.findCarPathForTile(tile.col, tile.row, entryDir);
         if (!carPath) continue;
 
-        // Validate that the vehicle can travel at least MIN_SPAWN_PATH_LENGTH tiles
         const pathLength = this.measurePathLength(tile.col, tile.row, carPath);
-        if (pathLength < this.MIN_SPAWN_PATH_LENGTH) continue;
+        if (pathLength < MIN_SPAWN_PATH_LENGTH) continue;
 
-        // Pick a random car class
         const carClass = this.carClassManager.getRandomClass();
         if (!carClass) return;
 
-        // Create the vehicle
         const firstSegment = carPath.segments[0];
-        this.vehicles.push({
+        const vehicle: AnimatedVehicle = {
           id: this.nextVehicleId++,
           carClassId: carClass.id,
           tileX: tile.col,
@@ -441,9 +589,17 @@ export class VehicleAnimationSystem {
           direction: firstSegment.direction,
           pixelX: firstSegment.startX,
           pixelY: firstSegment.startY,
-          speed: this.VEHICLE_SPEED,
-          alive: true
-        });
+          speed: CAR_SPEED,
+          alive: true,
+          roadSide: entryDir,
+          stoppedSince: null,
+          blocksRemaining: BLOCKS_TO_MOVE_INITIAL,
+          turnCount: 0,
+          isVisible: false,
+        };
+
+        this.vehicles.push(vehicle);
+        this.occupyLane(tile.col, tile.row, entryDir);
         return;
       }
     }
@@ -452,14 +608,13 @@ export class VehicleAnimationSystem {
   /**
    * Measure how many tiles a vehicle can travel from a starting tile/path.
    * Simulates tile transitions without creating a vehicle.
-   * Used to validate spawn locations for long enough journeys.
    */
   private measurePathLength(startCol: number, startRow: number, startPath: CarPath): number {
     let col = startCol;
     let row = startRow;
     let path = startPath;
-    let length = 1; // Count the starting tile
-    const maxCheck = 20; // Don't check more than 20 tiles ahead
+    let length = 1;
+    const maxCheck = 20;
 
     while (length < maxCheck) {
       const exitDir = path.exitDirection;
@@ -491,24 +646,19 @@ export class VehicleAnimationSystem {
   private findCarPathForTile(col: number, row: number, entryDirection: string): CarPath | null {
     if (!this.roadsRendering || !this.roadBlockClassManager) return null;
 
-    // Get the road topology at this tile
     const topology = this.roadsRendering.get(row, col);
     if (topology === RoadBlockId.None) return null;
 
-    // Get the full road block ID (includes land type, concrete, etc.)
     const landId = this.getLandId ? this.getLandId(col, row) : 0;
     const onConcrete = this.hasConcrete ? this.hasConcrete(col, row) : false;
     const fullRoadBlockId = roadBlockId(topology, landId, onConcrete, false, false);
 
-    // Get the road block class config which contains CarPaths
     const config = this.roadBlockClassManager.getClass(fullRoadBlockId);
     if (!config || config.carPaths.length === 0) return null;
 
-    // Find paths that match the entry direction
     const matchingPaths = config.carPaths.filter(p => p.entryDirection === entryDirection);
     if (matchingPaths.length === 0) return null;
 
-    // Pick a random matching path
     return matchingPaths[Math.floor(Math.random() * matchingPaths.length)];
   }
 }
