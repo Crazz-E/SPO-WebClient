@@ -10,9 +10,9 @@ function RoadBase() {
       <line x1="2" y1="19" x2="16" y2="5" />
       <line x1="8" y1="22" x2="22" y2="8" />
       {/* Dashed center line — centered between both edges */}
-      <line x1="5" y1="20.5" x2="7.5" y2="18" />
-      <line x1="9.5" y1="16" x2="12" y2="13.5" />
-      <line x1="14" y1="11.5" x2="16.5" y2="9" />
+      <line x1="7" y1="18.5" x2="9" y2="16.5" />
+      <line x1="11" y1="14.5" x2="13" y2="12.5" />
+      <line x1="15" y1="10.5" x2="17" y2="8.5" />
     </>
   );
 }
