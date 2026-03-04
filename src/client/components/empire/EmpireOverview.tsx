@@ -8,7 +8,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useEmpireStore } from '../../store/empire-store';
 import { useClient } from '../../context';
-import { FinancialSummary } from './FinancialSummary';
 import { FacilityList } from './FacilityList';
 import { Skeleton, SkeletonLines } from '../common';
 import styles from './EmpireOverview.module.css';
@@ -63,14 +62,6 @@ export function EmpireOverview() {
 
   return (
     <div className={styles.overview}>
-      {/* Financial summary cards */}
-      <FinancialSummary
-        revenue="0"
-        expenses="0"
-        profit="0"
-        facilityCount={facilities.length}
-      />
-
       {/* Search and sort controls */}
       <div className={styles.controls}>
         <input

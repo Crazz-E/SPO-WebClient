@@ -8,7 +8,7 @@ import type { BuildingCategory, BuildingInfo } from '@/shared/types';
 import { useGameStore } from './game-store';
 
 export type RightPanelType = 'building' | 'mail' | 'search' | 'politics' | 'transport';
-export type LeftPanelType = 'empire' | 'facilities';
+export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
 export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'createCompany' | 'connectionPicker' | 'zonePicker';
 export type MobileTab = 'map' | 'empire' | 'build' | 'mail' | 'more';
 

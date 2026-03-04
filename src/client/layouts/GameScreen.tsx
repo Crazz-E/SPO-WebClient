@@ -23,17 +23,19 @@ import { MailPanel } from '../components/mail';
 import { SearchPanel } from '../components/search';
 import { PoliticsPanel } from '../components/politics';
 import { TransportPanel } from '../components/transport';
+import { OverlayMenu } from '../components/hud/OverlayMenu';
 import { BuildMenu, ConnectionPickerModal, ServerSwitchOverlay, SettingsDialog, ZoneTypePicker } from '../components/modals';
 import { CommandPalette } from '../components/command-palette';
 import { MobileShell } from '../components/mobile';
 import { ErrorBoundary } from '../components/common';
-import { User, Heart } from 'lucide-react';
+import { User, Heart, Layers } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 /** Config for each left panel type */
 const LEFT_PANEL_CONFIG: Record<string, { title: string; icon: ReactNode }> = {
   empire: { title: 'Profile', icon: <User size={18} /> },
   facilities: { title: 'My Facilities', icon: <Heart size={18} /> },
+  overlays: { title: 'Map Overlays', icon: <Layers size={18} /> },
 };
 import styles from './GameScreen.module.css';
 
@@ -113,6 +115,7 @@ export function GameScreen() {
         <ErrorBoundary>
           {leftPanel === 'empire' && <ProfilePanel />}
           {leftPanel === 'facilities' && <EmpireOverview />}
+          {leftPanel === 'overlays' && <OverlayMenu />}
         </ErrorBoundary>
       </LeftPanel>
 

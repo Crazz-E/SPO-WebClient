@@ -1,40 +1,7 @@
-/* OverlayMenu — flyout sub-list beside the overlay button */
+/* OverlayMenu — content styles for overlay list inside LeftPanel */
 
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 199;
-}
-
-.menu {
-  position: absolute;
-  left: calc(100% + var(--space-2));
-  bottom: 0;
-  z-index: 200;
-  width: 200px;
-  max-height: 70vh;
-  overflow-y: auto;
-  background: var(--bg-secondary);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+.list {
   padding: var(--space-2);
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-
-  animation: slideIn 150ms var(--ease-out) both;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 
 .categoryLabel {
@@ -43,15 +10,20 @@
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: var(--space-2) var(--space-2) var(--space-1);
+  padding: var(--space-3) var(--space-2) var(--space-1);
   user-select: none;
+}
+
+.categoryLabel:first-child {
+  padding-top: var(--space-1);
 }
 
 .item {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-2);
   border: none;
   background: transparent;
   color: var(--text-primary);
@@ -61,6 +33,7 @@
   text-align: left;
   font-size: var(--text-sm);
   white-space: nowrap;
+  border-left: 3px solid transparent;
 }
 
 .item:hover {
@@ -68,15 +41,20 @@
 }
 
 .item.active {
-  background: var(--accent-blue);
-  color: #fff;
+  background: color-mix(in srgb, var(--accent-blue) 20%, transparent);
+  color: var(--accent-blue);
+  border-left-color: var(--accent-blue);
+  font-weight: 500;
 }
 
-/* Scrollbar */
-.menu::-webkit-scrollbar {
-  width: 4px;
+.itemLabel {
+  flex: 1;
 }
-.menu::-webkit-scrollbar-thumb {
-  background: var(--glass-border);
-  border-radius: 2px;
+
+.indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  flex-shrink: 0;
 }

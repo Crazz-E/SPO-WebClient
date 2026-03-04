@@ -5,7 +5,7 @@
  * Zoom in/out, minimap toggle, overlay toggle, refresh.
  */
 
-import { ZoomIn, ZoomOut, Layers, RefreshCw } from 'lucide-react';
+import { ZoomIn, ZoomOut, Bug, RefreshCw } from 'lucide-react';
 import { IconButton } from '../common';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
@@ -42,8 +42,8 @@ export function RightRail() {
       {/* Map utilities */}
       <div className={styles.group}>
         <IconButton
-          icon={<Layers size={18} />}
-          label="Overlays (D)"
+          icon={<Bug size={18} />}
+          label="Debug (D)"
           size="md"
           variant="glass"
           onClick={() => client.onToggleDebugOverlay()}

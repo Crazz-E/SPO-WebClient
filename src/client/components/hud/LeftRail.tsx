@@ -8,10 +8,10 @@
  */
 
 import { useState } from 'react';
-import { Hammer, Search, User, Milestone, Tractor, Mail, Settings, Globe, Heart, Landmark, Train, Layers } from 'lucide-react';
+import { Hammer, Search, User, Mail, Settings, Globe, Heart, Layers } from 'lucide-react';
 import { IconButton } from '../common';
 import { ZoneIcon } from '../icons/ZoneIcon';
-import { OverlayMenu } from './OverlayMenu';
+import { RoadIcon, BuildRoadIcon, RemoveRoadIcon } from '../icons/RoadIcons';
 import { useUiStore } from '../../store/ui-store';
 import { useGameStore } from '../../store/game-store';
 import { useMailStore } from '../../store/mail-store';
@@ -19,6 +19,7 @@ import { useClient } from '../../context';
 import styles from './LeftRail.module.css';
 
 export function LeftRail() {
+  const [roadExpanded, setRoadExpanded] = useState(false);
   const openModal = useUiStore((s) => s.openModal);
   const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
   const toggleRightPanel = useUiStore((s) => s.toggleRightPanel);
@@ -32,7 +33,7 @@ export function LeftRail() {
   const isCityZonesEnabled = useGameStore((s) => s.isCityZonesEnabled);
   const activeOverlay = useGameStore((s) => s.activeOverlay);
   const client = useClient();
-  const [overlayMenuOpen, setOverlayMenuOpen] = useState(false);
+  const roadActive = isRoadBuildingMode || isRoadDemolishMode;
 
   const railClass = [styles.rail, leftPanel ? styles.shifted : ''].filter(Boolean).join(' ');
 
@@ -69,22 +70,36 @@ export function LeftRail() {
 
       {/* Secondary — tools */}
       <div className={styles.group}>
-        <IconButton
-          icon={<Milestone size={20} />}
-          label="Build Road"
-          size="lg"
-          variant="glass"
-          active={isRoadBuildingMode}
-          onClick={() => client.onBuildRoad()}
-        />
-        <IconButton
-          icon={<Tractor size={20} />}
-          label="Demolish"
-          size="lg"
-          variant="glass"
-          active={isRoadDemolishMode}
-          onClick={() => client.onDemolishRoad()}
-        />
+        <div className={styles.roadRow}>
+          <IconButton
+            icon={<RoadIcon size={20} />}
+            label="Road"
+            size="lg"
+            variant="glass"
+            active={roadActive || roadExpanded}
+            onClick={() => setRoadExpanded((v) => !v)}
+          />
+          {roadExpanded && (
+            <div className={styles.roadSub}>
+              <IconButton
+                icon={<BuildRoadIcon size={20} />}
+                label="Build Road"
+                size="lg"
+                variant="glass"
+                active={isRoadBuildingMode}
+                onClick={() => { client.onBuildRoad(); setRoadExpanded(false); }}
+              />
+              <IconButton
+                icon={<RemoveRoadIcon size={20} />}
+                label="Demolish Road"
+                size="lg"
+                variant="glass"
+                active={isRoadDemolishMode}
+                onClick={() => { client.onDemolishRoad(); setRoadExpanded(false); }}
+              />
+            </div>
+          )}
+        </div>
         {isPublicOfficeRole && (
           <IconButton
             icon={<ZoneIcon size={20} />}
@@ -95,19 +110,14 @@ export function LeftRail() {
             onClick={() => isZonePaintingMode ? client.onCancelZonePainting() : openModal('zonePicker')}
           />
         )}
-        <div style={{ position: 'relative' }}>
-          <IconButton
-            icon={<Layers size={20} />}
-            label="Overlays"
-            size="lg"
-            variant="glass"
-            active={isCityZonesEnabled || activeOverlay !== null || overlayMenuOpen}
-            onClick={() => setOverlayMenuOpen(!overlayMenuOpen)}
-          />
-          {overlayMenuOpen && (
-            <OverlayMenu onClose={() => setOverlayMenuOpen(false)} />
-          )}
-        </div>
+        <IconButton
+          icon={<Layers size={20} />}
+          label="Overlays"
+          size="lg"
+          variant="glass"
+          active={isCityZonesEnabled || activeOverlay !== null || leftPanel === 'overlays'}
+          onClick={() => toggleLeftPanel('overlays')}
+        />
       </div>
 
       <div className={styles.divider} />
@@ -136,22 +146,6 @@ export function LeftRail() {
 
       {/* Quaternary — panels & navigation */}
       <div className={styles.group}>
-        <IconButton
-          icon={<Landmark size={20} />}
-          label="Politics"
-          size="lg"
-          variant="glass"
-          active={rightPanel === 'politics'}
-          onClick={() => toggleRightPanel('politics')}
-        />
-        <IconButton
-          icon={<Train size={20} />}
-          label="Transport"
-          size="lg"
-          variant="glass"
-          active={rightPanel === 'transport'}
-          onClick={() => toggleRightPanel('transport')}
-        />
         <IconButton
           icon={<Heart size={20} />}
           label="Facilities"
