@@ -244,6 +244,14 @@ export enum WsMessageType {
   RESP_RESEARCH_INVENTORY = 'RESP_RESEARCH_INVENTORY',
   REQ_RESEARCH_DETAILS = 'REQ_RESEARCH_DETAILS',
   RESP_RESEARCH_DETAILS = 'RESP_RESEARCH_DETAILS',
+
+  // Zone Painting
+  REQ_DEFINE_ZONE = 'REQ_DEFINE_ZONE',
+  RESP_DEFINE_ZONE = 'RESP_DEFINE_ZONE',
+
+  // Capitol
+  REQ_BUILD_CAPITOL = 'REQ_BUILD_CAPITOL',
+  RESP_CAPITOL_PLACED = 'RESP_CAPITOL_PLACED',
 }
 
 // =============================================================================
@@ -550,6 +558,7 @@ export interface WsReqGetAllFacilityDimensions extends WsMessage {
 export interface WsRespBuildingCategories extends WsMessage {
   type: WsMessageType.RESP_BUILDING_CATEGORIES;
   categories: BuildingCategory[];
+  capitolIconUrl?: string;
 }
 
 export interface WsRespBuildingFacilities extends WsMessage {
@@ -1223,6 +1232,42 @@ export interface WsReqResearchDetails extends WsMessage {
 export interface WsRespResearchDetails extends WsMessage {
   type: WsMessageType.RESP_RESEARCH_DETAILS;
   details: ResearchInventionDetails;
+}
+
+// =============================================================================
+// ZONE PAINTING MESSAGES
+// =============================================================================
+
+export interface WsReqDefineZone extends WsMessage {
+  type: WsMessageType.REQ_DEFINE_ZONE;
+  zoneId: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+export interface WsRespDefineZone extends WsMessage {
+  type: WsMessageType.RESP_DEFINE_ZONE;
+  success: boolean;
+  message?: string;
+}
+
+// =============================================================================
+// CAPITOL MESSAGES
+// =============================================================================
+
+export interface WsReqBuildCapitol extends WsMessage {
+  type: WsMessageType.REQ_BUILD_CAPITOL;
+  x: number;
+  y: number;
+}
+
+export interface WsRespCapitolPlaced extends WsMessage {
+  type: WsMessageType.RESP_CAPITOL_PLACED;
+  x: number;
+  y: number;
+  buildingId: string;
 }
 
 // =============================================================================

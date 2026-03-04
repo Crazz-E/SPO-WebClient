@@ -218,18 +218,122 @@ export interface ZoneOverlayState {
 }
 
 export enum SurfaceType {
+  // Special overlays (ssUnder — tint ground tiles)
   ZONES = 'ZONES',
   TOWNS = 'TOWNS',
+  // Environment overlays (ssOver — gradient heatmaps)
   BEAUTY = 'Beauty',
   CRIME = 'Crime',
   POLLUTION = 'Pollution',
+  QOL = 'QOL',
+  BAP = 'BAP',
+  // Population overlays
   HI_PEOPLE = 'hiPeople',
   MID_PEOPLE = 'midPeople',
   LO_PEOPLE = 'loPeople',
-  QOL = 'QOL',
-  BAP = 'BAP',
+  // Market overlays
   FRESH_FOOD = 'FreshFood',
+  ELAB_FOOD = 'ElabFood',
+  CLOTHES = 'Clothes_Market',
+  APPLIANCES = 'HouseHoldingAppliances',
+  CARS = 'Cars_Market',
+  RESTAURANT = 'Restaurant',
+  BAR = 'Bar',
+  TOYS = 'Toys',
+  DRUGS = 'Drugs',
+  MOVIE = 'Movie',
+  GASOLINE = 'Gasoline',
+  COMPUTERS = 'Computers',
+  FURNITURE = 'Furniture',
+  BOOKS = 'Books',
+  CDS = 'CDs',
+  FUNERAL = 'Funeral',
 }
+
+/**
+ * Overlay metadata for the overlay selector UI.
+ * Color scales match the Delphi MapIsoView.pas SurfaceData definitions.
+ * Each entry has 3 color scale points for linear RGB interpolation.
+ */
+export interface OverlayInfo {
+  type: SurfaceType;
+  label: string;
+  category: 'special' | 'environment' | 'population' | 'market';
+}
+
+export const OVERLAY_LIST: OverlayInfo[] = [
+  // Special
+  { type: SurfaceType.ZONES,      label: 'Building Zones',          category: 'special' },
+  { type: SurfaceType.TOWNS,      label: 'Towns',                   category: 'special' },
+  // Environment
+  { type: SurfaceType.BEAUTY,     label: 'Beauty',                  category: 'environment' },
+  { type: SurfaceType.QOL,        label: 'QOL',                     category: 'environment' },
+  { type: SurfaceType.CRIME,      label: 'Crime',                   category: 'environment' },
+  { type: SurfaceType.POLLUTION,  label: 'Pollution',               category: 'environment' },
+  { type: SurfaceType.BAP,        label: 'BAP',                     category: 'environment' },
+  // Population
+  { type: SurfaceType.HI_PEOPLE,  label: 'High-class Population',   category: 'population' },
+  { type: SurfaceType.MID_PEOPLE, label: 'Middle-class Population',  category: 'population' },
+  { type: SurfaceType.LO_PEOPLE,  label: 'Low-class Population',    category: 'population' },
+  // Market
+  { type: SurfaceType.FRESH_FOOD, label: 'Fresh Food',              category: 'market' },
+  { type: SurfaceType.ELAB_FOOD,  label: 'Processed Food',          category: 'market' },
+  { type: SurfaceType.CLOTHES,    label: 'Clothes',                 category: 'market' },
+  { type: SurfaceType.APPLIANCES, label: 'Appliances',              category: 'market' },
+  { type: SurfaceType.CARS,       label: 'Cars',                    category: 'market' },
+  { type: SurfaceType.RESTAURANT, label: 'Restaurants',             category: 'market' },
+  { type: SurfaceType.BAR,        label: 'Bar',                     category: 'market' },
+  { type: SurfaceType.TOYS,       label: 'Toys',                    category: 'market' },
+  { type: SurfaceType.DRUGS,      label: 'Drugs',                   category: 'market' },
+  { type: SurfaceType.MOVIE,      label: 'Movies',                  category: 'market' },
+  { type: SurfaceType.GASOLINE,   label: 'Gas',                     category: 'market' },
+  { type: SurfaceType.COMPUTERS,  label: 'Computers',               category: 'market' },
+  { type: SurfaceType.FURNITURE,  label: 'Furniture',               category: 'market' },
+  { type: SurfaceType.BOOKS,      label: 'Books',                   category: 'market' },
+  { type: SurfaceType.CDS,        label: 'CDs',                     category: 'market' },
+  { type: SurfaceType.FUNERAL,    label: 'Funeral',                 category: 'market' },
+];
+
+// =============================================================================
+// ZONE TYPES (for zone painting)
+// =============================================================================
+
+/**
+ * Zone types matching Delphi Protocol.pas TZoneType constants (0-9).
+ * Colors converted from Delphi BGR ($00BBGGRR) → CSS RGB hex.
+ */
+export enum ZoneType {
+  NONE = 0,
+  RESERVED = 1,
+  RESIDENTIAL = 2,
+  HI_RESIDENTIAL = 3,
+  MID_RESIDENTIAL = 4,
+  LO_RESIDENTIAL = 5,
+  INDUSTRIAL = 6,
+  COMMERCIAL = 7,
+  CIVICS = 8,
+  OFFICES = 9,
+}
+
+export interface ZoneTypeInfo {
+  id: ZoneType;
+  label: string;
+  color: string;
+  overlayColor: string;
+}
+
+export const ZONE_TYPES: ZoneTypeInfo[] = [
+  { id: ZoneType.NONE,            label: 'Erase',              color: '#595959', overlayColor: 'rgba(89,89,89,0.3)' },
+  { id: ZoneType.RESERVED,        label: 'Reserved',           color: '#800000', overlayColor: 'rgba(128,0,0,0.3)' },
+  { id: ZoneType.RESIDENTIAL,     label: 'Residential',        color: '#008080', overlayColor: 'rgba(0,128,128,0.3)' },
+  { id: ZoneType.HI_RESIDENTIAL,  label: 'High Residential',   color: '#C0FFBB', overlayColor: 'rgba(192,255,187,0.3)' },
+  { id: ZoneType.MID_RESIDENTIAL, label: 'Mid Residential',    color: '#4FA343', overlayColor: 'rgba(79,163,67,0.3)' },
+  { id: ZoneType.LO_RESIDENTIAL,  label: 'Low Residential',    color: '#23481E', overlayColor: 'rgba(35,72,30,0.3)' },
+  { id: ZoneType.INDUSTRIAL,      label: 'Industrial',         color: '#D7D988', overlayColor: 'rgba(215,217,136,0.3)' },
+  { id: ZoneType.COMMERCIAL,      label: 'Commercial',         color: '#4974D8', overlayColor: 'rgba(73,116,216,0.3)' },
+  { id: ZoneType.CIVICS,          label: 'Civics',             color: '#FFFFFF', overlayColor: 'rgba(255,255,255,0.3)' },
+  { id: ZoneType.OFFICES,         label: 'Offices',            color: '#394488', overlayColor: 'rgba(57,68,136,0.3)' },
+];
 
 // =============================================================================
 // BUILDING DETAILS

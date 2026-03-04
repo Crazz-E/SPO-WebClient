@@ -23,7 +23,12 @@ export type {
 // Domain types (business entities)
 export {
   SurfaceType,
+  ZoneType,
+  ZONE_TYPES,
+  OVERLAY_LIST,
 } from './domain-types';
+
+export type { ZoneTypeInfo, OverlayInfo } from './domain-types';
 
 export type {
   WorldInfo,
@@ -262,6 +267,12 @@ export type {
   WsRespResearchInventory,
   WsReqResearchDetails,
   WsRespResearchDetails,
+  // Zone Painting
+  WsReqDefineZone,
+  WsRespDefineZone,
+  // Capitol
+  WsReqBuildCapitol,
+  WsRespCapitolPlaced,
 } from './message-types';
 
 export type { ConnectionSearchResult, FavoritesItem, ResearchCategoryData, ResearchInventionItem, ResearchInventionDetails } from './message-types';
