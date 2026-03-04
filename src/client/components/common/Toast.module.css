@@ -1,44 +1,77 @@
-/* Toast notifications */
+/* Toast — phone-style notification cards */
 
 .container {
   position: fixed;
-  top: calc(var(--header-height) + var(--space-4));
-  right: var(--space-4);
+  top: calc(var(--topbar-height) + var(--space-3));
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   z-index: var(--z-toast);
   pointer-events: none;
+  width: 100%;
+  max-width: 420px;
+  padding: 0 var(--space-4);
+  box-sizing: border-box;
 }
 
 .toast {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--bg-elevated);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-3);
+  border-radius: var(--radius-xl);
+  background: var(--glass-bg);
   border: 1px solid var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--shadow-lg);
-  animation: slideInRight var(--duration-slow) var(--ease-out);
   pointer-events: auto;
-  max-width: 400px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  animation: slideDown var(--duration-slow) var(--ease-out);
+  transition: border-color var(--duration-fast) var(--ease-default),
+    box-shadow var(--duration-fast) var(--ease-default);
 }
 
-.info {
-  border-left: 3px solid var(--info);
+.toast:hover {
+  border-color: var(--glass-border-active);
+  box-shadow: var(--shadow-glow);
 }
 
-.success {
-  border-left: 3px solid var(--success);
+.toast:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
 }
 
-.warning {
-  border-left: 3px solid var(--warning);
+/* Colored dot indicator */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
 }
 
-.error {
-  border-left: 3px solid var(--error);
+.dotInfo {
+  background: var(--info);
+  box-shadow: 0 0 6px var(--info);
+}
+
+.dotSuccess {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.dotWarning {
+  background: var(--warning);
+  box-shadow: 0 0 6px var(--warning);
+}
+
+.dotError {
+  background: var(--error);
+  box-shadow: 0 0 6px var(--error);
 }
 
 .icon {
@@ -71,24 +104,72 @@
   color: var(--text-primary);
 }
 
-@keyframes slideInRight {
+/* Progress bar */
+.progressTrack {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.progressBar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  animation: progressShrink 15000ms linear forwards;
+}
+
+.progressInfo {
+  background: var(--info);
+}
+
+.progressSuccess {
+  background: var(--success);
+}
+
+.progressWarning {
+  background: var(--warning);
+}
+
+.progressError {
+  background: var(--error);
+}
+
+/* Overflow badge */
+.overflow {
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: var(--space-1) 0;
+  pointer-events: none;
+}
+
+/* Animations */
+@keyframes slideDown {
   from {
-    transform: translateX(100%);
+    transform: translateY(-100%);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
+    transform: translateY(0);
     opacity: 1;
+  }
+}
+
+@keyframes progressShrink {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
   }
 }
 
 @media (max-width: 768px) {
   .container {
-    left: var(--space-4);
-    right: var(--space-4);
-  }
-
-  .toast {
     max-width: none;
+    padding: 0 var(--space-3);
   }
 }
