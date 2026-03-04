@@ -38,10 +38,12 @@
 }
 
 .roadSub {
+  position: absolute;
+  left: calc(100% + var(--rail-gap));
+  top: 0;
   display: flex;
   flex-direction: row;
   gap: var(--rail-gap);
-  margin-left: var(--rail-gap);
 }
 
 /* Mobile — horizontal bottom bar instead */
