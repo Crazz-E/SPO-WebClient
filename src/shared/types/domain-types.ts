@@ -205,6 +205,8 @@ export interface FacilityDimensions {
   textureFilename?: string;   // Complete building texture filename
   emptyTextureFilename?: string;  // Empty residential texture filename
   constructionTextureFilename?: string;  // Construction state texture filename
+  animated?: boolean;         // Whether sprite has animation frames (from CLASSES.BIN)
+  animArea?: { left: number; top: number; right: number; bottom: number };  // Animation sub-region
 }
 
 export interface ZoneOverlayState {

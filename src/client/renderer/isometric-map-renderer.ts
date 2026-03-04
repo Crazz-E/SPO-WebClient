@@ -494,6 +494,7 @@ export class IsometricMapRenderer {
   private vehicleSystem: VehicleAnimationSystem | null = null;
   private vehicleSystemReady: boolean = false;
   private animationLoopRunning: boolean = false;
+  private hasAnimatedBuildings: boolean = false;
   private lastRenderTime: number = 0;
 
   constructor(canvasId: string) {
@@ -2101,6 +2102,7 @@ export class IsometricMapRenderer {
     const bounds = this.getVisibleBounds();
     const occupiedTiles = this.buildTileOccupationMap();
 
+    this.hasAnimatedBuildings = false;
     this.drawBuildings(bounds);
     this.drawVehicles(bounds, deltaTime, occupiedTiles);
     this.drawZoneOverlay(bounds);
@@ -2116,8 +2118,8 @@ export class IsometricMapRenderer {
 
     // Game info overlay removed — stats available via debug mode (D key)
 
-    // Keep rendering while a building is selected (for pulse animation)
-    if (this.selectedBuilding) {
+    // Keep rendering for animated buildings or selected building pulse
+    if (this.hasAnimatedBuildings || this.selectedBuilding) {
       this.requestRender();
     }
   }
@@ -2862,7 +2864,14 @@ export class IsometricMapRenderer {
 
       // Try to get building texture
       const textureFilename = GameObjectTextureCache.getBuildingTextureFilename(building.visualClass);
-      const texture = this.gameObjectTextureCache.getTextureSync('BuildingImages', textureFilename);
+      let texture = this.gameObjectTextureCache.getTextureSync('BuildingImages', textureFilename);
+
+      // Check for animated texture and pick current frame
+      const animatedTexture = this.gameObjectTextureCache.getAnimatedTexture('BuildingImages', textureFilename);
+      if (animatedTexture && texture) {
+        texture = this.gameObjectTextureCache.getAnimatedFrame(animatedTexture, performance.now());
+        this.hasAnimatedBuildings = true;
+      }
 
       if (texture) {
         // Calculate zoom scale factor

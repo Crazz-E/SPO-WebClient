@@ -18,10 +18,24 @@
  * - Building textures: RGB(0, 128, 0) - green background
  */
 
+import { parseGIF, decompressFrames } from 'gifuct-js';
 import { getFacilityDimensionsCache } from '../facility-dimensions-cache';
+
+/** A single frame of an animated GIF texture */
+export interface AnimatedFrame {
+  bitmap: ImageBitmap;
+  delay: number;  // milliseconds
+}
+
+/** Animated texture with frame array and timing */
+export interface AnimatedTexture {
+  frames: AnimatedFrame[];
+  totalDuration: number;  // sum of all delays in ms
+}
 
 interface CacheEntry {
   texture: ImageBitmap | null;
+  animatedTexture?: AnimatedTexture;
   lastAccess: number;
   loading: boolean;
   loaded: boolean;
@@ -221,7 +235,9 @@ export class GameObjectTextureCache {
    * Textures are served as pre-baked PNGs with alpha channel already applied
    * (for BMP textures like roads/concrete). GIF textures (buildings) are served
    * as-is since the browser handles GIF transparency natively.
-   * No client-side color keying is needed.
+   *
+   * For animated GIFs (multi-frame), decodes all frames into separate ImageBitmaps
+   * and stores them as an AnimatedTexture on the cache entry.
    */
   private async fetchTexture(category: TextureCategory, name: string): Promise<ImageBitmap | null> {
     // URL pattern: /cache/{category}/{name}
@@ -235,11 +251,96 @@ export class GameObjectTextureCache {
       }
 
       const blob = await response.blob();
+
+      // Attempt animated GIF decode for building textures
+      if (category === 'BuildingImages' && name.toLowerCase().endsWith('.gif')) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const animated = await this.decodeAnimatedGif(arrayBuffer);
+
+        if (animated) {
+          // Store animated texture on the cache entry (set after loadTexture resolves)
+          const key = this.getCacheKey(category, name);
+          const entry = this.cache.get(key);
+          if (entry) {
+            entry.animatedTexture = animated;
+          }
+          // Return first frame as the static fallback
+          return animated.frames[0].bitmap;
+        }
+
+        // Not animated — create bitmap from the buffer
+        const newBlob = new Blob([arrayBuffer], { type: 'image/gif' });
+        return createImageBitmap(newBlob);
+      }
+
       return createImageBitmap(blob);
     } catch (error) {
       console.warn(`[GameObjectTextureCache] Failed to load ${category}/${name}:`, error);
       return null;
     }
+  }
+
+  /**
+   * Decode an animated GIF into individual frames.
+   * Returns null if the GIF has only one frame (static).
+   */
+  private async decodeAnimatedGif(arrayBuffer: ArrayBuffer): Promise<AnimatedTexture | null> {
+    try {
+      const gif = parseGIF(arrayBuffer);
+      const frames = decompressFrames(gif, true);
+
+      if (frames.length <= 1) return null;
+
+      const animFrames: AnimatedFrame[] = [];
+      let totalDuration = 0;
+
+      for (const frame of frames) {
+        const imageData = new ImageData(
+          new Uint8ClampedArray(frame.patch),
+          frame.dims.width,
+          frame.dims.height
+        );
+        const bitmap = await createImageBitmap(imageData);
+        // GIF spec: delay 0 means "use default" — floor at 20ms to avoid stuck frames
+        const delay = Math.max(frame.delay * 10, 20); // gifuct-js delay is in centiseconds
+        animFrames.push({ bitmap, delay });
+        totalDuration += delay;
+      }
+
+      return { frames: animFrames, totalDuration };
+    } catch (error) {
+      console.warn('[GameObjectTextureCache] GIF decode failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the animated texture for a cached entry, if it exists.
+   * Returns null for static textures or uncached entries.
+   */
+  getAnimatedTexture(category: TextureCategory, name: string): AnimatedTexture | null {
+    const key = this.getCacheKey(category, name);
+    const entry = this.cache.get(key);
+    return entry?.animatedTexture ?? null;
+  }
+
+  /**
+   * Get the current frame bitmap for an animated texture based on elapsed time.
+   * Uses modular arithmetic to loop the animation.
+   */
+  getAnimatedFrame(animatedTexture: AnimatedTexture, elapsedMs: number): ImageBitmap {
+    const loopTime = elapsedMs % animatedTexture.totalDuration;
+    let accumulated = 0;
+
+    for (const frame of animatedTexture.frames) {
+      accumulated += frame.delay;
+      if (loopTime < accumulated) {
+        return frame.bitmap;
+      }
+    }
+
+    // Fallback: last frame
+    return animatedTexture.frames[animatedTexture.frames.length - 1].bitmap;
   }
 
   /**
@@ -261,6 +362,11 @@ export class GameObjectTextureCache {
         const entry = this.cache.get(oldestKey);
         if (entry?.texture) {
           entry.texture.close();
+        }
+        if (entry?.animatedTexture) {
+          for (const frame of entry.animatedTexture.frames) {
+            frame.bitmap.close();
+          }
         }
         this.cache.delete(oldestKey);
         this.evictions++;
@@ -387,6 +493,11 @@ export class GameObjectTextureCache {
     for (const entry of this.cache.values()) {
       if (entry.texture) {
         entry.texture.close();
+      }
+      if (entry.animatedTexture) {
+        for (const frame of entry.animatedTexture.frames) {
+          frame.bitmap.close();
+        }
       }
     }
 

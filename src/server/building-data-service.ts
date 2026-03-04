@@ -36,6 +36,8 @@ export interface FacilityDimensions {
   textureFilename?: string;
   emptyTextureFilename?: string;
   constructionTextureFilename?: string;
+  animated?: boolean;
+  animArea?: { left: number; top: number; right: number; bottom: number };
 }
 
 /**
@@ -235,7 +237,9 @@ export class BuildingDataService implements Service {
       level: building.visualStages,
       textureFilename: building.textureFilename,
       emptyTextureFilename: building.emptyTextureFilename,
-      constructionTextureFilename: building.constructionTextureFilename
+      constructionTextureFilename: building.constructionTextureFilename,
+      animated: building.animated,
+      animArea: building.animArea,
     };
   }
 

@@ -4,12 +4,33 @@
  */
 
 import { GameObjectTextureCache } from './game-object-texture-cache';
+import type { AnimatedTexture } from './game-object-texture-cache';
+
+// Mock gifuct-js
+const mockParseGIF = jest.fn();
+const mockDecompressFrames = jest.fn();
+jest.mock('gifuct-js', () => ({
+  parseGIF: (...args: unknown[]) => mockParseGIF(...args),
+  decompressFrames: (...args: unknown[]) => mockDecompressFrames(...args),
+}));
 
 // Mock fetch
 global.fetch = jest.fn();
 
 // Mock createImageBitmap
 (global as any).createImageBitmap = jest.fn();
+
+// Mock ImageData (not available in Node.js test environment)
+(global as any).ImageData = class ImageData {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+  constructor(data: Uint8ClampedArray, width: number, height: number) {
+    this.data = data;
+    this.width = width;
+    this.height = height;
+  }
+};
 
 // Mock facility dimensions cache
 jest.mock('../facility-dimensions-cache', () => ({
@@ -345,6 +366,234 @@ describe('GameObjectTextureCache', () => {
 
       await cache.getTextureAsync('RoadBlockImages', 'missing.bmp');
       expect(callback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('animated GIF support', () => {
+    const makeMockFrames = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        dims: { width: 64, height: 32, top: 0, left: 0 },
+        delay: 10, // centiseconds (= 100ms)
+        patch: new Uint8ClampedArray(64 * 32 * 4),
+        pixels: [],
+        colorTable: [],
+        disposalType: 0,
+        transparentIndex: -1,
+      }));
+
+    const makeMockBitmap = (id: number) => ({
+      width: 64,
+      height: 32,
+      close: jest.fn(),
+      _id: id,
+    });
+
+    function setupAnimatedGifMock(frameCount: number) {
+      const mockBlob = {
+        arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(100)),
+      };
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        blob: jest.fn().mockResolvedValue(mockBlob),
+      });
+
+      mockParseGIF.mockReturnValue({ frames: [], lsd: { width: 64, height: 32 } });
+      mockDecompressFrames.mockReturnValue(makeMockFrames(frameCount));
+
+      const bitmaps = Array.from({ length: frameCount }, (_, i) => makeMockBitmap(i));
+      let bitmapIndex = 0;
+      (global as any).createImageBitmap.mockImplementation(() =>
+        Promise.resolve(bitmaps[bitmapIndex++])
+      );
+
+      return bitmaps;
+    }
+
+    it('should decode animated GIF with multiple frames', async () => {
+      const bitmaps = setupAnimatedGifMock(3);
+
+      const texture = await cache.getTextureAsync('BuildingImages', 'mapportalin64x32x0.gif');
+      expect(texture).toBe(bitmaps[0]); // first frame as static fallback
+
+      const animated = cache.getAnimatedTexture('BuildingImages', 'mapportalin64x32x0.gif');
+      expect(animated).not.toBeNull();
+      expect(animated!.frames).toHaveLength(3);
+      expect(animated!.totalDuration).toBe(300); // 3 frames * 100ms each
+    });
+
+    it('should not create animated texture for single-frame GIF', async () => {
+      const mockBlob = {
+        arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(100)),
+      };
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        blob: jest.fn().mockResolvedValue(mockBlob),
+      });
+
+      mockParseGIF.mockReturnValue({ frames: [], lsd: { width: 64, height: 32 } });
+      mockDecompressFrames.mockReturnValue(makeMockFrames(1));
+
+      const mockBitmap = makeMockBitmap(0);
+      (global as any).createImageBitmap.mockResolvedValue(mockBitmap);
+
+      await cache.getTextureAsync('BuildingImages', 'MapPGIFoodStore64x32x0.gif');
+
+      const animated = cache.getAnimatedTexture('BuildingImages', 'MapPGIFoodStore64x32x0.gif');
+      expect(animated).toBeNull();
+    });
+
+    it('should not attempt GIF decode for non-GIF textures', async () => {
+      const mockBitmap = makeMockBitmap(0);
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        blob: jest.fn().mockResolvedValue(new Blob()),
+      });
+      (global as any).createImageBitmap.mockResolvedValueOnce(mockBitmap);
+
+      await cache.getTextureAsync('RoadBlockImages', 'Roadvert.bmp');
+      expect(mockParseGIF).not.toHaveBeenCalled();
+    });
+
+    it('should not attempt GIF decode for non-BuildingImages category', async () => {
+      const mockBitmap = makeMockBitmap(0);
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        blob: jest.fn().mockResolvedValue(new Blob()),
+      });
+      (global as any).createImageBitmap.mockResolvedValueOnce(mockBitmap);
+
+      await cache.getTextureAsync('CarImages', 'car.gif');
+      expect(mockParseGIF).not.toHaveBeenCalled();
+    });
+
+    it('should return null from getAnimatedTexture for uncached entry', () => {
+      const animated = cache.getAnimatedTexture('BuildingImages', 'nonexistent.gif');
+      expect(animated).toBeNull();
+    });
+
+    it('should floor frame delay to 20ms minimum', async () => {
+      const mockBlob = {
+        arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(100)),
+      };
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        blob: jest.fn().mockResolvedValue(mockBlob),
+      });
+
+      mockParseGIF.mockReturnValue({ frames: [], lsd: { width: 64, height: 32 } });
+      // delay=0 centiseconds → 0ms → floored to 20ms
+      mockDecompressFrames.mockReturnValue([
+        { dims: { width: 64, height: 32, top: 0, left: 0 }, delay: 0, patch: new Uint8ClampedArray(64 * 32 * 4), pixels: [], colorTable: [], disposalType: 0, transparentIndex: -1 },
+        { dims: { width: 64, height: 32, top: 0, left: 0 }, delay: 0, patch: new Uint8ClampedArray(64 * 32 * 4), pixels: [], colorTable: [], disposalType: 0, transparentIndex: -1 },
+      ]);
+
+      const bitmaps = [makeMockBitmap(0), makeMockBitmap(1)];
+      let idx = 0;
+      (global as any).createImageBitmap.mockImplementation(() => Promise.resolve(bitmaps[idx++]));
+
+      await cache.getTextureAsync('BuildingImages', 'test.gif');
+      const animated = cache.getAnimatedTexture('BuildingImages', 'test.gif');
+      expect(animated).not.toBeNull();
+      expect(animated!.frames[0].delay).toBe(20);
+      expect(animated!.frames[1].delay).toBe(20);
+      expect(animated!.totalDuration).toBe(40);
+    });
+
+    it('should handle GIF decode errors gracefully', async () => {
+      const mockBlob = {
+        arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(100)),
+      };
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        blob: jest.fn().mockResolvedValue(mockBlob),
+      });
+
+      mockParseGIF.mockImplementation(() => { throw new Error('Invalid GIF'); });
+
+      const mockBitmap = makeMockBitmap(0);
+      (global as any).createImageBitmap.mockResolvedValueOnce(mockBitmap);
+
+      const texture = await cache.getTextureAsync('BuildingImages', 'corrupt.gif');
+      // Falls back to static bitmap from the recreated blob
+      expect(texture).toBe(mockBitmap);
+      expect(cache.getAnimatedTexture('BuildingImages', 'corrupt.gif')).toBeNull();
+    });
+
+    describe('getAnimatedFrame', () => {
+      it('should return correct frame based on elapsed time', () => {
+        const frames = [
+          { bitmap: makeMockBitmap(0) as unknown as ImageBitmap, delay: 100 },
+          { bitmap: makeMockBitmap(1) as unknown as ImageBitmap, delay: 200 },
+          { bitmap: makeMockBitmap(2) as unknown as ImageBitmap, delay: 100 },
+        ];
+        const animated: AnimatedTexture = { frames, totalDuration: 400 };
+
+        // t=0 → frame 0 (0-100ms)
+        expect(cache.getAnimatedFrame(animated, 0)).toBe(frames[0].bitmap);
+        // t=50 → frame 0
+        expect(cache.getAnimatedFrame(animated, 50)).toBe(frames[0].bitmap);
+        // t=100 → frame 1 (100-300ms)
+        expect(cache.getAnimatedFrame(animated, 100)).toBe(frames[1].bitmap);
+        // t=250 → frame 1
+        expect(cache.getAnimatedFrame(animated, 250)).toBe(frames[1].bitmap);
+        // t=300 → frame 2 (300-400ms)
+        expect(cache.getAnimatedFrame(animated, 300)).toBe(frames[2].bitmap);
+        // t=350 → frame 2
+        expect(cache.getAnimatedFrame(animated, 350)).toBe(frames[2].bitmap);
+      });
+
+      it('should loop animation after totalDuration', () => {
+        const frames = [
+          { bitmap: makeMockBitmap(0) as unknown as ImageBitmap, delay: 100 },
+          { bitmap: makeMockBitmap(1) as unknown as ImageBitmap, delay: 100 },
+        ];
+        const animated: AnimatedTexture = { frames, totalDuration: 200 };
+
+        // t=200 → loops to t=0 → frame 0
+        expect(cache.getAnimatedFrame(animated, 200)).toBe(frames[0].bitmap);
+        // t=350 → loops to t=150 → frame 1
+        expect(cache.getAnimatedFrame(animated, 350)).toBe(frames[1].bitmap);
+        // t=500 → loops to t=100 → frame 1
+        expect(cache.getAnimatedFrame(animated, 500)).toBe(frames[1].bitmap);
+      });
+    });
+
+    describe('animated texture cleanup', () => {
+      it('should close animated frame bitmaps on clear()', async () => {
+        const bitmaps = setupAnimatedGifMock(2);
+        await cache.getTextureAsync('BuildingImages', 'portal.gif');
+
+        cache.clear();
+
+        // All frame bitmaps should be closed
+        for (const bitmap of bitmaps) {
+          expect(bitmap.close).toHaveBeenCalled();
+        }
+      });
+
+      it('should close animated frame bitmaps on eviction', async () => {
+        const smallCache = new GameObjectTextureCache(1);
+
+        // Load first animated texture
+        const bitmaps1 = setupAnimatedGifMock(2);
+        await smallCache.getTextureAsync('BuildingImages', 'portal1.gif');
+
+        // Load second texture to trigger eviction of first
+        const mockBitmap2 = makeMockBitmap(99);
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          blob: jest.fn().mockResolvedValue(new Blob()),
+        });
+        mockParseGIF.mockReset();
+        (global as any).createImageBitmap.mockResolvedValueOnce(mockBitmap2);
+
+        await smallCache.getTextureAsync('RoadBlockImages', 'road.bmp');
+
+        // First animated texture's frames should be closed via eviction
+        for (const bitmap of bitmaps1) {
+          expect(bitmap.close).toHaveBeenCalled();
+        }
+      });
     });
   });
 });
