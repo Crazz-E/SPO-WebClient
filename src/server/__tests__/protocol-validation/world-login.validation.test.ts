@@ -46,16 +46,16 @@ const CONTEXT_ID = '8161308';
 const TYCOON_ID = '22';
 const RDO_CNNT_ID = '12345678';
 
-// Must match the legacy Delphi client's property list exactly (no DSArea, no DAPort)
+// Must match the legacy Delphi client's property list exactly (no DSArea)
 const WORLD_PROPERTY_NAMES = [
-  'WorldName', 'WorldURL', 'DAAddr', 'DALockPort',
+  'WorldName', 'WorldURL', 'DAAddr', 'DAPort', 'DALockPort',
   'MailAddr', 'MailPort', 'WorldXSize', 'WorldYSize', 'WorldSeason',
 ];
 
 /**
  * Build the RDO scenario for the loginWorld flow on the world socket.
  * Contains: idof InterfaceServer, AccountStatus, Logon, RegisterEventsById.
- * The 10 world properties + user properties are handled by fallback responses.
+ * The world properties + user properties are handled by fallback responses.
  */
 function createWorldLoginRdoScenario(): RdoScenario {
   return {
@@ -189,28 +189,26 @@ describe('Protocol Validation: loginWorld()', () => {
   });
 
   describe('World property GET commands', () => {
-    it('should send 9 GET commands for world properties', async () => {
+    it('should send 10 GET commands for world properties', async () => {
       await runFullLoginFlow();
 
       const worldCmds = getWorldCommands();
       const getCmds = worldCmds.filter(cmd => cmd.includes(' get '));
 
-      // 9 world properties + 3 user properties (MailAccount, TycoonId, RDOCnntId) + 1 GetCompanyCount = 13 GETs total
-      // Filter specifically for the 9 world props
+      // 10 world properties + 3 user properties (MailAccount, TycoonId, RDOCnntId) + 1 GetCompanyCount = 14 GETs total
+      // Filter specifically for the 10 world props
       for (const prop of WORLD_PROPERTY_NAMES) {
         const propCmd = getCmds.find(cmd => cmd.includes(`get ${prop}`));
         expect(propCmd).toBeDefined();
       }
     });
 
-    it('should NOT query DSArea or DAPort (not in legacy client)', async () => {
+    it('should NOT query DSArea (not in legacy client)', async () => {
       await runFullLoginFlow();
 
       const worldCmds = getWorldCommands();
       const dsAreaCmd = worldCmds.find(cmd => cmd.includes('get DSArea'));
-      const daPortCmd = worldCmds.find(cmd => cmd.includes('get DAPort'));
       expect(dsAreaCmd).toBeUndefined();
-      expect(daPortCmd).toBeUndefined();
     });
 
     it('should target InterfaceServer ID for all world property GETs', async () => {
