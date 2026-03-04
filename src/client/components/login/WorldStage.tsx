@@ -32,7 +32,7 @@ export function WorldStage({ worlds, onSelect, onBack, isLoading }: WorldStagePr
           <GlassCard
             key={world.name}
             className={styles.worldCard}
-            onClick={() => onSelect(world.name)}
+            onClick={() => !isLoading && onSelect(world.name)}
           >
             <div className={styles.cardHeader}>
               <span className={styles.worldName}>{world.name}</span>
@@ -78,9 +78,16 @@ export function WorldStage({ worlds, onSelect, onBack, isLoading }: WorldStagePr
         ))}
       </div>
 
-      {isLoading && <div className={styles.loadingText}>Connecting to world...</div>}
+      {isLoading && (
+        <div className={styles.overlay}>
+          <div className={styles.overlayContent}>
+            <div className={styles.spinner} />
+            <span className={styles.overlayText}>Connecting to world...</span>
+          </div>
+        </div>
+      )}
 
-      {onBack && !isLoading && (
+      {onBack && (
         <button className={styles.backBtn} onClick={onBack}>
           Back to Regions
         </button>

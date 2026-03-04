@@ -44,7 +44,14 @@ export function ZoneStage({ onSelect, isLoading }: ZoneStageProps) {
         ))}
       </div>
 
-      {isLoading && <div className={styles.loadingText}>Querying region...</div>}
+      {isLoading && (
+        <div className={styles.overlay}>
+          <div className={styles.overlayContent}>
+            <div className={styles.spinner} />
+            <span className={styles.overlayText}>Querying region...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

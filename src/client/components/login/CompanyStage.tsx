@@ -65,7 +65,7 @@ export function CompanyStage({
               <GlassCard
                 key={company.id}
                 className={styles.companyCard}
-                onClick={() => onSelect(company.id)}
+                onClick={() => !isLoading && onSelect(company.id)}
               >
                 <div className={styles.companyName}>{company.name}</div>
                 {company.ownerRole && (
@@ -91,7 +91,7 @@ export function CompanyStage({
               <GlassCard
                 key={company.id}
                 className={styles.companyCard}
-                onClick={() => onSelect(company.id)}
+                onClick={() => !isLoading && onSelect(company.id)}
               >
                 <div className={styles.companyName}>{company.name}</div>
                 <span className={`${styles.roleBadge} ${styles.politicalBadge}`}>
@@ -105,13 +105,20 @@ export function CompanyStage({
 
       {/* Create new company */}
       <div className={styles.grid}>
-        <GlassCard className={styles.createCard} onClick={onCreate}>
+        <GlassCard className={styles.createCard} onClick={() => !isLoading && onCreate()}>
           <Plus size={24} className={styles.createIcon} />
           <span className={styles.createLabel}>Create New Company</span>
         </GlassCard>
       </div>
 
-      {isLoading && <div className={styles.loadingText}>Entering world...</div>}
+      {isLoading && (
+        <div className={styles.overlay}>
+          <div className={styles.overlayContent}>
+            <div className={styles.spinner} />
+            <span className={styles.overlayText}>Entering world...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
