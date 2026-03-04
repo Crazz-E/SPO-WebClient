@@ -70,7 +70,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
   incrementRefresh: () => set((s) => ({ refreshCounter: s.refreshCounter + 1 })),
 
   reset: () =>
-    set({
+    set((s) => ({
       profile: null,
       currentTab: 'curriculum',
       isLoading: false,
@@ -80,6 +80,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
       companies: null,
       autoConnections: null,
       policy: null,
-      refreshCounter: 0,
-    }),
+      // Increment (not zero) so the useEffect re-triggers even if already on 'curriculum'
+      refreshCounter: s.refreshCounter + 1,
+    })),
 }));

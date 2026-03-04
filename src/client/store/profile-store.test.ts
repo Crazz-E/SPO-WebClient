@@ -62,7 +62,8 @@ describe('Profile Store', () => {
     expect(state.companies).toBeNull();
     expect(state.autoConnections).toBeNull();
     expect(state.policy).toBeNull();
-    expect(state.refreshCounter).toBe(0);
+    // refreshCounter is non-zero after beforeEach reset() (increment-based reset)
+    expect(state.refreshCounter).toBeGreaterThan(0);
   });
 
   it('setCurriculum should store curriculum data and clear loading', () => {
@@ -90,15 +91,15 @@ describe('Profile Store', () => {
   });
 
   it('incrementRefresh should bump the counter', () => {
-    expect(useProfileStore.getState().refreshCounter).toBe(0);
+    const before = useProfileStore.getState().refreshCounter;
     useProfileStore.getState().incrementRefresh();
-    expect(useProfileStore.getState().refreshCounter).toBe(1);
+    expect(useProfileStore.getState().refreshCounter).toBe(before + 1);
     useProfileStore.getState().incrementRefresh();
-    expect(useProfileStore.getState().refreshCounter).toBe(2);
+    expect(useProfileStore.getState().refreshCounter).toBe(before + 2);
   });
 
   describe('reset()', () => {
-    it('should clear all tab data and reset counter', () => {
+    it('should clear all tab data and increment counter on reset', () => {
       // Populate state
       useProfileStore.getState().setCurriculum(mockCurriculum);
       useProfileStore.getState().setBankAccount(mockBank);
@@ -111,6 +112,8 @@ describe('Profile Store', () => {
       expect(useProfileStore.getState().bankAccount).not.toBeNull();
       expect(useProfileStore.getState().currentTab).toBe('bank');
 
+      const counterBefore = useProfileStore.getState().refreshCounter;
+
       // Reset
       useProfileStore.getState().reset();
 
@@ -122,7 +125,8 @@ describe('Profile Store', () => {
       expect(state.companies).toBeNull();
       expect(state.autoConnections).toBeNull();
       expect(state.policy).toBeNull();
-      expect(state.refreshCounter).toBe(0);
+      // reset() increments counter to guarantee useEffect re-triggers
+      expect(state.refreshCounter).toBe(counterBefore + 1);
       expect(state.currentTab).toBe('curriculum');
       expect(state.isLoading).toBe(false);
     });

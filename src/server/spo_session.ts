@@ -220,6 +220,10 @@ export class StarpeaceSession extends EventEmitter {
   private cachedPassword: string | null = null;
   private cachedZonePath: string = 'Root/Areas/Asia/Worlds';
 
+  // Active login identity — differs from cachedUsername during role-based company switches
+  // (e.g., "President of Shamba" vs original tycoon "SPO_test3")
+  private activeUsername: string | null = null;
+
   // Current company info (for role-based switching)
   private currentCompany: CompanyInfo | null = null;
   private availableCompanies: CompanyInfo[] = [];
@@ -343,6 +347,7 @@ export class StarpeaceSession extends EventEmitter {
   public async connectDirectory(username: string, pass: string, zonePath?: string): Promise<WorldInfo[]> {
     this.phase = SessionPhase.DIRECTORY_CONNECTED;
     this.cachedUsername = username;
+    this.activeUsername = username;
     this.cachedPassword = pass;
     this.cachedZonePath = zonePath || 'Root/Areas/Asia/Worlds';
 
@@ -876,6 +881,9 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
   // Determine the username to use for login
   const loginUsername = company.ownerRole || this.cachedUsername || '';
 
+  // Update the active identity so ASP page fetches use the correct tycoon
+  this.activeUsername = loginUsername;
+
   // If ownerRole is different from original username, we need to do a "role switch"
   if (company.ownerRole && company.ownerRole !== this.cachedUsername) {
     this.log.debug(`[Session] Role-based login detected: switching from "${this.cachedUsername}" to role "${company.ownerRole}"`);
@@ -1108,7 +1116,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
    */
   private buildAspBaseParams(): URLSearchParams {
     return new URLSearchParams({
-      Tycoon: this.cachedUsername || '',
+      Tycoon: this.activeUsername || this.cachedUsername || '',
       Password: this.cachedPassword || '',
       Company: this.currentCompany?.name || '',
       WorldName: this.currentWorldInfo?.name || '',
@@ -1772,7 +1780,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
    */
   public async fetchTycoonProfile(): Promise<TycoonProfileFull> {
     // Get name via IS proxy (TClientView.GetUserName is published)
-    let name = this.cachedUsername || '';
+    let name = this.activeUsername || this.cachedUsername || '';
     if (this.interfaceServerId) {
       try {
         const namePacket = await this.sendRdoRequest('world', {
@@ -2157,7 +2165,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 
       // Build base URL matching legacy Voyager pattern (no ISAddr/ISPort/ClientViewId for action URLs)
       const baseParams = new URLSearchParams({
-        Tycoon: this.cachedUsername || '',
+        Tycoon: this.activeUsername || this.cachedUsername || '',
         Password: this.cachedPassword || '',
         Company: this.currentCompany?.name || '',
         WorldName: this.currentWorldInfo?.name || '',
@@ -2312,7 +2320,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     try {
       const html = await this.fetchAspPage('NewLogon/chooseCompany.asp', {
         Logon: 'FALSE',
-        UserName: this.cachedUsername || '',
+        UserName: this.activeUsername || this.cachedUsername || '',
         RIWS: '',
       });
       const companies = this.parseCompaniesHtml(html);
@@ -2515,7 +2523,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
             FluidId: fluidId,
             DAAddr: this.daAddr || config.rdo.directoryHost,
             WorldName: this.currentWorldInfo?.name || '',
-            Tycoon: this.cachedUsername || '',
+            Tycoon: this.activeUsername || this.cachedUsername || '',
             Password: this.cachedPassword || '',
             DAPort: String(this.daPort || config.rdo.ports.directory),
             Hire: action === 'hireTradeCenter' ? 'YES' : 'NO',
@@ -2530,7 +2538,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
             FluidId: fluidId,
             DAAddr: this.daAddr || config.rdo.directoryHost,
             WorldName: this.currentWorldInfo?.name || '',
-            Tycoon: this.cachedUsername || '',
+            Tycoon: this.activeUsername || this.cachedUsername || '',
             Password: this.cachedPassword || '',
             DAPort: String(this.daPort || config.rdo.ports.directory),
             Hire: action === 'onlyWarehouses' ? 'YES' : 'NO',
@@ -2611,7 +2619,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       const queryParams = new URLSearchParams({
         Action: 'modify',
         WorldName: this.currentWorldInfo?.name || '',
-        Tycoon: this.cachedUsername || '',
+        Tycoon: this.activeUsername || this.cachedUsername || '',
         TycoonId: this.tycoonId || '',
         Password: this.cachedPassword || '',
         DAAddr: this.daAddr || config.rdo.directoryHost,
@@ -2661,7 +2669,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       switch (action) {
         case 'resetAccount': {
           const params = new URLSearchParams({
-            Tycoon: this.cachedUsername || '',
+            Tycoon: this.activeUsername || this.cachedUsername || '',
             WorldName: this.currentWorldInfo?.name || '',
             DAAddr: this.daAddr || config.rdo.directoryHost,
             DAPort: String(this.daPort || config.rdo.ports.directory),
@@ -2673,7 +2681,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
         }
         case 'abandonRole': {
           const params = new URLSearchParams({
-            Tycoon: this.cachedUsername || '',
+            Tycoon: this.activeUsername || this.cachedUsername || '',
             WorldName: this.currentWorldInfo?.name || '',
             DAAddr: this.daAddr || config.rdo.directoryHost,
             DAPort: String(this.daPort || config.rdo.ports.directory),
@@ -2691,14 +2699,14 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
             WorldName: this.currentWorldInfo?.name || '',
             DAAddr: this.daAddr || config.rdo.directoryHost,
             DAPort: String(this.daPort || config.rdo.ports.directory),
-            Tycoon: this.cachedUsername || '',
+            Tycoon: this.activeUsername || this.cachedUsername || '',
           });
           url = `http://${worldIp}/Five/0/Visual/Voyager/NewTycoon/rdoSetAdvanceLevel.asp?${params.toString().replace(/\+/g, '%20')}`;
           break;
         }
         case 'rebuildLinks': {
           const params = new URLSearchParams({
-            Tycoon: this.cachedUsername || '',
+            Tycoon: this.activeUsername || this.cachedUsername || '',
             Password: this.cachedPassword || '',
             Company: this.currentCompany?.name || '',
             WorldName: this.currentWorldInfo?.name || '',
@@ -2767,7 +2775,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     try {
       const queryParams = new URLSearchParams({
         WorldName: this.currentWorldInfo?.name || '',
-        TycoonName: this.cachedUsername || '',
+        TycoonName: this.activeUsername || this.cachedUsername || '',
         Password: this.cachedPassword || '',
         TownName: townName,
         DAAddr: this.daAddr || config.rdo.directoryHost,
@@ -2894,7 +2902,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       const socket = this.sockets.get('construction');
       if (!socket) throw new Error('Construction socket unavailable');
 
-      const voterName = this.cachedUsername || '';
+      const voterName = this.activeUsername || this.cachedUsername || '';
       const cmd = RdoCommand
         .sel(parseInt(currBlock))
         .call('RDOVote').push()
@@ -2937,7 +2945,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       const socket = this.sockets.get('construction');
       if (!socket) throw new Error('Construction socket unavailable');
 
-      const tycoonName = this.cachedUsername || '';
+      const tycoonName = this.activeUsername || this.cachedUsername || '';
       const cmd = RdoCommand
         .sel(parseInt(currBlock))
         .call('RDOLaunchCampaign').push()
@@ -3876,7 +3884,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     // response before sending the next. The RDO server is single-threaded and
     // crashes or deadlocks when bombarded with concurrent requests on one socket.
     const props = [
-      "WorldName", "WorldURL", "DAAddr", "DALockPort",
+      "WorldName", "WorldURL", "DAAddr", "DAPort", "DALockPort",
       "MailAddr", "MailPort", "WorldXSize", "WorldYSize", "WorldSeason"
     ] as const;
 
@@ -3897,6 +3905,9 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       }
       if (prop === "DAAddr") {
         this.daAddr = value;
+      }
+      if (prop === "DAPort") {
+        this.daPort = parseInt(value, 10);
       }
       if (prop === "MailAddr") {
         this.mailAddr = value;
@@ -5349,7 +5360,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
       Company: companyName,
       WorldName: this.currentWorldInfo.name,
       Cluster: '',
-      Tycoon: this.cachedUsername
+      Tycoon: this.activeUsername || this.cachedUsername
     });
 
     const url = `http://${this.currentWorldInfo.ip}/five/0/visual/voyager/Build/KindList.asp?${params.toString().replace(/\+/g, '%20')}`;
