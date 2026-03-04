@@ -156,6 +156,12 @@ import {
   WsRespResearchInventory,
   WsReqResearchDetails,
   WsRespResearchDetails,
+  // Zone Painting
+  WsReqDefineZone,
+  WsRespDefineZone,
+  // Capitol
+  WsReqBuildCapitol,
+  WsRespCapitolPlaced,
 } from '../shared/types';
 import { toErrorMessage } from '../shared/error-utils';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
@@ -1138,6 +1144,12 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
         const req = msg as WsReqLoginWorld;
         console.log(`[Gateway] Logging into world: ${req.worldName}`);
 
+        // Server switch: cleanup previous world session if still connected
+        if (session.isWorldConnected()) {
+          console.log('[Gateway] Server switch: cleaning up previous world session...');
+          await session.cleanupWorldSession();
+        }
+
         // 1. Lookup world info from session's cached directory data
         const worldInfo = session.getWorldInfo(req.worldName);
         if (!worldInfo) {
@@ -1418,10 +1430,12 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
 
         try {
           const categories = await session.fetchBuildingCategories(req.companyName);
+          const capitolIconUrl = session.getCapitolIconUrl();
           const response: WsRespBuildingCategories = {
             type: WsMessageType.RESP_BUILDING_CATEGORIES,
             wsRequestId: msg.wsRequestId,
-            categories
+            categories,
+            capitolIconUrl,
           };
           ws.send(JSON.stringify(response));
         } catch (err: unknown) {
@@ -1863,6 +1877,79 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
             type: WsMessageType.RESP_ERROR,
             wsRequestId: msg.wsRequestId,
             errorMessage: toErrorMessage(err) || 'Failed to demolish road',
+            code: ErrorCodes.ERROR_AccessDenied
+          };
+          ws.send(JSON.stringify(errorResp));
+        }
+        break;
+      }
+
+      // ========================================================================
+      // ZONE PAINTING
+      // ========================================================================
+
+      case WsMessageType.REQ_DEFINE_ZONE: {
+        const req = msg as WsReqDefineZone;
+        console.log(`[Gateway] Define zone ${req.zoneId} from (${req.x1}, ${req.y1}) to (${req.x2}, ${req.y2})`);
+
+        try {
+          const result = await session.defineZone(req.zoneId, req.x1, req.y1, req.x2, req.y2);
+
+          const response: WsRespDefineZone = {
+            type: WsMessageType.RESP_DEFINE_ZONE,
+            wsRequestId: msg.wsRequestId,
+            success: result.success,
+            message: result.message,
+          };
+          ws.send(JSON.stringify(response));
+        } catch (err: unknown) {
+          console.error('[Gateway] Failed to define zone:', err);
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: toErrorMessage(err) || 'Failed to define zone',
+            code: ErrorCodes.ERROR_AccessDenied
+          };
+          ws.send(JSON.stringify(errorResp));
+        }
+        break;
+      }
+
+      // ========================================================================
+      // CAPITOL
+      // ========================================================================
+
+      case WsMessageType.REQ_BUILD_CAPITOL: {
+        const req = msg as WsReqBuildCapitol;
+        console.log(`[Gateway] Build Capitol at (${req.x}, ${req.y})`);
+
+        try {
+          const result = await session.placeCapitol(req.x, req.y);
+
+          if (result.success) {
+            const response: WsRespCapitolPlaced = {
+              type: WsMessageType.RESP_CAPITOL_PLACED,
+              wsRequestId: msg.wsRequestId,
+              x: req.x,
+              y: req.y,
+              buildingId: result.buildingId || ''
+            };
+            ws.send(JSON.stringify(response));
+          } else {
+            const errorResp: WsRespError = {
+              type: WsMessageType.RESP_ERROR,
+              wsRequestId: msg.wsRequestId,
+              errorMessage: 'Failed to place Capitol - check placement location',
+              code: ErrorCodes.ERROR_AccessDenied
+            };
+            ws.send(JSON.stringify(errorResp));
+          }
+        } catch (err: unknown) {
+          console.error('[Gateway] Failed to build Capitol:', err);
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: toErrorMessage(err) || 'Failed to build Capitol',
             code: ErrorCodes.ERROR_AccessDenied
           };
           ws.send(JSON.stringify(errorResp));

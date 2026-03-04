@@ -173,6 +173,13 @@ export class StarpeaceSession extends EventEmitter {
     return toProxyUrl(remoteUrl, baseHost);
   }
 
+  /**
+   * Get the proxied Capitol icon URL for the current game server.
+   */
+  public getCapitolIconUrl(): string {
+    return this.convertToProxyUrl('/five/0/visual/voyager/Build/images/capitol.jpg');
+  }
+
   // Pending requests map
   private pendingRequests = new Map<number, {
     resolve: (msg: RdoPacket) => void;
@@ -4756,6 +4763,92 @@ private handlePush(socketName: string, packet: RdoPacket) {
   }
 
   /**
+   * Whether the session has an active world connection (WORLD_CONNECTING or WORLD_CONNECTED).
+   * Used by the gateway to detect server-switch scenarios.
+   */
+  public isWorldConnected(): boolean {
+    return this.phase === SessionPhase.WORLD_CONNECTING
+        || this.phase === SessionPhase.WORLD_CONNECTED;
+  }
+
+  /**
+   * Cleanup current world session for server switching.
+   * Sends RDOEndSession, closes all persistent sockets (world, mail, map, etc.),
+   * resets world-level state, but preserves credentials and directory data
+   * so the session can loginWorld() to a different server.
+   */
+  public async cleanupWorldSession(): Promise<void> {
+    this.log.debug('[Session] Cleaning up world session for server switch...');
+
+    // 1. Send RDOEndSession to gracefully close the game server session
+    await this.endSession();
+
+    // 2. Stop background services
+    this.stopServerBusyPolling();
+    this.stopCacherKeepAlive();
+
+    // 3. Close all persistent sockets (keep directory data intact)
+    for (const [name, socket] of this.sockets.entries()) {
+      this.log.debug(`[Session] Closing socket: ${name}`);
+      try {
+        socket.removeAllListeners();
+        socket.destroy();
+      } catch (err) {
+        this.log.error(`[Session] Error closing socket ${name}:`, err);
+      }
+    }
+    this.sockets.clear();
+    this.framers.clear();
+
+    // 4. Clear pending requests and buffers
+    for (const [, pending] of this.pendingRequests.entries()) {
+      pending.reject(new Error('Session cleaned up for server switch'));
+    }
+    this.pendingRequests.clear();
+    this.requestBuffer = [];
+    this.pendingMapRequests.clear();
+
+    // 5. Reset world-level state (preserve credentials + directory data)
+    this.worldContextId = null;
+    this.tycoonId = null;
+    this.currentWorldInfo = null;
+    this.rdoCnntId = null;
+    this.cacherId = null;
+    this.worldId = null;
+    this.daPort = null;
+    this.interfaceServerId = null;
+    this.interfaceEventsId = null;
+    this.mailAccount = null;
+    this.mailAddr = null;
+    this.mailPort = null;
+    this.mailServerId = null;
+    this.worldXSize = null;
+    this.worldYSize = null;
+    this.worldSeason = null;
+    this.virtualDate = null;
+    this.accountMoney = null;
+    this.failureLevel = null;
+    this.fTycoonProxyId = null;
+    this.lastRanking = 0;
+    this.lastBuildingCount = 0;
+    this.lastMaxBuildings = 0;
+    this.currentCompany = null;
+    this.availableCompanies = [];
+    this.currentFocusedBuildingId = null;
+    this.currentFocusedCoords = null;
+    this.isServerBusy = false;
+    this.activeMapRequests = 0;
+    this.knownObjects.clear();
+    this.chatUsers.clear();
+    this.currentChannel = '';
+
+    // 6. Reset phase to allow new loginWorld()
+    this.phase = SessionPhase.DIRECTORY_CONNECTED;
+
+    this.log.debug('[Session] World session cleanup complete, ready for new loginWorld()');
+  }
+
+  /**
    * Send RDOEndSession to gracefully close the game server session
    * Should be called before destroy() when user logs out
    * RDO Command: C <RID> sel <interfaceServerId> call RDOEndSession "*" ;
@@ -4925,6 +5018,58 @@ private handlePush(socketName: string, packet: RdoPacket) {
   }
 
   // =========================================================================
+  // DEFINEZONE PROTOCOL (Zone Painting)
+  // =========================================================================
+
+  /**
+   * Define a zone area on the map.
+   * RDO: sel <worldContextId> call DefineZone "^" #tycoonId, #zoneId, #x1, #y1, #x2, #y2
+   */
+  public async defineZone(
+    zoneId: number,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number
+  ): Promise<{ success: boolean; message?: string }> {
+    if (!this.worldContextId) {
+      throw new Error('Not logged into world - cannot define zone');
+    }
+    if (!this.tycoonId) {
+      throw new Error('No tycoon ID - cannot define zone');
+    }
+
+    // Normalize coordinates (ensure min/max)
+    const nx1 = Math.min(x1, x2);
+    const ny1 = Math.min(y1, y2);
+    const nx2 = Math.max(x1, x2);
+    const ny2 = Math.max(y1, y2);
+
+    this.log.debug(`[Zone] Defining zone ${zoneId} from (${nx1},${ny1}) to (${nx2},${ny2})`);
+
+    const packet = await this.sendRdoRequest('world', {
+      verb: RdoVerb.SEL,
+      targetId: this.worldContextId,
+      action: RdoAction.CALL,
+      member: 'DefineZone',
+      separator: '"^"',
+      args: [
+        RdoValue.int(parseInt(this.tycoonId, 10)).format(),
+        RdoValue.int(zoneId).format(),
+        RdoValue.int(nx1).format(),
+        RdoValue.int(ny1).format(),
+        RdoValue.int(nx2).format(),
+        RdoValue.int(ny2).format(),
+      ]
+    });
+
+    const result = packet.payload || '';
+    this.log.debug(`[Zone] DefineZone response: ${result}`);
+
+    return { success: true, message: result };
+  }
+
+  // =========================================================================
   // GETSURFACE PROTOCOL (Zone Overlays)
   // =========================================================================
 
@@ -4999,8 +5144,11 @@ private handlePush(socketName: string, packet: RdoPacket) {
   }
 
   /**
-   * Decode a single RLE-encoded row
+   * Decode a single RLE-encoded row.
    * Format: "value1=count1,value2=count2,..."
+   *
+   * Delphi CompressMap multiplies all values by Scale=1000 before encoding.
+   * We divide by 1000 here to restore original values, matching Delphi DecompressMap.
    */
   private decodeRLERow(encodedRow: string): number[] {
     const cells: number[] = [];
@@ -5011,8 +5159,10 @@ private handlePush(socketName: string, packet: RdoPacket) {
 
       const parts = segment.split('=');
       if (parts.length === 2) {
-        const value = parseInt(parts[0], 10);
+        const scaledValue = parseInt(parts[0], 10);
         const count = parseInt(parts[1], 10);
+        // Delphi CompressMap uses Scale=1000; divide to restore original values
+        const value = scaledValue / 1000;
 
         for (let i = 0; i < count; i++) {
           cells.push(value);
@@ -5527,6 +5677,54 @@ private handlePush(socketName: string, packet: RdoPacket) {
       }
     } catch (e) {
       this.log.error('[BuildConstruction] Failed to place building:', e);
+      return { success: false, buildingId: null };
+    }
+  }
+
+  /**
+   * Place the Capitol building via RDO NewFacility command.
+   * Capitol uses facilityClass "Capitol" and companyId 1 (hardcoded).
+   * RDO: sel <worldContextId> call NewFacility "^" "%Capitol","#1","#x","#y"
+   */
+  public async placeCapitol(
+    x: number,
+    y: number
+  ): Promise<{ success: boolean; buildingId: string | null }> {
+    if (!this.worldContextId) {
+      throw new Error('Not logged into world - cannot place Capitol');
+    }
+
+    this.log.debug(`[Capitol] Placing Capitol at (${x}, ${y})`);
+
+    try {
+      const packet = await this.sendRdoRequest('world', {
+        verb: RdoVerb.SEL,
+        targetId: this.worldContextId,
+        action: RdoAction.CALL,
+        member: 'NewFacility',
+        separator: '"^"',
+        args: [
+          RdoValue.string('Capitol').format(),
+          RdoValue.int(1).format(),
+          RdoValue.int(x).format(),
+          RdoValue.int(y).format(),
+        ]
+      });
+
+      const resultMatch = /res="#(\d+)"/.exec(packet.payload || '');
+      const resultCode = resultMatch ? parseInt(resultMatch[1], 10) : -1;
+
+      if (resultCode === 0) {
+        const buildingIdMatch = /sel (\d+)/.exec(packet.payload || '');
+        const buildingId = buildingIdMatch?.[1] || null;
+        this.log.debug(`[Capitol] Capitol placed successfully. ID: ${buildingId}`);
+        return { success: true, buildingId };
+      } else {
+        this.log.warn(`[Capitol] Capitol placement failed. Result code: ${resultCode}`);
+        return { success: false, buildingId: null };
+      }
+    } catch (e) {
+      this.log.error('[Capitol] Failed to place Capitol:', e);
       return { success: false, buildingId: null };
     }
   }
