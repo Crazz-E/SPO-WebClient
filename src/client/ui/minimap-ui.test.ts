@@ -39,6 +39,7 @@ interface MockContext {
   restore: jest.Mock;
   translate: jest.Mock;
   rotate: jest.Mock;
+  scale: jest.Mock;
   drawImage: jest.Mock;
   createImageData: jest.Mock;
   putImageData: jest.Mock;
@@ -88,6 +89,7 @@ function createMockCtx(): MockContext {
     restore: jest.fn(),
     translate: jest.fn(),
     rotate: jest.fn(),
+    scale: jest.fn(),
     drawImage: jest.fn(),
     createImageData: jest.fn(() => ({
       data: new Uint8ClampedArray(200 * 200 * 4),
@@ -241,49 +243,53 @@ describe('MinimapUI', () => {
   // ---------------------------------------------------------------------------
 
   describe('rotation sync', () => {
-    it('should apply no canvas rotation for NORTH (rotation=0)', () => {
+    it('should apply base -45° rotation for NORTH (rotation=0)', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 0) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
 
       expect(mockCtx.save).toHaveBeenCalled();
-      expect(mockCtx.rotate).toHaveBeenCalledWith(0);
+      expect(mockCtx.rotate).toHaveBeenCalledWith(-Math.PI / 4);
+      expect(mockCtx.scale).toHaveBeenCalledWith(Math.SQRT1_2, Math.SQRT1_2);
       expect(mockCtx.restore).toHaveBeenCalled();
 
       minimap.destroy();
     });
 
-    it('should apply 90° canvas rotation for EAST (rotation=1)', () => {
+    it('should apply base + 90° rotation for EAST (rotation=1)', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 1) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
 
-      expect(mockCtx.rotate).toHaveBeenCalledWith(Math.PI / 2);
+      expect(mockCtx.rotate).toHaveBeenCalledWith(Math.PI / 4);
+      expect(mockCtx.scale).toHaveBeenCalledWith(Math.SQRT1_2, Math.SQRT1_2);
 
       minimap.destroy();
     });
 
-    it('should apply 180° canvas rotation for SOUTH (rotation=2)', () => {
+    it('should apply base + 180° rotation for SOUTH (rotation=2)', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 2) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
 
-      expect(mockCtx.rotate).toHaveBeenCalledWith(Math.PI);
+      expect(mockCtx.rotate).toHaveBeenCalledWith(3 * Math.PI / 4);
+      expect(mockCtx.scale).toHaveBeenCalledWith(Math.SQRT1_2, Math.SQRT1_2);
 
       minimap.destroy();
     });
 
-    it('should apply 270° canvas rotation for WEST (rotation=3)', () => {
+    it('should apply base + 270° rotation for WEST (rotation=3)', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 3) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
 
-      expect(mockCtx.rotate).toHaveBeenCalledWith(3 * Math.PI / 2);
+      expect(mockCtx.rotate).toHaveBeenCalledWith(5 * Math.PI / 4);
+      expect(mockCtx.scale).toHaveBeenCalledWith(Math.SQRT1_2, Math.SQRT1_2);
 
       minimap.destroy();
     });
 
-    it('should translate around canvas center before and after rotate', () => {
+    it('should translate around canvas center with rotate and scale', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 1) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
@@ -292,13 +298,13 @@ describe('MinimapUI', () => {
       const translateCalls = mockCtx.translate.mock.calls;
       // First translate: to center
       expect(translateCalls[0]).toEqual([100, 100]);
-      // Second translate: back from center
+      // Second translate: back from center (after rotate + scale)
       expect(translateCalls[1]).toEqual([-100, -100]);
 
       minimap.destroy();
     });
 
-    it('should inverse-rotate click for SOUTH rotation', () => {
+    it('should inverse-transform click for SOUTH rotation', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 2) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
@@ -306,19 +312,20 @@ describe('MinimapUI', () => {
       const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
       expect(canvas).toBeDefined();
 
-      // Click at (150, 150) with SOUTH rotation (180°)
-      // Inverse rotation of (150,150) around center (100,100):
-      // dx=50, dy=50, angle=-PI, cos(-PI)=-1, sin(-PI)=0
-      // rx = 100 + 50*(-1) - 50*0 = 50
-      // ry = 100 + 50*0 + 50*(-1) = 50
-      // Map coords: round(50/200 * 100) = 25, round(50/200 * 100) = 25
+      // Click at (150, 150) with SOUTH rotation (totalAngle = -PI/4 + PI = 3PI/4)
+      // dx=50, dy=50, invAngle=-3PI/4
+      // cos(-3PI/4) ≈ -0.7071, sin(-3PI/4) ≈ -0.7071
+      // rdx = 50*(-0.7071) - 50*(-0.7071) = 0
+      // rdy = 50*(-0.7071) + 50*(-0.7071) = -70.71
+      // rx = 100 + 0/0.7071 = 100, ry = 100 + (-70.71)/0.7071 = 0
+      // mapX = round(100/200*100)=50, mapY = max(0, round(0/200*100))=0
       canvas!.onmousedown!({ offsetX: 150, offsetY: 150, preventDefault: jest.fn(), stopPropagation: jest.fn() });
-      expect(renderer.centerOn).toHaveBeenCalledWith(25, 25);
+      expect(renderer.centerOn).toHaveBeenCalledWith(50, 0);
 
       minimap.destroy();
     });
 
-    it('should inverse-rotate click for EAST rotation', () => {
+    it('should inverse-transform click for EAST rotation', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 1) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
@@ -326,26 +333,27 @@ describe('MinimapUI', () => {
       const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
       expect(canvas).toBeDefined();
 
-      // Click at top-center (100, 0) with EAST rotation (90°)
-      // Inverse rotation of (100,0) around center (100,100):
-      // dx=0, dy=-100, angle=-PI/2, cos(-PI/2)=0, sin(-PI/2)=-1
-      // rx = 100 + 0*0 - (-100)*(-1) = 100 - 100 = 0
-      // ry = 100 + 0*(-1) + (-100)*0 = 100
-      // Map coords: round(0/200 * 100) = 0, round(100/200 * 100) = 50
+      // Click at top-center (100, 0) with EAST rotation (totalAngle = -PI/4 + PI/2 = PI/4)
+      // dx=0, dy=-100, invAngle=-PI/4
+      // cos(-PI/4) ≈ 0.7071, sin(-PI/4) ≈ -0.7071
+      // rdx = 0*(0.7071) - (-100)*(-0.7071) = -70.71
+      // rdy = 0*(-0.7071) + (-100)*(0.7071) = -70.71
+      // rx = 100 + (-70.71)/0.7071 = 0, ry = 100 + (-70.71)/0.7071 = 0
+      // mapX = max(0, 0) = 0, mapY = max(0, 0) = 0
       canvas!.onmousedown!({ offsetX: 100, offsetY: 0, preventDefault: jest.fn(), stopPropagation: jest.fn() });
-      expect(renderer.centerOn).toHaveBeenCalledWith(0, 50);
+      expect(renderer.centerOn).toHaveBeenCalledWith(0, 0);
 
       minimap.destroy();
     });
 
-    it('should not inverse-rotate click for NORTH rotation', () => {
+    it('should inverse-transform center click for NORTH rotation', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 0) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
 
       const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
+      // Center click is invariant under rotation+scale: (100,100) → (50, 50)
       canvas!.onmousedown!({ offsetX: 100, offsetY: 100, preventDefault: jest.fn(), stopPropagation: jest.fn() });
-      // No rotation: (100,100) on 200x200 canvas → (50, 50) on 100x100 map
       expect(renderer.centerOn).toHaveBeenCalledWith(50, 50);
 
       minimap.destroy();

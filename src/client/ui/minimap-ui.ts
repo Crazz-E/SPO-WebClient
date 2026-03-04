@@ -31,6 +31,11 @@ const MAX_SIZE = 500;
 const MINIMAP_PADDING = 12;
 const UPDATE_INTERVAL_MS = 500;
 
+/** Base rotation to match isometric map orientation (NW at top) */
+const ISO_BASE_ANGLE = -Math.PI / 4;
+/** Scale factor to fit 45°-rotated square inside canvas (1/√2) */
+const ISO_SCALE = Math.SQRT1_2; // ~0.707
+
 /** RGB colors for each LandClass (bits 7-6 of landId): Grass, MidGrass, DryGround, Water */
 const LAND_CLASS_COLORS: readonly [number, number, number][] = [
   [74, 116, 50],    // ZoneA (0) — Grass: medium green
@@ -291,10 +296,11 @@ export class MinimapUI {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, this.currentWidth, this.currentHeight);
 
-    // Apply rotation around canvas center for all content layers
+    // Apply isometric base rotation (45°) + cardinal rotation around canvas center
     ctx.save();
     ctx.translate(this.currentWidth / 2, this.currentHeight / 2);
-    ctx.rotate(angle);
+    ctx.rotate(ISO_BASE_ANGLE + angle);
+    ctx.scale(ISO_SCALE, ISO_SCALE);
     ctx.translate(-this.currentWidth / 2, -this.currentHeight / 2);
 
     // Draw terrain background
@@ -424,25 +430,29 @@ export class MinimapUI {
     if (dims.width === 0 || dims.height === 0) return;
 
     const rotation = this.renderer.getRotation();
+    const totalAngle = ISO_BASE_ANGLE + (rotation * Math.PI) / 2;
 
-    // Inverse-rotate pixel coordinates back to north-up map space
-    let rx = pixelX;
-    let ry = pixelY;
-    if (rotation !== 0) {
-      const cx = this.currentWidth / 2;
-      const cy = this.currentHeight / 2;
-      const dx = pixelX - cx;
-      const dy = pixelY - cy;
-      const invAngle = -(rotation * Math.PI) / 2;
-      const cos = Math.cos(invAngle);
-      const sin = Math.sin(invAngle);
-      rx = cx + dx * cos - dy * sin;
-      ry = cy + dx * sin + dy * cos;
-    }
+    // Inverse the canvas transform: T(center) · R(angle) · S(scale) · T(-center)
+    // Inverse is: T(center) · S(1/scale) · R(-angle) · T(-center)
+    const cx = this.currentWidth / 2;
+    const cy = this.currentHeight / 2;
+    const dx = pixelX - cx;
+    const dy = pixelY - cy;
 
-    // Convert minimap pixel → map coordinates (x=col, y=row)
-    const mapX = Math.round((rx / this.currentWidth) * dims.width);
-    const mapY = Math.round((ry / this.currentHeight) * dims.height);
+    // Inverse rotate, then inverse scale
+    const invAngle = -totalAngle;
+    const cos = Math.cos(invAngle);
+    const sin = Math.sin(invAngle);
+    const rdx = dx * cos - dy * sin;
+    const rdy = dx * sin + dy * cos;
+    const rx = cx + rdx / ISO_SCALE;
+    const ry = cy + rdy / ISO_SCALE;
+
+    // Convert minimap pixel → map coordinates, clamped to valid bounds
+    const mapX = Math.max(0, Math.min(dims.width - 1,
+      Math.round((rx / this.currentWidth) * dims.width)));
+    const mapY = Math.max(0, Math.min(dims.height - 1,
+      Math.round((ry / this.currentHeight) * dims.height)));
 
     this.renderer.centerOn(mapX, mapY);
   }
