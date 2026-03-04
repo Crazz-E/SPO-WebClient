@@ -199,6 +199,124 @@ describe('game-store cluster browsing state', () => {
   });
 });
 
+describe('game-store zone painting state', () => {
+  beforeEach(() => {
+    useGameStore.getState().reset();
+  });
+
+  it('should have correct initial zone state', () => {
+    const state = useGameStore.getState();
+    expect(state.isZonePaintingMode).toBe(false);
+    expect(state.selectedZoneType).toBe(2);
+    expect(state.isPublicOfficeRole).toBe(false);
+    expect(state.isCityZonesEnabled).toBe(false);
+  });
+
+  it('setZonePaintingMode should update mode', () => {
+    useGameStore.getState().setZonePaintingMode(true);
+    expect(useGameStore.getState().isZonePaintingMode).toBe(true);
+
+    useGameStore.getState().setZonePaintingMode(false);
+    expect(useGameStore.getState().isZonePaintingMode).toBe(false);
+  });
+
+  it('setSelectedZoneType should update zone type', () => {
+    useGameStore.getState().setSelectedZoneType(6); // znIndustrial
+    expect(useGameStore.getState().selectedZoneType).toBe(6);
+
+    useGameStore.getState().setSelectedZoneType(0);
+    expect(useGameStore.getState().selectedZoneType).toBe(0);
+  });
+
+  it('setPublicOfficeRole should update role flag', () => {
+    useGameStore.getState().setPublicOfficeRole(true);
+    expect(useGameStore.getState().isPublicOfficeRole).toBe(true);
+
+    useGameStore.getState().setPublicOfficeRole(false);
+    expect(useGameStore.getState().isPublicOfficeRole).toBe(false);
+  });
+
+  it('setCityZonesEnabled should toggle overlay state', () => {
+    useGameStore.getState().setCityZonesEnabled(true);
+    expect(useGameStore.getState().isCityZonesEnabled).toBe(true);
+
+    useGameStore.getState().setCityZonesEnabled(false);
+    expect(useGameStore.getState().isCityZonesEnabled).toBe(false);
+  });
+
+  it('reset should clear zone painting state', () => {
+    useGameStore.getState().setZonePaintingMode(true);
+    useGameStore.getState().setSelectedZoneType(7); // znCommercial
+    useGameStore.getState().setPublicOfficeRole(true);
+    useGameStore.getState().setCityZonesEnabled(true);
+
+    useGameStore.getState().reset();
+
+    const state = useGameStore.getState();
+    expect(state.isZonePaintingMode).toBe(false);
+    expect(state.selectedZoneType).toBe(2);
+    expect(state.isPublicOfficeRole).toBe(false);
+    expect(state.isCityZonesEnabled).toBe(false);
+  });
+});
+
+describe('game-store server switch state', () => {
+  beforeEach(() => {
+    useGameStore.getState().reset();
+  });
+
+  it('should have correct initial server switch state', () => {
+    const state = useGameStore.getState();
+    expect(state.serverSwitchMode).toBe(false);
+    expect(state.serverSwitchOriginWorld).toBe('');
+  });
+
+  it('enterServerSwitch should activate switch mode and set origin world', () => {
+    useGameStore.getState().setWorld('Shamba');
+    useGameStore.getState().enterServerSwitch();
+
+    const state = useGameStore.getState();
+    expect(state.serverSwitchMode).toBe(true);
+    expect(state.serverSwitchOriginWorld).toBe('Shamba');
+    expect(state.loginStage).toBe('zones');
+    expect(state.loginLoading).toBe(false);
+  });
+
+  it('cancelServerSwitch should deactivate switch mode and reset stage', () => {
+    useGameStore.getState().setWorld('Shamba');
+    useGameStore.getState().enterServerSwitch();
+    useGameStore.getState().cancelServerSwitch();
+
+    const state = useGameStore.getState();
+    expect(state.serverSwitchMode).toBe(false);
+    expect(state.serverSwitchOriginWorld).toBe('');
+    expect(state.loginStage).toBe('auth');
+  });
+
+  it('completeServerSwitch should clear switch state without resetting stage', () => {
+    useGameStore.getState().setWorld('Shamba');
+    useGameStore.getState().enterServerSwitch();
+    useGameStore.getState().setLoginStage('companies');
+    useGameStore.getState().completeServerSwitch();
+
+    const state = useGameStore.getState();
+    expect(state.serverSwitchMode).toBe(false);
+    expect(state.serverSwitchOriginWorld).toBe('');
+    expect(state.loginStage).toBe('companies');
+  });
+
+  it('reset should clear server switch state', () => {
+    useGameStore.getState().setWorld('Shamba');
+    useGameStore.getState().enterServerSwitch();
+
+    useGameStore.getState().reset();
+
+    const state = useGameStore.getState();
+    expect(state.serverSwitchMode).toBe(false);
+    expect(state.serverSwitchOriginWorld).toBe('');
+  });
+});
+
 describe('delphiTDateTimeToJsDate', () => {
   it('should convert 0 to Dec 30, 1899', () => {
     const result = delphiTDateTimeToJsDate(0);

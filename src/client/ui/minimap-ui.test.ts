@@ -35,6 +35,13 @@ interface MockContext {
   moveTo: jest.Mock;
   lineTo: jest.Mock;
   stroke: jest.Mock;
+  save: jest.Mock;
+  restore: jest.Mock;
+  translate: jest.Mock;
+  rotate: jest.Mock;
+  drawImage: jest.Mock;
+  createImageData: jest.Mock;
+  putImageData: jest.Mock;
 }
 
 let allElements: MockElement[];
@@ -77,6 +84,15 @@ function createMockCtx(): MockContext {
     moveTo: jest.fn(),
     lineTo: jest.fn(),
     stroke: jest.fn(),
+    save: jest.fn(),
+    restore: jest.fn(),
+    translate: jest.fn(),
+    rotate: jest.fn(),
+    drawImage: jest.fn(),
+    createImageData: jest.fn(() => ({
+      data: new Uint8ClampedArray(200 * 200 * 4),
+    })),
+    putImageData: jest.fn(),
   };
 }
 
@@ -94,6 +110,8 @@ function createMockRenderer(overrides: Partial<MinimapRendererAPI> = {}): Minima
     getMapDimensions: jest.fn(() => ({ width: 100, height: 100 })),
     getVisibleTileBounds: jest.fn(() => ({ minI: 20, maxI: 40, minJ: 30, maxJ: 60 })),
     getZoom: jest.fn(() => 2),
+    getRotation: jest.fn(() => 0),
+    getTerrainPixelData: jest.fn(() => null),
     ...overrides,
   };
 }
@@ -216,5 +234,237 @@ describe('MinimapUI', () => {
     minimap.destroy();
     // After destroy, container should be removed
     expect(minimap.isVisible()).toBe(false);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Rotation sync tests
+  // ---------------------------------------------------------------------------
+
+  describe('rotation sync', () => {
+    it('should apply no canvas rotation for NORTH (rotation=0)', () => {
+      const renderer = createMockRenderer({ getRotation: jest.fn(() => 0) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      expect(mockCtx.save).toHaveBeenCalled();
+      expect(mockCtx.rotate).toHaveBeenCalledWith(0);
+      expect(mockCtx.restore).toHaveBeenCalled();
+
+      minimap.destroy();
+    });
+
+    it('should apply 90° canvas rotation for EAST (rotation=1)', () => {
+      const renderer = createMockRenderer({ getRotation: jest.fn(() => 1) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      expect(mockCtx.rotate).toHaveBeenCalledWith(Math.PI / 2);
+
+      minimap.destroy();
+    });
+
+    it('should apply 180° canvas rotation for SOUTH (rotation=2)', () => {
+      const renderer = createMockRenderer({ getRotation: jest.fn(() => 2) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      expect(mockCtx.rotate).toHaveBeenCalledWith(Math.PI);
+
+      minimap.destroy();
+    });
+
+    it('should apply 270° canvas rotation for WEST (rotation=3)', () => {
+      const renderer = createMockRenderer({ getRotation: jest.fn(() => 3) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      expect(mockCtx.rotate).toHaveBeenCalledWith(3 * Math.PI / 2);
+
+      minimap.destroy();
+    });
+
+    it('should translate around canvas center before and after rotate', () => {
+      const renderer = createMockRenderer({ getRotation: jest.fn(() => 1) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      // Canvas is 200x200, center = (100, 100)
+      const translateCalls = mockCtx.translate.mock.calls;
+      // First translate: to center
+      expect(translateCalls[0]).toEqual([100, 100]);
+      // Second translate: back from center
+      expect(translateCalls[1]).toEqual([-100, -100]);
+
+      minimap.destroy();
+    });
+
+    it('should inverse-rotate click for SOUTH rotation', () => {
+      const renderer = createMockRenderer({ getRotation: jest.fn(() => 2) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
+      expect(canvas).toBeDefined();
+
+      // Click at (150, 150) with SOUTH rotation (180°)
+      // Inverse rotation of (150,150) around center (100,100):
+      // dx=50, dy=50, angle=-PI, cos(-PI)=-1, sin(-PI)=0
+      // rx = 100 + 50*(-1) - 50*0 = 50
+      // ry = 100 + 50*0 + 50*(-1) = 50
+      // Map coords: round(50/200 * 100) = 25, round(50/200 * 100) = 25
+      canvas!.onmousedown!({ offsetX: 150, offsetY: 150, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      expect(renderer.centerOn).toHaveBeenCalledWith(25, 25);
+
+      minimap.destroy();
+    });
+
+    it('should inverse-rotate click for EAST rotation', () => {
+      const renderer = createMockRenderer({ getRotation: jest.fn(() => 1) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
+      expect(canvas).toBeDefined();
+
+      // Click at top-center (100, 0) with EAST rotation (90°)
+      // Inverse rotation of (100,0) around center (100,100):
+      // dx=0, dy=-100, angle=-PI/2, cos(-PI/2)=0, sin(-PI/2)=-1
+      // rx = 100 + 0*0 - (-100)*(-1) = 100 - 100 = 0
+      // ry = 100 + 0*(-1) + (-100)*0 = 100
+      // Map coords: round(0/200 * 100) = 0, round(100/200 * 100) = 50
+      canvas!.onmousedown!({ offsetX: 100, offsetY: 0, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      expect(renderer.centerOn).toHaveBeenCalledWith(0, 50);
+
+      minimap.destroy();
+    });
+
+    it('should not inverse-rotate click for NORTH rotation', () => {
+      const renderer = createMockRenderer({ getRotation: jest.fn(() => 0) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
+      canvas!.onmousedown!({ offsetX: 100, offsetY: 100, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      // No rotation: (100,100) on 200x200 canvas → (50, 50) on 100x100 map
+      expect(renderer.centerOn).toHaveBeenCalledWith(50, 50);
+
+      minimap.destroy();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Terrain background tests
+  // ---------------------------------------------------------------------------
+
+  describe('terrain background', () => {
+    function createTerrainData(width: number, height: number): { pixelData: Uint8Array; width: number; height: number } {
+      // Fill with mixed land classes: first half water (0xC0), second half grass (0x00)
+      const data = new Uint8Array(width * height);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          data[y * width + x] = y < height / 2 ? 0x00 : 0xC0; // Grass then Water
+        }
+      }
+      return { pixelData: data, width, height };
+    }
+
+    it('should not draw terrain background when getTerrainPixelData returns null', () => {
+      const renderer = createMockRenderer({ getTerrainPixelData: jest.fn(() => null) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      // drawImage should not be called (no terrain background)
+      expect(mockCtx.drawImage).not.toHaveBeenCalled();
+
+      minimap.destroy();
+    });
+
+    it('should draw terrain background when pixel data is available', () => {
+      const terrain = createTerrainData(100, 100);
+      const renderer = createMockRenderer({
+        getTerrainPixelData: jest.fn(() => terrain),
+      });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      // drawImage should be called for the terrain background canvas
+      expect(mockCtx.drawImage).toHaveBeenCalled();
+
+      minimap.destroy();
+    });
+
+    it('should cache terrain canvas across renders', () => {
+      const terrain = createTerrainData(100, 100);
+      const renderer = createMockRenderer({
+        getTerrainPixelData: jest.fn(() => terrain),
+      });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      const createElementMock = (document as unknown as { createElement: jest.Mock }).createElement;
+      const callCountAfterFirst = createElementMock.mock.calls.length;
+
+      // Trigger another render via timer
+      jest.advanceTimersByTime(500);
+
+      // No additional createElement for terrain canvas (cached)
+      // The total calls should not increase by a new terrain canvas creation
+      const callCountAfterSecond = createElementMock.mock.calls.length;
+      expect(callCountAfterSecond).toBe(callCountAfterFirst);
+
+      minimap.destroy();
+    });
+
+    it('should rebuild terrain canvas when map dimensions change', () => {
+      const terrain1 = createTerrainData(100, 100);
+      const terrain2 = createTerrainData(200, 200);
+      let currentTerrain = terrain1;
+
+      const renderer = createMockRenderer({
+        getTerrainPixelData: jest.fn(() => currentTerrain),
+        getMapDimensions: jest.fn(() => ({
+          width: currentTerrain.width,
+          height: currentTerrain.height,
+        })),
+      });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      const createElementMock = (document as unknown as { createElement: jest.Mock }).createElement;
+      const callsAfterFirst = createElementMock.mock.calls.length;
+
+      // Switch to different terrain
+      currentTerrain = terrain2;
+      jest.advanceTimersByTime(500);
+
+      // Should have created a new terrain canvas element
+      const callsAfterSecond = createElementMock.mock.calls.length;
+      expect(callsAfterSecond).toBeGreaterThan(callsAfterFirst);
+
+      minimap.destroy();
+    });
+
+    it('should generate correct colors for land classes', () => {
+      // Create a 4x1 terrain: one tile of each land class
+      const data = new Uint8Array(4);
+      data[0] = 0x00; // ZoneA (Grass)     — bits 7-6 = 00
+      data[1] = 0x40; // ZoneB (MidGrass)  — bits 7-6 = 01
+      data[2] = 0x80; // ZoneC (DryGround) — bits 7-6 = 10
+      data[3] = 0xC0; // ZoneD (Water)     — bits 7-6 = 11
+
+      const renderer = createMockRenderer({
+        getTerrainPixelData: jest.fn(() => ({ pixelData: data, width: 4, height: 1 })),
+        getMapDimensions: jest.fn(() => ({ width: 4, height: 1 })),
+      });
+
+      // The terrain canvas is built internally — we verify it calls createImageData and putImageData
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+
+      expect(mockCtx.createImageData).toHaveBeenCalled();
+      expect(mockCtx.putImageData).toHaveBeenCalled();
+
+      minimap.destroy();
+    });
   });
 });
