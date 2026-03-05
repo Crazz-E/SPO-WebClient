@@ -137,14 +137,14 @@ describe('SrvGeneral', () => {
 
   // G9 — Connect button
   it('Connect button: ACTION_BUTTON with actionId="connect" present in template', () => {
-    const prop = SRV_GENERAL_GROUP.properties.find(p => p.actionId === 'connect');
+    const prop = SRV_GENERAL_GROUP.properties.find(p => p.actionId === 'connectMap');
     expect(prop).toBeDefined();
     expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
-    expect(prop!.rdoName).toBe('connect');
+    expect(prop!.rdoName).toBe('connectMap');
   });
 
   it('Connect button: buttonLabel is "Connect"', () => {
-    const prop = SRV_GENERAL_GROUP.properties.find(p => p.actionId === 'connect');
+    const prop = SRV_GENERAL_GROUP.properties.find(p => p.actionId === 'connectMap');
     expect(prop!.buttonLabel).toBe('Connect');
   });
 
@@ -220,14 +220,14 @@ describe('IndGeneral', () => {
 
   // G3 — Connect button
   it('Connect button: ACTION_BUTTON with actionId="connect" present in template', () => {
-    const prop = IND_GENERAL_GROUP.properties.find(p => p.actionId === 'connect');
+    const prop = IND_GENERAL_GROUP.properties.find(p => p.actionId === 'connectMap');
     expect(prop).toBeDefined();
     expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
-    expect(prop!.rdoName).toBe('connect');
+    expect(prop!.rdoName).toBe('connectMap');
   });
 
   it('Connect button: buttonLabel is "Connect"', () => {
-    const prop = IND_GENERAL_GROUP.properties.find(p => p.actionId === 'connect');
+    const prop = IND_GENERAL_GROUP.properties.find(p => p.actionId === 'connectMap');
     expect(prop!.buttonLabel).toBe('Connect');
   });
 
@@ -457,14 +457,14 @@ describe('WHGeneral', () => {
 
   // G3 — Connect button
   it('Connect button: ACTION_BUTTON with actionId="connect" present in template', () => {
-    const prop = WH_GENERAL_GROUP.properties.find(p => p.actionId === 'connect');
+    const prop = WH_GENERAL_GROUP.properties.find(p => p.actionId === 'connectMap');
     expect(prop).toBeDefined();
     expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
-    expect(prop!.rdoName).toBe('connect');
+    expect(prop!.rdoName).toBe('connectMap');
   });
 
   it('Connect button: buttonLabel is "Connect"', () => {
-    const prop = WH_GENERAL_GROUP.properties.find(p => p.actionId === 'connect');
+    const prop = WH_GENERAL_GROUP.properties.find(p => p.actionId === 'connectMap');
     expect(prop!.buttonLabel).toBe('Connect');
   });
 
@@ -596,10 +596,10 @@ describe('Connect button (ACTION_BUTTON — IndGeneral, SrvGeneral, WHGeneral)',
 
   it('all 3 General groups have a connect ACTION_BUTTON', () => {
     for (const { name, group } of connectGroups) {
-      const prop = group.properties.find(p => p.actionId === 'connect');
+      const prop = group.properties.find(p => p.actionId === 'connectMap');
       expect(prop).toBeDefined();
       expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
-      expect(prop!.rdoName).toBe('connect');
+      expect(prop!.rdoName).toBe('connectMap');
       expect(prop!.buttonLabel).toBe('Connect');
       expect(typeof name).toBe('string');
     }
@@ -613,7 +613,7 @@ describe('Connect button (ACTION_BUTTON — IndGeneral, SrvGeneral, WHGeneral)',
 
   it('connect button appears before demolish button in property list', () => {
     for (const { group } of connectGroups) {
-      const connectIdx = group.properties.findIndex(p => p.actionId === 'connect');
+      const connectIdx = group.properties.findIndex(p => p.actionId === 'connectMap');
       const demolishIdx = group.properties.findIndex(p => p.actionId === 'demolish');
       expect(connectIdx).toBeGreaterThan(-1);
       expect(demolishIdx).toBeGreaterThan(-1);

@@ -1007,8 +1007,60 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 	  this.currentFocusedCoords = null;
 	}
 
+  /**
+   * Get the object ID at given map coordinates via ObjectAt RDO call.
+   */
+  private async objectAt(x: number, y: number): Promise<string> {
+    if (!this.worldContextId) throw new Error('Not logged into world');
 
+    const packet = await this.sendRdoRequest('world', {
+      verb: RdoVerb.SEL,
+      targetId: this.worldContextId,
+      action: RdoAction.CALL,
+      member: 'ObjectAt',
+      separator: '"^"',
+      args: [RdoValue.int(x).format(), RdoValue.int(y).format()],
+    });
 
+    const objectId = parsePropertyResponseHelper(packet.payload || '', 'res');
+    if (!objectId) throw new Error(`No object found at (${x}, ${y})`);
+    return objectId;
+  }
+
+  /**
+   * Connect two facilities by their map coordinates.
+   * Uses ObjectAt to resolve IDs, then ConnectFacilities RDO call.
+   * Returns the server's connection result message.
+   */
+  public async connectFacilitiesByCoords(
+    sourceX: number, sourceY: number,
+    targetX: number, targetY: number,
+  ): Promise<{ success: boolean; resultMessage: string }> {
+    if (!this.worldContextId) throw new Error('Not logged into world');
+
+    this.log.debug(`[Session] ConnectFacilities: source=(${sourceX},${sourceY}) target=(${targetX},${targetY})`);
+
+    // Resolve object IDs via ObjectAt
+    const sourceObjectId = await this.objectAt(sourceX, sourceY);
+    const targetObjectId = await this.objectAt(targetX, targetY);
+
+    this.log.debug(`[Session] ConnectFacilities: sourceId=${sourceObjectId} targetId=${targetObjectId}`);
+
+    // Call ConnectFacilities(sourceId, targetId) on worldContextId
+    const packet = await this.sendRdoRequest('world', {
+      verb: RdoVerb.SEL,
+      targetId: this.worldContextId,
+      action: RdoAction.CALL,
+      member: 'ConnectFacilities',
+      separator: '"^"',
+      args: [RdoValue.int(parseInt(sourceObjectId, 10)).format(), RdoValue.int(parseInt(targetObjectId, 10)).format()],
+    });
+
+    const resultMessage = parsePropertyResponseHelper(packet.payload || '', 'res') || '';
+    this.log.debug(`[Session] ConnectFacilities result: ${resultMessage}`);
+
+    return { success: true, resultMessage };
+  }
 
   /**
    * NEW: Check if a push command is a RefreshObject update
@@ -6869,10 +6921,11 @@ private handlePush(socketName: string, packet: RdoPacket) {
       case 'RDODisconnectFromTycoon': {
         // Args: tycoonId (integer), kind (integer), flag (wordbool = true)
         // Voyager: IndustryGeneralSheet.pas line 345/357
-        const tycoonId = params.tycoonId;
+        // tycoonId auto-injected from session if not provided by client
+        const tycoonId = params.tycoonId || this.tycoonId;
         const kind = params.kind;
         if (!tycoonId || !kind) {
-          throw new Error(`${rdoCommand} requires tycoonId and kind parameters`);
+          throw new Error(`${rdoCommand} requires kind parameter (and tycoonId must be available)`);
         }
         args.push(RdoValue.int(parseInt(tycoonId, 10)), RdoValue.int(parseInt(kind, 10)), RdoValue.int(-1));
         break;

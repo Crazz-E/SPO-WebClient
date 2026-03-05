@@ -74,7 +74,8 @@ export const IND_GENERAL_GROUP: PropertyGroup = {
     { rdoName: 'Stopped', displayName: 'Status', type: PropertyType.STOP_TOGGLE },
     { rdoName: 'TradeRole', displayName: 'Trade Role', type: PropertyType.ENUM, editable: true, enumLabels: { '0': 'Neutral', '1': 'Producer', '2': 'Distributor', '3': 'Buyer', '4': 'Importer', '5': 'Export', '6': 'Import' } },
     { rdoName: 'TradeLevel', displayName: 'Trade Level', type: PropertyType.ENUM, editable: true, enumLabels: { '0': 'Same Owner', '1': 'Subsidiaries', '2': 'Allies', '3': 'Anyone' } },
-    { rdoName: 'connect', displayName: 'Connect', type: PropertyType.ACTION_BUTTON, actionId: 'connect', buttonLabel: 'Connect' },
+    { rdoName: 'tradeConnect', displayName: 'Quick Trade', type: PropertyType.TRADE_CONNECT_BUTTONS },
+    { rdoName: 'connectMap', displayName: 'Connect', type: PropertyType.ACTION_BUTTON, actionId: 'connectMap', buttonLabel: 'Connect' },
     { rdoName: 'demolish', displayName: 'Demolish', type: PropertyType.ACTION_BUTTON, actionId: 'demolish', buttonLabel: 'Demolish' },
   ],
   rdoCommands: {
@@ -120,7 +121,8 @@ export const SRV_GENERAL_GROUP: PropertyGroup = {
         { rdoSuffix: 'srvAvgPrices', label: 'Avg Price', type: PropertyType.CURRENCY, width: '15%' },
       ],
     },
-    { rdoName: 'connect', displayName: 'Connect', type: PropertyType.ACTION_BUTTON, actionId: 'connect', buttonLabel: 'Connect' },
+    { rdoName: 'tradeConnect', displayName: 'Quick Trade', type: PropertyType.TRADE_CONNECT_BUTTONS },
+    { rdoName: 'connectMap', displayName: 'Connect', type: PropertyType.ACTION_BUTTON, actionId: 'connectMap', buttonLabel: 'Connect' },
     { rdoName: 'demolish', displayName: 'Demolish', type: PropertyType.ACTION_BUTTON, actionId: 'demolish', buttonLabel: 'Demolish' },
   ],
   rdoCommands: {
@@ -273,7 +275,8 @@ export const WH_GENERAL_GROUP: PropertyGroup = {
     { rdoName: 'TradeLevel', displayName: 'Trade Level', type: PropertyType.ENUM, editable: true, enumLabels: { '0': 'Same Owner', '1': 'Subsidiaries', '2': 'Allies', '3': 'Anyone' } },
     { rdoName: 'GateMap', displayName: 'Gate Map', type: PropertyType.NUMBER, hideEmpty: true },
     { rdoName: 'Stopped', displayName: 'Status', type: PropertyType.STOP_TOGGLE },
-    { rdoName: 'connect', displayName: 'Connect', type: PropertyType.ACTION_BUTTON, actionId: 'connect', buttonLabel: 'Connect' },
+    { rdoName: 'tradeConnect', displayName: 'Quick Trade', type: PropertyType.TRADE_CONNECT_BUTTONS },
+    { rdoName: 'connectMap', displayName: 'Connect', type: PropertyType.ACTION_BUTTON, actionId: 'connectMap', buttonLabel: 'Connect' },
     { rdoName: 'demolish', displayName: 'Demolish', type: PropertyType.ACTION_BUTTON, actionId: 'demolish', buttonLabel: 'Demolish' },
   ],
   rdoCommands: {

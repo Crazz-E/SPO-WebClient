@@ -133,6 +133,10 @@ export enum WsMessageType {
   REQ_DELETE_FACILITY = 'REQ_DELETE_FACILITY',
   RESP_DELETE_FACILITY = 'RESP_DELETE_FACILITY',
 
+  // Building Connection (map-click connect two facilities)
+  REQ_CONNECT_FACILITIES = 'REQ_CONNECT_FACILITIES',
+  RESP_CONNECT_FACILITIES = 'RESP_CONNECT_FACILITIES',
+
   // Road Building
   REQ_BUILD_ROAD = 'REQ_BUILD_ROAD',
   RESP_BUILD_ROAD = 'RESP_BUILD_ROAD',
@@ -654,6 +658,24 @@ export interface WsRespDeleteFacility extends WsMessage {
   type: WsMessageType.RESP_DELETE_FACILITY;
   success: boolean;
   message?: string;
+}
+
+// =============================================================================
+// BUILDING CONNECTION (map-click connect two facilities)
+// =============================================================================
+
+export interface WsReqConnectFacilities extends WsMessage {
+  type: WsMessageType.REQ_CONNECT_FACILITIES;
+  sourceX: number;
+  sourceY: number;
+  targetX: number;
+  targetY: number;
+}
+
+export interface WsRespConnectFacilities extends WsMessage {
+  type: WsMessageType.RESP_CONNECT_FACILITIES;
+  success: boolean;
+  resultMessage: string;
 }
 
 // =============================================================================

@@ -446,6 +446,10 @@ export class IsometricMapRenderer {
   };
   private roadCostPerTile: number = 2000000;
 
+  // Connect mode (map-click to connect two buildings)
+  private connectMode: boolean = false;
+  private onConnectModeClick: ((x: number, y: number) => void) | null = null;
+
   // Zone painting
   private zonePaintingMode: boolean = false;
   private zonePaintingType: number = 2;
@@ -1714,6 +1718,20 @@ export class IsometricMapRenderer {
   public getPlacementCoordinates(): { x: number; y: number } | null {
     if (!this.placementPreview) return null;
     return { x: this.placementPreview.j, y: this.placementPreview.i };
+  }
+
+  // =========================================================================
+  // CONNECT MODE (map-click to connect two buildings)
+  // =========================================================================
+
+  public setConnectMode(enabled: boolean): void {
+    this.connectMode = enabled;
+    this.canvas.style.cursor = enabled ? 'crosshair' : 'grab';
+    this.requestRender();
+  }
+
+  public setConnectModeCallback(callback: ((x: number, y: number) => void) | null): void {
+    this.onConnectModeClick = callback;
   }
 
   // =========================================================================
@@ -4364,6 +4382,12 @@ export class IsometricMapRenderer {
           const { nwI, nwJ } = this.placementNWCorner(p.i, p.j, p.xsize, p.ysize);
           this.onPlacementConfirm(nwJ, nwI); // j=x (col), i=y (row)
         }
+      } else if (this.connectMode) {
+        // Connect mode — click on a building to connect it to the source
+        const building = this.getBuildingAt(mapPos.j, mapPos.i);
+        if (building && this.onConnectModeClick) {
+          this.onConnectModeClick(building.x, building.y);
+        }
       } else if (this.onRoadDemolishClick) {
         // Road demolish mode — only fire if a road tile exists at click location
         const key = `${mapPos.j},${mapPos.i}`;
@@ -4541,7 +4565,7 @@ export class IsometricMapRenderer {
   }
 
   private updateCursor() {
-    if (this.placementMode || this.roadDrawingMode || this.onRoadDemolishClick || this.zonePaintingMode) {
+    if (this.placementMode || this.roadDrawingMode || this.onRoadDemolishClick || this.zonePaintingMode || this.connectMode) {
       this.canvas.style.cursor = 'crosshair';
     } else if (this.hoveredBuilding) {
       this.canvas.style.cursor = 'pointer';

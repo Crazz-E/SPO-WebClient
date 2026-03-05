@@ -942,6 +942,56 @@
   border-color: var(--accent-gold, #d4a843);
 }
 
+/* Trade connect/disconnect button grid */
+.tradeConnectGrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.tradeConnectRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1);
+}
+
+.tradeConnectBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.tradeConnectBtnLink {
+  background: rgba(40, 100, 70, 0.5);
+  border-color: rgba(40, 100, 70, 0.7);
+}
+
+.tradeConnectBtnLink:hover {
+  background: rgba(50, 130, 90, 0.7);
+  border-color: rgba(80, 180, 120, 0.9);
+}
+
+.tradeConnectBtnUnlink {
+  background: rgba(140, 50, 50, 0.4);
+  border-color: rgba(140, 50, 50, 0.6);
+}
+
+.tradeConnectBtnUnlink:hover {
+  background: rgba(170, 60, 60, 0.6);
+  border-color: rgba(200, 80, 80, 0.8);
+}
+
 /* Inline table action button (e.g., Elect, Depose, Vote in Capitol tabs) */
 .tableActionBtn {
   padding: 2px 8px;

@@ -369,10 +369,22 @@ function DefinedProperties({
       continue;
     }
 
+    // Trade connect/disconnect buttons (visible to all players)
+    if (def.type === PropertyType.TRADE_CONNECT_BUTTONS) {
+      elements.push(
+        <TradeConnectButtons
+          key="trade-connect"
+          onAction={handleActionButton}
+        />,
+      );
+      rendered.add(def.rdoName);
+      continue;
+    }
+
     // Action button
     if (def.type === PropertyType.ACTION_BUTTON) {
-      // Owner-only actions (connect, demolish) hidden from non-owners
-      const ownerOnlyActions = new Set(['connect', 'demolish']);
+      // Owner-only actions (connectMap, demolish) hidden from non-owners
+      const ownerOnlyActions = new Set(['connectMap', 'demolish']);
       if (ownerOnlyActions.has(def.actionId ?? '') && !canEdit) {
         rendered.add(def.rdoName);
         continue;
@@ -1196,6 +1208,50 @@ function RepairControl({
       {!canEdit && !isRepairing && (
         <span className={styles.value}>-</span>
       )}
+    </div>
+  );
+}
+
+// =============================================================================
+// TRADE CONNECT BUTTONS (Quick Trade — visible to all players)
+// =============================================================================
+
+const TRADE_KINDS = [
+  { kind: '1', label: 'Stores' },
+  { kind: '2', label: 'Factories' },
+  { kind: '4', label: 'Warehouses' },
+] as const;
+
+function TradeConnectButtons({ onAction }: { onAction: (id: string) => void }) {
+  return (
+    <div className={styles.tradeConnectGrid}>
+      {TRADE_KINDS.map(({ kind, label }) => (
+        <div key={kind} className={styles.tradeConnectRow}>
+          <button
+            className={`${styles.tradeConnectBtn} ${styles.tradeConnectBtnLink}`}
+            onClick={() => onAction(`tradeConnect:${kind}`)}
+            title={`Connect all your ${label.toLowerCase()} to this building`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+            {label}
+          </button>
+          <button
+            className={`${styles.tradeConnectBtn} ${styles.tradeConnectBtnUnlink}`}
+            onClick={() => onAction(`tradeDisconnect:${kind}`)}
+            title={`Disconnect all your ${label.toLowerCase()} from this building`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              <line x1="2" y1="2" x2="22" y2="22" />
+            </svg>
+            {label}
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

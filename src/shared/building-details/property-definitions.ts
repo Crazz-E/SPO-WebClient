@@ -51,6 +51,13 @@ export enum PropertyType {
    * Archaeology: TBlock.Stopped — published property, wordbool, Kernel/Kernel.pas
    */
   STOP_TOGGLE = 'STOP_TOGGLE',
+  /**
+   * Quick trade connect/disconnect buttons (3 rows: stores, factories, warehouses).
+   * Visible to ALL players (not owner-gated). Uses RDOConnectToTycoon/RDODisconnectFromTycoon.
+   * Server auto-injects the visiting player's tycoonId.
+   * Kind values: 1=stores, 2=factories, 4=warehouses.
+   */
+  TRADE_CONNECT_BUTTONS = 'TRADE_CONNECT_BUTTONS',
 }
 
 /**

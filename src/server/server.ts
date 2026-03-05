@@ -75,6 +75,9 @@ import {
   // Building Deletion
   WsReqDeleteFacility,
   WsRespDeleteFacility,
+  // Building Connection (map-click connect)
+  WsReqConnectFacilities,
+  WsRespConnectFacilities,
   // Road Building
   WsReqBuildRoad,
   WsRespBuildRoad,
@@ -1788,6 +1791,35 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
             wsRequestId: msg.wsRequestId,
             errorMessage: toErrorMessage(err) || 'Failed to delete facility',
             code: ErrorCodes.ERROR_AccessDenied
+          };
+          ws.send(JSON.stringify(errorResp));
+        }
+        break;
+      }
+
+      case WsMessageType.REQ_CONNECT_FACILITIES: {
+        const req = msg as WsReqConnectFacilities;
+        console.log(`[Gateway] Connect facilities: source=(${req.sourceX},${req.sourceY}) target=(${req.targetX},${req.targetY})`);
+
+        try {
+          const result = await session.connectFacilitiesByCoords(
+            req.sourceX, req.sourceY, req.targetX, req.targetY,
+          );
+
+          const response: WsRespConnectFacilities = {
+            type: WsMessageType.RESP_CONNECT_FACILITIES,
+            wsRequestId: msg.wsRequestId,
+            success: result.success,
+            resultMessage: result.resultMessage,
+          };
+          ws.send(JSON.stringify(response));
+        } catch (err: unknown) {
+          console.error('[Gateway] Failed to connect facilities:', err);
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: toErrorMessage(err) || 'Failed to connect facilities',
+            code: ErrorCodes.ERROR_AccessDenied,
           };
           ws.send(JSON.stringify(errorResp));
         }

@@ -122,7 +122,7 @@ describe('SrvGeneral', () => {
 
   // G9 — Connect button
   it('Connect button: ACTION_BUTTON with actionId="connect" present in template', () => {
-    const prop = SRV_GENERAL_GROUP.properties.find(p => p.actionId === 'connect');
+    const prop = SRV_GENERAL_GROUP.properties.find(p => p.actionId === 'connectMap');
     expect(prop).toBeDefined();
     expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
     expect(prop!.buttonLabel).toBe('Connect');
@@ -192,7 +192,7 @@ describe('IndGeneral', () => {
 
   // G3 — Connect button
   it('Connect button: ACTION_BUTTON with actionId="connect" present in template', () => {
-    const prop = IND_GENERAL_GROUP.properties.find(p => p.actionId === 'connect');
+    const prop = IND_GENERAL_GROUP.properties.find(p => p.actionId === 'connectMap');
     expect(prop).toBeDefined();
     expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
     expect(prop!.buttonLabel).toBe('Connect');
@@ -357,7 +357,7 @@ describe('WHGeneral', () => {
 
   // G3 — Connect button
   it('Connect button: ACTION_BUTTON with actionId="connect" present in template', () => {
-    const prop = WH_GENERAL_GROUP.properties.find(p => p.actionId === 'connect');
+    const prop = WH_GENERAL_GROUP.properties.find(p => p.actionId === 'connectMap');
     expect(prop).toBeDefined();
     expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
     expect(prop!.buttonLabel).toBe('Connect');

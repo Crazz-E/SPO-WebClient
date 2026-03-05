@@ -1918,10 +1918,14 @@ export class StarpeaceClient {
       this.electMinisterInline(buildingDetails, rowData);
     } else if (actionId === 'electMayor' && rowData) {
       this.electMayorInline(buildingDetails, rowData);
-    } else if (actionId === 'connect') {
-      // RDOConnectToTycoon: open Search panel so user can find the target company
-      useUiStore.getState().openRightPanel('search');
-      this.showNotification('Search for a company to connect with', 'info');
+    } else if (actionId.startsWith('tradeConnect:')) {
+      const kind = actionId.split(':')[1];
+      this.tradeConnect(buildingDetails, kind);
+    } else if (actionId.startsWith('tradeDisconnect:')) {
+      const kind = actionId.split(':')[1];
+      this.tradeDisconnect(buildingDetails, kind);
+    } else if (actionId === 'connectMap') {
+      this.startConnectMode(buildingDetails);
     } else if (actionId === 'demolish') {
       useUiStore.getState().requestConfirm(
         'Demolish Building',
@@ -1941,6 +1945,115 @@ export class StarpeaceClient {
     } else {
       console.warn(`[Client] Unhandled building action: ${actionId}`);
       this.showNotification(`Action "${actionId}" is not yet implemented`, 'error');
+    }
+  }
+
+  // =========================================================================
+  // TRADE CONNECT / DISCONNECT (Quick Trade buttons)
+  // =========================================================================
+
+  private async tradeConnect(buildingDetails: BuildingDetailsResponse, kind: string): Promise<void> {
+    try {
+      await this.setBuildingProperty(
+        buildingDetails.x, buildingDetails.y, 'RDOConnectToTycoon', '0', { kind },
+      );
+      const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
+      this.showNotification(`Connected all your ${kindLabel} to this building`, 'success');
+      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+    } catch (err: unknown) {
+      this.showNotification(`Connection failed: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  private async tradeDisconnect(buildingDetails: BuildingDetailsResponse, kind: string): Promise<void> {
+    try {
+      await this.setBuildingProperty(
+        buildingDetails.x, buildingDetails.y, 'RDODisconnectFromTycoon', '0', { kind },
+      );
+      const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
+      this.showNotification(`Disconnected all your ${kindLabel} from this building`, 'success');
+      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+    } catch (err: unknown) {
+      this.showNotification(`Disconnection failed: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  // =========================================================================
+  // MANUAL CONNECT MODE (Map click selection)
+  // =========================================================================
+
+  private isConnectMode: boolean = false;
+  private connectSourceBuilding: BuildingDetailsResponse | null = null;
+  private connectKeyboardHandler: ((e: KeyboardEvent) => void) | null = null;
+
+  private startConnectMode(buildingDetails: BuildingDetailsResponse): void {
+    this.isConnectMode = true;
+    this.connectSourceBuilding = buildingDetails;
+
+    const renderer = this.mapNavigationUI?.getRenderer();
+    if (renderer) {
+      renderer.setConnectMode(true);
+      renderer.setConnectModeCallback((targetX: number, targetY: number) => {
+        this.executeConnectFacilities(targetX, targetY);
+      });
+    }
+
+    this.connectKeyboardHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && this.isConnectMode) {
+        this.cancelConnectMode();
+      }
+    };
+    document.addEventListener('keydown', this.connectKeyboardHandler);
+
+    this.showNotification('Click on a building to connect. Press ESC to cancel.', 'info');
+  }
+
+  private cancelConnectMode(): void {
+    this.isConnectMode = false;
+    this.connectSourceBuilding = null;
+
+    const renderer = this.mapNavigationUI?.getRenderer();
+    if (renderer) {
+      renderer.setConnectMode(false);
+      renderer.setConnectModeCallback(null);
+    }
+
+    if (this.connectKeyboardHandler) {
+      document.removeEventListener('keydown', this.connectKeyboardHandler);
+      this.connectKeyboardHandler = null;
+    }
+  }
+
+  private async executeConnectFacilities(targetX: number, targetY: number): Promise<void> {
+    if (!this.connectSourceBuilding) return;
+    const source = this.connectSourceBuilding;
+
+    try {
+      const req = {
+        type: WsMessageType.REQ_CONNECT_FACILITIES,
+        sourceX: source.x,
+        sourceY: source.y,
+        targetX,
+        targetY,
+      };
+      const resp = await this.sendRequest(req) as WsMessage & { success: boolean; resultMessage: string };
+
+      if (resp.resultMessage) {
+        // Collapse multi-line result to readable single-line toast
+        const displayMsg = resp.resultMessage.replace(/\n/g, ' | ');
+        this.showNotification(displayMsg, resp.success ? 'success' : 'error');
+      } else {
+        this.showNotification(
+          resp.success ? 'Buildings connected successfully' : 'Connection failed',
+          resp.success ? 'success' : 'error',
+        );
+      }
+
+      this.refreshBuildingDetails(source.x, source.y);
+    } catch (err: unknown) {
+      this.showNotification(`Connection failed: ${toErrorMessage(err)}`, 'error');
+    } finally {
+      this.cancelConnectMode();
     }
   }
 
