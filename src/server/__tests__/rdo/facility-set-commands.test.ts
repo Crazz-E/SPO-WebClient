@@ -65,8 +65,10 @@ function buildRdoCommandArgs(
       break;
     }
     case 'RDOSetTaxValue': {
-      const taxIndex = parseInt(params.index || '0', 10);
-      args.push(RdoValue.int(taxIndex), RdoValue.int(parseInt(value, 10)));
+      // Args: TaxId (integer), percentage (widestring)
+      // TaxId is resolved from Tax{idx}Id property, passed via params.taxId
+      const taxId = parseInt(params.taxId || params.index || '0', 10);
+      args.push(RdoValue.int(taxId), RdoValue.string(value));
       break;
     }
     case 'RDOAutoProduce':
@@ -328,19 +330,25 @@ describe('Facility SET Command Format (buildRdoCommandArgs)', () => {
   });
 
   describe('RDOSetTaxValue', () => {
-    it('should format tax index and percentage as integers', () => {
-      const result = buildRdoCommandArgs('RDOSetTaxValue', '25', { index: '0' });
-      expect(result).toBe('"#0","#25"');
+    it('should format taxId (integer) and percentage (string)', () => {
+      // Voyager: RDOSetTaxValue(TaxId, valueString) — TaxId from Tax{idx}Id property
+      const result = buildRdoCommandArgs('RDOSetTaxValue', '100', { taxId: '110' });
+      expect(result).toBe('"#110","%100"');
     });
 
-    it('should handle different tax indices', () => {
-      const result = buildRdoCommandArgs('RDOSetTaxValue', '30', { index: '3' });
-      expect(result).toBe('"#3","#30"');
+    it('should handle different tax IDs', () => {
+      const result = buildRdoCommandArgs('RDOSetTaxValue', '-50', { taxId: '150' });
+      expect(result).toBe('"#150","%-50"');
     });
 
-    it('should default index to 0', () => {
+    it('should fall back to index when taxId not resolved', () => {
+      const result = buildRdoCommandArgs('RDOSetTaxValue', '25', { index: '3' });
+      expect(result).toBe('"#3","%25"');
+    });
+
+    it('should default to 0 when no params', () => {
       const result = buildRdoCommandArgs('RDOSetTaxValue', '15');
-      expect(result).toBe('"#0","#15"');
+      expect(result).toBe('"#0","%15"');
     });
   });
 

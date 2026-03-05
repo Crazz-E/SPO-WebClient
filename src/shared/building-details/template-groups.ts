@@ -924,7 +924,7 @@ export const TOWN_TAXES_GROUP: PropertyGroup = {
         { rdoSuffix: 'Tax', columnSuffix: 'Id', label: 'ID', type: PropertyType.TEXT, width: '0%' },
         { rdoSuffix: 'Tax', columnSuffix: 'Name0', label: 'Tax', type: PropertyType.TEXT, width: '30%' },
         { rdoSuffix: 'Tax', columnSuffix: 'Kind', label: 'Kind', type: PropertyType.TEXT, width: '15%' },
-        { rdoSuffix: 'Tax', columnSuffix: 'Percent', label: 'Rate', type: PropertyType.SLIDER, width: '25%', editable: true, min: 0, max: 100, step: 1 },
+        { rdoSuffix: 'Tax', columnSuffix: 'Percent', label: 'Rate', type: PropertyType.SLIDER, width: '25%', editable: true, min: -100, max: 100, step: 1 },
         { rdoSuffix: 'Tax', columnSuffix: 'LastYear', label: 'Last Year', type: PropertyType.CURRENCY, width: '30%' },
       ],
     },

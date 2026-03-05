@@ -6617,6 +6617,23 @@ private handlePush(socketName: string, packet: RdoPacket) {
         await this.cacherCloseObject(tempObjectId);
       }
 
+      // For RDOSetTaxValue, resolve row index → actual TaxId from building properties
+      // Voyager: TownTaxesSheet.pas — TaxId comes from Tax[idx].Id, not the row index
+      if (propertyName === 'RDOSetTaxValue' && additionalParams?.index && !additionalParams.taxId) {
+        const lookupObjectId = await this.cacherCreateObject();
+        try {
+          await this.cacherSetObject(lookupObjectId, x, y);
+          const taxIdProp = `Tax${additionalParams.index}Id`;
+          const [taxId] = await this.cacherGetPropertyList(lookupObjectId, [taxIdProp]);
+          if (taxId) {
+            additionalParams.taxId = taxId;
+            this.log.debug(`[BuildingDetails] Resolved ${taxIdProp}=${taxId} for RDOSetTaxValue`);
+          }
+        } finally {
+          await this.cacherCloseObject(lookupObjectId);
+        }
+      }
+
       // Build the RDO command arguments based on the command type
       const rdoArgs = this.buildRdoCommandArgs(propertyName, value, additionalParams);
 
@@ -6752,9 +6769,11 @@ private handlePush(socketName: string, packet: RdoPacket) {
       }
 
       case 'RDOSetTaxValue': {
-        // Args: tax index, new percentage
-        const taxIndex = parseInt(params.index || '0', 10);
-        args.push(RdoValue.int(taxIndex), RdoValue.int(parseInt(value, 10)));
+        // Args: TaxId (integer), percentage (widestring)
+        // Voyager: TownTaxesSheet.pas — MSProxy.RDOSetTaxValue(TaxId, valueString)
+        // TaxId is the actual tax identifier (100, 110, 120...), resolved from Tax{idx}Id
+        const taxId = parseInt(params.taxId || params.index || '0', 10);
+        args.push(RdoValue.int(taxId), RdoValue.string(value));
         break;
       }
 

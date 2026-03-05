@@ -172,6 +172,22 @@ function resolveRdoCommand(
     }
   }
 
+  // Mid-index match for columnSuffix patterns: digits embedded in middle.
+  // e.g., 'Tax0Percent' → prefix='Tax', index='0', suffix='Percent' → key='TaxPercent'
+  const midMatch = propertyName.match(/^(.*?)(\d+)(.+)$/);
+  if (midMatch) {
+    const [, prefix, indexStr, suffix] = midMatch;
+    const compositeKey = prefix + suffix;
+    const mapping = rdoCommands[compositeKey];
+    if (mapping?.indexed) {
+      const params: Record<string, string> = { index: indexStr, ...mapping.params };
+      if (mapping.command === 'property') {
+        return { command: 'property', params: { propertyName, ...params } };
+      }
+      return { command: mapping.command, params };
+    }
+  }
+
   // No mapping found — pass through as-is
   return { command: propertyName };
 }
