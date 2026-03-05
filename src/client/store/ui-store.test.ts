@@ -3,6 +3,7 @@
  */
 
 import { useUiStore } from './ui-store';
+import { useBuildingStore } from './building-store';
 
 describe('ui-store build menu state', () => {
   beforeEach(() => {
@@ -76,6 +77,30 @@ describe('ui-store existing state', () => {
 
     useUiStore.getState().openLeftPanel('facilities');
     expect(useUiStore.getState().leftPanel).toBe('facilities');
+  });
+
+  it('should open buildingInspector modal', () => {
+    useUiStore.getState().openModal('buildingInspector');
+    expect(useUiStore.getState().modal).toBe('buildingInspector');
+
+    useUiStore.getState().closeModal();
+    expect(useUiStore.getState().modal).toBeNull();
+  });
+
+  it('dismissTopmost with buildingInspector modal should clear building focus', () => {
+    // Set some building focus state
+    useBuildingStore.getState().setFocus({
+      buildingName: 'National Capitol',
+      ownerName: 'Test',
+      x: 100,
+      y: 200,
+    } as never);
+    useUiStore.getState().openModal('buildingInspector');
+
+    useUiStore.getState().dismissTopmost();
+
+    expect(useUiStore.getState().modal).toBeNull();
+    expect(useBuildingStore.getState().focusedBuilding).toBeNull();
   });
 
   it('should preserve dismissTopmost priority order', () => {

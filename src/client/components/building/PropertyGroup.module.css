@@ -942,6 +942,42 @@
   border-color: var(--accent-gold, #d4a843);
 }
 
+/* Inline table action button (e.g., Elect, Depose, Vote in Capitol tabs) */
+.tableActionBtn {
+  padding: 2px 8px;
+  background: rgba(52, 89, 80, 0.7);
+  border: 1px solid #4a7a6a;
+  border-radius: var(--radius-sm);
+  color: var(--accent-gold, #d4a843);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.tableActionBtn:hover {
+  background: rgba(74, 122, 106, 0.9);
+  border-color: var(--accent-gold, #d4a843);
+}
+
+/* Editable currency input in table cells */
+.currencyInput {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  padding: 2px 6px;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.currencyInput:focus {
+  border-color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.12);
+}
+
 /* =============================================================================
  * COMPANY INPUTS PANEL (compInputs) — Accordion with lazy-loaded details
  * ========================================================================== */

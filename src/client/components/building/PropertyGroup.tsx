@@ -251,6 +251,25 @@ function DefinedProperties({
     [client],
   );
 
+  const handleRowAction = useCallback(
+    (actionId: string, rowIndex: number) => {
+      const rowData: Record<string, string> = {};
+      const tableDef = definitions.find((d) => d.type === PropertyType.TABLE);
+      if (tableDef?.columns) {
+        const propSuffix = tableDef.indexSuffix || '';
+        for (const col of tableDef.columns) {
+          const colSuffix = col.columnSuffix || '';
+          const idxSuffix = col.indexSuffix !== undefined ? col.indexSuffix : propSuffix;
+          const key = `${col.rdoSuffix}${rowIndex}${colSuffix}${idxSuffix}`;
+          rowData[col.rdoSuffix] = valueMap.get(key) ?? '';
+        }
+      }
+      rowData['_index'] = String(rowIndex);
+      client.onBuildingAction(actionId, rowData);
+    },
+    [definitions, valueMap, client],
+  );
+
   for (const def of definitions) {
     // Workforce table
     if (def.type === PropertyType.WORKFORCE_TABLE) {
@@ -440,6 +459,7 @@ function DefinedProperties({
             canEdit={canEdit}
             rdoCommands={rdoCommands}
             onPropertyChange={handlePropertyChange}
+            onRowAction={handleRowAction}
           />,
         );
       }
@@ -730,6 +750,81 @@ function TextInput({ value, rdoName, pendingKey, onStringPropertyChange }: TextI
         value={localVal}
         onChange={handleChange}
         maxLength={40}
+      />
+      {pendingKey && <SaveIndicator propertyKey={pendingKey} />}
+    </span>
+  );
+}
+
+// =============================================================================
+// CURRENCY INPUT (editable currency value in table cells)
+// =============================================================================
+
+function CurrencyInput({
+  value,
+  rdoName,
+  pendingKey,
+  onPropertyChange,
+}: {
+  value: number;
+  rdoName: string;
+  pendingKey?: string;
+  onPropertyChange: (name: string, value: number) => void;
+}) {
+  const [localVal, setLocalVal] = useState(isNaN(value) ? '' : formatCurrency(value));
+  const [isEditing, setIsEditing] = useState(false);
+
+  const failedUpdates = useBuildingStore((s) => s.failedUpdates);
+  useEffect(() => {
+    if (!pendingKey) return;
+    const failed = failedUpdates.get(pendingKey);
+    if (failed) {
+      setLocalVal(formatCurrency(parseFloat(failed.originalValue) || 0));
+    }
+  }, [failedUpdates, pendingKey]);
+
+  // Sync from server when not editing
+  useEffect(() => {
+    if (!isEditing && !isNaN(value)) {
+      setLocalVal(formatCurrency(value));
+    }
+  }, [value, isEditing]);
+
+  const commit = useCallback(() => {
+    setIsEditing(false);
+    const parsed = parseFloat(localVal.replace(/[^0-9.-]/g, ''));
+    if (!isNaN(parsed)) {
+      onPropertyChange(rdoName, parsed);
+      setLocalVal(formatCurrency(parsed));
+    } else {
+      setLocalVal(formatCurrency(value));
+    }
+  }, [localVal, rdoName, value, onPropertyChange]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') commit();
+      if (e.key === 'Escape') {
+        setIsEditing(false);
+        setLocalVal(formatCurrency(value));
+      }
+    },
+    [commit, value],
+  );
+
+  return (
+    <span className={styles.textInputWrapper}>
+      <input
+        type="text"
+        className={styles.currencyInput}
+        value={localVal}
+        onFocus={() => {
+          setIsEditing(true);
+          setLocalVal(isNaN(value) ? '' : String(value));
+        }}
+        onChange={(e) => setLocalVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
       />
       {pendingKey && <SaveIndicator propertyKey={pendingKey} />}
     </span>
@@ -1117,6 +1212,7 @@ function DataTable({
   canEdit,
   rdoCommands,
   onPropertyChange,
+  onRowAction,
 }: {
   def: PropertyDefinition;
   rowCount: number;
@@ -1124,6 +1220,7 @@ function DataTable({
   canEdit: boolean;
   rdoCommands?: Record<string, RdoCommandMapping>;
   onPropertyChange: (name: string, value: number) => void;
+  onRowAction?: (actionId: string, rowIndex: number) => void;
 }) {
   const propSuffix = def.indexSuffix || '';
   const cols = def.columns!;
@@ -1153,9 +1250,11 @@ function DataTable({
                     col={col}
                     value={value}
                     rdoName={key}
+                    rowIndex={i}
                     canEdit={canEdit && !!col.editable}
                     rdoCommands={rdoCommands}
                     onPropertyChange={onPropertyChange}
+                    onRowAction={onRowAction}
                   />
                 </td>
               );
@@ -1171,20 +1270,43 @@ function TableCellValue({
   col,
   value,
   rdoName,
+  rowIndex,
   canEdit,
   rdoCommands,
   onPropertyChange,
+  onRowAction,
 }: {
   col: TableColumn;
   value: string;
   rdoName: string;
+  rowIndex: number;
   canEdit: boolean;
   rdoCommands?: Record<string, RdoCommandMapping>;
   onPropertyChange: (name: string, value: number) => void;
+  onRowAction?: (actionId: string, rowIndex: number) => void;
 }) {
   const num = parseFloat(value);
   switch (col.type) {
+    case PropertyType.ACTION_BUTTON:
+      return (
+        <button
+          className={styles.tableActionBtn}
+          onClick={() => col.actionId && onRowAction?.(col.actionId, rowIndex)}
+        >
+          {col.buttonLabel || 'Action'}
+        </button>
+      );
     case PropertyType.CURRENCY:
+      if (canEdit) {
+        return (
+          <CurrencyInput
+            value={num}
+            rdoName={rdoName}
+            pendingKey={computePendingKey(rdoName, rdoCommands)}
+            onPropertyChange={onPropertyChange}
+          />
+        );
+      }
       return <span className={styles.value}>{formatCurrency(num)}</span>;
     case PropertyType.PERCENTAGE:
       return <span className={styles.value}>{formatPercentage(num)}</span>;

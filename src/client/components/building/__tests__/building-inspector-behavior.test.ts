@@ -892,7 +892,7 @@ describe('CapitolTowns', () => {
     expect(table!.countProperty).toBe('TownCount');
   });
 
-  it('Town table: has Town, TownPopulation, TownQOL, TownRating, TownWealth, TownTax, HasMayor columns', () => {
+  it('Town table: has Town, TownPopulation, TownQOL, TownRating, TownWealth, TownTax, HasMayor, electMayor columns', () => {
     const table = CAPITOL_TOWNS_GROUP.properties.find(p => p.type === PropertyType.TABLE);
     const suffixes = table!.columns!.map(c => c.rdoSuffix);
     expect(suffixes).toContain('Town');
@@ -901,12 +901,39 @@ describe('CapitolTowns', () => {
     expect(suffixes).toContain('TownRating');
     expect(suffixes).toContain('TownWealth');
     expect(suffixes).toContain('HasMayor');
+    expect(suffixes).toContain('electMayor');
   });
 
   it('Town table: HasMayor is BOOLEAN column', () => {
     const table = CAPITOL_TOWNS_GROUP.properties.find(p => p.type === PropertyType.TABLE);
     const mayorCol = table!.columns!.find(c => c.rdoSuffix === 'HasMayor');
     expect(mayorCol!.type).toBe(PropertyType.BOOLEAN);
+  });
+
+  it('Town table: TownTax is editable SLIDER column', () => {
+    const table = CAPITOL_TOWNS_GROUP.properties.find(p => p.type === PropertyType.TABLE);
+    const taxCol = table!.columns!.find(c => c.rdoSuffix === 'TownTax');
+    expect(taxCol!.type).toBe(PropertyType.SLIDER);
+    expect(taxCol!.editable).toBe(true);
+    expect(taxCol!.min).toBe(0);
+    expect(taxCol!.max).toBe(100);
+  });
+
+  it('Town table: electMayor is ACTION_BUTTON column', () => {
+    const table = CAPITOL_TOWNS_GROUP.properties.find(p => p.type === PropertyType.TABLE);
+    const electCol = table!.columns!.find(c => c.rdoSuffix === 'electMayor');
+    expect(electCol!.type).toBe(PropertyType.ACTION_BUTTON);
+    expect(electCol!.actionId).toBe('electMayor');
+    expect(electCol!.buttonLabel).toBe('Elect');
+  });
+
+  it('rdoCommands: electMayor maps to RDOSitMayor', () => {
+    expect(CAPITOL_TOWNS_GROUP.rdoCommands?.['electMayor']?.command).toBe('RDOSitMayor');
+  });
+
+  it('rdoCommands: TownTax maps to RDOSetTownTaxes (indexed)', () => {
+    expect(CAPITOL_TOWNS_GROUP.rdoCommands?.['TownTax']?.command).toBe('RDOSetTownTaxes');
+    expect(CAPITOL_TOWNS_GROUP.rdoCommands?.['TownTax']?.indexed).toBe(true);
   });
 });
 
@@ -1211,24 +1238,30 @@ describe('Votes', () => {
     expect(table!.countProperty).toBe('CampaignCount');
   });
 
-  it('Candidate table: has Candidate, Votes, CmpRat, CmpPnts columns', () => {
+  it('Candidate table: has Candidate, Votes, CmpRat, CmpPnts, voteAction columns', () => {
     const table = VOTES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
     const suffixes = table!.columns!.map(c => c.rdoSuffix);
     expect(suffixes).toContain('Candidate');
     expect(suffixes).toContain('Votes');
     expect(suffixes).toContain('CmpRat');
     expect(suffixes).toContain('CmpPnts');
+    expect(suffixes).toContain('voteAction');
   });
 
-  it('voteAction: ACTION_BUTTON with actionId="vote"', () => {
-    const prop = VOTES_GROUP.properties.find(p => p.actionId === 'vote');
-    expect(prop).toBeDefined();
-    expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
-    expect(prop!.buttonLabel).toBe('Vote for Candidate');
+  it('Candidate table: voteAction is inline ACTION_BUTTON column', () => {
+    const table = VOTES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
+    const voteCol = table!.columns!.find(c => c.rdoSuffix === 'voteAction');
+    expect(voteCol!.type).toBe(PropertyType.ACTION_BUTTON);
+    expect(voteCol!.actionId).toBe('voteCandidate');
+    expect(voteCol!.buttonLabel).toBe('Vote');
   });
 
   it('rdoCommands: RDOVote command is registered', () => {
     expect(VOTES_GROUP.rdoCommands?.['RDOVote']?.command).toBe('RDOVote');
+  });
+
+  it('rdoCommands: voteCandidate maps to RDOVote', () => {
+    expect(VOTES_GROUP.rdoCommands?.['voteCandidate']?.command).toBe('RDOVote');
   });
 });
 
@@ -1247,31 +1280,50 @@ describe('Ministeries', () => {
     expect(table!.countProperty).toBe('MinisterCount');
   });
 
-  it('Minister table: has Ministry, Minister, MinisterRating, MinisterBudget columns', () => {
+  it('Minister table: has Ministry, Minister, MinisterRating, MinisterBudget, electMinister, deposeMinister columns', () => {
     const table = MINISTERIES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
     const suffixes = table!.columns!.map(c => c.rdoSuffix);
     expect(suffixes).toContain('Ministry');
     expect(suffixes).toContain('Minister');
     expect(suffixes).toContain('MinisterRating');
     expect(suffixes).toContain('MinisterBudget');
+    expect(suffixes).toContain('electMinister');
+    expect(suffixes).toContain('deposeMinister');
   });
 
-  it('banMinister: ACTION_BUTTON with actionId="banMinister"', () => {
-    const prop = MINISTERIES_GROUP.properties.find(p => p.actionId === 'banMinister');
-    expect(prop).toBeDefined();
-    expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
-    expect(prop!.buttonLabel).toBe('Depose Minister');
+  it('Minister table: MinisterBudget is editable CURRENCY column', () => {
+    const table = MINISTERIES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
+    const budgetCol = table!.columns!.find(c => c.rdoSuffix === 'MinisterBudget');
+    expect(budgetCol!.type).toBe(PropertyType.CURRENCY);
+    expect(budgetCol!.editable).toBe(true);
   });
 
-  it('sitMinister: ACTION_BUTTON with actionId="sitMinister"', () => {
-    const prop = MINISTERIES_GROUP.properties.find(p => p.actionId === 'sitMinister');
-    expect(prop).toBeDefined();
-    expect(prop!.type).toBe(PropertyType.ACTION_BUTTON);
-    expect(prop!.buttonLabel).toBe('Appoint Minister');
+  it('Minister table: electMinister is inline ACTION_BUTTON column', () => {
+    const table = MINISTERIES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
+    const electCol = table!.columns!.find(c => c.rdoSuffix === 'electMinister');
+    expect(electCol!.type).toBe(PropertyType.ACTION_BUTTON);
+    expect(electCol!.actionId).toBe('electMinister');
+    expect(electCol!.buttonLabel).toBe('Elect');
+  });
+
+  it('Minister table: deposeMinister is inline ACTION_BUTTON column', () => {
+    const table = MINISTERIES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
+    const deposeCol = table!.columns!.find(c => c.rdoSuffix === 'deposeMinister');
+    expect(deposeCol!.type).toBe(PropertyType.ACTION_BUTTON);
+    expect(deposeCol!.actionId).toBe('deposeMinister');
+    expect(deposeCol!.buttonLabel).toBe('Depose');
   });
 
   it('rdoCommands: MinisterBudget maps to RDOSetMinistryBudget', () => {
     expect(MINISTERIES_GROUP.rdoCommands?.['MinisterBudget']?.command).toBe('RDOSetMinistryBudget');
+  });
+
+  it('rdoCommands: electMinister maps to RDOSitMinister', () => {
+    expect(MINISTERIES_GROUP.rdoCommands?.['electMinister']?.command).toBe('RDOSitMinister');
+  });
+
+  it('rdoCommands: deposeMinister maps to RDOBanMinister', () => {
+    expect(MINISTERIES_GROUP.rdoCommands?.['deposeMinister']?.command).toBe('RDOBanMinister');
   });
 });
 

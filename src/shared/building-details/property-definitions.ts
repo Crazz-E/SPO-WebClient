@@ -132,6 +132,10 @@ export interface TableColumn {
   step?: number;
   /** Suffix appended AFTER the index (e.g., '.0' for MLS → srvNames0.0) */
   indexSuffix?: string;
+  /** For ACTION_BUTTON columns: action identifier dispatched to client */
+  actionId?: string;
+  /** For ACTION_BUTTON columns: button label text */
+  buttonLabel?: string;
 }
 
 /**

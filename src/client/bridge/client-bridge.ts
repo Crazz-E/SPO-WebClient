@@ -39,6 +39,7 @@ import type {
   CurriculumActionType,
 } from '@/shared/types';
 import { CLUSTER_IDS } from '@/shared/cluster-data';
+import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
 import {
   WsMessageType,
   type WsMessage,
@@ -158,7 +159,7 @@ export interface ClientCallbacks {
   onDeleteBuilding: (x: number, y: number) => void;
   onNavigateToBuilding: (x: number, y: number) => void;
   onInspectFocusedBuilding: () => void;
-  onBuildingAction: (actionId: string) => void;
+  onBuildingAction: (actionId: string, rowData?: Record<string, string>) => void;
   onSearchConnections: (x: number, y: number, fluidId: string, fluidName: string, direction: 'input' | 'output') => void;
   onConnectionSearch: (buildingX: number, buildingY: number, fluidId: string, direction: 'input' | 'output', filters: { company?: string; town?: string; maxResults?: number; roles?: number }) => void;
 
@@ -399,7 +400,7 @@ export const ClientBridge = {
     useBuildingStore.getState().clearOverlay();
   },
 
-  /** Show the building panel in the right panel with ownership context. */
+  /** Show the building panel (right panel for normal buildings, modal for civic buildings). */
   showBuildingPanel(details: BuildingDetailsResponse, currentCompanyName: string, focusInfo?: BuildingFocusInfo): void {
     const bld = useBuildingStore.getState();
     bld.setCurrentCompanyName(currentCompanyName);
@@ -408,7 +409,11 @@ export const ClientBridge = {
     }
     bld.setOverlayMode(false);
     bld.setDetails(details);
-    useUiStore.getState().openRightPanel('building');
+    if (isCivicBuilding(details.visualClass)) {
+      useUiStore.getState().openModal('buildingInspector');
+    } else {
+      useUiStore.getState().openRightPanel('building');
+    }
   },
 
   /** Update building details in-place (smart refresh). */
@@ -416,11 +421,13 @@ export const ClientBridge = {
     useBuildingStore.getState().setDetails(details);
   },
 
-  /** Hide the building panel. */
+  /** Hide the building panel (right panel or modal). */
   hideBuildingPanel(): void {
     useBuildingStore.getState().clearFocus();
     const uiState = useUiStore.getState();
-    if (uiState.rightPanel === 'building') {
+    if (uiState.modal === 'buildingInspector') {
+      uiState.closeModal();
+    } else if (uiState.rightPanel === 'building') {
       uiState.closeRightPanel();
     }
   },

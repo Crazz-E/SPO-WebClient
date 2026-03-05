@@ -5,11 +5,12 @@
 
 import { create } from 'zustand';
 import type { BuildingCategory, BuildingInfo } from '@/shared/types';
+import { useBuildingStore } from './building-store';
 import { useGameStore } from './game-store';
 
 export type RightPanelType = 'building' | 'mail' | 'search' | 'politics' | 'transport';
 export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
-export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch';
+export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector';
 export type MobileTab = 'map' | 'empire' | 'build' | 'mail' | 'more';
 
 interface UiState {
@@ -128,6 +129,9 @@ export const useUiStore = create<UiState>((set, get) => ({
         }
       }
       if (state.modal) {
+        if (state.modal === 'buildingInspector') {
+          useBuildingStore.getState().clearFocus();
+        }
         set({ modal: null, confirmPayload: null });
       } else if (state.rightPanel) {
         set({ rightPanel: null });

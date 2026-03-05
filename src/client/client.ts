@@ -124,6 +124,7 @@ import { useBuildingStore } from './store/building-store';
 import { useProfileStore } from './store/profile-store';
 import { useMailStore } from './store/mail-store';
 import { getFacilityDimensionsCache } from './facility-dimensions-cache';
+import { isCivicBuilding } from '../shared/building-details/civic-buildings';
 import { SoundManager } from './audio/sound-manager';
 
 // [E2E-DEBUG] Wire-level debug tracker exposed on window.__spoDebug
@@ -347,9 +348,9 @@ export class StarpeaceClient {
           );
         }
       },
-      onBuildingAction: (actionId) => {
+      onBuildingAction: (actionId, rowData) => {
         const details = useBuildingStore.getState().details;
-        if (details) this.handleBuildingAction(actionId, details);
+        if (details) this.handleBuildingAction(actionId, details, rowData);
       },
       onSearchConnections: (x, y, fluidId, fluidName, direction) => {
         ClientBridge.showConnectionPicker({ fluidName, fluidId, direction, buildingX: x, buildingY: y });
@@ -1552,12 +1553,16 @@ export class StarpeaceClient {
     this.isFocusingBuilding = true;
     ClientBridge.log('Building', `Opening inspector at (${x}, ${y})`);
 
-    // Open panel with skeleton immediately (slide-in animates in parallel with network)
+    // Open panel/modal with skeleton immediately (animates in parallel with network)
+    const vc = visualClass || this.currentFocusedVisualClass || '0';
     useBuildingStore.getState().setLoading(true);
-    useUiStore.getState().openRightPanel('building');
+    if (isCivicBuilding(vc)) {
+      useUiStore.getState().openModal('buildingInspector');
+    } else {
+      useUiStore.getState().openRightPanel('building');
+    }
 
     try {
-      const vc = visualClass || this.currentFocusedVisualClass || '0';
       const gen = this.nextGeneration('buildingDetails');
 
       // Consume speculative prefetch if available, otherwise fire fresh request
@@ -1618,9 +1623,13 @@ export class StarpeaceClient {
         visualClass = renderer.getVisualClassAt(x, y) ?? undefined;
       }
 
-      // Open panel with skeleton immediately (slide-in animates in parallel with network)
+      // Open panel/modal with skeleton immediately (animates in parallel with network)
       useBuildingStore.getState().setLoading(true);
-      useUiStore.getState().openRightPanel('building');
+      if (isCivicBuilding(visualClass || '0')) {
+        useUiStore.getState().openModal('buildingInspector');
+      } else {
+        useUiStore.getState().openRightPanel('building');
+      }
 
       const gen = this.nextGeneration('buildingDetails');
       const req: WsReqBuildingFocus = { type: WsMessageType.REQ_BUILDING_FOCUS, x, y };
@@ -1882,7 +1891,7 @@ export class StarpeaceClient {
   // BUILDING ACTION BUTTON HANDLERS
   // =========================================================================
 
-  private handleBuildingAction(actionId: string, buildingDetails: BuildingDetailsResponse): void {
+  private handleBuildingAction(actionId: string, buildingDetails: BuildingDetailsResponse, rowData?: Record<string, string>): void {
     if (actionId === 'visitPolitics') {
       const townName = buildingDetails.groups['townGeneral']
         ?.find(p => p.name === 'Town')?.value || '';
@@ -1897,10 +1906,18 @@ export class StarpeaceClient {
       this.releaseMovie(buildingDetails);
     } else if (actionId === 'vote') {
       this.voteForCandidate(buildingDetails);
+    } else if (actionId === 'voteCandidate' && rowData) {
+      this.voteForCandidateInline(buildingDetails, rowData);
     } else if (actionId === 'banMinister') {
       this.banMinister(buildingDetails);
+    } else if (actionId === 'deposeMinister' && rowData) {
+      this.deposeMinisterInline(buildingDetails, rowData);
     } else if (actionId === 'sitMinister') {
       this.sitMinister(buildingDetails);
+    } else if (actionId === 'electMinister' && rowData) {
+      this.electMinisterInline(buildingDetails, rowData);
+    } else if (actionId === 'electMayor' && rowData) {
+      this.electMayorInline(buildingDetails, rowData);
     } else if (actionId === 'connect') {
       // RDOConnectToTycoon: open Search panel so user can find the target company
       useUiStore.getState().openRightPanel('search');
@@ -2136,6 +2153,88 @@ export class StarpeaceClient {
     } catch (err: unknown) {
       this.showNotification(`Failed to appoint minister: ${toErrorMessage(err)}`, 'error');
     }
+  }
+
+  // =========================================================================
+  // INLINE ROW ACTIONS (Capitol government tabs)
+  // =========================================================================
+
+  private async electMayorInline(buildingDetails: BuildingDetailsResponse, rowData: Record<string, string>): Promise<void> {
+    const townName = rowData['Town'];
+    if (!townName) {
+      this.showNotification('No town selected', 'error');
+      return;
+    }
+    const playerName = this.storedUsername;
+    if (!playerName) {
+      this.showNotification('Player name not available', 'error');
+      return;
+    }
+    try {
+      await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RDOSitMayor', playerName, {
+        townName,
+      });
+      this.showNotification(`${playerName} elected as mayor of ${townName}`, 'success');
+      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+    } catch (err: unknown) {
+      this.showNotification(`Failed to elect mayor: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  private async electMinisterInline(buildingDetails: BuildingDetailsResponse, rowData: Record<string, string>): Promise<void> {
+    const ministryId = rowData['MinistryId'];
+    if (!ministryId) {
+      this.showNotification('No ministry selected', 'error');
+      return;
+    }
+    const playerName = this.storedUsername;
+    if (!playerName) {
+      this.showNotification('Player name not available', 'error');
+      return;
+    }
+    try {
+      await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RDOSitMinister', '0', {
+        ministryId,
+        ministerName: playerName,
+      });
+      this.showNotification(`${playerName} appointed as minister`, 'success');
+      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+    } catch (err: unknown) {
+      this.showNotification(`Failed to appoint minister: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  private async deposeMinisterInline(buildingDetails: BuildingDetailsResponse, rowData: Record<string, string>): Promise<void> {
+    const ministryId = rowData['MinistryId'];
+    if (!ministryId) {
+      this.showNotification('No ministry selected', 'error');
+      return;
+    }
+    try {
+      await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RDOBanMinister', '0', {
+        ministryId,
+      });
+      this.showNotification('Minister deposed', 'success');
+      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+    } catch (err: unknown) {
+      this.showNotification(`Failed to depose minister: ${toErrorMessage(err)}`, 'error');
+    }
+  }
+
+  private async voteForCandidateInline(buildingDetails: BuildingDetailsResponse, rowData: Record<string, string>): Promise<void> {
+    const candidateName = rowData['Candidate'];
+    if (!candidateName) {
+      this.showNotification('No candidate selected', 'error');
+      return;
+    }
+    this.ws?.send(JSON.stringify({
+      type: WsMessageType.REQ_POLITICS_VOTE,
+      buildingX: buildingDetails.x,
+      buildingY: buildingDetails.y,
+      candidateName,
+    }));
+    this.showNotification(`Voted for ${candidateName}`, 'success');
+    this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
   }
 
   // =========================================================================

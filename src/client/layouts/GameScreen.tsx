@@ -24,7 +24,7 @@ import { SearchPanel } from '../components/search';
 import { PoliticsPanel } from '../components/politics';
 import { TransportPanel } from '../components/transport';
 import { OverlayMenu } from '../components/hud/OverlayMenu';
-import { BuildMenu, ConnectionPickerModal, ServerSwitchOverlay, SettingsDialog, SupplierSearchModal, ZoneTypePicker } from '../components/modals';
+import { BuildMenu, BuildingInspectorModal, ConnectionPickerModal, ServerSwitchOverlay, SettingsDialog, SupplierSearchModal, ZoneTypePicker } from '../components/modals';
 import { CommandPalette } from '../components/command-palette';
 import { MobileShell } from '../components/mobile';
 import { ErrorBoundary } from '../components/common';
@@ -120,6 +120,7 @@ export function GameScreen() {
       </LeftPanel>
 
       {/* Modals — z-400 */}
+      <BuildingInspectorModal />
       <BuildMenu />
       <ConnectionPickerModal />
       <SupplierSearchModal />
