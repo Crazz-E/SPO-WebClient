@@ -147,6 +147,7 @@ export interface ClientCallbacks {
   onRequestBuildingFacilities: (kind: number, cluster: string) => void;
   onPlaceBuilding: (facilityClass: string, visualClassId: number) => void;
   onBuildCapitol: () => void;
+  onOpenCapitol: () => void;
 
   // Settings
   onSettingsChange: (settings: GameSettings) => void;

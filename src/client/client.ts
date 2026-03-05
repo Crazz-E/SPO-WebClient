@@ -326,6 +326,7 @@ export class StarpeaceClient {
       onPlaceBuilding: (facilityClass: string, visualClassId: number) =>
         this.placeBuildingFromMenu(facilityClass, visualClassId),
       onBuildCapitol: () => this.startCapitolPlacement(),
+      onOpenCapitol: () => this.openCapitolInspector(),
       onSettingsChange: (settings) => this.applySettings(settings),
 
       // Building actions (called from React BuildingInspector)
@@ -2930,6 +2931,30 @@ export class StarpeaceClient {
       return;
     }
     this.startBuildingPlacement(facility);
+  }
+
+  /**
+   * Open the Capitol building inspector by finding it on the map.
+   * Searches loaded buildings for visualClass '152' (Capitol).
+   */
+  private openCapitolInspector() {
+    const renderer = this.mapNavigationUI?.getRenderer();
+    if (!renderer) {
+      this.showNotification('Map not loaded yet', 'error');
+      return;
+    }
+
+    const CAPITOL_VISUAL_CLASS_ID = '152';
+    const capitol = renderer.getAllBuildings().find(
+      (b) => b.visualClass === CAPITOL_VISUAL_CLASS_ID,
+    );
+
+    if (!capitol) {
+      this.showNotification('No Capitol found on the map', 'error');
+      return;
+    }
+
+    this.focusBuilding(capitol.x, capitol.y);
   }
 
   /**

@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { Hammer, Search, User, Mail, Settings, Globe, Heart, Layers } from 'lucide-react';
+import { Hammer, Search, User, Mail, Settings, Globe, Heart, Layers, Landmark } from 'lucide-react';
 import { IconButton } from '../common';
 import { ZoneIcon } from '../icons/ZoneIcon';
 import { RoadIcon, BuildRoadIcon, RemoveRoadIcon } from '../icons/RoadIcons';
@@ -108,6 +108,15 @@ export function LeftRail() {
             variant="glass"
             active={isZonePaintingMode}
             onClick={() => isZonePaintingMode ? client.onCancelZonePainting() : openModal('zonePicker')}
+          />
+        )}
+        {isPublicOfficeRole && (
+          <IconButton
+            icon={<Landmark size={20} />}
+            label="Capitol"
+            size="lg"
+            variant="glass"
+            onClick={() => client.onOpenCapitol()}
           />
         )}
         <IconButton
