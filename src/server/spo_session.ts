@@ -55,6 +55,7 @@ import {
   PolicyEntry,
   PoliticsData,
   PoliticsRatingEntry,
+  PoliticalRoleInfo,
   ConnectionSearchResult,
   FavoritesItem,
   ResearchCategoryData,
@@ -3415,6 +3416,18 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     await new Promise(resolve => setTimeout(resolve, 30));
   }
 
+  private async cacherSetPath(tempObjectId: string, path: string): Promise<void> {
+    await this.sendRdoRequest('map', {
+      verb: RdoVerb.SEL,
+      targetId: tempObjectId,
+      action: RdoAction.CALL,
+      member: 'SetPath',
+      args: [path]
+    });
+    // Brief delay for server to populate cache (same as SetObject)
+    await new Promise(resolve => setTimeout(resolve, 30));
+  }
+
   private async cacherGetPropertyList(tempObjectId: string, propertyNames: string[]): Promise<string[]> {
     const query = propertyNames.join('\t') + '\t';
     const packet = await this.sendRdoRequest('map', {
@@ -3448,6 +3461,41 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       args: [tempObjectId],
 	  separator: '*'
     });
+  }
+
+  private parseBooleanCacheValue(value: string | undefined): boolean {
+    if (!value) return false;
+    const v = value.trim().toLowerCase();
+    return v === '1' || v === '-1' || v === 'true';
+  }
+
+  /**
+   * Query a tycoon's political role from the Delphi object cache.
+   * Uses SetPath('Tycoons\<name>.five\') to load the tycoon cache, then reads
+   * IsMayor/IsPresident/IsMinister boolean flags written by StoreRoleInfoToCache.
+   */
+  public async queryTycoonPoliticalRole(tycoonName: string): Promise<PoliticalRoleInfo> {
+    await this.connectMapService();
+    const tempObjId = await this.cacherCreateObject();
+    try {
+      const path = `Tycoons\\${tycoonName}.five\\`;
+      await this.cacherSetPath(tempObjId, path);
+      const values = await this.cacherGetPropertyList(tempObjId, [
+        'IsMayor', 'Town', 'IsCapitalMayor', 'IsPresident', 'IsMinister', 'Ministry'
+      ]);
+      return {
+        tycoonName,
+        isMayor: this.parseBooleanCacheValue(values[0]),
+        town: values[1] || '',
+        isCapitalMayor: this.parseBooleanCacheValue(values[2]),
+        isPresident: this.parseBooleanCacheValue(values[3]),
+        isMinister: this.parseBooleanCacheValue(values[4]),
+        ministry: values[5] || '',
+        queriedAt: Date.now(),
+      };
+    } finally {
+      await this.cacherCloseObject(tempObjId);
+    }
   }
 
   /**

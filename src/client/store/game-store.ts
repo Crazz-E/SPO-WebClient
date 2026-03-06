@@ -79,6 +79,7 @@ interface GameState {
   isZonePaintingMode: boolean;
   selectedZoneType: number;
   isPublicOfficeRole: boolean;
+  ownerRole: string;
 
   // Overlays
   isCityZonesEnabled: boolean;
@@ -119,7 +120,7 @@ interface GameState {
   setRoadDemolishMode: (active: boolean) => void;
   setZonePaintingMode: (active: boolean) => void;
   setSelectedZoneType: (zoneType: number) => void;
-  setPublicOfficeRole: (isPublicOffice: boolean) => void;
+  setPublicOfficeRole: (isPublicOffice: boolean, role?: string) => void;
   setCityZonesEnabled: (enabled: boolean) => void;
   setActiveOverlay: (overlay: SurfaceType | null) => void;
   setLoginWorlds: (worlds: WorldInfo[]) => void;
@@ -155,6 +156,7 @@ export const useGameStore = create<GameState>((set) => ({
   isZonePaintingMode: false,
   selectedZoneType: 2,
   isPublicOfficeRole: false,
+  ownerRole: '',
   isCityZonesEnabled: false,
   activeOverlay: null,
   loginWorlds: [],
@@ -185,7 +187,7 @@ export const useGameStore = create<GameState>((set) => ({
   setRoadDemolishMode: (active) => set({ isRoadDemolishMode: active }),
   setZonePaintingMode: (active) => set({ isZonePaintingMode: active }),
   setSelectedZoneType: (zoneType) => set({ selectedZoneType: zoneType }),
-  setPublicOfficeRole: (isPublicOffice) => set({ isPublicOfficeRole: isPublicOffice }),
+  setPublicOfficeRole: (isPublicOffice, role) => set({ isPublicOfficeRole: isPublicOffice, ownerRole: role ?? '' }),
   setCityZonesEnabled: (enabled) => set({ isCityZonesEnabled: enabled }),
   setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
 
@@ -244,6 +246,7 @@ export const useGameStore = create<GameState>((set) => ({
       isZonePaintingMode: false,
       selectedZoneType: 2,
       isPublicOfficeRole: false,
+      ownerRole: '',
       isCityZonesEnabled: false,
       loginWorlds: [],
       loginStage: 'auth',

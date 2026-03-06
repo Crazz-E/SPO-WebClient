@@ -36,6 +36,7 @@ import type {
   CurriculumActionType,
   PolicyData,
   PoliticsData,
+  PoliticalRoleInfo,
   TransportData,
   ClusterInfo,
   ClusterFacilityPreview,
@@ -220,6 +221,8 @@ export enum WsMessageType {
   RESP_POLITICS_VOTE = 'RESP_POLITICS_VOTE',
   REQ_POLITICS_LAUNCH_CAMPAIGN = 'REQ_POLITICS_LAUNCH_CAMPAIGN',
   RESP_POLITICS_LAUNCH_CAMPAIGN = 'RESP_POLITICS_LAUNCH_CAMPAIGN',
+  REQ_TYCOON_ROLE = 'REQ_TYCOON_ROLE',
+  RESP_TYCOON_ROLE = 'RESP_TYCOON_ROLE',
 
   // Connection Search
   REQ_SEARCH_CONNECTIONS = 'REQ_SEARCH_CONNECTIONS',
@@ -1083,6 +1086,20 @@ export interface WsRespPoliticsLaunchCampaign extends WsMessage {
   type: WsMessageType.RESP_POLITICS_LAUNCH_CAMPAIGN;
   success: boolean;
   message?: string;
+}
+
+// =============================================================================
+// TYCOON POLITICAL ROLE (Cache Query)
+// =============================================================================
+
+export interface WsReqTycoonRole extends WsMessage {
+  type: WsMessageType.REQ_TYCOON_ROLE;
+  tycoonName: string;
+}
+
+export interface WsRespTycoonRole extends WsMessage {
+  type: WsMessageType.RESP_TYCOON_ROLE;
+  role: PoliticalRoleInfo;
 }
 
 // =============================================================================

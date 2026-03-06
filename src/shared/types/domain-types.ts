@@ -838,6 +838,21 @@ export interface PoliticsData {
 }
 
 // =============================================================================
+// POLITICAL ROLES (Tycoon Cache)
+// =============================================================================
+
+export interface PoliticalRoleInfo {
+  tycoonName: string;
+  isMayor: boolean;
+  town: string;
+  isCapitalMayor: boolean;
+  isPresident: boolean;
+  isMinister: boolean;
+  ministry: string;
+  queriedAt: number;
+}
+
+// =============================================================================
 // ROAD BUILDING
 // =============================================================================
 

@@ -83,6 +83,7 @@ export type {
   PoliticsRatingEntry,
   PoliticsCampaignEntry,
   PoliticsData,
+  PoliticalRoleInfo,
   // Transport types
   TrainInfo,
   TrainRouteStop,
@@ -243,6 +244,8 @@ export type {
   WsRespPoliticsVote,
   WsReqPoliticsLaunchCampaign,
   WsRespPoliticsLaunchCampaign,
+  WsReqTycoonRole,
+  WsRespTycoonRole,
   // Connection Search
   WsReqSearchConnections,
   WsRespSearchConnections,

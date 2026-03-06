@@ -142,6 +142,8 @@ import {
   WsRespPoliticsVote,
   WsReqPoliticsLaunchCampaign,
   WsRespPoliticsLaunchCampaign,
+  WsReqTycoonRole,
+  WsRespTycoonRole,
   WsReqSearchConnections,
   WsRespSearchConnections,
   WsReqCreateCompany,
@@ -2636,6 +2638,19 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
           wsRequestId: msg.wsRequestId,
           success: result.success,
           message: result.message,
+        };
+        ws.send(JSON.stringify(response));
+        break;
+      }
+
+      case WsMessageType.REQ_TYCOON_ROLE: {
+        const roleReq = msg as WsReqTycoonRole;
+        console.log(`[Gateway] Querying political role for: ${roleReq.tycoonName}`);
+        const role = await session.queryTycoonPoliticalRole(roleReq.tycoonName);
+        const response: WsRespTycoonRole = {
+          type: WsMessageType.RESP_TYCOON_ROLE,
+          wsRequestId: msg.wsRequestId,
+          role,
         };
         ws.send(JSON.stringify(response));
         break;
