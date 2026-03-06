@@ -12,10 +12,13 @@ import styles from './StatusTicker.module.css';
 
 export function StatusTicker() {
   const building = useBuildingStore((s) => s.focusedBuilding);
+  const isOverlay = useBuildingStore((s) => s.isOverlayMode);
 
   const detailsText = building?.detailsText || '';
   const hintsText = building?.hintsText || '';
 
+  // Hide when inspector panel/modal is open — hints are shown in QuickStats
+  if (!isOverlay) return null;
   if (!detailsText && !hintsText) return null;
 
   return (

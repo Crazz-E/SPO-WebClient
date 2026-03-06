@@ -317,6 +317,30 @@ describe('game-store server switch state', () => {
   });
 });
 
+describe('game-store company switching state', () => {
+  beforeEach(() => {
+    useGameStore.getState().reset();
+  });
+
+  it('should have isSwitchingCompany false initially', () => {
+    expect(useGameStore.getState().isSwitchingCompany).toBe(false);
+  });
+
+  it('setSwitchingCompany should toggle the flag', () => {
+    useGameStore.getState().setSwitchingCompany(true);
+    expect(useGameStore.getState().isSwitchingCompany).toBe(true);
+
+    useGameStore.getState().setSwitchingCompany(false);
+    expect(useGameStore.getState().isSwitchingCompany).toBe(false);
+  });
+
+  it('reset should clear isSwitchingCompany', () => {
+    useGameStore.getState().setSwitchingCompany(true);
+    useGameStore.getState().reset();
+    expect(useGameStore.getState().isSwitchingCompany).toBe(false);
+  });
+});
+
 describe('delphiTDateTimeToJsDate', () => {
   it('should convert 0 to Dec 30, 1899', () => {
     const result = delphiTDateTimeToJsDate(0);
@@ -345,5 +369,32 @@ describe('delphiTDateTimeToJsDate', () => {
     expect(result.getFullYear()).toBeGreaterThan(2000);
     expect(result instanceof Date).toBe(true);
     expect(isNaN(result.getTime())).toBe(false);
+  });
+});
+
+describe('game-store Capitol coords', () => {
+  beforeEach(() => {
+    useGameStore.getState().reset();
+  });
+
+  it('should have null capitolCoords initially', () => {
+    expect(useGameStore.getState().capitolCoords).toBeNull();
+  });
+
+  it('setCapitolCoords should store coordinates', () => {
+    useGameStore.getState().setCapitolCoords({ x: 220, y: 41 });
+    expect(useGameStore.getState().capitolCoords).toEqual({ x: 220, y: 41 });
+  });
+
+  it('setCapitolCoords(null) should clear coordinates', () => {
+    useGameStore.getState().setCapitolCoords({ x: 220, y: 41 });
+    useGameStore.getState().setCapitolCoords(null);
+    expect(useGameStore.getState().capitolCoords).toBeNull();
+  });
+
+  it('reset should clear capitolCoords', () => {
+    useGameStore.getState().setCapitolCoords({ x: 220, y: 41 });
+    useGameStore.getState().reset();
+    expect(useGameStore.getState().capitolCoords).toBeNull();
   });
 });

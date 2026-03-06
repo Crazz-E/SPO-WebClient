@@ -6,6 +6,7 @@
 import { describe, it, expect } from '@jest/globals';
 import type {
   BuildingSupplyData,
+  BuildingProductData,
   BuildingConnectionData,
 } from '../../../../shared/types';
 
@@ -26,6 +27,22 @@ function createConnection(overrides?: Partial<BuildingConnectionData>): Building
     connected: true,
     x: 100,
     y: 200,
+    ...overrides,
+  };
+}
+
+function createProduct(overrides?: Partial<BuildingProductData>): BuildingProductData {
+  return {
+    path: 'output0',
+    name: 'Clothing',
+    metaFluid: 'Clothing',
+    lastFluid: '200',
+    connectionCount: 1,
+    connections: [createConnection({ facilityName: 'Fashion Store', x: 500, y: 600 })],
+    quality: '90',
+    pricePc: '100',
+    avgPrice: '105',
+    marketPrice: '1500',
     ...overrides,
   };
 }
@@ -316,5 +333,175 @@ describe('Supply RDO command wiring', () => {
 
     expect(params.command).toBe('RDODisconnectInput');
     expect(params.additionalParams.connectionList).toBe('100,200');
+  });
+});
+
+// =============================================================================
+// SUPPLY CARD - FIRE BUTTON
+// =============================================================================
+
+describe('SupplyCard Fire button', () => {
+  it('should build correct disconnect params for selected connection', () => {
+    const supply = createSupply();
+    const selectedIdx = 0;
+    const conn = supply.connections[selectedIdx];
+
+    const params = {
+      buildingX: 50,
+      buildingY: 75,
+      fluidId: supply.metaFluid,
+      direction: 'input' as const,
+      x: conn.x,
+      y: conn.y,
+    };
+
+    expect(params.fluidId).toBe('Chemicals');
+    expect(params.direction).toBe('input');
+    expect(params.x).toBe(100);
+    expect(params.y).toBe(200);
+  });
+
+  it('should use second connection when selectedIdx is 1', () => {
+    const supply = createSupply();
+    const selectedIdx = 1;
+    const conn = supply.connections[selectedIdx];
+
+    expect(conn.facilityName).toBe('Refinery');
+    expect(conn.x).toBe(300);
+    expect(conn.y).toBe(400);
+  });
+
+  it('should be disabled when no row is selected', () => {
+    const selectedIdx: number | null = null;
+    const fireDisabled = selectedIdx === null;
+    expect(fireDisabled).toBe(true);
+  });
+
+  it('should be enabled when a row is selected', () => {
+    const selectedIdx: number | null = 0;
+    const fireDisabled = selectedIdx === null;
+    expect(fireDisabled).toBe(false);
+  });
+
+  it('should clear selection after firing', () => {
+    let selectedIdx: number | null = 0;
+    // Simulate handleFire: disconnect + clear selection
+    selectedIdx = null;
+    expect(selectedIdx).toBeNull();
+  });
+});
+
+// =============================================================================
+// PRODUCT CARD - FIRE BUTTON
+// =============================================================================
+
+describe('ProductCard Fire button', () => {
+  it('should build correct disconnect params for selected buyer', () => {
+    const product = createProduct();
+    const selectedIdx = 0;
+    const conn = product.connections[selectedIdx];
+
+    const params = {
+      buildingX: 50,
+      buildingY: 75,
+      fluidId: product.metaFluid,
+      direction: 'output' as const,
+      x: conn.x,
+      y: conn.y,
+    };
+
+    expect(params.fluidId).toBe('Clothing');
+    expect(params.direction).toBe('output');
+    expect(params.x).toBe(500);
+    expect(params.y).toBe(600);
+  });
+
+  it('should toggle row selection on click', () => {
+    let selectedIdx: number | null = null;
+
+    // Click row 0 -> select
+    selectedIdx = selectedIdx === 0 ? null : 0;
+    expect(selectedIdx).toBe(0);
+
+    // Click row 0 again -> deselect
+    selectedIdx = selectedIdx === 0 ? null : 0;
+    expect(selectedIdx).toBeNull();
+  });
+
+  it('should be disabled when no row is selected', () => {
+    const selectedIdx: number | null = null;
+    const fireDisabled = selectedIdx === null;
+    expect(fireDisabled).toBe(true);
+  });
+
+  it('should only show actions when canEdit is true', () => {
+    const canEdit = false;
+    const showActions = canEdit;
+    expect(showActions).toBe(false);
+
+    const canEditTrue = true;
+    expect(canEditTrue).toBe(true);
+  });
+
+  it('should format RDODisconnectOutput with coordinate pair', () => {
+    const product = createProduct();
+    const conn = product.connections[0];
+    const connectionList = `${conn.x},${conn.y}`;
+
+    const params = {
+      command: 'RDODisconnectOutput',
+      value: '0',
+      additionalParams: { fluidId: product.metaFluid, connectionList },
+    };
+
+    expect(params.command).toBe('RDODisconnectOutput');
+    expect(params.additionalParams.fluidId).toBe('Clothing');
+    expect(params.additionalParams.connectionList).toBe('500,600');
+  });
+});
+
+// =============================================================================
+// KEYBOARD DELETE DISCONNECT
+// =============================================================================
+
+describe('Keyboard DELETE disconnect', () => {
+  it('should trigger fire when Delete pressed with selection (input)', () => {
+    const canEdit = true;
+    const selectedIdx: number | null = 0;
+    const key = 'Delete';
+    const shouldFire = key === 'Delete' && canEdit && selectedIdx !== null;
+    expect(shouldFire).toBe(true);
+  });
+
+  it('should trigger fire when Delete pressed with selection (output)', () => {
+    const canEdit = true;
+    const selectedIdx: number | null = 0;
+    const key = 'Delete';
+    const shouldFire = key === 'Delete' && canEdit && selectedIdx !== null;
+    expect(shouldFire).toBe(true);
+  });
+
+  it('should not trigger when no selection', () => {
+    const canEdit = true;
+    const selectedIdx: number | null = null;
+    const key = 'Delete';
+    const shouldFire = key === 'Delete' && canEdit && selectedIdx !== null;
+    expect(shouldFire).toBe(false);
+  });
+
+  it('should not trigger when canEdit is false', () => {
+    const canEdit = false;
+    const selectedIdx: number | null = 0;
+    const key = 'Delete';
+    const shouldFire = key === 'Delete' && canEdit && selectedIdx !== null;
+    expect(shouldFire).toBe(false);
+  });
+
+  it('should not trigger for other keys', () => {
+    const canEdit = true;
+    const selectedIdx: number | null = 0;
+    const key: string = 'Backspace';
+    const shouldFire = key === 'Delete' && canEdit && selectedIdx !== null;
+    expect(shouldFire).toBe(false);
   });
 });

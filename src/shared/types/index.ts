@@ -273,6 +273,7 @@ export type {
   // Capitol
   WsReqBuildCapitol,
   WsRespCapitolPlaced,
+  WsRespCapitolCoords,
   // Facility connections (trade)
   WsReqConnectFacilities,
   WsRespConnectFacilities,

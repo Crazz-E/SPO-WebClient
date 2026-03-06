@@ -7,4 +7,5 @@ export { TabBar } from './TabBar';
 export { ProgressBar } from './ProgressBar';
 export { IconButton } from './IconButton';
 export { ConfirmDialog } from './ConfirmDialog';
+export { PromptDialog } from './PromptDialog';
 export { ErrorBoundary } from './ErrorBoundary';

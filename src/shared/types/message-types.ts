@@ -256,6 +256,7 @@ export enum WsMessageType {
   // Capitol
   REQ_BUILD_CAPITOL = 'REQ_BUILD_CAPITOL',
   RESP_CAPITOL_PLACED = 'RESP_CAPITOL_PLACED',
+  RESP_CAPITOL_COORDS = 'RESP_CAPITOL_COORDS',
 }
 
 // =============================================================================
@@ -585,6 +586,7 @@ export interface WsRespSurfaceData extends WsMessage {
 export interface WsRespAllFacilityDimensions extends WsMessage {
   type: WsMessageType.RESP_ALL_FACILITY_DIMENSIONS;
   dimensions: Record<string, FacilityDimensions>;
+  civicVisualClassIds: string[];
 }
 
 // =============================================================================
@@ -1290,6 +1292,13 @@ export interface WsRespCapitolPlaced extends WsMessage {
   x: number;
   y: number;
   buildingId: string;
+}
+
+export interface WsRespCapitolCoords extends WsMessage {
+  type: WsMessageType.RESP_CAPITOL_COORDS;
+  x: number;
+  y: number;
+  hasCapitol: boolean;
 }
 
 // =============================================================================

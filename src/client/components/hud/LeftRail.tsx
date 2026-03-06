@@ -110,15 +110,13 @@ export function LeftRail() {
             onClick={() => isZonePaintingMode ? client.onCancelZonePainting() : openModal('zonePicker')}
           />
         )}
-        {isPublicOfficeRole && (
-          <IconButton
-            icon={<Landmark size={20} />}
-            label="Capitol"
-            size="lg"
-            variant="glass"
-            onClick={() => client.onOpenCapitol()}
-          />
-        )}
+        <IconButton
+          icon={<Landmark size={20} />}
+          label="Capitol"
+          size="lg"
+          variant="glass"
+          onClick={() => client.onOpenCapitol()}
+        />
         <IconButton
           icon={<Layers size={20} />}
           label="Overlays"

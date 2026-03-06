@@ -27,7 +27,7 @@ import { OverlayMenu } from '../components/hud/OverlayMenu';
 import { BuildMenu, BuildingInspectorModal, ConnectionPickerModal, ServerSwitchOverlay, SettingsDialog, SupplierSearchModal, ZoneTypePicker } from '../components/modals';
 import { CommandPalette } from '../components/command-palette';
 import { MobileShell } from '../components/mobile';
-import { ErrorBoundary } from '../components/common';
+import { ErrorBoundary, ConfirmDialog, PromptDialog } from '../components/common';
 import { User, Heart, Layers } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -69,6 +69,10 @@ function RightPanelContent({ type }: { type: string | null }) {
 export function GameScreen() {
   const rightPanel = useUiStore((s) => s.rightPanel);
   const leftPanel = useUiStore((s) => s.leftPanel);
+  const modal = useUiStore((s) => s.modal);
+  const confirmPayload = useUiStore((s) => s.confirmPayload);
+  const promptPayload = useUiStore((s) => s.promptPayload);
+  const closeModal = useUiStore((s) => s.closeModal);
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
   const closeLeftPanel = useUiStore((s) => s.closeLeftPanel);
 
@@ -126,6 +130,28 @@ export function GameScreen() {
       <SupplierSearchModal />
       <SettingsDialog />
       <ZoneTypePicker />
+
+      {/* Confirm Dialog — z-400 */}
+      {modal === 'confirm' && confirmPayload && (
+        <ConfirmDialog
+          title={confirmPayload.title}
+          message={confirmPayload.message}
+          onConfirm={() => { confirmPayload.onConfirm(); closeModal(); }}
+          onCancel={closeModal}
+        />
+      )}
+
+      {/* Prompt Dialog — z-400 */}
+      {modal === 'prompt' && promptPayload && (
+        <PromptDialog
+          title={promptPayload.title}
+          message={promptPayload.message}
+          placeholder={promptPayload.placeholder}
+          defaultValue={promptPayload.defaultValue}
+          onSubmit={(value) => { promptPayload.onSubmit(value); closeModal(); }}
+          onCancel={closeModal}
+        />
+      )}
 
       {/* Server Switch Overlay — z-450, between modals and command palette */}
       <ServerSwitchOverlay />

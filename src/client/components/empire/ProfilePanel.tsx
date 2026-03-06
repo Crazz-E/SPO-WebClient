@@ -548,11 +548,13 @@ function CompaniesTab() {
   const data = useProfileStore((s) => s.companies);
   const client = useClient();
   const currentCompanyName = useGameStore((s) => s.companyName);
+  const isSwitchingCompany = useGameStore((s) => s.isSwitchingCompany);
 
   if (!data) return <EmptyState message="No companies data" />;
 
   const handleSwitch = (co: { companyId: number; name: string; ownerRole: string }) => {
     if (co.name === (data.currentCompany || currentCompanyName)) return;
+    if (isSwitchingCompany) return;
     client.onProfileSwitchCompany(co.companyId, co.name, co.ownerRole);
   };
 
@@ -566,15 +568,22 @@ function CompaniesTab() {
       <p className={styles.companyInstructions}>
         You have registered the following companies in {data.worldName || 'this world'}. Choose one or create a new one.
       </p>
+      {isSwitchingCompany && (
+        <div className={styles.switchingBanner}>
+          <Skeleton width="14px" height="14px" />
+          <span>Switching company…</span>
+        </div>
+      )}
       {data.companies.map((co) => {
         const isActive = co.name === (data.currentCompany || currentCompanyName);
         return (
           <div
             key={co.companyId}
-            className={`${styles.listRow} ${isActive ? styles.activeRow : styles.clickableRow}`}
+            className={`${styles.listRow} ${isActive ? styles.activeRow : styles.clickableRow} ${isSwitchingCompany ? styles.rowDisabled : ''}`}
             onClick={() => handleSwitch(co)}
             role={isActive ? undefined : 'button'}
             tabIndex={isActive ? undefined : 0}
+            aria-disabled={isSwitchingCompany || undefined}
           >
             <div className={styles.rowMain}>
               <span className={styles.rowName}>
@@ -590,7 +599,7 @@ function CompaniesTab() {
           </div>
         );
       })}
-      <button className={styles.createCompanyBtn} onClick={handleCreate}>
+      <button className={styles.createCompanyBtn} onClick={handleCreate} disabled={isSwitchingCompany}>
         <Plus size={14} />
         Create New Company
       </button>

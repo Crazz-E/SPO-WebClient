@@ -10,7 +10,7 @@ import { useGameStore } from './game-store';
 
 export type RightPanelType = 'building' | 'mail' | 'search' | 'politics' | 'transport';
 export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
-export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector';
+export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'prompt' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector';
 export type MobileTab = 'map' | 'empire' | 'build' | 'mail' | 'more';
 
 interface UiState {
@@ -22,6 +22,8 @@ interface UiState {
   modal: ModalType | null;
   /** Payload for confirmation dialogs */
   confirmPayload: { title: string; message: string; onConfirm: () => void } | null;
+  /** Payload for text-input prompt dialogs */
+  promptPayload: { title: string; message: string; placeholder?: string; defaultValue?: string; onSubmit: (value: string) => void } | null;
 
   // Build menu data
   buildMenuCategories: BuildingCategory[];
@@ -47,6 +49,7 @@ interface UiState {
   openModal: (type: ModalType) => void;
   closeModal: () => void;
   requestConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  requestPrompt: (title: string, message: string, onSubmit: (value: string) => void, options?: { placeholder?: string; defaultValue?: string }) => void;
 
   // Actions — Build menu data
   setBuildMenuCategories: (cats: BuildingCategory[], capitolIconUrl?: string) => void;
@@ -70,6 +73,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   leftPanel: null,
   modal: null,
   confirmPayload: null,
+  promptPayload: null,
   buildMenuCategories: [],
   buildMenuFacilities: [],
   capitolIconUrl: '',
@@ -94,10 +98,19 @@ export const useUiStore = create<UiState>((set, get) => ({
   closeAllPanels: () => set({ rightPanel: null, leftPanel: null }),
 
   // Modals
-  openModal: (type) => set({ modal: type }),
-  closeModal: () => set({ modal: null, confirmPayload: null }),
+  openModal: (type) => {
+    // Civic building modal replaces the right-panel building inspector
+    if (type === 'buildingInspector') {
+      set({ modal: type, rightPanel: null });
+    } else {
+      set({ modal: type });
+    }
+  },
+  closeModal: () => set({ modal: null, confirmPayload: null, promptPayload: null }),
   requestConfirm: (title, message, onConfirm) =>
     set({ modal: 'confirm', confirmPayload: { title, message, onConfirm } }),
+  requestPrompt: (title, message, onSubmit, options) =>
+    set({ modal: 'prompt', promptPayload: { title, message, onSubmit, ...options } }),
 
   // Build menu data
   setBuildMenuCategories: (cats, capitolIconUrl) => set({ buildMenuCategories: cats, ...(capitolIconUrl ? { capitolIconUrl } : {}) }),
@@ -132,7 +145,7 @@ export const useUiStore = create<UiState>((set, get) => ({
         if (state.modal === 'buildingInspector') {
           useBuildingStore.getState().clearFocus();
         }
-        set({ modal: null, confirmPayload: null });
+        set({ modal: null, confirmPayload: null, promptPayload: null });
       } else if (state.rightPanel) {
         set({ rightPanel: null });
       } else if (state.leftPanel) {

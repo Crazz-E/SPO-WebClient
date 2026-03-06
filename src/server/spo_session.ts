@@ -182,6 +182,17 @@ export class StarpeaceSession extends EventEmitter {
     return this.convertToProxyUrl('/five/0/visual/voyager/Build/images/capitol.jpg');
   }
 
+  // Capitol coordinates (per-world, set from DirectoryMain.asp)
+  private capitolCoords: { x: number; y: number } | null = null;
+
+  public getCapitolCoords(): { x: number; y: number } | null {
+    return this.capitolCoords;
+  }
+
+  public setCapitolCoords(coords: { x: number; y: number } | null): void {
+    this.capitolCoords = coords;
+  }
+
   // Pending requests map
   private pendingRequests = new Map<number, {
     resolve: (msg: RdoPacket) => void;
@@ -1614,7 +1625,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
         member: 'GetHeaders',
         args: [RdoValue.int(0).toString()]
       });
-      const headersText = headersPacket.payload || '';
+      const headersText = parsePropertyResponseHelper(headersPacket.payload || '', 'res');
 
       // 3. Get body lines
       const linesPacket = await this.sendRdoRequest('mail', {
@@ -1624,7 +1635,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
         member: 'GetLines',
         args: [RdoValue.int(0).toString()]
       });
-      const bodyText = linesPacket.payload || '';
+      const bodyText = parsePropertyResponseHelper(linesPacket.payload || '', 'res');
 
       // 4. Get attachments
       const attachCountPacket = await this.sendRdoRequest('mail', {
@@ -3415,11 +3426,16 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     });
     const raw = cleanPayloadHelper(packet.payload || '');
 
-    // Handle tab-delimited or space-delimited responses
-    if (raw.includes('\t')) {
-      return raw.split('\t').map(v => v.trim());
+    // Always tab-split: request uses tab delimiters, response should too.
+    // The old space-split fallback broke multi-word values (e.g. "Processed Food")
+    // and misaligned every subsequent property in the batch.
+    const values = raw.split('\t').map(v => v.trim());
+    if (values.length < propertyNames.length) {
+      this.log.warn(
+        `[cacherGetPropertyList] Response has ${values.length} values for ${propertyNames.length} requested properties`
+      );
     }
-    return raw.split(/\s+/).map(v => v.trim());
+    return values;
   }
 
   private async cacherCloseObject(tempObjectId: string): Promise<void> {
@@ -5996,6 +6012,9 @@ private handlePush(socketName: string, packet: RdoPacket) {
 		  const count = countStr ? parseInt(countStr, 10) : 0;
 		  countValues.set(countProp, count);
 		  this.log.debug(`[BuildingDetails] Count: ${countProp} = "${countStr}" (parsed: ${count})`);
+		  if (count > 50) {
+		    this.log.warn(`[BuildingDetails] Unusually high count: ${countProp} = ${count}`);
+		  }
 
 		  // Build indexed property names based on actual count
 		  const indexedDefs = collected.indexedByCount.get(countProp) || [];
@@ -6069,7 +6088,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
 
 				for (const propName of workerProps) {
 				  const value = allValues.get(propName);
-				  if (value) {
+				  if (value !== undefined) {
 					groupValues.push({
 					  name: propName,
 					  value: value,
@@ -6086,7 +6105,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
 			  const count = countValues.get(prop.countProperty) || 0;
 			  // Include the count property so the client renderer knows how many rows to render
 			  const countVal = allValues.get(prop.countProperty);
-			  if (countVal) {
+			  if (countVal !== undefined) {
 				groupValues.push({ name: prop.countProperty, value: countVal });
 			  }
 			  for (let idx = 0; idx < count; idx++) {
@@ -6094,7 +6113,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
 				  const colSuffix = col.indexSuffix !== undefined ? col.indexSuffix : suffix;
 				  const colName = `${col.rdoSuffix}${idx}${col.columnSuffix || ''}${colSuffix}`;
 				  const colValue = allValues.get(colName);
-				  if (colValue) {
+				  if (colValue !== undefined) {
 					groupValues.push({
 					  name: colName,
 					  value: colValue,
@@ -6111,7 +6130,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
 			  if (!includedCountProps.has(prop.countProperty)) {
 				includedCountProps.add(prop.countProperty);
 				const countVal = allValues.get(prop.countProperty);
-				if (countVal) {
+				if (countVal !== undefined) {
 				  groupValues.push({ name: prop.countProperty, value: countVal });
 				}
 			  }
@@ -6120,7 +6139,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
 				const propName = `${prop.rdoName}${idx}${suffix}`;
 				const value = allValues.get(propName);
 
-				if (value) {
+				if (value !== undefined) {
 				  groupValues.push({
 					name: propName,
 					value: value,
@@ -6132,7 +6151,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
 				if (prop.maxProperty) {
 				  const maxPropName = `${prop.maxProperty}${idx}${suffix}`;
 				  const maxValue = allValues.get(maxPropName);
-				  if (maxValue) {
+				  if (maxValue !== undefined) {
 					groupValues.push({
 					  name: maxPropName,
 					  value: maxValue,
@@ -6146,18 +6165,18 @@ private handlePush(socketName: string, packet: RdoPacket) {
 			  for (let idx = 0; idx < 10; idx++) {
 				const propName = `${prop.rdoName}${idx}${suffix}`;
 				const value = allValues.get(propName);
-				
-				if (value) {
+
+				if (value !== undefined) {
 				  groupValues.push({
 					name: propName,
 					value: value,
 					index: idx,
 				  });
-				  
+
 				  if (prop.maxProperty) {
 					const maxPropName = `${prop.maxProperty}${idx}${suffix}`;
 					const maxValue = allValues.get(maxPropName);
-					if (maxValue) {
+					if (maxValue !== undefined) {
 					  groupValues.push({
 						name: maxPropName,
 						value: maxValue,
@@ -6170,7 +6189,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
 			} else {
             // Regular property
             const value = allValues.get(prop.rdoName);
-            if (value) {
+            if (value !== undefined) {
               groupValues.push({
                 name: prop.rdoName,
                 value: value,
@@ -6179,7 +6198,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
               // Also get max property if defined
               if (prop.maxProperty) {
                 const maxValue = allValues.get(prop.maxProperty);
-                if (maxValue) {
+                if (maxValue !== undefined) {
                   groupValues.push({
                     name: prop.maxProperty,
                     value: maxValue,
@@ -6680,6 +6699,23 @@ private handlePush(socketName: string, packet: RdoPacket) {
           if (taxId) {
             additionalParams.taxId = taxId;
             this.log.debug(`[BuildingDetails] Resolved ${taxIdProp}=${taxId} for RDOSetTaxValue`);
+          }
+        } finally {
+          await this.cacherCloseObject(lookupObjectId);
+        }
+      }
+
+      // For RDOSetMinistryBudget, resolve row index → actual MinistryId from building properties
+      // Voyager: MinisteriesSheet.pas — MinistryId comes from MinistryId[idx], not the row index
+      if (propertyName === 'RDOSetMinistryBudget' && additionalParams?.index && !additionalParams.ministryId) {
+        const lookupObjectId = await this.cacherCreateObject();
+        try {
+          await this.cacherSetObject(lookupObjectId, x, y);
+          const ministryIdProp = `MinistryId${additionalParams.index}`;
+          const [ministryId] = await this.cacherGetPropertyList(lookupObjectId, [ministryIdProp]);
+          if (ministryId) {
+            additionalParams.ministryId = ministryId;
+            this.log.debug(`[BuildingDetails] Resolved ${ministryIdProp}=${ministryId} for RDOSetMinistryBudget`);
           }
         } finally {
           await this.cacherCloseObject(lookupObjectId);

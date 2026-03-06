@@ -14,6 +14,7 @@ import {
   HQ_INVENTIONS_GROUP,
   HANDLER_TO_GROUP,
 } from './template-groups';
+import { CIVIC_HANDLER_NAMES, registerCivicVisualClass } from './civic-buildings';
 
 // =============================================================================
 // GENERIC FALLBACK TEMPLATE
@@ -101,6 +102,12 @@ export function registerInspectorTabs(
       name: buildingClassName || 'Building',
       groups,
     });
+
+    // Auto-register civic visual class IDs so isCivicBuilding works immediately
+    // on subsequent encounters (before template cache is lazily populated per-building).
+    if (groups.some(g => CIVIC_HANDLER_NAMES.has(g.handlerName ?? ''))) {
+      registerCivicVisualClass(visualClassId);
+    }
   }
 }
 

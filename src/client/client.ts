@@ -102,6 +102,7 @@ import {
   WsRespDefineZone,
   // Capitol
   WsReqBuildCapitol,
+  WsRespCapitolCoords,
   // Date
   WsEventRefreshDate,
   // Research / Inventions
@@ -124,7 +125,7 @@ import { useBuildingStore } from './store/building-store';
 import { useProfileStore } from './store/profile-store';
 import { useMailStore } from './store/mail-store';
 import { getFacilityDimensionsCache } from './facility-dimensions-cache';
-import { isCivicBuilding } from '../shared/building-details/civic-buildings';
+import { isCivicBuilding, registerCivicVisualClass } from '../shared/building-details/civic-buildings';
 import { SoundManager } from './audio/sound-manager';
 
 // [E2E-DEBUG] Wire-level debug tracker exposed on window.__spoDebug
@@ -447,6 +448,7 @@ export class StarpeaceClient {
       }),
       onProfileSwitchCompany: (companyId, companyName, ownerRole) => {
         const company: CompanyInfo = { id: String(companyId), name: companyName, ownerRole, cluster: '' };
+        useGameStore.getState().setSwitchingCompany(true);
         this.sendRequest({
           type: WsMessageType.REQ_SWITCH_COMPANY,
           company,
@@ -459,6 +461,8 @@ export class StarpeaceClient {
           useBuildingStore.getState().clearFocus();
         }).catch((err: unknown) => {
           ClientBridge.showError(`Failed to switch company: ${toErrorMessage(err)}`);
+        }).finally(() => {
+          useGameStore.getState().setSwitchingCompany(false);
         });
       },
 
@@ -886,6 +890,19 @@ export class StarpeaceClient {
       case WsMessageType.RESP_SEARCH_MENU_BANKS:
         ClientBridge.handleSearchMenuResponse(msg);
         break;
+
+      // Capitol coordinates (pushed after login)
+      case WsMessageType.RESP_CAPITOL_COORDS: {
+        const capitolMsg = msg as WsRespCapitolCoords;
+        if (capitolMsg.hasCapitol) {
+          useGameStore.getState().setCapitolCoords({ x: capitolMsg.x, y: capitolMsg.y });
+          ClientBridge.log('Capitol', `Capitol located at (${capitolMsg.x}, ${capitolMsg.y})`);
+        } else {
+          useGameStore.getState().setCapitolCoords(null);
+          ClientBridge.log('Capitol', 'No Capitol in this world');
+        }
+        break;
+      }
 
       // Profile Tab Responses (delegated to profile panel)
       case WsMessageType.RESP_PROFILE_CURRICULUM:
@@ -1484,6 +1501,11 @@ export class StarpeaceClient {
     } else if (this.isCloneMode) {
       this.executeCloneFacility(x, y);
     } else {
+      // Civic buildings (Capitol, TownHall) skip overlay — open modal directly
+      if (visualClass && isCivicBuilding(visualClass)) {
+        this.focusBuilding(x, y, visualClass);
+        return;
+      }
       // Two-click flow: first click → overlay, second click → open inspector
       const overlayBuilding = useBuildingStore.getState().focusedBuilding;
       const isOverlay = useBuildingStore.getState().isOverlayMode;
@@ -2273,49 +2295,54 @@ export class StarpeaceClient {
   // INLINE ROW ACTIONS (Capitol government tabs)
   // =========================================================================
 
-  private async electMayorInline(buildingDetails: BuildingDetailsResponse, rowData: Record<string, string>): Promise<void> {
+  private electMayorInline(buildingDetails: BuildingDetailsResponse, rowData: Record<string, string>): void {
     const townName = rowData['Town'];
     if (!townName) {
       this.showNotification('No town selected', 'error');
       return;
     }
-    const playerName = this.storedUsername;
-    if (!playerName) {
-      this.showNotification('Player name not available', 'error');
-      return;
-    }
-    try {
-      await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RDOSitMayor', playerName, {
-        townName,
-      });
-      this.showNotification(`${playerName} elected as mayor of ${townName}`, 'success');
-      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
-    } catch (err: unknown) {
-      this.showNotification(`Failed to elect mayor: ${toErrorMessage(err)}`, 'error');
-    }
+    useUiStore.getState().requestPrompt(
+      `Elect Mayor of ${townName}`,
+      `Enter username to elect as mayor of ${townName}:`,
+      async (playerName: string) => {
+        try {
+          await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RDOSitMayor', playerName, {
+            townName,
+          });
+          this.showNotification(`${playerName} elected as mayor of ${townName}`, 'success');
+          this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+        } catch (err: unknown) {
+          this.showNotification(`Failed to elect mayor: ${toErrorMessage(err)}`, 'error');
+        }
+      },
+      { defaultValue: this.storedUsername ?? '' },
+    );
   }
 
-  private async electMinisterInline(buildingDetails: BuildingDetailsResponse, rowData: Record<string, string>): Promise<void> {
+  private electMinisterInline(buildingDetails: BuildingDetailsResponse, rowData: Record<string, string>): void {
     const ministryId = rowData['MinistryId'];
     if (!ministryId) {
       this.showNotification('No ministry selected', 'error');
       return;
     }
-    const playerName = this.storedUsername;
-    if (!playerName) {
-      this.showNotification('Player name not available', 'error');
-      return;
-    }
-    try {
-      await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RDOSitMinister', '0', {
-        ministryId,
-        ministerName: playerName,
-      });
-      this.showNotification(`${playerName} appointed as minister`, 'success');
-      this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
-    } catch (err: unknown) {
-      this.showNotification(`Failed to appoint minister: ${toErrorMessage(err)}`, 'error');
-    }
+    const ministryName = rowData['Ministry'] || `Ministry ${ministryId}`;
+    useUiStore.getState().requestPrompt(
+      `Appoint ${ministryName}`,
+      `Enter username to appoint as ${ministryName}:`,
+      async (playerName: string) => {
+        try {
+          await this.setBuildingProperty(buildingDetails.x, buildingDetails.y, 'RDOSitMinister', '0', {
+            ministryId,
+            ministerName: playerName,
+          });
+          this.showNotification(`${playerName} appointed as ${ministryName}`, 'success');
+          this.refreshBuildingDetails(buildingDetails.x, buildingDetails.y);
+        } catch (err: unknown) {
+          this.showNotification(`Failed to appoint minister: ${toErrorMessage(err)}`, 'error');
+        }
+      },
+      { defaultValue: this.storedUsername ?? '' },
+    );
   }
 
   private async deposeMinisterInline(buildingDetails: BuildingDetailsResponse, rowData: Record<string, string>): Promise<void> {
@@ -2934,27 +2961,17 @@ export class StarpeaceClient {
   }
 
   /**
-   * Open the Capitol building inspector by finding it on the map.
-   * Searches loaded buildings for visualClass '152' (Capitol).
+   * Open the Capitol building inspector using cached coordinates
+   * from the DirectoryMain.asp page (fetched at world login).
    */
   private openCapitolInspector() {
-    const renderer = this.mapNavigationUI?.getRenderer();
-    if (!renderer) {
-      this.showNotification('Map not loaded yet', 'error');
+    const coords = useGameStore.getState().capitolCoords;
+    if (!coords) {
+      this.showNotification('No Capitol found in this world', 'error');
       return;
     }
 
-    const CAPITOL_VISUAL_CLASS_ID = '152';
-    const capitol = renderer.getAllBuildings().find(
-      (b) => b.visualClass === CAPITOL_VISUAL_CLASS_ID,
-    );
-
-    if (!capitol) {
-      this.showNotification('No Capitol found on the map', 'error');
-      return;
-    }
-
-    this.focusBuilding(capitol.x, capitol.y);
+    this.focusBuilding(coords.x, coords.y);
   }
 
   /**
@@ -3062,6 +3079,13 @@ export class StarpeaceClient {
       // Initialize client-side cache
       const cache = getFacilityDimensionsCache();
       cache.initialize(response.dimensions);
+
+      // Pre-populate civic building IDs so isCivicBuilding() works on first click
+      if (response.civicVisualClassIds) {
+        for (const id of response.civicVisualClassIds) {
+          registerCivicVisualClass(id);
+        }
+      }
 
       ClientBridge.log('Cache', `Loaded ${cache.getSize()} facility dimensions`);
     } catch (err: unknown) {

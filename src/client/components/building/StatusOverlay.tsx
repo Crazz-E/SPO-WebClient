@@ -13,6 +13,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useBuildingStore } from '../../store/building-store';
 import { worldToScreenCentered } from '../../bridge/client-bridge';
 import { useClient } from '../../context/ClientContext';
+import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
 import styles from './StatusOverlay.module.css';
 
 /** Gap between caret tip and texture top (pixels). */
@@ -67,6 +68,7 @@ export function StatusOverlay() {
   if (!building || !isOverlay || !screenPos) return null;
 
   const direction = revenueDirection(building.revenue);
+  const isCivic = isCivicBuilding(building.visualClass || '0');
 
   return (
     <div
@@ -98,7 +100,7 @@ export function StatusOverlay() {
         onClick={() => client.onInspectFocusedBuilding()}
         data-testid="inspect-button"
       >
-        INSPECT
+        {isCivic ? 'VISIT' : 'INSPECT'}
       </button>
 
       <div className={styles.caret} />

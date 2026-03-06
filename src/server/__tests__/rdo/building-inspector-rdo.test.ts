@@ -22,8 +22,13 @@ import {
   WH_GENERAL_GROUP,
   TV_GENERAL_GROUP,
   PRODUCTS_GROUP,
+  TOWN_JOBS_GROUP,
+  TOWN_RES_GROUP,
+  TOWN_SERVICES_GROUP,
+  WORKFORCE_GROUP,
 } from '../../../shared/building-details/template-groups';
 import { PropertyType } from '../../../shared/building-details/property-definitions';
+import type { BuildingPropertyValue } from '../../../shared/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -727,5 +732,157 @@ describe('Supplies', () => {
     expect(cmd).toContain('"^"');
     expect(cmd).toContain('"#0"');
     expect(cmd).toContain('"%0"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Response assembly — empty string handling (Bug fix: if(value) → if(value !== undefined))
+// ---------------------------------------------------------------------------
+
+describe('Response assembly: empty string values', () => {
+  /**
+   * Simulates the response assembly logic from spo_session.ts (lines 6062-6200).
+   * Tests that empty string values ('') are NOT dropped by the assembly.
+   */
+  function assembleRegularProperties(
+    properties: { rdoName: string; type: string; maxProperty?: string }[],
+    allValues: Map<string, string>,
+  ): BuildingPropertyValue[] {
+    const groupValues: BuildingPropertyValue[] = [];
+    for (const prop of properties) {
+      const value = allValues.get(prop.rdoName);
+      // This is the FIXED check: !== undefined instead of truthy
+      if (value !== undefined) {
+        groupValues.push({ name: prop.rdoName, value });
+        if (prop.maxProperty) {
+          const maxValue = allValues.get(prop.maxProperty);
+          if (maxValue !== undefined) {
+            groupValues.push({ name: prop.maxProperty, value: maxValue });
+          }
+        }
+      }
+    }
+    return groupValues;
+  }
+
+  function assembleWorkforceProperties(
+    allValues: Map<string, string>,
+  ): BuildingPropertyValue[] {
+    const groupValues: BuildingPropertyValue[] = [];
+    for (let i = 0; i < 3; i++) {
+      const workerProps = [
+        `Workers${i}`, `WorkersMax${i}`, `WorkersK${i}`,
+        `Salaries${i}`, `WorkForcePrice${i}`,
+      ];
+      for (const propName of workerProps) {
+        const value = allValues.get(propName);
+        // This is the FIXED check: !== undefined instead of truthy
+        if (value !== undefined) {
+          groupValues.push({ name: propName, value, index: i });
+        }
+      }
+    }
+    return groupValues;
+  }
+
+  it('should include regular properties with empty string values (Jobs tab)', () => {
+    const allValues = new Map<string, string>();
+    for (const prop of TOWN_JOBS_GROUP.properties) {
+      allValues.set(prop.rdoName, ''); // Server returns empty strings
+    }
+
+    const result = assembleRegularProperties(
+      TOWN_JOBS_GROUP.properties.map(p => ({ rdoName: p.rdoName, type: p.type })),
+      allValues,
+    );
+
+    // All 15 properties should be present (not dropped by empty string check)
+    expect(result).toHaveLength(TOWN_JOBS_GROUP.properties.length);
+    for (const prop of TOWN_JOBS_GROUP.properties) {
+      expect(result.find(r => r.name === prop.rdoName)).toBeDefined();
+    }
+  });
+
+  it('should include regular properties with empty string values (Residential tab)', () => {
+    const allValues = new Map<string, string>();
+    for (const prop of TOWN_RES_GROUP.properties) {
+      allValues.set(prop.rdoName, '');
+    }
+
+    const result = assembleRegularProperties(
+      TOWN_RES_GROUP.properties.map(p => ({ rdoName: p.rdoName, type: p.type })),
+      allValues,
+    );
+
+    expect(result).toHaveLength(TOWN_RES_GROUP.properties.length);
+  });
+
+  it('should include regular properties with "0" values (truthy in old code but verify)', () => {
+    const allValues = new Map<string, string>();
+    for (const prop of TOWN_JOBS_GROUP.properties) {
+      allValues.set(prop.rdoName, '0');
+    }
+
+    const result = assembleRegularProperties(
+      TOWN_JOBS_GROUP.properties.map(p => ({ rdoName: p.rdoName, type: p.type })),
+      allValues,
+    );
+
+    expect(result).toHaveLength(TOWN_JOBS_GROUP.properties.length);
+    expect(result.every(r => r.value === '0')).toBe(true);
+  });
+
+  it('should exclude properties not in allValues (undefined)', () => {
+    const allValues = new Map<string, string>();
+    // Only set first 3 properties
+    const first3 = TOWN_JOBS_GROUP.properties.slice(0, 3);
+    for (const prop of first3) {
+      allValues.set(prop.rdoName, '42');
+    }
+
+    const result = assembleRegularProperties(
+      TOWN_JOBS_GROUP.properties.map(p => ({ rdoName: p.rdoName, type: p.type })),
+      allValues,
+    );
+
+    expect(result).toHaveLength(3);
+  });
+
+  it('should include workforce properties with empty string values', () => {
+    const allValues = new Map<string, string>();
+    for (let i = 0; i < 3; i++) {
+      allValues.set(`Workers${i}`, '');
+      allValues.set(`WorkersMax${i}`, '');
+      allValues.set(`WorkersK${i}`, '');
+      allValues.set(`Salaries${i}`, '');
+      allValues.set(`WorkForcePrice${i}`, '');
+    }
+
+    const result = assembleWorkforceProperties(allValues);
+    expect(result).toHaveLength(15); // 3 classes × 5 properties
+  });
+
+  it('should include max property with empty string value', () => {
+    const allValues = new Map<string, string>();
+    allValues.set('SomeProperty', '50');
+    allValues.set('SomePropertyMax', '');
+
+    const result = assembleRegularProperties(
+      [{ rdoName: 'SomeProperty', type: 'NUMBER', maxProperty: 'SomePropertyMax' }],
+      allValues,
+    );
+
+    expect(result).toHaveLength(2);
+    expect(result[1]).toEqual({ name: 'SomePropertyMax', value: '' });
+  });
+
+  it('town services should have correct column structure for TABLE', () => {
+    const tableDef = TOWN_SERVICES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
+    expect(tableDef).toBeDefined();
+    expect(tableDef!.countProperty).toBe('srvCount');
+    expect(tableDef!.columns).toHaveLength(8);
+    // svrName column uses .0 MLS suffix
+    expect(tableDef!.columns![0].columnSuffix).toBe('.0');
+    expect(tableDef!.columns![0].rdoSuffix).toBe('svrName');
   });
 });

@@ -143,6 +143,10 @@ export interface TableColumn {
   actionId?: string;
   /** For ACTION_BUTTON columns: button label text */
   buttonLabel?: string;
+  /** For ACTION_BUTTON columns: condition for visibility based on another column's value */
+  visibleWhen?: { column: string; condition: 'empty' | 'notEmpty' };
+  /** For ACTION_BUTTON columns: alternate action shown when visibleWhen condition is NOT met */
+  altAction?: { actionId: string; buttonLabel: string; condition: 'empty' | 'notEmpty' };
 }
 
 /**

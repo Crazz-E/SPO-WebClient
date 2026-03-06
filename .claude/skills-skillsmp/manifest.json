@@ -250,6 +250,14 @@
       "stars": 29339,
       "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills-skillsmp\\web-accessibility\\SKILL.md",
       "githubUrl": "https://github.com/wshobson/agents/tree/main/plugins/accessibility-compliance/skills/screen-reader-testing"
+    },
+    {
+      "name": "readme-blueprint-generator",
+      "skillName": "readme-blueprint-generator",
+      "author": "github",
+      "stars": 23618,
+      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills-skillsmp\\readme-blueprint-generator.md",
+      "githubUrl": "https://github.com/github/awesome-copilot/tree/main/skills/readme-blueprint-generator"
     }
   ]
 }

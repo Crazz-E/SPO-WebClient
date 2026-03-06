@@ -87,6 +87,15 @@ describe('ui-store existing state', () => {
     expect(useUiStore.getState().modal).toBeNull();
   });
 
+  it('should close right panel when opening buildingInspector modal', () => {
+    useUiStore.getState().openRightPanel('building');
+    expect(useUiStore.getState().rightPanel).toBe('building');
+
+    useUiStore.getState().openModal('buildingInspector');
+    expect(useUiStore.getState().modal).toBe('buildingInspector');
+    expect(useUiStore.getState().rightPanel).toBeNull();
+  });
+
   it('dismissTopmost with buildingInspector modal should clear building focus', () => {
     // Set some building focus state
     useBuildingStore.getState().setFocus({
@@ -101,6 +110,34 @@ describe('ui-store existing state', () => {
 
     expect(useUiStore.getState().modal).toBeNull();
     expect(useBuildingStore.getState().focusedBuilding).toBeNull();
+  });
+
+  it('requestPrompt should set modal and promptPayload', () => {
+    const onSubmit = jest.fn();
+    useUiStore.getState().requestPrompt('Test Title', 'Test message', onSubmit, {
+      placeholder: 'Enter name',
+      defaultValue: 'default',
+    });
+
+    const state = useUiStore.getState();
+    expect(state.modal).toBe('prompt');
+    expect(state.promptPayload).toEqual({
+      title: 'Test Title',
+      message: 'Test message',
+      placeholder: 'Enter name',
+      defaultValue: 'default',
+      onSubmit,
+    });
+  });
+
+  it('closeModal should clear promptPayload', () => {
+    const onSubmit = jest.fn();
+    useUiStore.getState().requestPrompt('Title', 'Msg', onSubmit);
+    expect(useUiStore.getState().promptPayload).not.toBeNull();
+
+    useUiStore.getState().closeModal();
+    expect(useUiStore.getState().modal).toBeNull();
+    expect(useUiStore.getState().promptPayload).toBeNull();
   });
 
   it('should preserve dismissTopmost priority order', () => {

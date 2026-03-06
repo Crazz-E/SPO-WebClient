@@ -70,6 +70,9 @@ interface GameState {
   // Game date (from server RefreshDate push)
   gameDate: Date | null;
 
+  // Company switching
+  isSwitchingCompany: boolean;
+
   // Tool modes
   isRoadBuildingMode: boolean;
   isRoadDemolishMode: boolean;
@@ -97,6 +100,9 @@ interface GameState {
   clusterFacilities: ClusterFacilityPreview[];
   clusterFacilitiesLoading: boolean;
 
+  // Capitol location (from DirectoryMain.asp)
+  capitolCoords: { x: number; y: number } | null;
+
   // Settings
   settings: GameSettings;
 
@@ -106,6 +112,7 @@ interface GameState {
   setWorld: (worldName: string) => void;
   setCompany: (name: string, id: string) => void;
   setCompanies: (companies: CompanyInfo[]) => void;
+  setSwitchingCompany: (switching: boolean) => void;
   setTycoonStats: (stats: TycoonStats) => void;
   setGameDate: (date: Date) => void;
   setRoadBuildingMode: (active: boolean) => void;
@@ -124,6 +131,7 @@ interface GameState {
   setClusterInfoLoading: (loading: boolean) => void;
   setClusterFacilities: (facilities: ClusterFacilityPreview[]) => void;
   setClusterFacilitiesLoading: (loading: boolean) => void;
+  setCapitolCoords: (coords: { x: number; y: number } | null) => void;
   updateSettings: (partial: Partial<GameSettings>) => void;
   enterServerSwitch: () => void;
   cancelServerSwitch: () => void;
@@ -141,6 +149,7 @@ export const useGameStore = create<GameState>((set) => ({
   companies: [],
   tycoonStats: null,
   gameDate: null,
+  isSwitchingCompany: false,
   isRoadBuildingMode: false,
   isRoadDemolishMode: false,
   isZonePaintingMode: false,
@@ -158,6 +167,7 @@ export const useGameStore = create<GameState>((set) => ({
   clusterInfoLoading: false,
   clusterFacilities: [],
   clusterFacilitiesLoading: false,
+  capitolCoords: null,
   settings: { ...DEFAULT_SETTINGS },
 
   // Actions
@@ -166,6 +176,7 @@ export const useGameStore = create<GameState>((set) => ({
   setWorld: (worldName) => set({ worldName }),
   setCompany: (name, id) => set({ companyName: name, companyId: id }),
   setCompanies: (companies) => set({ companies }),
+  setSwitchingCompany: (switching) => set({ isSwitchingCompany: switching }),
 
   setTycoonStats: (stats) => set({ tycoonStats: stats }),
   setGameDate: (date) => set({ gameDate: date }),
@@ -188,6 +199,8 @@ export const useGameStore = create<GameState>((set) => ({
   setClusterInfoLoading: (loading) => set({ clusterInfoLoading: loading }),
   setClusterFacilities: (facilities) => set({ clusterFacilities: facilities, clusterFacilitiesLoading: false }),
   setClusterFacilitiesLoading: (loading) => set({ clusterFacilitiesLoading: loading }),
+
+  setCapitolCoords: (coords) => set({ capitolCoords: coords }),
 
   updateSettings: (partial) =>
     set((state) => ({
@@ -225,6 +238,7 @@ export const useGameStore = create<GameState>((set) => ({
       companies: [],
       tycoonStats: null,
       gameDate: null,
+      isSwitchingCompany: false,
       isRoadBuildingMode: false,
       isRoadDemolishMode: false,
       isZonePaintingMode: false,
@@ -239,6 +253,7 @@ export const useGameStore = create<GameState>((set) => ({
       companyCreationClusters: [],
       clusterInfo: null,
       clusterInfoLoading: false,
+      capitolCoords: null,
       clusterFacilities: [],
       clusterFacilitiesLoading: false,
     }),

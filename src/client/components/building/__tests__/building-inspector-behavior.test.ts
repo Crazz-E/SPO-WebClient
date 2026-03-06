@@ -1280,15 +1280,14 @@ describe('Ministeries', () => {
     expect(table!.countProperty).toBe('MinisterCount');
   });
 
-  it('Minister table: has Ministry, Minister, MinisterRating, MinisterBudget, electMinister, deposeMinister columns', () => {
+  it('Minister table: has Ministry, Minister, MinisterRating, MinisterBudget, ministerAction columns', () => {
     const table = MINISTERIES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
     const suffixes = table!.columns!.map(c => c.rdoSuffix);
     expect(suffixes).toContain('Ministry');
     expect(suffixes).toContain('Minister');
     expect(suffixes).toContain('MinisterRating');
     expect(suffixes).toContain('MinisterBudget');
-    expect(suffixes).toContain('electMinister');
-    expect(suffixes).toContain('deposeMinister');
+    expect(suffixes).toContain('ministerAction');
   });
 
   it('Minister table: MinisterBudget is editable CURRENCY column', () => {
@@ -1298,20 +1297,18 @@ describe('Ministeries', () => {
     expect(budgetCol!.editable).toBe(true);
   });
 
-  it('Minister table: electMinister is inline ACTION_BUTTON column', () => {
+  it('Minister table: ministerAction shows Elect when Minister empty, Depose via altAction when not', () => {
     const table = MINISTERIES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
-    const electCol = table!.columns!.find(c => c.rdoSuffix === 'electMinister');
-    expect(electCol!.type).toBe(PropertyType.ACTION_BUTTON);
-    expect(electCol!.actionId).toBe('electMinister');
-    expect(electCol!.buttonLabel).toBe('Elect');
-  });
-
-  it('Minister table: deposeMinister is inline ACTION_BUTTON column', () => {
-    const table = MINISTERIES_GROUP.properties.find(p => p.type === PropertyType.TABLE);
-    const deposeCol = table!.columns!.find(c => c.rdoSuffix === 'deposeMinister');
-    expect(deposeCol!.type).toBe(PropertyType.ACTION_BUTTON);
-    expect(deposeCol!.actionId).toBe('deposeMinister');
-    expect(deposeCol!.buttonLabel).toBe('Depose');
+    const actionCol = table!.columns!.find(c => c.rdoSuffix === 'ministerAction');
+    expect(actionCol!.type).toBe(PropertyType.ACTION_BUTTON);
+    expect(actionCol!.actionId).toBe('electMinister');
+    expect(actionCol!.buttonLabel).toBe('Elect');
+    expect(actionCol!.visibleWhen).toEqual({ column: 'Minister', condition: 'empty' });
+    expect(actionCol!.altAction).toEqual({
+      actionId: 'deposeMinister',
+      buttonLabel: 'Depose',
+      condition: 'notEmpty',
+    });
   });
 
   it('rdoCommands: MinisterBudget maps to RDOSetMinistryBudget', () => {

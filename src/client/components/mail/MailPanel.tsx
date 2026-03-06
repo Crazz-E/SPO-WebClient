@@ -16,7 +16,7 @@ import styles from './MailPanel.module.css';
 const FOLDERS: { id: MailFolder; label: string; badge?: boolean }[] = [
   { id: 'Inbox', label: 'Inbox', badge: true },
   { id: 'Sent', label: 'Sent' },
-  { id: 'Drafts', label: 'Drafts' },
+  { id: 'Draft', label: 'Drafts' },
 ];
 
 export function MailPanel() {
@@ -111,24 +111,30 @@ export function MailPanel() {
           {messages.length === 0 && (
             <div className={styles.empty}>No messages</div>
           )}
-          {messages.map((msg) => (
-            <button
-              key={msg.messageId}
-              className={`${styles.messageRow} ${!msg.read ? styles.unread : ''}`}
-              onClick={() => handleReadMessage(msg)}
-            >
-              <div className={styles.msgAvatar}>
-                {(msg.from || msg.fromAddr || '?')[0].toUpperCase()}
-              </div>
-              <div className={styles.msgContent}>
-                <div className={styles.msgHeader}>
-                  <span className={styles.msgSender}>{msg.from || msg.fromAddr}</span>
-                  <span className={styles.msgDate}>{msg.date}</span>
+          {messages.map((msg) => {
+            const isSent = currentFolder === 'Sent' || currentFolder === 'Draft';
+            const person = isSent
+              ? (msg.to || msg.toAddr || '')
+              : (msg.from || msg.fromAddr || '');
+            return (
+              <button
+                key={msg.messageId}
+                className={`${styles.messageRow} ${!msg.read ? styles.unread : ''}`}
+                onClick={() => handleReadMessage(msg)}
+              >
+                <div className={styles.msgAvatar}>
+                  {(person || '?')[0].toUpperCase()}
                 </div>
-                <span className={styles.msgSubject}>{msg.subject}</span>
-              </div>
-            </button>
-          ))}
+                <div className={styles.msgContent}>
+                  <div className={styles.msgHeader}>
+                    <span className={styles.msgSender}>{isSent ? `To: ${person}` : person}</span>
+                    <span className={styles.msgDate}>{msg.dateFmt || msg.date}</span>
+                  </div>
+                  <span className={styles.msgSubject}>{msg.subject}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -151,7 +157,7 @@ export function MailPanel() {
           <h3 className={styles.readSubject}>{currentMessage.subject}</h3>
           <div className={styles.readMeta}>
             <span>From: {currentMessage.from || currentMessage.fromAddr}</span>
-            <span>{currentMessage.date}</span>
+            <span>{currentMessage.dateFmt || currentMessage.date}</span>
           </div>
           <div className={styles.readBody}>{currentMessage.body.join('\n')}</div>
         </div>

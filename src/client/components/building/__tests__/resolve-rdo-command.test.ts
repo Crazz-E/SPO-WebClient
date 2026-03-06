@@ -157,6 +157,33 @@ describe('resolveRdoCommand', () => {
     });
   });
 
+  describe('ministry budget indexed match', () => {
+    const rdoCommands: Record<string, RdoCommandMapping> = {
+      'MinisterBudget': { command: 'RDOSetMinistryBudget', indexed: true },
+    };
+
+    it('should resolve MinisterBudget0 → RDOSetMinistryBudget with index 0', () => {
+      const result = resolveRdoCommand('MinisterBudget0', rdoCommands);
+      expect(result.command).toBe('RDOSetMinistryBudget');
+      expect(result.params).toEqual({ index: '0' });
+    });
+
+    it('should resolve MinisterBudget3 → RDOSetMinistryBudget with index 3', () => {
+      const result = resolveRdoCommand('MinisterBudget3', rdoCommands);
+      expect(result.command).toBe('RDOSetMinistryBudget');
+      expect(result.params).toEqual({ index: '3' });
+    });
+
+    it('should NOT resolve MinisterBudget when indexed is missing', () => {
+      const noIndexed: Record<string, RdoCommandMapping> = {
+        'MinisterBudget': { command: 'RDOSetMinistryBudget' },
+      };
+      const result = resolveRdoCommand('MinisterBudget0', noIndexed);
+      // Falls through to pass-through since indexed is not set
+      expect(result.command).toBe('MinisterBudget0');
+    });
+  });
+
   describe('priority: trailing-digit before mid-index', () => {
     it('should prefer trailing-digit match when both could match', () => {
       // Property 'abc123' could match trailing-digit 'abc' + '123'

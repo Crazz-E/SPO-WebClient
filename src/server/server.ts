@@ -10,6 +10,7 @@ import { UPDATE_SERVER } from '../shared/constants';
 import { fileToProxyUrl, PROXY_IMAGE_ENDPOINT } from '../shared/proxy-utils';
 import * as ErrorCodes from '../shared/error-codes';
 import { FacilityDimensionsCache } from './facility-dimensions-cache';
+import { getCivicVisualClassIds } from '../shared/building-details/civic-buildings';
 import { SearchMenuService } from './search-menu-service';
 import { UpdateService } from './update-service';
 import { MapDataService } from './map-data-service';
@@ -165,6 +166,7 @@ import {
   // Capitol
   WsReqBuildCapitol,
   WsRespCapitolPlaced,
+  WsRespCapitolCoords,
 } from '../shared/types';
 import { toErrorMessage } from '../shared/error-utils';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
@@ -1081,6 +1083,23 @@ wss.on('connection', (ws: WebSocket) => {
                 daPort // Use real DALockPort from session
               );
               console.log(`[Gateway] SearchMenuService initialized with DAAddr: ${daAddr}:${daPort}`);
+
+              // Fetch Capitol coordinates from DirectoryMain.asp and push to client
+              searchMenuService.getHomePage().then(categories => {
+                const capitol = categories.find(c => c.label === 'Capitol' && c.enabled && c.x != null && c.y != null);
+                const coords = capitol ? { x: capitol.x!, y: capitol.y! } : null;
+                spSession.setCapitolCoords(coords);
+                const resp: WsRespCapitolCoords = {
+                  type: WsMessageType.RESP_CAPITOL_COORDS,
+                  x: coords?.x ?? 0,
+                  y: coords?.y ?? 0,
+                  hasCapitol: coords !== null,
+                };
+                ws.send(JSON.stringify(resp));
+                console.log(`[Gateway] Capitol coords: ${coords ? `${coords.x},${coords.y}` : 'none'}`);
+              }).catch(err => {
+                console.error('[Gateway] Failed to fetch Capitol coords:', err);
+              });
             } else {
               console.error('[Gateway] Failed to initialize SearchMenuService: DAAddr or DAPort not available');
             }
@@ -1561,7 +1580,8 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
           const response: WsRespAllFacilityDimensions = {
             type: WsMessageType.RESP_ALL_FACILITY_DIMENSIONS,
             wsRequestId: msg.wsRequestId,
-            dimensions
+            dimensions,
+            civicVisualClassIds: getCivicVisualClassIds(),
           };
 
           console.log(`[Gateway] Sending ${Object.keys(dimensions).length} facility dimensions`);

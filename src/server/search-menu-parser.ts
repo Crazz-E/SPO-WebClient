@@ -7,7 +7,7 @@
 
 import * as cheerio from 'cheerio';
 import type { AnyNode } from 'domhandler';
-import {
+import type {
   SearchMenuCategory,
   TownInfo,
   TycoonProfile,
@@ -31,12 +31,20 @@ export function parseHomePage(html: string, baseUrl: string): SearchMenuCategory
     const enabled = true;
 
     if (ref && label) {
-      categories.push({
+      const cat: SearchMenuCategory = {
         id: ref.split('.asp')[0].split('/').pop() || label.toLowerCase(),
         label,
         enabled,
         iconUrl: imgSrc ? `${baseUrl}/${imgSrc}` : undefined
-      });
+      };
+
+      // Extract map coordinates from ref (used by Capitol)
+      const xMatch = ref.match(/[&?]x=(\d+)/);
+      const yMatch = ref.match(/[&?]y=(\d+)/);
+      if (xMatch) cat.x = parseInt(xMatch[1], 10);
+      if (yMatch) cat.y = parseInt(yMatch[1], 10);
+
+      categories.push(cat);
     }
   });
 

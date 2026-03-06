@@ -23,7 +23,7 @@ const SOUND_MAP: Record<SoundEvent, string> = {
   'chat-message': 'comm.wav',
   'mail': 'system.wav',
   'period-end': 'bells.wav',
-  'notification': 'system.wav',
+  'notification': '/sounds/come-here-notification.ogg',
   'error': 'Explosion.wav',
   'construction': 'Construction.wav',
 };
@@ -189,7 +189,8 @@ export class SoundManager {
     if (!ctx) return null;
 
     try {
-      const response = await fetch(`/cache/Sound/${filename}`);
+      const url = filename.startsWith('/') ? filename : `/cache/Sound/${filename}`;
+      const response = await fetch(url);
       if (!response.ok) return null;
       const arrayBuffer = await response.arrayBuffer();
       return await ctx.decodeAudioData(arrayBuffer);

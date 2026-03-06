@@ -531,6 +531,8 @@ export interface SearchMenuCategory {
   label: string;
   enabled: boolean;
   iconUrl?: string;
+  x?: number;
+  y?: number;
 }
 
 /**
