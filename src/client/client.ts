@@ -471,6 +471,10 @@ export class StarpeaceClient {
         type: WsMessageType.REQ_POLITICS_LAUNCH_CAMPAIGN,
         buildingX, buildingY,
       }),
+      onQueryTycoonRole: (tycoonName: string) => this.sendMessage({
+        type: WsMessageType.REQ_TYCOON_ROLE,
+        tycoonName,
+      }),
 
       // Empire
       onRequestFacilities: () => {
@@ -923,6 +927,10 @@ export class StarpeaceClient {
         ClientBridge.handlePoliticsResponse(msg);
         break;
 
+      case WsMessageType.RESP_TYCOON_ROLE:
+        ClientBridge.handleTycoonRoleResponse(msg);
+        break;
+
       // Transport Response
       case WsMessageType.RESP_TRANSPORT_DATA:
         ClientBridge.handleTransportResponse(msg);
@@ -1134,10 +1142,15 @@ export class StarpeaceClient {
       // Store company name for building construction
       this.currentCompanyName = company.name;
 
-      // Detect public office role for zone painting visibility
+      // Detect public office role for zone painting visibility (fast path from ASP HTML)
       const role = (company.ownerRole ?? '').toLowerCase();
       const isPublicOffice = role.includes('president') || role.includes('minister') || role.includes('mayor');
-      ClientBridge.setPublicOfficeRole(isPublicOffice);
+      ClientBridge.setPublicOfficeRole(isPublicOffice, role);
+
+      // Confirm via server cache (async, authoritative boolean flags)
+      if (this.storedUsername) {
+        this.sendMessage({ type: WsMessageType.REQ_TYCOON_ROLE, tycoonName: this.storedUsername });
+      }
 
       // Preload all facility dimensions (one-time, ~15KB)
       await this.preloadFacilityDimensions();
@@ -1919,6 +1932,8 @@ export class StarpeaceClient {
       const townName = buildingDetails.groups['townGeneral']
         ?.find(p => p.name === 'Town')?.value || '';
       ClientBridge.showPoliticsPanel(townName, buildingDetails.x, buildingDetails.y);
+    } else if (actionId === 'visitPresidentPoliticsPage') {
+      ClientBridge.showCapitolPanel(buildingDetails.x, buildingDetails.y);
     } else if (actionId === 'clone') {
       this.startCloneFacility(buildingDetails);
     } else if (actionId === 'launchMovie') {

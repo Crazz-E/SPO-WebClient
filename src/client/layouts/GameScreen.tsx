@@ -46,6 +46,7 @@ const RIGHT_PANEL_TITLES: Record<string, string> = {
   search: 'Search',
   politics: 'Politics',
   transport: 'Transport',
+  capitol: 'Capitol',
 };
 
 /** Renders the correct content component for the active right panel type */
@@ -58,6 +59,7 @@ function RightPanelContent({ type }: { type: string | null }) {
     case 'search':
       return <SearchPanel />;
     case 'politics':
+    case 'capitol':
       return <PoliticsPanel />;
     case 'transport':
       return <TransportPanel />;

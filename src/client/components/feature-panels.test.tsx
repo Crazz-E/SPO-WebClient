@@ -63,11 +63,13 @@ describe('TransportPanel', () => {
 // PoliticsPanel
 // ---------------------------------------------------------------------------
 
-describe('PoliticsPanel', () => {
+describe('PoliticsPanel (CapitolPanel)', () => {
   beforeEach(resetStores);
 
-  it('renders empty state', () => {
+  it('renders tab bar with default tabs', () => {
     renderWithProviders(<PoliticsPanel />);
-    expect(screen.getByText('Select a town hall to view politics')).toBeTruthy();
+    expect(screen.getByText('Towns')).toBeTruthy();
+    expect(screen.getByText('Ministries')).toBeTruthy();
+    expect(screen.getByText('Ratings')).toBeTruthy();
   });
 });

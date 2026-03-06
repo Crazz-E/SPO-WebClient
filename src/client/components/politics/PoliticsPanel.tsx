@@ -1,19 +1,49 @@
 /**
- * PoliticsPanel — Town politics, elections, campaigns in the right panel.
+ * PoliticsPanel — Tabbed Capitol management panel (right panel).
+ *
+ * Tabs: Towns, Ministries, Jobs, Residentials, Votes, Ratings
+ * Data source: BuildingDetailsResponse.groups for Capitol building data,
+ *              PoliticsData from ASP pages for the Ratings tab.
  */
 
-import { usePoliticsStore } from '../../store/politics-store';
-import { useClient } from '../../context';
-import { ProgressBar, Skeleton } from '../common';
+import { usePoliticsStore, type CapitolTab } from '../../store/politics-store';
+import { useBuildingStore } from '../../store/building-store';
+import type { BuildingPropertyValue } from '@/shared/types';
+import { Skeleton } from '../common';
+import { TownsTab } from './TownsTab';
+import { MinistriesTab } from './MinistriesTab';
+import { JobsTab } from './JobsTab';
+import { ResidentialsTab } from './ResidentialsTab';
+import { VotesTab } from './VotesTab';
+import { RatingsTab } from './RatingsTab';
 import styles from './PoliticsPanel.module.css';
 
+const TABS: { id: CapitolTab; label: string }[] = [
+  { id: 'towns', label: 'Towns' },
+  { id: 'ministries', label: 'Ministries' },
+  { id: 'jobs', label: 'Jobs' },
+  { id: 'residentials', label: 'Residentials' },
+  { id: 'votes', label: 'Votes' },
+  { id: 'ratings', label: 'Ratings' },
+];
+
+/** Group ID mapping — tab IDs to building details group keys */
+const TAB_GROUP_MAP: Record<string, string> = {
+  towns: 'capitolTowns',
+  ministries: 'ministeries',
+  jobs: 'townJobs',
+  residentials: 'townRes',
+  votes: 'votes',
+};
+
 export function PoliticsPanel() {
-  const client = useClient();
-  const data = usePoliticsStore((s) => s.data);
-  const townName = usePoliticsStore((s) => s.townName);
+  const activeTab = usePoliticsStore((s) => s.activeCapitolTab);
+  const setActiveTab = usePoliticsStore((s) => s.setActiveCapitolTab);
   const buildingX = usePoliticsStore((s) => s.buildingX);
   const buildingY = usePoliticsStore((s) => s.buildingY);
   const isLoading = usePoliticsStore((s) => s.isLoading);
+
+  const details = useBuildingStore((s) => s.details);
 
   if (isLoading) {
     return (
@@ -27,78 +57,62 @@ export function PoliticsPanel() {
     );
   }
 
-  if (!data) {
-    return (
-      <div className={styles.panel}>
-        <div className={styles.empty}>
-          Select a town hall to view politics
-        </div>
-      </div>
-    );
-  }
+  const groupId = TAB_GROUP_MAP[activeTab];
+  const groupProperties = groupId ? details?.groups[groupId] ?? [] : [];
 
   return (
     <div className={styles.panel}>
-      <div className={styles.townHeader}>
-        <h3 className={styles.townName}>{townName || data.townName || 'Town Politics'}</h3>
-        {data.mayorName && (
-          <span className={styles.mayor}>Mayor: {data.mayorName}</span>
-        )}
+      {/* Tab bar */}
+      <div className={styles.tabBar}>
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            className={`${styles.tab} ${activeTab === tab.id ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Election countdown */}
-      <section className={styles.section}>
-        <h4 className={styles.sectionTitle}>Election</h4>
-        <div className={styles.countdown}>
-          <span className={styles.countdownValue}>{data.yearsToElections}</span>
-          <span className={styles.countdownLabel}>years until next election</span>
-        </div>
-      </section>
-
-      {/* Approval ratings */}
-      {data.popularRatings && data.popularRatings.length > 0 && (
-        <section className={styles.section}>
-          <h4 className={styles.sectionTitle}>Popular Ratings</h4>
-          <div className={styles.ratings}>
-            {data.popularRatings.map((rating) => (
-              <div key={rating.name} className={styles.ratingRow}>
-                <span className={styles.ratingName}>{rating.name}</span>
-                <ProgressBar
-                  value={rating.value / 100}
-                  variant={rating.value >= 50 ? 'success' : 'warning'}
-                  showLabel
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Active campaigns */}
-      {data.campaigns && data.campaigns.length > 0 && (
-        <section className={styles.section}>
-          <h4 className={styles.sectionTitle}>Active Campaigns</h4>
-          <div className={styles.campaigns}>
-            {data.campaigns.map((campaign, i) => (
-              <div key={i} className={styles.campaignCard}>
-                <span className={styles.campaignName}>{campaign.candidateName}</span>
-                <span className={styles.campaignStatus}>Rating: {campaign.rating}%</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {data.canLaunchCampaign && (
-        <div className={styles.section}>
-          <button
-            className={styles.launchBtn}
-            onClick={() => client.onLaunchCampaign(buildingX, buildingY)}
-          >
-            Launch Campaign
-          </button>
-        </div>
-      )}
+      {/* Tab content */}
+      <div className={styles.tabContent}>
+        <TabContent
+          activeTab={activeTab}
+          properties={groupProperties}
+          buildingX={buildingX}
+          buildingY={buildingY}
+        />
+      </div>
     </div>
   );
+}
+
+function TabContent({
+  activeTab,
+  properties,
+  buildingX,
+  buildingY,
+}: {
+  activeTab: CapitolTab;
+  properties: BuildingPropertyValue[];
+  buildingX: number;
+  buildingY: number;
+}) {
+  switch (activeTab) {
+    case 'towns':
+      return <TownsTab properties={properties} buildingX={buildingX} buildingY={buildingY} />;
+    case 'ministries':
+      return <MinistriesTab properties={properties} buildingX={buildingX} buildingY={buildingY} />;
+    case 'jobs':
+      return <JobsTab properties={properties} buildingX={buildingX} buildingY={buildingY} />;
+    case 'residentials':
+      return <ResidentialsTab properties={properties} />;
+    case 'votes':
+      return <VotesTab properties={properties} buildingX={buildingX} buildingY={buildingY} />;
+    case 'ratings':
+      return <RatingsTab buildingX={buildingX} buildingY={buildingY} />;
+    default:
+      return null;
+  }
 }

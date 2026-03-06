@@ -66,6 +66,7 @@ import {
   type WsRespSearchMenuRankingDetail,
   type WsRespSearchMenuBanks,
   type WsRespPoliticsData,
+  type WsRespTycoonRole,
   type WsRespTransportData,
   type WsRespEmpireFacilities,
 } from '@/shared/types';
@@ -204,6 +205,7 @@ export interface ClientCallbacks {
 
   // Politics
   onLaunchCampaign: (buildingX: number, buildingY: number) => void;
+  onQueryTycoonRole: (tycoonName: string) => void;
 
   // Empire
   onRequestFacilities: () => void;
@@ -275,8 +277,8 @@ export const ClientBridge = {
     useGameStore.getState().setSelectedZoneType(zoneType);
   },
 
-  setPublicOfficeRole(isPublicOffice: boolean): void {
-    useGameStore.getState().setPublicOfficeRole(isPublicOffice);
+  setPublicOfficeRole(isPublicOffice: boolean, role?: string): void {
+    useGameStore.getState().setPublicOfficeRole(isPublicOffice, role);
   },
 
   setCityZonesEnabled(enabled: boolean): void {
@@ -633,10 +635,35 @@ export const ClientBridge = {
     }
   },
 
+  handleTycoonRoleResponse(msg: WsMessage): void {
+    if (msg.type !== WsMessageType.RESP_TYCOON_ROLE) return;
+    const resp = msg as WsRespTycoonRole;
+    const store = usePoliticsStore.getState();
+    store.setTycoonRole(resp.role);
+    store.setRoleQueryPending(resp.role.tycoonName, false);
+
+    // Update game-store for current user with authoritative cache data
+    const gameState = useGameStore.getState();
+    const currentUser = gameState.username;
+    if (currentUser && resp.role.tycoonName.toLowerCase() === currentUser.toLowerCase()) {
+      const isPublicOffice = resp.role.isMayor || resp.role.isPresident || resp.role.isMinister;
+      const roleName = resp.role.isPresident ? 'president'
+        : resp.role.isMayor ? 'mayor'
+        : resp.role.isMinister ? 'minister'
+        : '';
+      gameState.setPublicOfficeRole(isPublicOffice, roleName);
+    }
+  },
+
   showPoliticsPanel(townName: string, buildingX: number, buildingY: number): void {
     usePoliticsStore.getState().setTownContext(townName, buildingX, buildingY);
     usePoliticsStore.getState().setLoading(true);
     useUiStore.getState().openRightPanel('politics');
+  },
+
+  showCapitolPanel(buildingX: number, buildingY: number): void {
+    usePoliticsStore.getState().setTownContext('', buildingX, buildingY);
+    useUiStore.getState().openRightPanel('capitol');
   },
 
   // ---- Transport response handling ----

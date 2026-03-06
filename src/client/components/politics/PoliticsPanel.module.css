@@ -1,12 +1,10 @@
-/* PoliticsPanel — town politics */
+/* CapitolPanel — tabbed Capitol management panel */
 
 .panel {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
+  overflow: hidden;
 }
 
 .loading {
@@ -27,19 +25,65 @@
   text-align: center;
 }
 
-.townHeader {
-  padding: var(--space-4);
+/* ---- Tab bar ---- */
+
+.tabBar {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.townName {
-  font-size: var(--text-base);
-  font-weight: var(--font-bold);
-  color: var(--text-primary);
-  margin: 0;
+.tabBar::-webkit-scrollbar {
+  display: none;
 }
 
-/* Sections */
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 var(--space-3);
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-default),
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.tab:hover {
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+}
+
+.tabActive {
+  color: var(--accent-gold);
+  background: rgba(212, 168, 83, 0.1);
+  border-color: var(--accent-gold-dark);
+  font-weight: var(--font-semibold);
+}
+
+/* ---- Tab content area ---- */
+
+.tabContent {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+/* ---- Sections ---- */
+
 .section {
   padding: var(--space-4);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
@@ -54,7 +98,29 @@
   margin: 0 0 var(--space-3);
 }
 
-/* Election countdown */
+/* ---- Town header ---- */
+
+.townHeader {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.townName {
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.mayor {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+/* ---- Election countdown ---- */
+
 .countdown {
   display: flex;
   flex-direction: column;
@@ -76,7 +142,8 @@
   color: var(--text-muted);
 }
 
-/* Ratings */
+/* ---- Ratings ---- */
+
 .ratings {
   display: flex;
   flex-direction: column;
@@ -94,7 +161,8 @@
   color: var(--text-secondary);
 }
 
-/* Campaigns */
+/* ---- Campaigns ---- */
+
 .campaigns {
   display: flex;
   flex-direction: column;
@@ -120,15 +188,8 @@
   color: var(--accent-gold);
 }
 
-/* Mayor */
-.mayor {
-  font-size: var(--text-sm);
-  color: var(--text-muted);
-  margin-top: 4px;
-  display: block;
-}
+/* ---- Launch campaign button ---- */
 
-/* Launch campaign button */
 .launchBtn {
   width: 100%;
   padding: var(--space-3);
@@ -145,4 +206,249 @@
 
 .launchBtn:hover {
   opacity: 0.9;
+}
+
+/* ---- 3-column comparison grid (Jobs, Residentials) ---- */
+
+.columnGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.columnHeader {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: var(--space-1);
+}
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 0;
+}
+
+.statLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.statValue {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ---- Slider (min wage / tax) ---- */
+
+.sliderCell {
+  min-height: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: var(--space-1);
+}
+
+.slider {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--glass-border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-gold);
+  cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-gold);
+  cursor: pointer;
+  border: none;
+}
+
+.sliderValue {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Data table (Towns, Ministries, Votes) ---- */
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.dataTable th {
+  padding: var(--space-2) var(--space-2);
+  text-align: left;
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  border-bottom: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+
+.dataTable td {
+  padding: var(--space-2) var(--space-2);
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.dataTable tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ---- Action buttons (Elect, Depose, Vote) ---- */
+
+.actionBtn {
+  padding: 3px 10px;
+  background: linear-gradient(135deg, rgba(52, 89, 80, 0.8), rgba(40, 75, 66, 0.9));
+  border: 1px solid rgba(74, 122, 106, 0.6);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.actionBtn:hover {
+  background: linear-gradient(135deg, rgba(74, 122, 106, 0.9), rgba(52, 100, 86, 1));
+  border-color: var(--accent-gold);
+  box-shadow: 0 1px 6px rgba(212, 168, 67, 0.2);
+}
+
+.actionBtnDanger {
+  padding: 3px 10px;
+  background: linear-gradient(135deg, rgba(140, 50, 50, 0.7), rgba(120, 40, 40, 0.85));
+  border: 1px solid rgba(180, 70, 70, 0.5);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.actionBtnDanger:hover {
+  background: linear-gradient(135deg, rgba(170, 60, 60, 0.85), rgba(150, 50, 50, 1));
+  border-color: rgba(220, 80, 80, 0.7);
+  box-shadow: 0 1px 6px rgba(220, 80, 80, 0.2);
+}
+
+/* ---- Budget input (inline, no layout shift) ---- */
+
+.budgetInput {
+  width: 80px;
+  padding: 2px 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: border-color var(--duration-fast) var(--ease-default);
+}
+
+.budgetInput:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+/* ---- Ruler info (Votes tab header) ---- */
+
+.rulerInfo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  margin: var(--space-3);
+}
+
+.rulerStat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rulerStatLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rulerStatValue {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Voted-for row highlight ---- */
+
+.votedRow {
+  background: rgba(212, 168, 83, 0.06) !important;
+  border-left: 2px solid var(--accent-gold);
+}
+
+.votedBadge {
+  display: inline-block;
+  padding: 1px 6px;
+  background: rgba(212, 168, 83, 0.15);
+  border: 1px solid rgba(212, 168, 83, 0.3);
+  border-radius: var(--radius-full);
+  color: var(--accent-gold);
+  font-size: 9px;
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: var(--space-2);
 }
