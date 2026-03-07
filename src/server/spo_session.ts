@@ -3477,8 +3477,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       member: 'SetPath',
       args: [path]
     });
-    // Brief delay for server to populate cache (same as SetObject)
-    await new Promise(resolve => setTimeout(resolve, 30));
+    // No delay needed — Delphi SetPath is synchronous (loads file inline before responding)
   }
 
   private async cacherGetPropertyList(tempObjectId: string, propertyNames: string[]): Promise<string[]> {
@@ -6374,25 +6373,44 @@ private handlePush(socketName: string, packet: RdoPacket) {
         moneyGraph = this.parseMoneyGraph(moneyGraphInfo);
       }
 
-      // Fetch supply data if this template has supplies group
-      let supplies: BuildingSupplyData[] | undefined;
+      // Phase 3: Collect supply/product paths while object still points at building.
+      // All building-level queries (GetInputNames, GetOutputNames, compInputs) must
+      // complete BEFORE any SetPath calls, since SetPath changes the object's context.
       const suppliesGroup = template.groups.find(g => g.special === 'supplies');
-      if (suppliesGroup) {
-        supplies = await this.fetchBuildingSupplies(tempObjectId, x, y);
-      }
-
-      // Fetch product/output data if this template has products group
-      let products: BuildingProductData[] | undefined;
       const productsGroup = template.groups.find(g => g.special === 'products');
-      if (productsGroup) {
-        products = await this.fetchBuildingProducts(tempObjectId, x, y);
+      const compInputsGroup = template.groups.find(g => g.special === 'compInputs');
+
+      const supplyPaths = suppliesGroup ? await this.getSupplyPaths(tempObjectId) : [];
+      const productPaths = productsGroup ? await this.getProductPaths(tempObjectId) : [];
+      const compInputs = compInputsGroup ? await this.fetchCompInputData(tempObjectId) : undefined;
+
+      // Phase 4: Iterate supply/product paths using SetPath on the SAME object.
+      // Delphi TCachedObjectWrap.SetPath() fully resets internal state (fProperties,
+      // fStream) — no need for CreateObject/SetObject/CloseObject per path.
+      let supplies: BuildingSupplyData[] | undefined;
+      if (supplyPaths.length > 0) {
+        supplies = [];
+        for (const { path, name } of supplyPaths) {
+          try {
+            const detail = await this.fetchSupplyDetails(tempObjectId, path, name);
+            if (detail) supplies.push(detail);
+          } catch (e) {
+            this.log.warn(`[BuildingDetails] Error fetching supply ${path}:`, e);
+          }
+        }
       }
 
-      // Fetch company input data (eager — cInputCount + indexed cInput{i}.* properties)
-      let compInputs: CompInputData[] | undefined;
-      const compInputsGroup = template.groups.find(g => g.special === 'compInputs');
-      if (compInputsGroup) {
-        compInputs = await this.fetchCompInputData(tempObjectId);
+      let products: BuildingProductData[] | undefined;
+      if (productPaths.length > 0) {
+        products = [];
+        for (const { path, name } of productPaths) {
+          try {
+            const detail = await this.fetchProductDetails(tempObjectId, path, name);
+            if (detail) products.push(detail);
+          } catch (e) {
+            this.log.warn(`[BuildingDetails] Error fetching product ${path}:`, e);
+          }
+        }
       }
       const response: BuildingDetailsResponse = {
         buildingId: buildingId || allValues.get('ObjectId') || allValues.get('CurrBlock') || '',
@@ -6447,131 +6465,124 @@ private handlePush(socketName: string, packet: RdoPacket) {
   }
 
   /**
-   * Fetch supply/input data with connections for a building
-   * Uses GetInputNames and SetPath to navigate supply structure
+   * Collect supply/input paths from GetInputNames (requires object pointed at building).
+   * Returns parsed entries without creating new objects.
    */
-  private async fetchBuildingSupplies(
-    tempObjectId: string,
-    x: number,
-    y: number
-  ): Promise<BuildingSupplyData[]> {
-    const supplies: BuildingSupplyData[] = [];
+  private async getSupplyPaths(
+    tempObjectId: string
+  ): Promise<Array<{ path: string; name: string }>> {
+    const inputNamesPacket = await this.sendRdoRequest('map', {
+      verb: RdoVerb.SEL,
+      targetId: tempObjectId,
+      action: RdoAction.CALL,
+      member: 'GetInputNames',
+      args: ['0', '0'], // index=0, language=0 (English)
+    });
 
-    try {
-      // Get input names
-      const inputNamesPacket = await this.sendRdoRequest('map', {
-        verb: RdoVerb.SEL,
-        targetId: tempObjectId,
-        action: RdoAction.CALL,
-        member: 'GetInputNames',
-        args: ['0', '0'], // index=0, language=0 (English)
-      });
-
-      const inputNamesRaw = cleanPayloadHelper(inputNamesPacket.payload || '');
-      if (!inputNamesRaw || inputNamesRaw === '0' || inputNamesRaw === '-1') {
-        return supplies;
-      }
-
-      // Parse input names (format: "path::\nname\r\n" separated entries)
-      // split('\r') then trim() strips leading '\n' from entries 2+ (CRLF separators)
-      const entries = inputNamesRaw.split('\r').map(e => e.trim()).filter(Boolean);
-
-      for (const entry of entries) {
-        const colonIdx = entry.indexOf(':');
-        if (colonIdx === -1) continue;
-
-        const path = entry.substring(0, colonIdx);
-        // Skip 2 chars after colon, then read name until null
-        let name = entry.substring(colonIdx + 3);
-        const nullIdx = name.indexOf('\0');
-        if (nullIdx !== -1) {
-          name = name.substring(0, nullIdx);
-        }
-
-        // Create new temp object for this supply path
-        const supplyTempId = await this.cacherCreateObject();
-
-        try {
-          // Position object at building coordinates first (required for SetPath to work)
-          await this.cacherSetObject(supplyTempId, x, y);
-
-          // Navigate to supply path
-          const setPathPacket = await this.sendRdoRequest('map', {
-            verb: RdoVerb.SEL,
-            targetId: supplyTempId,
-            action: RdoAction.CALL,
-            member: 'SetPath',
-            args: [path],
-          });
-
-          const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
-          this.log.debug(`[BuildingDetails] SetPath('${path}') result: "${setPathResult}"`);
-          if (setPathResult === '-1') {
-            // Successfully navigated (-1 = Delphi WordBool TRUE), now get properties
-            const supplyProps = await this.cacherGetPropertyList(supplyTempId, [
-              'MetaFluid', 'FluidValue', 'LastCostPerc', 'minK', 'MaxPrice',
-              'QPSorted', 'SortMode', 'cnxCount', 'ObjectId'
-            ]);
-
-            const connectionCount = parseInt(supplyProps[7] || '0', 10);
-            const connections: BuildingConnectionData[] = [];
-
-            // Fetch connection details
-            for (let i = 0; i < connectionCount && i < 20; i++) {
-              const cnxProps = await this.fetchSubObjectProperties(supplyTempId, i, [
-                `cnxFacilityName${i}`,
-                `cnxCreatedBy${i}`,
-                `cnxCompanyName${i}`,
-                `cnxNfPrice${i}`,
-                `OverPriceCnxInfo${i}`,
-                `LastValueCnxInfo${i}`,
-                `tCostCnxInfo${i}`,
-                `cnxQuality${i}`,
-                `ConnectedCnxInfo${i}`,
-                `cnxXPos${i}`,
-                `cnxYPos${i}`,
-              ]);
-
-              if (cnxProps.length >= 11) {
-                connections.push({
-                  facilityName: cnxProps[0] || '',
-                  createdBy: cnxProps[1] || '',
-                  companyName: cnxProps[2] || '',
-                  price: cnxProps[3] || '0',
-                  overprice: cnxProps[4] || '0',
-                  lastValue: cnxProps[5] || '',
-                  cost: cnxProps[6] || '$0',
-                  quality: cnxProps[7] || '0%',
-                  connected: cnxProps[8] === '1',
-                  x: parseInt(cnxProps[9] || '0', 10),
-                  y: parseInt(cnxProps[10] || '0', 10),
-                });
-              }
-            }
-
-            supplies.push({
-              path,
-              name,
-              metaFluid: supplyProps[0] || '',
-              fluidValue: supplyProps[1] || '',
-              lastCostPerc: supplyProps[2] || undefined,
-              minK: supplyProps[3] || undefined,
-              maxPrice: supplyProps[4] || undefined,
-              qpSorted: supplyProps[5] || undefined,
-              sortMode: supplyProps[6] || undefined,
-              connectionCount,
-              connections,
-            });
-          }
-        } finally {
-          await this.cacherCloseObject(supplyTempId);
-        }
-      }
-    } catch (e) {
-      this.log.warn('[BuildingDetails] Error fetching supplies:', e);
+    const inputNamesRaw = cleanPayloadHelper(inputNamesPacket.payload || '');
+    if (!inputNamesRaw || inputNamesRaw === '0' || inputNamesRaw === '-1') {
+      return [];
     }
 
-    return supplies;
+    // Parse input names (format: "path::\nname\r\n" separated entries)
+    // split('\r') then trim() strips leading '\n' from entries 2+ (CRLF separators)
+    const entries = inputNamesRaw.split('\r').map(e => e.trim()).filter(Boolean);
+    const result: Array<{ path: string; name: string }> = [];
+
+    for (const entry of entries) {
+      const colonIdx = entry.indexOf(':');
+      if (colonIdx === -1) continue;
+
+      const path = entry.substring(0, colonIdx);
+      // Skip 2 chars after colon, then read name until null
+      let name = entry.substring(colonIdx + 3);
+      const nullIdx = name.indexOf('\0');
+      if (nullIdx !== -1) {
+        name = name.substring(0, nullIdx);
+      }
+      result.push({ path, name });
+    }
+    return result;
+  }
+
+  /**
+   * Fetch details for a single supply path.
+   * Reuses the caller's tempObjectId via SetPath (no CreateObject/CloseObject).
+   * SetPath fully resets TCachedObjectWrap internal state on the Delphi server.
+   */
+  private async fetchSupplyDetails(
+    tempObjectId: string,
+    path: string,
+    name: string
+  ): Promise<BuildingSupplyData | null> {
+    // Navigate to supply path (reuses existing object — SetPath resets TCachedObjectWrap state)
+    const setPathPacket = await this.sendRdoRequest('map', {
+      verb: RdoVerb.SEL,
+      targetId: tempObjectId,
+      action: RdoAction.CALL,
+      member: 'SetPath',
+      args: [path],
+    });
+    const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
+
+    this.log.debug(`[BuildingDetails] SetPath('${path}') result: "${setPathResult}"`);
+    if (setPathResult !== '-1') return null;
+
+    // Successfully navigated (-1 = Delphi WordBool TRUE), now get properties
+    const supplyProps = await this.cacherGetPropertyList(tempObjectId, [
+      'MetaFluid', 'FluidValue', 'LastCostPerc', 'minK', 'MaxPrice',
+      'QPSorted', 'SortMode', 'cnxCount', 'ObjectId'
+    ]);
+
+    const connectionCount = parseInt(supplyProps[7] || '0', 10);
+    const connections: BuildingConnectionData[] = [];
+
+    // Fetch connection details
+    for (let i = 0; i < connectionCount && i < 20; i++) {
+      const cnxProps = await this.fetchSubObjectProperties(tempObjectId, i, [
+        `cnxFacilityName${i}`,
+        `cnxCreatedBy${i}`,
+        `cnxCompanyName${i}`,
+        `cnxNfPrice${i}`,
+        `OverPriceCnxInfo${i}`,
+        `LastValueCnxInfo${i}`,
+        `tCostCnxInfo${i}`,
+        `cnxQuality${i}`,
+        `ConnectedCnxInfo${i}`,
+        `cnxXPos${i}`,
+        `cnxYPos${i}`,
+      ]);
+
+      if (cnxProps.length >= 11) {
+        connections.push({
+          facilityName: cnxProps[0] || '',
+          createdBy: cnxProps[1] || '',
+          companyName: cnxProps[2] || '',
+          price: cnxProps[3] || '0',
+          overprice: cnxProps[4] || '0',
+          lastValue: cnxProps[5] || '',
+          cost: cnxProps[6] || '$0',
+          quality: cnxProps[7] || '0%',
+          connected: cnxProps[8] === '1',
+          x: parseInt(cnxProps[9] || '0', 10),
+          y: parseInt(cnxProps[10] || '0', 10),
+        });
+      }
+    }
+
+    return {
+      path,
+      name,
+      metaFluid: supplyProps[0] || '',
+      fluidValue: supplyProps[1] || '',
+      lastCostPerc: supplyProps[2] || undefined,
+      minK: supplyProps[3] || undefined,
+      maxPrice: supplyProps[4] || undefined,
+      qpSorted: supplyProps[5] || undefined,
+      sortMode: supplyProps[6] || undefined,
+      connectionCount,
+      connections,
+    };
   }
 
   /**
@@ -6636,130 +6647,119 @@ private handlePush(socketName: string, packet: RdoPacket) {
   }
 
   /**
-   * Fetch product/output data with connections for a building
-   * Uses GetOutputNames and SetPath to navigate output gate structure
-   * Mirror of fetchBuildingSupplies() but for output gates (ProdSheetForm.pas)
-   *
-   * Output gate properties: MetaFluid, LastFluid, FluidQuality, PricePc, AvgPrice, MarketPrice, cnxCount
-   * Per-connection: cnxFacilityName, cnxCompanyName, LastValueCnxInfo, ConnectedCnxInfo, tCostCnxInfo, cnxXPos, cnxYPos
+   * Collect product/output paths from GetOutputNames (requires object pointed at building).
+   * Returns parsed entries without creating new objects.
    */
-  private async fetchBuildingProducts(
-    tempObjectId: string,
-    x: number,
-    y: number
-  ): Promise<BuildingProductData[]> {
-    const products: BuildingProductData[] = [];
+  private async getProductPaths(
+    tempObjectId: string
+  ): Promise<Array<{ path: string; name: string }>> {
+    const outputNamesPacket = await this.sendRdoRequest('map', {
+      verb: RdoVerb.SEL,
+      targetId: tempObjectId,
+      action: RdoAction.CALL,
+      member: 'GetOutputNames',
+      args: ['0', '0'], // index=0, language=0 (English)
+    });
 
-    try {
-      // Get output names (same RDO pattern as GetInputNames but for outputs)
-      const outputNamesPacket = await this.sendRdoRequest('map', {
-        verb: RdoVerb.SEL,
-        targetId: tempObjectId,
-        action: RdoAction.CALL,
-        member: 'GetOutputNames',
-        args: ['0', '0'], // index=0, language=0 (English)
-      });
-
-      const outputNamesRaw = cleanPayloadHelper(outputNamesPacket.payload || '');
-      if (!outputNamesRaw || outputNamesRaw === '0' || outputNamesRaw === '-1') {
-        return products;
-      }
-
-      // Parse output names (format: "path::\nname\r\n" separated entries — same as inputs)
-      // split('\r') then trim() strips leading '\n' from entries 2+ (CRLF separators)
-      const entries = outputNamesRaw.split('\r').map(e => e.trim()).filter(Boolean);
-
-      for (const entry of entries) {
-        const colonIdx = entry.indexOf(':');
-        if (colonIdx === -1) continue;
-
-        const path = entry.substring(0, colonIdx);
-        // Skip 2 chars after colon (:: separator), then read name until null
-        let name = entry.substring(colonIdx + 3);
-        const nullIdx = name.indexOf('\0');
-        if (nullIdx !== -1) {
-          name = name.substring(0, nullIdx);
-        }
-
-        // Create new temp object for this output path
-        const productTempId = await this.cacherCreateObject();
-
-        try {
-          // Position object at building coordinates first (required for SetPath to work)
-          await this.cacherSetObject(productTempId, x, y);
-
-          // Navigate to output path
-          const setPathPacket = await this.sendRdoRequest('map', {
-            verb: RdoVerb.SEL,
-            targetId: productTempId,
-            action: RdoAction.CALL,
-            member: 'SetPath',
-            args: [path],
-          });
-
-          const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
-          this.log.debug(`[BuildingDetails] Product SetPath('${path}') result: "${setPathResult}"`);
-          if (setPathResult === '-1') {
-            // Successfully navigated (-1 = Delphi WordBool TRUE) — fetch output gate properties
-            const outputProps = await this.cacherGetPropertyList(productTempId, [
-              'MetaFluid', 'LastFluid', 'FluidQuality', 'PricePc',
-              'AvgPrice', 'MarketPrice', 'cnxCount'
-            ]);
-
-            const connectionCount = parseInt(outputProps[6] || '0', 10);
-            const connections: BuildingConnectionData[] = [];
-
-            // Fetch connection details (clients/buyers of this output)
-            for (let i = 0; i < connectionCount && i < 20; i++) {
-              const cnxProps = await this.fetchSubObjectProperties(productTempId, i, [
-                `cnxFacilityName${i}`,
-                `cnxCompanyName${i}`,
-                `LastValueCnxInfo${i}`,
-                `ConnectedCnxInfo${i}`,
-                `tCostCnxInfo${i}`,
-                `cnxXPos${i}`,
-                `cnxYPos${i}`,
-              ]);
-
-              if (cnxProps.length >= 7) {
-                connections.push({
-                  facilityName: cnxProps[0] || '',
-                  companyName: cnxProps[1] || '',
-                  createdBy: '',
-                  price: '',
-                  overprice: '',
-                  lastValue: cnxProps[2] || '',
-                  cost: cnxProps[4] || '',
-                  quality: '',
-                  connected: cnxProps[3] === '1',
-                  x: parseInt(cnxProps[5] || '0', 10),
-                  y: parseInt(cnxProps[6] || '0', 10),
-                });
-              }
-            }
-
-            products.push({
-              path,
-              name,
-              metaFluid: outputProps[0] || '',
-              lastFluid: outputProps[1] || '',
-              quality: outputProps[2] || '',
-              pricePc: outputProps[3] || '',
-              avgPrice: outputProps[4] || '',
-              marketPrice: outputProps[5] || '',
-              connectionCount,
-              connections,
-            });
-          }
-        } finally {
-          await this.cacherCloseObject(productTempId);
-        }
-      }
-    } catch (e) {
-      this.log.warn('[BuildingDetails] Error fetching products:', e);
+    const outputNamesRaw = cleanPayloadHelper(outputNamesPacket.payload || '');
+    if (!outputNamesRaw || outputNamesRaw === '0' || outputNamesRaw === '-1') {
+      return [];
     }
 
-    return products;
+    // Parse output names (format: "path::\nname\r\n" separated entries — same as inputs)
+    // split('\r') then trim() strips leading '\n' from entries 2+ (CRLF separators)
+    const entries = outputNamesRaw.split('\r').map(e => e.trim()).filter(Boolean);
+    const result: Array<{ path: string; name: string }> = [];
+
+    for (const entry of entries) {
+      const colonIdx = entry.indexOf(':');
+      if (colonIdx === -1) continue;
+
+      const path = entry.substring(0, colonIdx);
+      // Skip 2 chars after colon (:: separator), then read name until null
+      let name = entry.substring(colonIdx + 3);
+      const nullIdx = name.indexOf('\0');
+      if (nullIdx !== -1) {
+        name = name.substring(0, nullIdx);
+      }
+      result.push({ path, name });
+    }
+    return result;
+  }
+
+  /**
+   * Fetch details for a single product/output path.
+   * Reuses the caller's tempObjectId via SetPath (no CreateObject/CloseObject).
+   * SetPath fully resets TCachedObjectWrap internal state on the Delphi server.
+   */
+  private async fetchProductDetails(
+    tempObjectId: string,
+    path: string,
+    name: string
+  ): Promise<BuildingProductData | null> {
+    // Navigate to output path (reuses existing object — SetPath resets TCachedObjectWrap state)
+    const setPathPacket = await this.sendRdoRequest('map', {
+      verb: RdoVerb.SEL,
+      targetId: tempObjectId,
+      action: RdoAction.CALL,
+      member: 'SetPath',
+      args: [path],
+    });
+
+    const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
+    this.log.debug(`[BuildingDetails] Product SetPath('${path}') result: "${setPathResult}"`);
+    if (setPathResult !== '-1') return null;
+
+    // Successfully navigated (-1 = Delphi WordBool TRUE) — fetch output gate properties
+    const outputProps = await this.cacherGetPropertyList(tempObjectId, [
+      'MetaFluid', 'LastFluid', 'FluidQuality', 'PricePc',
+      'AvgPrice', 'MarketPrice', 'cnxCount'
+    ]);
+
+    const connectionCount = parseInt(outputProps[6] || '0', 10);
+    const connections: BuildingConnectionData[] = [];
+
+    // Fetch connection details (clients/buyers of this output)
+    for (let i = 0; i < connectionCount && i < 20; i++) {
+      const cnxProps = await this.fetchSubObjectProperties(tempObjectId, i, [
+        `cnxFacilityName${i}`,
+        `cnxCompanyName${i}`,
+        `LastValueCnxInfo${i}`,
+        `ConnectedCnxInfo${i}`,
+        `tCostCnxInfo${i}`,
+        `cnxXPos${i}`,
+        `cnxYPos${i}`,
+      ]);
+
+      if (cnxProps.length >= 7) {
+        connections.push({
+          facilityName: cnxProps[0] || '',
+          companyName: cnxProps[1] || '',
+          createdBy: '',
+          price: '',
+          overprice: '',
+          lastValue: cnxProps[2] || '',
+          cost: cnxProps[4] || '',
+          quality: '',
+          connected: cnxProps[3] === '1',
+          x: parseInt(cnxProps[5] || '0', 10),
+          y: parseInt(cnxProps[6] || '0', 10),
+        });
+      }
+    }
+
+    return {
+      path,
+      name,
+      metaFluid: outputProps[0] || '',
+      lastFluid: outputProps[1] || '',
+      quality: outputProps[2] || '',
+      pricePc: outputProps[3] || '',
+      avgPrice: outputProps[4] || '',
+      marketPrice: outputProps[5] || '',
+      connectionCount,
+      connections,
+    };
   }
 
   /**
