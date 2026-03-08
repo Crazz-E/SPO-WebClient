@@ -5948,13 +5948,13 @@ private handlePush(socketName: string, packet: RdoPacket) {
     // so we must extract VisualClassId from the full HTML before cell-level processing.
     const visualClassMap = new Map<string, string>();
     // Strategy 1: FacilityClass before VisualClassId (standard order)
-    const infoRegex = /FacilityClass=([A-Za-z0-9]+)[^"']*VisualClassId=(\d+)/gi;
+    const infoRegex = /FacilityClass=([A-Za-z0-9_]+)[^"']*VisualClassId=(\d+)/gi;
     let infoMatch;
     while ((infoMatch = infoRegex.exec(html)) !== null) {
       visualClassMap.set(infoMatch[1], infoMatch[2]);
     }
     // Strategy 2: VisualClassId before FacilityClass (reversed order)
-    const reverseInfoRegex = /VisualClassId=(\d+)[^"']*FacilityClass=([A-Za-z0-9]+)/gi;
+    const reverseInfoRegex = /VisualClassId=(\d+)[^"']*FacilityClass=([A-Za-z0-9_]+)/gi;
     while ((infoMatch = reverseInfoRegex.exec(html)) !== null) {
       if (!visualClassMap.has(infoMatch[2])) {
         visualClassMap.set(infoMatch[2], infoMatch[1]);
@@ -6005,7 +6005,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
         const nextCellPos = html.indexOf('Cell_', cellAnchor + 5);
         const searchEnd = nextCellPos >= 0 ? nextCellPos : cellAnchor + 3000;
         const searchWindow = html.substring(cellAnchor, searchEnd);
-        const fcMatch = /FacilityClass=([A-Za-z0-9]+)/i.exec(searchWindow);
+        const fcMatch = /FacilityClass=([A-Za-z0-9_]+)/i.exec(searchWindow);
         if (fcMatch) {
           facilityClass = fcMatch[1];
           this.log.debug(`[BuildConstruction] Extracted facilityClass "${facilityClass}" from info attribute`);

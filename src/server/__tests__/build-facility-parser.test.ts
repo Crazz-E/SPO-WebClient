@@ -16,7 +16,7 @@ import { describe, it, expect } from '@jest/globals';
 // ---------------------------------------------------------------------------
 
 /** Pre-scan: extract FacilityClass → VisualClassId from info attribute URLs */
-const infoRegex = /FacilityClass=([A-Za-z0-9]+)[^"']*VisualClassId=(\d+)/gi;
+const infoRegex = /FacilityClass=([A-Za-z0-9_]+)[^"']*VisualClassId=(\d+)/gi;
 
 /** Match Cell_N detail rows (captures only up to first inner </tr>) */
 const cellRegex = /<tr[^>]*\sid\s*=\s*["']?Cell_(\d+)["']?[^>]*>([\s\S]*?)<\/tr>/gi;
@@ -28,7 +28,7 @@ const iconRegex = /src\s*=\s*["']?([^"'\s>]+)["']?/i;
 const facilityClassRegex = /Map([A-Z][a-zA-Z0-9]+?)(?:\d+x\d+(?:x\d+)?)?\.gif/i;
 
 /** Extract FacilityClass from info attribute (primary source) */
-const infoFacilityClassRegex = /FacilityClass=([A-Za-z0-9]+)/i;
+const infoFacilityClassRegex = /FacilityClass=([A-Za-z0-9_]+)/i;
 
 /** VisualClassId fallback: direct search within cell content */
 const visualIdRegex = /VisualClassId[=:](\d+)/i;
@@ -576,6 +576,156 @@ describe('FacilityList.asp HTML parsing', () => {
       const scopedMatch = visualIdRegex.exec(scopedWindow);
       expect(scopedMatch).not.toBeNull();
       expect(scopedMatch![1]).toBe('8032');
+    });
+  });
+
+  describe('PGISRVCOMMON_ underscore FacilityClass names (real Public Facilities HTML)', () => {
+    // Real server HTML uses PGISRVCOMMON_* FacilityClass names for IFEL buildings.
+    // Without underscore in the regex, all collapse to "PGISRVCOMMON" and the last
+    // one (Tennis Court) wins, causing ALL IFEL buildings to show as Tennis Court.
+    const PUBLIC_FACILITIES_HTML = `
+<table>
+  <tr>
+    <td id="LinkFrame_9"><div id="LinkText_9" class=listItem available="1" altid="9">Lizard Park</div></td>
+  </tr>
+  <tr id="Cell_9" style="display:none">
+    <td><table><tr>
+      <td><img src=/five/icons/MapIFELAlienParkA64x32x0.gif border="0" width="120" height="80"></td>
+      <td><div class=comment>$2,000K<br><nobr>3600 m.</nobr></div></td>
+    </tr>
+    <tr><td colspan="2"><table><tr>
+      <td class=button info="http://local.asp?frame_Id=MapIsoView&frame_Action=Build&FacilityClass=PGISRVCOMMON_AlienParkA&VisualClassId=8052" command="build">Build now</td>
+    </tr></table></td></tr>
+    </table></td>
+  </tr>
+
+  <tr>
+    <td id="LinkFrame_14"><div id="LinkText_14" class=listItem available="1" altid="14">Dump</div></td>
+  </tr>
+  <tr id="Cell_14" style="display:none">
+    <td><table><tr>
+      <td><img src=/five/icons/MapIFELDump64x32.gif border="0" width="120" height="80"></td>
+      <td><div class=comment>$40,000K<br><nobr>10000 m.</nobr></div></td>
+    </tr>
+    <tr><td colspan="2"><table><tr>
+      <td class=button info="http://local.asp?frame_Id=MapIsoView&frame_Action=Build&FacilityClass=PGISRVCOMMON_Disposal&VisualClassId=8002" command="build">Build now</td>
+    </tr></table></td></tr>
+    </table></td>
+  </tr>
+
+  <tr>
+    <td id="LinkFrame_17"><div id="LinkText_17" class=listItem available="1" altid="17">Tennis courts</div></td>
+  </tr>
+  <tr id="Cell_17" style="display:none">
+    <td><table><tr>
+      <td><img src=/five/icons/MapIFELTennis64x32.gif border="0" width="120" height="80"></td>
+      <td><div class=comment>$200K<br><nobr>3600 m.</nobr></div></td>
+    </tr>
+    <tr><td colspan="2"><table><tr>
+      <td class=button info="http://local.asp?frame_Id=MapIsoView&frame_Action=Build&FacilityClass=PGISRVCOMMON_TennisCourt&VisualClassId=8022" command="build">Build now</td>
+    </tr></table></td></tr>
+    </table></td>
+  </tr>
+</table>`;
+
+    it('should extract full PGISRVCOMMON_* FacilityClass names (not truncated at underscore)', () => {
+      const map = new Map<string, string>();
+      let m;
+      const regex = new RegExp(infoRegex.source, infoRegex.flags);
+      while ((m = regex.exec(PUBLIC_FACILITIES_HTML)) !== null) {
+        map.set(m[1], m[2]);
+      }
+
+      // Each building gets its OWN entry — not collapsed to "PGISRVCOMMON"
+      expect(map.size).toBe(3);
+      expect(map.get('PGISRVCOMMON_AlienParkA')).toBe('8052');
+      expect(map.get('PGISRVCOMMON_Disposal')).toBe('8002');
+      expect(map.get('PGISRVCOMMON_TennisCourt')).toBe('8022');
+    });
+
+    it('should NOT collapse all IFEL buildings to the same key', () => {
+      const map = new Map<string, string>();
+      let m;
+      const regex = new RegExp(infoRegex.source, infoRegex.flags);
+      while ((m = regex.exec(PUBLIC_FACILITIES_HTML)) !== null) {
+        map.set(m[1], m[2]);
+      }
+
+      // Lizard Park must NOT resolve to Tennis Court's ID
+      expect(map.get('PGISRVCOMMON_AlienParkA')).not.toBe('8022');
+      // Dump must NOT resolve to Tennis Court's ID
+      expect(map.get('PGISRVCOMMON_Disposal')).not.toBe('8022');
+    });
+
+    it('should extract full FacilityClass from per-cell info attribute', () => {
+      // Simulate per-cell extraction for Cell_9 (Lizard Park)
+      const cellAnchor = PUBLIC_FACILITIES_HTML.indexOf('Cell_9');
+      expect(cellAnchor).toBeGreaterThan(-1);
+
+      const nextCellPos = PUBLIC_FACILITIES_HTML.indexOf('Cell_', cellAnchor + 5);
+      const searchEnd = nextCellPos >= 0 ? nextCellPos : cellAnchor + 3000;
+      const searchWindow = PUBLIC_FACILITIES_HTML.substring(cellAnchor, searchEnd);
+
+      const fcMatch = infoFacilityClassRegex.exec(searchWindow);
+      expect(fcMatch).not.toBeNull();
+      expect(fcMatch![1]).toBe('PGISRVCOMMON_AlienParkA'); // full name with underscore
+    });
+
+    it('end-to-end: each building resolves to its own VisualClassId', () => {
+      // Pre-scan
+      const visualClassMap = new Map<string, string>();
+      let im;
+      const iRegex = new RegExp(infoRegex.source, infoRegex.flags);
+      while ((im = iRegex.exec(PUBLIC_FACILITIES_HTML)) !== null) {
+        visualClassMap.set(im[1], im[2]);
+      }
+
+      // Parse cells
+      const results: Array<{ name: string; facilityClass: string; visualClassId: string }> = [];
+      let cm;
+      const cRegex = new RegExp(cellRegex.source, cellRegex.flags);
+      while ((cm = cRegex.exec(PUBLIC_FACILITIES_HTML)) !== null) {
+        const cellIndex = cm[1];
+
+        const linkRegex = new RegExp(
+          `<div[^>]*id\\s*=\\s*["']?LinkText_${cellIndex}["']?[^>]*available\\s*=\\s*["']?(\\d+)["']?[^>]*>([^<]+)<`, 'i'
+        );
+        const linkMatch = linkRegex.exec(PUBLIC_FACILITIES_HTML);
+        if (!linkMatch) continue;
+        const name = linkMatch[2].trim();
+
+        // PRIMARY: Extract FacilityClass from info attribute
+        let facilityClass = '';
+        const cellAnchor = PUBLIC_FACILITIES_HTML.indexOf(`Cell_${cellIndex}`);
+        if (cellAnchor >= 0) {
+          const nextCellPos = PUBLIC_FACILITIES_HTML.indexOf('Cell_', cellAnchor + 5);
+          const searchEnd = nextCellPos >= 0 ? nextCellPos : cellAnchor + 3000;
+          const searchWindow = PUBLIC_FACILITIES_HTML.substring(cellAnchor, searchEnd);
+          const fcMatch = infoFacilityClassRegex.exec(searchWindow);
+          if (fcMatch) facilityClass = fcMatch[1];
+        }
+
+        // VisualClassId from pre-scan map
+        const visualClassId = visualClassMap.get(facilityClass) || '';
+        results.push({ name, facilityClass, visualClassId });
+      }
+
+      expect(results).toHaveLength(3);
+
+      const lizard = results.find(r => r.name === 'Lizard Park');
+      expect(lizard).toBeDefined();
+      expect(lizard!.facilityClass).toBe('PGISRVCOMMON_AlienParkA');
+      expect(lizard!.visualClassId).toBe('8052'); // NOT 8022 (Tennis)
+
+      const dump = results.find(r => r.name === 'Dump');
+      expect(dump).toBeDefined();
+      expect(dump!.facilityClass).toBe('PGISRVCOMMON_Disposal');
+      expect(dump!.visualClassId).toBe('8002'); // NOT 8022 (Tennis)
+
+      const tennis = results.find(r => r.name === 'Tennis courts');
+      expect(tennis).toBeDefined();
+      expect(tennis!.facilityClass).toBe('PGISRVCOMMON_TennisCourt');
+      expect(tennis!.visualClassId).toBe('8022');
     });
   });
 });

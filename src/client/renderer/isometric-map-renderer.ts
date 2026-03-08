@@ -2979,41 +2979,11 @@ export class IsometricMapRenderer {
           );
         }
 
-        // Draw facility coordinates label
-        this.drawBuildingLabel(`(${building.x},${building.y})`, southCornerScreenPos.x, southCornerScreenPos.y + halfHeight);
       } else {
         // Texture not loaded yet — skip (will render once texture arrives via onTextureLoaded callback)
         return;
       }
     });
-  }
-
-  /**
-   * Draw building label below the building sprite.
-   * Skipped at zoom levels 0-1 where tiles are too small for readable labels
-   */
-  private drawBuildingLabel(label: string, x: number, y: number): void {
-    // Skip labels at far zoom levels — tiles are too small for readable text
-    if (this.terrainRenderer.getZoomLevel() <= 1) return;
-
-    const ctx = this.ctx;
-
-    // Draw label background
-    ctx.font = '10px monospace';
-    const text = label;
-    const metrics = ctx.measureText(text);
-    const padding = 2;
-    const bgWidth = metrics.width + padding * 2;
-    const bgHeight = 12;
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(Math.round(x - bgWidth / 2), Math.round(y - bgHeight / 2), bgWidth, bgHeight);
-
-    // Draw label text
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, Math.round(x), Math.round(y));
   }
 
   /**
