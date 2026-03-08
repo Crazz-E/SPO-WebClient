@@ -3453,21 +3453,15 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
    */
   private setViewedArea(x: number, y: number, dx: number, dy: number): void {
     if (!this.worldContextId) return;
-    // Delphi expects integer args — round to avoid malformed "#100.7" values
-    const ix = Math.floor(x);
-    const iy = Math.floor(y);
-    const idx = Math.ceil(dx);
-    const idy = Math.ceil(dy);
-    if (idx <= 0 || idy <= 0) return; // Skip degenerate viewports
-    this.sendRdoRequest('world', {
-      verb: RdoVerb.SEL,
-      targetId: this.worldContextId,
-      action: RdoAction.CALL,
-      member: 'SetViewedArea',
-      args: [RdoValue.int(ix).format(), RdoValue.int(iy).format(), RdoValue.int(idx).format(), RdoValue.int(idy).format()]
-    }).catch(() => {
-      // Fire-and-forget — viewport update failures are non-critical
-    });
+    if (dx <= 0 || dy <= 0) return; // Skip degenerate viewports
+    const socket = this.sockets.get('world');
+    if (!socket) return;
+    const cmd = RdoCommand.sel(this.worldContextId)
+      .call('SetViewedArea')
+      .push()  // "*" separator, no RID — fire-and-forget (Delphi: procedure, not function)
+      .args(RdoValue.int(x), RdoValue.int(y), RdoValue.int(dx), RdoValue.int(dy))
+      .build();
+    socket.write(cmd);
   }
 
   /**

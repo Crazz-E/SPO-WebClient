@@ -18,7 +18,11 @@ When any UI component is added or modified, verify **both** the visual layer and
 3. **Wiring**: Trace the handler chain end-to-end: `onClick` → store action / bridge call → server request → expected side effect
 4. If the backing logic (store method, RDO call, WebSocket message) does not exist yet, **implement it** — do not leave dead buttons or placeholder handlers like `() => {}` or `console.log('TODO')`
 
-**RDO conformity:** When adding/modifying RDO requests, the `rdo-protocol` skill auto-loads with the 8-step conformity checklist, dispatch rules, and Delphi type mappings.
+**RDO conformity (MANDATORY for any RDO work):** Before writing or modifying ANY RDO-related code, you MUST:
+1. Read [doc/rdo-protocol-architecture.md](doc/rdo-protocol-architecture.md) — wire framing, dispatch internals, login sequence, push filtering rules
+2. Follow the `rdo-protocol` skill's 8-step conformity checklist (auto-loads for spo_session.ts, rdo.ts, rdo-types.ts)
+3. Verify against SPO-Original Delphi source using `delphi-archaeologist` skill before implementing
+This applies to new RDO calls, modified RDO calls, push handlers, and any code touching `sendRdoRequest()` or `RdoCommand`.
 
 **Screenshot analysis (mandatory for debug/E2E sessions):**
 Never read screenshot images in the main conversation context — each costs ~3-5MB and saturates the 20MB limit. Instead:

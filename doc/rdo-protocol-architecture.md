@@ -546,8 +546,8 @@ There are two mechanisms for resolving object IDs:
        │◄── res="#0" ───────────│                          │
        │                         │                          │
  10. sel <CVId> call             │                          │
-     SetViewedArea "^"           │                          │
-     "#x","#y","#dx","#dy" ────►│                          │
+     SetViewedArea "*"           │                          │
+     "#x","#y","#dx","#dy" ────►│  (fire-and-forget, void) │
        │                         │                          │
        │ ── game loop ──────────│                          │
        │                         │                          │
