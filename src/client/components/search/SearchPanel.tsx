@@ -29,7 +29,7 @@ const CATEGORIES: { id: SearchPage; label: string; icon: React.ReactNode }[] = [
 // ---------------------------------------------------------------------------
 
 function TownsPage() {
-  const towns = useSearchStore((s) => s.townsData?.towns ?? []);
+  const towns = useSearchStore((s) => s.townsData?.towns) ?? [];
   const client = useClient();
 
   if (towns.length === 0) {
@@ -65,7 +65,7 @@ function TownsPage() {
 // ---------------------------------------------------------------------------
 
 function PeoplePage() {
-  const results = useSearchStore((s) => s.peopleData?.results ?? []);
+  const results = useSearchStore((s) => s.peopleData?.results) ?? [];
   const isLoading = useSearchStore((s) => s.isLoading);
   const client = useClient();
   const [searchStr, setSearchStr] = useState('');
@@ -137,7 +137,7 @@ function flattenCategories(categories: RankingCategory[], depth: number = 0): Fl
 }
 
 function RankingsPage() {
-  const categories = useSearchStore((s) => s.rankingsData?.categories ?? []);
+  const categories = useSearchStore((s) => s.rankingsData?.categories) ?? [];
   const detail = useSearchStore((s) => s.rankingDetailData);
   const client = useClient();
 
@@ -202,7 +202,7 @@ function RankingsPage() {
 // ---------------------------------------------------------------------------
 
 function BanksPage() {
-  const banks = useSearchStore((s) => s.banksData?.banks ?? []);
+  const banks = useSearchStore((s) => s.banksData?.banks) ?? [];
 
   if (banks.length === 0) {
     return <div className={styles.emptyState}>No banks found.</div>;
