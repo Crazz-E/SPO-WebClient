@@ -3434,11 +3434,40 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
 
   /**
    * Update the player's camera center position (for save on disconnect).
-   * Called by the client whenever the camera stops moving.
+   * When viewport bounds are provided, also tells the game server via SetViewedArea
+   * so it knows which area to send RefreshArea/RefreshObject pushes for.
    */
-  public updateCameraPosition(x: number, y: number): void {
+  public updateCameraPosition(x: number, y: number, viewX?: number, viewY?: number, viewW?: number, viewH?: number): void {
     this.lastPlayerX = x;
     this.lastPlayerY = y;
+    if (viewX !== undefined && viewY !== undefined && viewW !== undefined && viewH !== undefined) {
+      this.setViewedArea(viewX, viewY, viewW, viewH);
+    }
+  }
+
+  /**
+   * Tell the InterfaceServer what map area the client is viewing.
+   * Required for the server to send RefreshArea/RefreshObject pushes —
+   * without this, IntersectRect(buildArea, clientViewport) always fails.
+   * Delphi signature: TClientView.SetViewedArea(x, y, dx, dy: integer)
+   */
+  private setViewedArea(x: number, y: number, dx: number, dy: number): void {
+    if (!this.worldContextId) return;
+    // Delphi expects integer args — round to avoid malformed "#100.7" values
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    const idx = Math.ceil(dx);
+    const idy = Math.ceil(dy);
+    if (idx <= 0 || idy <= 0) return; // Skip degenerate viewports
+    this.sendRdoRequest('world', {
+      verb: RdoVerb.SEL,
+      targetId: this.worldContextId,
+      action: RdoAction.CALL,
+      member: 'SetViewedArea',
+      args: [RdoValue.int(ix).format(), RdoValue.int(iy).format(), RdoValue.int(idx).format(), RdoValue.int(idy).format()]
+    }).catch(() => {
+      // Fire-and-forget — viewport update failures are non-critical
+    });
   }
 
   /**

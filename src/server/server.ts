@@ -1300,8 +1300,8 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
       }
 
       case WsMessageType.REQ_UPDATE_CAMERA: {
-        const camReq = msg as { x: number; y: number };
-        session.updateCameraPosition(camReq.x, camReq.y);
+        const camReq = msg as unknown as { x: number; y: number; viewX?: number; viewY?: number; viewW?: number; viewH?: number };
+        session.updateCameraPosition(camReq.x, camReq.y, camReq.viewX, camReq.viewY, camReq.viewW, camReq.viewH);
         // Fire-and-forget — no response needed
         break;
       }

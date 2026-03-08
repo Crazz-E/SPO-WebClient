@@ -1375,6 +1375,10 @@ export interface WsReqUpdateCamera extends WsMessage {
   type: WsMessageType.REQ_UPDATE_CAMERA;
   x: number;  // column (j) — matches LastX.0 cookie
   y: number;  // row (i) — matches LastY.0 cookie
+  viewX?: number;  // viewport top-left column
+  viewY?: number;  // viewport top-left row
+  viewW?: number;  // viewport width in tiles
+  viewH?: number;  // viewport height in tiles
 }
 
 // =============================================================================

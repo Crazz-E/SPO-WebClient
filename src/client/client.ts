@@ -3742,10 +3742,16 @@ export class StarpeaceClient {
     const renderer = this.mapNavigationUI?.getRenderer();
     if (!renderer || !this.isConnected || !this.ws) return;
     const pos = renderer.getCameraPosition();
+    const bounds = renderer.getVisibleTileBounds();
+    // TileBounds: i=row, j=column; Delphi SetViewedArea: x=column, y=row
     this.sendMessage({
       type: WsMessageType.REQ_UPDATE_CAMERA,
       x: pos.x,
       y: pos.y,
+      viewX: bounds.minJ,
+      viewY: bounds.minI,
+      viewW: bounds.maxJ - bounds.minJ,
+      viewH: bounds.maxI - bounds.minI,
     });
   }
 
