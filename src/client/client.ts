@@ -759,6 +759,7 @@ export class StarpeaceClient {
             areaEvt.x + areaEvt.width,
             areaEvt.y + areaEvt.height
           );
+          areaRenderer.triggerZoneCheck();
         }
         break;
       }
@@ -773,6 +774,7 @@ export class StarpeaceClient {
           if (renderer) {
             ClientBridge.log('Map', `Building ${refreshEvt.building.buildingId} ${kind === 1 ? 'structure changed' : 'destroyed'}, invalidating zone at (${refreshEvt.building.x}, ${refreshEvt.building.y})`);
             renderer.invalidateZone(refreshEvt.building.x, refreshEvt.building.y);
+            renderer.triggerZoneCheck();
           }
         }
 
