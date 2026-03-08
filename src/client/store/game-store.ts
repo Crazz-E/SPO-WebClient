@@ -89,6 +89,7 @@ interface GameState {
   loginWorlds: WorldInfo[];
   loginStage: 'auth' | 'zones' | 'worlds' | 'companies';
   loginLoading: boolean;
+  authError: { code: number; message: string } | null;
 
   // Server switch overlay (browse regions/worlds while in-game)
   serverSwitchMode: boolean;
@@ -127,6 +128,7 @@ interface GameState {
   setLoginCompanies: (companies: CompanyInfo[]) => void;
   setLoginStage: (stage: 'auth' | 'zones' | 'worlds' | 'companies') => void;
   setLoginLoading: (loading: boolean) => void;
+  setAuthError: (error: { code: number; message: string } | null) => void;
   setCompanyCreationClusters: (clusters: string[]) => void;
   setClusterInfo: (info: ClusterInfo | null) => void;
   setClusterInfoLoading: (loading: boolean) => void;
@@ -162,6 +164,7 @@ export const useGameStore = create<GameState>((set) => ({
   loginWorlds: [],
   loginStage: 'auth',
   loginLoading: false,
+  authError: null,
   serverSwitchMode: false,
   serverSwitchOriginWorld: '',
   companyCreationClusters: [],
@@ -195,6 +198,7 @@ export const useGameStore = create<GameState>((set) => ({
   setLoginCompanies: (companies) => set({ companies, loginStage: 'companies', loginLoading: false }),
   setLoginStage: (stage) => set({ loginStage: stage }),
   setLoginLoading: (loading) => set({ loginLoading: loading }),
+  setAuthError: (error) => set({ authError: error }),
 
   setCompanyCreationClusters: (clusters) => set({ companyCreationClusters: clusters }),
   setClusterInfo: (info) => set({ clusterInfo: info, clusterInfoLoading: false }),
@@ -251,6 +255,7 @@ export const useGameStore = create<GameState>((set) => ({
       loginWorlds: [],
       loginStage: 'auth',
       loginLoading: false,
+      authError: null,
       serverSwitchMode: false,
       serverSwitchOriginWorld: '',
       companyCreationClusters: [],

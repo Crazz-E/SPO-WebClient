@@ -82,6 +82,7 @@ import { config } from '../shared/config';
 import { createLogger } from '../shared/logger';
 import { toProxyUrl, isProxyUrl } from '../shared/proxy-utils';
 import { toErrorMessage } from '../shared/error-utils';
+import { AuthError } from '../shared/auth-error';
 import {
   cleanPayload as cleanPayloadHelper,
   splitMultilinePayload as splitMultilinePayloadHelper,
@@ -363,6 +364,14 @@ export class StarpeaceSession extends EventEmitter {
    * 1. Authentication Check
    * 2. World List Retrieval
    */
+  /**
+   * Auth-only check: validates credentials against the Directory Server
+   * without querying the world list. Throws AuthError on failure.
+   */
+  public async checkAuth(username: string, password: string): Promise<void> {
+    return this.performDirectoryAuth(username, password);
+  }
+
   public async connectDirectory(username: string, pass: string, zonePath?: string): Promise<WorldInfo[]> {
     this.phase = SessionPhase.DIRECTORY_CONNECTED;
     this.cachedUsername = username;
@@ -404,7 +413,8 @@ export class StarpeaceSession extends EventEmitter {
         args: [username, pass]
       });
       const res = parsePropertyResponseHelper(logonPacket.payload || '', 'res');
-      if (res !== '0') throw new Error(`Directory Authentication failed (Code: ${res})`);
+      const authCode = parseInt(res, 10);
+      if (authCode !== 0) throw new AuthError(authCode);
 
       // 3. End Session & Close (fire-and-forget — void push, no RID)
       socket.write(`C sel ${sessionId} call RDOEndSession "*";`);
@@ -3959,7 +3969,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     y1: number,
     x2: number,
     y2: number
-  ): Promise<{ success: boolean; cost: number; tileCount: number; message?: string; errorCode?: number }> {
+  ): Promise<{ success: boolean; cost: number; tileCount: number; message?: string; errorCode?: number; partial?: boolean }> {
     try {
       this.log.debug(`[RoadBuilding] Building road from (${x1}, ${y1}) to (${x2}, ${y2})`);
 
@@ -4086,6 +4096,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
         this.log.debug(`[RoadBuilding] ${message}`);
         return {
           success: true,
+          partial: failedSegment !== null,
           cost: totalCost,
           tileCount: totalTiles,
           message

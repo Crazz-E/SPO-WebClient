@@ -6,6 +6,7 @@ import { describe, it, expect } from '@jest/globals';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '../../__tests__/setup/render-helpers';
 import { AuthStage } from './AuthStage';
+import { AuthErrorModal } from './AuthErrorModal';
 import { WorldStage } from './WorldStage';
 import { ZoneStage } from './ZoneStage';
 import { CompanyStage } from './CompanyStage';
@@ -128,5 +129,48 @@ describe('CompanyStage', () => {
   it('renders back button', () => {
     renderWithProviders(<CompanyStage {...defaultProps} />);
     expect(screen.getByText('Back to worlds')).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AuthErrorModal
+// ---------------------------------------------------------------------------
+
+describe('AuthErrorModal', () => {
+  const defaultError = { code: 13, message: 'Invalid password' };
+
+  it('renders error message and title', () => {
+    renderWithProviders(<AuthErrorModal error={defaultError} onDismiss={() => {}} />);
+    expect(screen.getByText('Authentication Failed')).toBeTruthy();
+    expect(screen.getByText('Invalid password')).toBeTruthy();
+  });
+
+  it('renders error code when code > 0', () => {
+    renderWithProviders(<AuthErrorModal error={defaultError} onDismiss={() => {}} />);
+    expect(screen.getByText('Error code: 13')).toBeTruthy();
+  });
+
+  it('hides error code when code is 0', () => {
+    renderWithProviders(<AuthErrorModal error={{ code: 0, message: 'Unknown error' }} onDismiss={() => {}} />);
+    expect(screen.queryByText(/Error code/)).toBeNull();
+  });
+
+  it('calls onDismiss when Try Again is clicked', () => {
+    const onDismiss = jest.fn();
+    renderWithProviders(<AuthErrorModal error={defaultError} onDismiss={onDismiss} />);
+    fireEvent.click(screen.getByText('Try Again'));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onDismiss on Escape key', () => {
+    const onDismiss = jest.fn();
+    renderWithProviders(<AuthErrorModal error={defaultError} onDismiss={onDismiss} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders Try Again button', () => {
+    renderWithProviders(<AuthErrorModal error={defaultError} onDismiss={() => {}} />);
+    expect(screen.getByText('Try Again')).toBeTruthy();
   });
 });

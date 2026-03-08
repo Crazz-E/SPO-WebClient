@@ -1,6 +1,7 @@
 import {
   WsMessageType,
   WsMessage,
+  WsReqAuthCheck,
   WsReqConnectDirectory,
   WsReqLoginWorld,
   WsRespConnectSuccess,
@@ -314,6 +315,7 @@ export class StarpeaceClient {
       onServerSwitchZoneSelect: (zonePath: string) => this.serverSwitchZoneSelect(zonePath),
       onSendChatMessage: (message: string) => this.sendChatMessage(message),
       onJoinChannel: (channelName: string) => this.joinChannel(channelName),
+      onAuthCheck: (username: string, password: string) => this.performAuthCheck(username, password),
       onDirectoryConnect: (username: string, password: string, zonePath?: string) =>
         this.performDirectoryLogin(username, password, zonePath),
       onWorldSelect: (worldName: string) => this.login(worldName),
@@ -692,7 +694,9 @@ export class StarpeaceClient {
       if (msg.type === WsMessageType.RESP_ERROR) {
         const errorResp = msg as WsRespError;
         const localizedMessage = getErrorMessage(errorResp.code);
-        reject(new Error(localizedMessage));
+        const err = new Error(localizedMessage);
+        (err as Error & { code: number }).code = errorResp.code;
+        reject(err);
       } else {
         resolve(msg);
       }
@@ -1030,6 +1034,33 @@ export class StarpeaceClient {
 
   // --- Actions ---
 
+  private async performAuthCheck(username: string, password: string) {
+    ClientBridge.setLoginLoading(true);
+    ClientBridge.log('Auth', 'Checking credentials...');
+
+    try {
+      const req: WsReqAuthCheck = {
+        type: WsMessageType.REQ_AUTH_CHECK,
+        username,
+        password,
+      };
+      await this.sendRequest(req);
+
+      // Success — store creds and advance to zone selection
+      this.storedUsername = username;
+      this.storedPassword = password;
+      ClientBridge.setCredentials(username);
+      ClientBridge.log('Auth', 'Credentials valid');
+      useGameStore.getState().setLoginStage('zones');
+    } catch (err: unknown) {
+      ClientBridge.log('Auth', `Failed: ${toErrorMessage(err)}`);
+      const code = (err as { code?: number }).code ?? 0;
+      ClientBridge.setAuthError({ code, message: toErrorMessage(err) });
+    } finally {
+      ClientBridge.setLoginLoading(false);
+    }
+  }
+
   private async performDirectoryLogin(username: string, password: string, zonePath?: string) {
     this.storedUsername = username;
     this.storedPassword = password;
@@ -1050,13 +1081,14 @@ export class StarpeaceClient {
       ClientBridge.showWorlds(resp.worlds);
     } catch (err: unknown) {
       ClientBridge.log('Error', `Directory Auth Failed: ${toErrorMessage(err)}`);
-      alert('Login Failed: ' + toErrorMessage(err));
+      ClientBridge.showError('Login Failed: ' + toErrorMessage(err));
+      ClientBridge.setLoginLoading(false);
     }
   }
 
   private async login(worldName: string) {
     if (!this.storedUsername || !this.storedPassword) {
-      alert('Session lost, please reconnect');
+      ClientBridge.showError('Session lost, please reconnect');
       return;
     }
 
@@ -2736,13 +2768,18 @@ export class StarpeaceClient {
 
       const response = await this.sendRequest(req) as WsRespBuildRoad;
 
-      if (response.success) {
+      if (response.success && !response.partial) {
         ClientBridge.log('Road', `Road built: ${response.tileCount} tiles, cost $${response.cost}`);
         this.showNotification(`Road built: ${response.tileCount} tiles`, 'success');
-        // Refresh all zones intersecting the road path
+        this.loadAlignedMapAreaForRect(x1, y1, x2, y2);
+      } else if (response.success && response.partial) {
+        ClientBridge.log('Road', `Road partially built: ${response.tileCount} tiles, cost $${response.cost}`);
+        this.showNotification(response.message || `Road partially built (${response.tileCount} tiles)`, 'warning');
         this.loadAlignedMapAreaForRect(x1, y1, x2, y2);
       } else {
         ClientBridge.log('Error', response.message || 'Failed to build road');
+        this.showNotification(response.message || 'Failed to build road', 'error');
+        this.loadAlignedMapAreaForRect(x1, y1, x2, y2);
       }
     } catch (err: unknown) {
       ClientBridge.log('Error', `Failed to build road: ${toErrorMessage(err)}`);
@@ -3442,9 +3479,10 @@ export class StarpeaceClient {
   /**
    * Show a temporary notification to the user
    */
-  private showNotification(message: string, type: 'success' | 'error' | 'info' = 'info') {
+  private showNotification(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') {
     if (type === 'success') ClientBridge.showSuccess(message);
     else if (type === 'error') ClientBridge.showError(message);
+    else if (type === 'warning') ClientBridge.showWarning(message);
     else ClientBridge.showInfo(message);
   }
 

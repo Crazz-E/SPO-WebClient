@@ -105,6 +105,7 @@ export {
 export type {
   WsMessage,
   // Request payloads
+  WsReqAuthCheck,
   WsReqConnectDirectory,
   WsReqLoginWorld,
   WsReqRdoDirect,
@@ -114,6 +115,7 @@ export type {
   WsReqSwitchCompany,
   // Response payloads
   WsRespError,
+  WsRespAuthSuccess,
   WsRespConnectSuccess,
   WsRespLoginSuccess,
   WsRespRdoResult,

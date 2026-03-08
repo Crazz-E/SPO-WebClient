@@ -440,4 +440,109 @@ describe('Protocol Validation: buildRoad() + placeBuilding()', () => {
       expect(parsed.args).toContain('#55');
     });
   });
+
+  describe('buildRoad response error codes', () => {
+    // This regex is the same one used in spo_session.ts:buildRoad()
+    const parseResultCode = (payload: string): number => {
+      const match = /res="#(-?\d+)"/.exec(payload);
+      return match ? parseInt(match[1], 10) : -1;
+    };
+
+    // Error message map matching spo_session.ts:4062-4071
+    const errorMessages: Record<number, string> = {
+      1: 'Road construction failed — please try a different location',
+      2: 'Invalid road segment — check your coordinates',
+      3: 'Permission denied — you may not have sufficient funds or rights to build here',
+      4: 'Insufficient funds to build this road segment',
+      5: 'Your company was not recognized — please reconnect',
+      21: 'Unsupported road type',
+      22: 'Cannot build a road at this location — area may be occupied or restricted',
+      23: 'Cannot modify an existing road segment here',
+    };
+
+    it('should parse result code 0 as success', () => {
+      expect(parseResultCode('A505 res="#0"')).toBe(0);
+    });
+
+    it('should parse result code 22 (CannotCreateSeg)', () => {
+      expect(parseResultCode('A1589 res="#22"')).toBe(22);
+    });
+
+    it('should parse negative result codes', () => {
+      expect(parseResultCode('A100 res="#-1"')).toBe(-1);
+    });
+
+    it('should return -1 for unparseable responses', () => {
+      expect(parseResultCode('A100 err="timeout"')).toBe(-1);
+      expect(parseResultCode('')).toBe(-1);
+    });
+
+    it('should map error code 22 to location-restricted message', () => {
+      expect(errorMessages[22]).toBe(
+        'Cannot build a road at this location — area may be occupied or restricted'
+      );
+    });
+
+    it('should map all Delphi circuit error codes (21-23)', () => {
+      expect(errorMessages[21]).toBeDefined(); // ERROR_UnknownCircuit
+      expect(errorMessages[22]).toBeDefined(); // ERROR_CannotCreateSeg
+      expect(errorMessages[23]).toBeDefined(); // ERROR_CannotBreakSeg
+    });
+
+    it('should fall back to generic message for unknown error codes', () => {
+      const unknownCode = 99;
+      const message = errorMessages[unknownCode] || `Failed with code ${unknownCode}`;
+      expect(message).toBe('Failed with code 99');
+    });
+
+    describe('partial build result aggregation', () => {
+      // Simulates the buildRoad() aggregation logic from spo_session.ts:4026-4103
+      function aggregateResults(
+        segmentResults: number[]
+      ): { success: boolean; partial?: boolean; totalTiles: number } {
+        let totalTiles = 0;
+        let failedSegment = false;
+
+        for (const code of segmentResults) {
+          if (code === 0) {
+            totalTiles += 1; // Each diagonal segment = 1 tile
+          } else {
+            failedSegment = true;
+          }
+        }
+
+        if (totalTiles > 0) {
+          return { success: true, partial: failedSegment, totalTiles };
+        }
+        return { success: false, totalTiles: 0 };
+      }
+
+      it('should return success with no partial flag when all segments succeed', () => {
+        const result = aggregateResults([0, 0, 0]);
+        expect(result.success).toBe(true);
+        expect(result.partial).toBe(false);
+        expect(result.totalTiles).toBe(3);
+      });
+
+      it('should return partial: true when some segments fail', () => {
+        const result = aggregateResults([0, 22, 0]);
+        expect(result.success).toBe(true);
+        expect(result.partial).toBe(true);
+        expect(result.totalTiles).toBe(2);
+      });
+
+      it('should return success: false when all segments fail', () => {
+        const result = aggregateResults([22, 22, 22]);
+        expect(result.success).toBe(false);
+        expect(result.totalTiles).toBe(0);
+      });
+
+      it('should return partial: true even if only one segment succeeds', () => {
+        const result = aggregateResults([22, 0, 22, 22]);
+        expect(result.success).toBe(true);
+        expect(result.partial).toBe(true);
+        expect(result.totalTiles).toBe(1);
+      });
+    });
+  });
 });

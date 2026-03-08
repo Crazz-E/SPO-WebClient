@@ -22,6 +22,8 @@ import {
   WsMessage,
   FacilityDimensions,
   WorldInfo,
+  WsReqAuthCheck,
+  WsRespAuthSuccess,
   WsReqConnectDirectory,
   WsReqLoginWorld,
   WsReqRdoDirect,
@@ -175,6 +177,8 @@ import {
   WsRespCapitolCoords,
 } from '../shared/types';
 import { toErrorMessage } from '../shared/error-utils';
+import { AuthError } from '../shared/auth-error';
+import { getErrorMessage } from '../shared/error-codes';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
 
 /**
@@ -1143,6 +1147,41 @@ wss.on('connection', (ws: WebSocket) => {
 async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, searchMenuService: SearchMenuService | null, msg: WsMessage) {
   try {
     switch (msg.type) {
+      case WsMessageType.REQ_AUTH_CHECK: {
+        const req = msg as WsReqAuthCheck;
+        if (!req.username || !req.password) {
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: 'Username and password required',
+            code: ErrorCodes.ERROR_InvalidLogonData
+          };
+          ws.send(JSON.stringify(errorResp));
+          return;
+        }
+        try {
+          await session.checkAuth(req.username, req.password);
+          const response: WsRespAuthSuccess = {
+            type: WsMessageType.RESP_AUTH_SUCCESS,
+            wsRequestId: msg.wsRequestId,
+          };
+          ws.send(JSON.stringify(response));
+        } catch (err: unknown) {
+          if (err instanceof AuthError) {
+            const errorResp: WsRespError = {
+              type: WsMessageType.RESP_ERROR,
+              wsRequestId: msg.wsRequestId,
+              errorMessage: getErrorMessage(err.authCode),
+              code: err.authCode,
+            };
+            ws.send(JSON.stringify(errorResp));
+          } else {
+            throw err;
+          }
+        }
+        break;
+      }
+
       case WsMessageType.REQ_CONNECT_DIRECTORY: {
         console.log('[Gateway] Connecting to Directory...');
         const req = msg as WsReqConnectDirectory;
@@ -1868,7 +1907,8 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
             cost: result.cost,
             tileCount: result.tileCount,
             message: result.message,
-            errorCode: result.errorCode
+            errorCode: result.errorCode,
+            partial: result.partial
           };
           ws.send(JSON.stringify(response));
         } catch (err: unknown) {

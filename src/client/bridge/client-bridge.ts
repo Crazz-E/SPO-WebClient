@@ -116,6 +116,7 @@ export function worldToScreenCentered(
  */
 export interface ClientCallbacks {
   // Login flow
+  onAuthCheck: (username: string, password: string) => void;
   onDirectoryConnect: (username: string, password: string, zonePath?: string) => void;
   onWorldSelect: (worldName: string) => void;
   onCompanySelect: (companyId: string) => void;
@@ -328,6 +329,10 @@ export const ClientBridge = {
 
   setLoginLoading(loading: boolean): void {
     useGameStore.getState().setLoginLoading(loading);
+  },
+
+  setAuthError(error: { code: number; message: string } | null): void {
+    useGameStore.getState().setAuthError(error);
   },
 
   // ---- Tycoon stats ----

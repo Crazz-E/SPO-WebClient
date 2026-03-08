@@ -14,7 +14,7 @@
 import { useState, useCallback } from 'react';
 import { useGameStore } from '../store';
 import { useClient } from '../context';
-import { LoginBackground, AuthStage, ZoneStage, WorldStage, CompanyStage } from '../components/login';
+import { LoginBackground, AuthStage, AuthErrorModal, ZoneStage, WorldStage, CompanyStage } from '../components/login';
 import type { WorldZone } from '@/shared/types';
 import styles from './LoginScreen.module.css';
 
@@ -24,21 +24,29 @@ export function LoginScreen() {
   const worlds = useGameStore((s) => s.loginWorlds);
   const companies = useGameStore((s) => s.companies);
   const isLoading = useGameStore((s) => s.loginLoading);
+  const authError = useGameStore((s) => s.authError);
   const setLoginStage = useGameStore((s) => s.setLoginStage);
   const setLoginLoading = useGameStore((s) => s.setLoginLoading);
+  const setAuthError = useGameStore((s) => s.setAuthError);
 
   const client = useClient();
   const [storedCreds, setStoredCreds] = useState<{ username: string; password: string } | null>(null);
   const [selectedWorld, setSelectedWorld] = useState('');
 
-  // Stage A → B: store credentials, advance to zone selector (no server call yet)
+  // Stage A: validate credentials via RDO auth check, then advance to zones on success
   const handleConnect = useCallback(
     (username: string, password: string) => {
       setStoredCreds({ username, password });
-      setLoginStage('zones');
+      setLoginLoading(true);
+      client.onAuthCheck(username, password);
     },
-    [setLoginStage],
+    [client, setLoginLoading],
   );
+
+  // Dismiss auth error modal
+  const handleDismissAuthError = useCallback(() => {
+    setAuthError(null);
+  }, [setAuthError]);
 
   // Stage B → C: select zone, then perform directory connect with stored creds + zone path
   const handleZoneSelect = useCallback(
@@ -118,6 +126,10 @@ export function LoginScreen() {
           onBack={handleBackToWorlds}
           isLoading={isLoading}
         />
+      )}
+
+      {authError && (
+        <AuthErrorModal error={authError} onDismiss={handleDismissAuthError} />
       )}
     </div>
   );

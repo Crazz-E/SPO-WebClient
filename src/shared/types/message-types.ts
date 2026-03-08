@@ -50,6 +50,7 @@ import type { RdoVerb, RdoAction } from './protocol-types';
 
 export enum WsMessageType {
   // Client -> Gateway (Requests)
+  REQ_AUTH_CHECK = 'REQ_AUTH_CHECK',
   REQ_CONNECT_DIRECTORY = 'REQ_CONNECT_DIRECTORY',
   REQ_LOGIN_WORLD = 'REQ_LOGIN_WORLD',
   REQ_RDO_DIRECT = 'REQ_RDO_DIRECT',
@@ -59,6 +60,7 @@ export enum WsMessageType {
   REQ_MANAGE_CONSTRUCTION = 'REQ_MANAGE_CONSTRUCTION',
 
   // Gateway -> Client (Responses)
+  RESP_AUTH_SUCCESS = 'RESP_AUTH_SUCCESS',
   RESP_CONNECT_SUCCESS = 'RESP_CONNECT_SUCCESS',
   RESP_LOGIN_SUCCESS = 'RESP_LOGIN_SUCCESS',
   RESP_RDO_RESULT = 'RESP_RDO_RESULT',
@@ -279,6 +281,12 @@ export interface WsMessage {
 // REQUEST PAYLOADS
 // =============================================================================
 
+export interface WsReqAuthCheck extends WsMessage {
+  type: WsMessageType.REQ_AUTH_CHECK;
+  username: string;
+  password: string;
+}
+
 export interface WsReqConnectDirectory extends WsMessage {
   type: WsMessageType.REQ_CONNECT_DIRECTORY;
   username: string;
@@ -336,6 +344,10 @@ export interface WsRespError extends WsMessage {
   type: WsMessageType.RESP_ERROR;
   errorMessage: string;
   code: number;
+}
+
+export interface WsRespAuthSuccess extends WsMessage {
+  type: WsMessageType.RESP_AUTH_SUCCESS;
 }
 
 export interface WsRespConnectSuccess extends WsMessage {
@@ -785,6 +797,7 @@ export interface WsRespBuildRoad extends WsMessage {
   tileCount: number;
   message?: string;
   errorCode?: number;
+  partial?: boolean;
 }
 
 export interface WsReqGetRoadCost extends WsMessage {
