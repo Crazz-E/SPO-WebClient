@@ -7,12 +7,13 @@ import type {
   WsRespSearchMenuHome,
   WsRespSearchMenuTowns,
   WsRespSearchMenuPeopleSearch,
+  WsRespSearchMenuTycoonProfile,
   WsRespSearchMenuRankings,
   WsRespSearchMenuRankingDetail,
   WsRespSearchMenuBanks,
 } from '@/shared/types';
 
-export type SearchPage = 'home' | 'towns' | 'people' | 'rankings' | 'ranking-detail' | 'banks';
+export type SearchPage = 'home' | 'towns' | 'people' | 'rankings' | 'ranking-detail' | 'banks' | 'tycoon-profile';
 
 interface SearchState {
   // Navigation
@@ -26,6 +27,7 @@ interface SearchState {
   peopleData: WsRespSearchMenuPeopleSearch | null;
   rankingsData: WsRespSearchMenuRankings | null;
   rankingDetailData: WsRespSearchMenuRankingDetail | null;
+  tycoonProfileData: WsRespSearchMenuTycoonProfile | null;
   banksData: WsRespSearchMenuBanks | null;
 
   // Actions
@@ -38,6 +40,7 @@ interface SearchState {
   setRankingsData: (data: WsRespSearchMenuRankings) => void;
   setRankingDetailData: (data: WsRespSearchMenuRankingDetail) => void;
   clearRankingDetail: () => void;
+  setTycoonProfileData: (data: WsRespSearchMenuTycoonProfile) => void;
   setBanksData: (data: WsRespSearchMenuBanks) => void;
   reset: () => void;
 }
@@ -52,6 +55,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
   peopleData: null,
   rankingsData: null,
   rankingDetailData: null,
+  tycoonProfileData: null,
   banksData: null,
 
   navigateTo: (page) =>
@@ -78,6 +82,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
   setRankingsData: (data) => set({ rankingsData: data, isLoading: false }),
   setRankingDetailData: (data) => set({ rankingDetailData: data, isLoading: false }),
   clearRankingDetail: () => set({ rankingDetailData: null }),
+  setTycoonProfileData: (data) => set({ tycoonProfileData: data, isLoading: false }),
   setBanksData: (data) => set({ banksData: data, isLoading: false }),
 
   reset: () =>
@@ -90,6 +95,7 @@ export const useSearchStore = create<SearchState>((set, get) => ({
       peopleData: null,
       rankingsData: null,
       rankingDetailData: null,
+      tycoonProfileData: null,
       banksData: null,
     }),
 }));

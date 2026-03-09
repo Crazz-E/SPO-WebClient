@@ -425,6 +425,9 @@ export class StarpeaceClient {
       onSearchMenuPeopleSearch: (searchStr) => this.sendMessage({
         type: WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH, searchStr,
       }),
+      onSearchMenuTycoonProfile: (tycoonName) => this.sendMessage({
+        type: WsMessageType.REQ_SEARCH_MENU_TYCOON_PROFILE, tycoonName,
+      }),
       onSearchMenuRankings: () => this.sendMessage({ type: WsMessageType.REQ_SEARCH_MENU_RANKINGS }),
       onSearchMenuRankingDetail: (rankingPath) => this.sendMessage({
         type: WsMessageType.REQ_SEARCH_MENU_RANKING_DETAIL, rankingPath,
@@ -911,6 +914,7 @@ export class StarpeaceClient {
       case WsMessageType.RESP_SEARCH_MENU_HOME:
       case WsMessageType.RESP_SEARCH_MENU_TOWNS:
       case WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH:
+      case WsMessageType.RESP_SEARCH_MENU_TYCOON_PROFILE:
       case WsMessageType.RESP_SEARCH_MENU_RANKINGS:
       case WsMessageType.RESP_SEARCH_MENU_RANKING_DETAIL:
       case WsMessageType.RESP_SEARCH_MENU_BANKS:

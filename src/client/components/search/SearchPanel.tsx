@@ -15,6 +15,7 @@ import { GlassCard, Skeleton, ErrorBoundary } from '../common';
 import type {
   TownInfo, RankingCategory, RankingEntry,
 } from '@/shared/types';
+import { TycoonProfileView } from './TycoonProfileView';
 import styles from './SearchPanel.module.css';
 
 const CATEGORIES: { id: SearchPage; label: string; icon: React.ReactNode }[] = [
@@ -98,7 +99,14 @@ function PeoplePage() {
       {results.length > 0 && !isLoading && (
         <div className={styles.simpleList}>
           {results.map((name: string) => (
-            <div key={name} className={styles.clickableListItem}>
+            <div
+              key={name}
+              className={styles.clickableListItem}
+              onClick={() => {
+                useSearchStore.getState().navigateTo('tycoon-profile');
+                client.onSearchMenuTycoonProfile(name);
+              }}
+            >
               <UserSearch size={14} className={styles.listItemIcon} />
               <span>{name}</span>
             </div>
@@ -232,8 +240,18 @@ function BanksPage() {
 const PAGE_COMPONENTS: Record<string, React.FC> = {
   towns: TownsPage,
   people: PeoplePage,
+  'tycoon-profile': TycoonProfileView,
   rankings: RankingsPage,
   banks: BanksPage,
+};
+
+const PAGE_LABELS: Record<string, string> = {
+  towns: 'Towns',
+  people: 'People',
+  'tycoon-profile': 'Tycoon Profile',
+  rankings: 'Rankings',
+  'ranking-detail': 'Ranking Detail',
+  banks: 'Banks',
 };
 
 // ---------------------------------------------------------------------------
@@ -255,7 +273,7 @@ export function SearchPanel() {
 
   // Fetch category data when navigating to a category page
   useEffect(() => {
-    if (currentPage === 'home' || currentPage === 'ranking-detail') return;
+    if (currentPage === 'home' || currentPage === 'ranking-detail' || currentPage === 'tycoon-profile') return;
     const fetchers: Record<string, () => void> = {
       towns: () => client.onSearchMenuTowns(),
       people: () => {
@@ -280,7 +298,7 @@ export function SearchPanel() {
           </button>
           <ChevronRight size={12} className={styles.breadcrumbSep} />
           <span className={styles.breadcrumbCurrent}>
-            {CATEGORIES.find((c) => c.id === currentPage)?.label ?? currentPage}
+            {PAGE_LABELS[currentPage] ?? currentPage}
           </span>
         </div>
       )}

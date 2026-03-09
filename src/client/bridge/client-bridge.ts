@@ -62,6 +62,7 @@ import {
   type WsRespSearchMenuHome,
   type WsRespSearchMenuTowns,
   type WsRespSearchMenuPeopleSearch,
+  type WsRespSearchMenuTycoonProfile,
   type WsRespSearchMenuRankings,
   type WsRespSearchMenuRankingDetail,
   type WsRespSearchMenuBanks,
@@ -185,6 +186,7 @@ export interface ClientCallbacks {
   onSearchMenuHome: () => void;
   onSearchMenuTowns: () => void;
   onSearchMenuPeopleSearch: (searchStr: string) => void;
+  onSearchMenuTycoonProfile: (tycoonName: string) => void;
   onSearchMenuRankings: () => void;
   onSearchMenuRankingDetail: (rankingPath: string) => void;
   onSearchMenuBanks: () => void;
@@ -569,6 +571,9 @@ export const ClientBridge = {
         break;
       case WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH:
         search.setPeopleData(msg as WsRespSearchMenuPeopleSearch);
+        break;
+      case WsMessageType.RESP_SEARCH_MENU_TYCOON_PROFILE:
+        search.setTycoonProfileData(msg as WsRespSearchMenuTycoonProfile);
         break;
       case WsMessageType.RESP_SEARCH_MENU_RANKINGS:
         search.setRankingsData(msg as WsRespSearchMenuRankings);

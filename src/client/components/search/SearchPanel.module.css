@@ -180,7 +180,59 @@
 
 /* Profile card */
 .profileCard {
-  padding: var(--space-3) !important;
+  padding: var(--space-4) !important;
+}
+
+.profileHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.profilePhoto {
+  width: 64px;
+  height: 80px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  border: 1px solid var(--glass-border);
+}
+
+.profilePhotoPlaceholder {
+  width: 64px;
+  height: 80px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-disabled);
+  background: var(--glass-bg);
+}
+
+.profileName {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.profileStatsGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.profileStatLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+}
+
+.profileStatValue {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Simple list (people/tycoon results) */

@@ -102,6 +102,8 @@ import {
   WsRespSearchMenuRankings,
   WsReqSearchMenuRankingDetail,
   WsRespSearchMenuRankingDetail,
+  WsReqSearchMenuTycoonProfile,
+  WsRespSearchMenuTycoonProfile,
   WsReqSearchMenuBanks,
   WsRespSearchMenuBanks,
   // Logout
@@ -2260,9 +2262,20 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
       }
 
       case WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH: {
+        if (!searchMenuService) {
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: 'Search menu not available. Please log in first.',
+            code: ErrorCodes.ERROR_AccessDenied
+          };
+          ws.send(JSON.stringify(errorResp));
+          return;
+        }
+
         const req = msg as WsReqSearchMenuPeopleSearch;
         try {
-          const results = await session.searchPeople(req.searchStr);
+          const results = await searchMenuService.searchPeople(req.searchStr);
           const response: WsRespSearchMenuPeopleSearch = {
             type: WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH,
             wsRequestId: msg.wsRequestId,
@@ -2275,6 +2288,40 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
             type: WsMessageType.RESP_ERROR,
             wsRequestId: msg.wsRequestId,
             errorMessage: toErrorMessage(err) || 'Failed to search people',
+            code: ErrorCodes.ERROR_Unknown
+          };
+          ws.send(JSON.stringify(errorResp));
+        }
+        break;
+      }
+
+      case WsMessageType.REQ_SEARCH_MENU_TYCOON_PROFILE: {
+        if (!searchMenuService) {
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: 'Search menu not available. Please log in first.',
+            code: ErrorCodes.ERROR_AccessDenied
+          };
+          ws.send(JSON.stringify(errorResp));
+          return;
+        }
+
+        const req = msg as WsReqSearchMenuTycoonProfile;
+        try {
+          const profile = await searchMenuService.getTycoonProfile(req.tycoonName);
+          const response: WsRespSearchMenuTycoonProfile = {
+            type: WsMessageType.RESP_SEARCH_MENU_TYCOON_PROFILE,
+            wsRequestId: msg.wsRequestId,
+            profile
+          };
+          ws.send(JSON.stringify(response));
+        } catch (err: unknown) {
+          console.error('[Gateway] Failed to fetch tycoon profile:', err);
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: toErrorMessage(err) || 'Failed to fetch tycoon profile',
             code: ErrorCodes.ERROR_Unknown
           };
           ws.send(JSON.stringify(errorResp));
