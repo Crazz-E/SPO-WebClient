@@ -6078,8 +6078,14 @@ private handlePush(socketName: string, packet: RdoPacket) {
       const zoneMatch = /<img[^>]*src\s*=\s*["']?[^"']*zone[^"']*["']?[^>]*title\s*=\s*["']([^"']+)["']/i.exec(cellContent);
       const zoneRequirement = zoneMatch?.[1] || '';
 
+      // Derive residence class from zone requirement text
+      let residenceClass: 'high' | 'middle' | 'low' | undefined;
+      if (zoneRequirement.includes('High Residential')) residenceClass = 'high';
+      else if (zoneRequirement.includes('Mid Residential')) residenceClass = 'middle';
+      else if (zoneRequirement.includes('Low Residential')) residenceClass = 'low';
+
       if (facilityClass && name) {
-        const facility = {
+        const facility: BuildingInfo = {
           name,
           facilityClass,
           visualClassId,
@@ -6088,7 +6094,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
           description,
           zoneRequirement,
           iconPath: this.convertToProxyUrl(iconPath),
-          available
+          available,
+          ...(residenceClass && { residenceClass }),
         };
 
         this.log.debug(`[BuildConstruction] Parsed facility: ${facility.name} (${facility.facilityClass}) - $${facility.cost}, ${facility.area}m², available: ${facility.available}`);

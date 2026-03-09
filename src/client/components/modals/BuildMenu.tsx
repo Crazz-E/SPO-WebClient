@@ -8,16 +8,51 @@
  * Selecting a building closes the menu and starts placement mode.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, ArrowLeft } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useGameStore } from '../../store/game-store';
 import { useClient } from '../../context';
 import { GlassCard, Skeleton } from '../common';
-import type { BuildingCategory } from '@/shared/types';
+import type { BuildingCategory, BuildingInfo } from '@/shared/types';
 import styles from './BuildMenu.module.css';
 
+const RESIDENCE_GROUPS: { key: BuildingInfo['residenceClass']; label: string; styleClass: string }[] = [
+  { key: 'high', label: 'High Class', styleClass: styles.resGroupHigh },
+  { key: 'middle', label: 'Middle Class', styleClass: styles.resGroupMid },
+  { key: 'low', label: 'Low Class', styleClass: styles.resGroupLow },
+];
+
 type Phase = 'categories' | 'facilities';
+
+function FacilityCard({ facility, onSelect }: {
+  facility: BuildingInfo;
+  onSelect: (f: { facilityClass: string; visualClassId: string; available: boolean }) => void;
+}) {
+  return (
+    <button
+      className={`${styles.facilityCard} ${!facility.available ? styles.unavailable : ''}`}
+      onClick={() => facility.available && onSelect(facility)}
+      disabled={!facility.available}
+    >
+      {facility.iconPath && (
+        <img
+          src={facility.iconPath}
+          alt={facility.name}
+          className={styles.facilityIcon}
+        />
+      )}
+      <div className={styles.facilityInfo}>
+        <span className={styles.facilityName}>{facility.name}</span>
+        <span className={styles.facilityDesc}>{facility.description}</span>
+      </div>
+      <div className={styles.facilityMeta}>
+        <span className={styles.facilityCost}>${facility.cost.toLocaleString()}</span>
+        <span className={styles.facilityArea}>{facility.area}m²</span>
+      </div>
+    </button>
+  );
+}
 
 export function BuildMenu() {
   const modal = useUiStore((s) => s.modal);
@@ -70,6 +105,12 @@ export function BuildMenu() {
       client.onPlaceBuilding(facility.facilityClass, facility.visualClassId);
     },
     [closeModal, client],
+  );
+
+  // Group facilities by residence class when any facility has one
+  const hasResidenceGroups = useMemo(
+    () => facilities.some((f) => f.residenceClass),
+    [facilities],
   );
 
   if (modal !== 'buildMenu') return null;
@@ -145,30 +186,32 @@ export function BuildMenu() {
 
           {!isLoading && phase === 'facilities' && (
             <div className={styles.facilityList}>
-              {facilities.map((fac) => (
-                <button
-                  key={fac.facilityClass}
-                  className={`${styles.facilityCard} ${!fac.available ? styles.unavailable : ''}`}
-                  onClick={() => fac.available && handleFacilitySelect(fac)}
-                  disabled={!fac.available}
-                >
-                  {fac.iconPath && (
-                    <img
-                      src={fac.iconPath}
-                      alt={fac.name}
-                      className={styles.facilityIcon}
+              {hasResidenceGroups
+                ? RESIDENCE_GROUPS.map(({ key, label, styleClass }) => {
+                    const group = facilities.filter((f) => f.residenceClass === key);
+                    if (group.length === 0) return null;
+                    return (
+                      <div key={key} className={styles.resGroup}>
+                        <div className={`${styles.resGroupHeader} ${styleClass}`}>
+                          {label}
+                        </div>
+                        {group.map((fac) => (
+                          <FacilityCard
+                            key={fac.facilityClass}
+                            facility={fac}
+                            onSelect={handleFacilitySelect}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })
+                : facilities.map((fac) => (
+                    <FacilityCard
+                      key={fac.facilityClass}
+                      facility={fac}
+                      onSelect={handleFacilitySelect}
                     />
-                  )}
-                  <div className={styles.facilityInfo}>
-                    <span className={styles.facilityName}>{fac.name}</span>
-                    <span className={styles.facilityDesc}>{fac.description}</span>
-                  </div>
-                  <div className={styles.facilityMeta}>
-                    <span className={styles.facilityCost}>${fac.cost.toLocaleString()}</span>
-                    <span className={styles.facilityArea}>{fac.area}m²</span>
-                  </div>
-                </button>
-              ))}
+                  ))}
               {facilities.length === 0 && (
                 <div className={styles.empty}>No buildings available in this category</div>
               )}

@@ -158,6 +158,7 @@ export interface BuildingInfo {
   zoneRequirement: string;    // Zone type requirement
   iconPath: string;           // Building icon path
   available: boolean;         // Whether player can build this
+  residenceClass?: 'high' | 'middle' | 'low'; // Derived from zone requirement text
 }
 
 // =============================================================================
