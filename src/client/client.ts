@@ -53,6 +53,9 @@ import {
   // Building Rename
   WsReqRenameFacility,
   WsRespRenameFacility,
+  // Clone Facility
+  WsReqCloneFacility,
+  WsRespCloneFacility,
   // Building Deletion
   WsReqDeleteFacility,
   WsRespDeleteFacility,
@@ -258,10 +261,6 @@ export class StarpeaceClient {
   private isJoiningChannel: boolean = false;
   private isSelectingCompany: boolean = false;
 
-  // Clone facility state
-  private isCloneMode: boolean = false;
-  private cloneSourceBuilding: BuildingDetailsResponse | null = null;
-
   // Road building state
   private isRoadBuildingMode: boolean = false;
   private isBuildingRoad: boolean = false;
@@ -359,6 +358,7 @@ export class StarpeaceClient {
         const details = useBuildingStore.getState().details;
         if (details) this.handleBuildingAction(actionId, details, rowData);
       },
+      onCloneFacility: (x, y, options) => this.cloneFacility(x, y, options),
       onSearchConnections: (x, y, fluidId, fluidName, direction) => {
         ClientBridge.showConnectionPicker({ fluidName, fluidId, direction, buildingX: x, buildingY: y });
       },
@@ -1589,8 +1589,6 @@ export class StarpeaceClient {
   private handleMapClick(x: number, y: number, visualClass?: string) {
     if (this.currentBuildingToPlace) {
       this.placeBuilding(x, y);
-    } else if (this.isCloneMode) {
-      this.executeCloneFacility(x, y);
     } else {
       // Portal (visual class 6031) is not inspectable
       if (visualClass === '6031') return;
@@ -2031,9 +2029,7 @@ export class StarpeaceClient {
   // =========================================================================
 
   private handleBuildingAction(actionId: string, buildingDetails: BuildingDetailsResponse, rowData?: Record<string, string>): void {
-    if (actionId === 'clone') {
-      this.startCloneFacility(buildingDetails);
-    } else if (actionId === 'launchMovie') {
+    if (actionId === 'launchMovie') {
       this.launchMovie(buildingDetails);
     } else if (actionId === 'cancelMovie') {
       this.cancelMovie(buildingDetails);
@@ -2196,73 +2192,32 @@ export class StarpeaceClient {
   // CLONE FACILITY
   // =========================================================================
 
-  private async startCloneFacility(buildingDetails: BuildingDetailsResponse): Promise<void> {
-    this.isCloneMode = true;
-    this.cloneSourceBuilding = buildingDetails;
-
-    // Get facility dimensions from the source building's visual class
-    let xsize = 1;
-    let ysize = 1;
-    try {
-      const dimensions = await this.getFacilityDimensions(buildingDetails.visualClass);
-      if (dimensions) {
-        xsize = dimensions.xsize;
-        ysize = dimensions.ysize;
-      }
-    } catch (err) {
-      console.error('Failed to fetch facility dimensions for clone:', err);
-    }
-
-    const renderer = this.mapNavigationUI?.getRenderer();
-    if (renderer) {
-      renderer.setPlacementMode(true, `Clone: ${buildingDetails.buildingName}`, 0, 0, '', xsize, ysize, buildingDetails.visualClass);
-    }
-
-    this.setupCloneKeyboardHandler();
-    this.showNotification(`Click on map to clone ${buildingDetails.buildingName}. Press ESC to cancel.`, 'info');
-  }
-
-  private setupCloneKeyboardHandler(): void {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && this.isCloneMode) {
-        this.cancelCloneMode();
-        document.removeEventListener('keydown', handler);
-      }
-    };
-    document.addEventListener('keydown', handler);
-  }
-
-  private cancelCloneMode(): void {
-    this.isCloneMode = false;
-    this.cloneSourceBuilding = null;
-
-    const renderer = this.mapNavigationUI?.getRenderer();
-    if (renderer) {
-      renderer.setPlacementMode(false);
-    }
-  }
-
-  private async executeCloneFacility(targetX: number, targetY: number): Promise<void> {
-    if (!this.cloneSourceBuilding) return;
-
-    const source = this.cloneSourceBuilding;
-    ClientBridge.log('Clone', `Cloning ${source.buildingName} to (${targetX}, ${targetY})...`);
+  /**
+   * Propagate configuration settings from a building to other buildings of the same type.
+   * Options is a bitmask of clone flags (SameTown=1, SameCompany=2, Suppliers=4, etc.)
+   * Archaeology: ManagementSheet.pas:388-403, CloneOptions.pas
+   */
+  private async cloneFacility(x: number, y: number, options: number): Promise<void> {
+    ClientBridge.log('Clone', `Cloning settings at (${x}, ${y}) with options=0x${options.toString(16)}`);
 
     try {
-      await this.setBuildingProperty(source.x, source.y, 'CloneFacility', '0', {
-        x: String(targetX),
-        y: String(targetY),
-        tycoonId: '0',
-        limitToTown: '0',
-        limitToCompany: '0',
-      });
+      const req: WsReqCloneFacility = {
+        type: WsMessageType.REQ_CLONE_FACILITY,
+        x,
+        y,
+        options,
+      };
 
-      this.showNotification(`${source.buildingName} cloned successfully!`, 'success');
+      const response = await this.sendRequest(req) as WsRespCloneFacility;
+
+      if (response.success) {
+        this.showNotification('Clone settings applied successfully', 'success');
+      } else {
+        this.showNotification('Failed to apply clone settings', 'error');
+      }
     } catch (err: unknown) {
       ClientBridge.log('Error', `Failed to clone facility: ${toErrorMessage(err)}`);
-      this.showNotification('Failed to clone facility', 'error');
-    } finally {
-      this.cancelCloneMode();
+      this.showNotification('Failed to apply clone settings', 'error');
     }
   }
 

@@ -58,6 +58,14 @@ export enum PropertyType {
    * Kind values: 1=stores, 2=factories, 4=warehouses.
    */
   TRADE_CONNECT_BUTTONS = 'TRADE_CONNECT_BUTTONS',
+  /**
+   * Clone settings panel: checkbox list of clone options + Apply button.
+   * Hardcoded: "Same Company" (0x02), "Same Town" (0x01) — both checked by default.
+   * Dynamic: parsed from CloneMenu0 pipe-delimited string ("Label|value|Label|value|...").
+   * Apply button OR's checked flags → fire-and-forget CloneFacility on ClientView.
+   * Archaeology: ManagementSheet.pas:132-149, CloneOptions.pas
+   */
+  CLONE_SETTINGS = 'CLONE_SETTINGS',
 }
 
 /**

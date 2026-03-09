@@ -1,6 +1,6 @@
 ---
 name: delphi-archaeologist
-description: Analyze SPO-Original Delphi 5 codebase to understand systems and document them for the WebClient knowledge base. Two modes — Explore (understand how X works) and Document (write formal docs for subsystem Y).
+description: "TRIGGER: When reverse-engineering SPO-Original Delphi source, tracing RDO server handlers, or documenting legacy subsystems. Two modes: Explore (understand) and Document (write formal docs)."
 user-invokable: true
 disable-model-invocation: false
 metadata:

@@ -1,9 +1,6 @@
 ---
 name: debugger
-description: |
-  Systematic debugging and root cause analysis for identifying and fixing software issues.
-  Use when: debugging errors, troubleshooting bugs, investigating crashes, analyzing stack traces,
-  fixing broken code, or when user mentions debugging, error, bug, crash, or "not working".
+description: "TRIGGER: When troubleshooting failures — systematic root cause analysis, stack traces, bisection."
 license: MIT
 metadata:
   author: awesome-llm-apps

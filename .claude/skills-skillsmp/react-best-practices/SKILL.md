@@ -1,6 +1,6 @@
 ---
 name: react-best-practices
-description: React development guidelines with hooks, component patterns, state management, and performance optimization.
+description: "TRIGGER: When writing React components (*.tsx). Covers hooks rules, component composition, memoization, error boundaries."
 author: vercel
 category: development
 tags: [react, typescript, nextjs]

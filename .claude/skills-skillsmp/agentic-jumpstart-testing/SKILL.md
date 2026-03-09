@@ -1,6 +1,6 @@
 ---
 name: agentic-jumpstart-testing
-description: Testing patterns with Playwright for E2E tests and Vitest for unit tests. Use when writing tests, testing components, E2E testing, integration tests, mocking, or when the user mentions testing, Playwright, Vitest, test, or coverage.
+description: "TRIGGER: When bootstrapping new test suites. Covers Playwright E2E + Jest unit test scaffolding."
 ---
 
 # Testing Patterns

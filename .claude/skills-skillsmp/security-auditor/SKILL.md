@@ -1,6 +1,6 @@
 ---
 name: checking-owasp-compliance
-description: Check compliance with OWASP Top 10 security risks and best practices. Use when performing comprehensive security audits. Trigger with 'check OWASP compliance', 'audit web security', or 'validate OWASP'.
+description: "TRIGGER: When editing auth, session, or WebSocket code. Covers OWASP Top 10, XSS, injection, WebSocket security."
 version: 1.0.0
 allowed-tools: "Read, Write, Edit, Grep, Glob, Bash(security:*), Bash(scan:*), Bash(audit:*)"
 license: MIT

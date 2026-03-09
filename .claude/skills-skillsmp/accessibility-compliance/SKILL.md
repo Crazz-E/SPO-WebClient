@@ -1,6 +1,6 @@
 ---
 name: accessibility-compliance
-description: Implement WCAG 2.2 compliant interfaces with mobile accessibility, inclusive design patterns, and assistive technology support. Use when auditing accessibility, implementing ARIA patterns, building for screen readers, or ensuring inclusive user experiences.
+description: "TRIGGER: When adding/modifying UI components. Covers WCAG 2.2 AA, ARIA patterns, keyboard navigation, focus management."
 ---
 
 # Accessibility Compliance

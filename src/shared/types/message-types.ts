@@ -140,6 +140,10 @@ export enum WsMessageType {
   REQ_CONNECT_FACILITIES = 'REQ_CONNECT_FACILITIES',
   RESP_CONNECT_FACILITIES = 'RESP_CONNECT_FACILITIES',
 
+  // Clone Facility (propagate settings to same-type buildings)
+  REQ_CLONE_FACILITY = 'REQ_CLONE_FACILITY',
+  RESP_CLONE_FACILITY = 'RESP_CLONE_FACILITY',
+
   // Road Building
   REQ_BUILD_ROAD = 'REQ_BUILD_ROAD',
   RESP_BUILD_ROAD = 'RESP_BUILD_ROAD',
@@ -700,6 +704,22 @@ export interface WsRespConnectFacilities extends WsMessage {
   type: WsMessageType.RESP_CONNECT_FACILITIES;
   success: boolean;
   resultMessage: string;
+}
+
+// =============================================================================
+// CLONE FACILITY MESSAGES
+// =============================================================================
+
+export interface WsReqCloneFacility extends WsMessage {
+  type: WsMessageType.REQ_CLONE_FACILITY;
+  x: number;       // Source building X coordinate
+  y: number;       // Source building Y coordinate
+  options: number;  // Bitmask of clone option flags (OR'd together)
+}
+
+export interface WsRespCloneFacility extends WsMessage {
+  type: WsMessageType.RESP_CLONE_FACILITY;
+  success: boolean;
 }
 
 // =============================================================================

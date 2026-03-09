@@ -1,6 +1,6 @@
 ---
 name: code-guardian
-description: "Regression prevention: 5 crash category checklists, coverage ratchet, protected files, sanctuarization manifest for source code changes."
+description: "TRIGGER: Before modifying any src/ file. Checks 5 real crash categories (RDO traps, singleton state, i/j swap, type coercion, push handler errors), coverage ratchet, and protected file manifest."
 user-invokable: false
 disable-model-invocation: false
 ---

@@ -1,6 +1,6 @@
 ---
 name: core-components
-description: Core component library and design system patterns. Use when building UI, using design tokens, or working with the component library.
+description: "TRIGGER: When working on design tokens, CSS Modules, or common/ components. Covers component library patterns, theming."
 ---
 
 # Core Components

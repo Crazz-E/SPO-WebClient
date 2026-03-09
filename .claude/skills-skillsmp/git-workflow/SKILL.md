@@ -2,7 +2,7 @@
 name: Git
 slug: git
 version: 1.0.2
-description: Master Git workflows with branch strategies, conflict resolution, history management, and team collaboration patterns.
+description: "TRIGGER: When managing branches, resolving conflicts, or planning releases. Covers feature/, fix/ conventions."
 ---
 
 ## When to Use

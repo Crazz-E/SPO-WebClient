@@ -286,6 +286,9 @@ export type {
   // Facility connections (trade)
   WsReqConnectFacilities,
   WsRespConnectFacilities,
+  // Clone facility
+  WsReqCloneFacility,
+  WsRespCloneFacility,
 } from './message-types';
 
 export type { ConnectionSearchResult, FavoritesItem, ResearchCategoryData, ResearchInventionItem, ResearchInventionDetails } from './message-types';

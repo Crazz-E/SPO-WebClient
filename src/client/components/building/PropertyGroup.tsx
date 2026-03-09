@@ -405,6 +405,21 @@ function DefinedProperties({
       continue;
     }
 
+    // Clone settings (checklist of clone options + Apply button)
+    if (def.type === PropertyType.CLONE_SETTINGS) {
+      const cloneMenuValue = valueMap.get('CloneMenu0') ?? '';
+      elements.push(
+        <CloneSettings
+          key="clone-settings"
+          cloneMenuValue={cloneMenuValue}
+          buildingX={buildingX}
+          buildingY={buildingY}
+        />,
+      );
+      rendered.add(def.rdoName);
+      continue;
+    }
+
     // Revenue graph (MoneyGraphInfo)
     if (def.type === PropertyType.GRAPH) {
       const hasGraph = valueMap.get('MoneyGraph') ?? '0';
@@ -1322,6 +1337,105 @@ function ActionButton({ def, onAction }: { def: PropertyDefinition; onAction: (i
       >
         {def.buttonLabel ?? def.displayName}
       </button>
+    </div>
+  );
+}
+
+// =============================================================================
+// CLONE SETTINGS (PropertyType.CLONE_SETTINGS)
+// =============================================================================
+
+/**
+ * Parse pipe-delimited CloneMenu0 value into option pairs.
+ * Delphi format: "Label|decimalValue|Label|decimalValue|..."
+ * Archaeology: ManagementSheet.pas:137-149, CompStringsParser.pas:93-116
+ */
+export function parseCloneMenu(value: string): Array<{ label: string; value: number }> {
+  if (!value) return [];
+  const parts = value.split('|').filter(s => s.length > 0);
+  const options: Array<{ label: string; value: number }> = [];
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const label = parts[i].trim();
+    const numVal = parseInt(parts[i + 1], 10);
+    if (label && !isNaN(numVal)) {
+      options.push({ label, value: numVal });
+    }
+  }
+  return options;
+}
+
+/**
+ * Clone Settings panel — propagate building configuration to same-type buildings.
+ * Hardcoded: "Same Company" (0x02, checked), "Same Town" (0x01, checked).
+ * Dynamic: from CloneMenu0 pipe-delimited property value.
+ * Apply button OR's checked flags → fire-and-forget CloneFacility on ClientView.
+ * Archaeology: ManagementSheet.pas:132-149,388-403, CloneOptions.pas
+ */
+function CloneSettings({
+  cloneMenuValue,
+  buildingX,
+  buildingY,
+}: {
+  cloneMenuValue: string;
+  buildingX: number;
+  buildingY: number;
+}) {
+  const client = useClient();
+  const isOwner = useBuildingStore((s) => s.isOwner);
+
+  const dynamicOptions = parseCloneMenu(cloneMenuValue);
+
+  // Hardcoded scope options (always present, checked by default) + dynamic building-specific options
+  const allOptions: Array<{ label: string; value: number; defaultChecked: boolean }> = [
+    { label: 'Same Company', value: 0x02, defaultChecked: true },
+    { label: 'Same Town', value: 0x01, defaultChecked: true },
+    ...dynamicOptions.map(opt => ({ ...opt, defaultChecked: false })),
+  ];
+
+  const [checkedValues, setCheckedValues] = useState<Set<number>>(() => {
+    const defaults = new Set<number>();
+    for (const opt of allOptions) {
+      if (opt.defaultChecked) defaults.add(opt.value);
+    }
+    return defaults;
+  });
+
+  const handleToggle = useCallback((value: number) => {
+    setCheckedValues(prev => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  }, []);
+
+  const handleApply = useCallback(() => {
+    let bitmask = 0;
+    for (const v of checkedValues) bitmask |= v;
+    client.onCloneFacility(buildingX, buildingY, bitmask);
+  }, [checkedValues, buildingX, buildingY, client]);
+
+  if (!isOwner) return null;
+
+  return (
+    <div className={styles.cloneSettings}>
+      <div className={styles.cloneSettingsLabel}>Clone Settings</div>
+      {allOptions.map((opt) => (
+        <label key={opt.value} className={styles.cloneOption}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            checked={checkedValues.has(opt.value)}
+            onChange={() => handleToggle(opt.value)}
+          />
+          <span>{opt.label}</span>
+        </label>
+      ))}
+      <div className={styles.actionBtnContainer}>
+        <button className={styles.actionBtn} onClick={handleApply}>
+          Apply Clone
+        </button>
+      </div>
     </div>
   );
 }

@@ -81,6 +81,9 @@ import {
   // Building Connection (map-click connect)
   WsReqConnectFacilities,
   WsRespConnectFacilities,
+  // Clone Facility
+  WsReqCloneFacility,
+  WsRespCloneFacility,
   // Road Building
   WsReqBuildRoad,
   WsRespBuildRoad,
@@ -1708,6 +1711,29 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
             wsRequestId: msg.wsRequestId,
             errorMessage: toErrorMessage(err) || 'Failed to set property',
             code: ErrorCodes.ERROR_AccessDenied
+          };
+          ws.send(JSON.stringify(errorResp));
+        }
+        break;
+      }
+
+      case WsMessageType.REQ_CLONE_FACILITY: {
+        const req = msg as WsReqCloneFacility;
+        console.log(`[Gateway] Clone facility at (${req.x},${req.y}) options=0x${req.options.toString(16)}`);
+        try {
+          session.cloneFacility(req.x, req.y, req.options);
+          const response: WsRespCloneFacility = {
+            type: WsMessageType.RESP_CLONE_FACILITY,
+            wsRequestId: msg.wsRequestId,
+            success: true,
+          };
+          ws.send(JSON.stringify(response));
+        } catch (err: unknown) {
+          const errorResp: WsRespError = {
+            type: WsMessageType.RESP_ERROR,
+            wsRequestId: msg.wsRequestId,
+            errorMessage: toErrorMessage(err) || 'Failed to clone facility',
+            code: ErrorCodes.ERROR_AccessDenied,
           };
           ws.send(JSON.stringify(errorResp));
         }

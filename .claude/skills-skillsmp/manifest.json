@@ -188,14 +188,6 @@
       "githubUrl": "https://github.com/vercel/next.js/tree/canary/.claude-plugin/plugins/cache-components/skills/cache-components"
     },
     {
-      "name": "pwa-development-v2",
-      "skillName": "pwa-development",
-      "author": "alinaqi",
-      "stars": 509,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills-skillsmp\\pwa-development-v2\\SKILL.md",
-      "githubUrl": "https://github.com/alinaqi/claude-bootstrap/tree/main/skills/pwa-development"
-    },
-    {
       "name": "react-best-practices",
       "skillName": "react-best-practices",
       "author": "skillcreatorai",

@@ -1,6 +1,6 @@
 ---
 name: screen-reader-testing
-description: Test web applications with screen readers including VoiceOver, NVDA, and JAWS. Use when validating screen reader compatibility, debugging accessibility issues, or ensuring assistive technology support.
+description: "TRIGGER: When testing with screen readers (NVDA/VoiceOver). Covers ARIA live regions, focus traps, semantic HTML."
 ---
 
 # Screen Reader Testing

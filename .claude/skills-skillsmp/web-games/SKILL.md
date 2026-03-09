@@ -1,6 +1,6 @@
 ---
 name: web-games
-description: Web browser game development principles. Framework selection, WebGPU, optimization, PWA.
+description: "TRIGGER: When working on game loop, Canvas 2D renderer, or isometric engine. Covers frame budget, game-specific optimization, PWA."
 ---
 
 # Web Browser Game Development

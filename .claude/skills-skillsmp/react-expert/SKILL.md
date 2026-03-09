@@ -1,6 +1,6 @@
 ---
 name: react-expert
-description: Use when building React 18+ applications requiring component architecture, hooks patterns, or state management. Invoke for Server Components, performance optimization, Suspense boundaries, React 19 features.
+description: "TRIGGER: When implementing advanced React patterns — Suspense, concurrent features, Server Components, custom hooks."
 license: MIT
 metadata:
   author: https://github.com/Jeffallan

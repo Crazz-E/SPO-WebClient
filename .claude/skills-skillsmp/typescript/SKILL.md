@@ -1,8 +1,6 @@
 ---
 name: typescript
-description: >
-  TypeScript strict patterns and best practices.
-  Trigger: When implementing or refactoring TypeScript in .ts/.tsx (types, interfaces, generics, const maps, type guards, removing any, tightening unknown).
+description: "TRIGGER: When writing TypeScript — strict mode, const maps, type guards, discriminated unions, branded types. Enforces no any rule."
 license: Apache-2.0
 metadata:
   author: prowler-cloud

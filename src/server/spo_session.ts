@@ -3470,6 +3470,38 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
   }
 
   /**
+   * Propagate configuration settings from a building to other buildings of the same type.
+   * Fire-and-forget call on ClientView (worldContextId) — NOT on CurrBlock.
+   * Delphi: TClientView.CloneFacility(x, y, options, useless, tycoonId: integer)
+   * Archaeology: ManagementSheet.pas:388-403, ServerCnxHandler.pas:2262
+   */
+  public cloneFacility(x: number, y: number, options: number): void {
+    if (!this.worldContextId) {
+      throw new Error('World context not initialized');
+    }
+    if (!this.tycoonId) {
+      throw new Error('Tycoon ID not available');
+    }
+    const socket = this.sockets.get('world');
+    if (!socket) {
+      throw new Error('World socket not available');
+    }
+    const cmd = RdoCommand.sel(this.worldContextId)
+      .call('CloneFacility')
+      .push()  // "*" separator — void procedure, fire-and-forget
+      .args(
+        RdoValue.int(x),
+        RdoValue.int(y),
+        RdoValue.int(options),
+        RdoValue.int(0),  // useless param (always 0 in Delphi client)
+        RdoValue.int(parseInt(this.tycoonId, 10))
+      )
+      .build();
+    socket.write(cmd);
+    this.log.debug(`[CloneFacility] Sent: ${cmd}`);
+  }
+
+  /**
    * VERIFIED [HIGH-02]: Get property list at specific coordinates
    * Ensures SetObject is called before GetPropertyList with proper delay
    */
@@ -7025,6 +7057,12 @@ private handlePush(socketName: string, packet: RdoPacket) {
       // Build the RDO command arguments based on the command type
       const rdoArgs = this.buildRdoCommandArgs(propertyName, value, additionalParams);
 
+      // Published properties that use SET verb (not CALL) on CurrBlock.
+      // These are Delphi published properties accessed via RTTI, not methods.
+      const RDO_SET_PROPERTIES: ReadonlySet<string> = new Set([
+        'RDOAcceptCloning', // TBlock.RDOAcceptCloning — boolean, Kernel.pas:1304
+      ]);
+
       // Send SetProperty command via construction service
       // The sel on CurrBlock is persistent (no closure needed)
       let setCmd: string;
@@ -7033,6 +7071,13 @@ private handlePush(socketName: string, packet: RdoPacket) {
         const actualPropName = additionalParams.propertyName;
         setCmd = RdoCommand.sel(currBlock)
           .set(actualPropName)
+          .args(...rdoArgs)
+          .build();
+      } else if (RDO_SET_PROPERTIES.has(propertyName)) {
+        // Published property: use SET verb (not CALL)
+        // e.g., RDOAcceptCloning is a boolean property on TBlock — Kernel.pas:1304
+        setCmd = RdoCommand.sel(currBlock)
+          .set(propertyName)
           .args(...rdoArgs)
           .build();
       } else {
@@ -7275,26 +7320,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
         break;
       }
 
-      case 'CloneFacility': {
-        // Args: x (integer), y (integer), limitToTown (integer), limitToCompany (integer), tycoonId (integer)
-        // Voyager: TClientView.CloneFacility — doc/spo-original-reference.md:297
-        const cloneX = params.x;
-        const cloneY = params.y;
-        const limitToTown = params.limitToTown || '0';
-        const limitToCompany = params.limitToCompany || '0';
-        const cloneTycoonId = params.tycoonId || '0';
-        if (!cloneX || !cloneY) {
-          throw new Error('CloneFacility requires x and y parameters');
-        }
-        args.push(
-          RdoValue.int(parseInt(cloneX, 10)),
-          RdoValue.int(parseInt(cloneY, 10)),
-          RdoValue.int(parseInt(limitToTown, 10)),
-          RdoValue.int(parseInt(limitToCompany, 10)),
-          RdoValue.int(parseInt(cloneTycoonId, 10))
-        );
-        break;
-      }
+      // CloneFacility removed — now uses dedicated cloneFacility() method on ClientView
 
       case 'RDOSetMinSalaryValue': {
         // Args: levelIndex (integer: 0=hi, 1=mid, 2=lo), value (integer)
@@ -7555,10 +7581,9 @@ private handlePush(socketName: string, packet: RdoPacket) {
         return 'TradeRole';
 
       case 'RDOAcceptCloning':
-        return 'CloneMenu0';
+        return 'AcceptCloning';
 
-      case 'CloneFacility':
-        return 'UpgradeLevel';
+      // CloneFacility removed — now uses dedicated cloneFacility() method
 
       case 'RDOSetMinSalaryValue': {
         const level = params.levelIndex || '0';

@@ -1,6 +1,6 @@
 ---
 name: dependency-updater
-description: Smart dependency management for any language. Auto-detects project type, applies safe updates automatically, prompts for major versions, diagnoses and fixes dependency issues.
+description: "TRIGGER: When updating dependencies, checking outdated packages, or resolving version conflicts. Auto-detects project type, applies safe updates, prompts for major versions."
 license: MIT
 metadata:
   version: 1.0.0

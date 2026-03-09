@@ -1,6 +1,6 @@
 ---
 name: dependency-management-deps-audit
-description: "You are a dependency security expert specializing in vulnerability scanning, license compliance, and supply chain security. Analyze project dependencies for known vulnerabilities, licensing issues,..."
+description: "TRIGGER: When scanning for vulnerabilities, checking license compliance, or auditing supply chain security in package.json / node_modules."
 risk: unknown
 source: community
 ---

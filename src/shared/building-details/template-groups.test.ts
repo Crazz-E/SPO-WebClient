@@ -789,3 +789,32 @@ describe('Capitol building RDO property name generation', () => {
     ]);
   });
 });
+
+describe('UPGRADE_GROUP clone settings', () => {
+  it('AcceptCloning rdoCommands key matches property rdoName', () => {
+    const acceptProp = UPGRADE_GROUP.properties.find(p => p.rdoName === 'AcceptCloning');
+    expect(acceptProp).toBeDefined();
+    expect(acceptProp!.type).toBe(PropertyType.BOOLEAN);
+    expect(acceptProp!.editable).toBe(true);
+    // Key must match rdoName so handlePropertyChange can find the command
+    expect(UPGRADE_GROUP.rdoCommands!['AcceptCloning']).toBeDefined();
+    expect(UPGRADE_GROUP.rdoCommands!['AcceptCloning'].command).toBe('RDOAcceptCloning');
+  });
+
+  it('CloneMenu0 is CLONE_SETTINGS type (not TEXT or ACTION_BUTTON)', () => {
+    const cloneMenu = UPGRADE_GROUP.properties.find(p => p.rdoName === 'CloneMenu0');
+    expect(cloneMenu).toBeDefined();
+    expect(cloneMenu!.type).toBe(PropertyType.CLONE_SETTINGS);
+  });
+
+  it('no ACTION_BUTTON for cloneFacility (removed — replaced by CloneSettings component)', () => {
+    const actionButton = UPGRADE_GROUP.properties.find(
+      p => p.type === PropertyType.ACTION_BUTTON && p.actionId === 'clone'
+    );
+    expect(actionButton).toBeUndefined();
+  });
+
+  it('no CloneFacility in rdoCommands (now uses dedicated handler)', () => {
+    expect(UPGRADE_GROUP.rdoCommands!['CloneFacility']).toBeUndefined();
+  });
+});

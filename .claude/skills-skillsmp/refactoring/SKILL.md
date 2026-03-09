@@ -1,6 +1,6 @@
 ---
 name: codebase-cleanup-refactor-clean
-description: "You are a code refactoring expert specializing in clean code principles, SOLID design patterns, and modern software engineering best practices. Analyze and refactor the provided code to improve its quality, maintainability, and performance."
+description: "TRIGGER: When restructuring code — extract function, SOLID principles, reducing complexity. Preserves test coverage."
 ---
 
 # Refactor and Clean Code

@@ -526,12 +526,10 @@ export const UPGRADE_GROUP: PropertyGroup = {
     { rdoName: 'Pending', displayName: 'Pending', type: PropertyType.NUMBER, hideEmpty: true },
     { rdoName: 'UpgradeActions', displayName: 'Actions', type: PropertyType.UPGRADE_ACTIONS },
     { rdoName: 'AcceptCloning', displayName: 'Accept Cloning', type: PropertyType.BOOLEAN, editable: true },
-    { rdoName: 'CloneMenu0', displayName: 'Clone Options', type: PropertyType.TEXT, hideEmpty: true },
-    { rdoName: 'cloneFacility', displayName: 'Clone Facility', type: PropertyType.ACTION_BUTTON, actionId: 'clone', buttonLabel: 'Clone Facility' },
+    { rdoName: 'CloneMenu0', displayName: 'Clone Settings', type: PropertyType.CLONE_SETTINGS },
   ],
   rdoCommands: {
-    'RDOAcceptCloning': { command: 'RDOAcceptCloning' },
-    'CloneFacility': { command: 'CloneFacility' },
+    'AcceptCloning': { command: 'RDOAcceptCloning' },
   },
 };
 
