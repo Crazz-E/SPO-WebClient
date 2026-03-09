@@ -3583,20 +3583,22 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     return values;
   }
 
-  private async cacherCloseObject(tempObjectId: string): Promise<void> {
+  private cacherCloseObject(tempObjectId: string): void {
     if (!this.cacherId) return;
-    // CloseObject is a procedure WITH parameter → use "^" separator (synchronous call).
-    // The old code used separator: '*' which is WRONG per RDO dispatch rules:
-    //   procedure with params → "^" | parameterless procedure → "*"
-    // Using "*" with sendRdoRequest's QueryId could crash the Delphi FIVE layer.
-    await this.sendRdoRequest('map', {
-      verb: RdoVerb.SEL,
-      targetId: this.cacherId,
-      action: RdoAction.CALL,
-      member: 'CloseObject',
-      args: [tempObjectId]
-      // No separator override → defaults to "^" (METHOD_SEPARATOR) since rid is present
-    });
+    const socket = this.sockets.get('map');
+    if (!socket) return;
+    // CloseObject is a Delphi procedure (void) — fire-and-forget, no QueryId.
+    // Delphi: procedure CloseObject(Obj: integer)
+    try {
+      const cmd = RdoCommand.sel(this.cacherId)
+        .call('CloseObject')
+        .push() // "*" separator — void procedure
+        .args(RdoValue.int(parseInt(tempObjectId, 10)))
+        .build();
+      socket.write(cmd);
+    } catch (e: unknown) {
+      this.log.warn('[cacherCloseObject] Failed:', toErrorMessage(e));
+    }
   }
 
   private parseBooleanCacheValue(value: string | undefined): boolean {
