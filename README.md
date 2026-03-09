@@ -11,14 +11,30 @@ Starpeace Online is a massively multiplayer economic simulation where players bu
 This project is a modern web client that replaces the original desktop application. A Node.js gateway translates browser WebSocket messages into raw RDO commands, handling authentication, session management, and asset serving. The browser client renders the isometric game world on Canvas 2D and provides the full game UI in React.
 
 ```
-Browser Client ──WebSocket──▶ Node.js Gateway ──RDO/TCP──▶ Game Servers (Delphi)
+Browser Client ──WebSocket──> Node.js Gateway ──RDO/TCP──> Game Servers (Delphi)
 ```
 
-## Features
+## Technology Stack
+
+| Layer | Technology | Version |
+|-------|------------|---------|
+| Language | TypeScript (strict mode) | 5.9 |
+| Client UI | React, Zustand, CSS Modules, Lucide React | 19.2, 5.0 |
+| Accessibility | React Aria Components | 1.15 |
+| Rendering | Canvas 2D isometric engine (custom) | — |
+| Server | Node.js, WebSocket (ws) | 18+, 8.x |
+| Protocol | RDO over TCP (binary/text, type-prefixed values) | — |
+| Build | Vite (client), tsc (server), esbuild (terrain test) | 7.3 |
+| Testing | Jest, ts-jest, Testing Library | 30.2 |
+| HTML Parsing | Cheerio (mail body extraction) | 1.1 |
+| Animation | gifuct-js (GIF decoding for vehicle sprites) | 2.1 |
+| Archive | 7zip-min (CAB asset extraction) | 2.1 |
+
+## Key Features
 
 - **Canvas 2D isometric engine** — 9-layer renderer (terrain, vegetation, concrete, roads, buildings, zones, placement preview, road preview, UI overlays) with chunk caching, texture atlases, and vehicle animations
-- **React 19 UI with Zustand state** — 60+ React components across 16 directories, styled with CSS Modules. 11 Zustand stores manage all client state
-- **Four-stage cinematic login** — Authentication → Zone → World → Company selection with glassmorphism cards and animated backgrounds
+- **React 19 UI with Zustand state** — 65+ React components across 16 directories, styled with CSS Modules. 11 Zustand stores manage all client state
+- **Four-stage cinematic login** — Authentication > Zone > World > Company selection with glassmorphism cards and animated backgrounds
 - **MMORPG-style HUD** — Top bar with status ticker, left/right rails, slide-in panels, minimap, overlay menu
 - **Building inspector** — Real-time facility data with tabbed property groups (General, Supplies, Production, Workforce, Budget, Research), quick stats, revenue graphs, and pricing controls
 - **Empire overview** — Company facility list, financial summaries, profile panel, favorites
@@ -26,30 +42,15 @@ Browser Client ──WebSocket──▶ Node.js Gateway ──RDO/TCP──▶ G
 - **Chat system** — Channel-based chat with typing indicators
 - **Politics** — Six tabs: Jobs, Ministries, Ratings, Residentials, Towns, Votes
 - **Transport** — Route management panel
-- **Search** — Cross-entity search: Home, Towns, People, Rankings, Banks
+- **Search** — Cross-entity search: Home, Towns, People, Rankings, Banks with tycoon profile view
 - **Build menu** — Category-based building placement with zone-type picker and placement validation
 - **Command palette** — Ctrl+K keyboard launcher for quick navigation and actions
 - **Mobile-responsive** — Bottom navigation, bottom sheets, touch handling, responsive breakpoints
 - **Road and concrete systems** — Road building/demolition with topology-based texture selection, concrete tile rendering around buildings
 - **Surface overlays** — Environment, population, and market data visualizations on the map
-- **Mock server** — Capture-based replay engine with 15+ scenarios for offline development without a live game server
+- **Mock server** — Capture-based replay engine with 8+ scenarios for offline development without a live game server
 - **Service registry** — Managed service lifecycle with dependency ordering, health checks, and graceful shutdown
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Language | TypeScript 5.9 (strict mode) |
-| Client UI | React 19, Zustand 5, CSS Modules, Lucide React |
-| Accessibility | React Aria Components |
-| Rendering | Canvas 2D isometric engine (custom) |
-| Server | Node.js 18+, WebSocket (ws 8.x), HTTP |
-| Protocol | RDO over TCP (binary/text, type-prefixed values) |
-| Build | Vite 7 (client), tsc (server), esbuild (terrain test) |
-| Testing | Jest 30, ts-jest, Testing Library |
-| HTML Parsing | Cheerio (mail body extraction) |
-| Animation | gifuct-js (GIF decoding for vehicle sprites) |
-| Archive | 7zip-min (CAB asset extraction) |
+- **In-app changelog** — Version badge with changelog modal for tracking updates
 
 ## Getting Started
 
@@ -73,7 +74,7 @@ Then open `http://localhost:8080` in your browser.
 npm run build           # Build server (tsc) + client (Vite) + terrain test (esbuild)
 npm run dev             # Build + start server
 npm run dev:react       # Vite dev server only (hot reload, no backend)
-npm test                # Run all tests (~2528 tests, 96 suites)
+npm test                # Run all tests
 npm run test:watch      # Watch mode
 npm run test:coverage   # Coverage report
 npm run test:verbose    # Verbose output
@@ -90,45 +91,89 @@ npm run test:smoke      # Component smoke tests only (jsdom)
 | `LOG_LEVEL` | `info` | Logging verbosity (`debug`, `info`, `warn`, `error`) |
 | `NODE_ENV` | — | Set to `production` to disable colorized logs |
 
-## Architecture
+## Project Architecture
 
 ```
 src/
 ├── client/
 │   ├── main.tsx                 # Vite entry — boots client, mounts React
-│   ├── App.tsx                  # Root router (LoginScreen ↔ GameScreen)
+│   ├── App.tsx                  # Root router (LoginScreen <-> GameScreen)
 │   ├── client.ts                # StarpeaceClient — game logic controller
-│   ├── context.ts               # ClientContext (React ↔ client bridge)
+│   ├── context.ts               # ClientContext (React <-> client bridge)
 │   ├── bridge/                  # ClientBridge (store-pushing adapter)
 │   ├── store/                   # 11 Zustand stores
-│   ├── hooks/                   # Custom hooks (usePanel, useResponsive, useCommandPalette)
+│   │   ├── building-store.ts    # Building inspector state
+│   │   ├── chat-store.ts        # Chat channels and messages
+│   │   ├── empire-store.ts      # Company facilities and finances
+│   │   ├── game-store.ts        # Core game state (session, map, zones)
+│   │   ├── log-store.ts         # Action log
+│   │   ├── mail-store.ts        # Mail folders and messages
+│   │   ├── politics-store.ts    # Capitol and voting data
+│   │   ├── profile-store.ts     # User and tycoon profiles
+│   │   ├── search-store.ts      # Search queries and results
+│   │   ├── transport-store.ts   # Transport routes
+│   │   └── ui-store.ts          # Panels, modals, HUD state
+│   ├── hooks/                   # Custom hooks
+│   │   ├── usePanel.ts          # Panel open/close logic
+│   │   ├── useResponsive.ts     # Responsive breakpoints
+│   │   ├── useCommandPalette.ts # Command palette state
+│   │   ├── useKeyboardShortcuts.ts
+│   │   └── useChangelogCheck.ts # Version change detection
 │   ├── styles/                  # Design tokens, reset, typography, animations
 │   ├── layouts/                 # LoginScreen, GameScreen
 │   ├── components/              # React components (CSS Modules)
-│   │   ├── common/              # Badge, Toast, GlassCard, Skeleton, SliderInput, …
+│   │   ├── common/              # Badge, Toast, GlassCard, Skeleton, SliderInput, ...
 │   │   ├── hud/                 # TopBar, LeftRail, RightRail, StatusTicker
 │   │   ├── panels/              # RightPanel, LeftPanel (slide-in)
 │   │   ├── building/            # BuildingInspector, QuickStats, PropertyGroup, InspectorTabs
 │   │   ├── empire/              # EmpireOverview, FacilityList, FinancialSummary, ProfilePanel
 │   │   ├── mail/                # MailPanel, HtmlMailBody
 │   │   ├── chat/                # ChatStrip
-│   │   ├── search/              # SearchPanel
-│   │   ├── politics/            # JobsTab, MinistriesTab, RatingsTab, VotesTab, …
+│   │   ├── search/              # SearchPanel, TycoonProfileView
+│   │   ├── politics/            # JobsTab, MinistriesTab, RatingsTab, VotesTab, ...
 │   │   ├── transport/           # TransportPanel
-│   │   ├── modals/              # BuildMenu, SettingsDialog, CompanyCreationModal, …
+│   │   ├── modals/              # BuildMenu, SettingsDialog, CompanyCreationModal, ...
 │   │   ├── mobile/              # MobileShell, BottomNav, BottomSheet
 │   │   ├── command-palette/     # CommandPalette (Ctrl+K)
 │   │   ├── login/               # AuthStage, ZoneStage, WorldStage, CompanyStage
 │   │   ├── icons/               # ZoneIcon, RoadIcons
 │   │   └── map/                 # Map-related UI components
 │   ├── renderer/                # Canvas 2D isometric engine
+│   │   ├── isometric-map-renderer.ts      # Main renderer orchestrator
+│   │   ├── isometric-terrain-renderer.ts  # Terrain layer
+│   │   ├── chunk-cache.ts                 # Off-screen chunk caching
+│   │   ├── texture-cache.ts               # LRU texture cache
+│   │   ├── texture-atlas-cache.ts         # Atlas sprite sheet cache
+│   │   ├── road-texture-system.ts         # Road topology + texture mapping
+│   │   ├── concrete-texture-system.ts     # Concrete tile rendering
+│   │   ├── vehicle-animation-system.ts    # Vehicle sprite animation
+│   │   ├── terrain-loader.ts              # Terrain data loading
+│   │   ├── coordinate-mapper.ts           # Iso <-> screen transforms
+│   │   ├── placement-validation.ts        # Building placement rules
+│   │   ├── painter-algorithm.ts           # Draw ordering
+│   │   └── touch-handler-2d.ts            # Touch/pointer input
 │   └── ui/                      # Legacy canvas UI (minimap + map navigation)
 ├── server/
 │   ├── server.ts                # HTTP + WebSocket server (16 API endpoints)
-│   ├── spo_session.ts           # RDO session manager (TCP ↔ WebSocket)
+│   ├── spo_session.ts           # RDO session manager (TCP <-> WebSocket)
 │   ├── rdo.ts                   # RDO protocol parser
+│   ├── rdo-helpers.ts           # RDO utility functions
 │   ├── service-registry.ts      # ServiceRegistry (lifecycle, dependencies, health)
-│   └── services                 # Update, textures, map data, terrain chunks, facilities
+│   ├── update-service.ts        # Game asset sync service
+│   ├── building-data-service.ts # Building dimensions + data cache
+│   ├── map-data-service.ts      # Map data caching and parsing
+│   ├── map-parsers.ts           # Map file format parsers
+│   ├── terrain-chunk-renderer.ts # Server-side chunk pre-rendering
+│   ├── texture-extractor.ts     # CAB texture extraction
+│   ├── texture-alpha-baker.ts   # Alpha channel compositing
+│   ├── atlas-generator.ts       # Sprite atlas generation
+│   ├── cab-extractor.ts         # CAB archive extraction (7zip)
+│   ├── classes-bin-parser.ts    # Binary class data parser
+│   ├── asp-url-extractor.ts     # ASP URL parsing
+│   ├── facility-dimensions-cache.ts # Building dimension cache
+│   ├── mail-list-parser.ts      # Mail list parsing
+│   ├── search-menu-parser.ts    # Search menu parsing
+│   └── search-menu-service.ts   # Search menu service
 └── shared/
     ├── rdo-types.ts             # RDO type system (RdoValue, RdoCommand, RdoParser)
     ├── config.ts                # Environment-aware configuration
@@ -203,6 +248,46 @@ The Node.js server exposes REST endpoints for map data, textures, and asset serv
 | `GET /cache/:category/:filename` | Extracted game object textures |
 | `GET /proxy-image?url=<url>` | Image proxy for remote assets |
 
+## Development Workflow
+
+### Git Conventions
+
+- **Branches:** `feature/`, `fix/`, `refactor/`, `doc/` + descriptive name
+- **Commits:** `type: short summary` — types: `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`
+
+### Releases
+
+Versioning follows [Keep a Changelog](https://keepachangelog.com/) format. See [CHANGELOG.md](CHANGELOG.md) for release history.
+
+```bash
+npm run release    # Run release script
+```
+
+## Coding Standards
+
+- TypeScript strict mode — `unknown` for catch blocks, no `any`
+- camelCase for variables/methods, PascalCase for classes/interfaces
+- CSS Modules for component styling, design tokens for shared values
+- JSDoc for public API only — no over-engineering, small focused changes
+- Never construct RDO protocol strings manually — always use `RdoValue`/`RdoCommand`
+- All code changes require tests
+
+## Testing
+
+- **Framework:** Jest 30 with ts-jest, two projects: `unit` (Node.js env) and `component` (jsdom env)
+- **Stats:** ~130 test suites, all passing
+- **Convention:** `module.ts` -> `module.test.ts` in the same directory
+- **Coverage thresholds:** 35% global, 50% for `shared/`, 90% for `shared/building-details/`
+- **Custom matchers:** `toContainRdoCommand()`, `toMatchRdoCallFormat()`, `toMatchRdoSetFormat()`, `toHaveRdoTypePrefix()`
+
+```bash
+npm test                           # All tests
+npm test -- rdo-types              # Specific file
+npm test -- --testNamePattern="X"  # Specific test name
+npm run test:coverage              # Coverage report with thresholds
+npm run test:smoke                 # Component smoke tests only
+```
+
 ## Documentation
 
 Detailed technical docs live in the [doc/](doc/) directory:
@@ -242,38 +327,6 @@ Detailed technical docs live in the [doc/](doc/) directory:
 - [Mock Server Guide](doc/mock-server-guide.md) — Mock server setup and RDO capture
 - [Mock Server Scenarios](doc/Mock_Server_scenarios_captures.md) — Recorded sessions
 - [CAB Asset Extraction](doc/CAB-EXTRACTION.md) — Extracting textures from game archives
-
-## Testing
-
-- **Framework:** Jest 30 with ts-jest, two projects: `unit` (Node.js env) and `component` (jsdom env)
-- **Stats:** ~2528 tests across 96 suites, all passing
-- **Convention:** `module.ts` → `module.test.ts` in the same directory
-- **Coverage thresholds:** 35% global, 50% for `shared/`, 90% for `shared/building-details/`
-- **Custom matchers:** `toContainRdoCommand()`, `toMatchRdoCallFormat()`, `toMatchRdoSetFormat()`, `toHaveRdoTypePrefix()`
-
-```bash
-npm test                           # All tests
-npm test -- rdo-types              # Specific file
-npm test -- --testNamePattern="X"  # Specific test name
-npm run test:coverage              # Coverage report with thresholds
-npm run test:smoke                 # Component smoke tests only
-```
-
-## Contributing
-
-### Git Conventions
-
-- **Branches:** `feature/`, `fix/`, `refactor/`, `doc/` + descriptive name
-- **Commits:** `type: short summary` — types: `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`
-
-### Code Style
-
-- TypeScript strict mode — `unknown` for catch blocks, no `any`
-- camelCase for variables/methods, PascalCase for classes/interfaces
-- CSS Modules for component styling, design tokens for shared values
-- JSDoc for public API only — no over-engineering, small focused changes
-- Never construct RDO protocol strings manually — always use `RdoValue`/`RdoCommand`
-- All code changes require tests
 
 ## License
 
