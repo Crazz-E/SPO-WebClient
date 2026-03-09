@@ -2866,7 +2866,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 
     // Map action names to ASP filenames for cache lookup
     const actionToAsp: Record<string, string> = {
-      resetAccount: 'resetTycoon.asp',
+      resetAccount: 'rdoResetTycoon.asp',
       abandonRole: 'abandonRole.asp',
       upgradeLevel: 'rdoSetAdvanceLevel.asp',
       rebuildLinks: 'links.asp',
@@ -2894,7 +2894,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
               TycoonId: '',
               Password: this.cachedPassword || '',
             });
-            url = `http://${worldIp}/Five/0/Visual/Voyager/NewTycoon/resetTycoon.asp?${params.toString().replace(/\+/g, '%20')}`;
+            url = `http://${worldIp}/Five/0/Visual/Voyager/NewTycoon/rdoResetTycoon.asp?${params.toString().replace(/\+/g, '%20')}`;
             break;
           }
           case 'abandonRole': {
@@ -2945,7 +2945,12 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       }
 
       this.log.debug(`[Curriculum] Executing ${action}: ${url}`);
-      await fetch(url, { redirect: 'follow' });
+      const resp = await fetch(url, { redirect: 'follow' });
+      const body = await resp.text();
+      this.log.debug(`[Curriculum] ${action} response: ${resp.status} (${body.length} bytes)`);
+      if (!resp.ok) {
+        return { success: false, message: `${action} failed: HTTP ${resp.status}` };
+      }
       return { success: true, message: `${action} completed successfully` };
     } catch (e) {
       return { success: false, message: toErrorMessage(e) };
