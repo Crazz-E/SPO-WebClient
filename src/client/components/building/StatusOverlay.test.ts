@@ -14,6 +14,7 @@ jest.mock('./StatusOverlay.module.css', () => ({
   revenuePositive: 'revenuePositive',
   revenueNegative: 'revenueNegative',
   revenueNeutral: 'revenueNeutral',
+  salesInfo: 'salesInfo',
 }));
 
 // Import after mock
@@ -169,5 +170,24 @@ describe('StatusOverlay — visibility logic via store', () => {
     useBuildingStore.getState().setOverlayMode(true);
     const state = useBuildingStore.getState();
     expect(state.focusedBuilding?.revenue).toBe('($120/h)');
+  });
+
+  it('overlay includes salesInfo from focused building', () => {
+    useBuildingStore.getState().setFocus(mockBuilding);
+    useBuildingStore.getState().setOverlayMode(true);
+    const state = useBuildingStore.getState();
+    expect(state.focusedBuilding?.salesInfo).toBe('Pharmaceutics sales at 80%');
+  });
+
+  it('overlay handles empty salesInfo gracefully', () => {
+    const noSales: BuildingFocusInfo = {
+      ...mockBuilding,
+      salesInfo: '',
+    };
+    useBuildingStore.getState().setFocus(noSales);
+    useBuildingStore.getState().setOverlayMode(true);
+    const state = useBuildingStore.getState();
+    expect(state.focusedBuilding?.salesInfo).toBe('');
+    // Component skips rendering salesInfo div when falsy
   });
 });

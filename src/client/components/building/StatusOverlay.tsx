@@ -81,6 +81,10 @@ export function StatusOverlay() {
     >
       <div className={styles.buildingName}>{building.buildingName}</div>
 
+      {building.salesInfo && (
+        <div className={styles.salesInfo}>{building.salesInfo}</div>
+      )}
+
       <div className={styles.infoRow}>
         {building.ownerName && (
           <span className={styles.ownerName}>{building.ownerName}</span>
