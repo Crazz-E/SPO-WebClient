@@ -24,6 +24,7 @@ const sharedModuleConfig = {
         jsx: 'react-jsx',
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
+        resolveJsonModule: true,
         types: ['jest', 'node']
       },
       isolatedModules: false

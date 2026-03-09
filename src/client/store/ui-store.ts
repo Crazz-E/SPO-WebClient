@@ -10,7 +10,7 @@ import { useGameStore } from './game-store';
 
 export type RightPanelType = 'building' | 'mail' | 'search' | 'transport';
 export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
-export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'prompt' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector';
+export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'prompt' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector' | 'changelog';
 export type MobileTab = 'map' | 'empire' | 'build' | 'mail' | 'more';
 
 interface UiState {

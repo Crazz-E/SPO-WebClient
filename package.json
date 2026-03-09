@@ -16,7 +16,8 @@
     "test:coverage": "jest --coverage",
     "test:verbose": "jest --verbose",
     "test:changed": "jest --onlyChanged --bail",
-    "test:smoke": "jest --selectProjects component --bail"
+    "test:smoke": "jest --selectProjects component --bail",
+    "release": "node scripts/release.js"
   },
   "keywords": [
     "starpeace",

@@ -1,0 +1,18 @@
+[
+  {
+    "version": "0.1.0",
+    "date": "2026-03-09",
+    "entries": [
+      { "type": "added", "text": "Isometric canvas renderer with terrain, roads, and buildings" },
+      { "type": "added", "text": "RDO protocol communication with game servers" },
+      { "type": "added", "text": "Building inspector with property details and supplier search" },
+      { "type": "added", "text": "In-game mail system with compose, reply, and folder management" },
+      { "type": "added", "text": "User profile panel with company overview" },
+      { "type": "added", "text": "Real-time chat system" },
+      { "type": "added", "text": "Map navigation with zoom, pan, and keyboard shortcuts" },
+      { "type": "added", "text": "Build menu with categorized facility placement" },
+      { "type": "added", "text": "Transport route viewer" },
+      { "type": "added", "text": "Command palette for quick actions" }
+    ]
+  }
+]

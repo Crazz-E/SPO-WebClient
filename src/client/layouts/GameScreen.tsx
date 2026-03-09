@@ -23,7 +23,8 @@ import { MailPanel } from '../components/mail';
 import { SearchPanel } from '../components/search';
 import { TransportPanel } from '../components/transport';
 import { OverlayMenu } from '../components/hud/OverlayMenu';
-import { BuildMenu, BuildingInspectorModal, ConnectionPickerModal, ServerSwitchOverlay, SettingsDialog, SupplierSearchModal, ZoneTypePicker } from '../components/modals';
+import { BuildMenu, BuildingInspectorModal, ChangelogModal, ConnectionPickerModal, ServerSwitchOverlay, SettingsDialog, SupplierSearchModal, ZoneTypePicker } from '../components/modals';
+import { useChangelogCheck } from '../hooks/useChangelogCheck';
 import { CommandPalette } from '../components/command-palette';
 import { MobileShell } from '../components/mobile';
 import { ErrorBoundary, ConfirmDialog, PromptDialog } from '../components/common';
@@ -71,6 +72,8 @@ export function GameScreen() {
   const closeModal = useUiStore((s) => s.closeModal);
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
   const closeLeftPanel = useUiStore((s) => s.closeLeftPanel);
+
+  useChangelogCheck();
 
   return (
     <div className={styles.screen}>
@@ -126,6 +129,7 @@ export function GameScreen() {
       <SupplierSearchModal />
       <SettingsDialog />
       <ZoneTypePicker />
+      <ChangelogModal />
 
       {/* Confirm Dialog — z-400 */}
       {modal === 'confirm' && confirmPayload && (
