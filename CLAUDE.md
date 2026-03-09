@@ -6,8 +6,8 @@
 - Construct RDO protocol strings manually — always use `RdoValue`/`RdoCommand` from `@/shared/rdo-types`
 - Use `any` types — use `unknown` for catch blocks, typed interfaces for data
 - Modify without reading first — always read existing code before changing it
-- Skip tests — all code changes require tests, coverage >= 93%
-- Modify these files without discussion: `src/shared/rdo-types.ts`, `src/server/rdo.ts`, `src/__fixtures__/*`
+- Skip tests — all code changes require tests covering >= 93% of new/modified lines (global floor enforced by `jest.config.js` thresholds)
+- Modify these files without discussion: `src/shared/rdo-types.ts`, `src/server/rdo.ts`, `src/__fixtures__/*`, `jest.config.js` (thresholds can only go UP)
 - Load screenshots directly in the main context during debug/E2E sessions — use sub-agent delegation (see below)
 - Add UI elements without wiring their actions — every button, toggle, or control must be fully functional, not just visible (see below)
 
@@ -85,7 +85,7 @@ Project-level MCP config is in [.mcp.json](.mcp.json) (committed to git). All de
 ```bash
 npm run dev          # Build + start server (port 8080)
 npm run build        # Build all (server + client)
-npm test             # Run Jest tests (~1666 tests)
+npm test             # Run Jest tests (~3107 tests, 130 suites)
 npm run test:watch   # Watch mode
 npm run test:coverage # Coverage report
 ```
@@ -137,6 +137,7 @@ src/
 
 | Skill | Auto-loads for |
 |-------|---------------|
+| `code-guardian` | **Any source file edit** — regression prevention, 5 crash category checklists, sanctuarization manifest |
 | `rdo-protocol` | RDO commands, spo_session.ts, rdo.ts, protocol work |
 | `building-inspector` | Building details, facility inspector, property templates |
 | `road-rendering` | Road topology, textures, road-texture-system.ts |
@@ -215,7 +216,7 @@ npm test -- --testNamePattern="X"  # Specific suite
 
 **Custom matchers:** `toContainRdoCommand()`, `toMatchRdoCallFormat()`, `toMatchRdoSetFormat()`, `toHaveRdoTypePrefix()`
 
-**Current status:** 56 suites, ~1666 tests, all passing
+**Current status:** 130 suites, ~3107 tests, all passing
 
 ## API Endpoints
 

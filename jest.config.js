@@ -70,31 +70,32 @@ module.exports = {
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
+  // Coverage ratchet — thresholds locked to actual values (2026-03-09 baseline)
+  // These can only go UP. Run `npm run test:coverage` to see current values.
   coverageThreshold: {
     global: {
-      lines: 35,
-      functions: 35,
-      branches: 25,
-      statements: 35
+      lines: 39,
+      functions: 41,
+      branches: 29,
+      statements: 38
     },
-    // Per-directory thresholds — ratchet up as coverage improves
     './src/shared/': {
-      lines: 50,
-      functions: 60,
-      branches: 35,
-      statements: 50
+      lines: 54,
+      functions: 65,
+      branches: 37,
+      statements: 54
     },
     './src/shared/building-details/': {
-      lines: 90,
+      lines: 92,
       functions: 100,
       branches: 80,
-      statements: 90
+      statements: 91
     },
     './src/shared/types/': {
-      lines: 90,
-      functions: 70,
-      branches: 80,
-      statements: 90
+      lines: 96,
+      functions: 73,
+      branches: 90,
+      statements: 96
     },
   },
   testTimeout: 10000,
