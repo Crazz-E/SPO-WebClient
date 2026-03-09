@@ -729,3 +729,135 @@ describe('FacilityList.asp HTML parsing', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Residential zone classification (deriveResidenceClass)
+// ---------------------------------------------------------------------------
+
+import { deriveResidenceClass } from '../spo_session';
+
+describe('deriveResidenceClass — residential building classification', () => {
+  describe('Signal 1: zone image filename', () => {
+    it('should return "high" for zone-hires.gif', () => {
+      expect(deriveResidenceClass('images/zone-hires.gif', '', '')).toBe('high');
+    });
+
+    it('should return "middle" for zone-midres.gif', () => {
+      expect(deriveResidenceClass('images/zone-midres.gif', '', '')).toBe('middle');
+    });
+
+    it('should return "low" for zone-lores.gif', () => {
+      expect(deriveResidenceClass('images/zone-lores.gif', '', '')).toBe('low');
+    });
+
+    it('should be case-insensitive for filename', () => {
+      expect(deriveResidenceClass('images/Zone-HiRes.GIF', '', '')).toBe('high');
+      expect(deriveResidenceClass('images/ZONE-MIDRES.gif', '', '')).toBe('middle');
+      expect(deriveResidenceClass('images/zone-LoRes.gif', '', '')).toBe('low');
+    });
+
+    it('should match hires/midres/lores anywhere in filename', () => {
+      expect(deriveResidenceClass('/five/images/zone-hiresidential.gif', '', '')).toBe('high');
+      expect(deriveResidenceClass('zone_midres_v2.gif', '', '')).toBe('middle');
+      expect(deriveResidenceClass('some-path/lores-zone.gif', '', '')).toBe('low');
+    });
+  });
+
+  describe('Signal 2: zone title text', () => {
+    it('should match "High Residential" (original expected text)', () => {
+      expect(deriveResidenceClass('', 'Building must be in High Residential zone', '')).toBe('high');
+    });
+
+    it('should match "Hi Res" abbreviation', () => {
+      expect(deriveResidenceClass('', 'Hi Residential zone required', '')).toBe('high');
+    });
+
+    it('should match "Mid Residential"', () => {
+      expect(deriveResidenceClass('', 'Mid Residential zone', '')).toBe('middle');
+    });
+
+    it('should match "Middle Residential"', () => {
+      expect(deriveResidenceClass('', 'Middle Residential zone', '')).toBe('middle');
+    });
+
+    it('should match "Low Residential"', () => {
+      expect(deriveResidenceClass('', 'Low Residential zone', '')).toBe('low');
+    });
+
+    it('should match "Lo Res" abbreviation', () => {
+      expect(deriveResidenceClass('', 'Lo Residential zone required', '')).toBe('low');
+    });
+
+    it('should be case-insensitive for title', () => {
+      expect(deriveResidenceClass('', 'high residential zone', '')).toBe('high');
+      expect(deriveResidenceClass('', 'MID RESIDENTIAL', '')).toBe('middle');
+      expect(deriveResidenceClass('', 'low residential', '')).toBe('low');
+    });
+  });
+
+  describe('Signal 3: color-based zone descriptions', () => {
+    it('should return "high" for bright green zone', () => {
+      expect(deriveResidenceClass('', 'Building must be in bright green zone', '')).toBe('high');
+    });
+
+    it('should return "high" for light green zone', () => {
+      expect(deriveResidenceClass('', 'Building must be in light green zone', '')).toBe('high');
+    });
+
+    it('should return "middle" for plain green zone', () => {
+      expect(deriveResidenceClass('', 'Building must be in green zone', '')).toBe('middle');
+    });
+
+    it('should return "low" for dark green zone', () => {
+      expect(deriveResidenceClass('', 'Building must be in dark green zone', '')).toBe('low');
+    });
+  });
+
+  describe('Signal 4: FacilityClass name', () => {
+    it('should return "high" from PGIHiResA', () => {
+      expect(deriveResidenceClass('', '', 'PGIHiResA')).toBe('high');
+    });
+
+    it('should return "middle" from PGIMidResB', () => {
+      expect(deriveResidenceClass('', '', 'PGIMidResB')).toBe('middle');
+    });
+
+    it('should return "low" from PGILoResA', () => {
+      expect(deriveResidenceClass('', '', 'PGILoResA')).toBe('low');
+    });
+
+    it('should be case-insensitive for facility class', () => {
+      expect(deriveResidenceClass('', '', 'pgihiresa')).toBe('high');
+    });
+  });
+
+  describe('Non-residential returns undefined', () => {
+    it('should return undefined for zone-commerce.gif', () => {
+      expect(deriveResidenceClass('images/zone-commerce.gif', 'blue zone', '')).toBeUndefined();
+    });
+
+    it('should return undefined for zone-industry.gif', () => {
+      expect(deriveResidenceClass('images/zone-industry.gif', 'yellow zone', '')).toBeUndefined();
+    });
+
+    it('should return undefined when all signals are empty', () => {
+      expect(deriveResidenceClass('', '', '')).toBeUndefined();
+    });
+
+    it('should return undefined for unrelated facility class', () => {
+      expect(deriveResidenceClass('', '', 'PGISupermarketC')).toBeUndefined();
+    });
+  });
+
+  describe('Priority: filename > title > facility class', () => {
+    it('should prefer filename over title when both present', () => {
+      // filename says high, title says low — filename wins
+      expect(deriveResidenceClass('zone-hires.gif', 'dark green zone', '')).toBe('high');
+    });
+
+    it('should prefer title over facility class when no filename signal', () => {
+      // title says middle, facilityClass says high — title wins
+      expect(deriveResidenceClass('zone-generic.gif', 'Mid Residential', 'PGIHiResA')).toBe('middle');
+    });
+  });
+});

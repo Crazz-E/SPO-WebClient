@@ -156,6 +156,43 @@ export function parseFavoritesResponse(raw: string): FavoritesItem[] {
   return items;
 }
 
+/**
+ * Derive residential building class from zone image signals.
+ * Uses multiple signals in priority order: filename > title text > facility class name.
+ */
+export function deriveResidenceClass(
+  zoneSrc: string,
+  zoneTitle: string,
+  facilityClass: string
+): 'high' | 'middle' | 'low' | undefined {
+  // Signal 1: Zone image filename (most reliable — follows Delphi constants)
+  // Patterns: zone-hires.gif, zone-midres.gif, zone-lores.gif
+  const srcLower = zoneSrc.toLowerCase();
+  if (srcLower.includes('hires')) return 'high';
+  if (srcLower.includes('midres')) return 'middle';
+  if (srcLower.includes('lores')) return 'low';
+
+  // Signal 2: Zone title text (case-insensitive)
+  const titleLower = zoneTitle.toLowerCase();
+  if (titleLower.includes('high res') || titleLower.includes('hi res') || titleLower.includes('hi-res')) return 'high';
+  if (titleLower.includes('mid res') || titleLower.includes('middle res')) return 'middle';
+  if (titleLower.includes('low res') || titleLower.includes('lo res') || titleLower.includes('lo-res')) return 'low';
+
+  // Signal 3: Color-based zone descriptions in title
+  // Hi=bright/light green, Mid=plain green, Lo=dark green
+  if (titleLower.includes('bright green') || titleLower.includes('light green')) return 'high';
+  if (titleLower.includes('dark green')) return 'low';
+  if (/\bgreen\b/.test(titleLower)) return 'middle';
+
+  // Signal 4 (weakest): FacilityClass name hint
+  const fcLower = facilityClass.toLowerCase();
+  if (fcLower.includes('hires')) return 'high';
+  if (fcLower.includes('midres')) return 'middle';
+  if (fcLower.includes('lores')) return 'low';
+
+  return undefined;
+}
+
 export class StarpeaceSession extends EventEmitter {
   private readonly log = createLogger('Session');
   private sockets: Map<string, net.Socket> = new Map();
@@ -6106,15 +6143,21 @@ private handlePush(socketName: string, packet: RdoPacket) {
       const descMatch = /<div[^>]*class\s*=\s*["']?description["']?[^>]*>([^<]+)</i.exec(cellContent);
       const description = descMatch?.[1]?.trim() || '';
 
-      // Extract zone requirement from zone image title
-      const zoneMatch = /<img[^>]*src\s*=\s*["']?[^"']*zone[^"']*["']?[^>]*title\s*=\s*["']([^"']+)["']/i.exec(cellContent);
-      const zoneRequirement = zoneMatch?.[1] || '';
+      // Extract zone image src and title for residential classification
+      // Try src-before-title first (standard order), then title-before-src (reversed)
+      const zoneSrcFirst = /<img[^>]*src\s*=\s*["']?([^"'\s>]*zone[^"'\s>]*)["']?[^>]*title\s*=\s*["']([^"']+)["']/i.exec(cellContent);
+      const zoneTitleFirst = !zoneSrcFirst
+        ? /<img[^>]*title\s*=\s*["']([^"']+)["'][^>]*src\s*=\s*["']?([^"'\s>]*zone[^"'\s>]*)["']?/i.exec(cellContent)
+        : null;
+      const zoneSrc = zoneSrcFirst?.[1] || zoneTitleFirst?.[2] || '';
+      const zoneTitle = zoneSrcFirst?.[2] || zoneTitleFirst?.[1] || '';
+      const zoneRequirement = zoneTitle;
 
-      // Derive residence class from zone requirement text
-      let residenceClass: 'high' | 'middle' | 'low' | undefined;
-      if (zoneRequirement.includes('High Residential')) residenceClass = 'high';
-      else if (zoneRequirement.includes('Mid Residential')) residenceClass = 'middle';
-      else if (zoneRequirement.includes('Low Residential')) residenceClass = 'low';
+      // Derive residence class from zone image filename, title text, and facility class
+      const residenceClass = deriveResidenceClass(zoneSrc, zoneTitle, facilityClass);
+      if (zoneSrc || zoneTitle) {
+        this.log.debug(`[BuildConstruction] Zone signals for "${name}": src="${zoneSrc}" title="${zoneTitle}" → ${residenceClass ?? 'none'}`);
+      }
 
       if (facilityClass && name) {
         const facility: BuildingInfo = {

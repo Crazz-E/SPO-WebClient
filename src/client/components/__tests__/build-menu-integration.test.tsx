@@ -239,3 +239,94 @@ describe('Build Menu — integration flow', () => {
     expect(useUiStore.getState().modal).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Residential grouping
+// ---------------------------------------------------------------------------
+
+const mockResidentialFacilities: BuildingInfo[] = [
+  { facilityClass: 'PGIHiResA', name: 'Luxury Apartments', description: 'High class', cost: 200000, area: 4, iconPath: '', available: true, visualClassId: '5001', zoneRequirement: '', residenceClass: 'high' },
+  { facilityClass: 'PGIMidResA', name: 'Town Houses', description: 'Middle class', cost: 100000, area: 4, iconPath: '', available: true, visualClassId: '5101', zoneRequirement: '', residenceClass: 'middle' },
+  { facilityClass: 'PGILoResA', name: 'Low Income Housing', description: 'Low class', cost: 50000, area: 4, iconPath: '', available: true, visualClassId: '5201', zoneRequirement: '', residenceClass: 'low' },
+];
+
+describe('Build Menu — residential grouping', () => {
+  beforeEach(() => {
+    resetStores();
+    useUiStore.setState({
+      buildMenuCategories: [],
+      buildMenuFacilities: [],
+      capitolIconUrl: '',
+    });
+  });
+
+  it('renders grouped residential facilities with High/Mid/Low headers', () => {
+    useUiStore.setState({
+      modal: 'buildMenu',
+      buildMenuCategories: mockCategories,
+    });
+
+    renderWithProviders(<BuildMenu />);
+
+    // Go to facilities phase
+    fireEvent.click(screen.getByText('Commerce'));
+
+    act(() => {
+      useUiStore.setState({ buildMenuFacilities: mockResidentialFacilities });
+    });
+
+    expect(screen.getByText('High Class')).toBeTruthy();
+    expect(screen.getByText('Middle Class')).toBeTruthy();
+    expect(screen.getByText('Low Class')).toBeTruthy();
+    expect(screen.getByText('Luxury Apartments')).toBeTruthy();
+    expect(screen.getByText('Town Houses')).toBeTruthy();
+    expect(screen.getByText('Low Income Housing')).toBeTruthy();
+  });
+
+  it('shows ungrouped facilities alongside classified groups', () => {
+    const mixed: BuildingInfo[] = [
+      ...mockResidentialFacilities,
+      { facilityClass: 'PGIResSpecial', name: 'Special Building', description: '', cost: 30000, area: 4, iconPath: '', available: true, visualClassId: '5301', zoneRequirement: '' },
+    ];
+
+    useUiStore.setState({
+      modal: 'buildMenu',
+      buildMenuCategories: mockCategories,
+    });
+
+    renderWithProviders(<BuildMenu />);
+
+    fireEvent.click(screen.getByText('Commerce'));
+
+    act(() => {
+      useUiStore.setState({ buildMenuFacilities: mixed });
+    });
+
+    // Groups should render
+    expect(screen.getByText('High Class')).toBeTruthy();
+    // Ungrouped facility should also render
+    expect(screen.getByText('Special Building')).toBeTruthy();
+  });
+
+  it('renders flat list when no facility has residenceClass', () => {
+    useUiStore.setState({
+      modal: 'buildMenu',
+      buildMenuCategories: mockCategories,
+    });
+
+    renderWithProviders(<BuildMenu />);
+
+    fireEvent.click(screen.getByText('Commerce'));
+
+    act(() => {
+      useUiStore.setState({ buildMenuFacilities: mockFacilities });
+    });
+
+    // No group headers should be present
+    expect(screen.queryByText('High Class')).toBeNull();
+    expect(screen.queryByText('Middle Class')).toBeNull();
+    expect(screen.queryByText('Low Class')).toBeNull();
+    // Buildings still render
+    expect(screen.getByText('Small Store')).toBeTruthy();
+  });
+});

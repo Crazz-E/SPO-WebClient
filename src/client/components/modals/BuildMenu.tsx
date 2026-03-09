@@ -187,24 +187,33 @@ export function BuildMenu() {
           {!isLoading && phase === 'facilities' && (
             <div className={styles.facilityList}>
               {hasResidenceGroups
-                ? RESIDENCE_GROUPS.map(({ key, label, styleClass }) => {
-                    const group = facilities.filter((f) => f.residenceClass === key);
-                    if (group.length === 0) return null;
-                    return (
-                      <div key={key} className={styles.resGroup}>
-                        <div className={`${styles.resGroupHeader} ${styleClass}`}>
-                          {label}
+                ? <>
+                    {RESIDENCE_GROUPS.map(({ key, label, styleClass }) => {
+                      const group = facilities.filter((f) => f.residenceClass === key);
+                      if (group.length === 0) return null;
+                      return (
+                        <div key={key} className={styles.resGroup}>
+                          <div className={`${styles.resGroupHeader} ${styleClass}`}>
+                            {label}
+                          </div>
+                          {group.map((fac) => (
+                            <FacilityCard
+                              key={fac.facilityClass}
+                              facility={fac}
+                              onSelect={handleFacilitySelect}
+                            />
+                          ))}
                         </div>
-                        {group.map((fac) => (
-                          <FacilityCard
-                            key={fac.facilityClass}
-                            facility={fac}
-                            onSelect={handleFacilitySelect}
-                          />
-                        ))}
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                    {facilities.filter((f) => !f.residenceClass).map((fac) => (
+                      <FacilityCard
+                        key={fac.facilityClass}
+                        facility={fac}
+                        onSelect={handleFacilitySelect}
+                      />
+                    ))}
+                  </>
                 : facilities.map((fac) => (
                     <FacilityCard
                       key={fac.facilityClass}
