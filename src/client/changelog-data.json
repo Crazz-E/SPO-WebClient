@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.0",
+    "date": "2026-03-09",
+    "entries": [
+      { "type": "added", "text": "Search people results wired to tycoon profile view" },
+      { "type": "added", "text": "In-app versioning workflow and changelog for players" },
+      { "type": "changed", "text": "Promoted from Alpha to Beta 1.0.0" }
+    ]
+  },
+  {
     "version": "0.1.0",
     "date": "2026-03-09",
     "entries": [

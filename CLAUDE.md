@@ -45,7 +45,7 @@ Never read screenshot images in the main conversation context — each costs ~3-
 ## Project
 
 **Starpeace Online WebClient** — Browser-based multiplayer tycoon game client
-TypeScript + Node.js + WebSocket + Canvas 2D Isometric | RDO protocol | Alpha 0.1.0
+TypeScript + Node.js + WebSocket + Canvas 2D Isometric | RDO protocol | Beta 1.0.0
 
 ```
 Browser Client --WebSocket--> Node.js Gateway --RDO Protocol--> Game Servers

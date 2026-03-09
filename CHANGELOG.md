@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.0] - 2026-03-09
+
+### Added
+- Search people results wired to tycoon profile view
+- In-app versioning workflow and changelog for players
+
+### Changed
+- Promoted from Alpha to Beta 1.0.0
+
 ## [0.1.0] - 2026-03-09
 
 ### Added

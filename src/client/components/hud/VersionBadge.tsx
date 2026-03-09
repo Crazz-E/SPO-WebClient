@@ -13,7 +13,7 @@ export function VersionBadge() {
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') openModal('changelog'); }}
     >
-      <div>Alpha {APP_VERSION} ({BUILD_DATE})</div>
+      <div>Beta {APP_VERSION} ({BUILD_DATE})</div>
       <div>Created by Robin &ldquo;Crazz&rdquo; Aleman</div>
     </div>
   );

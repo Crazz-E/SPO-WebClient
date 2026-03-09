@@ -72,7 +72,7 @@ export function AuthStage({ onConnect, isLoading, status }: AuthStageProps) {
         </button>
       </GlassCard>
 
-      <span className={styles.version}>Alpha {APP_VERSION} ({BUILD_DATE})</span>
+      <span className={styles.version}>Beta {APP_VERSION} ({BUILD_DATE})</span>
     </div>
   );
 }

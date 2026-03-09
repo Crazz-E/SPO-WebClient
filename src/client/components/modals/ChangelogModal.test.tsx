@@ -31,8 +31,8 @@ describe('ChangelogModal', () => {
   it('displays version entries from changelog data', () => {
     useUiStore.getState().openModal('changelog');
     renderWithProviders(<ChangelogModal />);
-    // The initial changelog-data.json has a v0.1.0 release
-    expect(screen.getByText('v0.1.0')).toBeTruthy();
+    // The changelog-data.json has a v1.0.0 release
+    expect(screen.getByText('v1.0.0')).toBeTruthy();
   });
 
   it('sets localStorage version on close via X button', () => {
