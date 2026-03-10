@@ -189,6 +189,73 @@ describe('CompInputSection: read-only display (editable=false)', () => {
 });
 
 // =============================================================================
+// DEMAND UTILIZATION BAR — demanded / maxDemand * 100
+// =============================================================================
+
+describe('Demand utilization percentage (demPct)', () => {
+  function demPct(demanded: number, maxDemand: number): number {
+    const barMax = maxDemand > 0 ? maxDemand : demanded;
+    return barMax > 0 ? Math.min(100, (demanded / barMax) * 100) : 0;
+  }
+
+  it('should be 100% when demanded equals max capacity', () => {
+    const data = makeCompInput({ demanded: 1680, maxDemand: 1680 });
+    expect(demPct(data.demanded, data.maxDemand)).toBe(100);
+  });
+
+  it('should be ~91% when demanded is below max capacity', () => {
+    const data = makeCompInput({ demanded: 1680, maxDemand: 1850 });
+    expect(demPct(data.demanded, data.maxDemand)).toBeCloseTo(90.81, 1);
+  });
+
+  it('should be 0% when demanded is 0', () => {
+    const data = makeCompInput({ demanded: 0, maxDemand: 1680 });
+    expect(demPct(data.demanded, data.maxDemand)).toBe(0);
+  });
+
+  it('should fall back to demanded as barMax when maxDemand is 0', () => {
+    const data = makeCompInput({ demanded: 500, maxDemand: 0 });
+    expect(demPct(data.demanded, data.maxDemand)).toBe(100);
+  });
+
+  it('should cap at 100% when demanded exceeds maxDemand', () => {
+    const data = makeCompInput({ demanded: 2000, maxDemand: 1500 });
+    expect(demPct(data.demanded, data.maxDemand)).toBe(100);
+  });
+
+  it('should be 0% when both demanded and maxDemand are 0', () => {
+    expect(demPct(0, 0)).toBe(0);
+  });
+});
+
+// =============================================================================
+// WARNING CONDITION — demand below capacity (demPct < 100)
+// =============================================================================
+
+describe('Warning condition (demand below capacity)', () => {
+  function demPct(demanded: number, maxDemand: number): number {
+    const barMax = maxDemand > 0 ? maxDemand : demanded;
+    return barMax > 0 ? Math.min(100, (demanded / barMax) * 100) : 0;
+  }
+
+  it('should NOT warn when demand is at full capacity', () => {
+    const data = makeCompInput({ demanded: 1680, maxDemand: 1680 });
+    expect(demPct(data.demanded, data.maxDemand) < 100).toBe(false);
+  });
+
+  it('should warn when demand is below capacity', () => {
+    const data = makeCompInput({ demanded: 1680, maxDemand: 1850 });
+    expect(demPct(data.demanded, data.maxDemand) < 100).toBe(true);
+  });
+
+  it('should NOT warn based on supply fulfillment alone', () => {
+    // supply < demand but demand == max: NO warning (old behavior would warn)
+    const data = makeCompInput({ supplied: 800, demanded: 1680, maxDemand: 1680 });
+    expect(demPct(data.demanded, data.maxDemand) < 100).toBe(false);
+  });
+});
+
+// =============================================================================
 // getConnectionStatus
 // =============================================================================
 

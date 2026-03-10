@@ -1381,6 +1381,14 @@
 .ciLowSupply.ciBarWarn { color: var(--accent-gold, #d4a843); }
 .ciLowSupply.ciBarCrit { color: var(--color-error, #f44336); }
 
+.ciDemandBelowCap {
+  font-size: var(--font-xs);
+  padding: 0 var(--space-3);
+  color: var(--accent-gold, #d4a843);
+  opacity: 0;
+  animation: fadeIn 0.4s ease forwards;
+}
+
 /* Status color classes */
 .healthy { color: var(--color-success, #4caf50); }
 .ciDot.healthy { background: var(--color-success, #4caf50); }

@@ -2392,7 +2392,7 @@ function CompInputSection({
                 disabled={!canEdit}
                 onChange={handleDemandChange}
               />
-              <span className={styles.ciDemandPerc}>{localDemand}%</span>
+              <span className={styles.ciDemandPerc}>{Math.round(demPct)}%</span>
             </div>
 
             {/* Row 2: Supply bar — scaled to maxDemand capacity */}
@@ -2404,16 +2404,16 @@ function CompInputSection({
                 {/* Supply fill — supplied portion of max capacity */}
                 <div
                   className={`${styles.ciSupplyBarFill}${fillPct < 50 ? ` ${styles.ciBarCrit}` : fillPct < 100 ? ` ${styles.ciBarWarn}` : ''}`}
-                  style={{ width: `${supPct}%` }}
+                  style={{ width: `${fillPct}%` }}
                 />
               </div>
-              <span className={styles.ciDemandPerc}>{Math.round(supPct)}%</span>
+              <span className={styles.ciDemandPerc}>{Math.round(fillPct)}%</span>
             </div>
 
-            {/* Low supply warning */}
-            {fillPct < 100 && (
-              <span className={`${styles.ciLowSupply}${fillPct < 50 ? ` ${styles.ciBarCrit}` : ` ${styles.ciBarWarn}`}`}>
-                {fillPct < 50 ? 'Critical: supply severely low' : 'Warning: supply below demand'}
+            {/* Demand below capacity warning */}
+            {demPct < 100 && (
+              <span className={styles.ciDemandBelowCap}>
+                Demand below capacity
               </span>
             )}
 
