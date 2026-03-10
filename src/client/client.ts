@@ -1313,6 +1313,11 @@ export class StarpeaceClient {
     };
     this.availableCompanies.push(newCompany);
 
+    // Keep building-store ownership Set in sync with the new company
+    useBuildingStore.getState().setOwnedCompanyNames(
+      new Set(this.availableCompanies.map(c => c.name)),
+    );
+
     // If already in-game (created from ProfilePanel), just update the store
     // without reinitializing the entire game view.
     if (this.mapNavigationUI) {

@@ -49,6 +49,7 @@ function resetStore() {
     currentTab: 'overview',
     isLoading: false,
     currentCompanyName: '',
+    ownedCompanyNames: new Set<string>(),
     isOwner: false,
     connectionPicker: null,
     research: null,
@@ -191,6 +192,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
 
   it('isOwner true when details.ownerName matches currentCompanyName', () => {
     const store = useBuildingStore.getState();
+    store.setOwnedCompanyNames(new Set(['TestCorp']));
     store.setCurrentCompanyName('TestCorp');
     store.setFocus(mockFocusInfo);
     store.setDetails({
@@ -203,6 +205,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
 
   it('isOwner false when details.ownerName does not match', () => {
     const store = useBuildingStore.getState();
+    store.setOwnedCompanyNames(new Set(['TestCorp']));
     store.setCurrentCompanyName('TestCorp');
     store.setFocus(mockFocusInfo);
     store.setDetails({
@@ -215,6 +218,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
 
   it('isOwner falls back to focusedBuilding.ownerName when details.ownerName is empty', () => {
     const store = useBuildingStore.getState();
+    store.setOwnedCompanyNames(new Set(['TestCorp']));
     store.setCurrentCompanyName('TestCorp');
     store.setFocus(mockFocusInfo); // ownerName = 'TestCorp'
     store.setDetails({
@@ -227,6 +231,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
 
   it('isOwner false when both details and focus owner are empty', () => {
     const store = useBuildingStore.getState();
+    store.setOwnedCompanyNames(new Set(['TestCorp']));
     store.setCurrentCompanyName('TestCorp');
     store.setFocus({ ...mockFocusInfo, ownerName: '' });
     store.setDetails({
@@ -239,6 +244,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
 
   it('isOwner false when focus owner does not match (fallback path)', () => {
     const store = useBuildingStore.getState();
+    store.setOwnedCompanyNames(new Set(['TestCorp']));
     store.setCurrentCompanyName('TestCorp');
     store.setFocus({ ...mockFocusInfo, ownerName: 'OtherCorp' });
     store.setDetails({
@@ -249,7 +255,22 @@ describe('Building Store — Ownership for under-construction buildings', () => 
     expect(useBuildingStore.getState().isOwner).toBe(false);
   });
 
-  it('setCurrentCompanyName recomputes isOwner with focus fallback', () => {
+  it('isOwner true when building belongs to a different owned company (cross-company)', () => {
+    const store = useBuildingStore.getState();
+    // Tycoon owns both TestCorp and OtherCorp, but active company is TestCorp
+    store.setOwnedCompanyNames(new Set(['TestCorp', 'OtherCorp']));
+    store.setCurrentCompanyName('TestCorp');
+    store.setFocus(mockFocusInfo);
+    store.setDetails({
+      buildingId: '12345', buildingName: 'Drug Store', ownerName: 'OtherCorp',
+      x: 100, y: 200, visualClass: '1234', templateName: 'Building',
+      securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+    });
+    // Should be true — tycoon owns OtherCorp even though it's not the active company
+    expect(useBuildingStore.getState().isOwner).toBe(true);
+  });
+
+  it('setOwnedCompanyNames recomputes isOwner for focused building', () => {
     const store = useBuildingStore.getState();
     store.setFocus(mockFocusInfo); // ownerName = 'TestCorp'
     store.setDetails({
@@ -257,11 +278,11 @@ describe('Building Store — Ownership for under-construction buildings', () => 
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
     });
-    // Initially no company name set
+    // Initially no owned companies — not owner
     expect(useBuildingStore.getState().isOwner).toBe(false);
 
-    // Set matching company name
-    useBuildingStore.getState().setCurrentCompanyName('TestCorp');
+    // Add TestCorp to owned set — now owner via focus fallback
+    useBuildingStore.getState().setOwnedCompanyNames(new Set(['TestCorp']));
     expect(useBuildingStore.getState().isOwner).toBe(true);
   });
 });

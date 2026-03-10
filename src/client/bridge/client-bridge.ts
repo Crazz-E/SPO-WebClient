@@ -421,6 +421,9 @@ export const ClientBridge = {
   showBuildingPanel(details: BuildingDetailsResponse, currentCompanyName: string, focusInfo?: BuildingFocusInfo): void {
     const bld = useBuildingStore.getState();
     bld.setCurrentCompanyName(currentCompanyName);
+    // Sync all owned company names so isOwner works across companies
+    const companies = useGameStore.getState().companies;
+    bld.setOwnedCompanyNames(new Set(companies.map(c => c.name)));
     if (focusInfo) {
       bld.setFocus(focusInfo);
     }

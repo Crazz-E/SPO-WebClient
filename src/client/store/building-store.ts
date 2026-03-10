@@ -60,6 +60,8 @@ interface BuildingState {
 
   // Ownership context (set by client.ts when showing panel)
   currentCompanyName: string;
+  /** All company names owned by the logged-in tycoon (for cross-company ownership). */
+  ownedCompanyNames: Set<string>;
   isOwner: boolean;
 
   // Optimistic SET feedback
@@ -88,6 +90,7 @@ interface BuildingState {
   setCurrentTab: (tab: string) => void;
   setLoading: (loading: boolean) => void;
   setCurrentCompanyName: (name: string) => void;
+  setOwnedCompanyNames: (names: Set<string>) => void;
   clearFocus: () => void;
   clearDetails: () => void;
   clearOverlay: () => void;
@@ -131,6 +134,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
   currentTab: 'overview',
   isLoading: false,
   currentCompanyName: '',
+  ownedCompanyNames: new Set<string>(),
   isOwner: false,
 
   // Optimistic SET feedback
@@ -153,11 +157,14 @@ export const useBuildingStore = create<BuildingState>((set) => ({
         details.templateName,
       );
     }
-    set((state) => ({
-      details,
-      isLoading: false,
-      isOwner: (details.ownerName || state.focusedBuilding?.ownerName || '') === state.currentCompanyName,
-    }));
+    set((state) => {
+      const ownerName = details.ownerName || state.focusedBuilding?.ownerName || '';
+      return {
+        details,
+        isLoading: false,
+        isOwner: ownerName !== '' && state.ownedCompanyNames.has(ownerName),
+      };
+    });
   },
 
   setCurrentTab: (tab) => set({ currentTab: tab }),
@@ -165,12 +172,26 @@ export const useBuildingStore = create<BuildingState>((set) => ({
   setLoading: (loading) => set({ isLoading: loading }),
 
   setCurrentCompanyName: (name) =>
-    set((state) => ({
-      currentCompanyName: name,
-      isOwner: state.details
-        ? (state.details.ownerName || state.focusedBuilding?.ownerName || '') === name
-        : false,
-    })),
+    set((state) => {
+      const ownerName = state.details
+        ? (state.details.ownerName || state.focusedBuilding?.ownerName || '')
+        : '';
+      return {
+        currentCompanyName: name,
+        isOwner: ownerName !== '' && state.ownedCompanyNames.has(ownerName),
+      };
+    }),
+
+  setOwnedCompanyNames: (names) =>
+    set((state) => {
+      const ownerName = state.details
+        ? (state.details.ownerName || state.focusedBuilding?.ownerName || '')
+        : '';
+      return {
+        ownedCompanyNames: names,
+        isOwner: ownerName !== '' && names.has(ownerName),
+      };
+    }),
 
   clearFocus: () =>
     set({
