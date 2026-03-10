@@ -3,7 +3,7 @@
  *
  * Two phases:
  * 1. Category grid — building type categories with icons
- * 2. Facility list — buildings within selected category
+ * 2. Facility list — buildings within selected category (expandable "blueprint" cards)
  *
  * Selecting a building closes the menu and starts placement mode.
  */
@@ -25,32 +25,117 @@ const RESIDENCE_GROUPS: { key: BuildingInfo['residenceClass']; label: string; st
 
 type Phase = 'categories' | 'facilities';
 
-function FacilityCard({ facility, onSelect }: {
+/** Mini tile grid visualization showing building footprint */
+function TileGrid({ xsize, ysize }: { xsize: number; ysize: number }) {
+  // Cap display at 6×6 to keep grid reasonable
+  const displayX = Math.min(xsize, 6);
+  const displayY = Math.min(ysize, 6);
+  return (
+    <div
+      className={styles.tileGrid}
+      style={{ gridTemplateColumns: `repeat(${displayX}, 12px)` }}
+      aria-label={`${xsize} by ${ysize} tile footprint`}
+    >
+      {Array.from({ length: displayX * displayY }, (_, i) => (
+        <div key={i} className={styles.tileCell} />
+      ))}
+    </div>
+  );
+}
+
+/** Zone requirement tag with colored dot */
+function ZoneTag({ zone }: { zone: string }) {
+  if (!zone) return null;
+  return (
+    <span className={styles.zoneTag}>
+      <span className={styles.zoneDot} />
+      {zone}
+    </span>
+  );
+}
+
+function FacilityCard({ facility, isExpanded, onToggleExpand, onSelect }: {
   facility: BuildingInfo;
+  isExpanded: boolean;
+  onToggleExpand: (facilityClass: string) => void;
   onSelect: (f: { facilityClass: string; visualClassId: string; available: boolean }) => void;
 }) {
+  const hasDims = facility.xsize != null && facility.ysize != null && facility.xsize > 0 && facility.ysize > 0;
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (facility.available) onToggleExpand(facility.facilityClass);
+    }
+  }, [facility.available, facility.facilityClass, onToggleExpand]);
+
   return (
-    <button
-      className={`${styles.facilityCard} ${!facility.available ? styles.unavailable : ''}`}
-      onClick={() => facility.available && onSelect(facility)}
-      disabled={!facility.available}
+    <div
+      className={`${styles.facilityCard} ${isExpanded ? styles.expanded : ''} ${!facility.available ? styles.unavailable : ''}`}
+      onClick={() => facility.available && onToggleExpand(facility.facilityClass)}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={facility.available ? 0 : -1}
+      aria-expanded={isExpanded}
+      aria-disabled={!facility.available}
     >
-      {facility.iconPath && (
-        <img
-          src={facility.iconPath}
-          alt={facility.name}
-          className={styles.facilityIcon}
-        />
+      {/* Collapsed row: Icon + Name/Desc + Cost/Tiles */}
+      <div className={styles.facilityRow}>
+        {facility.iconPath && (
+          <img
+            src={facility.iconPath}
+            alt={facility.name}
+            className={styles.facilityIcon}
+          />
+        )}
+        <div className={styles.facilityInfo}>
+          <span className={styles.facilityName}>{facility.name}</span>
+          {!isExpanded && (
+            <span className={styles.facilityDesc}>{facility.description}</span>
+          )}
+        </div>
+        <div className={styles.facilityMeta}>
+          <span className={styles.facilityCost}>${facility.cost.toLocaleString()}</span>
+          {hasDims && (
+            <span className={styles.tileBadge}>
+              {facility.xsize}×{facility.ysize}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded detail area */}
+      {isExpanded && (
+        <div className={styles.facilityExpanded}>
+          <p className={styles.fullDesc}>{facility.description}</p>
+          <div className={styles.expandedLayout}>
+            {hasDims && (
+              <TileGrid xsize={facility.xsize!} ysize={facility.ysize!} />
+            )}
+            <div className={styles.expandedMeta}>
+              {facility.zoneRequirement && <ZoneTag zone={facility.zoneRequirement} />}
+              <span className={styles.metaLine}>
+                Cost: ${facility.cost.toLocaleString()}
+              </span>
+              {hasDims && (
+                <span className={styles.metaLine}>
+                  Tiles: {facility.xsize} × {facility.ysize} ({facility.xsize! * facility.ysize!} tiles)
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            className={styles.placeBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(facility);
+            }}
+          >
+            Place Building
+          </button>
+        </div>
       )}
-      <div className={styles.facilityInfo}>
-        <span className={styles.facilityName}>{facility.name}</span>
-        <span className={styles.facilityDesc}>{facility.description}</span>
-      </div>
-      <div className={styles.facilityMeta}>
-        <span className={styles.facilityCost}>${facility.cost.toLocaleString()}</span>
-        <span className={styles.facilityArea}>{facility.area}m²</span>
-      </div>
-    </button>
+    </div>
   );
 }
 
@@ -66,12 +151,14 @@ export function BuildMenu() {
   const [phase, setPhase] = useState<Phase>('categories');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedFacility, setExpandedFacility] = useState<string | null>(null);
 
   // Load categories when opened
   useEffect(() => {
     if (modal !== 'buildMenu') return;
     setPhase('categories');
     setIsLoading(true);
+    setExpandedFacility(null);
     client.onRequestBuildingCategories();
   }, [modal, client]);
 
@@ -82,6 +169,11 @@ export function BuildMenu() {
 
   useEffect(() => {
     if (facilities.length > 0) setIsLoading(false);
+  }, [facilities]);
+
+  // Reset expanded card when switching to facilities phase
+  useEffect(() => {
+    setExpandedFacility(null);
   }, [facilities]);
 
   const handleCategorySelect = useCallback(
@@ -107,11 +199,25 @@ export function BuildMenu() {
     [closeModal, client],
   );
 
+  const handleToggleExpand = useCallback((facilityClass: string) => {
+    setExpandedFacility((prev) => prev === facilityClass ? null : facilityClass);
+  }, []);
+
   // Group facilities by residence class when any facility has one
   const hasResidenceGroups = useMemo(
     () => facilities.some((f) => f.residenceClass),
     [facilities],
   );
+
+  const renderFacilityCard = useCallback((fac: BuildingInfo) => (
+    <FacilityCard
+      key={fac.facilityClass}
+      facility={fac}
+      isExpanded={expandedFacility === fac.facilityClass}
+      onToggleExpand={handleToggleExpand}
+      onSelect={handleFacilitySelect}
+    />
+  ), [expandedFacility, handleToggleExpand, handleFacilitySelect]);
 
   if (modal !== 'buildMenu') return null;
 
@@ -162,9 +268,6 @@ export function BuildMenu() {
                     />
                   )}
                   <span className={styles.categoryName}>{cat.kindName}</span>
-                  {cat.tycoonLevel > 0 && (
-                    <span className={styles.levelBadge}>Lv.{cat.tycoonLevel}</span>
-                  )}
                 </GlassCard>
               ))}
               {isPublicOfficeRole && capitolIconUrl && (
@@ -196,31 +299,13 @@ export function BuildMenu() {
                           <div className={`${styles.resGroupHeader} ${styleClass}`}>
                             {label}
                           </div>
-                          {group.map((fac) => (
-                            <FacilityCard
-                              key={fac.facilityClass}
-                              facility={fac}
-                              onSelect={handleFacilitySelect}
-                            />
-                          ))}
+                          {group.map(renderFacilityCard)}
                         </div>
                       );
                     })}
-                    {facilities.filter((f) => !f.residenceClass).map((fac) => (
-                      <FacilityCard
-                        key={fac.facilityClass}
-                        facility={fac}
-                        onSelect={handleFacilitySelect}
-                      />
-                    ))}
+                    {facilities.filter((f) => !f.residenceClass).map(renderFacilityCard)}
                   </>
-                : facilities.map((fac) => (
-                    <FacilityCard
-                      key={fac.facilityClass}
-                      facility={fac}
-                      onSelect={handleFacilitySelect}
-                    />
-                  ))}
+                : facilities.map(renderFacilityCard)}
               {facilities.length === 0 && (
                 <div className={styles.empty}>No buildings available in this category</div>
               )}

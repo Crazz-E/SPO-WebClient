@@ -3,11 +3,12 @@
  *
  * Tests the full user journey:
  * 1. Open build menu modal → categories request fires
- * 2. Store receives categories → category grid renders
+ * 2. Store receives categories → category grid renders (no level badge)
  * 3. Click category → facilities request fires
- * 4. Store receives facilities → facility list renders
- * 5. Click facility → modal closes, placement mode starts
- * 6. Capitol card (public office role) → fires onBuildCapitol
+ * 4. Store receives facilities → facility list renders with tile badges
+ * 5. Click facility → card expands (accordion behavior)
+ * 6. Click "Place Building" → modal closes, placement mode starts
+ * 7. Capitol card (public office role) → fires onBuildCapitol
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -41,7 +42,9 @@ const mockFacilities: BuildingInfo[] = [
     iconPath: '/icons/small-store.png',
     available: true,
     visualClassId: '101',
-    zoneRequirement: '',
+    zoneRequirement: 'Commercial zone',
+    xsize: 2,
+    ysize: 2,
   },
   {
     facilityClass: 'LargeStore',
@@ -53,8 +56,18 @@ const mockFacilities: BuildingInfo[] = [
     available: false,
     visualClassId: '102',
     zoneRequirement: 'commercial',
+    xsize: 3,
+    ysize: 3,
   },
 ];
+
+// Helper: navigate to facilities phase and populate store
+function goToFacilitiesPhase(facilities: BuildingInfo[] = mockFacilities) {
+  fireEvent.click(screen.getByText('Commerce'));
+  act(() => {
+    useUiStore.setState({ buildMenuFacilities: facilities });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -86,7 +99,7 @@ describe('Build Menu — integration flow', () => {
     expect(catSpy).toHaveBeenCalled();
   });
 
-  it('renders category cards when store receives data', () => {
+  it('renders category cards without level badge', () => {
     useUiStore.setState({
       modal: 'buildMenu',
       buildMenuCategories: mockCategories,
@@ -96,7 +109,8 @@ describe('Build Menu — integration flow', () => {
 
     expect(screen.getByText('Commerce')).toBeTruthy();
     expect(screen.getByText('Industry')).toBeTruthy();
-    expect(screen.getByText('Lv.2')).toBeTruthy();
+    // Level badge should NOT be rendered (removed from UI)
+    expect(screen.queryByText('Lv.2')).toBeNull();
   });
 
   it('requests facilities when category is clicked', () => {
@@ -115,8 +129,7 @@ describe('Build Menu — integration flow', () => {
     expect(facSpy).toHaveBeenCalledWith('1', 'default');
   });
 
-  it('renders facility list when store receives facilities', () => {
-    // Pre-set facilities so the useEffect fires on mount
+  it('renders facility list with tile badges when store receives facilities', () => {
     useUiStore.setState({
       modal: 'buildMenu',
       buildMenuCategories: mockCategories,
@@ -125,11 +138,8 @@ describe('Build Menu — integration flow', () => {
 
     renderWithProviders(<BuildMenu />);
 
-    // Click Commerce to go to facilities phase
     fireEvent.click(screen.getByText('Commerce'));
 
-    // Facilities were already in the store, so the useEffect clears isLoading.
-    // Trigger another store update to re-render with the loaded data.
     act(() => {
       useUiStore.setState({ buildMenuFacilities: [...mockFacilities] });
     });
@@ -138,9 +148,30 @@ describe('Build Menu — integration flow', () => {
     expect(screen.getByText('A basic retail shop')).toBeTruthy();
     expect(screen.getByText('Large Store')).toBeTruthy();
     expect(screen.getByText('A large department store')).toBeTruthy();
+    // Tile dimension badges
+    expect(screen.getByText('2×2')).toBeTruthy();
+    expect(screen.getByText('3×3')).toBeTruthy();
   });
 
-  it('closes modal and starts placement when available facility clicked', () => {
+  it('expands facility card on click and shows Place Building button', () => {
+    useUiStore.setState({
+      modal: 'buildMenu',
+      buildMenuCategories: mockCategories,
+    });
+
+    renderWithProviders(<BuildMenu />);
+    goToFacilitiesPhase();
+
+    // Click to expand
+    fireEvent.click(screen.getByText('Small Store'));
+
+    // Expanded area should show Place Building button and full metadata
+    expect(screen.getByText('Place Building')).toBeTruthy();
+    // Tile info in expanded area
+    expect(screen.getByText('Tiles: 2 × 2 (4 tiles)')).toBeTruthy();
+  });
+
+  it('closes modal and starts placement when Place Building is clicked', () => {
     const placeSpy = jest.fn();
     const mockCallbacks = createSpiedCallbacks({ onPlaceBuilding: placeSpy });
 
@@ -150,47 +181,81 @@ describe('Build Menu — integration flow', () => {
     });
 
     renderWithProviders(<BuildMenu />, { clientCallbacks: mockCallbacks });
+    goToFacilitiesPhase();
 
-    // Go to facilities phase
-    fireEvent.click(screen.getByText('Commerce'));
-
-    // Set facilities
-    act(() => {
-      useUiStore.setState({ buildMenuFacilities: mockFacilities });
-    });
-
-    // Click available facility
+    // Expand then place
     fireEvent.click(screen.getByText('Small Store'));
+    fireEvent.click(screen.getByText('Place Building'));
 
-    // Modal should close and placement should start
     expect(useUiStore.getState().modal).toBeNull();
     expect(placeSpy).toHaveBeenCalledWith('SmallStore', '101');
   });
 
-  it('does not start placement for unavailable facility', () => {
-    const placeSpy = jest.fn();
-    const mockCallbacks = createSpiedCallbacks({ onPlaceBuilding: placeSpy });
+  it('collapses expanded card when another card is clicked (accordion)', () => {
+    // Use two available facilities
+    const twoAvailable: BuildingInfo[] = [
+      { ...mockFacilities[0] },
+      { ...mockFacilities[1], available: true },
+    ];
 
     useUiStore.setState({
       modal: 'buildMenu',
       buildMenuCategories: mockCategories,
     });
 
-    renderWithProviders(<BuildMenu />, { clientCallbacks: mockCallbacks });
+    renderWithProviders(<BuildMenu />);
+    goToFacilitiesPhase(twoAvailable);
 
-    // Go to facilities phase
-    fireEvent.click(screen.getByText('Commerce'));
+    // Expand first card
+    fireEvent.click(screen.getByText('Small Store'));
+    expect(screen.getByText('Tiles: 2 × 2 (4 tiles)')).toBeTruthy();
 
-    act(() => {
-      useUiStore.setState({ buildMenuFacilities: mockFacilities });
+    // Click second card — first should collapse
+    fireEvent.click(screen.getByText('Large Store'));
+    expect(screen.queryByText('Tiles: 2 × 2 (4 tiles)')).toBeNull();
+    expect(screen.getByText('Tiles: 3 × 3 (9 tiles)')).toBeTruthy();
+  });
+
+  it('does not expand unavailable facility', () => {
+    useUiStore.setState({
+      modal: 'buildMenu',
+      buildMenuCategories: mockCategories,
     });
 
-    // Click unavailable facility (Large Store)
-    const largeStore = screen.getByText('Large Store').closest('button');
-    if (largeStore) fireEvent.click(largeStore);
+    renderWithProviders(<BuildMenu />);
+    goToFacilitiesPhase();
 
-    // Should NOT have called placement
-    expect(placeSpy).not.toHaveBeenCalled();
+    // Click unavailable facility (Large Store) — find the card by role
+    const largeStoreCard = screen.getByText('Large Store').closest('[role="button"]');
+    if (largeStoreCard) fireEvent.click(largeStoreCard);
+
+    // Should NOT show expanded content
+    expect(screen.queryByText('Place Building')).toBeNull();
+  });
+
+  it('facility card has correct accessibility attributes', () => {
+    useUiStore.setState({
+      modal: 'buildMenu',
+      buildMenuCategories: mockCategories,
+    });
+
+    renderWithProviders(<BuildMenu />);
+    goToFacilitiesPhase();
+
+    const smallStoreCard = screen.getByText('Small Store').closest('[role="button"]');
+    expect(smallStoreCard).toBeTruthy();
+    expect(smallStoreCard?.getAttribute('aria-expanded')).toBe('false');
+    expect(smallStoreCard?.getAttribute('tabindex')).toBe('0');
+
+    // Expand
+    fireEvent.click(screen.getByText('Small Store'));
+    const expandedCard = screen.getByText('Small Store').closest('[role="button"]');
+    expect(expandedCard?.getAttribute('aria-expanded')).toBe('true');
+
+    // Unavailable card should have aria-disabled and tabindex -1
+    const largeStoreCard = screen.getByText('Large Store').closest('[role="button"]');
+    expect(largeStoreCard?.getAttribute('aria-disabled')).toBe('true');
+    expect(largeStoreCard?.getAttribute('tabindex')).toBe('-1');
   });
 
   it('shows Capitol card for public office role', () => {
@@ -245,9 +310,9 @@ describe('Build Menu — integration flow', () => {
 // ---------------------------------------------------------------------------
 
 const mockResidentialFacilities: BuildingInfo[] = [
-  { facilityClass: 'PGIHiResA', name: 'Luxury Apartments', description: 'High class', cost: 200000, area: 4, iconPath: '', available: true, visualClassId: '5001', zoneRequirement: '', residenceClass: 'high' },
-  { facilityClass: 'PGIMidResA', name: 'Town Houses', description: 'Middle class', cost: 100000, area: 4, iconPath: '', available: true, visualClassId: '5101', zoneRequirement: '', residenceClass: 'middle' },
-  { facilityClass: 'PGILoResA', name: 'Low Income Housing', description: 'Low class', cost: 50000, area: 4, iconPath: '', available: true, visualClassId: '5201', zoneRequirement: '', residenceClass: 'low' },
+  { facilityClass: 'PGIHiResA', name: 'Luxury Apartments', description: 'High class', cost: 200000, area: 4, iconPath: '', available: true, visualClassId: '5001', zoneRequirement: '', residenceClass: 'high', xsize: 2, ysize: 2 },
+  { facilityClass: 'PGIMidResA', name: 'Town Houses', description: 'Middle class', cost: 100000, area: 4, iconPath: '', available: true, visualClassId: '5101', zoneRequirement: '', residenceClass: 'middle', xsize: 2, ysize: 2 },
+  { facilityClass: 'PGILoResA', name: 'Low Income Housing', description: 'Low class', cost: 50000, area: 4, iconPath: '', available: true, visualClassId: '5201', zoneRequirement: '', residenceClass: 'low', xsize: 2, ysize: 2 },
 ];
 
 describe('Build Menu — residential grouping', () => {
@@ -286,7 +351,7 @@ describe('Build Menu — residential grouping', () => {
   it('shows ungrouped facilities alongside classified groups', () => {
     const mixed: BuildingInfo[] = [
       ...mockResidentialFacilities,
-      { facilityClass: 'PGIResSpecial', name: 'Special Building', description: '', cost: 30000, area: 4, iconPath: '', available: true, visualClassId: '5301', zoneRequirement: '' },
+      { facilityClass: 'PGIResSpecial', name: 'Special Building', description: '', cost: 30000, area: 4, iconPath: '', available: true, visualClassId: '5301', zoneRequirement: '', xsize: 1, ysize: 1 },
     ];
 
     useUiStore.setState({

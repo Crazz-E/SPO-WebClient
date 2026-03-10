@@ -159,6 +159,8 @@ export interface BuildingInfo {
   iconPath: string;           // Building icon path
   available: boolean;         // Whether player can build this
   residenceClass?: 'high' | 'middle' | 'low'; // Derived from zone requirement text
+  xsize?: number;             // Width in tiles (from FacilityDimensions)
+  ysize?: number;             // Height in tiles (from FacilityDimensions)
 }
 
 // =============================================================================

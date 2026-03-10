@@ -3096,11 +3096,18 @@ export class StarpeaceClient {
       };
 
       const response = await this.sendRequest(req) as WsRespBuildingFacilities;
-      this.lastLoadedFacilities = response.facilities;
 
-      ClientBridge.setBuildMenuFacilities(response.facilities);
+      // Enrich facilities with tile dimensions from the preloaded cache
+      const dimCache = getFacilityDimensionsCache();
+      const enriched = response.facilities.map(f => {
+        const dims = dimCache.getFacility(f.visualClassId);
+        return dims ? { ...f, xsize: dims.xsize, ysize: dims.ysize } : f;
+      });
 
-      ClientBridge.log('Build', `Loaded ${response.facilities.length} facilities`);
+      this.lastLoadedFacilities = enriched;
+      ClientBridge.setBuildMenuFacilities(enriched);
+
+      ClientBridge.log('Build', `Loaded ${enriched.length} facilities`);
     } catch (err: unknown) {
       ClientBridge.log('Error', `Failed to load facilities: ${toErrorMessage(err)}`);
     }
