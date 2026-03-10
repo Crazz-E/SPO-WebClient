@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, ArrowLeft } from 'lucide-react';
+import { X, ArrowLeft, Lock } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useGameStore } from '../../store/game-store';
 import { useClient } from '../../context';
@@ -78,16 +78,30 @@ function FacilityCard({ facility, isExpanded, onToggleExpand, onSelect }: {
       tabIndex={facility.available ? 0 : -1}
       aria-expanded={isExpanded}
       aria-disabled={!facility.available}
+      title={!facility.available ? 'Not available yet' : undefined}
     >
       {/* Collapsed row: Icon + Name/Desc + Cost/Tiles */}
       <div className={styles.facilityRow}>
-        {facility.iconPath && (
-          <img
-            src={facility.iconPath}
-            alt={facility.name}
-            className={styles.facilityIcon}
-          />
-        )}
+        {facility.iconPath ? (
+          <div className={styles.iconWrap}>
+            <img
+              src={facility.iconPath}
+              alt={facility.name}
+              className={styles.facilityIcon}
+            />
+            {!facility.available && (
+              <span className={styles.lockOverlay} aria-hidden="true">
+                <Lock size={14} />
+              </span>
+            )}
+          </div>
+        ) : !facility.available ? (
+          <div className={styles.iconWrap}>
+            <span className={styles.lockOverlay} aria-hidden="true">
+              <Lock size={14} />
+            </span>
+          </div>
+        ) : null}
         <div className={styles.facilityInfo}>
           <span className={styles.facilityName}>{facility.name}</span>
           {!isExpanded && (
@@ -95,7 +109,11 @@ function FacilityCard({ facility, isExpanded, onToggleExpand, onSelect }: {
           )}
         </div>
         <div className={styles.facilityMeta}>
-          <span className={styles.facilityCost}>${facility.cost.toLocaleString()}</span>
+          {!facility.available ? (
+            <span className={styles.lockedBadge}>Locked</span>
+          ) : (
+            <span className={styles.facilityCost}>${facility.cost.toLocaleString()}</span>
+          )}
           {hasDims && (
             <span className={styles.tileBadge}>
               {facility.xsize}×{facility.ysize}
