@@ -10,7 +10,7 @@ const path = require('path');
 
 const API_KEY = 'sk_live_skillsmp_Y-DcREuip4XIpakL7dMNRMVZvQSO81aqE6JI-8LODBg';
 const API_BASE = 'https://skillsmp.com/api/v1';
-const SKILLS_DIR = path.join(__dirname, 'skills-skillsmp');
+const SKILLS_DIR = path.join(__dirname, 'skills');
 
 // Required skills for SPO-WebClient
 const REQUIRED_SKILLS = [

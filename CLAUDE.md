@@ -137,13 +137,13 @@ Skills auto-load contextually via `PreToolUse` hook in `.claude/settings.json`.
 | `dependency-updater` | Updating dependencies, checking outdated packages |
 | `e2e-test` | E2E testing with Playwright MCP (user-invoked only) |
 
-**Community skills** (30+ installed, auto-load via hooks): React, Zustand, state mgmt, testing, server, security, renderer, a11y, design, TypeScript, refactoring, debugging, protocol, git workflow. See [manifest.json](.claude/skills-skillsmp/manifest.json).
+**Community skills** (30+ installed, auto-load via hooks): React, Zustand, state mgmt, testing, server, security, renderer, a11y, design, TypeScript, refactoring, debugging, protocol, git workflow. See [manifest.json](.claude/skills/manifest.json).
 
 ## SkillsMP
 
 Search SkillsMP API before creating custom skills. Prefer skills with 1,000+ stars.
 - Installer: [.claude/skillsmp-installer.js](.claude/skillsmp-installer.js) | Ad-hoc: [.claude/install-new-skills.js](.claude/install-new-skills.js)
-- Installed: [.claude/skills-skillsmp/](.claude/skills-skillsmp/) (30+ skills) | Metadata: [manifest.json](.claude/skills-skillsmp/manifest.json)
+- Installed: [.claude/skills/](.claude/skills/) (30+ skills) | Metadata: [manifest.json](.claude/skills/manifest.json)
 
 ## RDO Protocol
 
