@@ -28,6 +28,7 @@ import type { GameSettings } from './store/game-store';
 import { useUiStore } from './store/ui-store';
 import { useChatStore } from './store/chat-store';
 import { useBuildingStore } from './store/building-store';
+import { getFacilityDimensionsCache } from './facility-dimensions-cache';
 import { useProfileStore } from './store/profile-store';
 import { useMailStore } from './store/mail-store';
 import { usePoliticsStore } from './store/politics-store';
@@ -692,7 +693,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       }
 
       this.mapNavigationUI.setOnFetchFacilityDimensions(async (visualClass) => {
-        const cache = (await import('./facility-dimensions-cache')).getFacilityDimensionsCache();
+        const cache = getFacilityDimensionsCache();
         if (!cache.isInitialized()) return null;
         return cache.getFacility(visualClass) || null;
       });
