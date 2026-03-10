@@ -558,6 +558,142 @@ describe('GameObjectTextureCache', () => {
       });
     });
 
+    describe('color keying for GIFs in COLOR_KEY_GIFS', () => {
+      it('should apply color keying to single-frame GIF in COLOR_KEY_GIFS set', async () => {
+        const mockBlob = {
+          arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(100)),
+        };
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          blob: jest.fn().mockResolvedValue(mockBlob),
+        });
+
+        // Create frame with known background (pixel 0,0 = dark gray 19,21,21)
+        const patch = new Uint8ClampedArray(4 * 4); // 2x2 pixels
+        // Pixel (0,0): background color
+        patch[0] = 19; patch[1] = 21; patch[2] = 21; patch[3] = 255;
+        // Pixel (1,0): also background (within tolerance)
+        patch[4] = 20; patch[5] = 22; patch[6] = 20; patch[7] = 255;
+        // Pixel (0,1): content (red, different from background)
+        patch[8] = 255; patch[9] = 0; patch[10] = 0; patch[11] = 255;
+        // Pixel (1,1): content (blue)
+        patch[12] = 0; patch[13] = 0; patch[14] = 255; patch[15] = 255;
+
+        mockParseGIF.mockReturnValue({ frames: [], lsd: { width: 2, height: 2 } });
+        mockDecompressFrames.mockReturnValue([{
+          dims: { width: 2, height: 2, top: 0, left: 0 },
+          delay: 10,
+          patch,
+          pixels: [],
+          colorTable: [],
+          disposalType: 0,
+          transparentIndex: -1,
+        }]);
+
+        let capturedImageData: InstanceType<typeof ImageData> | null = null;
+        (global as any).createImageBitmap.mockImplementation((data: unknown) => {
+          if (data instanceof ImageData) capturedImageData = data;
+          return Promise.resolve(makeMockBitmap(0));
+        });
+
+        // Use the filename that's in COLOR_KEY_GIFS
+        await cache.getTextureAsync('BuildingImages', 'mapmkocdstore64x32x0.gif');
+
+        // Should have gone through gifuct-js decode path (ImageData, not Blob)
+        expect(capturedImageData).not.toBeNull();
+        // Background pixels should have alpha=0
+        expect(capturedImageData!.data[3]).toBe(0);   // pixel (0,0): transparent
+        expect(capturedImageData!.data[7]).toBe(0);   // pixel (1,0): transparent (within tolerance)
+        // Content pixels should remain opaque
+        expect(capturedImageData!.data[11]).toBe(255); // pixel (0,1): red, opaque
+        expect(capturedImageData!.data[15]).toBe(255); // pixel (1,1): blue, opaque
+
+        // Single-frame → no animated texture
+        expect(cache.getAnimatedTexture('BuildingImages', 'mapmkocdstore64x32x0.gif')).toBeNull();
+      });
+
+      it('should NOT apply color keying to GIF not in COLOR_KEY_GIFS set', async () => {
+        const mockBlob = {
+          arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(100)),
+        };
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          blob: jest.fn().mockResolvedValue(mockBlob),
+        });
+
+        mockParseGIF.mockReturnValue({ frames: [], lsd: { width: 64, height: 32 } });
+        mockDecompressFrames.mockReturnValue(makeMockFrames(1));
+
+        const mockBitmap = makeMockBitmap(0);
+        (global as any).createImageBitmap.mockResolvedValue(mockBitmap);
+
+        // Use a filename NOT in COLOR_KEY_GIFS — single-frame goes to browser-native path
+        await cache.getTextureAsync('BuildingImages', 'MapPGIFoodStore64x32x0.gif');
+
+        // Should have been called with a Blob (browser-native), not ImageData
+        const lastCall = (global as any).createImageBitmap.mock.calls.at(-1);
+        expect(lastCall[0]).toBeInstanceOf(Blob);
+      });
+
+      it('should apply color keying to animated GIF in COLOR_KEY_GIFS set', async () => {
+        // Create 2-frame GIF with background color
+        const makeColorKeyFrame = () => {
+          const patch = new Uint8ClampedArray(2 * 2 * 4); // 2x2
+          // Pixel (0,0): background
+          patch[0] = 19; patch[1] = 21; patch[2] = 21; patch[3] = 255;
+          // Pixel (1,0): content
+          patch[4] = 200; patch[5] = 100; patch[6] = 50; patch[7] = 255;
+          // Pixel (0,1): background
+          patch[8] = 19; patch[9] = 21; patch[10] = 21; patch[11] = 255;
+          // Pixel (1,1): content
+          patch[12] = 100; patch[13] = 200; patch[14] = 50; patch[15] = 255;
+          return {
+            dims: { width: 2, height: 2, top: 0, left: 0 },
+            delay: 10,
+            patch,
+            pixels: [],
+            colorTable: [],
+            disposalType: 0,
+            transparentIndex: -1,
+          };
+        };
+
+        const mockBlob = {
+          arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(100)),
+        };
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          blob: jest.fn().mockResolvedValue(mockBlob),
+        });
+
+        mockParseGIF.mockReturnValue({ frames: [], lsd: { width: 2, height: 2 } });
+        mockDecompressFrames.mockReturnValue([makeColorKeyFrame(), makeColorKeyFrame()]);
+
+        const capturedImageDatas: Array<InstanceType<typeof ImageData>> = [];
+        let bitmapIdx = 0;
+        (global as any).createImageBitmap.mockImplementation((data: unknown) => {
+          if (data instanceof ImageData) capturedImageDatas.push(data);
+          return Promise.resolve(makeMockBitmap(bitmapIdx++));
+        });
+
+        await cache.getTextureAsync('BuildingImages', 'mapmkocdstore64x32x0.gif');
+
+        // Both frames should have color keying applied
+        expect(capturedImageDatas).toHaveLength(2);
+        for (const imgData of capturedImageDatas) {
+          expect(imgData.data[3]).toBe(0);    // background pixel: transparent
+          expect(imgData.data[7]).toBe(255);   // content pixel: opaque
+          expect(imgData.data[11]).toBe(0);    // background pixel: transparent
+          expect(imgData.data[15]).toBe(255);  // content pixel: opaque
+        }
+
+        // Should be animated (2 frames)
+        const animated = cache.getAnimatedTexture('BuildingImages', 'mapmkocdstore64x32x0.gif');
+        expect(animated).not.toBeNull();
+        expect(animated!.frames).toHaveLength(2);
+      });
+    });
+
     describe('animated texture cleanup', () => {
       it('should close animated frame bitmaps on clear()', async () => {
         const bitmaps = setupAnimatedGifMock(2);

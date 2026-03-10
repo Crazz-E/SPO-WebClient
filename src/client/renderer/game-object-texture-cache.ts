@@ -33,6 +33,12 @@ export interface AnimatedTexture {
   totalDuration: number;  // sum of all delays in ms
 }
 
+/** Result of decoding a GIF through gifuct-js with optional color keying */
+interface GifDecodeResult {
+  firstFrameBitmap: ImageBitmap;
+  animatedTexture: AnimatedTexture | null;
+}
+
 interface CacheEntry {
   texture: ImageBitmap | null;
   animatedTexture?: AnimatedTexture;
@@ -87,6 +93,11 @@ export class GameObjectTextureCache {
   private cache: Map<string, CacheEntry> = new Map();
   private maxSize: number;
   private accessCounter: number = 0;
+
+  /** Building GIFs that lack proper GIF transparency and need client-side color keying */
+  private static readonly COLOR_KEY_GIFS: Set<string> = new Set([
+    'mapmkocdstore64x32x0.gif',
+  ]);
 
   // Statistics
   private hits: number = 0;
@@ -252,23 +263,24 @@ export class GameObjectTextureCache {
 
       const blob = await response.blob();
 
-      // Attempt animated GIF decode for building textures
+      // Attempt GIF decode for building textures (with optional color keying)
       if (category === 'BuildingImages' && name.toLowerCase().endsWith('.gif')) {
         const arrayBuffer = await blob.arrayBuffer();
-        const animated = await this.decodeAnimatedGif(arrayBuffer);
+        const needsColorKey = GameObjectTextureCache.COLOR_KEY_GIFS.has(name.toLowerCase());
+        const result = await this.decodeGifFrames(arrayBuffer, needsColorKey);
 
-        if (animated) {
-          // Store animated texture on the cache entry (set after loadTexture resolves)
-          const key = this.getCacheKey(category, name);
-          const entry = this.cache.get(key);
-          if (entry) {
-            entry.animatedTexture = animated;
+        if (result) {
+          if (result.animatedTexture) {
+            const key = this.getCacheKey(category, name);
+            const entry = this.cache.get(key);
+            if (entry) {
+              entry.animatedTexture = result.animatedTexture;
+            }
           }
-          // Return first frame as the static fallback
-          return animated.frames[0].bitmap;
+          return result.firstFrameBitmap;
         }
 
-        // Not animated — create bitmap from the buffer
+        // Not animated (and no color keying needed) — create bitmap from the buffer
         const newBlob = new Blob([arrayBuffer], { type: 'image/gif' });
         return createImageBitmap(newBlob);
       }
@@ -281,22 +293,52 @@ export class GameObjectTextureCache {
   }
 
   /**
-   * Decode an animated GIF into individual frames.
-   * Returns null if the GIF has only one frame (static).
+   * Apply color key transparency to GIF RGBA pixel data.
+   * Reads pixel (0,0) to detect background color, sets alpha=0 for matches within tolerance.
    */
-  private async decodeAnimatedGif(arrayBuffer: ArrayBuffer): Promise<AnimatedTexture | null> {
+  private applyGifColorKey(pixels: Uint8ClampedArray, tolerance: number = 5): void {
+    if (pixels.length < 4) return;
+    const keyR = pixels[0], keyG = pixels[1], keyB = pixels[2];
+    const count = pixels.length / 4;
+    for (let i = 0; i < count; i++) {
+      const off = i * 4;
+      if (
+        Math.abs(pixels[off] - keyR) <= tolerance &&
+        Math.abs(pixels[off + 1] - keyG) <= tolerance &&
+        Math.abs(pixels[off + 2] - keyB) <= tolerance
+      ) {
+        pixels[off + 3] = 0;
+      }
+    }
+  }
+
+  /**
+   * Decode a GIF into individual frames, optionally applying color key transparency.
+   * Returns null if decoding fails or if the GIF has only one frame and no color keying is needed.
+   */
+  private async decodeGifFrames(
+    arrayBuffer: ArrayBuffer,
+    applyColorKey: boolean = false
+  ): Promise<GifDecodeResult | null> {
     try {
       const gif = parseGIF(arrayBuffer);
       const frames = decompressFrames(gif, true);
 
-      if (frames.length <= 1) return null;
+      if (frames.length === 0) return null;
+
+      // Single-frame GIF without color keying: let browser handle natively
+      if (frames.length <= 1 && !applyColorKey) return null;
 
       const animFrames: AnimatedFrame[] = [];
       let totalDuration = 0;
 
       for (const frame of frames) {
+        const patchData = new Uint8ClampedArray(frame.patch);
+        if (applyColorKey) {
+          this.applyGifColorKey(patchData);
+        }
         const imageData = new ImageData(
-          new Uint8ClampedArray(frame.patch),
+          patchData,
           frame.dims.width,
           frame.dims.height
         );
@@ -307,7 +349,12 @@ export class GameObjectTextureCache {
         totalDuration += delay;
       }
 
-      return { frames: animFrames, totalDuration };
+      return {
+        firstFrameBitmap: animFrames[0].bitmap,
+        animatedTexture: frames.length > 1
+          ? { frames: animFrames, totalDuration }
+          : null,
+      };
     } catch (error) {
       console.warn('[GameObjectTextureCache] GIF decode failed:', error);
       return null;
