@@ -21,6 +21,7 @@ import {
   WsRespChatChannelList,
   WsEventChatUserTyping,
   WsEventChatChannelChange,
+  WsEventChatUserListChange,
   WsReqBuildingFocus,
   WsReqBuildingUnfocus,
   WsRespBuildingFocus,
@@ -739,9 +740,15 @@ export class StarpeaceClient {
         break;
       }
 
-      case WsMessageType.EVENT_CHAT_USER_LIST_CHANGE:
-        this.requestUserList();
+      case WsMessageType.EVENT_CHAT_USER_LIST_CHANGE: {
+        const userChange = msg as WsEventChatUserListChange;
+        if (userChange.action === 'JOIN') {
+          ClientBridge.addChatUser(userChange.user);
+        } else {
+          ClientBridge.removeChatUser(userChange.user.id);
+        }
         break;
+      }
 
       case WsMessageType.EVENT_MAP_DATA:
       case WsMessageType.RESP_MAP_DATA:

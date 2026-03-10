@@ -469,6 +469,14 @@ export const ClientBridge = {
     useChatStore.getState().setUsers(users);
   },
 
+  addChatUser(user: { name: string; id: string; status: number }): void {
+    useChatStore.getState().addUser(user);
+  },
+
+  removeChatUser(userId: string): void {
+    useChatStore.getState().removeUser(userId);
+  },
+
   setChatUserTyping(username: string, isTyping: boolean): void {
     useChatStore.getState().setUserTyping(username, isTyping);
   },

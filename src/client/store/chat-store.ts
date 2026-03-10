@@ -39,6 +39,8 @@ interface ChatState {
   setChannels: (channels: string[]) => void;
   addMessage: (channel: string, message: ChatMessage) => void;
   setUsers: (users: ChatUser[]) => void;
+  addUser: (user: ChatUser) => void;
+  removeUser: (userId: string) => void;
   setUserTyping: (username: string, isTyping: boolean) => void;
   setExpanded: (expanded: boolean) => void;
   toggleExpanded: () => void;
@@ -75,6 +77,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
     set({ users: map });
   },
+
+  addUser: (user) =>
+    set((state) => ({
+      users: { ...state.users, [user.id]: user },
+    })),
+
+  removeUser: (userId) =>
+    set((state) => {
+      const { [userId]: _, ...rest } = state.users;
+      return { users: rest };
+    }),
 
   setUserTyping: (username, isTyping) =>
     set((state) => {
