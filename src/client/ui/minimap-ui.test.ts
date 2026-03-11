@@ -218,12 +218,12 @@ describe('MinimapUI', () => {
     const minimap = new MinimapUI();
     minimap.setRenderer(renderer);
 
-    // Find the canvas (element with onmousedown and width=200)
-    const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
-    expect(canvas).toBeDefined();
+    // onmousedown is set on the container (not the canvas) for border-vs-navigate routing
+    const container = allElements.find(el => el.id === 'minimap-container');
+    expect(container).toBeDefined();
 
-    // Simulate click at center (100, 100) of 200x200 canvas on a 100x100 map
-    canvas!.onmousedown!({ offsetX: 100, offsetY: 100, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+    // Center click (100, 100) is interior (L1=0), routes to navigate
+    container!.onmousedown!({ offsetX: 100, offsetY: 100, preventDefault: jest.fn(), stopPropagation: jest.fn() });
     expect(renderer.centerOn).toHaveBeenCalledWith(50, 50);
 
     minimap.destroy();
@@ -320,44 +320,41 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should inverse-transform click for SOUTH rotation', () => {
+    it('should inverse-transform interior click for SOUTH rotation', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 2) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
 
-      const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
-      expect(canvas).toBeDefined();
+      // Use container (onmousedown is set there, not on canvas)
+      const container = allElements.find(el => el.id === 'minimap-container');
+      expect(container).toBeDefined();
 
-      // Click at (150, 150) with SOUTH rotation (totalAngle = -PI/4 + PI = 3PI/4)
-      // dx=50, dy=50, invAngle=-3PI/4
-      // cos(-3PI/4) ≈ -0.7071, sin(-3PI/4) ≈ -0.7071
-      // rdx = 50*(-0.7071) - 50*(-0.7071) = 0
-      // rdy = 50*(-0.7071) + 50*(-0.7071) = -70.71
-      // rx = 100 + 0/0.7071 = 100, ry = 100 + (-70.71)/0.7071 = 0
-      // mapX = round(100/200*100)=50, mapY = min(99, round((200-0)/200*100))=99
-      canvas!.onmousedown!({ offsetX: 150, offsetY: 150, preventDefault: jest.fn(), stopPropagation: jest.fn() });
-      expect(renderer.centerOn).toHaveBeenCalledWith(50, 99);
+      // Click at (95, 105) — clearly inside diamond (L1 dist from border = 90 >> BORDER_HIT=14)
+      // SOUTH rotation: totalAngle = -PI/4 + PI = 3PI/4, invAngle = -3PI/4
+      // dx=-5, dy=5  →  rx = 100 + (-dx + dy) = 100 + 5 + 5 = 110
+      //                   ry = 100 - (dx + dy) = 100 - (-5+5) = 100
+      // mapX = round(110/200*100) = 55,  mapY = round((200-100)/200*100) = 50
+      container!.onmousedown!({ offsetX: 95, offsetY: 105, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      expect(renderer.centerOn).toHaveBeenCalledWith(55, 50);
 
       minimap.destroy();
     });
 
-    it('should inverse-transform click for EAST rotation', () => {
+    it('should inverse-transform interior click for EAST rotation', () => {
       const renderer = createMockRenderer({ getRotation: jest.fn(() => 1) });
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
 
-      const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
-      expect(canvas).toBeDefined();
+      const container = allElements.find(el => el.id === 'minimap-container');
+      expect(container).toBeDefined();
 
-      // Click at top-center (100, 0) with EAST rotation (totalAngle = -PI/4 + PI/2 = PI/4)
-      // dx=0, dy=-100, invAngle=-PI/4
-      // cos(-PI/4) ≈ 0.7071, sin(-PI/4) ≈ -0.7071
-      // rdx = 0*(0.7071) - (-100)*(-0.7071) = -70.71
-      // rdy = 0*(-0.7071) + (-100)*(0.7071) = -70.71
-      // rx = 100 + (-70.71)/0.7071 = 0, ry = 100 + (-70.71)/0.7071 = 0
-      // mapX = max(0, 0) = 0, mapY = min(99, round((200-0)/200*100)) = 99
-      canvas!.onmousedown!({ offsetX: 100, offsetY: 0, preventDefault: jest.fn(), stopPropagation: jest.fn() });
-      expect(renderer.centerOn).toHaveBeenCalledWith(0, 99);
+      // Click at (90, 80) — clearly inside diamond (L1=30, dist from border = 70 >> 14)
+      // EAST rotation: totalAngle = PI/4, invAngle = -PI/4
+      // dx=-10, dy=-20  →  rx = 100 + (dx + dy) = 100 + (-10 + -20) = 70
+      //                      ry = 100 + (dy - dx) = 100 + (-20 - (-10)) = 90
+      // mapX = round(70/200*100) = 35,  mapY = round((200-90)/200*100) = 55
+      container!.onmousedown!({ offsetX: 90, offsetY: 80, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      expect(renderer.centerOn).toHaveBeenCalledWith(35, 55);
 
       minimap.destroy();
     });
@@ -367,9 +364,10 @@ describe('MinimapUI', () => {
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
 
-      const canvas = allElements.find(el => el.onmousedown !== null && el.width === 200);
-      // Center click is invariant under rotation+scale: (100,100) → (50, 50)
-      canvas!.onmousedown!({ offsetX: 100, offsetY: 100, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+      const container = allElements.find(el => el.id === 'minimap-container');
+      expect(container).toBeDefined();
+      // Center click (L1=0) is interior and invariant under rotation+scale: (100,100) → (50, 50)
+      container!.onmousedown!({ offsetX: 100, offsetY: 100, preventDefault: jest.fn(), stopPropagation: jest.fn() });
       expect(renderer.centerOn).toHaveBeenCalledWith(50, 50);
 
       minimap.destroy();
@@ -501,9 +499,11 @@ describe('MinimapUI', () => {
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
-      // drawCameraMarker calls arc() once for the center dot
-      expect(mockCtx.arc).toHaveBeenCalledTimes(1);
-      // And moveTo/lineTo for the crosshair lines
+      // drawCameraMarker: 1 arc (center dot)
+      // drawDiamondBorder vertex handles: 4 vertices × 2 arcs (outer ring + inner dot) = 8
+      // Total: 9 arc calls
+      expect(mockCtx.arc).toHaveBeenCalledTimes(9);
+      // Camera crosshair uses moveTo/lineTo
       expect(mockCtx.moveTo.mock.calls.length).toBeGreaterThan(0);
 
       minimap.destroy();
@@ -519,32 +519,25 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should create controls pill on the wrapper (not the inner container)', () => {
+    it('should draw vertex handle dots (arc calls) as part of diamond border', () => {
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+
+      // drawDiamondBorder: 4 vertices × 2 arcs (outer ring + inner dot) = 8
+      // drawCameraMarker: 1 arc — total = 9
+      expect(mockCtx.arc).toHaveBeenCalledTimes(9);
+
+      minimap.destroy();
+    });
+
+    it('should have wrapper with exactly 1 child (container only, no pill)', () => {
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
       const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
       expect(wrapper).toBeDefined();
-      const pill = allElements.find(el => el.id === 'minimap-controls');
-      expect(pill).toBeDefined();
-      expect(pill!.style.cssText).toContain('ns-resize');
-
-      minimap.destroy();
-    });
-
-    it('should create wrapper with 2 children (container + pill) and pill with 4 buttons', () => {
-      const minimap = new MinimapUI({ onZoomIn: jest.fn(), onZoomOut: jest.fn(), onRotateCW: jest.fn(), onRotateCCW: jest.fn() });
-      minimap.setRenderer(createMockRenderer());
-
-      // Wrapper has: #minimap-container + #minimap-controls = 2 children
-      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
-      expect(wrapper).toBeDefined();
-      expect(wrapper!.children.length).toBe(2);
-
-      // Controls pill has 4 buttons: ↺ − + ↻
-      const pill = allElements.find(el => el.id === 'minimap-controls');
-      expect(pill).toBeDefined();
-      expect(pill!.children.length).toBe(4);
+      expect(wrapper!.children.length).toBe(1);
+      expect(wrapper!.children[0].id).toBe('minimap-container');
 
       minimap.destroy();
     });
@@ -567,34 +560,21 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should position controls pill with ns-resize cursor and centered horizontally', () => {
-      const minimap = new MinimapUI();
-      minimap.setRenderer(createMockRenderer());
-
-      const pill = allElements.find(el => el.id === 'minimap-controls');
-      expect(pill).toBeDefined();
-      expect(pill!.style.cssText).toContain('ns-resize');
-      expect(pill!.style.cssText).toContain('left: 50%');
-
-      minimap.destroy();
-    });
-
-    it('should set wrapper height to currentSize + 48 (PILL_GAP=8 + PILL_H=40)', () => {
+    it('should set wrapper width and height equal to DESKTOP_SIZE=200 (no pill)', () => {
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
       const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
       expect(wrapper).toBeDefined();
-      // DESKTOP_SIZE=200 (window.innerWidth=0 → isMobile()=false → desktop)
-      // wrapperHeight = 200 + 8 + 40 = 248
+      // window.innerWidth=0 → isMobile()=false → DESKTOP_SIZE=200
+      // wrapper height = currentSize (same as diamond — no pill offset)
       expect(wrapper!.style.cssText).toContain('width: 200px');
-      expect(wrapper!.style.cssText).toContain('height: 248px');
+      expect(wrapper!.style.cssText).toContain('height: 200px');
 
       minimap.destroy();
     });
 
-    it('should use MOBILE_SIZE=140 when window.innerWidth is a mobile width', () => {
-      // Node test env has no window — inject a minimal stub on globalThis
+    it('should use MOBILE_SIZE=140 with square wrapper when innerWidth is mobile', () => {
       const origWindow = (globalThis as Record<string, unknown>).window;
       (globalThis as Record<string, unknown>).window = { innerWidth: 375 };
 
@@ -603,9 +583,9 @@ describe('MinimapUI', () => {
 
       const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
       expect(wrapper).toBeDefined();
-      // MOBILE_SIZE=140, wrapperHeight = 140 + 48 = 188
+      // MOBILE_SIZE=140, wrapper is square (no pill)
       expect(wrapper!.style.cssText).toContain('width: 140px');
-      expect(wrapper!.style.cssText).toContain('height: 188px');
+      expect(wrapper!.style.cssText).toContain('height: 140px');
 
       minimap.destroy();
       (globalThis as Record<string, unknown>).window = origWindow;

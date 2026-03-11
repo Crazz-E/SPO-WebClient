@@ -628,12 +628,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       cash: '0', incomePerHour: '0', ranking: 0, buildingCount: 0, maxBuildings: 0,
     });
 
-    this.minimapUI = new MinimapUI({
-      onZoomIn:    () => this.mapNavigationUI?.getRenderer()?.zoomIn(),
-      onZoomOut:   () => this.mapNavigationUI?.getRenderer()?.zoomOut(),
-      onRotateCW:  () => this.mapNavigationUI?.getRenderer()?.rotateCW(),
-      onRotateCCW: () => this.mapNavigationUI?.getRenderer()?.rotateCCW(),
-    });
+    this.minimapUI = new MinimapUI();
     const renderer = this.mapNavigationUI.getRenderer();
     if (renderer) {
       this.minimapUI.setRenderer(renderer);
