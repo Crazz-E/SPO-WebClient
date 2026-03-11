@@ -708,8 +708,10 @@ export class StarpeaceClient implements ClientHandlerContext {
   }
 
   private init() {
+    // In Electron, window.location is file:// — use the host injected via preload contextBridge
+    const host = (window as Window & { electronHost?: string }).electronHost ?? window.location.host;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${window.location.host}/ws`;
+    const url = `${protocol}//${host}/ws`;
     ClientBridge.log('System', `Connecting to Gateway at ${url}...`);
 
     this.ws = new WebSocket(url);
