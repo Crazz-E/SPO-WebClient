@@ -405,6 +405,8 @@ export class IsometricMapRenderer {
   private selectedBuilding: MapBuilding | null = null;
   private selectedBuildingDrawnTop: { x: number; y: number; textureHeight: number } | null = null;
   private selectionPulseTime: number = 0;
+  // One-shot expanding ring drawn when a building is first selected
+  private selectionBurstStartTime: number = 0;
   private mouseMapI: number = 0;
   private mouseMapJ: number = 0;
   private mouseHasEnteredCanvas: boolean = false;
@@ -436,6 +438,12 @@ export class IsometricMapRenderer {
   private placementMode: boolean = false;
   private placementInvalid: boolean = false;
   private fallbackIconImages: Map<string, HTMLImageElement | null> = new Map();
+  // 0 = fully valid (green), 1 = fully invalid (red) — lerped each frame
+  private placementColorT: number = 0;
+  private placementColorTLastMs: number = 0;
+
+  // Per-building visual effects: upgrade flash/scale-pop and demolition shrink/fade
+  private buildingEffects: Map<string, { type: 'upgrade' | 'demolish'; startTime: number; building: MapBuilding }> = new Map();
 
   // Road drawing
   private roadDrawingMode: boolean = false;
@@ -512,6 +520,7 @@ export class IsometricMapRenderer {
   private hasAnimatedBuildings: boolean = false;
   private lastRenderTime: number = 0;
   private lastPulseRenderTime: number = 0;
+  private lastPlacementRenderTime: number = 0;
   private lastVehicleFrameTime: number = 0;
   // Bound event handlers for proper cleanup
   private boundMouseDown = (e: MouseEvent) => this.onMouseDown(e);
@@ -1083,6 +1092,12 @@ export class IsometricMapRenderer {
    * Rebuild all buildings and segments from cached zones
    */
   private rebuildAggregatedData() {
+    // Snapshot previous buildings before clearing (for upgrade/demolition detection)
+    const prevByKey = new Map<string, MapBuilding>();
+    for (const b of this.allBuildings) {
+      prevByKey.set(`${b.x},${b.y}`, b);
+    }
+
     this.allBuildings = [];
     this.allSegments = [];
     this.roadTilesMap.clear();
@@ -1149,6 +1164,40 @@ export class IsometricMapRenderer {
       this.allSegments,
       this.facilityDimensionsCache
     );
+
+    // Detect upgrade (visualClass changed) and demolition (building removed).
+    // Skip on first load (prevByKey is empty — no real changes to animate).
+    if (prevByKey.size > 0) {
+      const now = performance.now();
+      const newByKey = new Map<string, MapBuilding>();
+      for (const b of this.allBuildings) {
+        newByKey.set(`${b.x},${b.y}`, b);
+      }
+
+      // Upgrades: same position, different visualClass
+      for (const [key, newB] of newByKey) {
+        const prev = prevByKey.get(key);
+        if (prev && prev.visualClass !== newB.visualClass) {
+          this.buildingEffects.set(key, { type: 'upgrade', startTime: now, building: newB });
+        }
+      }
+
+      // Demolitions: building present before but gone now
+      for (const [key, prevB] of prevByKey) {
+        if (!newByKey.has(key) && this.buildingEffects.get(key)?.type !== 'demolish') {
+          this.buildingEffects.set(key, { type: 'demolish', startTime: now, building: prevB });
+        }
+      }
+    }
+
+    // Expire finished effects
+    const expireNow = performance.now();
+    for (const [key, effect] of this.buildingEffects) {
+      const duration = effect.type === 'upgrade' ? 450 : 500;
+      if (expireNow - effect.startTime > duration) {
+        this.buildingEffects.delete(key);
+      }
+    }
   }
 
   /**
@@ -1519,10 +1568,12 @@ export class IsometricMapRenderer {
     return { x: southCornerScreenPos.x, y: textureTopY, textureHeight: scaledHeight };
   }
 
-  /** Mark a building as selected (focused) — shows gold pulsing footprint. */
+  /** Mark a building as selected (focused) — shows gold pulsing footprint + entry burst ring. */
   public setSelectedBuilding(x: number, y: number): void {
     this.selectedBuilding = this.getBuildingAt(x, y);
-    this.selectionPulseTime = performance.now();
+    const now = performance.now();
+    this.selectionPulseTime = now;
+    this.selectionBurstStartTime = now;
     this.requestRender();
   }
 
@@ -2182,10 +2233,26 @@ export class IsometricMapRenderer {
 
     // Game info overlay removed — stats available via debug mode (D key)
 
-    // Keep rendering for animated buildings or selected building pulse
-    // Throttle selection pulse to 15fps (66ms) — no visual difference for a slow sine wave
-    if (this.hasAnimatedBuildings) {
+    // Keep rendering while any time-based animation is active.
+    // Priority order: animated building textures (full fps) > active effects (full fps)
+    //   > selection burst (full fps for 350ms) > placement breathing (throttled 20fps)
+    //   > selection pulse (throttled to 15fps — slow sine wave)
+    const burstActive = this.selectedBuilding !== null &&
+      (performance.now() - this.selectionBurstStartTime) < 350;
+    const hasActiveEffects = this.buildingEffects.size > 0;
+
+    if (this.hasAnimatedBuildings || hasActiveEffects || burstActive) {
       this.requestRender();
+    } else if (this.placementMode) {
+      // Breathing animation only needs ~20fps — throttle to 50ms intervals
+      const now = performance.now();
+      const delay = 50 - (now - this.lastPlacementRenderTime);
+      if (delay <= 0) {
+        this.lastPlacementRenderTime = now;
+        this.requestRender();
+      } else {
+        setTimeout(() => { this.lastPlacementRenderTime = performance.now(); this.requestRender(); }, delay);
+      }
     } else if (this.selectedBuilding) {
       const now = performance.now();
       if (now - this.lastPulseRenderTime >= 66) {
@@ -2988,8 +3055,30 @@ export class IsometricMapRenderer {
           return;
         }
 
-        // Draw texture scaled to match current zoom level
-        ctx.drawImage(texture, drawX, drawY, scaledWidth, scaledHeight);
+        // Upgrade flash + scale pop: briefly scale the sprite up then back on visualClass change
+        const effectKey = `${building.x},${building.y}`;
+        const effect = this.buildingEffects.get(effectKey);
+        const isUpgrading = effect?.type === 'upgrade';
+
+        if (isUpgrading && effect) {
+          const t = Math.min(1, (performance.now() - effect.startTime) / 450);
+          // Scale: 1.0 → 1.08 → 1.0 using a sine arc peaking at t=0.4
+          const scaleBoost = 1 + 0.08 * Math.sin(t * Math.PI);
+          const cx = drawX + scaledWidth / 2;
+          const cy = drawY + scaledHeight / 2;
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(scaleBoost, scaleBoost);
+          ctx.drawImage(texture, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+          // White flash overlay fading from 0.75 → 0
+          ctx.globalAlpha = 0.75 * Math.max(0, 1 - t * 2.5);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(-scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+          ctx.restore();
+        } else {
+          // Draw texture scaled to match current zoom level
+          ctx.drawImage(texture, drawX, drawY, scaledWidth, scaledHeight);
+        }
 
         // Draw hover/selection effect ON TOP of texture (visible for tall buildings)
         const isSelected = this.selectedBuilding === building;
@@ -3007,21 +3096,63 @@ export class IsometricMapRenderer {
             isSelected, isHovered
           );
         }
-
-        // Draw construction indicator if building is under construction
-        if (textureFilename.startsWith('Construction')) {
-          this.drawConstructionIndicator(
-            southCornerScreenPos.x,
-            southCornerScreenPos.y + halfHeight,
-            scaledWidth
-          );
+        if (isSelected) {
+          this.drawSelectionBurst(building, xsize, ysize, config);
         }
+
 
       } else {
         // Texture not loaded yet — skip (will render once texture arrives via onTextureLoaded callback)
         return;
       }
     });
+
+    // Demolition pass: render buildings that were removed from the map with a shrink+fade effect.
+    // These buildings no longer exist in allBuildings so they must be drawn separately.
+    for (const [, effect] of this.buildingEffects) {
+      if (effect.type !== 'demolish') continue;
+      const DURATION = 500;
+      const t = Math.min(1, (performance.now() - effect.startTime) / DURATION);
+      if (t >= 1) continue;
+
+      const demolishing = effect.building;
+      const dims = this.facilityDimensionsCache.get(demolishing.visualClass);
+      const xsize = dims?.xsize || 1;
+      const ysize = dims?.ysize || 1;
+
+      const textureFilename = GameObjectTextureCache.getBuildingTextureFilename(demolishing.visualClass);
+      const texture = this.gameObjectTextureCache.getTextureSync('BuildingImages', textureFilename);
+      if (!texture) continue;
+
+      const scaleFactor = config.tileWidth / 64;
+      const scaledWidth = texture.width * scaleFactor;
+      const scaledHeight = texture.height * scaleFactor;
+
+      const rotation = this.terrainRenderer.getRotation();
+      let anchorI: number, anchorJ: number;
+      switch (rotation) {
+        case Rotation.NORTH: anchorI = demolishing.y;              anchorJ = demolishing.x;              break;
+        case Rotation.EAST:  anchorI = demolishing.y + ysize - 1;  anchorJ = demolishing.x;              break;
+        case Rotation.SOUTH: anchorI = demolishing.y + ysize - 1;  anchorJ = demolishing.x + xsize - 1;  break;
+        case Rotation.WEST:  anchorI = demolishing.y;              anchorJ = demolishing.x + xsize - 1;  break;
+        default:             anchorI = demolishing.y;              anchorJ = demolishing.x;              break;
+      }
+      const southCorner = this.terrainRenderer.mapToScreen(anchorI, anchorJ);
+      const baseX = Math.round(southCorner.x - scaledWidth / 2);
+      const baseY = Math.round(southCorner.y + config.tileHeight - scaledHeight);
+
+      // Shrink toward south corner: scale 1.0 → 0.2, alpha 1.0 → 0
+      const shrink = 1 - t * 0.8;
+      const cx = baseX + scaledWidth / 2;
+      const cy = baseY + scaledHeight;
+
+      ctx.save();
+      ctx.globalAlpha = 1 - t;
+      ctx.translate(cx, cy);
+      ctx.scale(shrink, shrink);
+      ctx.drawImage(texture, -scaledWidth / 2, -scaledHeight, scaledWidth, scaledHeight);
+      ctx.restore();
+    }
   }
 
   /**
@@ -3059,6 +3190,58 @@ export class IsometricMapRenderer {
   }
 
   /**
+   * Draw only the exterior-facing edge of each footprint tile.
+   * For a rectangular building this produces the full perimeter; corner tiles get
+   * 2 edges, edge tiles 1, interior tiles none.
+   *
+   * All subpaths are batched into a single beginPath → stroke() call so that
+   * shadowBlur triggers only ONE GPU compositing pass regardless of building size.
+   * (N separate stroke() calls with shadowBlur = N shadow passes — very expensive.)
+   * lineCap = 'round' still applies per-segment: each moveTo starts a new subpath.
+   * ctx stroke state (style, width, shadow) must be set before calling.
+   */
+  private drawExteriorTileEdges(
+    building: MapBuilding,
+    xsize: number,
+    ysize: number,
+    config: ZoomConfig,
+    halfWidth: number,
+    halfHeight: number
+  ): void {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    for (let dy = 0; dy < ysize; dy++) {
+      for (let dx = 0; dx < xsize; dx++) {
+        const pos = this.terrainRenderer.mapToScreen(building.y + dy, building.x + dx);
+        const sx = Math.round(pos.x);
+        const sy = Math.round(pos.y);
+
+        // NE edge (top → right): exterior on top row
+        if (dy === 0) {
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx + halfWidth, sy + halfHeight);
+        }
+        // SE edge (right → bottom): exterior on rightmost column
+        if (dx === xsize - 1) {
+          ctx.moveTo(sx + halfWidth, sy + halfHeight);
+          ctx.lineTo(sx, sy + config.tileHeight);
+        }
+        // SW edge (bottom → left): exterior on bottom row
+        if (dy === ysize - 1) {
+          ctx.moveTo(sx, sy + config.tileHeight);
+          ctx.lineTo(sx - halfWidth, sy + halfHeight);
+        }
+        // NW edge (left → top): exterior on leftmost column
+        if (dx === 0) {
+          ctx.moveTo(sx - halfWidth, sy + halfHeight);
+          ctx.lineTo(sx, sy);
+        }
+      }
+    }
+    ctx.stroke(); // single shadow compositing pass for all edges
+  }
+
+  /**
    * Draw building footprint as individual tile diamonds (fill only).
    */
   private drawBuildingFootprint(
@@ -3090,8 +3273,8 @@ export class IsometricMapRenderer {
 
   /**
    * Draw selection/hover effect on top of a building texture.
-   * - Selected: gold pulsing footprint with glowing outline
-   * - Hover: green semi-transparent footprint with subtle outline
+   * - Selected: gold pulsing outline + corner bracket markers
+   * - Hover: green outline + corner brackets (no fill)
    */
   private drawBuildingSelectionEffect(
     building: MapBuilding,
@@ -3101,39 +3284,134 @@ export class IsometricMapRenderer {
     halfWidth: number,
     halfHeight: number,
     isSelected: boolean,
-    isHovered: boolean
+    _isHovered: boolean
   ): void {
     const ctx = this.ctx;
     const now = performance.now();
 
-    // Pulsing alpha for selected buildings (0.15 to 0.35 over ~1.5s cycle)
+    // Pulsing alpha for selected buildings (0.5 to 0.9 over ~1.5s cycle)
     const pulseAlpha = isSelected
-      ? 0.15 + 0.2 * (0.5 + 0.5 * Math.sin((now - this.selectionPulseTime) * 0.004))
-      : 0.2;
+      ? 0.5 + 0.4 * (0.5 + 0.5 * Math.sin((now - this.selectionPulseTime) * 0.004))
+      : 0.55;
 
-    // Color: gold for selected, green for hover-only
-    const fillColor = isSelected ? '#D4A853' : '#10B981';
-    const strokeColor = isSelected ? '#D4A853' : '#10B981';
+    const color = isSelected ? '#D4A853' : '#10B981';
 
-    // 1. Semi-transparent fill over the footprint
+    // Per-tile exterior edges — each tile's outward-facing sides drawn individually
+    ctx.save();
     ctx.globalAlpha = pulseAlpha;
-    ctx.fillStyle = fillColor;
-    this.drawBuildingFootprint(building, xsize, ysize, config, halfWidth, halfHeight);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isSelected ? 1.5 : 1;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = isSelected ? 6 : 3;
+    this.drawExteriorTileEdges(building, xsize, ysize, config, halfWidth, halfHeight);
+    ctx.restore();
+  }
 
-    // 2. Glowing outline around the entire footprint perimeter
-    ctx.globalAlpha = isSelected ? 0.8 : 0.5;
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = isSelected ? 2 : 1.5;
-    ctx.shadowColor = strokeColor;
-    ctx.shadowBlur = isSelected ? 8 : 4;
+  /**
+   * Draw small L-shaped bracket markers at the 4 outer corners of a building footprint.
+   * N/E/S/W vertices — each bracket has two short arms along the adjacent footprint edges.
+   * Much less visual noise than a solid tile fill while still communicating the exact footprint.
+   */
+  private drawCornerBrackets(
+    building: MapBuilding,
+    xsize: number,
+    ysize: number,
+    config: ZoomConfig,
+    halfWidth: number,
+    halfHeight: number,
+    color: string,
+    alpha: number
+  ): void {
+    const ctx = this.ctx;
 
-    this.drawFootprintOutline(building, xsize, ysize, config, halfWidth, halfHeight);
+    // Diagonal length of a single tile edge
+    const diag = Math.sqrt(halfWidth * halfWidth + halfHeight * halfHeight);
+    // Arm length: at least 8px, scales with tile size (~45% of one tile edge)
+    const armLen = Math.max(8, diag * 0.45);
 
-    // Reset context state
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1.0;
-    ctx.lineWidth = 1;
+    // Normalised direction components shared by all 4 isometric diagonals
+    const dx = halfWidth / diag;
+    const dy = halfHeight / diag;
+
+    // 4 outer corner vertices of the footprint in screen space
+    const sN = this.terrainRenderer.mapToScreen(building.y,              building.x);
+    const sE = this.terrainRenderer.mapToScreen(building.y,              building.x + xsize - 1);
+    const sS = this.terrainRenderer.mapToScreen(building.y + ysize - 1,  building.x + xsize - 1);
+    const sW = this.terrainRenderer.mapToScreen(building.y + ysize - 1,  building.x);
+
+    const N = { x: sN.x,              y: sN.y };
+    const E = { x: sE.x + halfWidth,  y: sE.y + halfHeight };
+    const S = { x: sS.x,              y: sS.y + config.tileHeight };
+    const W = { x: sW.x - halfWidth,  y: sW.y + halfHeight };
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 6;
+
+    const arm = (fx: number, fy: number, dirX: number, dirY: number) => {
+      ctx.beginPath();
+      ctx.moveTo(Math.round(fx), Math.round(fy));
+      ctx.lineTo(Math.round(fx + dirX * armLen), Math.round(fy + dirY * armLen));
+      ctx.stroke();
+    };
+
+    // N corner: one arm toward E (+dx,+dy), one toward W (−dx,+dy)
+    arm(N.x, N.y, +dx, +dy);
+    arm(N.x, N.y, -dx, +dy);
+
+    // E corner: one arm toward N (−dx,−dy), one toward S (−dx,+dy)
+    arm(E.x, E.y, -dx, -dy);
+    arm(E.x, E.y, -dx, +dy);
+
+    // S corner: one arm toward E (+dx,−dy), one toward W (−dx,−dy)
+    arm(S.x, S.y, +dx, -dy);
+    arm(S.x, S.y, -dx, -dy);
+
+    // W corner: one arm toward S (+dx,+dy), one toward N (+dx,−dy)
+    arm(W.x, W.y, +dx, +dy);
+    arm(W.x, W.y, +dx, -dy);
+
+    ctx.restore();
+  }
+
+  /**
+   * One-shot expanding ellipse ring drawn the moment a building is selected.
+   * Fades out over 350ms — gives tactile "click confirmed" feedback.
+   */
+  private drawSelectionBurst(building: MapBuilding, xsize: number, ysize: number, config: ZoomConfig): void {
+    const DURATION = 350;
+    const elapsed = performance.now() - this.selectionBurstStartTime;
+    if (elapsed >= DURATION) return;
+
+    const t = elapsed / DURATION; // 0 → 1
+
+    // Screen centre: midpoint between NW and SE corners, shifted down by half tile
+    const screenNW = this.terrainRenderer.mapToScreen(building.y, building.x);
+    const screenSE = this.terrainRenderer.mapToScreen(building.y + ysize - 1, building.x + xsize - 1);
+    const cx = (screenNW.x + screenSE.x) / 2;
+    const cy = (screenNW.y + screenSE.y) / 2 + config.tileHeight / 2;
+
+    // Ellipse radii expand outward; Y-radius halved to match isometric foreshortening
+    const maxRx = (xsize + ysize) * config.tileWidth * 0.35;
+    const rx = maxRx * t;
+    const ry = rx * 0.5;
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = 0.75 * (1 - t);
+    ctx.strokeStyle = '#D4A853';
+    ctx.lineWidth = 2.5 - t * 1.5; // starts thick, thins as it expands
+    ctx.shadowColor = '#D4A853';
+    ctx.shadowBlur = 10 * (1 - t);
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 0.5), 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   /**
@@ -3515,27 +3793,33 @@ export class IsometricMapRenderer {
     const validation = validatePlacementZones(tileZones, requiredZoneValue, hasCollision);
     const isInvalid = validation.isInvalid;
     this.placementInvalid = isInvalid;
-    const fillColor = isInvalid ? 'rgba(255, 100, 100, 0.5)' : 'rgba(100, 255, 100, 0.5)';
-    const strokeColor = isInvalid ? '#ff4444' : '#44ff44';
 
-    // Draw diamond overlay tiles (collision feedback) — rotation-aware
-    for (const tile of footprint) {
-      const screenPos = this.terrainRenderer.mapToScreen(tile.tileI, tile.tileJ);
+    // Lerp placement color smoothly between valid (green) and invalid (red) — ~120ms crossfade
+    const now = performance.now();
+    const dtMs = this.placementColorTLastMs > 0 ? now - this.placementColorTLastMs : 0;
+    this.placementColorTLastMs = now;
+    const targetT = isInvalid ? 1 : 0;
+    const lerpSpeed = 0.0085; // full crossfade in ~118ms
+    this.placementColorT += (targetT - this.placementColorT) * Math.min(1, dtMs * lerpSpeed);
+    const ct = this.placementColorT;
 
-      ctx.beginPath();
-      ctx.moveTo(screenPos.x, screenPos.y);
-      ctx.lineTo(screenPos.x - halfWidth, screenPos.y + halfHeight);
-      ctx.lineTo(screenPos.x, screenPos.y + config.tileHeight);
-      ctx.lineTo(screenPos.x + halfWidth, screenPos.y + halfHeight);
-      ctx.closePath();
+    const rStroke = Math.round(68 + 187 * ct);
+    const gStroke = Math.round(255 - 187 * ct);
+    const strokeColor = `rgb(${rStroke}, ${gStroke}, 68)`;
 
-      ctx.fillStyle = fillColor;
-      ctx.fill();
+    // Per-tile exterior edges for placement footprint
+    const { nwI, nwJ } = this.placementNWCorner(preview.i, preview.j, preview.xsize, preview.ysize);
+    const previewBuilding = { x: nwJ, y: nwI, visualClass: preview.visualClass } as MapBuilding;
 
-      ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
+    ctx.save();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = strokeColor;
+    ctx.shadowBlur = 8;
+    ctx.globalAlpha = 0.9;
+    this.drawExteriorTileEdges(previewBuilding, preview.xsize, preview.ysize, config, halfWidth, halfHeight);
+    ctx.restore();
 
     // Draw building sprite preview (semi-transparent) on top of diamonds
     if (preview.visualClass) {
@@ -3567,29 +3851,128 @@ export class IsometricMapRenderer {
         const drawX = Math.round(southCorner.x - scaledWidth / 2);
         const drawY = Math.round(southCorner.y + config.tileHeight - scaledHeight);
 
-        // Draw semi-transparent, tinted red on invalid placement
-        ctx.globalAlpha = isInvalid ? 0.4 : 0.7;
+        // Breathing pulse: ghost alpha oscillates gently so it feels alive
+        const breathe = 0.08 * (0.5 + 0.5 * Math.sin(performance.now() * 0.002));
+        ctx.globalAlpha = isInvalid ? 0.3 + breathe * 0.6 : 0.62 + breathe;
         ctx.drawImage(drawImage, drawX, drawY, scaledWidth, scaledHeight);
         ctx.globalAlpha = 1.0;
       }
     }
 
-    // Draw tooltip
-    const centerPos = this.terrainRenderer.mapToScreen(preview.i, preview.j);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-    ctx.fillRect(centerPos.x + 20, centerPos.y - 60, 200, 80);
+    // Styled tooltip following the cursor
+    const cursorScreen = this.terrainRenderer.mapToScreen(preview.i, preview.j);
+    this.drawPlacementTooltip(preview, cursorScreen, ct);
+  }
 
-    ctx.fillStyle = '#fff';
-    ctx.font = '12px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText(preview.buildingName, centerPos.x + 30, centerPos.y - 42);
-    ctx.fillText(`Cost: $${preview.cost.toLocaleString()}`, centerPos.x + 30, centerPos.y - 24);
-    ctx.fillText(`Size: ${preview.xsize}×${preview.ysize}`, centerPos.x + 30, centerPos.y - 6);
-    // Show clean zone name (extracted from full requirement text)
+  /**
+   * Draw the placement tooltip in the game's glass-panel design language.
+   * Dark teal background, green border, gold/red accent, Inter font.
+   */
+  private drawPlacementTooltip(
+    preview: PlacementPreview,
+    cursor: { x: number; y: number },
+    ct: number  // placementColorT: 0=valid (gold), 1=invalid (red)
+  ): void {
+    const ctx = this.ctx;
+
+    // Accent colour interpolated from gold → red
+    const aR = Math.round(212 + (239 - 212) * ct);
+    const aG = Math.round(168 + ( 68 - 168) * ct);
+    const aB = Math.round( 83 + ( 68 -  83) * ct);
+    const accent = `rgb(${aR},${aG},${aB})`;
+
+    const titleFont  = 'bold 13px Inter, system-ui, sans-serif';
+    const detailFont = '11px Inter, system-ui, sans-serif';
+    const lineH   = 18;
+    const padX    = 13;
+    const padTop  = 10;
+    const padBot  = 10;
+    const divGap  = 6;
+    const accentBarW = 3;
+
     const zoneName = this.parseZoneDisplayName(preview.zoneRequirement);
-    if (zoneName) {
-      ctx.fillText(`Zone: ${zoneName}`, centerPos.x + 30, centerPos.y + 12);
+    const rows: Array<{ label: string; value: string }> = [
+      { label: 'Cost', value: `$${preview.cost.toLocaleString()}` },
+      { label: 'Size', value: `${preview.xsize} × ${preview.ysize}` },
+      ...(zoneName ? [{ label: 'Zone', value: zoneName }] : []),
+    ];
+
+    // Measure content widths
+    ctx.font = titleFont;
+    const titleW = ctx.measureText(preview.buildingName).width;
+    ctx.font = detailFont;
+    const labelW = Math.max(...rows.map(r => ctx.measureText(r.label).width));
+    const valueW = Math.max(...rows.map(r => ctx.measureText(r.value).width));
+
+    const contentW = Math.max(titleW, labelW + 24 + valueW, 120);
+    const w = Math.round(contentW + padX * 2 + accentBarW);
+    const h = Math.round(padTop + lineH + divGap * 2 + 1 + rows.length * lineH + padBot);
+
+    // Position above-right of cursor, flip when near canvas edges
+    let tx = Math.round(cursor.x + 18);
+    let ty = Math.round(cursor.y - h - 14);
+    if (tx + w > this.canvas.width  - 10) tx = Math.round(cursor.x - w - 18);
+    if (ty < 10)                          ty = Math.round(cursor.y + 26);
+
+    ctx.save();
+
+    // Background
+    ctx.fillStyle = 'rgba(10, 26, 26, 0.95)';
+    const r = 7;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(tx, ty, w, h, r);
+    } else {
+      ctx.rect(tx, ty, w, h);
     }
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Left accent bar
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(tx, ty, accentBarW, h, [r, 0, 0, r]);
+    } else {
+      ctx.fillRect(tx, ty, accentBarW, h);
+    }
+    ctx.fill();
+
+    const textX = tx + accentBarW + padX;
+
+    // Title
+    ctx.font = titleFont;
+    ctx.fillStyle = accent;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(preview.buildingName, textX, ty + padTop + lineH / 2);
+
+    // Divider
+    const divY = Math.round(ty + padTop + lineH + divGap);
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(tx + 10, divY);
+    ctx.lineTo(tx + w - 10, divY);
+    ctx.stroke();
+
+    // Detail rows
+    ctx.font = detailFont;
+    rows.forEach((row, i) => {
+      const rowY = Math.round(ty + padTop + lineH + divGap * 2 + 1 + i * lineH + lineH / 2);
+      ctx.fillStyle = '#6EE7B7';
+      ctx.textAlign = 'left';
+      ctx.fillText(row.label, textX, rowY);
+      ctx.fillStyle = '#F0FDF4';
+      ctx.textAlign = 'right';
+      ctx.fillText(row.value, tx + w - padX, rowY);
+    });
+
+    ctx.restore();
   }
 
   /**

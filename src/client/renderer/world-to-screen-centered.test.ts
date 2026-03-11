@@ -344,6 +344,7 @@ describe('addCachedZone — bounds clipping', () => {
     renderer.concreteTilesSet = new Set();
     renderer.debugConcreteSourceMap = new Map();
     renderer.roadsRendering = null;
+    renderer.buildingEffects = new Map();
 
     // Stubs for downstream methods
     renderer.terrainRenderer = { getTerrainLoader: () => null };
