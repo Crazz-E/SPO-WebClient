@@ -3204,7 +3204,7 @@ export class IsometricMapRenderer {
     building: MapBuilding,
     xsize: number,
     ysize: number,
-    _config: ZoomConfig,
+    config: ZoomConfig,
     halfWidth: number,
     halfHeight: number
   ): void {
@@ -3213,15 +3213,20 @@ export class IsometricMapRenderer {
     const sx = Math.round(pos.x);
     const sy = Math.round(pos.y);
 
-    // The outer perimeter of a rectangular isometric footprint is always a
-    // diamond whose 4 vertices are derived directly from the building dimensions.
+    // In this renderer, increasing row/col moves tiles UP on screen, so
+    // (building.y, building.x) is the visual FRONT (south/bottom) corner.
+    // mapToScreen gives the top-center of that tile's bounding box; the actual
+    // south vertex is one tileHeight lower.  All other perimeter vertices are
+    // derived by stepping outward from that south vertex.
+    //
     // Drawing as a single closed path gives clean lineJoin corners (no double
     // round-caps at tile boundaries from separate moveTo subpaths).
+    const sy0 = sy + config.tileHeight; // south vertex of the front tile
     ctx.beginPath();
-    ctx.moveTo(sx,                             sy);                             // top    (NW corner in map)
-    ctx.lineTo(sx + xsize * halfWidth,         sy + xsize * halfHeight);        // right  (NE corner in map)
-    ctx.lineTo(sx + (xsize - ysize) * halfWidth, sy + (xsize + ysize) * halfHeight); // bottom (SE corner in map)
-    ctx.lineTo(sx - ysize * halfWidth,         sy + ysize * halfHeight);        // left   (SW corner in map)
+    ctx.moveTo(sx,                               sy0);                                      // bottom (south, front)
+    ctx.lineTo(sx + xsize * halfWidth,           sy0 - xsize * halfHeight);                // right
+    ctx.lineTo(sx + (xsize - ysize) * halfWidth, sy0 - (xsize + ysize) * halfHeight);      // top (north, back)
+    ctx.lineTo(sx - ysize * halfWidth,           sy0 - ysize * halfHeight);                // left
     ctx.closePath();
     ctx.stroke();
   }
