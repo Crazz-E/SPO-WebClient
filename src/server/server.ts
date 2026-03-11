@@ -236,7 +236,30 @@ function getImageContentType(filename: string): string {
  * Uses in-memory file index for O(1) cache lookup instead of scanning directories.
  */
 async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<void> {
-  // Security: reject file:// and non-HTTP schemes (SSRF prevention)
+  // Handle file:// URLs — serve local files only from within the cache directory
+  if (imageUrl.startsWith('file://')) {
+    const filePath = path.normalize(decodeURIComponent(imageUrl.replace('file://', '')));
+    const normalizedCache = path.normalize(CACHE_DIR);
+    if (!filePath.startsWith(normalizedCache)) {
+      res.writeHead(403);
+      res.end('Access denied: file outside cache directory');
+      return;
+    }
+    try {
+      const content = await fsp.readFile(filePath);
+      res.writeHead(200, {
+        'Content-Type': getImageContentType(filePath),
+        'Cache-Control': 'public, max-age=3600',
+      });
+      res.end(content);
+    } catch {
+      res.writeHead(404);
+      res.end('File not found');
+    }
+    return;
+  }
+
+  // Security: reject non-HTTP schemes (SSRF prevention)
   if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
     res.writeHead(400);
     res.end('Only http:// and https:// URLs are allowed');
