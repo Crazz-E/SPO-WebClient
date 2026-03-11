@@ -6,7 +6,9 @@
  * The minimap rotates to match the main map's current rotation.
  * Click anywhere on the minimap to re-center the main camera.
  *
- * Toggle visibility with the 'M' key.
+ * Control buttons (zoom in/out, rotate CW/CCW) float around the diamond.
+ * Drag the grip handle at the bottom vertex to resize.
+ * Toggle visibility with the minimap button in the RightRail.
  */
 
 import { MapBuilding, MapSegment } from '../../shared/types';
@@ -25,14 +27,19 @@ export interface MinimapRendererAPI {
   getTerrainPixelData(): { pixelData: Uint8Array; width: number; height: number } | null;
 }
 
+/** Optional action callbacks wired by the host (client.ts). */
+export interface MinimapActions {
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onRotateCW?: () => void;
+  onRotateCCW?: () => void;
+}
+
 const DEFAULT_SIZE = 200;
 const MIN_SIZE = 120;
 const MAX_SIZE = 500;
 const MINIMAP_PADDING = 12;
 const UPDATE_INTERVAL_MS = 500;
-
-/** Cardinal directions indexed by rotation (0=N, 1=E, 2=S, 3=W) */
-const CARDINAL_DIRS = ['N', 'E', 'S', 'W'] as const;
 
 /** Base rotation to match isometric map orientation (NW at top) */
 const ISO_BASE_ANGLE = -Math.PI / 4;
@@ -47,7 +54,29 @@ const LAND_CLASS_COLORS: readonly [number, number, number][] = [
   [40, 90, 160],    // ZoneD (3) — Water: blue
 ];
 
+/** Shared base style for all floating control buttons. */
+const BTN_BASE = `
+  position: absolute;
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: rgba(203, 213, 225, 0.9);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 24px;
+  text-align: center;
+  user-select: none;
+  pointer-events: auto;
+  padding: 0;
+  backdrop-filter: blur(4px);
+  transition: background 130ms, border-color 130ms;
+`;
+
 export class MinimapUI {
+  /** Outer wrapper — fixed positioning + panel offset. overflow:visible so buttons show outside diamond. */
+  private wrapper: HTMLElement | null = null;
+  /** Inner diamond container — clip-path + overflow:hidden. */
   private container: HTMLElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
@@ -60,9 +89,7 @@ export class MinimapUI {
   private terrainCanvas: HTMLCanvasElement | null = null;
   private terrainCacheKey: string = '';
 
-  constructor() {
-    // Minimap is always visible once renderer is attached — no toggle needed.
-  }
+  constructor(private readonly actions: MinimapActions = {}) {}
 
   /**
    * Attach the renderer that provides map data and camera info.
@@ -79,8 +106,8 @@ export class MinimapUI {
     if (this.visible) return;
     this.visible = true;
     this.ensureDOM();
-    if (this.container) {
-      this.container.style.display = 'block';
+    if (this.wrapper) {
+      this.wrapper.style.display = 'block';
     }
     this.startUpdating();
   }
@@ -91,8 +118,8 @@ export class MinimapUI {
   public hide(): void {
     if (!this.visible) return;
     this.visible = false;
-    if (this.container) {
-      this.container.style.display = 'none';
+    if (this.wrapper) {
+      this.wrapper.style.display = 'none';
     }
     this.stopUpdating();
   }
@@ -125,9 +152,10 @@ export class MinimapUI {
       this.unsubPanel();
       this.unsubPanel = null;
     }
-    if (this.container && this.container.parentElement) {
-      this.container.parentElement.removeChild(this.container);
+    if (this.wrapper && this.wrapper.parentElement) {
+      this.wrapper.parentElement.removeChild(this.wrapper);
     }
+    this.wrapper = null;
     this.container = null;
     this.canvas = null;
     this.ctx = null;
@@ -136,19 +164,18 @@ export class MinimapUI {
   }
 
   /**
-   * Shift the minimap container to avoid an open left panel.
+   * Shift the minimap wrapper to avoid an open left panel.
    */
   private applyPanelOffset(panelOpen: boolean): void {
-    if (!this.container) return;
+    if (!this.wrapper) return;
     if (panelOpen) {
-      // Read the CSS custom property so we stay in sync with the design tokens
       const panelWidth =
         getComputedStyle(document.documentElement)
           .getPropertyValue('--panel-width-desktop')
           .trim() || '420px';
-      this.container.style.left = `calc(${panelWidth} + ${MINIMAP_PADDING}px)`;
+      this.wrapper.style.left = `calc(${panelWidth} + ${MINIMAP_PADDING}px)`;
     } else {
-      this.container.style.left = `${MINIMAP_PADDING}px`;
+      this.wrapper.style.left = `${MINIMAP_PADDING}px`;
     }
   }
 
@@ -159,31 +186,34 @@ export class MinimapUI {
   private ensureDOM(): void {
     if (this.canvas) return;
 
-    // Container — positioned top-left of the viewport
-    this.container = document.createElement('div');
-    this.container.id = 'minimap-container';
-    this.container.style.cssText = `
+    // ── Outer wrapper: fixed position, overflow:visible so buttons extend outside ──
+    this.wrapper = document.createElement('div');
+    this.wrapper.id = 'minimap-wrapper';
+    this.wrapper.style.cssText = `
       position: fixed;
       top: ${MINIMAP_PADDING}px;
       left: ${MINIMAP_PADDING}px;
       width: ${this.currentWidth}px;
       height: ${this.currentHeight}px;
-      overflow: hidden;
+      overflow: visible;
       z-index: 100;
+      pointer-events: none;
+      transition: left 250ms cubic-bezier(0.16, 1, 0.3, 1);
+    `;
+
+    // ── Inner diamond container: clipped, interactive ──
+    this.container = document.createElement('div');
+    this.container.id = 'minimap-container';
+    this.container.style.cssText = `
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
       cursor: crosshair;
       background: #0f172a;
       clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
       filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.35)) drop-shadow(0 0 2px rgba(148, 163, 184, 0.6)) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.65));
-      transition: left 250ms cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: auto;
     `;
-
-    // Shift minimap when left panel opens (matches LeftRail behavior)
-    this.applyPanelOffset(useUiStore.getState().leftPanel !== null);
-    this.unsubPanel = useUiStore.subscribe(
-      (state) => {
-        this.applyPanelOffset(state.leftPanel !== null);
-      },
-    );
 
     // Canvas
     this.canvas = document.createElement('canvas');
@@ -193,23 +223,36 @@ export class MinimapUI {
     this.ctx = this.canvas.getContext('2d');
 
     this.container.appendChild(this.canvas);
+    this.wrapper.appendChild(this.container);
 
-    // Resize handle — bottom vertex of diamond
-    const handle = document.createElement('div');
-    handle.style.cssText = `
-      position: absolute;
-      bottom: -2px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 20px;
-      height: 12px;
-      cursor: s-resize;
-      z-index: 1;
-    `;
-    this.container.appendChild(handle);
+    // ── Rotate buttons — left vertex ──
+    this.wrapper.appendChild(this.createButton('↺', 'Rotate Counter-clockwise',
+      'left: -30px; top: calc(50% - 27px);',
+      () => this.actions.onRotateCCW?.()));
+    this.wrapper.appendChild(this.createButton('↻', 'Rotate Clockwise',
+      'left: -30px; top: calc(50% + 3px);',
+      () => this.actions.onRotateCW?.()));
+
+    // ── Zoom buttons — right vertex ──
+    this.wrapper.appendChild(this.createButton('+', 'Zoom In',
+      'right: -30px; top: calc(50% - 27px);',
+      () => this.actions.onZoomIn?.()));
+    this.wrapper.appendChild(this.createButton('−', 'Zoom Out',
+      'right: -30px; top: calc(50% + 3px);',
+      () => this.actions.onZoomOut?.()));
+
+    // ── Resize grip — bottom vertex ──
+    const handle = this.createResizeHandle();
+    this.wrapper.appendChild(handle);
     this.attachResizeListeners(handle);
 
-    document.body.appendChild(this.container);
+    // Shift minimap when left panel opens
+    this.applyPanelOffset(useUiStore.getState().leftPanel !== null);
+    this.unsubPanel = useUiStore.subscribe((state) => {
+      this.applyPanelOffset(state.leftPanel !== null);
+    });
+
+    document.body.appendChild(this.wrapper);
 
     // Click-to-navigate
     this.canvas.onmousedown = (e: MouseEvent) => {
@@ -219,19 +262,89 @@ export class MinimapUI {
     };
   }
 
+  /** Small glass-style button with a Unicode symbol, positioned absolutely on the wrapper. */
+  private createButton(
+    symbol: string,
+    title: string,
+    positionStyle: string,
+    onClick: () => void,
+  ): HTMLElement {
+    const btn = document.createElement('button');
+    btn.style.cssText = BTN_BASE + positionStyle;
+    btn.title = title;
+    btn.textContent = symbol;
+    btn.addEventListener('mouseenter', () => {
+      btn.style.background = 'rgba(56, 189, 248, 0.18)';
+      btn.style.borderColor = 'rgba(56, 189, 248, 0.5)';
+    });
+    btn.addEventListener('mouseleave', () => {
+      btn.style.background = 'rgba(15, 23, 42, 0.82)';
+      btn.style.borderColor = 'rgba(148, 163, 184, 0.22)';
+    });
+    btn.addEventListener('mousedown', (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+
+  /** Pill-shaped grip handle at the bottom diamond vertex — clearly grabbable. */
+  private createResizeHandle(): HTMLElement {
+    const handle = document.createElement('div');
+    handle.id = 'minimap-resize-handle';
+    handle.style.cssText = `
+      position: absolute;
+      bottom: -11px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 56px;
+      height: 18px;
+      cursor: ns-resize;
+      border-radius: 9px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      pointer-events: auto;
+      z-index: 1;
+      transition: background 130ms, border-color 130ms;
+    `;
+    for (let i = 0; i < 3; i++) {
+      const dot = document.createElement('div');
+      dot.style.cssText = `
+        width: 3px; height: 3px;
+        border-radius: 50%;
+        background: rgba(148, 163, 184, 0.6);
+        pointer-events: none;
+      `;
+      handle.appendChild(dot);
+    }
+    handle.addEventListener('mouseenter', () => {
+      handle.style.background = 'rgba(56, 189, 248, 0.15)';
+      handle.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+    });
+    handle.addEventListener('mouseleave', () => {
+      handle.style.background = 'rgba(15, 23, 42, 0.82)';
+      handle.style.borderColor = 'rgba(148, 163, 184, 0.25)';
+    });
+    return handle;
+  }
+
   private attachResizeListeners(handle: HTMLElement): void {
     let startY = 0;
     let startW = 0;
 
     const onMouseMove = (e: MouseEvent) => {
-      // Dragging bottom vertex: moving down = bigger, up = smaller
       const delta = e.clientY - startY;
       const newSize = Math.max(MIN_SIZE, Math.min(MAX_SIZE, startW + delta));
       this.currentWidth = newSize;
       this.currentHeight = newSize;
-      if (this.container) {
-        this.container.style.width = `${newSize}px`;
-        this.container.style.height = `${newSize}px`;
+      if (this.wrapper) {
+        this.wrapper.style.width = `${newSize}px`;
+        this.wrapper.style.height = `${newSize}px`;
       }
       if (this.canvas) {
         this.canvas.width = newSize;
@@ -323,10 +436,8 @@ export class MinimapUI {
 
     ctx.restore();
 
-    // Screen-space overlays — drawn after restore, not affected by map rotation
+    // Screen-space overlay: thin gradient diamond border
     this.drawDiamondBorder(ctx);
-    this.drawCompassLabels(ctx, rotation);
-    this.drawResizeHandleDots(ctx);
   }
 
   private drawTerrainBackground(ctx: CanvasRenderingContext2D): void {
@@ -489,50 +600,6 @@ export class MinimapUI {
     ctx.strokeStyle = grad;
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.restore();
-  }
-
-  /** Cardinal direction labels at the 4 diamond vertices (screen space, after ctx.restore). */
-  private drawCompassLabels(ctx: CanvasRenderingContext2D, rotation: number): void {
-    const cx = this.currentWidth / 2;
-    const cy = this.currentHeight / 2;
-
-    // Each diamond vertex and which direction is currently there based on rotation
-    const vertices: [string, number, number][] = [
-      [CARDINAL_DIRS[rotation % 4],           cx,                       10],      // top
-      [CARDINAL_DIRS[(rotation + 1) % 4],     this.currentWidth - 10,   cy],      // right
-      [CARDINAL_DIRS[(rotation + 2) % 4],     cx,                       this.currentHeight - 10], // bottom
-      [CARDINAL_DIRS[(rotation + 3) % 4],     10,                       cy],      // left
-    ];
-
-    ctx.save();
-    ctx.font = 'bold 10px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    for (const [label, x, y] of vertices) {
-      // Drop shadow for readability over any terrain color
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-      ctx.fillText(label, x + 1, y + 1);
-      // N gets sky-blue accent, other directions get white
-      ctx.fillStyle = label === 'N' ? '#38bdf8' : 'rgba(255, 255, 255, 0.8)';
-      ctx.fillText(label, x, y);
-    }
-    ctx.restore();
-  }
-
-  /** Three grip dots near the bottom vertex as a visible resize affordance (screen space). */
-  private drawResizeHandleDots(ctx: CanvasRenderingContext2D): void {
-    const cx = this.currentWidth / 2;
-    const y = this.currentHeight - 18;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
-    for (let i = -1; i <= 1; i++) {
-      ctx.beginPath();
-      ctx.arc(cx + i * 5, y, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
     ctx.restore();
   }
 

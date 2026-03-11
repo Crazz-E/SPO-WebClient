@@ -709,6 +709,14 @@ export class IsometricMapRenderer {
     this.requestRender();
   }
 
+  public rotateCW(): void {
+    this.rotateClockwise();
+  }
+
+  public rotateCCW(): void {
+    this.rotateCounterClockwise();
+  }
+
   /**
    * Setup touch controls for mobile (pan, pinch-zoom, rotation snap, double-tap)
    */

@@ -497,42 +497,14 @@ describe('MinimapUI', () => {
   // ---------------------------------------------------------------------------
 
   describe('screen-space overlays', () => {
-    it('should draw compass labels in screen space after map rotation restore', () => {
-      const minimap = new MinimapUI();
-      minimap.setRenderer(createMockRenderer({ getRotation: jest.fn(() => 0) }));
-
-      // drawCompassLabels calls fillText for each of the 4 cardinal direction labels
-      expect(mockCtx.fillText).toHaveBeenCalled();
-      const labelCalls = mockCtx.fillText.mock.calls.map((c: unknown[]) => c[0]);
-      // Each label is drawn twice (shadow + color), so 8 calls total for 4 directions
-      expect(labelCalls.filter((l: unknown) => l === 'N').length).toBeGreaterThanOrEqual(1);
-      expect(labelCalls.filter((l: unknown) => l === 'E').length).toBeGreaterThanOrEqual(1);
-      expect(labelCalls.filter((l: unknown) => l === 'S').length).toBeGreaterThanOrEqual(1);
-      expect(labelCalls.filter((l: unknown) => l === 'W').length).toBeGreaterThanOrEqual(1);
-
-      minimap.destroy();
-    });
-
-    it('should rotate compass labels for EAST rotation (top vertex = E)', () => {
-      const minimap = new MinimapUI();
-      minimap.setRenderer(createMockRenderer({ getRotation: jest.fn(() => 1) }));
-
-      const labelCalls = mockCtx.fillText.mock.calls.map((c: unknown[]) => c[0]);
-      // For rotation=1 (EAST), top vertex shows 'E' first
-      expect(labelCalls[0]).toBe('E');
-
-      minimap.destroy();
-    });
-
     it('should draw camera marker crosshair with arc (dot) and lines', () => {
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
-      // drawCameraMarker calls arc() for the center dot
-      expect(mockCtx.arc).toHaveBeenCalled();
+      // drawCameraMarker calls arc() once for the center dot
+      expect(mockCtx.arc).toHaveBeenCalledTimes(1);
       // And moveTo/lineTo for the crosshair lines
-      const moveToCalls = mockCtx.moveTo.mock.calls.length;
-      expect(moveToCalls).toBeGreaterThan(0);
+      expect(mockCtx.moveTo.mock.calls.length).toBeGreaterThan(0);
 
       minimap.destroy();
     });
@@ -547,12 +519,27 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should draw resize handle dots with 3 arc calls near bottom vertex', () => {
+    it('should create DOM resize handle on the wrapper (not the inner container)', () => {
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
-      // drawResizeHandleDots + drawCameraMarker both call arc() — at least 4 total (1 crosshair + 3 dots)
-      expect(mockCtx.arc.mock.calls.length).toBeGreaterThanOrEqual(4);
+      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
+      expect(wrapper).toBeDefined();
+      const handle = allElements.find(el => el.id === 'minimap-resize-handle');
+      expect(handle).toBeDefined();
+      expect(handle!.style.cssText).toContain('ns-resize');
+
+      minimap.destroy();
+    });
+
+    it('should create 4 control buttons on the wrapper (zoom + rotate)', () => {
+      const minimap = new MinimapUI({ onZoomIn: jest.fn(), onZoomOut: jest.fn(), onRotateCW: jest.fn(), onRotateCCW: jest.fn() });
+      minimap.setRenderer(createMockRenderer());
+
+      // Wrapper has: container + 2 rotate buttons + 2 zoom buttons + resize handle = 6 children
+      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
+      expect(wrapper).toBeDefined();
+      expect(wrapper!.children.length).toBe(6);
 
       minimap.destroy();
     });
@@ -575,17 +562,14 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should position resize handle at bottom vertex with s-resize cursor', () => {
+    it('should position resize handle on the outer wrapper with ns-resize cursor', () => {
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
-      const container = allElements.find(el => el.id === 'minimap-container');
-      expect(container).toBeDefined();
-      // Handle is the second child (after canvas)
-      const handle = container!.children[1];
+      const handle = allElements.find(el => el.id === 'minimap-resize-handle');
       expect(handle).toBeDefined();
-      expect(handle.style.cssText).toContain('s-resize');
-      expect(handle.style.cssText).toContain('left: 50%');
+      expect(handle!.style.cssText).toContain('ns-resize');
+      expect(handle!.style.cssText).toContain('left: 50%');
 
       minimap.destroy();
     });
