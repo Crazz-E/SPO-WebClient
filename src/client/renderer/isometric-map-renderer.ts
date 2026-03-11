@@ -3204,41 +3204,26 @@ export class IsometricMapRenderer {
     building: MapBuilding,
     xsize: number,
     ysize: number,
-    config: ZoomConfig,
+    _config: ZoomConfig,
     halfWidth: number,
     halfHeight: number
   ): void {
     const ctx = this.ctx;
-    ctx.beginPath();
-    for (let dy = 0; dy < ysize; dy++) {
-      for (let dx = 0; dx < xsize; dx++) {
-        const pos = this.terrainRenderer.mapToScreen(building.y + dy, building.x + dx);
-        const sx = Math.round(pos.x);
-        const sy = Math.round(pos.y);
+    const pos = this.terrainRenderer.mapToScreen(building.y, building.x);
+    const sx = Math.round(pos.x);
+    const sy = Math.round(pos.y);
 
-        // NE edge (top → right): exterior on top row
-        if (dy === 0) {
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(sx + halfWidth, sy + halfHeight);
-        }
-        // SE edge (right → bottom): exterior on rightmost column
-        if (dx === xsize - 1) {
-          ctx.moveTo(sx + halfWidth, sy + halfHeight);
-          ctx.lineTo(sx, sy + config.tileHeight);
-        }
-        // SW edge (bottom → left): exterior on bottom row
-        if (dy === ysize - 1) {
-          ctx.moveTo(sx, sy + config.tileHeight);
-          ctx.lineTo(sx - halfWidth, sy + halfHeight);
-        }
-        // NW edge (left → top): exterior on leftmost column
-        if (dx === 0) {
-          ctx.moveTo(sx - halfWidth, sy + halfHeight);
-          ctx.lineTo(sx, sy);
-        }
-      }
-    }
-    ctx.stroke(); // single shadow compositing pass for all edges
+    // The outer perimeter of a rectangular isometric footprint is always a
+    // diamond whose 4 vertices are derived directly from the building dimensions.
+    // Drawing as a single closed path gives clean lineJoin corners (no double
+    // round-caps at tile boundaries from separate moveTo subpaths).
+    ctx.beginPath();
+    ctx.moveTo(sx,                             sy);                             // top    (NW corner in map)
+    ctx.lineTo(sx + xsize * halfWidth,         sy + xsize * halfHeight);        // right  (NE corner in map)
+    ctx.lineTo(sx + (xsize - ysize) * halfWidth, sy + (xsize + ysize) * halfHeight); // bottom (SE corner in map)
+    ctx.lineTo(sx - ysize * halfWidth,         sy + ysize * halfHeight);        // left   (SW corner in map)
+    ctx.closePath();
+    ctx.stroke();
   }
 
   /**
