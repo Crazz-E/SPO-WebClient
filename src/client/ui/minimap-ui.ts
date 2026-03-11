@@ -1,20 +1,27 @@
 /**
- * MinimapUI - Small top-down overview map with viewport indicator and click-to-navigate
+ * MinimapUI - Small top-down overview map with viewport indicator and click-to-navigate.
  *
  * Renders terrain background (colored by land class), buildings as colored dots,
  * road segments as lines, and the current viewport as a translucent rectangle.
  * The minimap rotates to match the main map's current rotation.
- * Click anywhere on the minimap to re-center the main camera.
+ * Click (or tap on mobile) anywhere on the minimap to re-center the main camera.
  *
- * Control buttons (zoom in/out, rotate CW/CCW) float around the diamond.
- * Drag the grip handle at the bottom vertex to resize.
- * Toggle visibility with the minimap button in the RightRail.
+ * A horizontal controls pill sits below the diamond:
+ *   [↺ Rotate CCW]  [− Zoom Out]  [+ Zoom In]  [↻ Rotate CW]
+ * Drag the pill vertically (not on a button) to resize the minimap.
+ *
+ * Desktop: top-left, shifts right when the left panel is open.
+ * Mobile (< 640px): bottom-left, above the BottomNav safe area.
  */
 
 import { MapBuilding, MapSegment } from '../../shared/types';
 import { useUiStore } from '../store/ui-store';
 
-/** Renderer interface — only the subset MinimapUI needs */
+// ---------------------------------------------------------------------------
+// Public interfaces
+// ---------------------------------------------------------------------------
+
+/** Renderer interface — only the subset MinimapUI needs. */
 export interface MinimapRendererAPI {
   getCameraPosition(): { x: number; y: number };
   centerOn(x: number, y: number): void;
@@ -35,116 +42,102 @@ export interface MinimapActions {
   onRotateCCW?: () => void;
 }
 
-const DEFAULT_SIZE = 200;
-const MIN_SIZE = 120;
-const MAX_SIZE = 500;
-const MINIMAP_PADDING = 12;
+// ---------------------------------------------------------------------------
+// Layout constants
+// ---------------------------------------------------------------------------
+
+const DESKTOP_PAD = 12;      // px — screen edge gap (desktop)
+const MOBILE_PAD  = 8;       // px — screen edge gap (mobile)
+const DESKTOP_SIZE = 200;    // px — initial diamond size (desktop)
+const MOBILE_SIZE  = 140;    // px — initial diamond size (mobile)
+const MIN_SIZE = 100;        // px — minimum diamond size
+const MAX_SIZE = 500;        // px — maximum diamond size
 const UPDATE_INTERVAL_MS = 500;
 
-/** Base rotation to match isometric map orientation (NW at top) */
-const ISO_BASE_ANGLE = -Math.PI / 4;
-/** Scale factor to fit 45°-rotated square inside canvas (1/√2) */
-const ISO_SCALE = Math.SQRT1_2; // ~0.707
+// Controls pill
+const PILL_BTN  = 32;        // px — each button's width & height
+const PILL_PAD  = 4;         // px — pill inner padding
+const PILL_GAP  = 8;         // px — gap between diamond bottom-vertex and pill top
+const PILL_BTN_GAP = 4;      // px — gap between buttons inside pill
+const PILL_H    = PILL_BTN + PILL_PAD * 2; // 40 px — total pill height
 
-/** RGB colors for each LandClass (bits 7-6 of landId): Grass, MidGrass, DryGround, Water */
+// Mobile viewport breakpoint
+const MOBILE_BP = 640;
+
+// ---------------------------------------------------------------------------
+// Rendering constants
+// ---------------------------------------------------------------------------
+
+/** Base canvas rotation to match isometric NW-at-top orientation. */
+const ISO_BASE_ANGLE = -Math.PI / 4;
+/** Scale factor to fit 45°-rotated square inside canvas (1/√2). */
+const ISO_SCALE = Math.SQRT1_2;
+
+/** RGB colors per LandClass (bits 7-6 of landId): Grass, MidGrass, DryGround, Water */
 const LAND_CLASS_COLORS: readonly [number, number, number][] = [
-  [74, 116, 50],    // ZoneA (0) — Grass: medium green
-  [110, 140, 70],   // ZoneB (1) — MidGrass: lighter green
-  [160, 130, 80],   // ZoneC (2) — DryGround: sandy brown
-  [40, 90, 160],    // ZoneD (3) — Water: blue
+  [74,  116, 50 ],   // ZoneA (0) — Grass
+  [110, 140, 70 ],   // ZoneB (1) — MidGrass
+  [160, 130, 80 ],   // ZoneC (2) — DryGround
+  [40,  90,  160],   // ZoneD (3) — Water
 ];
 
-/** Shared base style for all floating control buttons. */
-const BTN_BASE = `
-  position: absolute;
-  width: 24px; height: 24px;
-  border-radius: 6px;
-  background: rgba(15, 23, 42, 0.82);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  color: rgba(203, 213, 225, 0.9);
-  cursor: pointer;
-  font-size: 15px;
-  line-height: 24px;
-  text-align: center;
-  user-select: none;
-  pointer-events: auto;
-  padding: 0;
-  backdrop-filter: blur(4px);
-  transition: background 130ms, border-color 130ms;
-`;
+// ---------------------------------------------------------------------------
+// MinimapUI class
+// ---------------------------------------------------------------------------
 
 export class MinimapUI {
-  /** Outer wrapper — fixed positioning + panel offset. overflow:visible so buttons show outside diamond. */
+  /** Outer wrapper — fixed position, overflow:visible, taller than diamond to hold pill. */
   private wrapper: HTMLElement | null = null;
   /** Inner diamond container — clip-path + overflow:hidden. */
   private container: HTMLElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
   private renderer: MinimapRendererAPI | null = null;
+
   private visible = false;
   private updateTimer: ReturnType<typeof setInterval> | null = null;
-  private currentWidth = DEFAULT_SIZE;
-  private currentHeight = DEFAULT_SIZE;
+
+  /** Current diamond size (width = height, always square). */
+  private currentSize: number = DESKTOP_SIZE;
+
   private unsubPanel: (() => void) | null = null;
   private terrainCanvas: HTMLCanvasElement | null = null;
-  private terrainCacheKey: string = '';
+  private terrainCacheKey = '';
 
   constructor(private readonly actions: MinimapActions = {}) {}
 
-  /**
-   * Attach the renderer that provides map data and camera info.
-   */
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
   public setRenderer(renderer: MinimapRendererAPI): void {
     this.renderer = renderer;
     this.show();
   }
 
-  /**
-   * Show the minimap and start periodic rendering.
-   */
   public show(): void {
     if (this.visible) return;
     this.visible = true;
     this.ensureDOM();
-    if (this.wrapper) {
-      this.wrapper.style.display = 'block';
-    }
+    if (this.wrapper) this.wrapper.style.display = 'block';
     this.startUpdating();
   }
 
-  /**
-   * Hide the minimap and stop periodic rendering.
-   */
   public hide(): void {
     if (!this.visible) return;
     this.visible = false;
-    if (this.wrapper) {
-      this.wrapper.style.display = 'none';
-    }
+    if (this.wrapper) this.wrapper.style.display = 'none';
     this.stopUpdating();
   }
 
-  /**
-   * Toggle minimap visibility.
-   */
   public toggle(): void {
-    if (this.visible) {
-      this.hide();
-    } else {
-      this.show();
-    }
+    this.visible ? this.hide() : this.show();
   }
 
-  /**
-   * Whether the minimap is currently visible.
-   */
   public isVisible(): boolean {
     return this.visible;
   }
 
-  /**
-   * Clean up DOM and listeners.
-   */
   public destroy(): void {
     this.visible = false;
     this.stopUpdating();
@@ -152,7 +145,7 @@ export class MinimapUI {
       this.unsubPanel();
       this.unsubPanel = null;
     }
-    if (this.wrapper && this.wrapper.parentElement) {
+    if (this.wrapper?.parentElement) {
       this.wrapper.parentElement.removeChild(this.wrapper);
     }
     this.wrapper = null;
@@ -163,19 +156,48 @@ export class MinimapUI {
     this.terrainCacheKey = '';
   }
 
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  /** True when the viewport is narrower than MOBILE_BP (640 px). */
+  private isMobile(): boolean {
+    return typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth < MOBILE_BP;
+  }
+
+  /** Total wrapper height = diamond + gap + pill. */
+  private wrapperHeight(size: number): number {
+    return size + PILL_GAP + PILL_H;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Positioning
+  // ---------------------------------------------------------------------------
+
   /**
-   * Shift the minimap wrapper to avoid an open left panel.
+   * Set wrapper position.
+   * Desktop: top-left, shifted right when left panel is open.
+   * Mobile: bottom-left, above the BottomNav safe area.
    */
-  private applyPanelOffset(panelOpen: boolean): void {
+  private applyPositioning(): void {
     if (!this.wrapper) return;
-    if (panelOpen) {
-      const panelWidth =
-        getComputedStyle(document.documentElement)
-          .getPropertyValue('--panel-width-desktop')
-          .trim() || '420px';
-      this.wrapper.style.left = `calc(${panelWidth} + ${MINIMAP_PADDING}px)`;
+    if (this.isMobile()) {
+      this.wrapper.style.top    = '';
+      this.wrapper.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + 56px + ${MOBILE_PAD}px)`;
+      this.wrapper.style.left   = `${MOBILE_PAD}px`;
     } else {
-      this.wrapper.style.left = `${MINIMAP_PADDING}px`;
+      this.wrapper.style.bottom = '';
+      this.wrapper.style.top    = `${DESKTOP_PAD}px`;
+      const panelOpen = useUiStore.getState().leftPanel !== null;
+      if (panelOpen) {
+        const panelWidth =
+          getComputedStyle(document.documentElement)
+            .getPropertyValue('--panel-width-desktop')
+            .trim() || '420px';
+        this.wrapper.style.left = `calc(${panelWidth} + ${DESKTOP_PAD}px)`;
+      } else {
+        this.wrapper.style.left = `${DESKTOP_PAD}px`;
+      }
     }
   }
 
@@ -186,187 +208,274 @@ export class MinimapUI {
   private ensureDOM(): void {
     if (this.canvas) return;
 
-    // ── Outer wrapper: fixed position, overflow:visible so buttons extend outside ──
+    // Pick size based on viewport
+    if (this.isMobile()) this.currentSize = MOBILE_SIZE;
+
+    // ── Outer wrapper ──────────────────────────────────────────────────────────
     this.wrapper = document.createElement('div');
     this.wrapper.id = 'minimap-wrapper';
     this.wrapper.style.cssText = `
       position: fixed;
-      top: ${MINIMAP_PADDING}px;
-      left: ${MINIMAP_PADDING}px;
-      width: ${this.currentWidth}px;
-      height: ${this.currentHeight}px;
+      top: ${DESKTOP_PAD}px;
+      left: ${DESKTOP_PAD}px;
+      width: ${this.currentSize}px;
+      height: ${this.wrapperHeight(this.currentSize)}px;
       overflow: visible;
       z-index: 100;
       pointer-events: none;
-      transition: left 250ms cubic-bezier(0.16, 1, 0.3, 1);
+      transition: left 250ms cubic-bezier(0.16, 1, 0.3, 1),
+                  bottom 250ms cubic-bezier(0.16, 1, 0.3, 1);
     `;
 
-    // ── Inner diamond container: clipped, interactive ──
+    // ── Inner diamond container ────────────────────────────────────────────────
     this.container = document.createElement('div');
     this.container.id = 'minimap-container';
     this.container.style.cssText = `
       position: absolute;
-      inset: 0;
+      top: 0; left: 0;
+      width: ${this.currentSize}px;
+      height: ${this.currentSize}px;
       overflow: hidden;
       cursor: crosshair;
       background: #0f172a;
       clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-      filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.35)) drop-shadow(0 0 2px rgba(148, 163, 184, 0.6)) drop-shadow(0 2px 8px rgba(0, 0, 0, 0.65));
+      filter:
+        drop-shadow(0 0 10px rgba(56, 189, 248, 0.30))
+        drop-shadow(0 0 2px rgba(148, 163, 184, 0.55))
+        drop-shadow(0 4px 12px rgba(0, 0, 0, 0.70));
       pointer-events: auto;
     `;
 
     // Canvas
     this.canvas = document.createElement('canvas');
-    this.canvas.width = this.currentWidth;
-    this.canvas.height = this.currentHeight;
+    this.canvas.width  = this.currentSize;
+    this.canvas.height = this.currentSize;
     this.canvas.style.cssText = 'display: block; width: 100%; height: 100%;';
     this.ctx = this.canvas.getContext('2d');
 
-    this.container.appendChild(this.canvas);
-    this.wrapper.appendChild(this.container);
-
-    // ── Rotate buttons — left vertex ──
-    this.wrapper.appendChild(this.createButton('↺', 'Rotate Counter-clockwise',
-      'left: -30px; top: calc(50% - 27px);',
-      () => this.actions.onRotateCCW?.()));
-    this.wrapper.appendChild(this.createButton('↻', 'Rotate Clockwise',
-      'left: -30px; top: calc(50% + 3px);',
-      () => this.actions.onRotateCW?.()));
-
-    // ── Zoom buttons — right vertex ──
-    this.wrapper.appendChild(this.createButton('+', 'Zoom In',
-      'right: -30px; top: calc(50% - 27px);',
-      () => this.actions.onZoomIn?.()));
-    this.wrapper.appendChild(this.createButton('−', 'Zoom Out',
-      'right: -30px; top: calc(50% + 3px);',
-      () => this.actions.onZoomOut?.()));
-
-    // ── Resize grip — bottom vertex ──
-    const handle = this.createResizeHandle();
-    this.wrapper.appendChild(handle);
-    this.attachResizeListeners(handle);
-
-    // Shift minimap when left panel opens
-    this.applyPanelOffset(useUiStore.getState().leftPanel !== null);
-    this.unsubPanel = useUiStore.subscribe((state) => {
-      this.applyPanelOffset(state.leftPanel !== null);
-    });
-
-    document.body.appendChild(this.wrapper);
-
-    // Click-to-navigate
+    // Click-to-navigate (mouse)
     this.canvas.onmousedown = (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       this.handleClick(e.offsetX, e.offsetY);
     };
+
+    // Click-to-navigate (touch)
+    this.canvas.addEventListener('touchend', (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.changedTouches.length === 0) return;
+      const touch = e.changedTouches[0];
+      const rect = (e.target as HTMLCanvasElement).getBoundingClientRect?.();
+      const offsetX = rect ? touch.clientX - rect.left : touch.clientX;
+      const offsetY = rect ? touch.clientY - rect.top  : touch.clientY;
+      this.handleClick(offsetX, offsetY);
+    }, { passive: false });
+
+    this.container.appendChild(this.canvas);
+    this.wrapper.appendChild(this.container);
+
+    // ── Controls pill ─────────────────────────────────────────────────────────
+    const pill = this.createControlsPill();
+    this.wrapper.appendChild(pill);
+    this.attachPillResizeListeners(pill);
+
+    // Initial positioning + subscribe to panel changes
+    this.applyPositioning();
+    this.unsubPanel = useUiStore.subscribe(() => {
+      this.applyPositioning();
+    });
+
+    document.body.appendChild(this.wrapper);
   }
 
-  /** Small glass-style button with a Unicode symbol, positioned absolutely on the wrapper. */
-  private createButton(
-    symbol: string,
-    title: string,
-    positionStyle: string,
-    onClick: () => void,
-  ): HTMLElement {
+  // ---------------------------------------------------------------------------
+  // Controls pill
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Horizontal pill with four buttons: [↺][−][+][↻].
+   * Sits at the bottom of the outer wrapper (below the diamond).
+   * Dragging the pill background (not a button) resizes the minimap.
+   */
+  private createControlsPill(): HTMLElement {
+    const pill = document.createElement('div');
+    pill.id = 'minimap-controls';
+
+    const pillWidth = PILL_BTN * 4 + PILL_BTN_GAP * 3 + PILL_PAD * 2;
+    pill.style.cssText = `
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: ${pillWidth}px;
+      height: ${PILL_H}px;
+      padding: ${PILL_PAD}px;
+      border-radius: ${PILL_H / 2}px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      display: flex;
+      align-items: center;
+      gap: ${PILL_BTN_GAP}px;
+      cursor: ns-resize;
+      pointer-events: auto;
+      z-index: 1;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      transition: background 130ms, border-color 130ms;
+      touch-action: none;
+      user-select: none;
+    `;
+
+    pill.addEventListener('mouseenter', () => {
+      pill.style.borderColor = 'rgba(56, 189, 248, 0.35)';
+    });
+    pill.addEventListener('mouseleave', () => {
+      pill.style.borderColor = 'rgba(148, 163, 184, 0.22)';
+    });
+
+    const defs: Array<{ sym: string; title: string; cb: () => void }> = [
+      { sym: '↺', title: 'Rotate Counter-clockwise', cb: () => this.actions.onRotateCCW?.() },
+      { sym: '−', title: 'Zoom Out',                 cb: () => this.actions.onZoomOut?.() },
+      { sym: '+', title: 'Zoom In',                  cb: () => this.actions.onZoomIn?.() },
+      { sym: '↻', title: 'Rotate Clockwise',         cb: () => this.actions.onRotateCW?.() },
+    ];
+
+    for (const { sym, title, cb } of defs) {
+      pill.appendChild(this.createPillButton(sym, title, cb));
+    }
+
+    return pill;
+  }
+
+  private createPillButton(symbol: string, title: string, onClick: () => void): HTMLElement {
     const btn = document.createElement('button');
-    btn.style.cssText = BTN_BASE + positionStyle;
     btn.title = title;
     btn.textContent = symbol;
+    btn.style.cssText = `
+      width: ${PILL_BTN}px;
+      height: ${PILL_BTN}px;
+      border-radius: 50%;
+      background: transparent;
+      border: 1px solid transparent;
+      color: rgba(203, 213, 225, 0.85);
+      cursor: pointer;
+      font-size: 15px;
+      line-height: ${PILL_BTN}px;
+      text-align: center;
+      user-select: none;
+      pointer-events: auto;
+      padding: 0;
+      transition: background 120ms, border-color 120ms, color 120ms;
+      touch-action: manipulation;
+      flex-shrink: 0;
+    `;
+
     btn.addEventListener('mouseenter', () => {
-      btn.style.background = 'rgba(56, 189, 248, 0.18)';
-      btn.style.borderColor = 'rgba(56, 189, 248, 0.5)';
+      btn.style.background   = 'rgba(56, 189, 248, 0.18)';
+      btn.style.borderColor  = 'rgba(56, 189, 248, 0.45)';
+      btn.style.color        = 'rgba(56, 189, 248, 1)';
     });
     btn.addEventListener('mouseleave', () => {
-      btn.style.background = 'rgba(15, 23, 42, 0.82)';
-      btn.style.borderColor = 'rgba(148, 163, 184, 0.22)';
+      btn.style.background   = 'transparent';
+      btn.style.borderColor  = 'transparent';
+      btn.style.color        = 'rgba(203, 213, 225, 0.85)';
     });
     btn.addEventListener('mousedown', (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       onClick();
     });
+    btn.addEventListener('touchend', (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    }, { passive: false });
+
     return btn;
   }
 
-  /** Pill-shaped grip handle at the bottom diamond vertex — clearly grabbable. */
-  private createResizeHandle(): HTMLElement {
-    const handle = document.createElement('div');
-    handle.id = 'minimap-resize-handle';
-    handle.style.cssText = `
-      position: absolute;
-      bottom: -11px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 56px;
-      height: 18px;
-      cursor: ns-resize;
-      border-radius: 9px;
-      background: rgba(15, 23, 42, 0.82);
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 3px;
-      pointer-events: auto;
-      z-index: 1;
-      transition: background 130ms, border-color 130ms;
-    `;
-    for (let i = 0; i < 3; i++) {
-      const dot = document.createElement('div');
-      dot.style.cssText = `
-        width: 3px; height: 3px;
-        border-radius: 50%;
-        background: rgba(148, 163, 184, 0.6);
-        pointer-events: none;
-      `;
-      handle.appendChild(dot);
-    }
-    handle.addEventListener('mouseenter', () => {
-      handle.style.background = 'rgba(56, 189, 248, 0.15)';
-      handle.style.borderColor = 'rgba(56, 189, 248, 0.4)';
-    });
-    handle.addEventListener('mouseleave', () => {
-      handle.style.background = 'rgba(15, 23, 42, 0.82)';
-      handle.style.borderColor = 'rgba(148, 163, 184, 0.25)';
-    });
-    return handle;
-  }
+  // ---------------------------------------------------------------------------
+  // Resize via pill drag
+  // ---------------------------------------------------------------------------
 
-  private attachResizeListeners(handle: HTMLElement): void {
-    let startY = 0;
-    let startW = 0;
+  /**
+   * Attaches mouse and touch resize listeners to the pill.
+   * Dragging the pill background (not a button) resizes the minimap.
+   * Drag UP to grow, drag DOWN to shrink (delta is inverted).
+   */
+  private attachPillResizeListeners(pill: HTMLElement): void {
+    let startY    = 0;
+    let startSize = 0;
+    let active    = false;
 
-    const onMouseMove = (e: MouseEvent) => {
-      const delta = e.clientY - startY;
-      const newSize = Math.max(MIN_SIZE, Math.min(MAX_SIZE, startW + delta));
-      this.currentWidth = newSize;
-      this.currentHeight = newSize;
+    const applySize = (newSize: number): void => {
+      const clamped = Math.max(MIN_SIZE, Math.min(MAX_SIZE, newSize));
+      this.currentSize = clamped;
       if (this.wrapper) {
-        this.wrapper.style.width = `${newSize}px`;
-        this.wrapper.style.height = `${newSize}px`;
+        this.wrapper.style.width  = `${clamped}px`;
+        this.wrapper.style.height = `${this.wrapperHeight(clamped)}px`;
+      }
+      if (this.container) {
+        this.container.style.width  = `${clamped}px`;
+        this.container.style.height = `${clamped}px`;
       }
       if (this.canvas) {
-        this.canvas.width = newSize;
-        this.canvas.height = newSize;
+        this.canvas.width  = clamped;
+        this.canvas.height = clamped;
       }
-      this.terrainCanvas = null; // Invalidate terrain cache — new size
+      this.terrainCanvas = null; // Invalidate terrain cache
       this.render();
     };
 
+    // ── Mouse ──
+    const onMouseMove = (e: MouseEvent) => {
+      if (!active) return;
+      // Drag up (negative delta) = grow; drag down = shrink
+      const delta = e.clientY - startY;
+      applySize(startSize - delta);
+    };
     const onMouseUp = () => {
+      active = false;
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
 
-    handle.addEventListener('mousedown', (e: MouseEvent) => {
+    pill.addEventListener('mousedown', (e: MouseEvent) => {
+      if ((e.target as HTMLElement).tagName === 'BUTTON') return;
       e.preventDefault();
       e.stopPropagation();
-      startY = e.clientY;
-      startW = this.currentWidth;
+      active    = true;
+      startY    = e.clientY;
+      startSize = this.currentSize;
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     });
+
+    // ── Touch ──
+    const onTouchMove = (e: TouchEvent) => {
+      if (!active || e.touches.length === 0) return;
+      e.preventDefault();
+      const delta = e.touches[0].clientY - startY;
+      applySize(startSize - delta);
+    };
+    const onTouchEnd = () => {
+      active = false;
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+
+    pill.addEventListener('touchstart', (e: TouchEvent) => {
+      if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+      if (e.touches.length === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      active    = true;
+      startY    = e.touches[0].clientY;
+      startSize = this.currentSize;
+      document.addEventListener('touchmove', onTouchMove, { passive: false });
+      document.addEventListener('touchend', onTouchEnd);
+    }, { passive: false });
   }
 
   // ---------------------------------------------------------------------------
@@ -393,45 +502,36 @@ export class MinimapUI {
   private render(): void {
     if (!this.ctx || !this.renderer) return;
 
-    const ctx = this.ctx;
+    const ctx  = this.ctx;
     const dims = this.renderer.getMapDimensions();
     if (dims.width === 0 || dims.height === 0) return;
 
-    const rotation = this.renderer.getRotation(); // 0|1|2|3
-    const angle = (rotation * Math.PI) / 2;
+    const rotation = this.renderer.getRotation();
+    const angle    = (rotation * Math.PI) / 2;
 
-    // Scale factor: map coordinates → minimap pixels
-    const scaleX = this.currentWidth / dims.width;
-    const scaleY = this.currentHeight / dims.height;
+    // Scale: map coords → minimap pixels
+    const scaleX = this.currentSize / dims.width;
+    const scaleY = this.currentSize / dims.height;
 
-    // Clear entire canvas (outside rotation transform)
+    // Clear
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, this.currentWidth, this.currentHeight);
+    ctx.fillRect(0, 0, this.currentSize, this.currentSize);
 
-    // Apply isometric base rotation (45°) + cardinal rotation around canvas center
+    // Isometric rotation transform
     ctx.save();
-    ctx.translate(this.currentWidth / 2, this.currentHeight / 2);
+    ctx.translate(this.currentSize / 2, this.currentSize / 2);
     ctx.rotate(ISO_BASE_ANGLE + angle);
     ctx.scale(ISO_SCALE, ISO_SCALE);
-    ctx.translate(-this.currentWidth / 2, -this.currentHeight / 2);
+    ctx.translate(-this.currentSize / 2, -this.currentSize / 2);
 
-    // Flip Y axis to correct north/south orientation
-    ctx.translate(0, this.currentHeight);
+    // Flip Y so north is visually correct
+    ctx.translate(0, this.currentSize);
     ctx.scale(1, -1);
 
-    // Draw terrain background
     this.drawTerrainBackground(ctx);
-
-    // Draw road segments
     this.drawRoads(ctx, scaleX, scaleY);
-
-    // Draw buildings
     this.drawBuildings(ctx, scaleX, scaleY);
-
-    // Draw viewport rectangle
     this.drawViewport(ctx, scaleX, scaleY);
-
-    // Draw camera position crosshair (on top of viewport rect)
     this.drawCameraMarker(ctx, scaleX, scaleY);
 
     ctx.restore();
@@ -440,17 +540,17 @@ export class MinimapUI {
     this.drawDiamondBorder(ctx);
   }
 
+  // ---------------------------------------------------------------------------
+  // Draw helpers
+  // ---------------------------------------------------------------------------
+
   private drawTerrainBackground(ctx: CanvasRenderingContext2D): void {
     const terrain = this.renderer!.getTerrainPixelData();
     if (!terrain) return;
 
     const key = `${terrain.width}x${terrain.height}`;
     if (!this.terrainCanvas || this.terrainCacheKey !== key) {
-      this.terrainCanvas = this.buildTerrainCanvas(
-        terrain.pixelData,
-        terrain.width,
-        terrain.height
-      );
+      this.terrainCanvas = this.buildTerrainCanvas(terrain.pixelData, terrain.width, terrain.height);
       this.terrainCacheKey = key;
     }
 
@@ -460,13 +560,13 @@ export class MinimapUI {
   private buildTerrainCanvas(
     pixelData: Uint8Array,
     mapWidth: number,
-    mapHeight: number
+    mapHeight: number,
   ): HTMLCanvasElement {
-    const outW = this.currentWidth;
-    const outH = this.currentHeight;
+    const outW = this.currentSize;
+    const outH = this.currentSize;
 
     const canvas = document.createElement('canvas');
-    canvas.width = outW;
+    canvas.width  = outW;
     canvas.height = outH;
     const tCtx = canvas.getContext('2d')!;
     const imageData = tCtx.createImageData(outW, outH);
@@ -474,13 +574,13 @@ export class MinimapUI {
 
     for (let py = 0; py < outH; py++) {
       for (let px = 0; px < outW; px++) {
-        const mapX = Math.floor((px / outW) * mapWidth);
-        const mapY = Math.floor((py / outH) * mapHeight);
+        const mapX  = Math.floor((px / outW) * mapWidth);
+        const mapY  = Math.floor((py / outH) * mapHeight);
         const landId = pixelData[mapY * mapWidth + mapX];
-        const lc = (landId >> 6) & 0x03; // LandClass = bits 7-6
+        const lc    = (landId >> 6) & 0x03;
         const [r, g, b] = LAND_CLASS_COLORS[lc];
-        const idx = (py * outW + px) * 4;
-        data[idx] = r;
+        const idx   = (py * outW + px) * 4;
+        data[idx]     = r;
         data[idx + 1] = g;
         data[idx + 2] = b;
         data[idx + 3] = 255;
@@ -495,8 +595,8 @@ export class MinimapUI {
     const segments = this.renderer!.getAllSegments();
     if (segments.length === 0) return;
 
-    ctx.strokeStyle = 'rgba(100, 116, 139, 0.7)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(203, 213, 225, 0.5)';
+    ctx.lineWidth   = 1;
     ctx.beginPath();
     for (const seg of segments) {
       ctx.moveTo(seg.x1 * scaleX, seg.y1 * scaleY);
@@ -509,13 +609,14 @@ export class MinimapUI {
     const buildings = this.renderer!.getAllBuildings();
     if (buildings.length === 0) return;
 
+    const dotSize = Math.max(2, Math.min(scaleX, scaleY) * 2);
+
     for (const b of buildings) {
-      // Color by alert state: alert=red, normal=green
-      ctx.fillStyle = b.alert ? '#ef4444' : '#22c55e';
       const px = b.x * scaleX;
       const py = b.y * scaleY;
-      const size = Math.max(2, Math.min(scaleX, scaleY) * 2);
-      ctx.fillRect(px - size / 2, py - size / 2, size, size);
+      // Alert = red-400, normal = green-400
+      ctx.fillStyle = b.alert ? '#f87171' : '#4ade80';
+      ctx.fillRect(px - dotSize / 2, py - dotSize / 2, dotSize, dotSize);
     }
   }
 
@@ -527,45 +628,40 @@ export class MinimapUI {
     const y1 = bounds.minI * scaleY;
     const x2 = bounds.maxJ * scaleX;
     const y2 = bounds.maxI * scaleY;
-
-    const w = x2 - x1;
-    const h = y2 - y1;
+    const w  = x2 - x1;
+    const h  = y2 - y1;
 
     // Semi-transparent fill
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.12)';
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.10)';
     ctx.fillRect(x1, y1, w, h);
 
-    // Main border
+    // Bright border
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth   = 1.5;
     ctx.strokeRect(x1, y1, w, h);
 
-    // Corner tick marks for clarity
+    // Corner tick marks
     const tick = 4;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.lineWidth   = 1;
     ctx.beginPath();
-    // Top-left
-    ctx.moveTo(x1, y1 + tick); ctx.lineTo(x1, y1); ctx.lineTo(x1 + tick, y1);
-    // Top-right
-    ctx.moveTo(x2 - tick, y1); ctx.lineTo(x2, y1); ctx.lineTo(x2, y1 + tick);
-    // Bottom-right
-    ctx.moveTo(x2, y2 - tick); ctx.lineTo(x2, y2); ctx.lineTo(x2 - tick, y2);
-    // Bottom-left
-    ctx.moveTo(x1 + tick, y2); ctx.lineTo(x1, y2); ctx.lineTo(x1, y2 - tick);
+    ctx.moveTo(x1,        y1 + tick); ctx.lineTo(x1,        y1); ctx.lineTo(x1 + tick, y1);
+    ctx.moveTo(x2 - tick, y1);        ctx.lineTo(x2,        y1); ctx.lineTo(x2,        y1 + tick);
+    ctx.moveTo(x2,        y2 - tick); ctx.lineTo(x2,        y2); ctx.lineTo(x2 - tick, y2);
+    ctx.moveTo(x1 + tick, y2);        ctx.lineTo(x1,        y2); ctx.lineTo(x1,        y2 - tick);
     ctx.stroke();
   }
 
-  /** Crosshair at the current camera position (drawn in rotated map space). */
+  /** Amber crosshair at the current camera position (drawn in rotated map space). */
   private drawCameraMarker(ctx: CanvasRenderingContext2D, scaleX: number, scaleY: number): void {
-    const cam = this.renderer!.getCameraPosition();
-    const px = cam.x * scaleX;
-    const py = cam.y * scaleY;
+    const cam  = this.renderer!.getCameraPosition();
+    const px   = cam.x * scaleX;
+    const py   = cam.y * scaleY;
     const size = 5;
 
     ctx.save();
     ctx.strokeStyle = 'rgba(251, 191, 36, 0.9)';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth   = 1.5;
     ctx.beginPath();
     ctx.moveTo(px - size, py);
     ctx.lineTo(px + size, py);
@@ -580,25 +676,25 @@ export class MinimapUI {
     ctx.restore();
   }
 
-  /** Thin gradient diamond border drawn in screen space (after ctx.restore). */
+  /** Thin gradient diamond border drawn in screen space (outside the rotation transform). */
   private drawDiamondBorder(ctx: CanvasRenderingContext2D): void {
-    const cx = this.currentWidth / 2;
-    const cy = this.currentHeight / 2;
+    const cx = this.currentSize / 2;
+    const cy = this.currentSize / 2;
 
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(cx, 1);
-    ctx.lineTo(this.currentWidth - 1, cy);
-    ctx.lineTo(cx, this.currentHeight - 1);
-    ctx.lineTo(1, cy);
+    ctx.moveTo(cx,                  1);
+    ctx.lineTo(this.currentSize - 1, cy);
+    ctx.lineTo(cx,                  this.currentSize - 1);
+    ctx.lineTo(1,                   cy);
     ctx.closePath();
 
-    const grad = ctx.createLinearGradient(0, 0, this.currentWidth, this.currentHeight);
-    grad.addColorStop(0, 'rgba(56, 189, 248, 0.6)');
-    grad.addColorStop(0.5, 'rgba(148, 163, 184, 0.35)');
-    grad.addColorStop(1, 'rgba(56, 189, 248, 0.6)');
+    const grad = ctx.createLinearGradient(0, 0, this.currentSize, this.currentSize);
+    grad.addColorStop(0,   'rgba(56, 189, 248, 0.65)');
+    grad.addColorStop(0.5, 'rgba(148, 163, 184, 0.30)');
+    grad.addColorStop(1,   'rgba(56, 189, 248, 0.65)');
     ctx.strokeStyle = grad;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth   = 1.5;
     ctx.stroke();
     ctx.restore();
   }
@@ -613,30 +709,27 @@ export class MinimapUI {
     const dims = this.renderer.getMapDimensions();
     if (dims.width === 0 || dims.height === 0) return;
 
-    const rotation = this.renderer.getRotation();
+    const rotation   = this.renderer.getRotation();
     const totalAngle = ISO_BASE_ANGLE + (rotation * Math.PI) / 2;
 
     // Inverse the canvas transform: T(center) · R(angle) · S(scale) · T(-center)
-    // Inverse is: T(center) · S(1/scale) · R(-angle) · T(-center)
-    const cx = this.currentWidth / 2;
-    const cy = this.currentHeight / 2;
-    const dx = pixelX - cx;
-    const dy = pixelY - cy;
+    const cx   = this.currentSize / 2;
+    const cy   = this.currentSize / 2;
+    const dx   = pixelX - cx;
+    const dy   = pixelY - cy;
 
-    // Inverse rotate, then inverse scale
     const invAngle = -totalAngle;
     const cos = Math.cos(invAngle);
     const sin = Math.sin(invAngle);
     const rdx = dx * cos - dy * sin;
     const rdy = dx * sin + dy * cos;
-    const rx = cx + rdx / ISO_SCALE;
-    const ry = cy + rdy / ISO_SCALE;
+    const rx  = cx + rdx / ISO_SCALE;
+    const ry  = cy + rdy / ISO_SCALE;
 
-    // Convert minimap pixel → map coordinates, clamped to valid bounds
-    const mapX = Math.max(0, Math.min(dims.width - 1,
-      Math.round((rx / this.currentWidth) * dims.width)));
+    const mapX = Math.max(0, Math.min(dims.width  - 1,
+      Math.round((rx / this.currentSize) * dims.width)));
     const mapY = Math.max(0, Math.min(dims.height - 1,
-      Math.round(((this.currentHeight - ry) / this.currentHeight) * dims.height)));
+      Math.round(((this.currentSize - ry) / this.currentSize) * dims.height)));
 
     this.renderer.centerOn(mapX, mapY);
   }

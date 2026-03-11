@@ -519,27 +519,32 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should create DOM resize handle on the wrapper (not the inner container)', () => {
+    it('should create controls pill on the wrapper (not the inner container)', () => {
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
       const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
       expect(wrapper).toBeDefined();
-      const handle = allElements.find(el => el.id === 'minimap-resize-handle');
-      expect(handle).toBeDefined();
-      expect(handle!.style.cssText).toContain('ns-resize');
+      const pill = allElements.find(el => el.id === 'minimap-controls');
+      expect(pill).toBeDefined();
+      expect(pill!.style.cssText).toContain('ns-resize');
 
       minimap.destroy();
     });
 
-    it('should create 4 control buttons on the wrapper (zoom + rotate)', () => {
+    it('should create wrapper with 2 children (container + pill) and pill with 4 buttons', () => {
       const minimap = new MinimapUI({ onZoomIn: jest.fn(), onZoomOut: jest.fn(), onRotateCW: jest.fn(), onRotateCCW: jest.fn() });
       minimap.setRenderer(createMockRenderer());
 
-      // Wrapper has: container + 2 rotate buttons + 2 zoom buttons + resize handle = 6 children
+      // Wrapper has: #minimap-container + #minimap-controls = 2 children
       const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
       expect(wrapper).toBeDefined();
-      expect(wrapper!.children.length).toBe(6);
+      expect(wrapper!.children.length).toBe(2);
+
+      // Controls pill has 4 buttons: ↺ − + ↻
+      const pill = allElements.find(el => el.id === 'minimap-controls');
+      expect(pill).toBeDefined();
+      expect(pill!.children.length).toBe(4);
 
       minimap.destroy();
     });
@@ -562,16 +567,48 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should position resize handle on the outer wrapper with ns-resize cursor', () => {
+    it('should position controls pill with ns-resize cursor and centered horizontally', () => {
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
-      const handle = allElements.find(el => el.id === 'minimap-resize-handle');
-      expect(handle).toBeDefined();
-      expect(handle!.style.cssText).toContain('ns-resize');
-      expect(handle!.style.cssText).toContain('left: 50%');
+      const pill = allElements.find(el => el.id === 'minimap-controls');
+      expect(pill).toBeDefined();
+      expect(pill!.style.cssText).toContain('ns-resize');
+      expect(pill!.style.cssText).toContain('left: 50%');
 
       minimap.destroy();
+    });
+
+    it('should set wrapper height to currentSize + 48 (PILL_GAP=8 + PILL_H=40)', () => {
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+
+      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
+      expect(wrapper).toBeDefined();
+      // DESKTOP_SIZE=200 (window.innerWidth=0 → isMobile()=false → desktop)
+      // wrapperHeight = 200 + 8 + 40 = 248
+      expect(wrapper!.style.cssText).toContain('width: 200px');
+      expect(wrapper!.style.cssText).toContain('height: 248px');
+
+      minimap.destroy();
+    });
+
+    it('should use MOBILE_SIZE=140 when window.innerWidth is a mobile width', () => {
+      // Node test env has no window — inject a minimal stub on globalThis
+      const origWindow = (globalThis as Record<string, unknown>).window;
+      (globalThis as Record<string, unknown>).window = { innerWidth: 375 };
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+
+      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
+      expect(wrapper).toBeDefined();
+      // MOBILE_SIZE=140, wrapperHeight = 140 + 48 = 188
+      expect(wrapper!.style.cssText).toContain('width: 140px');
+      expect(wrapper!.style.cssText).toContain('height: 188px');
+
+      minimap.destroy();
+      (globalThis as Record<string, unknown>).window = origWindow;
     });
   });
 });
