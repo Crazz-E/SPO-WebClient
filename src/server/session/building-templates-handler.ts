@@ -16,7 +16,7 @@ import type {
 } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue } from '../../shared/rdo-types';
-import { deriveResidenceClass } from '../spo_session';
+import { deriveResidenceClass } from './session-utils';
 import fetch from 'node-fetch';
 
 // ===========================================================================
@@ -38,7 +38,7 @@ export async function fetchClusterInfo(ctx: SessionContext, clusterName: string)
     const response = await fetch(url, { redirect: 'follow' });
     const html = await response.text();
     return parseClusterInfo(ctx, clusterName, html);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.error(`[ClusterBrowse] Failed to fetch cluster info for ${clusterName}:`, e);
     return { id: clusterName, displayName: clusterName, description: '', categories: [] };
   }
@@ -108,7 +108,7 @@ export async function fetchClusterFacilities(ctx: SessionContext, cluster: strin
     const response = await fetch(url, { redirect: 'follow' });
     const html = await response.text();
     return parseClusterFacilities(ctx, html);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.error(`[ClusterBrowse] Failed to fetch facilities for ${cluster}/${folder}:`, e);
     return [];
   }
@@ -205,7 +205,7 @@ export async function fetchBuildingCategories(ctx: SessionContext, companyName: 
     const html = await response.text();
 
     return parseBuildingCategories(ctx, html);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.error('[BuildConstruction] Failed to fetch categories:', e);
     return [];
   }
@@ -315,7 +315,7 @@ export async function fetchBuildingFacilities(
     const html = await response.text();
 
     return parseBuildingFacilities(ctx, html);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.error('[BuildConstruction] Failed to fetch facilities:', e);
     return [];
   }
@@ -546,7 +546,7 @@ export async function placeBuilding(
       ctx.log.warn(`[BuildConstruction] Building placement failed. Result code: ${resultCode}`);
       return { success: false, buildingId: null };
     }
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.error('[BuildConstruction] Failed to place building:', e);
     return { success: false, buildingId: null };
   }
@@ -595,7 +595,7 @@ export async function placeCapitol(
       ctx.log.warn(`[Capitol] Capitol placement failed. Result code: ${resultCode}`);
       return { success: false, buildingId: null };
     }
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.error('[Capitol] Failed to place Capitol:', e);
     return { success: false, buildingId: null };
   }

@@ -204,15 +204,15 @@ export async function selectCompanyAndStart(ctx: ClientHandlerContext, companyId
       }
     }
 
-    ctx.connectMailService().catch(err => {
+    ctx.connectMailService().catch((err: unknown) => {
       ClientBridge.log('Mail', `Mail service connection failed: ${toErrorMessage(err)}`);
     });
 
-    ctx.getProfile().catch(err => {
+    ctx.getProfile().catch((err: unknown) => {
       ClientBridge.log('Profile', `Profile fetch failed: ${toErrorMessage(err)}`);
     });
 
-    ctx.initChatChannels().catch(err => {
+    ctx.initChatChannels().catch((err: unknown) => {
       ClientBridge.log('Chat', `Chat init failed: ${toErrorMessage(err)}`);
     });
 
@@ -290,7 +290,7 @@ export function serverSwitchZoneSelect(ctx: ClientHandlerContext, zonePath: stri
   performDirectoryLogin(ctx, ctx.storedUsername, ctx.storedPassword, zonePath);
 }
 
-export function profileSwitchCompany(ctx: ClientHandlerContext, companyId: string, companyName: string, ownerRole: string): void {
+export function profileSwitchCompany(ctx: ClientHandlerContext, companyId: number | string, companyName: string, ownerRole: string): void {
   const company: CompanyInfo = { id: String(companyId), name: companyName, ownerRole };
   useGameStore.getState().setSwitchingCompany(true);
   ctx.sendRequest({

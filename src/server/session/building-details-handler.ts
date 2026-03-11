@@ -85,7 +85,7 @@ async function getBuildingDetailsImpl(
     ownerName = focusInfo.ownerName;
     buildingId = focusInfo.buildingId;
     ctx.log.debug(`[BuildingDetails] Focus info: name="${buildingName}", owner="${ownerName}"`);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn(`[BuildingDetails] Could not focus building:`, e);
   }
 
@@ -364,7 +364,7 @@ async function getBuildingDetailsImpl(
         try {
           const detail = await fetchSupplyDetails(ctx, tempObjectId, path, name);
           if (detail) supplies.push(detail);
-        } catch (e) {
+        } catch (e: unknown) {
           ctx.log.warn(`[BuildingDetails] Error fetching supply ${path}:`, e);
         }
       }
@@ -377,7 +377,7 @@ async function getBuildingDetailsImpl(
         try {
           const detail = await fetchProductDetails(ctx, tempObjectId, path, name);
           if (detail) products.push(detail);
-        } catch (e) {
+        } catch (e: unknown) {
           ctx.log.warn(`[BuildingDetails] Error fetching product ${path}:`, e);
         }
       }
@@ -611,7 +611,7 @@ async function fetchCompInputData(ctx: SessionContext, tempObjectId: string): Pr
         units:     allValues[base + 6] ?? '',
       });
     }
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn('[BuildingDetails] Error fetching comp input data:', e);
   }
 
@@ -760,7 +760,7 @@ async function fetchSubObjectProperties(
       return raw.split('\t').map(v => v.trim());
     }
     return raw.split(/\s+/).map(v => v.trim()).filter(v => v.length > 0);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn(`[BuildingDetails] Error fetching sub-object ${subIndex}:`, e);
     return [];
   }

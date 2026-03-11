@@ -853,7 +853,7 @@ export class IsometricMapRenderer {
 
       // Re-render to show road textures
       this.requestRender();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[IsometricMapRenderer] Error loading road block classes:', error);
     }
   }
@@ -898,7 +898,7 @@ export class IsometricMapRenderer {
 
       // Re-render to show concrete textures
       this.requestRender();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[IsometricMapRenderer] Error loading concrete block classes:', error);
     }
   }
@@ -931,7 +931,7 @@ export class IsometricMapRenderer {
       this.vehicleSystem.setRoadBlockClassManager(this.roadBlockClassManager);
       this.vehicleSystem.setGameObjectTextureCache(this.gameObjectTextureCache);
       this.vehicleSystemReady = true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[IsometricMapRenderer] Error loading car classes:', error);
     }
   }

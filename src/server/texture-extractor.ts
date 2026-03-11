@@ -181,7 +181,7 @@ export class TextureExtractor implements Service {
         mapColor: mapColorMatch ? parseInt(mapColorMatch[1], 10) : 0,
         filename: filenameMatch[1].trim()
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[TextureExtractor] Error parsing INI file ${filePath}:`, error);
       return null;
     }
@@ -250,7 +250,7 @@ export class TextureExtractor implements Service {
           fs.writeFileSync(pngPath, newPng);
           console.log(`[TextureExtractor] ${name}: removed ${removed} black shadow pixels`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`[TextureExtractor] Failed to remove shadow from ${name}:`, error);
       }
     }
@@ -447,7 +447,7 @@ export class TextureExtractor implements Service {
 
       try {
         await this.extractCab(cabPath, targetDir);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(`[TextureExtractor] Failed to extract ${cabFile}:`, error);
       }
     }

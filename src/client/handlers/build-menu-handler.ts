@@ -27,6 +27,7 @@ import { useGameStore } from '../store/game-store';
 import { getFacilityDimensionsCache } from '../facility-dimensions-cache';
 import { registerCivicVisualClass } from '../../shared/building-details/civic-buildings';
 import type { ClientHandlerContext } from './client-context';
+import { setupEscapeHandler } from './handler-utils';
 
 export async function openBuildMenu(ctx: ClientHandlerContext): Promise<void> {
   if (!ctx.currentCompanyName) {
@@ -125,7 +126,7 @@ export async function startCapitolPlacement(ctx: ClientHandlerContext): Promise<
       xsize = dimensions.xsize;
       ysize = dimensions.ysize;
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Failed to fetch Capitol dimensions:', err);
   }
 
@@ -242,7 +243,7 @@ async function startBuildingPlacement(ctx: ClientHandlerContext, building: Build
       xsize = dimensions.xsize;
       ysize = dimensions.ysize;
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Failed to fetch facility dimensions:', err);
   }
   ctx.currentBuildingXSize = xsize;
@@ -280,24 +281,15 @@ async function startBuildingPlacement(ctx: ClientHandlerContext, building: Build
 }
 
 function setupPlacementKeyboardHandler(ctx: ClientHandlerContext): void {
-  const handler = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      if (ctx.currentBuildingToPlace) {
-        cancelBuildingPlacement(ctx);
-        document.removeEventListener('keydown', handler);
-      } else if (ctx.isRoadBuildingMode) {
-        ctx.cancelRoadBuildingMode();
-        document.removeEventListener('keydown', handler);
-      } else if (ctx.isRoadDemolishMode) {
-        ctx.cancelRoadDemolishMode();
-        document.removeEventListener('keydown', handler);
-      } else if (ctx.isZonePaintingMode) {
-        ctx.cancelZonePaintingMode();
-        document.removeEventListener('keydown', handler);
-      }
-    }
-  };
-  document.addEventListener('keydown', handler);
+  setupEscapeHandler(
+    () => !!(ctx.currentBuildingToPlace || ctx.isRoadBuildingMode || ctx.isRoadDemolishMode || ctx.isZonePaintingMode),
+    () => {
+      if (ctx.currentBuildingToPlace) cancelBuildingPlacement(ctx);
+      else if (ctx.isRoadBuildingMode) ctx.cancelRoadBuildingMode();
+      else if (ctx.isRoadDemolishMode) ctx.cancelRoadDemolishMode();
+      else if (ctx.isZonePaintingMode) ctx.cancelZonePaintingMode();
+    },
+  );
 }
 
 export async function placeBuilding(ctx: ClientHandlerContext, x: number, y: number): Promise<void> {
@@ -336,14 +328,14 @@ function enableCityZonesForPlacement(ctx: ClientHandlerContext): void {
     ctx.overlayBeforePlacement = { type: 'overlay', overlay: ctx.activeOverlayType };
     ctx.toggleZoneOverlay(false, ctx.activeOverlayType);
     ctx.activeOverlayType = null;
-    ClientBridge.setActiveOverlay(null);
+    // Store is updated automatically via ctx.activeOverlayType setter
   } else {
     ctx.overlayBeforePlacement = { type: 'none' };
   }
 
   if (!ctx.isCityZonesEnabled) {
     ctx.isCityZonesEnabled = true;
-    ClientBridge.setCityZonesEnabled(true);
+    // Store is updated automatically via ctx.isCityZonesEnabled setter
     ctx.toggleZoneOverlay(true, SurfaceType.ZONES);
   }
 }
@@ -355,12 +347,12 @@ function restoreOverlayAfterPlacement(ctx: ClientHandlerContext): void {
   if (prev.type === 'zones') return;
 
   ctx.isCityZonesEnabled = false;
-  ClientBridge.setCityZonesEnabled(false);
+  // Store is updated automatically via ctx.isCityZonesEnabled setter
   ctx.toggleZoneOverlay(false, SurfaceType.ZONES);
 
   if (prev.type === 'overlay' && prev.overlay) {
     ctx.activeOverlayType = prev.overlay;
-    ClientBridge.setActiveOverlay(prev.overlay);
+    // Store is updated automatically via ctx.activeOverlayType setter
     ctx.toggleZoneOverlay(true, prev.overlay);
   }
 }

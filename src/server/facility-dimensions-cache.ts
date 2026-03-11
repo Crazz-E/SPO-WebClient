@@ -41,7 +41,7 @@ export class FacilityDimensionsCache implements Service {
       this.initialized = true;
       logger.info('[FacilityDimensionsCache] Initialization complete');
       this.logCacheStats();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('[FacilityDimensionsCache] Initialization failed:', error);
       throw error;
     }

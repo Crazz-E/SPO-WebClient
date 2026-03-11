@@ -236,7 +236,7 @@ export class IsometricTerrainRenderer {
 
       console.log(`[IsometricRenderer] Terrain preview loaded: ${this.terrainPreview.width}×${this.terrainPreview.height}`);
       this.requestRender();
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('[IsometricRenderer] Failed to load terrain preview:', error);
     } finally {
       this.terrainPreviewLoading = false;
@@ -273,7 +273,7 @@ export class IsometricTerrainRenderer {
         // Clear chunk cache since season changed
         this.chunkCache?.clearAll();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn(`[IsometricRenderer] Error fetching terrain info:`, error);
     }
   }

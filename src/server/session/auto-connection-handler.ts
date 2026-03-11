@@ -31,7 +31,7 @@ export async function fetchAutoConnections(ctx: SessionContext): Promise<AutoCon
     const baseUrl = ctx.buildAspUrl(aspPath, { RIWS: '' });
     const html = await ctx.fetchAspPage(aspPath, { RIWS: '' });
     return parseAutoConnectionsHtml(ctx, html, baseUrl);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn('[AutoConnections] ASP fetch failed:', e);
     return { fluids: [] };
   }
@@ -232,7 +232,7 @@ export async function executeAutoConnectionAction(
     ctx.log.debug(`[AutoConnections] Executing ${action}: ${url}`);
     await fetch(url, { redirect: 'follow' });
     return { success: true };
-  } catch (e) {
+  } catch (e: unknown) {
     return { success: false, message: toErrorMessage(e) };
   }
 }
@@ -250,7 +250,7 @@ export async function fetchPolicy(ctx: SessionContext): Promise<PolicyData> {
     const baseUrl = ctx.buildAspUrl(aspPath, { RIWS: '' });
     const html = await ctx.fetchAspPage(aspPath, { RIWS: '' });
     return parsePolicyHtml(ctx, html, baseUrl);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn('[Policy] ASP fetch failed:', e);
     return { policies: [] };
   }
@@ -354,7 +354,7 @@ export async function setPolicyStatus(
     });
 
     return { success: true };
-  } catch (e) {
+  } catch (e: unknown) {
     return { success: false, message: toErrorMessage(e) };
   }
 }
@@ -467,7 +467,7 @@ export async function executeCurriculumAction(
       return { success: false, message: `${action} failed: HTTP ${resp.status}` };
     }
     return { success: true, message: `${action} completed successfully` };
-  } catch (e) {
+  } catch (e: unknown) {
     return { success: false, message: toErrorMessage(e) };
   }
 }

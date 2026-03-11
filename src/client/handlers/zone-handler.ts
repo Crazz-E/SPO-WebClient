@@ -13,6 +13,7 @@ import {
 import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';
 import type { ClientHandlerContext } from './client-context';
+import { setupEscapeHandler } from './handler-utils';
 
 export function toggleZonePaintingMode(ctx: ClientHandlerContext, zoneType: number): void {
   if (ctx.isZonePaintingMode && ctx.selectedZoneType === zoneType) {
@@ -41,8 +42,7 @@ export function toggleZonePaintingMode(ctx: ClientHandlerContext, zoneType: numb
   ctx.toggleZoneOverlay(true, SurfaceType.ZONES);
   setupZonePaintingKeyboardHandler(ctx);
 
-  ClientBridge.setZonePaintingMode(true);
-  ClientBridge.setSelectedZoneType(zoneType);
+  // Store is updated automatically via ctx.isZonePaintingMode and ctx.selectedZoneType setters
   ClientBridge.log('Zone', `Zone painting mode enabled: type ${zoneType}`);
 }
 
@@ -60,18 +60,15 @@ export function cancelZonePaintingMode(ctx: ClientHandlerContext): void {
     ctx.toggleZoneOverlay(false, SurfaceType.ZONES);
   }
 
-  ClientBridge.setZonePaintingMode(false);
+  // Store is updated automatically via ctx.isZonePaintingMode setter
   ClientBridge.log('Zone', 'Zone painting mode disabled');
 }
 
 function setupZonePaintingKeyboardHandler(ctx: ClientHandlerContext): void {
-  const handler = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && ctx.isZonePaintingMode) {
-      cancelZonePaintingMode(ctx);
-      document.removeEventListener('keydown', handler);
-    }
-  };
-  document.addEventListener('keydown', handler);
+  setupEscapeHandler(
+    () => ctx.isZonePaintingMode,
+    () => cancelZonePaintingMode(ctx),
+  );
 }
 
 async function defineZoneArea(ctx: ClientHandlerContext, x1: number, y1: number, x2: number, y2: number): Promise<void> {

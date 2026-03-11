@@ -88,7 +88,7 @@ export async function fetchRequired(
     }
 
     return response;
-  } catch (error) {
+  } catch (error: unknown) {
     clearTimeout(timeoutId);
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(`Request timeout after ${timeout}ms: ${url}`);
@@ -226,7 +226,7 @@ export async function fetchWithResult<T>(
       statusText: response.statusText,
       data,
     };
-  } catch (error) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return {
       ok: false,

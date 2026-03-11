@@ -275,7 +275,7 @@ export class TextureCache {
       this.evictIfNeeded();
 
       return texture;
-    } catch (error) {
+    } catch (error: unknown) {
       // Remove failed entry
       this.cache.delete(key);
       return null;
@@ -306,7 +306,7 @@ export class TextureCache {
 
       const blob = await response.blob();
       return createImageBitmap(blob);
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn(`[TextureCache] Failed to load texture ${paletteIndex}:`, error);
       return null;
     }

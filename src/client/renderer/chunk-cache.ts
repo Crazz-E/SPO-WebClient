@@ -257,7 +257,9 @@ export class ChunkCache {
     const entry = cache.get(key);
 
     if (entry && entry.ready) {
-      entry.lastAccess = ++this.accessCounter;
+      // Move to end of Map iteration order (insertion-order LRU)
+      cache.delete(key);
+      cache.set(key, entry);
       this.stats.cacheHits++;
       return entry.canvas;
     }
@@ -482,7 +484,7 @@ export class ChunkCache {
       }
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       // Network error — fall back to local
       console.warn(`[ChunkCache] Server chunk fetch failed for ${chunkI},${chunkJ}:`, error);
       return false;
@@ -664,7 +666,9 @@ export class ChunkCache {
     const entry = cache.get(key);
     if (!entry || !entry.ready) return false;
 
-    entry.lastAccess = ++this.accessCounter;
+    // Move to end of Map iteration order (insertion-order LRU)
+    cache.delete(key);
+    cache.set(key, entry);
 
     const config = ZOOM_LEVELS[zoomLevel];
     const screenPos = getChunkScreenPosition(
@@ -761,22 +765,20 @@ export class ChunkCache {
 
     const maxChunks = MAX_CHUNKS_PER_ZOOM[zoomLevel] ?? 96;
     while (cache.size > maxChunks) {
-      let oldestKey: string | null = null;
-      let oldestAccess = Infinity;
+      // Insertion-order LRU: first key in Map is the oldest accessed
+      const firstKey = cache.keys().next().value;
+      if (firstKey === undefined) break;
 
-      for (const [key, entry] of cache) {
-        if (entry.ready && !entry.rendering && entry.lastAccess < oldestAccess) {
-          oldestAccess = entry.lastAccess;
-          oldestKey = key;
-        }
+      const entry = cache.get(firstKey);
+      // Skip entries still rendering (move to end and try next)
+      if (entry && (!entry.ready || entry.rendering)) {
+        cache.delete(firstKey);
+        cache.set(firstKey, entry);
+        break; // Safety: avoid infinite loop if all entries are rendering
       }
 
-      if (oldestKey) {
-        cache.delete(oldestKey);
-        this.stats.evictions++;
-      } else {
-        break;
-      }
+      cache.delete(firstKey);
+      this.stats.evictions++;
     }
   }
 

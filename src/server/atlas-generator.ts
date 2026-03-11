@@ -197,7 +197,7 @@ export function generateTerrainAtlas(
           height: texHeight,
         };
         tileCount++;
-      } catch (texError) {
+      } catch (texError: unknown) {
         // Skip individual texture errors
         console.warn(`[AtlasGenerator] Failed to process texture ${paletteIndex}:`, texError);
       }
@@ -231,7 +231,7 @@ export function generateTerrainAtlas(
       atlasWidth,
       atlasHeight,
     };
-  } catch (error) {
+  } catch (error: unknown) {
     return {
       success: false,
       atlasPath,
@@ -357,7 +357,7 @@ export function generateObjectAtlas(
           height: texHeight,
         };
         tileCount++;
-      } catch (texError) {
+      } catch (texError: unknown) {
         console.warn(`[AtlasGenerator] Failed to process ${file}:`, texError);
       }
     }
@@ -394,7 +394,7 @@ export function generateObjectAtlas(
       atlasWidth,
       atlasHeight,
     };
-  } catch (error) {
+  } catch (error: unknown) {
     return {
       success: false,
       atlasPath: outputPath,

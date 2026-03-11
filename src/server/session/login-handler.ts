@@ -187,7 +187,7 @@ async function performDirectoryAuth(ctx: LoginContext, username: string, pass: s
     if (authCode !== 0) throw new AuthError(authCode);
 
     // 3. End Session & Close (fire-and-forget — void push, no RID)
-    socket.write(`C sel ${sessionId} call RDOEndSession "*";`);
+    socket.write(RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
     ctx.log.debug('[Session] Directory Authentication Success');
   } finally {
     socket.end();
@@ -224,7 +224,7 @@ async function performDirectoryQuery(ctx: LoginContext, zonePath?: string): Prom
     ctx.setAvailableWorlds(worldMap);
 
     // 3. End Session & Close (fire-and-forget — void push, no RID)
-    socket.write(`C sel ${sessionId} call RDOEndSession "*";`);
+    socket.write(RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
     return worlds;
   } finally {
     socket.end();
@@ -271,7 +271,7 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
     const names = parseSearchKeyResults(ctx, resValue);
 
     // 6. End Session (fire-and-forget — void push, no RID)
-    socket.write(`C sel ${sessionId} call RDOEndSession "*";`);
+    socket.write(RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
 
     return names;
   } catch (err: unknown) {
@@ -805,7 +805,7 @@ async function fetchCompaniesViaHttp(
 
     ctx.log.debug(`[HTTP] Found ${companies.length} companies, realContextId: ${realId}`);
     return { companies, realContextId: realId };
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.error('[HTTP] Failed to fetch companies:', e);
     return { companies: [], realContextId: null };
   }

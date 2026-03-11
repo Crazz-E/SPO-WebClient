@@ -104,7 +104,7 @@ export function parseBuildings(rawLines: string[]): MapBuilding[] {
           `[MapParser] Invalid building data at index ${i}: visualClass="${visualClass}", x=${x}, y=${y}`,
         );
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn(`[MapParser] Failed to parse building at index ${i}:`, e);
     }
   }
@@ -162,7 +162,7 @@ export function parseSegments(rawLines: string[]): MapSegment[] {
           unknown6,
         });
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.warn(`[MapParser] Failed to parse segment at index ${i}:`, e);
     }
   }

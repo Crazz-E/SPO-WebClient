@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       status.textContent = `Loaded: ${selectedMap}`;
       loading.classList.add('hidden');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to load map:', error);
       status.textContent = `Error: ${(error as Error).message}`;
       loading.classList.add('hidden');

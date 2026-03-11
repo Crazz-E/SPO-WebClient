@@ -367,7 +367,7 @@ export function bakeAlpha(
       transparentPixels,
       totalPixels: bmpData.width * bmpData.height,
     };
-  } catch (error) {
+  } catch (error: unknown) {
     return {
       success: false,
       inputPath,

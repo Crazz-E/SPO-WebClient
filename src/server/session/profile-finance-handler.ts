@@ -42,7 +42,7 @@ export async function fetchTycoonProfile(ctx: SessionContext): Promise<TycoonPro
       });
       const parsed = parsePropertyResponseHelper(namePacket.payload!, 'res');
       if (parsed && !parsed.startsWith('error')) name = parsed;
-    } catch (e) {
+    } catch (e: unknown) {
       ctx.log.warn('[Profile] GetUserName failed, using cached username:', e);
     }
   }
@@ -69,7 +69,7 @@ export async function fetchTycoonProfile(ctx: SessionContext): Promise<TycoonPro
   try {
     const html = await ctx.fetchAspPage('NewTycoon/TycoonCurriculum.asp', { RIWS: '' });
     parseCurriculumHtml(html, profile);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn('[Profile] TycoonCurriculum.asp fetch failed, using push data only:', e);
   }
 
@@ -89,7 +89,7 @@ export async function fetchTycoonProfile(ctx: SessionContext): Promise<TycoonPro
         profile.photoUrl = `/proxy-image?url=${encodeURIComponent(fullUrl)}`;
       }
     }
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn('[Profile] RenderTycoon.asp photo fetch failed:', e);
   }
 
@@ -528,7 +528,7 @@ export async function executeBankAction(
     }
 
     return { success: true, message: `${action} completed successfully` };
-  } catch (e) {
+  } catch (e: unknown) {
     return { success: false, message: toErrorMessage(e) };
   }
 }
@@ -644,7 +644,7 @@ export async function fetchCompanies(ctx: SessionContext): Promise<CompaniesData
     const companies = parseCompaniesHtml(ctx, html);
     const worldName = ctx.currentWorldInfo?.name || '';
     return { companies, currentCompany, worldName };
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn('[Companies] ASP fetch failed:', e);
     const worldName = ctx.currentWorldInfo?.name || '';
     return { companies: [], currentCompany, worldName };

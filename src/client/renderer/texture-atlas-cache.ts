@@ -183,7 +183,7 @@ export class TextureAtlasCache {
       this.loaded = true;
 
       console.log(`[TextureAtlasCache] Loaded atlas: ${this.terrainType}/${SEASON_NAMES[this.season]} (${Object.keys(manifest.tiles).length} tiles, ${manifest.atlasWidth}x${manifest.atlasHeight})`);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[TextureAtlasCache] Failed to load atlas:`, error);
       this.loaded = true; // Prevent retries
     }

@@ -18,6 +18,7 @@
  */
 
 import * as fs from 'fs';
+import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { decodePng, decodeBmpIndices, encodePng, downscaleRGBA2x, PngData } from './texture-alpha-baker';
 import { AtlasManifest, TileEntry } from './atlas-generator';
@@ -267,7 +268,7 @@ export class TerrainChunkRenderer implements Service {
 
       console.log(`[TerrainChunkRenderer] Loaded atlas: ${terrainType}/${SEASON_NAMES[season as Season]} (${Object.keys(manifest.tiles).length} tiles, ${pngData.width}x${pngData.height})`);
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[TerrainChunkRenderer] Failed to load atlas ${terrainType}/${season}:`, error);
       return false;
     }
@@ -299,7 +300,7 @@ export class TerrainChunkRenderer implements Service {
 
       console.log(`[TerrainChunkRenderer] Loaded map data: ${mapName} (${data.width}x${data.height})`);
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(`[TerrainChunkRenderer] Failed to load map ${mapName}:`, error);
       return false;
     }
@@ -322,13 +323,15 @@ export class TerrainChunkRenderer implements Service {
     // Check disk cache
     const cachePath = this.getChunkCachePath(mapName, terrainType, season, chunkI, chunkJ, zoomLevel);
 
-    if (fs.existsSync(cachePath)) {
-      const result = fs.readFileSync(cachePath);
+    try {
+      const result = await fsp.readFile(cachePath);
       const dt = Date.now() - t0;
       if (dt > 10) {
         console.log(`[TerrainChunkRenderer] disk-cache z${zoomLevel} ${chunkI},${chunkJ}: ${dt}ms (${(result.length / 1024).toFixed(0)} KB)`);
       }
       return result;
+    } catch {
+      // File doesn't exist, generate it
     }
 
     // Dedup in-flight generation
@@ -381,21 +384,21 @@ export class TerrainChunkRenderer implements Service {
       let z3W = CHUNK_CANVAS_WIDTH;
       let z3H = CHUNK_CANVAS_HEIGHT;
 
-      if (fs.existsSync(z3CachePath)) {
+      try {
         // Decode from cached PNG
-        const pngBuf = fs.readFileSync(z3CachePath);
+        const pngBuf = await fsp.readFile(z3CachePath);
         const decoded = decodePng(pngBuf);
         z3Pixels = decoded.pixels;
         z3W = decoded.width;
         z3H = decoded.height;
-      } else {
+      } catch {
         // Generate zoom-3 from atlas and cache it
         z3Pixels = this.generateChunkRGBA(terrainType, season, chunkI, chunkJ, mapName);
         if (z3Pixels) {
           const z3Png = encodePng(z3W, z3H, z3Pixels);
           const z3Dir = path.dirname(z3CachePath);
-          if (!fs.existsSync(z3Dir)) fs.mkdirSync(z3Dir, { recursive: true });
-          fs.writeFileSync(z3CachePath, z3Png);
+          await fsp.mkdir(z3Dir, { recursive: true });
+          await fsp.writeFile(z3CachePath, z3Png);
         }
       }
 
@@ -421,10 +424,8 @@ export class TerrainChunkRenderer implements Service {
     // Write to disk cache
     const cachePath = this.getChunkCachePath(mapName, terrainType, season, chunkI, chunkJ, zoomLevel);
     const cacheDir = path.dirname(cachePath);
-    if (!fs.existsSync(cacheDir)) {
-      fs.mkdirSync(cacheDir, { recursive: true });
-    }
-    fs.writeFileSync(cachePath, png);
+    await fsp.mkdir(cacheDir, { recursive: true });
+    await fsp.writeFile(cachePath, png);
 
     return png;
   }

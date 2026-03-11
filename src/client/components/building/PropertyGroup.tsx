@@ -6,13 +6,12 @@
  * Editable properties dispatch changes via the client callbacks.
  */
 
-import { useState, useCallback, useRef, useEffect, type JSX } from 'react';
-import type { BuildingPropertyValue, BuildingSupplyData, BuildingProductData, BuildingConnectionData, CompInputData } from '@/shared/types';
+import { useState, useCallback, useRef, useEffect, memo, type JSX } from 'react';
+import type { BuildingPropertyValue, BuildingProductData } from '@/shared/types';
 import {
   PropertyType,
   type PropertyDefinition,
   type TableColumn,
-  type PropertyGroup as PropertyGroupDef,
   type RdoCommandMapping,
   formatCurrency,
   formatPercentage,
@@ -25,8 +24,10 @@ import { useGameStore } from '../../store/game-store';
 import { useClient } from '../../context';
 import { ResearchPanel } from './ResearchPanel';
 import { RevenueGraph } from './RevenueGraph';
-import { getConnectionStatus } from './comp-inputs-utils';
 import { SaveIndicator } from './SaveIndicator';
+import { SuppliesPanel } from './SuppliesGroup';
+import { ProductsPanel } from './ProductsGroup';
+import { CompInputsPanel } from './InputsGroup';
 import styles from './PropertyGroup.module.css';
 
 interface PropertyGroupProps {
@@ -130,7 +131,7 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
 }
 
 /** Check if current player is mayor of this town (from ActualRuler property) */
-function checkIsMayor(properties: BuildingPropertyValue[]): boolean {
+export function checkIsMayor(properties: BuildingPropertyValue[]): boolean {
   const ruler = properties.find((p) => p.name === 'ActualRuler');
   return ruler?.value !== undefined && ruler.value !== '';
 }
@@ -145,7 +146,7 @@ function checkIsMayor(properties: BuildingPropertyValue[]): boolean {
  * 'srvPrices0' → { command: 'RDOSetPrice', params: { index: '0' } }
  * 'Stopped' → { command: 'property', params: { propertyName: 'Stopped' } }
  */
-function resolveRdoCommand(
+export function resolveRdoCommand(
   propertyName: string,
   rdoCommands?: Record<string, RdoCommandMapping>,
 ): { command: string; params?: Record<string, string> } {
@@ -201,7 +202,7 @@ function resolveRdoCommand(
  * Compute the pending-update key for a property, matching the key format
  * used in client.ts setBuildingProperty: "command" or "command:{"index":"0"}"
  */
-function computePendingKey(
+export function computePendingKey(
   rdoName: string,
   rdoCommands?: Record<string, RdoCommandMapping>,
 ): string {
@@ -597,14 +598,14 @@ function DefinedPropertyRow({ def, value, maxValue, canEdit, onPropertyChange, o
   );
 }
 
-function RawPropertyRow({ prop }: { prop: BuildingPropertyValue }) {
+const RawPropertyRow = memo(function RawPropertyRow({ prop }: { prop: BuildingPropertyValue }) {
   return (
     <div className={styles.row}>
       <span className={styles.name}>{prop.name}</span>
       <span className={styles.value}>{prop.value}</span>
     </div>
   );
-}
+});
 
 // =============================================================================
 // VALUE RENDERERS
@@ -684,7 +685,7 @@ function PropertyValue({ def, value, maxValue, canEdit, onPropertyChange, onStri
   }
 }
 
-function getColorClass(num: number, colorCode?: string): string {
+export function getColorClass(num: number, colorCode?: string): string {
   if (!colorCode) return '';
   if (colorCode === 'positive') return styles.positive;
   if (colorCode === 'negative') return styles.negative;
@@ -1836,612 +1837,3 @@ function PriceSliderWithMarker({
   );
 }
 
-// =============================================================================
-// SUPPLIES PANEL (special === 'supplies')
-// =============================================================================
-
-function SuppliesPanel({
-  supplies,
-  canEdit,
-  buildingX,
-  buildingY,
-}: {
-  supplies: BuildingSupplyData[];
-  canEdit: boolean;
-  buildingX: number;
-  buildingY: number;
-}) {
-  if (supplies.length === 0) {
-    return <div className={styles.empty}>No supply inputs</div>;
-  }
-  return (
-    <div className={styles.supplyList}>
-      {supplies.map((supply, i) => (
-        <SupplyCard key={i} supply={supply} canEdit={canEdit} buildingX={buildingX} buildingY={buildingY} />
-      ))}
-    </div>
-  );
-}
-
-function OverpaymentPopover({
-  conn,
-  connIndex,
-  supply,
-  buildingX,
-  buildingY,
-  onClose,
-}: {
-  conn: BuildingConnectionData;
-  connIndex: number;
-  supply: BuildingSupplyData;
-  buildingX: number;
-  buildingY: number;
-  onClose: () => void;
-}) {
-  const client = useClient();
-  const initialOverprice = parseInt(conn.overprice || '0', 10);
-  const [overprice, setOverprice] = useState(isNaN(initialOverprice) ? 0 : initialOverprice);
-
-  const handleOk = () => {
-    client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetInputOverPrice', String(overprice), {
-      fluidId: supply.metaFluid,
-      index: String(connIndex),
-    });
-    client.onRefreshBuilding(buildingX, buildingY);
-    onClose();
-  };
-
-  const handleDelete = () => {
-    client.onDisconnectConnection(buildingX, buildingY, supply.metaFluid, 'input', conn.x, conn.y);
-    onClose();
-  };
-
-  return (
-    <>
-      <div className={styles.overpayBackdrop} onClick={onClose} />
-      <div className={styles.overpayPopover}>
-        <div className={styles.overpayHeader}>
-          <div>Name: <strong>{conn.facilityName}</strong></div>
-          <div>Company: <strong>{conn.companyName}</strong></div>
-        </div>
-        <div className={styles.overpaySliderRow}>
-          <span className={styles.sliderLabel}>Overpayment</span>
-          <input
-            type="range"
-            className={styles.slider}
-            min={0}
-            max={150}
-            step={1}
-            value={overprice}
-            onChange={(e) => setOverprice(parseInt(e.target.value, 10))}
-          />
-          <span className={styles.sliderValue}>{overprice}%</span>
-        </div>
-        <div className={styles.overpayActions}>
-          <button className={styles.overpayDeleteBtn} onClick={handleDelete}>Delete</button>
-          <button className={styles.overpayOkBtn} onClick={handleOk}>OK</button>
-          <button className={styles.overpayCancelBtn} onClick={onClose}>Cancel</button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function SupplyCard({
-  supply,
-  canEdit,
-  buildingX,
-  buildingY,
-}: {
-  supply: BuildingSupplyData;
-  canEdit: boolean;
-  buildingX: number;
-  buildingY: number;
-}) {
-  const client = useClient();
-  const [expanded, setExpanded] = useState(false);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-  const [overpayTarget, setOverpayTarget] = useState<number | null>(null);
-  const maxPriceTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const minKTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  const currentMaxPrice = parseInt(supply.maxPrice || '200', 10);
-  const currentMinK = parseInt(supply.minK || '0', 10);
-  const [localMaxPrice, setLocalMaxPrice] = useState(isNaN(currentMaxPrice) ? 200 : currentMaxPrice);
-  const [localMinK, setLocalMinK] = useState(isNaN(currentMinK) ? 0 : currentMinK);
-
-  const handleMaxPriceChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10);
-    setLocalMaxPrice(val);
-    if (maxPriceTimeoutRef.current) clearTimeout(maxPriceTimeoutRef.current);
-    maxPriceTimeoutRef.current = setTimeout(() => {
-      client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetInputMaxPrice', String(val), {
-        fluidId: supply.metaFluid,
-      });
-    }, 300);
-  }, [client, buildingX, buildingY, supply.metaFluid]);
-
-  const handleMinKChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10);
-    setLocalMinK(val);
-    if (minKTimeoutRef.current) clearTimeout(minKTimeoutRef.current);
-    minKTimeoutRef.current = setTimeout(() => {
-      client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetInputMinK', String(val), {
-        fluidId: supply.metaFluid,
-      });
-    }, 300);
-  }, [client, buildingX, buildingY, supply.metaFluid]);
-
-  const handleHire = () => {
-    client.onSearchConnections(buildingX, buildingY, supply.metaFluid, supply.name, 'input');
-  };
-
-  const handleModify = () => {
-    if (selectedIdx !== null) setOverpayTarget(selectedIdx);
-  };
-
-  const handleFire = () => {
-    if (selectedIdx === null) return;
-    const conn = supply.connections[selectedIdx];
-    if (!conn) return;
-    client.onDisconnectConnection(buildingX, buildingY, supply.metaFluid, 'input', conn.x, conn.y);
-    setSelectedIdx(null);
-  };
-
-  const handleRowClick = (idx: number) => {
-    setSelectedIdx(selectedIdx === idx ? null : idx);
-  };
-
-  const handleRowContextMenu = (e: React.MouseEvent, idx: number) => {
-    e.preventDefault();
-    setOverpayTarget(idx);
-  };
-
-  return (
-    <div className={styles.supplyCard}>
-      <button className={styles.supplyHeader} onClick={() => setExpanded((v) => !v)}>
-        <span className={styles.supplyName}>{supply.name || supply.metaFluid}</span>
-        <span className={styles.supplyCount}>
-          {supply.connectionCount} supplier{supply.connectionCount !== 1 ? 's' : ''}
-        </span>
-        <span className={styles.supplyChevron}>{expanded ? '▲' : '▼'}</span>
-      </button>
-
-      {expanded && (
-        <div className={styles.supplyBody}>
-          {/* Stats row */}
-          <div className={styles.supplyStats}>
-            {supply.fluidValue && (
-              <span className={styles.supplyStat}>Last Value: <strong>{supply.fluidValue}</strong></span>
-            )}
-            {supply.lastCostPerc && (
-              <span className={styles.supplyStat}>Cost: <strong>{supply.lastCostPerc}%</strong></span>
-            )}
-          </div>
-
-          {/* Max Price slider */}
-          {canEdit && supply.maxPrice !== undefined ? (
-            <div className={styles.supplySliderRow}>
-              <span className={styles.sliderLabel}>Max Price</span>
-              <input
-                type="range"
-                className={styles.slider}
-                min={0}
-                max={500}
-                step={10}
-                value={localMaxPrice}
-                onChange={handleMaxPriceChange}
-              />
-              <span className={styles.sliderValue}>{localMaxPrice}%</span>
-            </div>
-          ) : supply.maxPrice !== undefined ? (
-            <div className={styles.row}>
-              <span className={styles.name}>Max Price</span>
-              <span className={styles.value}>{supply.maxPrice}%</span>
-            </div>
-          ) : null}
-
-          {/* Min Quality slider */}
-          {canEdit && supply.minK !== undefined ? (
-            <div className={styles.supplySliderRow}>
-              <span className={styles.sliderLabel}>Min Quality</span>
-              <input
-                type="range"
-                className={styles.slider}
-                min={0}
-                max={100}
-                step={1}
-                value={localMinK}
-                onChange={handleMinKChange}
-              />
-              <span className={styles.sliderValue}>{localMinK}%</span>
-            </div>
-          ) : supply.minK !== undefined ? (
-            <div className={styles.row}>
-              <span className={styles.name}>Min Quality</span>
-              <span className={styles.value}>{supply.minK}%</span>
-            </div>
-          ) : null}
-
-          {/* Connections table */}
-          {supply.connections.length > 0 ? (
-            <table
-              className={styles.supplyTable}
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Delete' && canEdit && selectedIdx !== null) {
-                  handleFire();
-                }
-              }}
-            >
-              <thead>
-                <tr>
-                  <th style={{ width: 24 }}></th>
-                  <th>Facility</th>
-                  <th style={{ width: 80 }}>Owner</th>
-                  <th style={{ width: 60 }}>Price</th>
-                  <th style={{ width: 60 }}>Overpaid</th>
-                  <th style={{ width: 80 }}>Last</th>
-                  <th style={{ width: 60 }}>Quality</th>
-                  <th style={{ width: 60 }}>T.Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {supply.connections.map((conn, j) => (
-                  <tr
-                    key={j}
-                    className={`${styles.supplyTableRow}${selectedIdx === j ? ` ${styles.supplyTableRowSelected}` : ''}`}
-                    onClick={() => handleRowClick(j)}
-                    onContextMenu={(e) => canEdit && handleRowContextMenu(e, j)}
-                  >
-                    <td>
-                      {conn.connected && <span className={styles.supplyConnectedIcon}>&#10003;</span>}
-                    </td>
-                    <td>{conn.facilityName}</td>
-                    <td>{conn.companyName}</td>
-                    <td>${conn.price}</td>
-                    <td>{conn.overprice}%</td>
-                    <td>{conn.lastValue}</td>
-                    <td>{conn.quality}</td>
-                    <td>{conn.cost}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className={styles.noConnections}>No suppliers connected</div>
-          )}
-
-          {/* Overpayment popover */}
-          {overpayTarget !== null && canEdit && supply.connections[overpayTarget] && (
-            <OverpaymentPopover
-              conn={supply.connections[overpayTarget]}
-              connIndex={overpayTarget}
-              supply={supply}
-              buildingX={buildingX}
-              buildingY={buildingY}
-              onClose={() => setOverpayTarget(null)}
-            />
-          )}
-
-          {/* Action buttons */}
-          {canEdit && (
-            <div className={styles.supplyActions}>
-              <button className={styles.hireBtn} onClick={handleHire}>Hire</button>
-              <button
-                className={styles.modifyBtn}
-                onClick={handleModify}
-                disabled={selectedIdx === null}
-              >
-                Modify
-              </button>
-              <button
-                className={styles.fireBtn}
-                onClick={handleFire}
-                disabled={selectedIdx === null}
-              >
-                Fire
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// =============================================================================
-// PRODUCTS PANEL (special === 'products')
-// =============================================================================
-
-function ProductsPanel({
-  products,
-  canEdit,
-  buildingX,
-  buildingY,
-}: {
-  products: BuildingProductData[];
-  canEdit: boolean;
-  buildingX: number;
-  buildingY: number;
-}) {
-  if (products.length === 0) {
-    return <div className={styles.empty}>No product outputs</div>;
-  }
-  return (
-    <div className={styles.supplyList}>
-      {products.map((product, i) => (
-        <ProductCard key={i} product={product} canEdit={canEdit} buildingX={buildingX} buildingY={buildingY} />
-      ))}
-    </div>
-  );
-}
-
-function ProductCard({
-  product,
-  canEdit,
-  buildingX,
-  buildingY,
-}: {
-  product: BuildingProductData;
-  canEdit: boolean;
-  buildingX: number;
-  buildingY: number;
-}) {
-  const client = useClient();
-  const [expanded, setExpanded] = useState(false);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-
-  const handleRowClick = (idx: number) => {
-    setSelectedIdx(selectedIdx === idx ? null : idx);
-  };
-
-  const handleHire = () => {
-    client.onSearchConnections(buildingX, buildingY, product.metaFluid, product.name || product.metaFluid, 'output');
-  };
-
-  const handleFire = () => {
-    if (selectedIdx === null) return;
-    const conn = product.connections[selectedIdx];
-    if (!conn) return;
-    client.onDisconnectConnection(buildingX, buildingY, product.metaFluid, 'output', conn.x, conn.y);
-    setSelectedIdx(null);
-  };
-
-  return (
-    <div className={styles.supplyCard}>
-      <button className={styles.supplyHeader} onClick={() => setExpanded((v) => !v)}>
-        <span className={styles.supplyName}>{product.name || product.metaFluid}</span>
-        <span className={styles.supplyCount}>
-          {product.connectionCount} buyer{product.connectionCount !== 1 ? 's' : ''}
-        </span>
-        <span className={styles.supplyChevron}>{expanded ? '▲' : '▼'}</span>
-      </button>
-
-      {expanded && (
-        <div className={styles.supplyBody}>
-          {product.lastFluid && (
-            <div className={styles.row}>
-              <span className={styles.name}>Last Produced</span>
-              <span className={styles.value}>{product.lastFluid}</span>
-            </div>
-          )}
-          {product.quality && (
-            <div className={styles.row}>
-              <span className={styles.name}>Quality</span>
-              <span className={styles.value}>{product.quality}%</span>
-            </div>
-          )}
-          {product.pricePc && (
-            <div className={styles.row}>
-              <span className={styles.name}>Sell Price</span>
-              <span className={styles.value}>{product.pricePc}%</span>
-            </div>
-          )}
-          {product.marketPrice && (
-            <div className={styles.row}>
-              <span className={styles.name}>Market Price</span>
-              <span className={styles.value}>{formatCurrency(parseFloat(product.marketPrice))}</span>
-            </div>
-          )}
-
-          {product.connections.length > 0 ? (
-            <table
-              className={styles.supplyTable}
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Delete' && canEdit && selectedIdx !== null) {
-                  handleFire();
-                }
-              }}
-            >
-              <thead>
-                <tr>
-                  <th>Facility</th>
-                  <th style={{ width: 80 }}>Owner</th>
-                  <th style={{ width: 60 }}>Price</th>
-                  <th style={{ width: 60 }}>Quality</th>
-                </tr>
-              </thead>
-              <tbody>
-                {product.connections.map((conn, j) => (
-                  <tr
-                    key={j}
-                    className={`${styles.supplyTableRow}${selectedIdx === j ? ` ${styles.supplyTableRowSelected}` : ''}`}
-                    onClick={() => handleRowClick(j)}
-                  >
-                    <td>{conn.facilityName}</td>
-                    <td>{conn.companyName}</td>
-                    <td>{conn.price ? `${conn.price}%` : ''}</td>
-                    <td>{conn.quality ? `${conn.quality}%` : ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className={styles.noConnections}>No buyers connected</div>
-          )}
-
-          {canEdit && (
-            <div className={styles.supplyActions}>
-              <button className={styles.hireBtn} onClick={handleHire}>Hire</button>
-              <button
-                className={styles.fireBtn}
-                onClick={handleFire}
-                disabled={selectedIdx === null}
-              >
-                Remove
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// =============================================================================
-// COMPANY INPUTS PANEL (special === 'compInputs') — Eager render from cInputCount/cInput{i}.* data
-// =============================================================================
-
-function CompInputsPanel({
-  compInputs,
-  canEdit,
-  buildingX,
-  buildingY,
-}: {
-  compInputs: CompInputData[];
-  canEdit: boolean;
-  buildingX: number;
-  buildingY: number;
-}) {
-  if (compInputs.length === 0) {
-    return <div className={styles.empty}>No company inputs</div>;
-  }
-
-  return (
-    <div className={styles.ciAccordion}>
-      {compInputs.map((data, i) => (
-        <CompInputSection
-          key={i}
-          data={data}
-          inputIndex={i}
-          canEdit={canEdit && data.editable}
-          buildingX={buildingX}
-          buildingY={buildingY}
-        />
-      ))}
-    </div>
-  );
-}
-
-function CompInputSection({
-  data,
-  inputIndex,
-  canEdit,
-  buildingX,
-  buildingY,
-}: {
-  data: CompInputData;
-  inputIndex: number;
-  canEdit: boolean;
-  buildingX: number;
-  buildingY: number;
-}) {
-  const client = useClient();
-  const [localDemand, setLocalDemand] = useState(data.ratio);
-  const demandTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  const barMax = data.maxDemand > 0 ? data.maxDemand : data.demanded;
-  const demPct = barMax > 0 ? Math.min(100, (data.demanded / barMax) * 100) : 0;
-  const supPct = barMax > 0 ? Math.min(100, (data.supplied / barMax) * 100) : 0;
-  const fillPct = data.demanded > 0 ? Math.min(100, (data.supplied / data.demanded) * 100) : 0;
-
-  const handleDemandChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10)));
-      setLocalDemand(val);
-      if (demandTimeout.current) clearTimeout(demandTimeout.current);
-      demandTimeout.current = setTimeout(() => {
-        client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetCompanyInputDemand', String(val), {
-          index: String(inputIndex),
-        });
-      }, 300);
-    },
-    [client, buildingX, buildingY, inputIndex],
-  );
-
-  return (
-    <div className={styles.ciAccordionItem}>
-      <div className={styles.ciAccordionHeader}>
-        <span className={styles.ciAccordionName}>{data.name.toUpperCase()}</span>
-      </div>
-      <div className={styles.ciAccordionBody}>
-        {data.editable ? (
-          <>
-            {/* Row 1: Demand slider */}
-            <div className={styles.ciDemandRow}>
-              <span className={styles.ciDemandLabel}>Demand</span>
-              <input
-                type="range"
-                className={styles.slider}
-                min={0}
-                max={100}
-                step={1}
-                value={localDemand}
-                disabled={!canEdit}
-                onChange={handleDemandChange}
-              />
-              <span className={styles.ciDemandPerc}>{Math.round(demPct)}%</span>
-            </div>
-
-            {/* Row 2: Supply bar — scaled to maxDemand capacity */}
-            <div className={styles.ciDemandRow}>
-              <span className={styles.ciDemandLabel}>Supply</span>
-              <div className={styles.ciSupplyBar}>
-                {/* Demand zone — faint gold showing demanded portion of max capacity */}
-                <div className={styles.ciDemandZone} style={{ width: `${demPct}%` }} />
-                {/* Supply fill — supplied portion of max capacity */}
-                <div
-                  className={`${styles.ciSupplyBarFill}${fillPct < 50 ? ` ${styles.ciBarCrit}` : fillPct < 100 ? ` ${styles.ciBarWarn}` : ''}`}
-                  style={{ width: `${fillPct}%` }}
-                />
-              </div>
-              <span className={styles.ciDemandPerc}>{Math.round(fillPct)}%</span>
-            </div>
-
-            {/* Demand below capacity warning */}
-            {demPct < 100 && (
-              <span className={styles.ciDemandBelowCap}>
-                Demand below capacity
-              </span>
-            )}
-
-            {/* Summary — includes max capacity when available */}
-            <div className={styles.ciSummary}>
-              <span className={styles.ciFluidLabel}>
-                Supplied {formatNumber(data.supplied)} / Demanded {formatNumber(data.demanded)}{data.maxDemand > 0 ? ` / Max ${formatNumber(data.maxDemand)}` : ''} {data.units}
-              </span>
-            </div>
-          </>
-        ) : (
-          /* Non-editable: read-only info rows (Requesting / Receiving / Ratio) */
-          <div className={styles.ciReadOnlyGrid}>
-            <div className={styles.ciReadOnlyRow}>
-              <span className={styles.ciReadOnlyLabel}>Requesting</span>
-              <span className={styles.ciReadOnlyValue}>{formatNumber(data.demanded)} {data.units}</span>
-            </div>
-            <div className={styles.ciReadOnlyRow}>
-              <span className={styles.ciReadOnlyLabel}>Receiving</span>
-              <span className={styles.ciReadOnlyValue}>{formatNumber(data.supplied)} {data.units}</span>
-            </div>
-            <div className={styles.ciReadOnlyRow}>
-              <span className={styles.ciReadOnlyLabel}>Ratio</span>
-              <span className={styles.ciReadOnlyValue}>{data.ratio}%</span>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}

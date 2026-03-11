@@ -110,7 +110,7 @@ export class UpdateService implements Service {
         const data = fs.readFileSync(this.CAB_METADATA_FILE, 'utf8');
         this.cabMetadata = JSON.parse(data);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn('[UpdateService] Failed to load CAB metadata, starting fresh:', error);
       this.cabMetadata = {};
     }
@@ -122,7 +122,7 @@ export class UpdateService implements Service {
   private saveCabMetadata(): void {
     try {
       fs.writeFileSync(this.CAB_METADATA_FILE, JSON.stringify(this.cabMetadata, null, 2), 'utf8');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('[UpdateService] Failed to save CAB metadata:', error);
     }
   }
@@ -175,7 +175,7 @@ export class UpdateService implements Service {
       logger.info(`[UpdateService] Extracted ${extractedFiles.length} files from CAB`);
 
       return extractedFiles;
-    } catch (error) {
+    } catch (error: unknown) {
       this.stats.failed++;
       logger.error(`[UpdateService] Failed to extract CAB ${cabRelative}:`, error);
 
@@ -210,7 +210,7 @@ export class UpdateService implements Service {
           logger.info(`[UpdateService] 🗑 Deleted old extraction: ${extractedFile}`);
           this.stats.deleted++;
         }
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error(`[UpdateService] Failed to delete old extraction ${extractedFile}:`, error);
       }
     }
@@ -308,7 +308,7 @@ export class UpdateService implements Service {
         logger.info(`[UpdateService] Discovered ${items.filter(i => i.type === 'file').length} files and ${items.filter(i => i.type === 'directory').length} directories on remote server`);
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(`[UpdateService] Error discovering ${relativePath || 'root'}:`, error);
     }
 
@@ -393,7 +393,7 @@ export class UpdateService implements Service {
       }
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       this.stats.failed++;
       logger.error(`[UpdateService] ✗ Failed to download ${item.path}:`, error);
       return false;
@@ -422,7 +422,7 @@ export class UpdateService implements Service {
 
       this.stats.deleted++;
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(`[UpdateService] Failed to delete ${relativePath}:`, error);
       return false;
     }

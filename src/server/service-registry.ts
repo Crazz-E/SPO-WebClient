@@ -130,7 +130,7 @@ export class ServiceRegistry extends EventEmitter {
           await service.initialize();
           const elapsed = Date.now() - start;
           console.log(`[ServiceRegistry] ${name} initialized (${elapsed}ms)`);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error(`[ServiceRegistry] Failed to initialize ${name}:`, error);
           throw error;
         }
@@ -176,7 +176,7 @@ export class ServiceRegistry extends EventEmitter {
             )
           ]);
           console.log(`[ServiceRegistry] ${name} shut down`);
-        } catch (error) {
+        } catch (error: unknown) {
           console.error(`[ServiceRegistry] Error shutting down ${name}:`, error);
         }
       }
@@ -397,7 +397,7 @@ export function setupGracefulShutdown(registry: ServiceRegistry, server?: Shutdo
       clearTimeout(forceTimeout);
       console.log('[Shutdown] Graceful shutdown complete');
       process.exit(0);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('[Shutdown] Error during shutdown:', error);
       clearTimeout(forceTimeout);
       process.exit(1);

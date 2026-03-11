@@ -5,7 +5,7 @@
  * Folder tabs at top, message list scrollable, compose form.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, memo } from 'react';
 import { Send, Trash2, Reply, PenSquare } from 'lucide-react';
 import { useMailStore } from '../../store/mail-store';
 import { useClient } from '../../context';
@@ -20,6 +20,35 @@ const FOLDERS: { id: MailFolder; label: string; badge?: boolean }[] = [
   { id: 'Sent', label: 'Sent' },
   { id: 'Draft', label: 'Drafts' },
 ];
+
+interface MailMessageRowProps {
+  msg: MailMessageHeader;
+  isSentFolder: boolean;
+  onClick: (msg: MailMessageHeader) => void;
+}
+
+const MailMessageRow = memo(function MailMessageRow({ msg, isSentFolder, onClick }: MailMessageRowProps) {
+  const person = isSentFolder
+    ? (msg.to || msg.toAddr || '')
+    : (msg.from || msg.fromAddr || '');
+  return (
+    <button
+      className={`${styles.messageRow} ${!msg.read ? styles.unread : ''}`}
+      onClick={() => onClick(msg)}
+    >
+      <div className={styles.msgAvatar}>
+        {(person || '?')[0].toUpperCase()}
+      </div>
+      <div className={styles.msgContent}>
+        <div className={styles.msgHeader}>
+          <span className={styles.msgSender}>{isSentFolder ? `To: ${person}` : person}</span>
+          <span className={styles.msgDate}>{msg.dateFmt || msg.date}</span>
+        </div>
+        <span className={styles.msgSubject}>{msg.subject}</span>
+      </div>
+    </button>
+  );
+});
 
 export function MailPanel() {
   const currentFolder = useMailStore((s) => s.currentFolder);
@@ -113,30 +142,14 @@ export function MailPanel() {
           {messages.length === 0 && (
             <div className={styles.empty}>No messages</div>
           )}
-          {messages.map((msg) => {
-            const isSent = currentFolder === 'Sent' || currentFolder === 'Draft';
-            const person = isSent
-              ? (msg.to || msg.toAddr || '')
-              : (msg.from || msg.fromAddr || '');
-            return (
-              <button
-                key={msg.messageId}
-                className={`${styles.messageRow} ${!msg.read ? styles.unread : ''}`}
-                onClick={() => handleReadMessage(msg)}
-              >
-                <div className={styles.msgAvatar}>
-                  {(person || '?')[0].toUpperCase()}
-                </div>
-                <div className={styles.msgContent}>
-                  <div className={styles.msgHeader}>
-                    <span className={styles.msgSender}>{isSent ? `To: ${person}` : person}</span>
-                    <span className={styles.msgDate}>{msg.dateFmt || msg.date}</span>
-                  </div>
-                  <span className={styles.msgSubject}>{msg.subject}</span>
-                </div>
-              </button>
-            );
-          })}
+          {messages.map((msg) => (
+            <MailMessageRow
+              key={msg.messageId}
+              msg={msg}
+              isSentFolder={currentFolder === 'Sent' || currentFolder === 'Draft'}
+              onClick={handleReadMessage}
+            />
+          ))}
         </div>
       )}
 

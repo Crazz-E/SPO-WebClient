@@ -94,41 +94,41 @@ const imageFileIndex = new Map<string, string>();
  * Build in-memory index of all image files in cache directories.
  * Called once at startup and after downloading new files.
  */
-function buildImageFileIndex(): void {
+async function buildImageFileIndex(): Promise<void> {
   imageFileIndex.clear();
   const CACHE_ROOT = path.join(__dirname, '../../cache');
 
   // Index files in update server cache subdirectories
-  if (fs.existsSync(CACHE_ROOT)) {
-    const entries = fs.readdirSync(CACHE_ROOT, { withFileTypes: true });
+  try {
+    const entries = await fsp.readdir(CACHE_ROOT, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory()) {
         const dirPath = path.join(CACHE_ROOT, entry.name);
-        const files = fs.readdirSync(dirPath);
+        const files = await fsp.readdir(dirPath);
         for (const file of files) {
           imageFileIndex.set(file.toLowerCase(), path.join(dirPath, file));
         }
       }
     }
+  } catch {
+    // Cache root doesn't exist yet
   }
 
   // Index files in webclient-cache
-  if (fs.existsSync(WEBCLIENT_CACHE_DIR)) {
-    const files = fs.readdirSync(WEBCLIENT_CACHE_DIR);
+  try {
+    const files = await fsp.readdir(WEBCLIENT_CACHE_DIR);
     for (const file of files) {
-      // Don't overwrite update server entries (they have priority)
       const key = file.toLowerCase();
       if (!imageFileIndex.has(key)) {
         imageFileIndex.set(key, path.join(WEBCLIENT_CACHE_DIR, file));
       }
     }
+  } catch {
+    // webclient-cache doesn't exist yet
   }
 
   logger.info(`Image file index built: ${imageFileIndex.size} files`);
 }
-
-// Build index at startup (synchronous, runs once)
-buildImageFileIndex();
 
 // =============================================================================
 // In-memory INI cache (road, concrete, car block classes)
@@ -139,7 +139,7 @@ interface IniFileCache {
 
 const iniCache: Record<string, IniFileCache> = {};
 
-function buildIniCache(): void {
+async function buildIniCache(): Promise<void> {
   const dirs: Record<string, string> = {
     roadBlockClasses: path.join(CACHE_DIR, 'RoadBlockClasses'),
     concreteBlockClasses: path.join(CACHE_DIR, 'ConcreteClasses'),
@@ -147,25 +147,23 @@ function buildIniCache(): void {
   };
 
   for (const [key, dirPath] of Object.entries(dirs)) {
-    if (!fs.existsSync(dirPath)) {
+    try {
+      const allFiles = await fsp.readdir(dirPath);
+      const iniFiles = allFiles.filter(f => f.toLowerCase().endsWith('.ini'));
+      const iniContents: Array<{ filename: string; content: string }> = [];
+      for (const file of iniFiles) {
+        const filePath = path.join(dirPath, file);
+        const content = await fsp.readFile(filePath, 'utf-8');
+        iniContents.push({ filename: file, content });
+      }
+      iniCache[key] = { files: iniContents };
+    } catch {
       iniCache[key] = { files: [] };
-      continue;
     }
-    const files = fs.readdirSync(dirPath).filter(f => f.toLowerCase().endsWith('.ini'));
-    const iniContents: Array<{ filename: string; content: string }> = [];
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      const content = fs.readFileSync(filePath, 'utf-8');
-      iniContents.push({ filename: file, content });
-    }
-    iniCache[key] = { files: iniContents };
   }
 
-  logger.info(`INI cache built: road=${iniCache.roadBlockClasses.files.length}, concrete=${iniCache.concreteBlockClasses.files.length}, car=${iniCache.carClasses.files.length}`);
+  logger.info(`INI cache built: road=${iniCache.roadBlockClasses?.files.length ?? 0}, concrete=${iniCache.concreteBlockClasses?.files.length ?? 0}, car=${iniCache.carClasses?.files.length ?? 0}`);
 }
-
-// Build INI cache at startup
-buildIniCache();
 
 // =============================================================================
 // Research Invention Index (parsed from research.0.dat)
@@ -174,14 +172,16 @@ buildIniCache();
 let inventionIndex: DatInventionIndex | null = null;
 let inventionIndexJson: string | null = null;
 
-function loadInventionIndex(): void {
+async function loadInventionIndex(): Promise<void> {
   const datPath = path.join(CACHE_DIR, 'Inventions', 'research.0.dat');
-  if (!fs.existsSync(datPath)) {
+  try {
+    await fsp.access(datPath);
+  } catch {
     logger.warn('research.0.dat not found — research name resolution disabled');
     return;
   }
   try {
-    const buffer = fs.readFileSync(datPath);
+    const buffer = await fsp.readFile(datPath);
     const parsed = parseResearchDat(buffer);
     inventionIndex = buildInventionIndex(parsed);
 
@@ -205,8 +205,6 @@ function loadInventionIndex(): void {
     logger.error(`Failed to load research.0.dat: ${toErrorMessage(err)}`);
   }
 }
-
-loadInventionIndex();
 
 /** Get the invention index for name enrichment. */
 export function getInventionIndex(): DatInventionIndex | null {
@@ -238,19 +236,37 @@ function getImageContentType(filename: string): string {
  * Uses in-memory file index for O(1) cache lookup instead of scanning directories.
  */
 async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<void> {
-  // Handle local file:// URLs
-  if (imageUrl.startsWith('file://')) {
-    const localPath = imageUrl.substring('file://'.length);
-    try {
-      const content = await fsp.readFile(localPath);
-      res.writeHead(200, { 'Content-Type': getImageContentType(localPath) });
-      res.end(content);
-      return;
-    } catch {
-      res.writeHead(404);
-      res.end('File not found');
+  // Security: reject file:// and non-HTTP schemes (SSRF prevention)
+  if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+    res.writeHead(400);
+    res.end('Only http:// and https:// URLs are allowed');
+    return;
+  }
+
+  // Security: block requests to private/internal IP ranges
+  try {
+    const urlObj = new URL(imageUrl);
+    const hostname = urlObj.hostname;
+    if (hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '::1' ||
+        hostname === '[::1]' ||
+        hostname.startsWith('10.') ||
+        hostname.startsWith('192.168.') ||
+        hostname.startsWith('169.254.') ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+        /^fe80[:%]/i.test(hostname) ||
+        /^\[fe80[:%]/i.test(hostname) ||
+        /^fc/i.test(hostname) || /^\[fc/i.test(hostname) ||
+        /^fd/i.test(hostname) || /^\[fd/i.test(hostname)) {
+      res.writeHead(403);
+      res.end('Access to internal addresses is not allowed');
       return;
     }
+  } catch {
+    res.writeHead(400);
+    res.end('Invalid URL');
+    return;
   }
 
   // Extract filename from URL
@@ -334,7 +350,7 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
       'Cache-Control': 'public, max-age=31536000'
     });
     res.end(buffer);
-  } catch (error) {
+  } catch (error: unknown) {
     logger.warn(`Failed to fetch image ${filename}: ${toErrorMessage(error)}`);
 
     // Cache the placeholder to avoid repeated failed downloads
@@ -349,8 +365,53 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
   }
 }
 
+// Security headers applied to all HTTP responses
+function setSecurityHeaders(res: http.ServerResponse): void {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'");
+}
+
+// Simple in-memory rate limiter for sensitive endpoints
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX_AUTH = 10;       // max auth attempts per minute per IP
+const RATE_LIMIT_MAX_PROXY = 60;      // max proxy-image requests per minute per IP
+const RATE_LIMIT_MAX_ENTRIES = 10_000; // max entries before forced cleanup
+
+function checkRateLimit(ip: string, category: string, maxRequests: number): boolean {
+  const key = `${category}:${ip}`;
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+
+  if (!entry || now > entry.resetTime) {
+    // Prevent unbounded growth: evict expired entries when map is too large
+    if (rateLimitMap.size >= RATE_LIMIT_MAX_ENTRIES) {
+      for (const [k, v] of rateLimitMap) {
+        if (now > v.resetTime) rateLimitMap.delete(k);
+      }
+    }
+    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  entry.count++;
+  return entry.count <= maxRequests;
+}
+
+// Periodic cleanup of expired rate limit entries (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap) {
+    if (now > entry.resetTime) rateLimitMap.delete(key);
+  }
+}, 300_000);
+
 // 1. HTTP Server for Static Files + Image Proxy
 const server = http.createServer(async (req, res) => {
+  setSecurityHeaders(res);
   const safePath = req.url === '/' ? '/index.html' : req.url || '/index.html';
 
   // Map data API endpoint: /api/map-data/:mapname
@@ -379,7 +440,7 @@ const server = http.createServer(async (req, res) => {
     } catch (error: unknown) {
       console.error(`[MapDataService] Error loading map ${mapName}:`, error);
       res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: toErrorMessage(error) || 'Failed to load map data' }));
+      res.end(JSON.stringify({ error: 'Failed to load map data' }));
     }
     return;
   }
@@ -759,6 +820,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Rate limit proxy-image requests
+    const clientIp = (req.socket.remoteAddress || '0.0.0.0').replace('::ffff:', '');
+    if (!checkRateLimit(clientIp, 'proxy', RATE_LIMIT_MAX_PROXY)) {
+      res.writeHead(429, { 'Content-Type': 'text/plain' });
+      res.end('Too many requests');
+      return;
+    }
+
     await proxyImage(imageUrl, res);
     return;
   }
@@ -817,10 +886,10 @@ const server = http.createServer(async (req, res) => {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
         res.writeHead(404);
-        res.end(`File not found: ${relativePath}`);
+        res.end('File not found');
       } else {
         res.writeHead(500);
-        res.end('Server Error: ' + code);
+        res.end('Internal server error');
       }
     }
     return;
@@ -849,24 +918,62 @@ const server = http.createServer(async (req, res) => {
     '.png': 'image/png'
   };
 
-  fs.readFile(filePath, (err, content) => {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        res.writeHead(404);
-        res.end('File not found');
-      } else {
-        res.writeHead(500);
-        res.end('Server Error: ' + err.code);
-      }
+  try {
+    const content = await fsp.readFile(filePath);
+    res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'text/plain' });
+    res.end(content, 'utf-8');
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      res.writeHead(404);
+      res.end('File not found');
     } else {
-      res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'text/plain' });
-      res.end(content, 'utf-8');
+      res.writeHead(500);
+      res.end('Internal server error');
     }
-  });
+  }
 });
 
 // 2. WebSocket Server
-const wss = new WebSocketServer({ server });
+// Per-IP WebSocket connection tracking for rate limiting
+const wsConnectionsPerIp = new Map<string, number>();
+const WS_MAX_CONNECTIONS_PER_IP = 5;
+
+const wss = new WebSocketServer({
+  server,
+  maxPayload: 64 * 1024, // 64KB max message size
+  verifyClient: (info, callback) => {
+    // Validate Origin header to prevent Cross-Site WebSocket Hijacking
+    const origin = info.origin || info.req.headers.origin || '';
+    const host = info.req.headers.host || '';
+
+    // Allow same-origin connections and localhost development
+    const allowedOrigins = [
+      `http://${host}`,
+      `https://${host}`,
+      'http://localhost:8080',
+      'http://127.0.0.1:8080',
+    ];
+
+    if (origin && !allowedOrigins.includes(origin)) {
+      logger.warn(`[Gateway] WebSocket connection rejected: invalid origin "${origin}"`);
+      callback(false, 403, 'Forbidden: invalid origin');
+      return;
+    }
+
+    // Per-IP connection limit
+    const ip = (info.req.socket.remoteAddress || '0.0.0.0').replace('::ffff:', '');
+    const currentCount = wsConnectionsPerIp.get(ip) || 0;
+    if (currentCount >= WS_MAX_CONNECTIONS_PER_IP) {
+      logger.warn(`[Gateway] WebSocket connection rejected: too many connections from ${ip}`);
+      callback(false, 429, 'Too many connections');
+      return;
+    }
+
+    wsConnectionsPerIp.set(ip, currentCount + 1);
+    callback(true);
+  },
+});
 
 // GM Chat: track all connected WebSocket clients and their usernames
 const connectedClients = new Map<WebSocket, string>(); // ws → username
@@ -956,7 +1063,7 @@ wss.on('connection', (ws: WebSocket) => {
                 };
                 ws.send(JSON.stringify(resp));
                 console.log(`[Gateway] Capitol coords: ${coords ? `${coords.x},${coords.y}` : 'none'}`);
-              }).catch(err => {
+              }).catch((err: unknown) => {
                 console.error('[Gateway] Failed to fetch Capitol coords:', err);
               });
             } else {
@@ -965,7 +1072,7 @@ wss.on('connection', (ws: WebSocket) => {
           }
         }, 500);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('[Gateway] Message Error:', err);
       const errorResp: WsRespError = {
         type: WsMessageType.RESP_ERROR,
@@ -979,11 +1086,20 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('close', async () => {
     console.log('[Gateway] Client Disconnected');
     connectedClients.delete(ws);
+
+    // Decrement per-IP connection count
+    const wsIp = (ws as unknown as { _socket?: { remoteAddress?: string } })._socket?.remoteAddress?.replace('::ffff:', '') || '0.0.0.0';
+    const count = wsConnectionsPerIp.get(wsIp) || 0;
+    if (count <= 1) {
+      wsConnectionsPerIp.delete(wsIp);
+    } else {
+      wsConnectionsPerIp.set(wsIp, count - 1);
+    }
     // Send Logoff before cleanup to gracefully close game server session
     // Note: endSession() schedules socket closure 2 seconds after Logoff
     try {
       await spSession.endSession();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('[Gateway] Error sending Logoff on close:', err);
     }
     spSession.destroy();
@@ -994,9 +1110,32 @@ wss.on('connection', (ws: WebSocket) => {
  * Message Router — dispatches to handler modules in ws-handlers/
  */
 async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, searchMenuService: SearchMenuService | null, msg: WsMessage) {
+  // Rate limit authentication attempts
+  const authTypes: string[] = [WsMessageType.REQ_AUTH_CHECK, WsMessageType.REQ_CONNECT_DIRECTORY];
+  if (authTypes.includes(msg.type)) {
+    const ip = (ws as unknown as { _socket?: { remoteAddress?: string } })._socket?.remoteAddress?.replace('::ffff:', '') || '0.0.0.0';
+    if (!checkRateLimit(ip, 'auth', RATE_LIMIT_MAX_AUTH)) {
+      const errorResp: WsRespError = {
+        type: WsMessageType.RESP_ERROR,
+        wsRequestId: msg.wsRequestId,
+        errorMessage: 'Too many authentication attempts. Please try again later.',
+        code: ErrorCodes.ERROR_Unknown
+      };
+      ws.send(JSON.stringify(errorResp));
+      return;
+    }
+  }
+
   const handler = wsHandlerRegistry[msg.type as WsMessageType];
   if (!handler) {
     console.warn(`[Gateway] Unknown message type: ${msg.type}`);
+    const errorResp: WsRespError = {
+      type: WsMessageType.RESP_ERROR,
+      wsRequestId: msg.wsRequestId,
+      errorMessage: 'Unknown message type',
+      code: ErrorCodes.ERROR_InvalidParameter
+    };
+    ws.send(JSON.stringify(errorResp));
     return;
   }
 
@@ -1006,11 +1145,12 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
       msg,
     );
   } catch (err: unknown) {
+    // Log full details server-side, send generic message to client
     console.error('[Gateway] Request Failed:', toErrorMessage(err));
     const errorResp: WsRespError = {
       type: WsMessageType.RESP_ERROR,
       wsRequestId: msg.wsRequestId,
-      errorMessage: toErrorMessage(err) || 'Internal Server Error',
+      errorMessage: 'Internal server error',
       code: ErrorCodes.ERROR_Unknown
     };
     ws.send(JSON.stringify(errorResp));
@@ -1020,6 +1160,14 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
 // Start Server
 async function startServer() {
   try {
+    // Build in-memory caches in parallel (async I/O — non-blocking startup)
+    console.log('[Gateway] Building caches...');
+    await Promise.all([
+      buildImageFileIndex(),
+      buildIniCache(),
+      loadInventionIndex(),
+    ]);
+
     // Initialize all registered services (in dependency order)
     console.log('[Gateway] Initializing services...');
     await serviceRegistry.initialize();
@@ -1043,7 +1191,7 @@ async function startServer() {
       console.log(`[Gateway] Server running at http://localhost:${PORT}`);
       console.log(`[Gateway] Serving static files from ${PUBLIC_DIR}`);
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('[Gateway] Failed to start server:', error);
     process.exit(1);
   }

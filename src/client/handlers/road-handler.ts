@@ -16,6 +16,7 @@ import {
 import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';
 import type { ClientHandlerContext } from './client-context';
+import { setupEscapeHandler } from './handler-utils';
 
 export function toggleRoadBuildingMode(ctx: ClientHandlerContext): void {
   ctx.isRoadBuildingMode = !ctx.isRoadBuildingMode;
@@ -45,7 +46,7 @@ export function toggleRoadBuildingMode(ctx: ClientHandlerContext): void {
     }
   }
 
-  ClientBridge.setRoadBuildingMode(ctx.isRoadBuildingMode);
+  // Store is updated automatically via ctx.isRoadBuildingMode setter
 }
 
 export function cancelRoadBuildingMode(ctx: ClientHandlerContext): void {
@@ -56,7 +57,7 @@ export function cancelRoadBuildingMode(ctx: ClientHandlerContext): void {
     renderer.setRoadDrawingMode(false);
   }
 
-  ClientBridge.setRoadBuildingMode(false);
+  // Store is updated automatically via ctx.isRoadBuildingMode setter
   ClientBridge.log('Road', 'Road building mode cancelled');
 }
 
@@ -105,13 +106,10 @@ async function buildRoadSegment(ctx: ClientHandlerContext, x1: number, y1: numbe
 }
 
 function setupRoadBuildingKeyboardHandler(ctx: ClientHandlerContext): void {
-  const handler = (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && ctx.isRoadBuildingMode) {
-      cancelRoadBuildingMode(ctx);
-      document.removeEventListener('keydown', handler);
-    }
-  };
-  document.addEventListener('keydown', handler);
+  setupEscapeHandler(
+    () => ctx.isRoadBuildingMode,
+    () => cancelRoadBuildingMode(ctx),
+  );
 }
 
 // ── Road Demolition ─────────────────────────────────────────────────────────
@@ -148,7 +146,7 @@ export function toggleRoadDemolishMode(ctx: ClientHandlerContext): void {
     }
   }
 
-  ClientBridge.setRoadDemolishMode(ctx.isRoadDemolishMode);
+  // Store is updated automatically via ctx.isRoadDemolishMode setter
 }
 
 export function cancelRoadDemolishMode(ctx: ClientHandlerContext): void {
@@ -161,7 +159,7 @@ export function cancelRoadDemolishMode(ctx: ClientHandlerContext): void {
     renderer.setCancelRoadDemolishCallback(null);
   }
 
-  ClientBridge.setRoadDemolishMode(false);
+  // Store is updated automatically via ctx.isRoadDemolishMode setter
 }
 
 async function demolishRoadAt(ctx: ClientHandlerContext, x: number, y: number): Promise<void> {

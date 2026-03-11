@@ -6,13 +6,18 @@
  * Keyboard shortcuts are registered globally here.
  */
 
+import { lazy, Suspense } from 'react';
 import { useGameStore } from './store';
 import { LoginScreen } from './layouts/LoginScreen';
 import { GameScreen } from './layouts/GameScreen';
 import { ToastContainer } from './components/common';
-import { CompanyCreationModal } from './components/modals';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useClient } from './context';
+
+// Lazy-loaded modal — not needed on initial render
+const CompanyCreationModal = lazy(() =>
+  import('./components/modals/CompanyCreationModal').then(m => ({ default: m.CompanyCreationModal }))
+);
 
 export function App() {
   const status = useGameStore((s) => s.status);
@@ -24,7 +29,9 @@ export function App() {
   return (
     <>
       {status !== 'connected' ? <LoginScreen /> : <GameScreen />}
-      <CompanyCreationModal />
+      <Suspense fallback={null}>
+        <CompanyCreationModal />
+      </Suspense>
       <ToastContainer />
     </>
   );

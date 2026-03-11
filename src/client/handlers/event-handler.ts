@@ -137,7 +137,7 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
           if (refreshedDetails) {
             ClientBridge.updateBuildingDetails(refreshedDetails);
           }
-        }).catch(err => {
+        }).catch((err: unknown) => {
           ClientBridge.log('Error', `Failed to refresh building: ${toErrorMessage(err)}`);
         });
       }
@@ -172,7 +172,7 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
       ClientBridge.log('Period', 'Financial period ended — refreshing data');
       ctx.showNotification('Financial period ended', 'info');
       ctx.soundManager.play('period-end');
-      ctx.getProfile().catch(err => {
+      ctx.getProfile().catch((err: unknown) => {
         ClientBridge.log('Error', `Failed to refresh tycoon data: ${toErrorMessage(err)}`);
       });
       break;
@@ -209,7 +209,7 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
           if (refreshedDetails) {
             ClientBridge.updateBuildingDetails(refreshedDetails);
           }
-        }).catch(err => {
+        }).catch((err: unknown) => {
           ClientBridge.log('Error', `Failed to refresh building after cache invalidation: ${toErrorMessage(err)}`);
         });
       }

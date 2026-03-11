@@ -140,7 +140,9 @@ export class GameObjectTextureCache {
     const entry = this.cache.get(key);
 
     if (entry && entry.texture) {
-      entry.lastAccess = ++this.accessCounter;
+      // Move to end of Map iteration order (insertion-order LRU)
+      this.cache.delete(key);
+      this.cache.set(key, entry);
       this.hits++;
       return entry.texture;
     }
@@ -168,9 +170,10 @@ export class GameObjectTextureCache {
     const entry = this.cache.get(key);
 
     if (entry) {
-      entry.lastAccess = ++this.accessCounter;
-
       if (entry.texture) {
+        // Move to end of Map iteration order (insertion-order LRU)
+        this.cache.delete(key);
+        this.cache.set(key, entry);
         this.hits++;
         return entry.texture;
       }
@@ -233,7 +236,7 @@ export class GameObjectTextureCache {
       }
 
       return texture;
-    } catch (error) {
+    } catch (error: unknown) {
       // Remove failed entry
       this.cache.delete(key);
       return null;
@@ -286,7 +289,7 @@ export class GameObjectTextureCache {
       }
 
       return createImageBitmap(blob);
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn(`[GameObjectTextureCache] Failed to load ${category}/${name}:`, error);
       return null;
     }
@@ -355,7 +358,7 @@ export class GameObjectTextureCache {
           ? { frames: animFrames, totalDuration }
           : null,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('[GameObjectTextureCache] GIF decode failed:', error);
       return null;
     }
@@ -395,31 +398,29 @@ export class GameObjectTextureCache {
    */
   private evictIfNeeded(): void {
     while (this.cache.size > this.maxSize) {
-      let oldestKey: string | null = null;
-      let oldestAccess = Infinity;
+      // Insertion-order LRU: first key in Map is the oldest accessed
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey === undefined) break;
 
-      for (const [key, entry] of this.cache) {
-        if (!entry.loading && entry.lastAccess < oldestAccess) {
-          oldestAccess = entry.lastAccess;
-          oldestKey = key;
-        }
-      }
-
-      if (oldestKey) {
-        const entry = this.cache.get(oldestKey);
-        if (entry?.texture) {
-          entry.texture.close();
-        }
-        if (entry?.animatedTexture) {
-          for (const frame of entry.animatedTexture.frames) {
-            frame.bitmap.close();
-          }
-        }
-        this.cache.delete(oldestKey);
-        this.evictions++;
-      } else {
+      const entry = this.cache.get(firstKey);
+      // Skip entries still loading (move to end and try next)
+      if (entry?.loading) {
+        this.cache.delete(firstKey);
+        this.cache.set(firstKey, entry);
+        // Safety: if all entries are loading, stop to prevent infinite loop
         break;
       }
+
+      if (entry?.texture) {
+        entry.texture.close();
+      }
+      if (entry?.animatedTexture) {
+        for (const frame of entry.animatedTexture.frames) {
+          frame.bitmap.close();
+        }
+      }
+      this.cache.delete(firstKey);
+      this.evictions++;
     }
   }
 
@@ -476,7 +477,7 @@ export class GameObjectTextureCache {
       this.atlases.set(category, { image, manifest });
 
       console.log(`[GameObjectTextureCache] Loaded ${category} atlas (${Object.keys(manifest.tiles).length} textures)`);
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn(`[GameObjectTextureCache] Failed to load ${category} atlas:`, error);
     }
   }

@@ -100,12 +100,12 @@ export function loadAlignedMapAreaForRect(ctx: ClientHandlerContext, x1: number,
 
 export function toggleCityZones(ctx: ClientHandlerContext): void {
   ctx.isCityZonesEnabled = !ctx.isCityZonesEnabled;
-  ClientBridge.setCityZonesEnabled(ctx.isCityZonesEnabled);
+  // Store is updated automatically via ctx.isCityZonesEnabled setter
   ClientBridge.log('Zones', `City Zones overlay ${ctx.isCityZonesEnabled ? 'enabled' : 'disabled'}`);
 
   if (ctx.isCityZonesEnabled && ctx.activeOverlayType !== null) {
     ctx.activeOverlayType = null;
-    ClientBridge.setActiveOverlay(null);
+    // Store is updated automatically via ctx.activeOverlayType setter
     toggleZoneOverlay(ctx, false, SurfaceType.ZONES);
   }
 
@@ -127,7 +127,7 @@ export function setOverlay(ctx: ClientHandlerContext, surfaceType: SurfaceType |
   }
 
   ctx.activeOverlayType = surfaceType;
-  ClientBridge.setActiveOverlay(surfaceType);
+  // Store is updated automatically via ctx.activeOverlayType setter
 
   if (surfaceType === null) {
     ClientBridge.log('Overlay', 'Overlay disabled');
@@ -136,7 +136,7 @@ export function setOverlay(ctx: ClientHandlerContext, surfaceType: SurfaceType |
 
   if (ctx.isCityZonesEnabled) {
     ctx.isCityZonesEnabled = false;
-    ClientBridge.setCityZonesEnabled(false);
+    // Store is updated automatically via ctx.isCityZonesEnabled setter
     ClientBridge.log('Zones', 'City Zones disabled (overlay activated)');
   }
 

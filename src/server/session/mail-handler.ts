@@ -153,7 +153,7 @@ export async function composeMail(
       args: [RdoValue.int(parseInt(msgId, 10)).toString()],
       separator: '*'  // void procedure (Delphi: procedure CloseMessage)
     });
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after post:', e);
   }
 
@@ -251,7 +251,7 @@ export async function saveDraft(
       args: [RdoValue.int(parseInt(msgId, 10)).toString()],
       separator: '*'  // void procedure (Delphi: procedure CloseMessage)
     });
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after save:', e);
   }
 
@@ -356,7 +356,7 @@ export async function readMailMessage(
         args: [RdoValue.int(parseInt(msgId, 10)).toString()],
         separator: '*'  // void procedure (Delphi: procedure CloseMessage)
       });
-    } catch (e) {
+    } catch (e: unknown) {
       ctx.log.warn('[Mail] Failed to close message:', e);
     }
   }
@@ -458,7 +458,7 @@ export async function getMailFolder(
     const html = await response.text();
     const folderType = folder as MailFolder;
     return parseMessageListHtml(html, folderType);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.error('[Mail] Failed to fetch folder listing:', toErrorMessage(e));
     return [];
   }

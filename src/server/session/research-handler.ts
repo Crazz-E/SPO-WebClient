@@ -10,7 +10,7 @@ import type { ResearchCategoryData, ResearchInventionDetails } from '../../share
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue } from '../../shared/rdo-types';
 import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
-import { parseResearchItems } from '../spo_session';
+import { parseResearchItems } from './session-utils';
 
 /**
  * Fetch the full research inventory (available / developing / completed) for

@@ -22,6 +22,9 @@ import {
 export class RdoFramer {
   private buffer: string = '';
 
+  /** Maximum buffer size (5MB) to prevent memory exhaustion from malformed packets */
+  private static readonly MAX_BUFFER_SIZE = 5 * 1024 * 1024;
+
   /**
    * Find the next unquoted semicolon delimiter position.
    * Per Delphi's KeyWordPos (RDOUtils.pas), semicolons inside "..." are skipped.
@@ -41,6 +44,14 @@ export class RdoFramer {
 
   public ingest(chunk: Buffer | string): string[] {
     this.buffer += chunk.toString('latin1');
+
+    // Guard against unbounded buffer growth (malformed packets with unclosed quotes)
+    if (this.buffer.length > RdoFramer.MAX_BUFFER_SIZE) {
+      console.error(`[RdoFramer] Buffer exceeded ${RdoFramer.MAX_BUFFER_SIZE} bytes, clearing to prevent memory exhaustion`);
+      this.buffer = '';
+      return [];
+    }
+
     const messages: string[] = [];
     let delimiterIndex: number;
 

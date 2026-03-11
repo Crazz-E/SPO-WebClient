@@ -18,7 +18,7 @@ import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
 import { splitMultilinePayload as splitMultilinePayloadHelper } from '../rdo-helpers';
-import { parseFavoritesResponse } from '../spo_session';
+import { parseFavoritesResponse } from './session-utils';
 import { toErrorMessage } from '../../shared/error-utils';
 import { config } from '../../shared/config';
 import fetch from 'node-fetch';
@@ -57,7 +57,7 @@ async function fetchMayorDataFromBuilding(ctx: SessionContext, x: number, y: num
       yearsToElections: parseInt(values[4]) || 0,
       campaignCount: parseInt(values[5]) || 0,
     };
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.debug(`[Politics] Could not fetch mayor data from building: ${toErrorMessage(e)}`);
   }
   return { mayorName: '', mayorPrestige: 0, mayorRating: 0, tycoonsRating: 0, yearsToElections: 0, campaignCount: 0 };
@@ -229,7 +229,7 @@ export async function getPoliticsData(
       const tycoonsResp = await fetch(tycoonsUrl, { redirect: 'follow' });
       const tycoonsHtml = await tycoonsResp.text();
       tycoonsRatings = parsePoliticsRatings(tycoonsHtml);
-    } catch (e) {
+    } catch (e: unknown) {
       ctx.log.debug(`[Politics] Tycoons ratings fetch failed: ${toErrorMessage(e)}`);
     }
 
@@ -258,7 +258,7 @@ export async function getPoliticsData(
       canLaunchCampaign,
       campaignMessage,
     };
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn(`[Politics] Failed to fetch politics data: ${toErrorMessage(e)}`);
     return getDefaultPoliticsData(townName);
   }
@@ -303,7 +303,7 @@ export async function politicsVote(
     await new Promise(resolve => setTimeout(resolve, 200));
 
     return { success: true, message: `Voted for ${candidateName}` };
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn(`[Politics] Vote failed: ${toErrorMessage(e)}`);
     return { success: false, message: toErrorMessage(e) };
   }
@@ -330,7 +330,7 @@ export async function politicsLaunchCampaign(
     const resp = await fetch(url, { redirect: 'follow' });
     const html = await resp.text();
     return parseCampaignResponse(html);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn(`[Politics] LaunchCampaign failed: ${toErrorMessage(e)}`);
     return { success: false, message: toErrorMessage(e) };
   }
@@ -356,7 +356,7 @@ export async function politicsCancelCampaign(
     const resp = await fetch(url, { redirect: 'follow' });
     const html = await resp.text();
     return parseCampaignResponse(html);
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn(`[Politics] CancelCampaign failed: ${toErrorMessage(e)}`);
     return { success: false, message: toErrorMessage(e) };
   }
@@ -413,7 +413,7 @@ export async function searchConnections(
     const results = parseRdoConnectionResults(packet.payload || '', direction);
     ctx.log.debug(`[Connections] ${method} returned ${results.length} results`);
     return results;
-  } catch (e) {
+  } catch (e: unknown) {
     ctx.log.warn(`[Connections] ${direction} search failed: ${toErrorMessage(e)}`);
     return [];
   }

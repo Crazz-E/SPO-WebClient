@@ -13,6 +13,7 @@
  * - CommandPalette (z-500)
  */
 
+import { lazy, Suspense } from 'react';
 import { useUiStore } from '../store';
 import { InfoWidget, LeftRail, RightRail, StatusTicker, VersionBadge } from '../components/hud';
 import { RightPanel, LeftPanel } from '../components/panels';
@@ -23,13 +24,21 @@ import { MailPanel } from '../components/mail';
 import { SearchPanel } from '../components/search';
 import { TransportPanel } from '../components/transport';
 import { OverlayMenu } from '../components/hud/OverlayMenu';
-import { BuildMenu, BuildingInspectorModal, ChangelogModal, ConnectionPickerModal, ServerSwitchOverlay, SettingsDialog, SupplierSearchModal, ZoneTypePicker } from '../components/modals';
+import { ServerSwitchOverlay, ZoneTypePicker } from '../components/modals';
 import { useChangelogCheck } from '../hooks/useChangelogCheck';
 import { CommandPalette } from '../components/command-palette';
 import { MobileShell } from '../components/mobile';
 import { ErrorBoundary, ConfirmDialog, PromptDialog } from '../components/common';
 import { User, Heart, Layers } from 'lucide-react';
 import type { ReactNode } from 'react';
+
+// Lazy-loaded modals — not needed on initial render
+const BuildMenu = lazy(() => import('../components/modals/BuildMenu').then(m => ({ default: m.BuildMenu })));
+const BuildingInspectorModal = lazy(() => import('../components/modals/BuildingInspectorModal').then(m => ({ default: m.BuildingInspectorModal })));
+const ChangelogModal = lazy(() => import('../components/modals/ChangelogModal').then(m => ({ default: m.ChangelogModal })));
+const ConnectionPickerModal = lazy(() => import('../components/modals/ConnectionPickerModal').then(m => ({ default: m.ConnectionPickerModal })));
+const SettingsDialog = lazy(() => import('../components/modals/SettingsDialog').then(m => ({ default: m.SettingsDialog })));
+const SupplierSearchModal = lazy(() => import('../components/modals/SupplierSearchModal').then(m => ({ default: m.SupplierSearchModal })));
 
 /** Config for each left panel type */
 const LEFT_PANEL_CONFIG: Record<string, { title: string; icon: ReactNode }> = {
@@ -123,14 +132,16 @@ export function GameScreen() {
         </ErrorBoundary>
       </LeftPanel>
 
-      {/* Modals — z-400 */}
-      <BuildingInspectorModal />
-      <BuildMenu />
-      <ConnectionPickerModal />
-      <SupplierSearchModal />
-      <SettingsDialog />
+      {/* Modals — z-400 (lazy-loaded, not needed on initial render) */}
+      <Suspense fallback={null}>
+        <BuildingInspectorModal />
+        <BuildMenu />
+        <ConnectionPickerModal />
+        <SupplierSearchModal />
+        <SettingsDialog />
+        <ChangelogModal />
+      </Suspense>
       <ZoneTypePicker />
-      <ChangelogModal />
 
       {/* Confirm Dialog — z-400 */}
       {modal === 'confirm' && confirmPayload && (

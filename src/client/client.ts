@@ -178,18 +178,24 @@ export class StarpeaceClient implements ClientHandlerContext {
   public isJoiningChannel: boolean = false;
   public isSelectingCompany: boolean = false;
 
-  // Road building state
-  public isRoadBuildingMode: boolean = false;
+  // Road building state — delegated to game-store (single source of truth)
+  public get isRoadBuildingMode(): boolean { return useGameStore.getState().isRoadBuildingMode; }
+  public set isRoadBuildingMode(v: boolean) { useGameStore.getState().setRoadBuildingMode(v); }
   public isBuildingRoad: boolean = false;
-  public isRoadDemolishMode: boolean = false;
+  public get isRoadDemolishMode(): boolean { return useGameStore.getState().isRoadDemolishMode; }
+  public set isRoadDemolishMode(v: boolean) { useGameStore.getState().setRoadDemolishMode(v); }
 
-  // Zone painting state
-  public isZonePaintingMode: boolean = false;
-  public selectedZoneType: number = 2;
+  // Zone painting state — delegated to game-store (single source of truth)
+  public get isZonePaintingMode(): boolean { return useGameStore.getState().isZonePaintingMode; }
+  public set isZonePaintingMode(v: boolean) { useGameStore.getState().setZonePaintingMode(v); }
+  public get selectedZoneType(): number { return useGameStore.getState().selectedZoneType; }
+  public set selectedZoneType(v: number) { useGameStore.getState().setSelectedZoneType(v); }
 
-  // Overlay state
-  public isCityZonesEnabled: boolean = false;
-  public activeOverlayType: SurfaceType | null = null;
+  // Overlay state — delegated to game-store (single source of truth)
+  public get isCityZonesEnabled(): boolean { return useGameStore.getState().isCityZonesEnabled; }
+  public set isCityZonesEnabled(v: boolean) { useGameStore.getState().setCityZonesEnabled(v); }
+  public get activeOverlayType(): SurfaceType | null { return useGameStore.getState().activeOverlay; }
+  public set activeOverlayType(v: SurfaceType | null) { useGameStore.getState().setActiveOverlay(v); }
 
   // Speculative prefetch
   public speculativeBuildingDetails = new Map<string, Promise<BuildingDetailsResponse | null>>();
@@ -214,6 +220,7 @@ export class StarpeaceClient implements ClientHandlerContext {
 
   private cameraUpdateTimer: ReturnType<typeof setTimeout> | null = null;
   private viewportHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private beforeUnloadHandler: (() => void) | null = null;
   private debugWire: SpoDebugWire; // [E2E-DEBUG]
 
   constructor() {
@@ -716,13 +723,14 @@ export class StarpeaceClient implements ClientHandlerContext {
       try {
         const msg: WsMessage = JSON.parse(event.data);
         this.handleMessage(msg);
-      } catch (e) {
+      } catch (e: unknown) {
         console.error('[Client] Failed to parse message:', e);
       }
     };
 
     this.ws.onclose = () => {
       this.isConnected = false;
+      this.cleanupTimers();
       ClientBridge.log('System', 'Gateway Disconnected.');
       ClientBridge.setDisconnected();
     };
@@ -733,9 +741,10 @@ export class StarpeaceClient implements ClientHandlerContext {
     };
 
     // Send logout on page close
-    window.addEventListener('beforeunload', () => {
+    this.beforeUnloadHandler = () => {
       this.sendLogoutBeacon();
-    });
+    };
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
   }
 
   private handleMessage(msg: WsMessage) {
@@ -770,6 +779,21 @@ export class StarpeaceClient implements ClientHandlerContext {
     dispatchEvent(this, msg);
   }
 
+  private cleanupTimers(): void {
+    if (this.viewportHeartbeatTimer !== null) {
+      clearInterval(this.viewportHeartbeatTimer);
+      this.viewportHeartbeatTimer = null;
+    }
+    if (this.cameraUpdateTimer !== null) {
+      clearTimeout(this.cameraUpdateTimer);
+      this.cameraUpdateTimer = null;
+    }
+    if (this.beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+      this.beforeUnloadHandler = null;
+    }
+  }
+
   private sendCameraPositionDebounced(): void {
     if (this.cameraUpdateTimer !== null) {
       clearTimeout(this.cameraUpdateTimer);
@@ -786,7 +810,7 @@ export class StarpeaceClient implements ClientHandlerContext {
     try {
       const req = { type: WsMessageType.REQ_LOGOUT };
       this.ws.send(JSON.stringify(req));
-    } catch (_err) {
+    } catch (_err: unknown) {
       // Ignore errors during page unload
     }
   }
@@ -806,7 +830,7 @@ export class StarpeaceClient implements ClientHandlerContext {
           );
           canvasHasContent = sample.data[3] > 0;
         }
-      } catch (_) { /* security or empty canvas */ }
+      } catch (_: unknown) { /* security or empty canvas */ }
     }
 
     const uiState = useUiStore.getState();

@@ -78,7 +78,7 @@ export class BuildingDataService implements Service {
       this.initialized = true;
       logger.info('[BuildingDataService] Initialization complete');
       this.logStats();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('[BuildingDataService] Initialization failed:', error);
       throw error;
     }
