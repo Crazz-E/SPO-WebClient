@@ -1230,24 +1230,65 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
 // Start Server
 async function startServer() {
   try {
-    // Build in-memory caches in parallel (async I/O — non-blocking startup)
-    console.log('[Gateway] Building caches...');
-    await Promise.all([
-      buildImageFileIndex(),
-      buildIniCache(),
-      loadInventionIndex(),
-    ]);
-
-    // Start HTTP server FIRST so /api/startup-status is reachable during warm-up
+    // Start HTTP server FIRST so /api/startup-status SSE is reachable during cache building
     await new Promise<void>((resolve) => {
       server.listen(PORT, () => {
-        console.log(`[Gateway] HTTP server listening on port ${PORT} (initializing services...)`);
+        console.log(`[Gateway] HTTP server listening on port ${PORT} (initializing...)`);
         resolve();
       });
     });
 
     // Setup graceful shutdown handlers (SIGTERM, SIGINT)
     setupGracefulShutdown(serviceRegistry, server);
+
+    // Build in-memory caches with granular progress reporting via SSE
+    const cacheSteps: import('./service-registry').CacheStepEntry[] = [
+      { name: 'inventionIndex', label: 'Parsing research data', status: 'pending' },
+      { name: 'imageIndex', label: 'Indexing image files', status: 'pending' },
+      { name: 'iniCache', label: 'Loading configuration', status: 'pending' },
+    ];
+
+    const emitCacheProgress = (message: string) => {
+      const pendingServices = serviceRegistry.getServiceNames().map(name => ({
+        name,
+        status: 'pending' as const,
+        progress: 0,
+      }));
+      serviceRegistry.emit('startup-progress', {
+        phase: 'initializing',
+        progress: 0,
+        message,
+        services: pendingServices,
+        cacheSteps: [...cacheSteps],
+      } satisfies import('./service-registry').StartupProgressEvent);
+    };
+
+    console.log('[Gateway] Building caches...');
+    emitCacheProgress('Building file indexes...');
+
+    await Promise.all([
+      (async () => {
+        cacheSteps[0].status = 'running';
+        emitCacheProgress('Parsing research data...');
+        await loadInventionIndex();
+        cacheSteps[0].status = 'complete';
+        emitCacheProgress('Research data ready');
+      })(),
+      (async () => {
+        cacheSteps[1].status = 'running';
+        emitCacheProgress('Indexing image files...');
+        await buildImageFileIndex();
+        cacheSteps[1].status = 'complete';
+        emitCacheProgress('Image index ready');
+      })(),
+      (async () => {
+        cacheSteps[2].status = 'running';
+        emitCacheProgress('Loading configuration...');
+        await buildIniCache();
+        cacheSteps[2].status = 'complete';
+        emitCacheProgress('Configuration ready');
+      })(),
+    ]);
 
     // Initialize services — facilities/textures/mapData run in parallel (same depth)
     console.log('[Gateway] Initializing services...');

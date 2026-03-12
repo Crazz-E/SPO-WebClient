@@ -223,6 +223,19 @@ export async function selectCompanyAndStart(ctx: ClientHandlerContext, companyId
       }
     }
 
+    // Wait for visible viewport chunks to load before dismissing the overlay.
+    // This prevents the user seeing an empty/blue canvas while chunks stream in.
+    const rendererForChunks = ctx.getRenderer();
+    if (rendererForChunks) {
+      ClientBridge.setMapLoadingProgress({ progress: 0.95, message: 'Loading terrain...' });
+      const zoomLevel = 2; // Default zoom on login
+      const visibleChunks = rendererForChunks.getVisibleChunkCoords(zoomLevel);
+      const chunkCache = rendererForChunks.getChunkCache();
+      if (chunkCache && visibleChunks.length > 0) {
+        await chunkCache.awaitChunksReady(visibleChunks, zoomLevel);
+      }
+    }
+
     // Chat init runs AFTER terrain + facility dims are loaded.
     // initChatChannels() makes 3 sequential sendRequest() calls internally — launching
     // it concurrently with preloadFacilityDimensions() overwhelmed the RDO connection

@@ -108,6 +108,11 @@
 .serviceStatus {
   font-size: var(--text-xs);
   color: var(--text-muted);
+  max-width: 60%;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Status colour overrides */

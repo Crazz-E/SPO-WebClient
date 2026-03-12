@@ -164,6 +164,10 @@ export class ChunkCache {
   // Callback when chunk becomes ready
   private onChunkReady: (() => void) | null = null;
 
+  // Pending await for viewport-ready loading
+  private pendingAwait: { keys: Set<string>; resolve: () => void } | null = null;
+  private pendingAwaitTimeout: ReturnType<typeof setTimeout> | null = null;
+
   constructor(
     textureCache: TextureCache,
     getTextureId: (x: number, y: number) => number
@@ -476,6 +480,9 @@ export class ChunkCache {
       // Evict if needed
       this.evictIfNeeded(zoomLevel);
 
+      // Check if this chunk satisfies a pending awaitChunksReady() call
+      this.checkPendingAwait(key);
+
       // Notification is batched in processRenderQueue()
 
       const total = tDraw - t0;
@@ -614,6 +621,9 @@ export class ChunkCache {
 
     // Evict if needed
     this.evictIfNeeded(zoomLevel);
+
+    // Check if this chunk satisfies a pending awaitChunksReady() call
+    this.checkPendingAwait(key);
 
     // Notification is batched in processRenderQueue()
   }
@@ -758,6 +768,72 @@ export class ChunkCache {
   }
 
   /**
+   * Wait for specific chunks to become ready.
+   * Triggers loading for each chunk via getChunkSync(), then returns a Promise
+   * that resolves once all specified chunks have entry.ready === true.
+   * Includes a safety timeout (default 15s) to prevent infinite waiting.
+   */
+  awaitChunksReady(
+    chunks: Array<{ i: number; j: number }>,
+    zoomLevel: number,
+    timeoutMs: number = 15_000
+  ): Promise<void> {
+    const cache = this.caches.get(zoomLevel);
+    if (!cache) return Promise.resolve();
+
+    // Determine which chunks are not yet ready
+    const pendingKeys = new Set<string>();
+    for (const { i, j } of chunks) {
+      const key = this.getKey(i, j);
+      const entry = cache.get(key);
+      if (!entry || !entry.ready) {
+        pendingKeys.add(key);
+      }
+    }
+
+    // All already ready — resolve immediately
+    if (pendingKeys.size === 0) return Promise.resolve();
+
+    // Trigger loading for all pending chunks
+    for (const { i, j } of chunks) {
+      const key = this.getKey(i, j);
+      if (pendingKeys.has(key)) {
+        this.getChunkSync(i, j, zoomLevel);
+      }
+    }
+
+    return new Promise<void>((resolve) => {
+      this.pendingAwait = { keys: pendingKeys, resolve };
+
+      // Safety timeout — resolve even if some chunks fail
+      this.pendingAwaitTimeout = setTimeout(() => {
+        if (this.pendingAwait) {
+          console.warn(`[ChunkCache] awaitChunksReady timed out with ${this.pendingAwait.keys.size} chunks remaining`);
+          this.pendingAwait.resolve();
+          this.pendingAwait = null;
+          this.pendingAwaitTimeout = null;
+        }
+      }, timeoutMs);
+    });
+  }
+
+  /**
+   * Check if a newly-ready chunk satisfies a pending awaitChunksReady() call.
+   */
+  private checkPendingAwait(key: string): void {
+    if (!this.pendingAwait) return;
+    this.pendingAwait.keys.delete(key);
+    if (this.pendingAwait.keys.size === 0) {
+      if (this.pendingAwaitTimeout !== null) {
+        clearTimeout(this.pendingAwaitTimeout);
+        this.pendingAwaitTimeout = null;
+      }
+      this.pendingAwait.resolve();
+      this.pendingAwait = null;
+    }
+  }
+
+  /**
    * LRU eviction for a specific zoom level
    */
   private evictIfNeeded(zoomLevel: number): void {
@@ -804,6 +880,15 @@ export class ChunkCache {
     if (this.chunkReadyTimer !== null) {
       clearTimeout(this.chunkReadyTimer);
       this.chunkReadyTimer = null;
+    }
+    // Cancel any pending awaitChunksReady
+    if (this.pendingAwait) {
+      if (this.pendingAwaitTimeout !== null) {
+        clearTimeout(this.pendingAwaitTimeout);
+        this.pendingAwaitTimeout = null;
+      }
+      this.pendingAwait.resolve();
+      this.pendingAwait = null;
     }
     this.stats = {
       chunksRendered: 0,

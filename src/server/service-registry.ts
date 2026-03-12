@@ -14,12 +14,18 @@ import { EventEmitter } from 'events';
  * Service lifecycle interface
  * Services can optionally implement these methods for managed lifecycle
  */
+/**
+ * Callback for services to report sub-step progress during initialization.
+ * @param subStep - User-friendly description (e.g. "Step 2/4: Scanning local cache")
+ */
+export type SubProgressCallback = (subStep: string) => void;
+
 export interface Service {
   /** Service name for logging and identification */
   readonly name: string;
 
-  /** Initialize the service (called during startup) */
-  initialize?(): Promise<void>;
+  /** Initialize the service (called during startup). Optional reportProgress for sub-step updates. */
+  initialize?(reportProgress?: SubProgressCallback): Promise<void>;
 
   /** Shutdown the service gracefully */
   shutdown?(): Promise<void>;
@@ -43,6 +49,17 @@ export interface ServiceStatusEntry {
   name: string;
   status: ServiceStatus;
   progress: number;
+  /** Optional sub-step description (e.g. "Step 2/4: Scanning local cache") */
+  subStep?: string;
+}
+
+/**
+ * Pre-service cache-building step entry
+ */
+export interface CacheStepEntry {
+  name: string;
+  label: string;
+  status: 'pending' | 'running' | 'complete';
 }
 
 /**
@@ -53,6 +70,8 @@ export interface StartupProgressEvent {
   progress: number;   // 0–1
   message: string;
   services: ServiceStatusEntry[];
+  /** Pre-service cache-building steps (present only during cache phase) */
+  cacheSteps?: CacheStepEntry[];
 }
 
 /**
@@ -162,6 +181,8 @@ export class ServiceRegistry extends EventEmitter {
     const statuses = new Map<string, ServiceStatus>();
     for (const name of this.services.keys()) statuses.set(name, 'pending');
 
+    const subSteps = new Map<string, string>();
+
     const buildProgressEvent = (message: string): StartupProgressEvent => {
       let completedWeight = 0;
       for (const [name, status] of statuses) {
@@ -175,6 +196,7 @@ export class ServiceRegistry extends EventEmitter {
           name,
           status,
           progress: status === 'complete' ? 1 : 0,
+          subStep: subSteps.get(name),
         })),
       };
     };
@@ -193,8 +215,15 @@ export class ServiceRegistry extends EventEmitter {
         if (service.initialize) {
           console.log(`[ServiceRegistry] Initializing ${name}...`);
           const start = Date.now();
+
+          // Sub-progress callback for granular status updates
+          const reportProgress: SubProgressCallback = (subStep: string) => {
+            subSteps.set(name, subStep);
+            this.emit('startup-progress', buildProgressEvent(startMsg));
+          };
+
           try {
-            await service.initialize();
+            await service.initialize(reportProgress);
             const elapsed = Date.now() - start;
             console.log(`[ServiceRegistry] ${name} initialized (${elapsed}ms)`);
           } catch (error: unknown) {

@@ -76,7 +76,7 @@ export class UpdateService implements Service {
    * Service interface: Initialize the service
    * Calls syncAll() to synchronize with update server
    */
-  async initialize(): Promise<void> {
+  async initialize(reportProgress?: (subStep: string) => void): Promise<void> {
     if (this.initialized) {
       logger.info('[UpdateService] Already initialized');
       return;
@@ -90,7 +90,7 @@ export class UpdateService implements Service {
       throw new Error('CAB extraction not available. Install 7zip-min: npm install 7zip-min');
     }
 
-    await this.syncAll();
+    await this.syncAll(reportProgress);
     this.initialized = true;
   }
 
@@ -468,7 +468,7 @@ export class UpdateService implements Service {
   /**
    * Synchronize cache with remote server
    */
-  async syncAll(): Promise<void> {
+  async syncAll(reportProgress?: (subStep: string) => void): Promise<void> {
     logger.info('[UpdateService] Starting automatic synchronization...');
     this.stats = { downloaded: 0, deleted: 0, skipped: 0, failed: 0, extracted: 0 };
 
@@ -482,12 +482,14 @@ export class UpdateService implements Service {
 
     // Step 1: Discover remote structure
     logger.info('[UpdateService] Step 1/4: Discovering remote structure...');
+    reportProgress?.('Discovering remote files (1/4)');
     const remoteItems = await this.discoverRemoteStructure();
     const remoteFiles = remoteItems.filter(i => i.type === 'file');
     const remoteDirs = remoteItems.filter(i => i.type === 'directory');
 
     // Step 2: Build local inventory
     logger.info('[UpdateService] Step 2/4: Scanning local cache...');
+    reportProgress?.('Scanning local cache (2/4)');
     const localItems = this.buildLocalInventory();
     const localFiles = localItems.filter(p => {
       const fullPath = path.join(this.CACHE_ROOT, p);
@@ -503,6 +505,7 @@ export class UpdateService implements Service {
 
     // Step 3: Download missing files and extract CAB files
     logger.info('[UpdateService] Step 3/4: Downloading missing files and extracting CABs...');
+    reportProgress?.('Downloading & extracting files (3/4)');
     const remoteFilePaths = new Set(remoteFiles.map(f => f.path));
 
     for (const remoteFile of remoteFiles) {
@@ -573,6 +576,7 @@ export class UpdateService implements Service {
 
     // Step 4: Remove orphaned files (files that exist locally but not on remote)
     logger.info('[UpdateService] Step 4/4: Removing orphaned files...');
+    reportProgress?.('Cleaning up orphaned files (4/4)');
 
     for (const localFile of localFiles) {
       if (this.isExcluded(localFile)) {

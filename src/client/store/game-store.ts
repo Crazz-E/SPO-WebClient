@@ -41,7 +41,8 @@ export interface ServerStartupState {
   ready: boolean;
   progress: number;
   message: string;
-  services: Array<{ name: string; status: ServiceStatus; progress: number }>;
+  services: Array<{ name: string; status: ServiceStatus; progress: number; subStep?: string }>;
+  cacheSteps?: Array<{ name: string; label: string; status: 'pending' | 'running' | 'complete' }>;
 }
 
 export interface MapLoadingState {

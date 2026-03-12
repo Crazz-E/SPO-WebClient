@@ -1735,6 +1735,33 @@ export class IsometricMapRenderer {
   }
 
   /**
+   * Get the ChunkCache instance (for awaiting viewport readiness).
+   */
+  public getChunkCache(): import('./chunk-cache').ChunkCache | null {
+    return this.terrainRenderer.getChunkCache();
+  }
+
+  /**
+   * Get an array of chunk coordinates currently visible in the viewport.
+   * Used to wait for all viewport chunks to be ready before dismissing the loading screen.
+   */
+  public getVisibleChunkCoords(zoomLevel: number): Array<{ i: number; j: number }> {
+    const chunkCache = this.terrainRenderer.getChunkCache();
+    if (!chunkCache) return [];
+
+    const tileBounds = this.getVisibleTileBounds();
+    const { minChunkI, maxChunkI, minChunkJ, maxChunkJ } = chunkCache.getVisibleChunksFromBounds(tileBounds);
+
+    const coords: Array<{ i: number; j: number }> = [];
+    for (let ci = minChunkI; ci <= maxChunkI; ci++) {
+      for (let cj = minChunkJ; cj <= maxChunkJ; cj++) {
+        coords.push({ i: ci, j: cj });
+      }
+    }
+    return coords;
+  }
+
+  /**
    * Set terrain season from server WorldSeason property
    */
   public setSeason(season: Season): void {

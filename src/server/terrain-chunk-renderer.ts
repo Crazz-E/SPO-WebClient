@@ -347,7 +347,10 @@ export class TerrainChunkRenderer implements Service {
     const existing = this.generating.get(genKey);
     if (existing) return existing;
 
-    const promise = this._generateAndCacheZoom(mapName, terrainType, season, chunkI, chunkJ, zoomLevel);
+    // Use worker pool with priority dispatch when active (client requests jump ahead of background pre-gen)
+    const promise = this.workerPool
+      ? this._generateViaWorkerPool(mapName, terrainType, season, chunkI, chunkJ, zoomLevel)
+      : this._generateAndCacheZoom(mapName, terrainType, season, chunkI, chunkJ, zoomLevel);
     this.generating.set(genKey, promise);
 
     try {
@@ -357,6 +360,47 @@ export class TerrainChunkRenderer implements Service {
       return result;
     } finally {
       this.generating.delete(genKey);
+    }
+  }
+
+  /**
+   * Generate a chunk via the worker pool with priority dispatch.
+   * Workers produce all 4 zoom levels; we cache them all and return the requested one.
+   */
+  private async _generateViaWorkerPool(
+    mapName: string,
+    terrainType: string,
+    season: number,
+    chunkI: number,
+    chunkJ: number,
+    zoomLevel: number
+  ): Promise<Buffer | null> {
+    if (!this.workerPool) return null;
+
+    try {
+      const pngs = await this.workerPool.dispatchPriority({
+        mapName, terrainType, season, chunkI, chunkJ,
+      });
+
+      // Cache all 4 zoom levels to disk (pngs[0]=z3, pngs[1]=z2, pngs[2]=z1, pngs[3]=z0)
+      const writes: Promise<void>[] = [];
+      for (let z = MAX_ZOOM; z >= 0; z--) {
+        const pngIdx = MAX_ZOOM - z;
+        const cachePath = this.getChunkCachePath(mapName, terrainType, season, chunkI, chunkJ, z);
+        writes.push(
+          fsp.mkdir(path.dirname(cachePath), { recursive: true })
+            .then(() => fsp.writeFile(cachePath, pngs[pngIdx]))
+        );
+      }
+      await Promise.all(writes);
+
+      // Return the requested zoom level
+      const pngIdx = MAX_ZOOM - zoomLevel;
+      return pngs[pngIdx] ?? null;
+    } catch (err: unknown) {
+      console.error(`[TerrainChunkRenderer] Worker priority dispatch failed for ${chunkI},${chunkJ}:`, err);
+      // Fall back to main-thread generation
+      return this._generateAndCacheZoom(mapName, terrainType, season, chunkI, chunkJ, zoomLevel);
     }
   }
 
@@ -968,6 +1012,7 @@ type WorkerOutMsg =
 export class WorkerPool {
   private entries: WorkerEntry[] = [];
   private queue: PendingJob[] = [];
+  private priorityQueue: PendingJob[] = [];
   private active = new Map<string, PendingJob>();
   private jobSeq = 0;
   private terminated = false;
@@ -1034,21 +1079,35 @@ export class WorkerPool {
     });
   }
 
+  /** Dispatch a high-priority job (client-requested chunks jump ahead of background pre-gen). */
+  dispatchPriority(params: ChunkJobParams): Promise<Buffer[]> {
+    if (this.terminated) return Promise.reject(new Error('WorkerPool is terminated'));
+    return new Promise<Buffer[]>((resolve, reject) => {
+      this.priorityQueue.push({ params, resolve, reject });
+      this._drain();
+    });
+  }
+
   /** Terminate all workers. Pending jobs are rejected. */
   async terminate(): Promise<void> {
     this.terminated = true;
+    for (const { reject } of this.priorityQueue) reject(new Error('WorkerPool terminated'));
     for (const { reject } of this.queue) reject(new Error('WorkerPool terminated'));
+    this.priorityQueue = [];
     this.queue = [];
     await Promise.all(this.entries.map(e => e.worker.terminate()));
     this.entries = [];
   }
 
   private _drain(): void {
-    while (this.queue.length > 0) {
+    while (this.priorityQueue.length > 0 || this.queue.length > 0) {
       const entry = this.entries.find(e => e.idle);
       if (!entry) break;
 
-      const job = this.queue.shift()!;
+      // Priority queue drained first (client-requested chunks)
+      const job = this.priorityQueue.length > 0
+        ? this.priorityQueue.shift()!
+        : this.queue.shift()!;
       const jobId = String(++this.jobSeq);
       this.active.set(jobId, job);
       entry.idle = false;

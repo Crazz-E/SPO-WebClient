@@ -74,7 +74,7 @@ export class TextureExtractor implements Service {
   /**
    * Initialize texture extraction for all terrain types and seasons
    */
-  async initialize(): Promise<void> {
+  async initialize(reportProgress?: (subStep: string) => void): Promise<void> {
     if (this.initialized) {
       console.log('[TextureExtractor] Already initialized');
       return;
@@ -88,6 +88,7 @@ export class TextureExtractor implements Service {
     }
 
     // Parse LandClasses INI files to get authoritative palette→filename mapping
+    reportProgress?.('Parsing terrain class definitions');
     await this.parseLandClassesINI();
 
     // Get available terrain types
@@ -95,19 +96,25 @@ export class TextureExtractor implements Service {
     console.log(`[TextureExtractor] Found terrain types: ${terrainTypes.join(', ')}`);
 
     // Extract textures for each terrain type and season
+    let processed = 0;
+    const totalTerrains = terrainTypes.length;
     for (const terrainType of terrainTypes) {
       const seasons = await this.getAvailableSeasons(terrainType);
 
       for (const season of seasons) {
+        processed++;
+        reportProgress?.(`Baking textures: ${terrainType}/${season} (${processed}/${totalTerrains * 2})`);
         await this.extractTerrainTextures(terrainType, season);
       }
     }
 
     // Pre-bake alpha for object textures (roads, concrete)
     // These use dynamic color key detection from corner pixel (0,0)
+    reportProgress?.('Baking object textures (roads, concrete)');
     this.bakeObjectTextures();
 
     // Generate terrain atlases (one per terrain type + season)
+    reportProgress?.('Generating terrain atlases');
     for (const terrainType of terrainTypes) {
       const seasons = await this.getAvailableSeasons(terrainType);
       for (const season of seasons) {
@@ -116,6 +123,7 @@ export class TextureExtractor implements Service {
     }
 
     // Generate object atlases (roads, concrete)
+    reportProgress?.('Generating object atlases');
     this.generateObjectAtlases();
 
     this.initialized = true;
