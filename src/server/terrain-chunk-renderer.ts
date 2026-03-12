@@ -180,6 +180,12 @@ export class TerrainChunkRenderer implements Service {
   /** Background pre-generation state */
   private preGenerating: boolean = false;
 
+  /** Total chunks to generate in the current pre-gen run */
+  private preGenTotal: number = 0;
+
+  /** Chunks generated so far in the current pre-gen run */
+  private preGenDone: number = 0;
+
   /** Set to true to stop the background pre-generation loop */
   private stopRequested: boolean = false;
 
@@ -197,6 +203,24 @@ export class TerrainChunkRenderer implements Service {
     this.cacheDir = cacheDir;
     this.mapCacheDir = mapCacheDir;
     this.textureDir = textureDir;
+  }
+
+  /**
+   * Load atlases only — no pre-generation. Used by the CLI cache-build script.
+   * Call this instead of initialize() when you want to drive preGenerateAllChunks() manually.
+   */
+  async initializeAtlases(): Promise<void> {
+    const prev = this.skipPreGeneration;
+    this.skipPreGeneration = true;
+    await this.initialize();
+    this.skipPreGeneration = prev;
+  }
+
+  /**
+   * Current pre-generation progress snapshot.
+   */
+  getPreGenProgress(): { total: number; done: number; active: boolean } {
+    return { total: this.preGenTotal, done: this.preGenDone, active: this.preGenerating };
   }
 
   /**
@@ -600,14 +624,20 @@ export class TerrainChunkRenderer implements Service {
   }
 
   /**
-   * Pre-generate ALL chunks for all available maps and zoom levels.
-   * Uses a worker thread pool (one worker per CPU core, capped at 8) to
-   * render chunks in parallel, saturating available CPU resources.
-   * Runs fire-and-forget from initialize().
+   * Pre-generate chunks for all available maps and zoom levels (or a specific subset).
+   * Uses a worker thread pool (one worker per CPU core, capped at 8) to render chunks
+   * in parallel. Dispatches in small batches and yields to the event loop between batches
+   * so RDO/WebSocket handlers are not starved by microtask flooding.
+   *
+   * @param targetMaps - Optional list of map folder names to generate. When omitted,
+   *   all maps found in cache/Maps/ with a .bmp file are included. Controlled by the
+   *   PREGENERATE_MAPS env var (comma-separated) when running as server background task.
    */
-  private async preGenerateAllChunks(): Promise<void> {
+  async preGenerateAllChunks(targetMaps?: string[]): Promise<void> {
     if (this.preGenerating) return;
     this.preGenerating = true;
+    this.preGenTotal = 0;
+    this.preGenDone = 0;
 
     try {
       const mapsDir = path.join(this.mapCacheDir, 'Maps');
@@ -616,13 +646,24 @@ export class TerrainChunkRenderer implements Service {
         return;
       }
 
-      // TESTING: only pre-generate for these maps
-      const PREGENERATE_MAPS = new Set(['Shamba', 'Zorcon', 'Angelicus']);
+      // Determine which maps to generate:
+      // 1. If caller passes targetMaps, use those.
+      // 2. Else if PREGENERATE_MAPS env var is set, use that (server background mode).
+      // 3. Else generate all maps found in cache/Maps/ with a .bmp file.
+      let allowedMaps: Set<string> | null = null;
+      if (targetMaps && targetMaps.length > 0) {
+        allowedMaps = new Set(targetMaps);
+      } else if (process.env.PREGENERATE_MAPS) {
+        allowedMaps = new Set(process.env.PREGENERATE_MAPS.split(',').map(s => s.trim()).filter(Boolean));
+      }
 
       const mapDirs = fs.readdirSync(mapsDir, { withFileTypes: true })
         .filter(e => e.isDirectory())
         .map(e => e.name)
-        .filter(name => PREGENERATE_MAPS.has(name) && fs.existsSync(path.join(mapsDir, name, `${name}.bmp`)));
+        .filter(name =>
+          (allowedMaps === null || allowedMaps.has(name)) &&
+          fs.existsSync(path.join(mapsDir, name, `${name}.bmp`))
+        );
 
       if (mapDirs.length === 0) {
         console.log('[TerrainChunkRenderer] No maps with BMPs found, skipping pre-generation');
@@ -647,7 +688,10 @@ export class TerrainChunkRenderer implements Service {
       await this.workerPool.initialize();
 
       const poolSize = Math.max(2, Math.min(os.cpus().length, 8));
-      console.log(`[TerrainChunkRenderer] Worker pool ready (${poolSize} workers)`);
+      // Dispatch in batches of poolSize*2: keeps workers fed without flooding the event loop.
+      // After each batch completes, setImmediate() yields to RDO/WebSocket handlers.
+      const DISPATCH_BATCH = poolSize * 2;
+      console.log(`[TerrainChunkRenderer] Worker pool ready (${poolSize} workers, batch=${DISPATCH_BATCH})`);
 
       const totalT0 = Date.now();
       let totalGenerated = 0;
@@ -669,39 +713,40 @@ export class TerrainChunkRenderer implements Service {
         let existingCount = 0;
         for (let ci = 0; ci < chunksI; ci++) {
           for (let cj = 0; cj < chunksJ; cj++) {
-            if (
-              fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, 0))
-            ) existingCount++;
+            if (fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, 0))) {
+              existingCount++;
+            }
           }
         }
 
         if (existingCount === totalChunks) {
           console.log(`[TerrainChunkRenderer] ${item.mapName}/${SEASON_NAMES[item.season as Season]}: all ${totalChunks} chunks cached`);
+          this.preGenDone += totalChunks;
+          this.preGenTotal += totalChunks;
           continue;
         }
 
+        const missing = totalChunks - existingCount;
+        this.preGenTotal += missing;
         console.log(`[TerrainChunkRenderer] Pre-generating ${item.mapName} (${item.terrainType}, ${SEASON_NAMES[item.season as Season]}): ${existingCount}/${totalChunks} cached`);
 
         const itemT0 = Date.now();
         let itemGenerated = 0;
-
-        // Dispatch ALL missing chunks to the pool simultaneously.
-        // The pool's concurrency is bounded by worker count — no thundering herd.
-        const jobs: Promise<void>[] = [];
+        let batch: Promise<void>[] = [];
 
         for (let ci = 0; ci < chunksI; ci++) {
           for (let cj = 0; cj < chunksJ; cj++) {
             if (this.stopRequested) break;
 
-            if (
-              fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, 0))
-            ) continue;
+            if (fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, 0))) {
+              continue;
+            }
 
             const _ci = ci;
             const _cj = cj;
 
-            jobs.push(
-              this.workerPool.dispatch({
+            batch.push(
+              this.workerPool!.dispatch({
                 mapName: item.mapName,
                 terrainType: item.terrainType,
                 season: item.season,
@@ -721,14 +766,28 @@ export class TerrainChunkRenderer implements Service {
                 }
                 await Promise.all(writes);
                 itemGenerated++;
+                this.preGenDone++;
               }).catch((err: unknown) => {
                 console.error(`[TerrainChunkRenderer] Failed chunk ${_ci},${_cj} for ${item.mapName}:`, err);
               })
             );
+
+            // Flush batch and yield to event loop to prevent microtask flooding.
+            // This gives RDO/WebSocket handlers a chance to run between batches.
+            if (batch.length >= DISPATCH_BATCH) {
+              await Promise.all(batch);
+              batch = [];
+              await new Promise<void>(r => setImmediate(r));
+            }
           }
+          if (this.stopRequested) break;
         }
 
-        await Promise.all(jobs);
+        // Flush remaining jobs
+        if (batch.length > 0) {
+          await Promise.all(batch);
+          batch = [];
+        }
 
         totalGenerated += itemGenerated;
         const dt = Date.now() - itemT0;

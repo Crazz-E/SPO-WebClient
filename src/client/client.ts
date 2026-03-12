@@ -632,6 +632,8 @@ export class StarpeaceClient implements ClientHandlerContext {
     const renderer = this.mapNavigationUI.getRenderer();
     if (renderer) {
       this.minimapUI.setRenderer(renderer);
+      // Wire chunk loading progress to the store so TerrainSyncBar can show it in-game
+      renderer.onChunkProgress = (done, total) => ClientBridge.setChunkLoading(done, total);
     }
 
     ClientBridge.loadPersistedSettings();

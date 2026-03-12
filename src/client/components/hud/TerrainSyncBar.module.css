@@ -1,0 +1,25 @@
+.root {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: center;
+  min-width: 200px;
+  max-width: 320px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-glass, rgba(10, 14, 20, 0.82));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 8px);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}

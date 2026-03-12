@@ -165,8 +165,20 @@ export class ChunkCache {
   private onChunkReady: (() => void) | null = null;
 
   // Pending await for viewport-ready loading
-  private pendingAwait: { keys: Set<string>; resolve: () => void } | null = null;
+  private pendingAwait: {
+    keys: Set<string>;
+    total: number;
+    resolve: () => void;
+    onProgress?: (done: number, total: number) => void;
+  } | null = null;
   private pendingAwaitTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // Session progress tracking — session resets when the render queue goes idle→active.
+  // onChunkProgress is called with (done, total) on every chunk completion and on start.
+  private sessionQueued: number = 0;
+  private sessionDone: number = 0;
+  /** Called with (done, total) whenever chunk loading session progress changes. Public for external wiring. */
+  onChunkProgress: ((done: number, total: number) => void) | null = null;
 
   constructor(
     textureCache: TextureCache,
@@ -300,6 +312,14 @@ export class ChunkCache {
       entry.rendering = true;
     }
 
+    // Session progress tracking: reset counters when queue was idle, then count this chunk
+    if (this.sessionQueued === this.sessionDone) {
+      this.sessionQueued = 0;
+      this.sessionDone = 0;
+    }
+    this.sessionQueued++;
+    this.onChunkProgress?.(this.sessionDone, this.sessionQueued);
+
     // Add to queue
     this.renderQueue.push({
       chunkI,
@@ -391,6 +411,11 @@ export class ChunkCache {
     // Ensure at least one final notification fires after queue is drained
     this.scheduleChunkReadyNotification();
 
+    // Emit final completion when session is fully done
+    if (this.sessionQueued > 0 && this.sessionDone >= this.sessionQueued) {
+      this.onChunkProgress?.(this.sessionQueued, this.sessionQueued);
+    }
+
     const totalDt = performance.now() - queueStart;
     if (processed > 1) {
       console.log(`[ChunkCache] queue done: ${processed} chunks in ${totalDt.toFixed(0)}ms (avg ${(totalDt / processed).toFixed(0)}ms/chunk)`);
@@ -480,8 +505,8 @@ export class ChunkCache {
       // Evict if needed
       this.evictIfNeeded(zoomLevel);
 
-      // Check if this chunk satisfies a pending awaitChunksReady() call
-      this.checkPendingAwait(key);
+      // Update session progress and check pending awaitChunksReady()
+      this.notifyChunkComplete(key);
 
       // Notification is batched in processRenderQueue()
 
@@ -622,8 +647,8 @@ export class ChunkCache {
     // Evict if needed
     this.evictIfNeeded(zoomLevel);
 
-    // Check if this chunk satisfies a pending awaitChunksReady() call
-    this.checkPendingAwait(key);
+    // Update session progress and check pending awaitChunksReady()
+    this.notifyChunkComplete(key);
 
     // Notification is batched in processRenderQueue()
   }
@@ -776,7 +801,8 @@ export class ChunkCache {
   awaitChunksReady(
     chunks: Array<{ i: number; j: number }>,
     zoomLevel: number,
-    timeoutMs: number = 15_000
+    timeoutMs: number = 15_000,
+    onProgress?: (done: number, total: number) => void
   ): Promise<void> {
     const cache = this.caches.get(zoomLevel);
     if (!cache) return Promise.resolve();
@@ -792,7 +818,13 @@ export class ChunkCache {
     }
 
     // All already ready — resolve immediately
-    if (pendingKeys.size === 0) return Promise.resolve();
+    if (pendingKeys.size === 0) {
+      onProgress?.(chunks.length, chunks.length);
+      return Promise.resolve();
+    }
+
+    // Emit initial progress (0/total)
+    onProgress?.(chunks.length - pendingKeys.size, chunks.length);
 
     // Trigger loading for all pending chunks
     for (const { i, j } of chunks) {
@@ -803,7 +835,7 @@ export class ChunkCache {
     }
 
     return new Promise<void>((resolve) => {
-      this.pendingAwait = { keys: pendingKeys, resolve };
+      this.pendingAwait = { keys: pendingKeys, total: chunks.length, resolve, onProgress };
 
       // Safety timeout — resolve even if some chunks fail
       this.pendingAwaitTimeout = setTimeout(() => {
@@ -818,11 +850,22 @@ export class ChunkCache {
   }
 
   /**
+   * Called when a chunk becomes ready. Updates session progress and checks pending await.
+   */
+  private notifyChunkComplete(key: string): void {
+    this.sessionDone++;
+    this.onChunkProgress?.(this.sessionDone, this.sessionQueued);
+    this.checkPendingAwait(key);
+  }
+
+  /**
    * Check if a newly-ready chunk satisfies a pending awaitChunksReady() call.
    */
   private checkPendingAwait(key: string): void {
     if (!this.pendingAwait) return;
     this.pendingAwait.keys.delete(key);
+    const done = this.pendingAwait.total - this.pendingAwait.keys.size;
+    this.pendingAwait.onProgress?.(done, this.pendingAwait.total);
     if (this.pendingAwait.keys.size === 0) {
       if (this.pendingAwaitTimeout !== null) {
         clearTimeout(this.pendingAwaitTimeout);

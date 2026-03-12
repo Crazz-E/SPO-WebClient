@@ -227,12 +227,23 @@ export async function selectCompanyAndStart(ctx: ClientHandlerContext, companyId
     // This prevents the user seeing an empty/blue canvas while chunks stream in.
     const rendererForChunks = ctx.getRenderer();
     if (rendererForChunks) {
-      ClientBridge.setMapLoadingProgress({ progress: 0.95, message: 'Loading terrain...' });
       const zoomLevel = 2; // Default zoom on login
       const visibleChunks = rendererForChunks.getVisibleChunkCoords(zoomLevel);
       const chunkCache = rendererForChunks.getChunkCache();
       if (chunkCache && visibleChunks.length > 0) {
-        await chunkCache.awaitChunksReady(visibleChunks, zoomLevel);
+        const chunkTotal = visibleChunks.length;
+        ClientBridge.setMapLoadingProgress({
+          progress: 0.95,
+          message: `Loading terrain: 0/${chunkTotal} chunks`,
+        });
+        await chunkCache.awaitChunksReady(visibleChunks, zoomLevel, 15_000, (done, total) => {
+          const pct = 0.95 + (total > 0 ? (done / total) * 0.04 : 0);
+          ClientBridge.setMapLoadingProgress({
+            progress: pct,
+            message: `Loading terrain: ${done}/${total} chunks`,
+          });
+          ClientBridge.setChunkLoading(done, total);
+        });
       }
     }
 

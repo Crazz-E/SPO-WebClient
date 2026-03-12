@@ -94,6 +94,10 @@ export class IsometricTerrainRenderer {
   // instead of triggering terrain-only renders (which cause blinking)
   private onRenderNeeded: (() => void) | null = null;
 
+  // External chunk progress callback: wired to ChunkCache.onChunkProgress after map load.
+  // Set by the parent (client.ts or bridge) to receive (done, total) progress updates.
+  onChunkProgress: ((done: number, total: number) => void) | null = null;
+
   constructor(canvas: HTMLCanvasElement, options?: { disableMouseControls?: boolean }) {
     this.canvas = canvas;
     const ctx = canvas.getContext('2d');
@@ -166,6 +170,10 @@ export class IsometricTerrainRenderer {
         this.requestRender();
       }
     });
+    // Wire chunk progress to bridge so the in-game HUD bar can show loading state
+    if (this.onChunkProgress) {
+      this.chunkCache.onChunkProgress = this.onChunkProgress;
+    }
 
     // Center camera on map
     this.cameraI = Math.floor(terrainData.height / 2);
