@@ -464,7 +464,7 @@ describe('encodePng', () => {
     expect(png[25]).toBe(6); // RGBA
   });
 
-  it('should produce decompressible IDAT chunk', () => {
+  it('should produce decompressible IDAT chunk with Up filter', () => {
     const pixels = Buffer.from([255, 0, 0, 255]); // 1x1 red RGBA
     const png = encodePng(1, 1, pixels);
 
@@ -481,10 +481,11 @@ describe('encodePng', () => {
     const idatData = png.subarray(idatStart + 8, idatStart + 8 + idatLength);
     const decompressed = zlib.inflateSync(idatData);
 
-    // Should contain filter byte (0) + 4 RGBA bytes for 1x1 image
+    // Should contain filter byte (2=Up) + 4 RGBA bytes for 1x1 image
+    // For first row, Up filter with no row above = same as raw values
     expect(decompressed.length).toBe(5);
-    expect(decompressed[0]).toBe(0);   // Filter: None
-    expect(decompressed[1]).toBe(255); // R
+    expect(decompressed[0]).toBe(2);   // Filter: Up
+    expect(decompressed[1]).toBe(255); // R (no row above, so raw value)
     expect(decompressed[2]).toBe(0);   // G
     expect(decompressed[3]).toBe(0);   // B
     expect(decompressed[4]).toBe(255); // A
@@ -493,14 +494,10 @@ describe('encodePng', () => {
   it('should handle transparent pixels', () => {
     const pixels = Buffer.from([0, 0, 255, 0]); // 1x1 transparent blue
     const png = encodePng(1, 1, pixels);
+    const decoded = decodePng(png);
 
-    // Find and decompress IDAT
-    const idatStart = 33;
-    const idatLength = png.readUInt32BE(idatStart);
-    const idatData = png.subarray(idatStart + 8, idatStart + 8 + idatLength);
-    const decompressed = zlib.inflateSync(idatData);
-
-    expect(decompressed[4]).toBe(0); // Alpha = 0 (transparent)
+    expect(decoded.pixels[3]).toBe(0); // Alpha = 0 (transparent)
+    expect(decoded.pixels[2]).toBe(255); // B preserved
   });
 
   it('should contain IEND chunk', () => {
@@ -529,22 +526,11 @@ describe('encodePng', () => {
     }
 
     const png = encodePng(4, 4, pixels);
+    const decoded = decodePng(png);
 
-    // Find IDAT and decompress
-    const idatStart = 33;
-    const idatLength = png.readUInt32BE(idatStart);
-    const idatData = png.subarray(idatStart + 8, idatStart + 8 + idatLength);
-    const decompressed = zlib.inflateSync(idatData);
-
-    // Verify: 4 rows * (1 filter + 4*4 RGBA) = 4 * 17 = 68 bytes
-    expect(decompressed.length).toBe(4 * (1 + 4 * 4));
-
-    // Check first row (y=0): filter=0, then 4 pixels
-    expect(decompressed[0]).toBe(0); // Filter: None
-    expect(decompressed[1]).toBe(0);   // (0,0) R
-    expect(decompressed[2]).toBe(0);   // (0,0) G
-    expect(decompressed[3]).toBe(128); // (0,0) B
-    expect(decompressed[4]).toBe(255); // (0,0) A
+    expect(decoded.width).toBe(4);
+    expect(decoded.height).toBe(4);
+    expect(decoded.pixels.equals(pixels)).toBe(true);
   });
 });
 
@@ -889,6 +875,153 @@ describe('decodeBmpIndices', () => {
   it('should reject invalid BMP signature', () => {
     const badBuf = Buffer.alloc(60, 0); // >= 54 bytes but no valid BMP signature
     expect(() => decodeBmpIndices(badBuf)).toThrow('Invalid BMP signature');
+  });
+});
+
+// ============================================================================
+// downscaleRGBA2x tests
+// ============================================================================
+
+// ============================================================================
+// PNG Up filter compression tests
+// ============================================================================
+
+describe('encodePng Up filter', () => {
+  it('should use filter type 2 (Up) in IDAT data', () => {
+    const pixels = Buffer.alloc(4 * 3 * 4, 128); // 4x3 uniform gray
+    const png = encodePng(4, 3, pixels);
+
+    // Find and decompress IDAT
+    const idatStart = 33;
+    const idatLength = png.readUInt32BE(idatStart);
+    const idatData = png.subarray(idatStart + 8, idatStart + 8 + idatLength);
+    const decompressed = zlib.inflateSync(idatData);
+
+    const rowBytes = 4 * 4;
+    // Every row should have filter byte = 2
+    for (let y = 0; y < 3; y++) {
+      expect(decompressed[y * (1 + rowBytes)]).toBe(2);
+    }
+  });
+
+  it('should produce significantly smaller output for uniform terrain', () => {
+    // Simulate terrain-like data: large flat regions with same color
+    const w = 64, h = 32;
+    const pixels = Buffer.alloc(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        // Flat green terrain with slight horizontal variation
+        pixels[idx] = 34;
+        pixels[idx + 1] = 139;
+        pixels[idx + 2] = 34;
+        pixels[idx + 3] = 255;
+      }
+    }
+
+    const png = encodePng(w, h, pixels);
+
+    // For comparison: encode with filter 0 + level 6 (old method)
+    const rowBytes = w * 4;
+    const rawDataOld = Buffer.alloc(h * (1 + rowBytes));
+    for (let y = 0; y < h; y++) {
+      const off = y * (1 + rowBytes);
+      rawDataOld[off] = 0; // Filter: None
+      pixels.copy(rawDataOld, off + 1, y * rowBytes, (y + 1) * rowBytes);
+    }
+    const compressedOld = zlib.deflateSync(rawDataOld, { level: 6 });
+    // Old PNG would be: signature(8) + IHDR(25) + IDAT(12+compressedOld) + IEND(12)
+    const oldSize = 8 + 25 + 12 + compressedOld.length + 12;
+
+    // New (Up filter + level 9) should be smaller
+    expect(png.length).toBeLessThan(oldSize);
+  });
+
+  it('should produce smaller output for vertically repetitive data', () => {
+    // Data where every row is identical — Up filter produces all zeros after row 0
+    // Use larger size where the filter difference is meaningful
+    const w = 128, h = 64;
+    const pixels = Buffer.alloc(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        pixels[idx] = x * 2;     // R varies horizontally
+        pixels[idx + 1] = 100;
+        pixels[idx + 2] = 50;
+        pixels[idx + 3] = 255;
+      }
+    }
+
+    const png = encodePng(w, h, pixels);
+
+    // Old method for comparison (filter 0 + level 6)
+    const rowBytes = w * 4;
+    const rawDataOld = Buffer.alloc(h * (1 + rowBytes));
+    for (let y = 0; y < h; y++) {
+      const off = y * (1 + rowBytes);
+      rawDataOld[off] = 0;
+      pixels.copy(rawDataOld, off + 1, y * rowBytes, (y + 1) * rowBytes);
+    }
+    const compressedOld = zlib.deflateSync(rawDataOld, { level: 6 });
+    const oldSize = 8 + 25 + 12 + compressedOld.length + 12;
+
+    // Up filter on identical rows should compress better
+    expect(png.length).toBeLessThan(oldSize);
+  });
+
+  it('should round-trip a single-row image', () => {
+    // Edge case: single row means Up filter has no row above (above=0)
+    const pixels = Buffer.from([
+      255, 0, 0, 255,
+      0, 255, 0, 255,
+      0, 0, 255, 255,
+    ]);
+
+    const png = encodePng(3, 1, pixels);
+    const decoded = decodePng(png);
+
+    expect(decoded.width).toBe(3);
+    expect(decoded.height).toBe(1);
+    expect(decoded.pixels.equals(pixels)).toBe(true);
+  });
+
+  it('should round-trip a single-pixel image', () => {
+    const pixels = Buffer.from([42, 99, 200, 128]);
+    const png = encodePng(1, 1, pixels);
+    const decoded = decodePng(png);
+
+    expect(decoded.pixels.equals(pixels)).toBe(true);
+  });
+
+  it('should round-trip a fully transparent image', () => {
+    const w = 8, h = 8;
+    const pixels = Buffer.alloc(w * h * 4, 0); // All zeros (transparent black)
+    const png = encodePng(w, h, pixels);
+    const decoded = decodePng(png);
+
+    expect(decoded.pixels.equals(pixels)).toBe(true);
+  });
+
+  it('should round-trip a large image with varied pixel data', () => {
+    // Simulates a realistic chunk with varied content
+    const w = 128, h = 64;
+    const pixels = Buffer.alloc(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        pixels[idx] = (x * 7 + y * 13) % 256;
+        pixels[idx + 1] = (x * 3 + y * 11) % 256;
+        pixels[idx + 2] = (x * 5 + y * 17) % 256;
+        pixels[idx + 3] = x < 10 || x > 117 ? 0 : 255; // Transparent edges
+      }
+    }
+
+    const png = encodePng(w, h, pixels);
+    const decoded = decodePng(png);
+
+    expect(decoded.width).toBe(w);
+    expect(decoded.height).toBe(h);
+    expect(decoded.pixels.equals(pixels)).toBe(true);
   });
 });
 

@@ -218,17 +218,26 @@ function createPngChunk(type: string, data: Buffer): Buffer {
  * @returns PNG file buffer
  */
 export function encodePng(width: number, height: number, rgbaPixels: Buffer): Buffer {
-  // Build raw scanlines with filter byte (0 = None) for each row
+  // Build raw scanlines with filter byte (2 = Up) for each row.
+  // Up filter: filtered[x] = raw[x] - above[x]. For pixel art terrain with
+  // large flat regions, vertically adjacent pixels are often identical, producing
+  // runs of zeros that zlib compresses dramatically better than raw pixels.
   const rowBytes = width * 4;
   const rawData = Buffer.alloc(height * (1 + rowBytes));
 
   for (let y = 0; y < height; y++) {
     const rawOffset = y * (1 + rowBytes);
-    rawData[rawOffset] = 0; // Filter type: None
-    rgbaPixels.copy(rawData, rawOffset + 1, y * rowBytes, (y + 1) * rowBytes);
+    rawData[rawOffset] = 2; // Filter type: Up
+    const currRow = y * rowBytes;
+    const prevRow = (y - 1) * rowBytes;
+    for (let x = 0; x < rowBytes; x++) {
+      const curr = rgbaPixels[currRow + x];
+      const above = y > 0 ? rgbaPixels[prevRow + x] : 0;
+      rawData[rawOffset + 1 + x] = (curr - above) & 0xFF;
+    }
   }
 
-  const compressed = zlib.deflateSync(rawData, { level: 6 });
+  const compressed = zlib.deflateSync(rawData, { level: 9 });
 
   const chunks: Buffer[] = [];
 
@@ -550,12 +559,21 @@ export function decodePng(buffer: Buffer): PngData {
 
   for (let y = 0; y < height; y++) {
     const filterByte = rawData[y * (1 + rowBytes)];
-    if (filterByte !== 0) {
-      throw new Error(`Unsupported PNG filter type: ${filterByte} (only None=0 supported)`);
-    }
+    const rowStart = y * (1 + rowBytes) + 1;
+    const dstStart = y * rowBytes;
 
-    // Copy row data (skip the filter byte)
-    rawData.copy(pixels, y * rowBytes, y * (1 + rowBytes) + 1, y * (1 + rowBytes) + 1 + rowBytes);
+    if (filterByte === 0) {
+      // None: copy as-is
+      rawData.copy(pixels, dstStart, rowStart, rowStart + rowBytes);
+    } else if (filterByte === 2) {
+      // Up: add pixel from row above
+      for (let x = 0; x < rowBytes; x++) {
+        const above = y > 0 ? pixels[dstStart - rowBytes + x] : 0;
+        pixels[dstStart + x] = (rawData[rowStart + x] + above) & 0xFF;
+      }
+    } else {
+      throw new Error(`Unsupported PNG filter type: ${filterByte} (only None=0 and Up=2 supported)`);
+    }
   }
 
   return { width, height, pixels };
