@@ -5,7 +5,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { EventEmitter } from 'events';
 import { createLogger } from '../shared/logger';
 import { UPDATE_SERVER } from '../shared/constants';
 import { extractCabArchive, isCabExtractorAvailable } from './cab-extractor';
@@ -37,7 +36,7 @@ interface CabMetadata {
 
 import type { Service } from './service-registry';
 
-export class UpdateService extends EventEmitter implements Service {
+export class UpdateService implements Service {
   public readonly name = 'update';
 
   private readonly UPDATE_SERVER_BASE = UPDATE_SERVER.CACHE_URL;
@@ -66,10 +65,9 @@ export class UpdateService extends EventEmitter implements Service {
   ];
 
   constructor(cacheRoot?: string) {
-    super();
     // Default to cache/ directory in project root
     // This mirrors the exact structure from update.starpeaceonline.com/five/client/cache/
-    this.CACHE_ROOT = cacheRoot || process.env['SPO_CACHE_DIR'] || path.join(__dirname, '../../cache');
+    this.CACHE_ROOT = cacheRoot || path.join(__dirname, '../../cache');
     this.CAB_METADATA_FILE = path.join(this.CACHE_ROOT, '.cab-metadata.json');
     this.loadCabMetadata();
   }
@@ -570,11 +568,6 @@ export class UpdateService extends EventEmitter implements Service {
       } else {
         // File missing, download
         await this.downloadFile(remoteFile);
-        this.emit('download-progress', {
-          downloaded: this.stats.downloaded,
-          total: remoteFiles.length,
-          current: remoteFile.path,
-        });
       }
     }
 

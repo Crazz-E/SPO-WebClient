@@ -41,7 +41,7 @@ import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '.
 const logger = createLogger('Gateway');
 const PORT = config.server.port;
 const PUBLIC_DIR = path.join(__dirname, '../../public');
-const CACHE_DIR = process.env['SPO_CACHE_DIR'] ?? path.join(__dirname, '../../cache');
+const CACHE_DIR = path.join(__dirname, '../../cache');
 
 // =============================================================================
 // Service Registration
@@ -79,7 +79,7 @@ const textureExtractor = () => serviceRegistry.get<TextureExtractor>('textures')
 const terrainChunkRenderer = () => serviceRegistry.get<TerrainChunkRenderer>('terrainChunks');
 
 // WebClient-specific cache directory (for future needs, separate from update server mirror)
-const WEBCLIENT_CACHE_DIR = process.env['SPO_WEBCLIENT_CACHE_DIR'] ?? path.join(__dirname, '../../webclient-cache');
+const WEBCLIENT_CACHE_DIR = path.join(__dirname, '../../webclient-cache');
 if (!fs.existsSync(WEBCLIENT_CACHE_DIR)) {
   fs.mkdirSync(WEBCLIENT_CACHE_DIR, { recursive: true });
 }
@@ -96,7 +96,7 @@ const imageFileIndex = new Map<string, string>();
  */
 async function buildImageFileIndex(): Promise<void> {
   imageFileIndex.clear();
-  const CACHE_ROOT = CACHE_DIR;
+  const CACHE_ROOT = path.join(__dirname, '../../cache');
 
   // Index files in update server cache subdirectories
   try {
@@ -310,7 +310,7 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
     }
 
     // Not in index — try downloading from update server
-    const CACHE_ROOT = CACHE_DIR;
+    const CACHE_ROOT = path.join(__dirname, '../../cache');
     const imageDirs: string[] = [];
     for (const [, filePath] of imageFileIndex) {
       const dir = path.basename(path.dirname(filePath));

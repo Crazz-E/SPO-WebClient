@@ -38,9 +38,6 @@ cache/
 # Separate from update server structure
 webclient-cache/
 
-# Electron packaged installers
-release/
-
 # Test coverage
 coverage/
 
