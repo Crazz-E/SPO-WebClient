@@ -410,16 +410,17 @@ describe('TerrainChunkRenderer', () => {
     const renderer = createRenderer();
     await renderer.initialize();
 
-    const pngBuffer = await renderer.getChunk('TestMap', 'Earth', 2, 0, 0);
+    // Use zoom 2 (Z3 is not cached — client renders locally)
+    const pngBuffer = await renderer.getChunk('TestMap', 'Earth', 2, 0, 0, 2);
 
     expect(pngBuffer).not.toBeNull();
 
     // Check disk cache
-    const cachePath = renderer.getChunkCachePath('TestMap', 'Earth', 2, 0, 0);
+    const cachePath = renderer.getChunkCachePath('TestMap', 'Earth', 2, 0, 0, 2);
     expect(fs.existsSync(cachePath)).toBe(true);
 
     // Second call should return cached version
-    const cachedBuffer = await renderer.getChunk('TestMap', 'Earth', 2, 0, 0);
+    const cachedBuffer = await renderer.getChunk('TestMap', 'Earth', 2, 0, 0, 2);
     expect(cachedBuffer).not.toBeNull();
     expect(cachedBuffer!.equals(pngBuffer!)).toBe(true);
   });
@@ -514,13 +515,13 @@ describe('TerrainChunkRenderer', () => {
     const renderer = createRenderer();
     await renderer.initialize();
 
-    // Generate a chunk to populate cache
-    await renderer.getChunk('TestMap', 'Earth', 2, 0, 0);
-    expect(renderer.isChunkCached('TestMap', 'Earth', 2, 0, 0)).toBe(true);
+    // Generate a chunk to populate cache (use zoom 2; Z3 not cached)
+    await renderer.getChunk('TestMap', 'Earth', 2, 0, 0, 2);
+    expect(renderer.isChunkCached('TestMap', 'Earth', 2, 0, 0, 2)).toBe(true);
 
     // Invalidate
     renderer.invalidateMap('TestMap');
-    expect(renderer.isChunkCached('TestMap', 'Earth', 2, 0, 0)).toBe(false);
+    expect(renderer.isChunkCached('TestMap', 'Earth', 2, 0, 0, 2)).toBe(false);
   });
 
   it('should include zoom level in cache path', () => {
@@ -534,7 +535,7 @@ describe('TerrainChunkRenderer', () => {
     expect(pathZ0).not.toEqual(pathZ3);
   });
 
-  it('should generate all zoom levels for a chunk', async () => {
+  it('should generate all zoom levels for a chunk (Z3 not cached)', async () => {
     const renderer = createRenderer();
     await renderer.initialize();
     renderer.loadMapData('TestMap');
@@ -542,32 +543,35 @@ describe('TerrainChunkRenderer', () => {
     const success = await renderer.generateChunkAllZooms('TestMap', 'Earth', 2, 0, 0);
     expect(success).toBe(true);
 
-    // All 4 zoom levels should be cached on disk
-    for (let z = 0; z <= 3; z++) {
+    // Z2, Z1, Z0 should be cached on disk
+    for (let z = 0; z <= 2; z++) {
       expect(renderer.isChunkCached('TestMap', 'Earth', 2, 0, 0, z)).toBe(true);
     }
 
-    // Verify all zoom levels produce non-empty WebP files
-    const z3Buf = fs.readFileSync(renderer.getChunkCachePath('TestMap', 'Earth', 2, 0, 0, 3));
+    // Z3 should NOT be cached (client renders locally from atlas)
+    expect(renderer.isChunkCached('TestMap', 'Earth', 2, 0, 0, 3)).toBe(false);
+
+    // Verify Z2 and Z0 produce valid non-empty WebP files
+    const z2Buf = fs.readFileSync(renderer.getChunkCachePath('TestMap', 'Earth', 2, 0, 0, 2));
     const z0Buf = fs.readFileSync(renderer.getChunkCachePath('TestMap', 'Earth', 2, 0, 0, 0));
 
-    expect(z3Buf.length).toBeGreaterThan(0);
+    expect(z2Buf.length).toBeGreaterThan(0);
     expect(z0Buf.length).toBeGreaterThan(0);
-    // Zoom 3 (2080×1056) should produce a larger file than zoom 0 (260×132)
-    expect(z3Buf.length).toBeGreaterThan(z0Buf.length);
+    // Zoom 2 (1040×528) should produce a larger file than zoom 0 (260×132)
+    expect(z2Buf.length).toBeGreaterThan(z0Buf.length);
 
     // Verify WebP signature (RIFF....WEBP)
-    expect(z3Buf.subarray(0, 4).toString('ascii')).toBe('RIFF');
-    expect(z3Buf.subarray(8, 12).toString('ascii')).toBe('WEBP');
+    expect(z2Buf.subarray(0, 4).toString('ascii')).toBe('RIFF');
+    expect(z2Buf.subarray(8, 12).toString('ascii')).toBe('WEBP');
     expect(z0Buf.subarray(0, 4).toString('ascii')).toBe('RIFF');
     expect(z0Buf.subarray(8, 12).toString('ascii')).toBe('WEBP');
   });
 
-  it('should serve zoom-specific chunks via getChunk', async () => {
+  it('should serve zoom-specific chunks via getChunk (Z3 returns null)', async () => {
     const renderer = createRenderer();
     await renderer.initialize();
 
-    // Request zoom 1 chunk
+    // Request zoom 1 chunk — should succeed
     const z1Png = await renderer.getChunk('TestMap', 'Earth', 2, 0, 0, 1);
     expect(z1Png).not.toBeNull();
 
@@ -575,6 +579,10 @@ describe('TerrainChunkRenderer', () => {
     const decoded = await decodeWebP(z1Png!);
     expect(decoded.width).toBe(Math.floor(CHUNK_CANVAS_WIDTH / 4));
     expect(decoded.height).toBe(Math.floor(CHUNK_CANVAS_HEIGHT / 4));
+
+    // Request zoom 3 chunk — should return null (client renders locally)
+    const z3Png = await renderer.getChunk('TestMap', 'Earth', 2, 0, 0, 3);
+    expect(z3Png).toBeNull();
   });
 
   it('should return false from generateChunkAllZooms for missing atlas', async () => {

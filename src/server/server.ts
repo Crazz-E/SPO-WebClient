@@ -703,6 +703,13 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Z3 chunks not pre-rendered; client renders locally from atlas
+    if (zoomLevel === 3) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Z3 chunks not pre-rendered; client renders locally' }));
+      return;
+    }
+
     if (!terrainChunkRenderer().hasAtlas(terrainType, season)) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: `Atlas not available for ${terrainType}/${season}` }));

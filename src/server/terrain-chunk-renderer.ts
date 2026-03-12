@@ -382,9 +382,9 @@ export class TerrainChunkRenderer implements Service {
         mapName, terrainType, season, chunkI, chunkJ,
       });
 
-      // Cache all 4 zoom levels to disk (pngs[0]=z3, pngs[1]=z2, pngs[2]=z1, pngs[3]=z0)
+      // Cache Z2→Z0 to disk (skip Z3 — client renders locally). pngs[0]=z3, pngs[1]=z2, pngs[2]=z1, pngs[3]=z0
       const writes: Promise<void>[] = [];
-      for (let z = MAX_ZOOM; z >= 0; z--) {
+      for (let z = MAX_ZOOM - 1; z >= 0; z--) {
         const pngIdx = MAX_ZOOM - z;
         const cachePath = this.getChunkCachePath(mapName, terrainType, season, chunkI, chunkJ, z);
         writes.push(
@@ -437,21 +437,15 @@ export class TerrainChunkRenderer implements Service {
       let z3H = CHUNK_CANVAS_HEIGHT;
 
       try {
-        // Decode from cached WebP
+        // Decode from cached WebP (legacy Z3 cache may still exist on disk)
         const webpBuf = await fsp.readFile(z3CachePath);
         const decoded = await decodeWebP(webpBuf);
         z3Pixels = decoded.pixels;
         z3W = decoded.width;
         z3H = decoded.height;
       } catch {
-        // Generate zoom-3 from atlas and cache it
+        // Generate zoom-3 from atlas (not cached — client renders Z3 locally)
         z3Pixels = this.generateChunkRGBA(terrainType, season, chunkI, chunkJ, mapName);
-        if (z3Pixels) {
-          const z3Webp = await encodeWebP(z3W, z3H, z3Pixels);
-          const z3Dir = path.dirname(z3CachePath);
-          await fsp.mkdir(z3Dir, { recursive: true });
-          await fsp.writeFile(z3CachePath, z3Webp);
-        }
       }
 
       if (!z3Pixels) return null;
@@ -469,6 +463,9 @@ export class TerrainChunkRenderer implements Service {
     }
 
     if (!pixels) return null;
+
+    // Z3 not cached — client renders locally from atlas
+    if (zoomLevel === MAX_ZOOM) return null;
 
     // Encode as WebP
     const webp = await encodeWebP(width, height, pixels);
@@ -565,9 +562,8 @@ export class TerrainChunkRenderer implements Service {
     const z3Pixels = this.generateChunkRGBA(terrainType, season, chunkI, chunkJ, mapName);
     if (!z3Pixels) return false;
 
-    // Encode and cache zoom 3
-    const z3Webp = await encodeWebP(CHUNK_CANVAS_WIDTH, CHUNK_CANVAS_HEIGHT, z3Pixels);
-    this._writeChunkCache(mapName, terrainType, season, chunkI, chunkJ, MAX_ZOOM, z3Webp);
+    // Z3 not encoded/cached — client renders Z3 locally from atlas.
+    // Z3 RGBA kept in memory as downscale cascade source for Z2→Z1→Z0.
 
     // Cascade downscale: 3→2→1→0
     let pixels = z3Pixels;
@@ -669,13 +665,12 @@ export class TerrainChunkRenderer implements Service {
         const chunksJ = Math.ceil(map.width / CHUNK_SIZE);
         const totalChunks = chunksI * chunksJ;
 
-        // Count already-cached chunks (check zoom-0 and zoom-3 as sentinels)
+        // Count already-cached chunks (check zoom-0 as sentinel; Z3 not cached)
         let existingCount = 0;
         for (let ci = 0; ci < chunksI; ci++) {
           for (let cj = 0; cj < chunksJ; cj++) {
             if (
-              fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, 0)) &&
-              fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, MAX_ZOOM))
+              fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, 0))
             ) existingCount++;
           }
         }
@@ -699,8 +694,7 @@ export class TerrainChunkRenderer implements Service {
             if (this.stopRequested) break;
 
             if (
-              fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, 0)) &&
-              fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, MAX_ZOOM))
+              fs.existsSync(this.getChunkCachePath(item.mapName, item.terrainType, item.season, ci, cj, 0))
             ) continue;
 
             const _ci = ci;
@@ -715,9 +709,9 @@ export class TerrainChunkRenderer implements Service {
                 chunkJ: _cj,
               }).then(async (pngs) => {
                 if (this.stopRequested) return;
-                // pngs[0]=zoom3, pngs[1]=zoom2, pngs[2]=zoom1, pngs[3]=zoom0
+                // pngs[0]=zoom3 (skipped), pngs[1]=zoom2, pngs[2]=zoom1, pngs[3]=zoom0
                 const writes: Promise<void>[] = [];
-                for (let z = MAX_ZOOM; z >= 0; z--) {
+                for (let z = MAX_ZOOM - 1; z >= 0; z--) {
                   const pngIdx = MAX_ZOOM - z;
                   const cachePath = this.getChunkCachePath(item.mapName, item.terrainType, item.season, _ci, _cj, z);
                   writes.push(
