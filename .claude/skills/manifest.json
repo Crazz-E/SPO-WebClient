@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "installedAt": "2026-02-26T19:17:47.008Z",
+  "installedAt": "2026-03-13T15:31:03.676Z",
   "source": "skillsmp.com",
   "skills": [
     {
@@ -250,6 +250,20 @@
       "stars": 23618,
       "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\readme-blueprint-generator.md",
       "githubUrl": "https://github.com/github/awesome-copilot/tree/main/skills/readme-blueprint-generator"
+    },
+    {
+      "name": "senior-security",
+      "skillName": "senior-security",
+      "author": "alirezarezvani",
+      "stars": 4436,
+      "githubUrl": "https://github.com/alirezarezvani/claude-skills/tree/main/engineering-team/senior-security"
+    },
+    {
+      "name": "api-security-review",
+      "skillName": "api-security-review",
+      "author": "AnvinX1",
+      "stars": 2,
+      "githubUrl": "https://github.com/AnvinX1/Tesserin-pro/tree/main/.specter/skills/api-security-review"
     }
   ]
 }
