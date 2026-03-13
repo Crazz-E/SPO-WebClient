@@ -1,6 +1,5 @@
 # Auto detect text files and normalize line endings to LF in the repository
 * text=auto
-
 # Force LF for source code
 *.ts text eol=lf
 *.js text eol=lf
@@ -9,11 +8,9 @@
 *.css text eol=lf
 *.html text eol=lf
 *.csv text eol=lf
-
 # Force CRLF for Windows batch files
 *.bat text eol=crlf
 *.cmd text eol=crlf
-
 # Binary files
 *.png binary
 *.jpg binary
@@ -21,3 +18,5 @@
 *.gif binary
 *.ico binary
 *.BIN binary
+webclient-cache/chunks/**/*.webp filter=lfs diff=lfs merge=lfs -text
+webclient-cache/chunks/**/*.png filter=lfs diff=lfs merge=lfs -text

@@ -35,8 +35,9 @@ nul
 cache/
 
 # WebClient-specific cache (for game server fallback images and local needs)
-# Separate from update server structure
-webclient-cache/
+# Separate from update server structure — ignore everything except chunks (tracked via Git LFS)
+webclient-cache/*
+!webclient-cache/chunks/
 
 # Test coverage
 coverage/
