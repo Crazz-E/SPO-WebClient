@@ -26,7 +26,7 @@ export default defineConfig({
         manualChunks: undefined,
       },
     },
-    sourcemap: true,
+    sourcemap: process.env.NODE_ENV !== 'production',
     target: 'es2020',
   },
   resolve: {

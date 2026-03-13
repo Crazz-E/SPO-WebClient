@@ -121,7 +121,9 @@ function initSpoDebug(): SpoDebugWire {
     maxHistory: 200,
     getState: null,
   };
-  (window as unknown as Record<string, unknown>).__spoDebug = debug;
+  if (import.meta.env.DEV) {
+    (window as unknown as Record<string, unknown>).__spoDebug = debug;
+  }
   return debug;
 }
 

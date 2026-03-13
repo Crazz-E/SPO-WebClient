@@ -402,13 +402,43 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
   }
 }
 
+const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
+
+/**
+ * Extract client IP, respecting X-Forwarded-For when behind a trusted reverse proxy.
+ */
+function getClientIp(req: { headers: http.IncomingHttpHeaders; socket: { remoteAddress?: string } }): string {
+  if (TRUST_PROXY) {
+    const xff = req.headers['x-forwarded-for'];
+    const first = typeof xff === 'string' ? xff.split(',')[0].trim() : undefined;
+    if (first) return first.replace('::ffff:', '');
+  }
+  return (req.socket.remoteAddress || '0.0.0.0').replace('::ffff:', '');
+}
+
+/**
+ * Sanitize a user-supplied URL path segment to prevent path traversal.
+ * Returns the decoded value if safe, or null if it contains traversal sequences.
+ */
+function sanitizePathParam(raw: string): string | null {
+  const decoded = decodeURIComponent(raw);
+  if (decoded.includes('..') || decoded.includes('/') || decoded.includes('\\') || decoded.includes('\0')) {
+    return null;
+  }
+  return decoded;
+}
+
 // Security headers applied to all HTTP responses
 function setSecurityHeaders(res: http.ServerResponse): void {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'");
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'");
+  if (process.env.ENABLE_HSTS === 'true') {
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+  }
 }
 
 // Simple in-memory rate limiter for sensitive endpoints
@@ -462,7 +492,6 @@ const server = http.createServer(async (req, res) => {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
     });
     res.flushHeaders();
     const send = (data: import('./service-registry').StartupProgressEvent) => {
@@ -486,11 +515,11 @@ const server = http.createServer(async (req, res) => {
 
   // Map data API endpoint: /api/map-data/:mapname
   if (safePath.startsWith('/api/map-data/')) {
-    const mapName = safePath.substring('/api/map-data/'.length).split('?')[0];
+    const mapName = sanitizePathParam(safePath.substring('/api/map-data/'.length).split('?')[0]);
 
     if (!mapName) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing map name' }));
+      res.end(JSON.stringify({ error: 'Invalid or missing map name' }));
       return;
     }
 
@@ -508,7 +537,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ metadata, bmpUrl }));
     } catch (error: unknown) {
-      console.error(`[MapDataService] Error loading map ${mapName}:`, error);
+      logger.error(`MapDataService: Error loading map: ${toErrorMessage(error)}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to load map data' }));
     }
@@ -549,13 +578,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (safePath.startsWith('/api/terrain-info/')) {
-    const terrainType = decodeURIComponent(safePath.substring('/api/terrain-info/'.length).split('?')[0]);
+    const terrainType = sanitizePathParam(safePath.substring('/api/terrain-info/'.length).split('?')[0]);
+
+    if (!terrainType) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid terrain type' }));
+      return;
+    }
 
     const terrainInfo = textureExtractor().getTerrainInfo(terrainType);
 
     if (!terrainInfo) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: `Terrain type not found: ${terrainType}` }));
+      res.end(JSON.stringify({ error: 'Terrain type not found' }));
       return;
     }
 
@@ -578,8 +613,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const terrainType = decodeURIComponent(parts[0]);
+    const terrainType = sanitizePathParam(parts[0]);
     const season = parseInt(parts[1].split('?')[0], 10);
+
+    if (!terrainType) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid terrain type' }));
+      return;
+    }
 
     if (isNaN(season) || season < 0 || season > 3) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -613,8 +654,14 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const terrainType = decodeURIComponent(parts[0]);
+    const terrainType = sanitizePathParam(parts[0]);
     const season = parseInt(parts[1].split('?')[0], 10);
+
+    if (!terrainType) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid terrain type' }));
+      return;
+    }
 
     if (isNaN(season) || season < 0 || season > 3) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -640,7 +687,12 @@ const server = http.createServer(async (req, res) => {
 
   // Object atlas endpoint: /api/object-atlas/:category
   if (safePath.startsWith('/api/object-atlas/') && !safePath.endsWith('/manifest')) {
-    const category = safePath.substring('/api/object-atlas/'.length).split('?')[0];
+    const category = sanitizePathParam(safePath.substring('/api/object-atlas/'.length).split('?')[0]);
+    if (!category) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid category' }));
+      return;
+    }
     const atlasPath = path.join(WEBCLIENT_CACHE_DIR, 'objects', `${category}-atlas.png`);
 
     try {
@@ -652,14 +704,19 @@ const server = http.createServer(async (req, res) => {
       res.end(content);
     } catch {
       res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: `Atlas not found for category: ${category}` }));
+      res.end(JSON.stringify({ error: 'Atlas not found' }));
     }
     return;
   }
 
   // Object atlas manifest: /api/object-atlas/:category/manifest
   if (safePath.startsWith('/api/object-atlas/') && safePath.endsWith('/manifest')) {
-    const category = safePath.substring('/api/object-atlas/'.length).replace('/manifest', '').split('?')[0];
+    const category = sanitizePathParam(safePath.substring('/api/object-atlas/'.length).replace('/manifest', '').split('?')[0]);
+    if (!category) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid category' }));
+      return;
+    }
     const manifestPath = path.join(WEBCLIENT_CACHE_DIR, 'objects', `${category}-atlas.json`);
 
     try {
@@ -671,7 +728,7 @@ const server = http.createServer(async (req, res) => {
       res.end(content);
     } catch {
       res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: `Atlas manifest not found for category: ${category}` }));
+      res.end(JSON.stringify({ error: 'Atlas manifest not found' }));
     }
     return;
   }
@@ -688,12 +745,18 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const mapName = decodeURIComponent(parts[0]);
-    const terrainType = decodeURIComponent(parts[1]);
+    const mapName = sanitizePathParam(parts[0]);
+    const terrainType = sanitizePathParam(parts[1]);
     const season = parseInt(parts[2], 10);
     const zoomLevel = parseInt(parts[3], 10);
     const chunkI = parseInt(parts[4], 10);
     const chunkJ = parseInt(parts[5].split('?')[0], 10);
+
+    if (!mapName || !terrainType) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid map name or terrain type' }));
+      return;
+    }
 
     if (isNaN(season) || season < 0 || season > 3 ||
         isNaN(zoomLevel) || zoomLevel < 0 || zoomLevel > 3 ||
@@ -705,7 +768,7 @@ const server = http.createServer(async (req, res) => {
 
     if (!terrainChunkRenderer().hasAtlas(terrainType, season)) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: `Atlas not available for ${terrainType}/${season}` }));
+      res.end(JSON.stringify({ error: 'Atlas not available' }));
       return;
     }
 
@@ -726,10 +789,10 @@ const server = http.createServer(async (req, res) => {
       res.end(chunkPng);
       const reqDt = Date.now() - reqT0;
       if (reqDt > 20) {
-        console.log(`[TerrainChunk API] z${zoomLevel} ${chunkI},${chunkJ}: ${reqDt}ms (${(chunkPng.length / 1024).toFixed(0)} KB)`);
+        logger.debug(`TerrainChunk API: z${zoomLevel} ${chunkI},${chunkJ}: ${reqDt}ms (${(chunkPng.length / 1024).toFixed(0)} KB)`);
       }
     } catch (error: unknown) {
-      console.error(`[TerrainChunk] Error generating chunk z${zoomLevel} ${chunkI},${chunkJ}:`, error);
+      logger.error(`TerrainChunk: Error generating chunk z${zoomLevel} ${chunkI},${chunkJ}: ${toErrorMessage(error)}`);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Internal server error' }));
     }
@@ -747,9 +810,15 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const mapName = decodeURIComponent(parts[0]);
-    const terrainType = decodeURIComponent(parts[1]);
+    const mapName = sanitizePathParam(parts[0]);
+    const terrainType = sanitizePathParam(parts[1]);
     const season = parseInt(parts[2].split('?')[0], 10);
+
+    if (!mapName || !terrainType) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid map name or terrain type' }));
+      return;
+    }
 
     if (isNaN(season) || season < 0 || season > 3) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -785,9 +854,15 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const mapName = decodeURIComponent(parts[0]);
-    const terrainType = decodeURIComponent(parts[1]);
+    const mapName = sanitizePathParam(parts[0]);
+    const terrainType = sanitizePathParam(parts[1]);
     const season = parseInt(parts[2].split('?')[0], 10);
+
+    if (!mapName || !terrainType) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid map name or terrain type' }));
+      return;
+    }
 
     if (isNaN(season) || season < 0 || season > 3) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -829,9 +904,15 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    const terrainType = decodeURIComponent(parts[0]);
+    const terrainType = sanitizePathParam(parts[0]);
     const season = parseInt(parts[1], 10);
     const paletteIndex = parseInt(parts[2].split('?')[0], 10);
+
+    if (!terrainType) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid terrain type' }));
+      return;
+    }
 
     if (isNaN(season) || season < 0 || season > 3 || isNaN(paletteIndex)) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -891,7 +972,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Rate limit proxy-image requests
-    const clientIp = (req.socket.remoteAddress || '0.0.0.0').replace('::ffff:', '');
+    const clientIp = getClientIp(req);
     if (!checkRateLimit(clientIp, 'proxy', RATE_LIMIT_MAX_PROXY)) {
       res.writeHead(429, { 'Content-Type': 'text/plain' });
       res.end('Too many requests');
@@ -965,15 +1046,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Basic security check to prevent directory traversal
-  if (safePath.includes('..')) {
+  // Map URL to local file
+  let filePath = path.join(PUBLIC_DIR, safePath);
+
+  // Prevent directory traversal — normalize and verify the resolved path stays within PUBLIC_DIR
+  const normalizedPublicPath = path.normalize(filePath);
+  if (!normalizedPublicPath.startsWith(path.normalize(PUBLIC_DIR))) {
     res.writeHead(403);
     res.end('Access Denied');
     return;
   }
-
-  // Map URL to local file
-  let filePath = path.join(PUBLIC_DIR, safePath);
 
   // If requesting the JS bundle
   if (safePath === '/client.js') {
@@ -1032,7 +1114,7 @@ const wss = new WebSocketServer({
     }
 
     // Per-IP connection limit
-    const ip = (info.req.socket.remoteAddress || '0.0.0.0').replace('::ffff:', '');
+    const ip = getClientIp(info.req);
     const currentCount = wsConnectionsPerIp.get(ip) || 0;
     if (currentCount >= WS_MAX_CONNECTIONS_PER_IP) {
       logger.warn(`[Gateway] WebSocket connection rejected: too many connections from ${ip}`);
@@ -1047,10 +1129,11 @@ const wss = new WebSocketServer({
 
 // GM Chat: track all connected WebSocket clients and their usernames
 const connectedClients = new Map<WebSocket, string>(); // ws → username
-const GM_USERNAMES = new Set((process.env.SPO_GM_USERS || 'admin').split(',').map(s => s.trim()));
+const GM_USERNAMES = new Set((process.env.SPO_GM_USERS || '').split(',').map(s => s.trim()).filter(Boolean));
 
-wss.on('connection', (ws: WebSocket) => {
-  console.log('[Gateway] New Client Connected');
+wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+  const clientIp = getClientIp(req);
+  logger.info('New Client Connected');
 
   // Create a dedicated Starpeace Session for this connection
   const spSession = new StarpeaceSession();
@@ -1098,7 +1181,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
       }
 
-      await handleClientMessage(ws, spSession, searchMenuService, msg);
+      await handleClientMessage(ws, spSession, searchMenuService, msg, clientIp);
 
       // Initialize SearchMenuService after successful login response
       const isCompanySelection = msg.type === WsMessageType.REQ_SELECT_COMPANY || msg.type === WsMessageType.REQ_SWITCH_COMPANY;
@@ -1118,7 +1201,7 @@ wss.on('connection', (ws: WebSocket) => {
                 daAddr, // Use real DAAddr from session
                 daPort // Use real DALockPort from session
               );
-              console.log(`[Gateway] SearchMenuService initialized with DAAddr: ${daAddr}:${daPort}`);
+              logger.info(`SearchMenuService initialized with DAAddr: ${daAddr}:${daPort}`);
 
               // Fetch Capitol coordinates from DirectoryMain.asp and push to client
               searchMenuService.getHomePage().then(categories => {
@@ -1132,18 +1215,18 @@ wss.on('connection', (ws: WebSocket) => {
                   hasCapitol: coords !== null,
                 };
                 ws.send(JSON.stringify(resp));
-                console.log(`[Gateway] Capitol coords: ${coords ? `${coords.x},${coords.y}` : 'none'}`);
+                logger.debug(`Capitol coords: ${coords ? `${coords.x},${coords.y}` : 'none'}`);
               }).catch((err: unknown) => {
-                console.error('[Gateway] Failed to fetch Capitol coords:', err);
+                logger.error(`Failed to fetch Capitol coords: ${toErrorMessage(err)}`);
               });
             } else {
-              console.error('[Gateway] Failed to initialize SearchMenuService: DAAddr or DAPort not available');
+              logger.error('Failed to initialize SearchMenuService: DAAddr or DAPort not available');
             }
           }
         }, 500);
       }
     } catch (err: unknown) {
-      console.error('[Gateway] Message Error:', err);
+      logger.error(`Message Error: ${toErrorMessage(err)}`);
       const errorResp: WsRespError = {
         type: WsMessageType.RESP_ERROR,
         errorMessage: 'Invalid Message Format',
@@ -1154,23 +1237,22 @@ wss.on('connection', (ws: WebSocket) => {
   });
 
   ws.on('close', async () => {
-    console.log('[Gateway] Client Disconnected');
+    logger.info('Client Disconnected');
     connectedClients.delete(ws);
 
     // Decrement per-IP connection count
-    const wsIp = (ws as unknown as { _socket?: { remoteAddress?: string } })._socket?.remoteAddress?.replace('::ffff:', '') || '0.0.0.0';
-    const count = wsConnectionsPerIp.get(wsIp) || 0;
+    const count = wsConnectionsPerIp.get(clientIp) || 0;
     if (count <= 1) {
-      wsConnectionsPerIp.delete(wsIp);
+      wsConnectionsPerIp.delete(clientIp);
     } else {
-      wsConnectionsPerIp.set(wsIp, count - 1);
+      wsConnectionsPerIp.set(clientIp, count - 1);
     }
     // Send Logoff before cleanup to gracefully close game server session
     // Note: endSession() schedules socket closure 2 seconds after Logoff
     try {
       await spSession.endSession();
     } catch (err: unknown) {
-      console.error('[Gateway] Error sending Logoff on close:', err);
+      logger.error(`Error sending Logoff on close: ${toErrorMessage(err)}`);
     }
     spSession.destroy();
   });
@@ -1179,12 +1261,11 @@ wss.on('connection', (ws: WebSocket) => {
 /**
  * Message Router — dispatches to handler modules in ws-handlers/
  */
-async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, searchMenuService: SearchMenuService | null, msg: WsMessage) {
+async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, searchMenuService: SearchMenuService | null, msg: WsMessage, clientIp: string) {
   // Rate limit authentication attempts
-  const authTypes: string[] = [WsMessageType.REQ_AUTH_CHECK, WsMessageType.REQ_CONNECT_DIRECTORY];
+  const authTypes: string[] = [WsMessageType.REQ_AUTH_CHECK, WsMessageType.REQ_CONNECT_DIRECTORY, WsMessageType.REQ_LOGIN_WORLD];
   if (authTypes.includes(msg.type)) {
-    const ip = (ws as unknown as { _socket?: { remoteAddress?: string } })._socket?.remoteAddress?.replace('::ffff:', '') || '0.0.0.0';
-    if (!checkRateLimit(ip, 'auth', RATE_LIMIT_MAX_AUTH)) {
+    if (!checkRateLimit(clientIp, 'auth', RATE_LIMIT_MAX_AUTH)) {
       const errorResp: WsRespError = {
         type: WsMessageType.RESP_ERROR,
         wsRequestId: msg.wsRequestId,
@@ -1198,7 +1279,7 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
 
   const handler = wsHandlerRegistry[msg.type as WsMessageType];
   if (!handler) {
-    console.warn(`[Gateway] Unknown message type: ${msg.type}`);
+    logger.warn(`Unknown message type: ${msg.type}`);
     const errorResp: WsRespError = {
       type: WsMessageType.RESP_ERROR,
       wsRequestId: msg.wsRequestId,
@@ -1216,7 +1297,7 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
     );
   } catch (err: unknown) {
     // Log full details server-side, send generic message to client
-    console.error('[Gateway] Request Failed:', toErrorMessage(err));
+    logger.error(`Request Failed: ${toErrorMessage(err)}`);
     const errorResp: WsRespError = {
       type: WsMessageType.RESP_ERROR,
       wsRequestId: msg.wsRequestId,
@@ -1233,7 +1314,7 @@ async function startServer() {
     // Start HTTP server FIRST so /api/startup-status SSE is reachable during cache building
     await new Promise<void>((resolve) => {
       server.listen(PORT, () => {
-        console.log(`[Gateway] HTTP server listening on port ${PORT} (initializing...)`);
+        logger.info(`HTTP server listening on port ${PORT} (initializing...)`);
         resolve();
       });
     });
@@ -1263,7 +1344,7 @@ async function startServer() {
       } satisfies import('./service-registry').StartupProgressEvent);
     };
 
-    console.log('[Gateway] Building caches...');
+    logger.info('Building caches...');
     emitCacheProgress('Building file indexes...');
 
     await Promise.all([
@@ -1291,23 +1372,23 @@ async function startServer() {
     ]);
 
     // Initialize services — facilities/textures/mapData run in parallel (same depth)
-    console.log('[Gateway] Initializing services...');
+    logger.info('Initializing services...');
     await serviceRegistry.initialize();
 
     // Log service-specific statistics
     const updateStats = serviceRegistry.get<UpdateService>('update').getStats();
-    console.log(`[Gateway] Update service: ${updateStats.downloaded} downloaded, ${updateStats.extracted} CAB extracted, ${updateStats.skipped} skipped, ${updateStats.failed} failed`);
+    logger.info(`Update service: ${updateStats.downloaded} downloaded, ${updateStats.extracted} CAB extracted, ${updateStats.skipped} skipped, ${updateStats.failed} failed`);
 
     const facilityStats = facilityDimensionsCache().getStats();
-    console.log(`[Gateway] Facility cache: ${facilityStats.total} facilities loaded`);
+    logger.info(`Facility cache: ${facilityStats.total} facilities loaded`);
 
     const textureStats = textureExtractor().getStats() as Array<{ terrainType: string; seasonName: string; textureCount: number }>;
-    console.log(`[Gateway] Texture extractor: ${textureStats.length} terrain/season combinations`);
-    textureStats.forEach(s => console.log(`  - ${s.terrainType}/${s.seasonName}: ${s.textureCount} textures`));
+    logger.info(`Texture extractor: ${textureStats.length} terrain/season combinations`);
+    textureStats.forEach(s => logger.info(`  - ${s.terrainType}/${s.seasonName}: ${s.textureCount} textures`));
 
-    console.log(`[Gateway] Server ready at http://localhost:${PORT}`);
+    logger.info(`Server ready at http://localhost:${PORT}`);
   } catch (error: unknown) {
-    console.error('[Gateway] Failed to start server:', error);
+    logger.error(`Failed to start server: ${toErrorMessage(error)}`);
     process.exit(1);
   }
 }
