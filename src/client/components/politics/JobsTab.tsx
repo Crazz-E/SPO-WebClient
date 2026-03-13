@@ -7,7 +7,7 @@ import { useState, useCallback } from 'react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { useClient } from '../../context';
 import { useGameStore } from '../../store/game-store';
-import { buildValueMap, getNum, formatCompact, isPresidentRole } from './capitol-utils';
+import { buildValueMap, getNum, formatCompact, isFacilityOwnerRole } from './capitol-utils';
 import styles from './PoliticsPanel.module.css';
 
 interface JobsTabProps {
@@ -28,7 +28,7 @@ interface JobClass {
 
 export function JobsTab({ properties, buildingX, buildingY }: JobsTabProps) {
   const ownerRole = useGameStore((s) => s.ownerRole);
-  const isPresident = isPresidentRole(ownerRole);
+  const canEdit = isFacilityOwnerRole(ownerRole);
   const valueMap = buildValueMap(properties);
 
   const classes: JobClass[] = [
@@ -95,7 +95,7 @@ export function JobsTab({ properties, buildingX, buildingY }: JobsTabProps) {
             levelIndex={String(i)}
             buildingX={buildingX}
             buildingY={buildingY}
-            editable={isPresident}
+            editable={canEdit}
           />
         </div>
       ))}

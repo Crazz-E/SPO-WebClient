@@ -28,3 +28,14 @@ export function isPresidentRole(ownerRole: string): boolean {
   const role = ownerRole.toLowerCase();
   return role.includes('president') || role.includes('président');
 }
+
+/** Check if the ownerRole string indicates the user is mayor. */
+export function isMayorRole(ownerRole: string): boolean {
+  const role = ownerRole.toLowerCase();
+  return role.includes('mayor') || role.includes('maire');
+}
+
+/** Check if the ownerRole indicates the user owns the civic facility (mayor or president). */
+export function isFacilityOwnerRole(ownerRole: string): boolean {
+  return isPresidentRole(ownerRole) || isMayorRole(ownerRole);
+}

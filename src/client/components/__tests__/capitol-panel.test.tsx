@@ -345,7 +345,7 @@ describe('CapitolPanel', () => {
       expect(sliders.length).toBe(3);
     });
 
-    it('disables min wage sliders when not president', () => {
+    it('disables min wage sliders when no civic role', () => {
       useGameStore.setState({ ownerRole: '', isPublicOfficeRole: false });
       const { container } = renderWithProviders(<BuildingInspector hideHeader />);
       switchTab('townJobs');
@@ -355,8 +355,18 @@ describe('CapitolPanel', () => {
       });
     });
 
-    it('disables min wage sliders for non-president public office role (mayor)', () => {
+    it('enables min wage sliders when mayor', () => {
       useGameStore.setState({ ownerRole: 'mayor', isPublicOfficeRole: true });
+      const { container } = renderWithProviders(<BuildingInspector hideHeader />);
+      switchTab('townJobs');
+      const sliders = container.querySelectorAll('input[type="range"]');
+      sliders.forEach((slider) => {
+        expect((slider as HTMLInputElement).disabled).toBe(false);
+      });
+    });
+
+    it('disables min wage sliders for minister role', () => {
+      useGameStore.setState({ ownerRole: 'minister', isPublicOfficeRole: true });
       const { container } = renderWithProviders(<BuildingInspector hideHeader />);
       switchTab('townJobs');
       const sliders = container.querySelectorAll('input[type="range"]');

@@ -747,11 +747,14 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       return;
     }
 
-    if (!this.cachedUsername || !this.cachedPassword) {
+    // Use role-based identity when available (e.g., "Mayor of Shamba" after company switch)
+    // Falls back to original tycoon username for regular players
+    const loginUser = this.activeUsername || this.cachedUsername;
+    if (!loginUser || !this.cachedPassword) {
       throw new Error('Credentials not cached - cannot connect to construction service');
     }
 
-    this.log.debug('[Construction] Connecting to Construction Service (port 7001)...');
+    this.log.debug(`[Construction] Connecting to Construction Service (port 7001) as "${loginUser}"...`);
     await this.createSocket(
       'construction',
       this.currentWorldInfo?.ip || '127.0.0.1',
@@ -773,12 +776,12 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
         .call('RDOLogonClient')
         .push()
         .args(
-          RdoValue.string(this.cachedUsername!),
+          RdoValue.string(loginUser),
           RdoValue.string(this.cachedPassword!)
         )
         .build();
       socket.write(logonCmd);
-      this.log.debug(`[Construction] Sent RDOLogonClient`);
+      this.log.debug(`[Construction] Sent RDOLogonClient as "${loginUser}"`);
       // Small delay to let server process logon
       await new Promise(resolve => setTimeout(resolve, 100));
     }
