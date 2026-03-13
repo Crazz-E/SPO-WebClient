@@ -1434,7 +1434,7 @@
      * Render a single chunk: try server-side pre-rendered PNG first, fall back to local rendering.
      */
     async renderChunk(chunkI, chunkJ, zoomLevel) {
-      if (this.useServerChunks && !this.serverChunkFailed && this.mapName && zoomLevel < 3) {
+      if (this.useServerChunks && !this.serverChunkFailed && this.mapName) {
         const success = await this.fetchServerChunk(chunkI, chunkJ, zoomLevel);
         if (success) return;
       }
