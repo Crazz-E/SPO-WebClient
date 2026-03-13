@@ -27,6 +27,7 @@ import { AtlasManifest, TileEntry } from './atlas-generator';
 import { isSpecialTile } from '../shared/land-utils';
 import { Season, SEASON_NAMES } from '../shared/map-config';
 import { MapDataService } from './map-data-service';
+import { config } from '../shared/config';
 import type { Service } from './service-registry';
 
 // ============================================================================
@@ -646,14 +647,14 @@ export class TerrainChunkRenderer implements Service {
       }
 
       // Determine which maps to generate:
-      // 1. If caller passes targetMaps, use those.
-      // 2. Else if PREGENERATE_MAPS env var is set, use that (server background mode).
-      // 3. Else generate all maps found in cache/Maps/ with a .bmp file.
+      // 1. If caller passes targetMaps (CLI --map), use those.
+      // 2. Else use config.chunks.devMaps (defaults to Shamba,Zorcon in dev, all in prod;
+      //    overridable via PREGENERATE_MAPS env var).
       let allowedMaps: Set<string> | null = null;
       if (targetMaps && targetMaps.length > 0) {
         allowedMaps = new Set(targetMaps);
-      } else if (process.env.PREGENERATE_MAPS) {
-        allowedMaps = new Set(process.env.PREGENERATE_MAPS.split(',').map(s => s.trim()).filter(Boolean));
+      } else if (config.chunks.devMaps.length > 0) {
+        allowedMaps = new Set(config.chunks.devMaps);
       }
 
       const mapDirs = fs.readdirSync(mapsDir, { withFileTypes: true })
@@ -686,6 +687,9 @@ export class TerrainChunkRenderer implements Service {
         }
       }
 
+      if (allowedMaps) {
+        console.log(`[TerrainChunkRenderer] DEV map filter active: ${[...allowedMaps].join(', ')}`);
+      }
       console.log(`[TerrainChunkRenderer] Pre-generation: ${mapDirs.length} maps, ${workItems.length} map/season combos`);
 
       // Resolve the compiled worker path (works for both dev and packaged builds)
