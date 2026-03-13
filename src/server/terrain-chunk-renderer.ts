@@ -489,9 +489,6 @@ export class TerrainChunkRenderer implements Service {
 
     if (!pixels) return null;
 
-    // Z3 not cached — client renders locally from atlas
-    if (zoomLevel === MAX_ZOOM) return null;
-
     // Encode as WebP
     const webp = await encodeWebP(width, height, pixels);
 
@@ -587,10 +584,11 @@ export class TerrainChunkRenderer implements Service {
     const z3Pixels = this.generateChunkRGBA(terrainType, season, chunkI, chunkJ, mapName);
     if (!z3Pixels) return false;
 
-    // Z3 not encoded/cached — client renders Z3 locally from atlas.
-    // Z3 RGBA kept in memory as downscale cascade source for Z2→Z1→Z0.
+    // Encode and cache Z3 at full resolution
+    const z3Webp = await encodeWebP(CHUNK_CANVAS_WIDTH, CHUNK_CANVAS_HEIGHT, z3Pixels);
+    this._writeChunkCache(mapName, terrainType, season, chunkI, chunkJ, MAX_ZOOM, z3Webp);
 
-    // Cascade downscale: 3→2→1→0
+    // Cascade downscale: Z3→Z2→Z1→Z0
     let pixels = z3Pixels;
     let width = CHUNK_CANVAS_WIDTH;
     let height = CHUNK_CANVAS_HEIGHT;
@@ -718,7 +716,7 @@ export class TerrainChunkRenderer implements Service {
         const chunksJ = Math.ceil(map.width / CHUNK_SIZE);
         const totalChunks = chunksI * chunksJ;
 
-        // Count already-cached chunks (check zoom-0 as sentinel; Z3 not cached)
+        // Count already-cached chunks (check zoom-0 as sentinel)
         let existingCount = 0;
         for (let ci = 0; ci < chunksI; ci++) {
           for (let cj = 0; cj < chunksJ; cj++) {
@@ -786,9 +784,9 @@ export class TerrainChunkRenderer implements Service {
                 chunkJ: _cj,
               }).then(async (pngs) => {
                 if (this.stopRequested) return;
-                // pngs[0]=zoom3 (skipped), pngs[1]=zoom2, pngs[2]=zoom1, pngs[3]=zoom0
+                // pngs[0]=zoom3, pngs[1]=zoom2, pngs[2]=zoom1, pngs[3]=zoom0
                 const writes: Promise<void>[] = [];
-                for (let z = MAX_ZOOM - 1; z >= 0; z--) {
+                for (let z = MAX_ZOOM; z >= 0; z--) {
                   const pngIdx = MAX_ZOOM - z;
                   const cachePath = this.getChunkCachePath(item.mapName, item.terrainType, item.season, _ci, _cj, z);
                   writes.push(

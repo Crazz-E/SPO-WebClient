@@ -187,9 +187,9 @@ async function renderChunkAllZooms(
     }
   }
 
-  // buffers[0]=zoom3 (empty sentinel), buffers[1]=zoom2, buffers[2]=zoom1, buffers[3]=zoom0
+  // buffers[0]=zoom3, buffers[1]=zoom2, buffers[2]=zoom1, buffers[3]=zoom0
   const buffers: Buffer[] = [];
-  buffers.push(Buffer.alloc(0)); // Z3 not cached — client renders locally from atlas
+  buffers.push(await encodeWebP(CHUNK_CANVAS_WIDTH, CHUNK_CANVAS_HEIGHT, pixels));
 
   let curPixels: Buffer = pixels;
   let curW = CHUNK_CANVAS_WIDTH;

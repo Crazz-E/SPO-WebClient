@@ -440,7 +440,7 @@ export class ChunkCache {
    */
   private async renderChunk(chunkI: number, chunkJ: number, zoomLevel: number): Promise<void> {
     // Try server chunk first (only if map info is set and server hasn't failed)
-    if (this.useServerChunks && !this.serverChunkFailed && this.mapName && zoomLevel < 3) {
+    if (this.useServerChunks && !this.serverChunkFailed && this.mapName) {
       const success = await this.fetchServerChunk(chunkI, chunkJ, zoomLevel);
       if (success) return;
     }
