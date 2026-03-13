@@ -197,6 +197,13 @@ export class TextureAtlasCache {
   }
 
   /**
+   * Get the atlas manifest (tile coordinates, dimensions, etc.)
+   */
+  getManifest(): AtlasManifest | null {
+    return this.manifest;
+  }
+
+  /**
    * Get the atlas ImageBitmap for drawImage() calls
    */
   getAtlas(): ImageBitmap | null {

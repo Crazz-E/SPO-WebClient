@@ -1756,6 +1756,18 @@ export class IsometricMapRenderer {
   }
 
   /**
+   * Get atlas image + manifest for minimap color sampling.
+   */
+  public getAtlasData(): { atlas: ImageBitmap; manifest: import('./texture-atlas-cache').AtlasManifest } | null {
+    const cache = this.terrainRenderer.getAtlasCache();
+    if (!cache.isReady()) return null;
+    const atlas = cache.getAtlas();
+    const manifest = cache.getManifest();
+    if (!atlas || !manifest) return null;
+    return { atlas, manifest };
+  }
+
+  /**
    * Get the ChunkCache instance (for awaiting viewport readiness).
    */
   public getChunkCache(): import('./chunk-cache').ChunkCache | null {

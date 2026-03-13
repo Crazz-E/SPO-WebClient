@@ -342,7 +342,7 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should map top vertex click to tile (0,0)', () => {
+    it('should map top vertex click to tile (maxI, maxJ)', () => {
       const renderer = createMockRenderer();
       const minimap = new MinimapUI();
       minimap.setRenderer(renderer);
@@ -350,15 +350,15 @@ describe('MinimapUI', () => {
       const container = allElements.find(el => el.id === 'minimap-container');
 
       // Top vertex of 220px diamond = (110, 0)
-      // Reverse transform should map close to tile (i=0, j=0) but with padding offset
+      // After swap+flip, top of diamond = tile (maxI, maxJ) = (99, 99)
       container!.onmousedown!({ offsetX: 110, offsetY: 0, preventDefault: jest.fn(), stopPropagation: jest.fn() });
 
       const calls = (renderer.centerOn as jest.Mock).mock.calls;
       const lastCall = calls[calls.length - 1] as number[];
-      // Due to padding, the exact top vertex won't map to (0,0) precisely
-      // but it should be in the low range
-      expect(lastCall[0]).toBeLessThanOrEqual(10);
-      expect(lastCall[1]).toBeLessThanOrEqual(10);
+      // Due to padding, the exact top vertex won't map to (99,99) precisely
+      // but it should be in the high range
+      expect(lastCall[0]).toBeGreaterThanOrEqual(90);
+      expect(lastCall[1]).toBeGreaterThanOrEqual(90);
 
       minimap.destroy();
     });
