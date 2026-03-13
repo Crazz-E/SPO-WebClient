@@ -71,15 +71,49 @@ Then open `http://localhost:8080` in your browser.
 ### Commands
 
 ```bash
-npm run build           # Build server (tsc) + client (Vite) + terrain test (esbuild)
-npm run dev             # Build + start server
-npm run dev:react       # Vite dev server only (hot reload, no backend)
-npm test                # Run all tests
-npm run test:watch      # Watch mode
-npm run test:coverage   # Coverage report
-npm run test:verbose    # Verbose output
-npm run test:changed    # Test only changed files (bail on first failure)
-npm run test:smoke      # Component smoke tests only (jsdom)
+# Build
+npm run build              # Build all (server + client + terrain test)
+npm run build:server       # Build server only (tsc)
+npm run build:client       # Build client only (Vite)
+npm run build:terrain-test # Build terrain test (esbuild)
+
+# Run
+npm run dev                # Build all + start server on port 8080
+npm run dev:react          # Vite dev server only (hot reload, no backend)
+npm start                  # Start server (must build first)
+
+# Test
+npm test                   # Run all tests
+npm run test:watch         # Watch mode
+npm run test:coverage      # Coverage report
+npm run test:verbose       # Verbose output
+npm run test:changed       # Test only changed files (bail on first failure)
+npm run test:smoke         # Component smoke tests only (jsdom)
+
+# Cache & Release
+npm run cache:chunks       # Pre-generate terrain chunks (skip asset sync)
+npm run cache:all          # Pre-generate terrain chunks (with asset sync)
+npm run release            # Run release script
+```
+
+#### Chunk Cache Parameters
+
+The `cache:all` and `cache:chunks` scripts accept optional flags via `--`:
+
+| Flag | Description |
+|------|-------------|
+| `--skip-sync` | Skip asset sync from update server (used internally by `cache:chunks`) |
+| `--map <name>` | Generate chunks for a specific map only (can be repeated) |
+
+```bash
+# Sync assets + generate chunks for all maps
+npm run cache:all
+
+# Generate chunks for a single map (no sync)
+npm run cache:chunks -- --map Shamba
+
+# Sync + generate chunks for two specific maps
+npm run cache:all -- --map Shamba --map Zorcon
 ```
 
 ### Environment Variables
