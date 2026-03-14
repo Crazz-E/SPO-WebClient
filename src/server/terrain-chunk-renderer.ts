@@ -530,11 +530,20 @@ export class TerrainChunkRenderer implements Service {
     // Allocate chunk RGBA buffer (transparent initially)
     const pixels = Buffer.alloc(CHUNK_CANVAS_WIDTH * CHUNK_CANVAS_HEIGHT * 4, 0);
 
-    // Calculate tile range for this chunk
-    const startI = chunkI * CHUNK_SIZE;
-    const startJ = chunkJ * CHUNK_SIZE;
-    const endI = Math.min(startI + CHUNK_SIZE, map.height);
-    const endJ = Math.min(startJ + CHUNK_SIZE, map.width);
+    // Calculate tile range for this chunk, with 1-tile border overlap.
+    // Border tiles extend into adjacent chunks so that their diamond pixels
+    // fill the transparent corners of the chunk canvas.  This eliminates
+    // dark seam lines caused by GPU compositing at transparency boundaries
+    // when adjacent chunks are drawn side-by-side on the main canvas.
+    const BORDER = 1;
+    const startI = Math.max(0, chunkI * CHUNK_SIZE - BORDER);
+    const startJ = Math.max(0, chunkJ * CHUNK_SIZE - BORDER);
+    const endI = Math.min(chunkI * CHUNK_SIZE + CHUNK_SIZE + BORDER, map.height);
+    const endJ = Math.min(chunkJ * CHUNK_SIZE + CHUNK_SIZE + BORDER, map.width);
+
+    // Base offsets for localI/localJ (chunk-owned tiles start at localI=0)
+    const baseI = chunkI * CHUNK_SIZE;
+    const baseJ = chunkJ * CHUNK_SIZE;
 
     // Render tiles (same iteration order as client)
     for (let i = startI; i < endI; i++) {

@@ -452,12 +452,21 @@ export function downscaleRGBA2x(
       const i01 = ((sy + 1) * srcW + sx) * 4;
       const i11 = ((sy + 1) * srcW + sx + 1) * 4;
 
-      // Box filter: average of 4 pixels
+      // Alpha-aware box filter: prevents semi-transparent seam artifacts at chunk edges.
+      // RGB is weighted by alpha so transparent pixels (R=G=B=A=0) don't darken the result.
+      // Alpha uses max (binary-alpha-safe): if any source pixel is opaque, result is opaque.
       const dstIdx = (dy * dstW + dx) * 4;
-      dst[dstIdx]     = (src[i00] + src[i10] + src[i01] + src[i11] + 2) >> 2;     // R
-      dst[dstIdx + 1] = (src[i00 + 1] + src[i10 + 1] + src[i01 + 1] + src[i11 + 1] + 2) >> 2; // G
-      dst[dstIdx + 2] = (src[i00 + 2] + src[i10 + 2] + src[i01 + 2] + src[i11 + 2] + 2) >> 2; // B
-      dst[dstIdx + 3] = (src[i00 + 3] + src[i10 + 3] + src[i01 + 3] + src[i11 + 3] + 2) >> 2; // A
+      const a00 = src[i00 + 3], a10 = src[i10 + 3], a01 = src[i01 + 3], a11 = src[i11 + 3];
+      const sumA = a00 + a10 + a01 + a11;
+
+      if (sumA === 0) {
+        // All transparent — leave as zero (Buffer.alloc already zeroed)
+      } else {
+        dst[dstIdx]     = ((src[i00] * a00 + src[i10] * a10 + src[i01] * a01 + src[i11] * a11) / sumA + 0.5) | 0;
+        dst[dstIdx + 1] = ((src[i00 + 1] * a00 + src[i10 + 1] * a10 + src[i01 + 1] * a01 + src[i11 + 1] * a11) / sumA + 0.5) | 0;
+        dst[dstIdx + 2] = ((src[i00 + 2] * a00 + src[i10 + 2] * a10 + src[i01 + 2] * a01 + src[i11 + 2] * a11) / sumA + 0.5) | 0;
+        dst[dstIdx + 3] = Math.max(a00, a10, a01, a11);
+      }
     }
   }
 
