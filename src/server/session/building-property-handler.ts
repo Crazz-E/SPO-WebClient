@@ -7,12 +7,36 @@
 
 import type { SessionContext } from './session-context';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
+import { toErrorMessage } from '../../shared/error-utils';
+
+// =========================================================================
+// Serialisation — prevent concurrent cacher operations on the same session
+// =========================================================================
+const sessionLocks = new WeakMap<SessionContext, Promise<unknown>>();
+
+function serialise(ctx: SessionContext, fn: () => Promise<{ success: boolean; newValue: string }>): Promise<{ success: boolean; newValue: string }> {
+  const prev = sessionLocks.get(ctx) ?? Promise.resolve();
+  const next = prev.then(fn, fn); // run fn after previous settles (success or failure)
+  sessionLocks.set(ctx, next);
+  return next;
+}
 
 // =========================================================================
 // PUBLIC — setBuildingProperty
 // =========================================================================
 
-export async function setBuildingProperty(
+export function setBuildingProperty(
+  ctx: SessionContext,
+  x: number,
+  y: number,
+  propertyName: string,
+  value: string,
+  additionalParams?: Record<string, string>
+): Promise<{ success: boolean; newValue: string }> {
+  return serialise(ctx, () => setBuildingPropertyImpl(ctx, x, y, propertyName, value, additionalParams));
+}
+
+async function setBuildingPropertyImpl(
   ctx: SessionContext,
   x: number,
   y: number,
@@ -148,8 +172,8 @@ export async function setBuildingProperty(
       await ctx.cacherCloseObject(verifyObjectId);
     }
 
-  } catch (e) {
-    ctx.log.error(`[BuildingDetails] Failed to set property:`, e);
+  } catch (e: unknown) {
+    ctx.log.error(`[BuildingDetails] Failed to set property: ${toErrorMessage(e)}`);
     return { success: false, newValue: '' };
   }
 }

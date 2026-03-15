@@ -123,12 +123,11 @@ function MinWageSlider({
   const [value, setValue] = useState(initialValue);
   const pendingKey = `RDOSetMinSalaryValue:{"levelIndex":"${levelIndex}"}`;
 
-  const handleChange = useCallback(
-    (newValue: number) => {
-      setValue(newValue);
-      client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetMinSalaryValue', String(newValue), { levelIndex });
+  const commitValue = useCallback(
+    () => {
+      client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetMinSalaryValue', String(value), { levelIndex });
     },
-    [client, buildingX, buildingY, levelIndex],
+    [client, buildingX, buildingY, levelIndex, value],
   );
 
   return (
@@ -141,7 +140,8 @@ function MinWageSlider({
         step={1}
         value={value}
         disabled={!editable}
-        onChange={(e) => handleChange(parseInt(e.target.value, 10))}
+        onChange={(e) => setValue(parseInt(e.target.value, 10))}
+        onPointerUp={commitValue}
       />
       <span className={styles.sliderValue}>{value}%</span>
       <SaveIndicator propertyKey={pendingKey} />
