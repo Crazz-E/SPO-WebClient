@@ -22,7 +22,6 @@ export function MinistriesTab({ properties, buildingX, buildingY }: MinistriesTa
   const isPresident = isPresidentRole(ownerRole);
 
   const valueMap = buildValueMap(properties);
-  const ruler = valueMap.get('ActualRuler') ?? '';
   const count = getNum(valueMap, 'MinisterCount');
 
   const rows = Array.from({ length: count }, (_, i) => ({
@@ -64,9 +63,6 @@ export function MinistriesTab({ properties, buildingX, buildingY }: MinistriesTa
 
   return (
     <div className={styles.section}>
-      {ruler && (
-        <div className={styles.sectionTitle}>President: {ruler}</div>
-      )}
       <table className={styles.dataTable}>
         <thead>
           <tr>
@@ -153,7 +149,7 @@ function BudgetInput({
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
         <span
-          style={{ cursor: 'pointer' }}
+          className={styles.editableValue}
           onClick={() => setEditing(true)}
           title="Click to edit budget"
         >

@@ -23,6 +23,11 @@ export function formatCompact(n: number): string {
   return n.toLocaleString();
 }
 
+/** Format a number as a percentage string. */
+export function formatPercent(n: number): string {
+  return `${n}%`;
+}
+
 /** Check if the ownerRole string indicates the user is president. */
 export function isPresidentRole(ownerRole: string): boolean {
   const role = ownerRole.toLowerCase();

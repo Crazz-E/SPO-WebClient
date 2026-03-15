@@ -279,10 +279,26 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
       ClientBridge.handlePoliticsResponse(msg);
       break;
 
-    case WsMessageType.RESP_POLITICS_LAUNCH_CAMPAIGN:
-    case WsMessageType.RESP_POLITICS_CANCEL_CAMPAIGN:
+    case WsMessageType.RESP_POLITICS_VOTE: {
       ClientBridge.handlePoliticsCampaignResponse(msg);
+      // Refresh building details so vote tally updates
+      const votedBuilding = useBuildingStore.getState().details;
+      if (votedBuilding) {
+        setTimeout(() => ctx.refreshBuildingDetails(votedBuilding.x, votedBuilding.y), 500);
+      }
       break;
+    }
+
+    case WsMessageType.RESP_POLITICS_LAUNCH_CAMPAIGN:
+    case WsMessageType.RESP_POLITICS_CANCEL_CAMPAIGN: {
+      ClientBridge.handlePoliticsCampaignResponse(msg);
+      // Refresh building details so candidate list updates after campaign change
+      const openBuilding = useBuildingStore.getState().details;
+      if (openBuilding) {
+        setTimeout(() => ctx.refreshBuildingDetails(openBuilding.x, openBuilding.y), 500);
+      }
+      break;
+    }
 
     case WsMessageType.RESP_TYCOON_ROLE:
       ClientBridge.handleTycoonRoleResponse(msg);
