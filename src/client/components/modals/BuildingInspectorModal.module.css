@@ -56,6 +56,17 @@
   font-family: var(--font-mono);
 }
 
+.roleLabel {
+  color: var(--accent-gold);
+  font-weight: var(--font-semibold);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .closeBtn {
   background: none;
   border: none;

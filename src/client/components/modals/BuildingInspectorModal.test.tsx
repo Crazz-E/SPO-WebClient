@@ -63,7 +63,8 @@ describe('BuildingInspectorModal smoke tests', () => {
 
     renderWithProviders(<BuildingInspectorModal />);
     expect(screen.getByText('National Capitol')).toBeTruthy();
-    expect(screen.getByText('Government')).toBeTruthy();
+    // ownerName is shown inside the role label (e.g. "Mayor: Government")
+    expect(screen.getByText(/Government/)).toBeTruthy();
   });
 
   it('renders close button with accessible label', () => {

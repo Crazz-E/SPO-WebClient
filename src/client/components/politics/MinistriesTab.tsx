@@ -3,6 +3,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import { Edit3 } from 'lucide-react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { useClient } from '../../context';
 import { useGameStore } from '../../store/game-store';
@@ -63,10 +64,7 @@ export function MinistriesTab({ properties, buildingX, buildingY }: MinistriesTa
   }
 
   return (
-    <div className={styles.section}>
-      {ruler && (
-        <div className={styles.sectionTitle}>President: {ruler}</div>
-      )}
+    <div>
       <table className={styles.dataTable}>
         <thead>
           <tr>
@@ -151,21 +149,22 @@ function BudgetInput({
 
   if (!editing) {
     return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+      <span className={styles.budgetCell}>
         <span
-          style={{ cursor: 'pointer' }}
+          className={styles.budgetValue}
           onClick={() => setEditing(true)}
           title="Click to edit budget"
         >
           {formatCompact(initialValue)}
         </span>
+        <Edit3 size={10} className={styles.budgetEditIcon} />
         <SaveIndicator propertyKey={pendingKey} />
       </span>
     );
   }
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+    <span className={styles.budgetCell}>
       <input
         className={styles.budgetInput}
         type="number"

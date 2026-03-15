@@ -7,8 +7,32 @@
 }
 
 .disabled {
-  opacity: 0.5;
-  pointer-events: none;
+  opacity: 0.6;
+}
+
+.disabled .slider {
+  cursor: default;
+}
+
+.disabled .slider::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  box-shadow: none;
+  cursor: default;
+}
+
+.disabled .slider::-webkit-slider-thumb:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.disabled .slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  box-shadow: none;
+  cursor: default;
 }
 
 .header {

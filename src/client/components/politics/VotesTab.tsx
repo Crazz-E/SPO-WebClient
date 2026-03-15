@@ -114,13 +114,6 @@ export function VotesTab({ properties, buildingX, buildingY }: VotesTabProps) {
         <div className={styles.empty}>No candidates running for election</div>
       )}
 
-      {voteOf && (
-        <div className={styles.section}>
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: 0 }}>
-            You voted for: <strong>{voteOf}</strong>
-          </p>
-        </div>
-      )}
     </>
   );
 }

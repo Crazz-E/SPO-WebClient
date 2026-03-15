@@ -52,10 +52,7 @@ export function TownsTab({ properties, buildingX, buildingY }: TownsTabProps) {
   }
 
   return (
-    <div className={styles.section}>
-      {ruler && (
-        <div className={styles.sectionTitle}>President: {ruler}</div>
-      )}
+    <div className={styles.tableScroll}>
       <table className={styles.dataTable}>
         <thead>
           <tr>

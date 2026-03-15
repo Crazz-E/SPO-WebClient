@@ -7,6 +7,7 @@ import { useState, useCallback } from 'react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { useClient } from '../../context';
 import { useGameStore } from '../../store/game-store';
+import { SaveIndicator } from '../building/SaveIndicator';
 import { buildValueMap, getNum, formatCompact, isPresidentRole, isMayorRole } from './capitol-utils';
 import styles from './PoliticsPanel.module.css';
 
@@ -120,6 +121,7 @@ function MinWageSlider({
 }) {
   const client = useClient();
   const [value, setValue] = useState(initialValue);
+  const pendingKey = `RDOSetMinSalaryValue:{"levelIndex":"${levelIndex}"}`;
 
   const handleChange = useCallback(
     (newValue: number) => {
@@ -142,6 +144,7 @@ function MinWageSlider({
         onChange={(e) => handleChange(parseInt(e.target.value, 10))}
       />
       <span className={styles.sliderValue}>{value}%</span>
+      <SaveIndicator propertyKey={pendingKey} />
     </div>
   );
 }

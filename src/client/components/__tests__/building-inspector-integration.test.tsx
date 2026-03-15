@@ -110,7 +110,7 @@ describe('Building Inspector — integration flow', () => {
 
     // Header — name appears in header + Name property row
     expect(screen.getAllByText('Small Farm').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('TestCorp')).toBeTruthy();
+    expect(screen.getByText(/TestCorp/)).toBeTruthy();
 
     // Tabs
     expect(screen.getByText('GENERAL')).toBeTruthy();
@@ -201,7 +201,7 @@ describe('BuildingInspectorModal — integration flow', () => {
     const dialog = screen.getByRole('dialog', { name: 'Small Farm' });
     expect(dialog).toBeTruthy();
     expect(screen.getAllByText('Small Farm').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('TestCorp')).toBeTruthy();
+    expect(screen.getByText(/TestCorp/)).toBeTruthy();
   });
 
   it('renders inspector with hideHeader inside modal', () => {

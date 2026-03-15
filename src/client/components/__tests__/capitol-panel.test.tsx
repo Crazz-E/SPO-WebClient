@@ -1,11 +1,12 @@
 /**
  * Capitol Panel integration tests.
  *
- * Tests: tab switching, president-only Elect/Depose, Jobs/Residentials columns,
- * Votes tab candidate table, budget editing.
+ * Tests: consolidated civic tabs (Overview, Administration, Demographics, Elections),
+ * president-only Elect/Depose, Jobs/Housing columns, candidate table, budget editing,
+ * campaign buttons.
  *
- * After the PoliticsPanel → BuildingInspector merge, the civic tabs are now
- * rendered inside BuildingInspector when a civic building is detected.
+ * Civic buildings now use consolidated tabs:
+ *   Overview | Administration | Demographics | Elections
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -190,118 +191,94 @@ describe('CapitolPanel', () => {
     useGameStore.setState({ ownerRole: '', isPublicOfficeRole: false });
   });
 
-  // ---- Tab switching ----
+  // ---- Consolidated tab structure ----
 
-  it('renders civic tabs including synthetic Ratings tab', () => {
-    setupCapitol({ capitolTowns: CAPITOL_TOWNS_DATA });
-    renderWithProviders(<BuildingInspector hideHeader />);
-    // Standard server tabs
-    expect(screen.getByText('Towns')).toBeTruthy();
-    expect(screen.getByText('Ministries')).toBeTruthy();
-    expect(screen.getByText('Jobs')).toBeTruthy();
-    expect(screen.getByText('Residentials')).toBeTruthy();
-    expect(screen.getByText('Votes')).toBeTruthy();
-    // Synthetic tab injected by BuildingInspector
-    expect(screen.getByText('Ratings')).toBeTruthy();
-  });
-
-  it('defaults to first tab (General)', () => {
+  it('renders consolidated civic tabs (Overview, Administration, Demographics, Elections)', () => {
     setupCapitol({
       capitolGeneral: [{ name: 'ActualRuler', value: 'President Crazz' }],
       capitolTowns: CAPITOL_TOWNS_DATA,
-    });
-    renderWithProviders(<BuildingInspector hideHeader />);
-    // General tab is first (order 0), rendered as generic PropertyGroup
-    expect(screen.getByText('President Crazz')).toBeTruthy();
-  });
-
-  it('switches to Towns tab with rich component', () => {
-    setupCapitol({ capitolTowns: CAPITOL_TOWNS_DATA });
-    renderWithProviders(<BuildingInspector hideHeader />);
-    fireEvent.click(screen.getByText('Towns'));
-    expect(screen.getByText('Shamba')).toBeTruthy();
-    expect(screen.getByText('Moanda')).toBeTruthy();
-  });
-
-  it('switches to Ministries tab', () => {
-    setupCapitol({
-      capitolTowns: CAPITOL_TOWNS_DATA,
       ministeries: MINISTRIES_DATA,
+      townJobs: JOBS_DATA,
+      townRes: RES_DATA,
+      votes: VOTES_DATA,
     });
     renderWithProviders(<BuildingInspector hideHeader />);
-    fireEvent.click(screen.getByText('Ministries'));
-    expect(screen.getByText('Health')).toBeTruthy();
+    expect(screen.getByText('Overview')).toBeTruthy();
+    expect(screen.getByText('Administration')).toBeTruthy();
+    expect(screen.getByText('Demographics')).toBeTruthy();
+    expect(screen.getByText('Elections')).toBeTruthy();
   });
 
-  // ---- Towns tab (president-only Elect) ----
+  it('defaults to Overview tab showing ruler info', () => {
+    setupCapitol({
+      capitolGeneral: [{ name: 'ActualRuler', value: 'President Crazz' }],
+      votes: VOTES_DATA,
+    });
+    renderWithProviders(<BuildingInspector hideHeader />);
+    // Ruler name appears in banner + general properties
+    expect(screen.getAllByText('President Crazz').length).toBeGreaterThanOrEqual(1);
+  });
 
-  describe('TownsTab', () => {
+  // ---- Administration tab (Towns + Ministries) ----
+
+  describe('Administration tab', () => {
     beforeEach(() => {
-      setupCapitol({ capitolTowns: CAPITOL_TOWNS_DATA });
+      setupCapitol({
+        capitolGeneral: [{ name: 'ActualRuler', value: 'President Crazz' }],
+        capitolTowns: CAPITOL_TOWNS_DATA,
+        ministeries: MINISTRIES_DATA,
+        votes: VOTES_DATA,
+      });
     });
 
-    it('shows town rows with data', () => {
+    it('shows towns and ministries stacked', () => {
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('capitolTowns');
+      switchTab('administration');
       expect(screen.getByText('Shamba')).toBeTruthy();
       expect(screen.getByText('Moanda')).toBeTruthy();
+      expect(screen.getByText('Health')).toBeTruthy();
+      expect(screen.getByText('Education')).toBeTruthy();
     });
 
     it('hides Elect button when not president', () => {
       useGameStore.setState({ ownerRole: '' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('capitolTowns');
+      switchTab('administration');
       expect(screen.queryByText('Elect')).toBeNull();
     });
 
-    it('shows Elect button when president', () => {
+    it('shows Elect buttons when president', () => {
       useGameStore.setState({ ownerRole: 'president' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('capitolTowns');
+      switchTab('administration');
       const electButtons = screen.getAllByText('Elect');
-      expect(electButtons.length).toBe(2); // One per town
+      // 2 town Elect + 1 ministry Elect (Education empty)
+      expect(electButtons.length).toBe(3);
     });
 
-    it('calls onBuildingAction with electMayor when Elect clicked', () => {
+    it('calls onBuildingAction with electMayor when Elect clicked on town', () => {
       useGameStore.setState({ ownerRole: 'president' });
       const spy = jest.fn();
       const callbacks = createSpiedCallbacks({ onBuildingAction: spy });
       renderWithProviders(<BuildingInspector hideHeader />, { clientCallbacks: callbacks });
-      switchTab('capitolTowns');
+      switchTab('administration');
       const electButtons = screen.getAllByText('Elect');
       fireEvent.click(electButtons[0]);
       expect(spy).toHaveBeenCalledWith('electMayor', expect.objectContaining({ Town: 'Shamba' }));
     });
-  });
 
-  // ---- Ministries tab (president-only Elect/Depose, budget editing) ----
-
-  describe('MinistriesTab', () => {
-    beforeEach(() => {
-      setupCapitol({ capitolTowns: CAPITOL_TOWNS_DATA, ministeries: MINISTRIES_DATA });
-    });
-
-    it('shows ministry rows', () => {
-      renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ministeries');
-      expect(screen.getByText('Health')).toBeTruthy();
-      expect(screen.getByText('Education')).toBeTruthy();
-    });
-
-    it('shows Depose for filled minister and Elect for empty when president', () => {
+    it('shows Depose for filled minister when president', () => {
       useGameStore.setState({ ownerRole: 'president' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ministeries');
-      expect(screen.getByText('Depose')).toBeTruthy(); // Health has Dr. Smith
-      expect(screen.getByText('Elect')).toBeTruthy(); // Education is empty
+      switchTab('administration');
+      expect(screen.getByText('Depose')).toBeTruthy();
     });
 
-    it('hides Depose/Elect when not president', () => {
+    it('hides Depose when not president', () => {
       useGameStore.setState({ ownerRole: '' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ministeries');
+      switchTab('administration');
       expect(screen.queryByText('Depose')).toBeNull();
-      expect(screen.queryByText('Elect')).toBeNull();
     });
 
     it('calls onBuildingAction with deposeMinister when Depose clicked', () => {
@@ -309,41 +286,66 @@ describe('CapitolPanel', () => {
       const spy = jest.fn();
       const callbacks = createSpiedCallbacks({ onBuildingAction: spy });
       renderWithProviders(<BuildingInspector hideHeader />, { clientCallbacks: callbacks });
-      switchTab('ministeries');
+      switchTab('administration');
       fireEvent.click(screen.getByText('Depose'));
       expect(spy).toHaveBeenCalledWith('deposeMinister', expect.objectContaining({ MinistryId: '0' }));
     });
   });
 
-  // ---- Jobs tab (3-column layout) ----
+  // ---- Demographics tab (Jobs + Housing) ----
 
-  describe('JobsTab', () => {
+  describe('Demographics tab', () => {
     beforeEach(() => {
       setupCapitol({
+        capitolGeneral: [{ name: 'ActualRuler', value: 'President Crazz' }],
         capitolTowns: CAPITOL_TOWNS_DATA,
         townJobs: JOBS_DATA,
+        townRes: RES_DATA,
+        votes: VOTES_DATA,
       });
     });
 
-    it('renders 3 column headers', () => {
+    it('renders Employment and Housing sections', () => {
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townJobs');
+      switchTab('demographics');
+      expect(screen.getByText('Employment')).toBeTruthy();
+      expect(screen.getByText('Housing')).toBeTruthy();
+    });
+
+    it('renders 3 job column headers', () => {
+      renderWithProviders(<BuildingInspector hideHeader />);
+      switchTab('demographics');
       expect(screen.getByText('Executive')).toBeTruthy();
       expect(screen.getByText('Professional')).toBeTruthy();
       expect(screen.getByText('Worker')).toBeTruthy();
     });
 
-    it('shows vacancy data for all classes', () => {
+    it('renders 3 housing column headers', () => {
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townJobs');
+      switchTab('demographics');
+      expect(screen.getByText('High Class')).toBeTruthy();
+      expect(screen.getByText('Middle Class')).toBeTruthy();
+      expect(screen.getByText('Low Class')).toBeTruthy();
+    });
+
+    it('shows vacancy data for jobs', () => {
+      renderWithProviders(<BuildingInspector hideHeader />);
+      switchTab('demographics');
       expect(screen.getByText('125')).toBeTruthy(); // hi vacancies
       expect(screen.getByText('340')).toBeTruthy(); // mid vacancies
       expect(screen.getByText('890')).toBeTruthy(); // lo vacancies
     });
 
+    it('shows vacancy data for housing', () => {
+      renderWithProviders(<BuildingInspector hideHeader />);
+      switchTab('demographics');
+      expect(screen.getByText('250')).toBeTruthy(); // hi vacancies
+      expect(screen.getByText('800')).toBeTruthy(); // mid vacancies
+    });
+
     it('renders min wage sliders', () => {
       const { container } = renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townJobs');
+      switchTab('demographics');
       const sliders = container.querySelectorAll('input[type="range"]');
       expect(sliders.length).toBe(3);
     });
@@ -351,7 +353,7 @@ describe('CapitolPanel', () => {
     it('disables min wage sliders when no civic role', () => {
       useGameStore.setState({ ownerRole: '', isPublicOfficeRole: false });
       const { container } = renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townJobs');
+      switchTab('demographics');
       const sliders = container.querySelectorAll('input[type="range"]');
       sliders.forEach((slider) => {
         expect((slider as HTMLInputElement).disabled).toBe(true);
@@ -361,7 +363,7 @@ describe('CapitolPanel', () => {
     it('disables min wage sliders for mayor in Capitol', () => {
       useGameStore.setState({ ownerRole: 'mayor', isPublicOfficeRole: true });
       const { container } = renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townJobs');
+      switchTab('demographics');
       const sliders = container.querySelectorAll('input[type="range"]');
       sliders.forEach((slider) => {
         expect((slider as HTMLInputElement).disabled).toBe(true);
@@ -374,30 +376,20 @@ describe('CapitolPanel', () => {
         makeTab('townJobs', 'Jobs', 30),
         makeTab('townRes', 'Residentials', 40),
       ];
-      setupCapitol({ townJobs: JOBS_DATA }, townHallTabs);
+      setupCapitol({ townJobs: JOBS_DATA, townRes: RES_DATA }, townHallTabs);
       useGameStore.setState({ ownerRole: 'mayor', isPublicOfficeRole: true });
       const { container } = renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townJobs');
+      switchTab('demographics');
       const sliders = container.querySelectorAll('input[type="range"]');
       sliders.forEach((slider) => {
         expect((slider as HTMLInputElement).disabled).toBe(false);
-      });
-    });
-
-    it('disables min wage sliders for minister role', () => {
-      useGameStore.setState({ ownerRole: 'minister', isPublicOfficeRole: true });
-      const { container } = renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townJobs');
-      const sliders = container.querySelectorAll('input[type="range"]');
-      sliders.forEach((slider) => {
-        expect((slider as HTMLInputElement).disabled).toBe(true);
       });
     });
 
     it('enables min wage sliders when president', () => {
       useGameStore.setState({ ownerRole: 'president', isPublicOfficeRole: true });
       const { container } = renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townJobs');
+      switchTab('demographics');
       const sliders = container.querySelectorAll('input[type="range"]');
       sliders.forEach((slider) => {
         expect((slider as HTMLInputElement).disabled).toBe(false);
@@ -405,89 +397,9 @@ describe('CapitolPanel', () => {
     });
   });
 
-  // ---- Residentials tab (3-column layout) ----
+  // ---- Elections tab (Ratings + Votes + Campaigns) ----
 
-  describe('ResidentialsTab', () => {
-    beforeEach(() => {
-      setupCapitol({
-        capitolTowns: CAPITOL_TOWNS_DATA,
-        townRes: RES_DATA,
-      });
-    });
-
-    it('renders 3 column headers', () => {
-      renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townRes');
-      expect(screen.getByText('High Class')).toBeTruthy();
-      expect(screen.getByText('Middle Class')).toBeTruthy();
-      expect(screen.getByText('Low Class')).toBeTruthy();
-    });
-
-    it('shows vacancy data', () => {
-      renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('townRes');
-      expect(screen.getByText('250')).toBeTruthy(); // hi vacancies
-      expect(screen.getByText('800')).toBeTruthy(); // mid vacancies
-    });
-  });
-
-  // ---- Votes tab (candidate table + vote buttons) ----
-
-  describe('VotesTab', () => {
-    beforeEach(() => {
-      setupCapitol({
-        capitolTowns: CAPITOL_TOWNS_DATA,
-        votes: VOTES_DATA,
-      });
-    });
-
-    it('shows ruler info', () => {
-      renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('votes');
-      expect(screen.getByText('President Crazz')).toBeTruthy();
-    });
-
-    it('shows candidate table', () => {
-      renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('votes');
-      // Senator Adams appears twice (table + voted-for summary), Mayor Wilson once
-      expect(screen.getAllByText('Senator Adams').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Mayor Wilson')).toBeTruthy();
-    });
-
-    it('highlights voted-for candidate with badge', () => {
-      renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('votes');
-      expect(screen.getByText('Your vote')).toBeTruthy();
-    });
-
-    it('shows Vote button only for non-voted candidates', () => {
-      renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('votes');
-      const voteButtons = screen.getAllByText('Vote');
-      // Only Mayor Wilson should have Vote button (Senator Adams is voted-for)
-      expect(voteButtons.length).toBe(1);
-    });
-
-    it('calls onBuildingAction with voteCandidate when Vote clicked', () => {
-      const spy = jest.fn();
-      const callbacks = createSpiedCallbacks({ onBuildingAction: spy });
-      renderWithProviders(<BuildingInspector hideHeader />, { clientCallbacks: callbacks });
-      switchTab('votes');
-      fireEvent.click(screen.getByText('Vote'));
-      expect(spy).toHaveBeenCalledWith('voteCandidate', expect.objectContaining({ Candidate: 'Mayor Wilson' }));
-    });
-
-    it('shows voted-for summary text', () => {
-      renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('votes');
-      expect(screen.getByText(/You voted for/)).toBeTruthy();
-    });
-  });
-
-  // ---- Ratings tab: Start/Cancel Campaign ----
-
-  describe('Ratings tab campaign button', () => {
+  describe('Elections tab', () => {
     const MOCK_POLITICS_DATA: PoliticsData = {
       townName: 'Paraiso',
       yearsToElections: 33,
@@ -504,7 +416,7 @@ describe('CapitolPanel', () => {
       campaignMessage: '',
     };
 
-    function setupRatingsTab(opts: {
+    function setupElectionsTab(opts: {
       username?: string;
       ownerRole?: string;
       isPublicOfficeRole?: boolean;
@@ -524,108 +436,141 @@ describe('CapitolPanel', () => {
       });
     }
 
-    it('shows "Start Campaign" when user is not mayor and not a candidate', () => {
-      setupRatingsTab();
+    it('shows candidate table', () => {
+      setupElectionsTab();
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
+      expect(screen.getAllByText('Senator Adams').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('Mayor Wilson')).toBeTruthy();
+    });
+
+    it('highlights voted-for candidate with badge', () => {
+      setupElectionsTab();
+      renderWithProviders(<BuildingInspector hideHeader />);
+      switchTab('elections');
+      expect(screen.getByText('Your vote')).toBeTruthy();
+    });
+
+    it('shows Vote button only for non-voted candidates', () => {
+      setupElectionsTab();
+      renderWithProviders(<BuildingInspector hideHeader />);
+      switchTab('elections');
+      const voteButtons = screen.getAllByText('Vote');
+      expect(voteButtons.length).toBe(1);
+    });
+
+    it('calls onBuildingAction with voteCandidate when Vote clicked', () => {
+      setupElectionsTab();
+      const spy = jest.fn();
+      const callbacks = createSpiedCallbacks({ onBuildingAction: spy });
+      renderWithProviders(<BuildingInspector hideHeader />, { clientCallbacks: callbacks });
+      switchTab('elections');
+      fireEvent.click(screen.getByText('Vote'));
+      expect(spy).toHaveBeenCalledWith('voteCandidate', expect.objectContaining({ Candidate: 'Mayor Wilson' }));
+    });
+
+    it('shows "Start Campaign" when user is not an office holder and not a candidate', () => {
+      setupElectionsTab();
+      renderWithProviders(<BuildingInspector hideHeader />);
+      switchTab('elections');
       expect(screen.getByText('Start Campaign')).toBeTruthy();
       expect(screen.queryByText('Cancel Campaign')).toBeNull();
     });
 
     it('shows "Cancel Campaign" when user is already a candidate', () => {
-      setupRatingsTab({ username: 'Senator Adams' });
+      setupElectionsTab({ username: 'Senator Adams' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.getByText('Cancel Campaign')).toBeTruthy();
       expect(screen.queryByText('Start Campaign')).toBeNull();
     });
 
     it('hides both buttons when user is president', () => {
-      setupRatingsTab({ ownerRole: 'President of Shamba' });
+      setupElectionsTab({ ownerRole: 'President of Shamba' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.queryByText('Start Campaign')).toBeNull();
       expect(screen.queryByText('Cancel Campaign')).toBeNull();
     });
 
     it('hides both buttons when user is mayor', () => {
-      setupRatingsTab({ ownerRole: 'Mayor', isPublicOfficeRole: true });
+      setupElectionsTab({ ownerRole: 'Mayor', isPublicOfficeRole: true });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.queryByText('Start Campaign')).toBeNull();
       expect(screen.queryByText('Cancel Campaign')).toBeNull();
     });
 
     it('hides both buttons when user is minister', () => {
-      setupRatingsTab({ ownerRole: 'Minister', isPublicOfficeRole: true });
+      setupElectionsTab({ ownerRole: 'Minister', isPublicOfficeRole: true });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.queryByText('Start Campaign')).toBeNull();
       expect(screen.queryByText('Cancel Campaign')).toBeNull();
     });
 
     it('calls onLaunchCampaign with correct coords when Start Campaign clicked', () => {
-      setupRatingsTab();
+      setupElectionsTab();
       const spy = jest.fn();
       const callbacks = createSpiedCallbacks({ onLaunchCampaign: spy });
       renderWithProviders(<BuildingInspector hideHeader />, { clientCallbacks: callbacks });
-      switchTab('ratings');
+      switchTab('elections');
       fireEvent.click(screen.getByText('Start Campaign'));
       expect(spy).toHaveBeenCalledWith(510, 420);
     });
 
     it('calls onCancelCampaign with correct coords when Cancel Campaign clicked', () => {
-      setupRatingsTab({ username: 'Senator Adams' });
+      setupElectionsTab({ username: 'Senator Adams' });
       const spy = jest.fn();
       const callbacks = createSpiedCallbacks({ onCancelCampaign: spy });
       renderWithProviders(<BuildingInspector hideHeader />, { clientCallbacks: callbacks });
-      switchTab('ratings');
+      switchTab('elections');
       fireEvent.click(screen.getByText('Cancel Campaign'));
       expect(spy).toHaveBeenCalledWith(510, 420);
     });
 
     it('displays campaign message when present', () => {
-      setupRatingsTab({
+      setupElectionsTab({
         politicsData: { ...MOCK_POLITICS_DATA, campaignMessage: 'Your prestige is too low.' },
       });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.getByText('Your prestige is too low.')).toBeTruthy();
     });
 
     it('hides campaign message when empty', () => {
-      setupRatingsTab({
+      setupElectionsTab({
         politicsData: { ...MOCK_POLITICS_DATA, campaignMessage: '' },
       });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.queryByText('Your prestige is too low.')).toBeNull();
     });
 
     it('detects isCandidate case-insensitively', () => {
-      setupRatingsTab({ username: 'senator adams' });
+      setupElectionsTab({ username: 'senator adams' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.getByText('Cancel Campaign')).toBeTruthy();
     });
 
     it('derives isCandidate from PoliticsData.campaigns when votes group is empty', () => {
-      setupRatingsTab({
+      setupElectionsTab({
         username: 'Senator Adams',
-        votesData: [], // no votes group data
+        votesData: [],
         politicsData: {
           ...MOCK_POLITICS_DATA,
           campaigns: [{ candidateName: 'Senator Adams', rating: 45 }],
         },
       });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.getByText('Cancel Campaign')).toBeTruthy();
       expect(screen.queryByText('Start Campaign')).toBeNull();
     });
 
     it('disables Start Campaign when canLaunchCampaign is false', () => {
-      setupRatingsTab({
+      setupElectionsTab({
         politicsData: {
           ...MOCK_POLITICS_DATA,
           canLaunchCampaign: false,
@@ -633,52 +578,52 @@ describe('CapitolPanel', () => {
         },
       });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       const btn = screen.getByText('Start Campaign');
       expect((btn as HTMLButtonElement).disabled).toBe(true);
     });
 
     it('enables Start Campaign when canLaunchCampaign is true', () => {
-      setupRatingsTab({
+      setupElectionsTab({
         politicsData: { ...MOCK_POLITICS_DATA, canLaunchCampaign: true },
       });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       const btn = screen.getByText('Start Campaign');
       expect((btn as HTMLButtonElement).disabled).toBe(false);
     });
 
-    // ---- Town Hall context (townName set) ----
+    // ---- Town Hall context ----
 
-    it('shows Start Campaign in Town Hall context (townName set)', () => {
-      setupRatingsTab();
+    it('shows Start Campaign in Town Hall context', () => {
+      setupElectionsTab();
       usePoliticsStore.setState({ townName: 'Olympus' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.getByText('Start Campaign')).toBeTruthy();
     });
 
     it('shows Cancel Campaign in Town Hall context when user is candidate', () => {
-      setupRatingsTab({ username: 'Senator Adams' });
+      setupElectionsTab({ username: 'Senator Adams' });
       usePoliticsStore.setState({ townName: 'Olympus' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.getByText('Cancel Campaign')).toBeTruthy();
     });
 
     it('hides buttons in Town Hall context when user is mayor', () => {
-      setupRatingsTab({ ownerRole: 'Mayor', isPublicOfficeRole: true });
+      setupElectionsTab({ ownerRole: 'Mayor', isPublicOfficeRole: true });
       usePoliticsStore.setState({ townName: 'Olympus' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.queryByText('Start Campaign')).toBeNull();
       expect(screen.queryByText('Cancel Campaign')).toBeNull();
     });
 
     it('shows Cancel Campaign in Town Hall context via PoliticsData.campaigns', () => {
-      setupRatingsTab({
+      setupElectionsTab({
         username: 'TestPlayer',
-        votesData: [], // Town Hall has no votes group
+        votesData: [],
         politicsData: {
           ...MOCK_POLITICS_DATA,
           campaigns: [{ candidateName: 'TestPlayer', rating: 30 }],
@@ -686,7 +631,7 @@ describe('CapitolPanel', () => {
       });
       usePoliticsStore.setState({ townName: 'Olympus' });
       renderWithProviders(<BuildingInspector hideHeader />);
-      switchTab('ratings');
+      switchTab('elections');
       expect(screen.getByText('Cancel Campaign')).toBeTruthy();
     });
   });

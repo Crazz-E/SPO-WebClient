@@ -2,12 +2,9 @@
  * BuildingInspector — Figma-like property sheet for building details.
  *
  * Slides in via RightPanel when a building is focused.
- * Structure:
- * - Toolbar: refresh + close buttons (top-right)
- * - Header: building name, owner, visual class
- * - QuickStats: revenue, profit, workers, efficiency
- * - TabNavigation: driven by server-sent tab config
- * - Tab content: property rows, supply/product accordions
+ * For civic buildings (Capitol/TownHall), uses consolidated tabs:
+ *   Overview | Administration | Demographics | Elections
+ * For other buildings, uses the server-sent pill grid tabs.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,39 +16,24 @@ import { useUiStore } from '../../store';
 import { useClient } from '../../context';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
 import type { BuildingDetailsTab, BuildingPropertyValue } from '@/shared/types';
-import { IconButton, Skeleton } from '../common';
+import { IconButton, Skeleton, TabBar } from '../common';
 import { QuickStats } from './QuickStats';
 import { InspectorTabs } from './InspectorTabs';
 import { PropertyGroup } from './PropertyGroup';
-import { TownsTab } from '../politics/TownsTab';
-import { MinistriesTab } from '../politics/MinistriesTab';
-import { JobsTab } from '../politics/JobsTab';
-import { ResidentialsTab } from '../politics/ResidentialsTab';
-import { VotesTab } from '../politics/VotesTab';
-import { RatingsTab } from '../politics/RatingsTab';
+import {
+  OverviewSection,
+  AdministrationSection,
+  DemographicsSection,
+  ElectionsSection,
+  buildCivicTabs,
+  getGeneralGroupId,
+} from '../politics';
 import { buildValueMap, getNum } from '../politics/capitol-utils';
+import type { CivicTabId } from '../politics/CivicTabConfig';
 import styles from './BuildingInspector.module.css';
 
 /** Auto-refresh interval for open building panel (ms). */
 const AUTO_REFRESH_INTERVAL = 30_000;
-
-/** Group IDs that have rich civic tab components (replaces generic PropertyGroup). */
-const CIVIC_TAB_OVERRIDES = new Set([
-  'capitolTowns',
-  'ministeries',
-  'townJobs',
-  'townRes',
-  'votes',
-]);
-
-/** Synthetic Ratings tab injected for civic buildings. */
-const RATINGS_TAB: BuildingDetailsTab = {
-  id: 'ratings',
-  name: 'Ratings',
-  icon: '★',
-  order: 90,
-  handlerName: 'ratings',
-};
 
 interface BuildingInspectorProps {
   /** Hide the built-in header (used when wrapped in a modal that already shows the name). */
@@ -74,20 +56,20 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   const username = useGameStore((s) => s.username);
   const holdsOffice = useGameStore((s) => s.isPublicOfficeRole);
 
-  // For civic buildings, append the synthetic Ratings tab
-  const tabs = useMemo(() => {
-    if (!details) return [];
-    if (!isCivic) return details.tabs;
-    return [...details.tabs, RATINGS_TAB];
+  // Build civic tabs from server groups (only for civic buildings)
+  const civicTabs = useMemo(() => {
+    if (!details || !isCivic) return [];
+    return buildCivicTabs(details.tabs);
   }, [details, isCivic]);
 
-  // Derive campaign state (needed for Ratings tab)
-  // Primary: PoliticsData.campaigns (works for both Capitol and Town Hall)
+  // For non-civic buildings, use server-sent tabs directly
+  const standardTabs = details?.tabs ?? [];
+
+  // Derive campaign state (needed for Elections tab)
   const politicsCampaigns = usePoliticsStore((s) => s.data?.campaigns);
   const isCandidateFromPolitics = (politicsCampaigns ?? []).some(
     (c) => c.candidateName.toLowerCase() === (username ?? '').toLowerCase()
   );
-  // Fallback: votes group (only populated for Capitol)
   const votesGroup = details?.groups['votes'] ?? [];
   const valueMap = buildValueMap(votesGroup);
   const candidateCount = getNum(valueMap, 'CampaignCount');
@@ -95,6 +77,7 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     valueMap.get(`Candidate${i}`) ?? ''
   ).some((name) => name.toLowerCase() === (username ?? '').toLowerCase());
   const isCandidate = isCandidateFromPolitics || isCandidateFromVotes;
+
   const handleRefresh = useCallback(() => {
     if (details) client.onRefreshBuilding(details.x, details.y);
   }, [details?.x, details?.y, client]);
@@ -119,8 +102,7 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     setIsRenaming(false);
   }, []);
 
-  // Auto-refresh building details while panel is open (prevents stale QuickStats)
-  // Pauses when browser tab is hidden to avoid wasting resources
+  // Auto-refresh building details while panel is open
   const refreshTimer = useRef<ReturnType<typeof setInterval>>(undefined);
   useEffect(() => {
     if (!details) return;
@@ -175,29 +157,40 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     );
   }
 
-  // Find active tab's properties (filter out Name — shown in header instead)
-  const activeGroupId = tabs.find((t) => t.id === currentTab)?.id ?? tabs[0]?.id ?? '';
-  const properties = (details.groups[activeGroupId] ?? []).filter((p) => p.name !== 'Name');
+  // Determine active tab
+  const activeCivicTab = (isCivic && civicTabs.some((t) => t.id === currentTab))
+    ? currentTab as CivicTabId
+    : civicTabs[0]?.id as CivicTabId | undefined;
+
+  const activeStandardGroupId = (!isCivic)
+    ? (standardTabs.find((t) => t.id === currentTab)?.id ?? standardTabs[0]?.id ?? '')
+    : '';
+
+  const standardProperties = activeStandardGroupId
+    ? (details.groups[activeStandardGroupId] ?? []).filter((p) => p.name !== 'Name')
+    : [];
 
   return (
     <div className={styles.inspector}>
-      {/* Toolbar — refresh + close (top-right) */}
-      <div className={styles.toolbar}>
-        <IconButton
-          icon={<RefreshCw size={16} />}
-          label="Refresh"
-          size="sm"
-          variant="ghost"
-          onClick={handleRefresh}
-        />
-        <IconButton
-          icon={<X size={16} />}
-          label="Close"
-          size="sm"
-          variant="ghost"
-          onClick={handleClose}
-        />
-      </div>
+      {/* Toolbar — refresh + close (top-right, hidden when modal provides its own) */}
+      {!hideHeader && (
+        <div className={styles.toolbar}>
+          <IconButton
+            icon={<RefreshCw size={16} />}
+            label="Refresh"
+            size="sm"
+            variant="ghost"
+            onClick={handleRefresh}
+          />
+          <IconButton
+            icon={<X size={16} />}
+            label="Close"
+            size="sm"
+            variant="ghost"
+            onClick={handleClose}
+          />
+        </div>
+      )}
 
       {/* Header (hidden when inside modal — modal provides its own title) */}
       {!hideHeader && (
@@ -255,81 +248,126 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
         </div>
       )}
 
-      {/* Quick stats from focus info */}
-      <div className={styles.stagger1}>
-        <QuickStats focus={focusedBuilding} />
-      </div>
+      {/* Quick stats from focus info (hidden for civic — revenue/workers not meaningful) */}
+      {!isCivic && (
+        <div className={styles.stagger1}>
+          <QuickStats focus={focusedBuilding} />
+        </div>
+      )}
 
       {/* Tab navigation */}
-      {tabs.length > 0 && (
-        <div className={styles.stagger2}>
-          <InspectorTabs
-            tabs={tabs}
-            activeTab={currentTab || activeGroupId}
-            onTabChange={setCurrentTab}
-          />
-        </div>
+      {isCivic ? (
+        /* Civic: horizontal TabBar with consolidated tabs */
+        civicTabs.length > 0 && (
+          <div className={styles.stagger2}>
+            <TabBar
+              tabs={civicTabs}
+              activeTab={activeCivicTab ?? civicTabs[0]?.id ?? ''}
+              onTabChange={setCurrentTab}
+            />
+          </div>
+        )
+      ) : (
+        /* Non-civic: pill grid with server-sent tabs */
+        standardTabs.length > 0 && (
+          <div className={styles.stagger2}>
+            <InspectorTabs
+              tabs={standardTabs}
+              activeTab={currentTab || activeStandardGroupId}
+              onTabChange={setCurrentTab}
+            />
+          </div>
+        )
       )}
 
       {/* Tab content — scrollable */}
       <div className={`${styles.content} ${styles.stagger3}`}>
-        <CivicOrGenericTab
-          isCivic={isCivic}
-          activeGroupId={activeGroupId}
-          properties={properties}
-          buildingX={details.x}
-          buildingY={details.y}
-          isCandidate={isCandidate}
-          holdsOffice={holdsOffice}
-          tabs={details.tabs}
-        />
+        {isCivic ? (
+          <CivicTabContent
+            activeTab={activeCivicTab ?? 'overview'}
+            details={details}
+            buildingX={details.x}
+            buildingY={details.y}
+            isCandidate={isCandidate}
+            holdsOffice={holdsOffice}
+          />
+        ) : (
+          <PropertyGroup
+            properties={standardProperties}
+            buildingX={details.x}
+            buildingY={details.y}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-/** Renders a rich civic tab component or falls back to generic PropertyGroup. */
-function CivicOrGenericTab({
-  isCivic,
-  activeGroupId,
-  properties,
+/** Routes civic tab IDs to the appropriate section component. */
+function CivicTabContent({
+  activeTab,
+  details,
   buildingX,
   buildingY,
   isCandidate,
   holdsOffice,
-  tabs,
 }: {
-  isCivic: boolean;
-  activeGroupId: string;
-  properties: BuildingPropertyValue[];
+  activeTab: CivicTabId;
+  details: NonNullable<ReturnType<typeof useBuildingStore.getState>['details']>;
   buildingX: number;
   buildingY: number;
   isCandidate: boolean;
   holdsOffice: boolean;
-  tabs: BuildingDetailsTab[];
 }) {
-  if (!isCivic || !CIVIC_TAB_OVERRIDES.has(activeGroupId)) {
-    // Synthetic Ratings tab for civic buildings
-    if (isCivic && activeGroupId === 'ratings') {
-      return <RatingsTab buildingX={buildingX} buildingY={buildingY} isCandidate={isCandidate} holdsOffice={holdsOffice} />;
-    }
-    return <PropertyGroup properties={properties} buildingX={buildingX} buildingY={buildingY} />;
-  }
+  const generalGroupId = getGeneralGroupId(details.tabs);
+  const generalProps = generalGroupId ? (details.groups[generalGroupId] ?? []) : [];
+  const votesProps = details.groups['votes'] ?? [];
+  const townsProps = details.groups['capitolTowns'] ?? [];
+  const ministriesProps = details.groups['ministeries'] ?? [];
+  const jobsProps = details.groups['townJobs'] ?? [];
+  const resProps = details.groups['townRes'] ?? [];
 
-  switch (activeGroupId) {
-    case 'capitolTowns':
-      return <TownsTab properties={properties} buildingX={buildingX} buildingY={buildingY} />;
-    case 'ministeries':
-      return <MinistriesTab properties={properties} buildingX={buildingX} buildingY={buildingY} />;
-    case 'townJobs': {
-      const isCapitol = tabs.some(t => t.handlerName === 'capitolGeneral');
-      return <JobsTab properties={properties} buildingX={buildingX} buildingY={buildingY} isCapitol={isCapitol} />;
-    }
-    case 'townRes':
-      return <ResidentialsTab properties={properties} />;
-    case 'votes':
-      return <VotesTab properties={properties} buildingX={buildingX} buildingY={buildingY} />;
+  switch (activeTab) {
+    case 'overview':
+      return (
+        <OverviewSection
+          generalProperties={generalProps}
+          votesProperties={votesProps}
+          buildingX={buildingX}
+          buildingY={buildingY}
+          serverTabs={details.tabs}
+        />
+      );
+    case 'administration':
+      return (
+        <AdministrationSection
+          townsProperties={townsProps}
+          ministriesProperties={ministriesProps}
+          buildingX={buildingX}
+          buildingY={buildingY}
+        />
+      );
+    case 'demographics':
+      return (
+        <DemographicsSection
+          jobsProperties={jobsProps}
+          residentialsProperties={resProps}
+          buildingX={buildingX}
+          buildingY={buildingY}
+          serverTabs={details.tabs}
+        />
+      );
+    case 'elections':
+      return (
+        <ElectionsSection
+          votesProperties={votesProps}
+          buildingX={buildingX}
+          buildingY={buildingY}
+          isCandidate={isCandidate}
+          holdsOffice={holdsOffice}
+        />
+      );
     default:
-      return <PropertyGroup properties={properties} buildingX={buildingX} buildingY={buildingY} />;
+      return null;
   }
 }
