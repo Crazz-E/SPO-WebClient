@@ -1,0 +1,38 @@
+/* Sparkline — tiny inline trend chart */
+
+.sparkline {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.area {
+  opacity: 0.12;
+}
+
+.dot {
+  /* filled by color variant */
+}
+
+/* Color variants */
+.positive .line { stroke: var(--money-positive); }
+.positive .dot { fill: var(--money-positive); }
+.positive .area { fill: var(--money-positive); }
+
+.negative .line { stroke: var(--money-negative); }
+.negative .dot { fill: var(--money-negative); }
+.negative .area { fill: var(--money-negative); }
+
+.gold .line { stroke: var(--accent-gold); }
+.gold .dot { fill: var(--accent-gold); }
+.gold .area { fill: var(--accent-gold); }
+
+.neutral .line { stroke: var(--text-muted); }
+.neutral .dot { fill: var(--text-muted); }
+.neutral .area { fill: var(--text-muted); }

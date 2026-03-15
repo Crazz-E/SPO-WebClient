@@ -1,43 +1,49 @@
 /* ============================================================================
  * SPO WebClient — Design Tokens
- * Dark green palette with Anno 1800-inspired gold accents
+ * Corporate Empire: neutral dark palette with gold empire accents
  * ============================================================================ */
 
 :root {
-  /* ---- Primary Green (IP color) ---- */
+  /* ---- Primary Green (IP color — positive/active states) ---- */
   --primary: #10B981;
   --primary-dark: #059669;
   --primary-light: #34D399;
   --primary-muted: #065F46;
   --primary-subtle: rgba(16, 185, 129, 0.1);
 
-  /* ---- Gold accent (Anno 1800 ornate) ---- */
+  /* ---- Gold accent (empire identity) ---- */
   --accent-gold: #D4A853;
   --accent-gold-light: #E8C77B;
   --accent-gold-dark: #B8912E;
   --accent-gold-subtle: rgba(212, 168, 83, 0.1);
 
-  /* ---- Backgrounds (dark, green undertone) ---- */
-  --bg-primary: #0A1A1A;
-  --bg-secondary: #0F2A2A;
-  --bg-tertiary: #163333;
-  --bg-elevated: #1A3D3D;
-  --bg-hover: #1E4747;
+  /* ---- Backgrounds (neutral dark, no green tint) ---- */
+  --bg-primary: #0C0D10;
+  --bg-secondary: #141618;
+  --bg-tertiary: #1C1E22;
+  --bg-elevated: #24272C;
+  --bg-hover: #2C3038;
 
-  /* ---- Surface / Glass ---- */
-  --glass-bg: rgba(15, 42, 42, 0.85);
-  --glass-bg-light: rgba(22, 51, 51, 0.9);
-  --glass-border: rgba(16, 185, 129, 0.15);
-  --glass-border-active: rgba(16, 185, 129, 0.3);
-  --glass-blur: blur(16px);
+  /* ---- Surface (solid panels) ---- */
+  --surface-primary: #141618;
+  --surface-border: rgba(255, 255, 255, 0.06);
+  --surface-border-active: rgba(255, 255, 255, 0.12);
+  --surface-divider: rgba(255, 255, 255, 0.04);
 
-  /* ---- Text (WCAG AA on dark backgrounds) ---- */
-  --text-primary: #F0FDF4;
-  --text-secondary: #A7F3D0;
-  --text-tertiary: #6EE7B7;
-  --text-muted: #7BBDA8;      /* de-emphasised labels — was vivid lime, now calm teal */
-  --text-placeholder: #5A8A78; /* empty states / placeholder — readable (~5:1) but subdued */
-  --text-disabled: #2D6B5A;   /* inactive controls only — low contrast by design */
+  /* ---- Glass (InfoWidget + minimap only) ---- */
+  --glass-bg: rgba(20, 22, 24, 0.88);
+  --glass-bg-light: rgba(28, 30, 34, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-border-active: rgba(255, 255, 255, 0.12);
+  --glass-blur: blur(12px);
+
+  /* ---- Text (neutral gray hierarchy, WCAG AA) ---- */
+  --text-primary: #F0F0F2;
+  --text-secondary: #C4C8D0;
+  --text-tertiary: #9CA1AC;
+  --text-muted: #7D8492;
+  --text-placeholder: #565D68;
+  --text-disabled: #3A3F48;
 
   /* ---- Semantic Colors ---- */
   --success: #22C55E;
@@ -102,7 +108,7 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
-  --shadow-glow: 0 0 20px rgba(16, 185, 129, 0.15);
+  --shadow-glow: 0 0 20px rgba(212, 168, 83, 0.12);
   --shadow-gold-glow: 0 0 12px rgba(212, 168, 83, 0.2);
 
   /* ---- Z-Index Scale ---- */
@@ -128,7 +134,7 @@
 
   /* ---- Layout — HUD Overlay System ---- */
   --topbar-height: 36px;
-  --topbar-bg: rgba(10, 26, 26, 0.7);
+  --topbar-bg: rgba(12, 13, 16, 0.7);
   --rail-button-size: 48px;
   --rail-gap: 8px;
   --chatstrip-collapsed: 80px;

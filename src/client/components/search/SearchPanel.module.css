@@ -13,7 +13,7 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 
@@ -83,7 +83,7 @@
   overflow-y: auto;
   padding: var(--space-4);
   scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
+  scrollbar-color: var(--surface-border) transparent;
 }
 
 /* List components */
@@ -138,8 +138,8 @@
 
 .searchInput {
   flex: 1;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
+  background: var(--surface-primary);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   color: var(--text-primary);
@@ -162,7 +162,7 @@
   border: none;
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
-  color: var(--glass-bg);
+  color: var(--surface-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -195,19 +195,19 @@
   height: 80px;
   border-radius: var(--radius-sm);
   object-fit: cover;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
 }
 
 .profilePhotoPlaceholder {
   width: 64px;
   height: 80px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-disabled);
-  background: var(--glass-bg);
+  background: var(--surface-primary);
 }
 
 .profileName {
@@ -246,7 +246,7 @@
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
   color: var(--text-primary);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .simpleListItem:last-child {
@@ -262,14 +262,14 @@
   font-size: var(--text-sm);
   color: var(--text-primary);
   cursor: pointer;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
   transition: background-color var(--duration-fast) var(--ease-default),
               color var(--duration-fast) var(--ease-default);
 }
 
 .clickableListItem:hover {
-  background: rgba(16, 185, 129, 0.08);
+  background: var(--accent-gold-subtle);
   color: var(--accent-gold);
 }
 
@@ -312,7 +312,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   font-size: var(--text-sm);
 }
 
@@ -350,7 +350,7 @@
 }
 
 .rankingItem:hover {
-  background: rgba(16, 185, 129, 0.08);
+  background: var(--accent-gold-subtle);
 }
 
 .rankingCategoryItem {

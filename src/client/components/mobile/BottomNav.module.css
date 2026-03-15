@@ -8,7 +8,7 @@
   height: 56px;
   z-index: 400;
   background: var(--bg-secondary);
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid var(--surface-border);
   display: none; /* Only show on mobile */
   align-items: stretch;
   padding-bottom: env(safe-area-inset-bottom, 0);

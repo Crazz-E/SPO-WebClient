@@ -22,7 +22,7 @@
 }
 
 .subtitle {
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: var(--text-sm);
   margin: calc(-1 * var(--space-2)) 0 0;
   text-align: center;
@@ -41,27 +41,35 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-5) var(--space-6);
-  transition:
-    border-color var(--duration-fast) var(--ease-default),
-    box-shadow var(--duration-fast) var(--ease-default),
-    transform var(--duration-fast) var(--ease-default);
+  background: var(--bg-tertiary);
+  border: 2px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  transition: all var(--duration-base) var(--ease-default);
 }
 
 .zoneCard:hover {
   transform: translateY(-2px);
   border-color: var(--accent-gold);
-  box-shadow: var(--shadow-gold-glow);
+  box-shadow: 0 0 16px rgba(212, 168, 83, 0.2);
+}
+
+.zoneCard[data-selected='true'],
+.zoneCard.selected {
+  border-color: var(--accent-gold);
+  background: rgba(212, 168, 83, 0.05);
+  box-shadow: 0 0 20px rgba(212, 168, 83, 0.25);
 }
 
 .zoneName {
   font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
+  font-weight: var(--font-bold);
   color: var(--text-primary);
 }
 
 .zoneDesc {
   font-size: var(--text-sm);
-  color: var(--text-muted);
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 /* Connecting overlay */

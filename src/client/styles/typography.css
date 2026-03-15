@@ -52,6 +52,58 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * Data display — monospace values, financial figures, trends
+ * --------------------------------------------------------------------------- */
+
+/* Monospace data value — for ALL numbers in data displays */
+.text-data-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  line-height: var(--leading-dense);
+}
+
+/* Financial values — larger, bold mono (cash, revenue headings) */
+.text-financial-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: var(--leading-dense);
+}
+
+/* Trend indicators — positive / negative / neutral */
+.text-trend-positive {
+  color: var(--money-positive);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.text-trend-negative {
+  color: var(--money-negative);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.text-trend-neutral {
+  color: var(--text-muted);
+  font-weight: var(--font-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rank display — gold mono badge text */
+.text-rank {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  color: var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
  * Utility classes
  * --------------------------------------------------------------------------- */
 

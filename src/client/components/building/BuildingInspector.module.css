@@ -40,8 +40,16 @@
 /* Header */
 .header {
   padding: var(--space-4);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
+}
+
+.ownerBorder {
+  border-left: 3px solid var(--accent-gold);
+}
+
+.rivalBorder {
+  border-left: 3px solid var(--text-disabled);
 }
 
 .nameRow {
@@ -100,7 +108,7 @@
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 
@@ -157,7 +165,7 @@
   overflow-y: auto;
   padding: var(--space-3) var(--space-4);
   scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
+  scrollbar-color: var(--surface-border) transparent;
 }
 
 /* Staggered content entry — sections fade in sequentially when details arrive */

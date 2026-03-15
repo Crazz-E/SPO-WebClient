@@ -2,6 +2,7 @@
  * FinancialSummary — Four financial metric cards with gold highlight.
  */
 
+import { StatCard } from '../common';
 import styles from './FinancialSummary.module.css';
 
 interface FinancialSummaryProps {
@@ -17,22 +18,10 @@ export function FinancialSummary({ revenue, expenses, profit, facilityCount }: F
 
   return (
     <div className={styles.grid}>
-      <div className={styles.card}>
-        <span className={styles.value}>${revenue}</span>
-        <span className={styles.label}>Revenue</span>
-      </div>
-      <div className={styles.card}>
-        <span className={styles.value}>${expenses}</span>
-        <span className={styles.label}>Expenses</span>
-      </div>
-      <div className={`${styles.card} ${isLoss ? styles.loss : styles.profit}`}>
-        <span className={styles.value}>${profit}</span>
-        <span className={styles.label}>Net Profit</span>
-      </div>
-      <div className={styles.card}>
-        <span className={styles.value}>{facilityCount}</span>
-        <span className={styles.label}>Facilities</span>
-      </div>
+      <StatCard label="Revenue" value={`$${revenue}`} variant="profit" className={styles.card} />
+      <StatCard label="Expenses" value={`$${expenses}`} variant="loss" className={styles.card} />
+      <StatCard label="Net Profit" value={`$${profit}`} variant={isLoss ? 'loss' : 'profit'} className={styles.card} />
+      <StatCard label="Facilities" value={facilityCount} variant="gold" className={styles.card} />
     </div>
   );
 }

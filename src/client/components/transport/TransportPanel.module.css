@@ -35,7 +35,7 @@
   flex: 1;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
+  scrollbar-color: var(--surface-border) transparent;
 }
 
 .trainCard {

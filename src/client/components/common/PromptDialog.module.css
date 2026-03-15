@@ -1,9 +1,9 @@
 .submitBtn {
   padding: var(--space-2) var(--space-4);
-  background: var(--primary);
-  border: 1px solid transparent;
+  background: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
   border-radius: var(--radius-md);
-  color: #fff;
+  color: var(--bg-primary);
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
@@ -16,5 +16,6 @@
 }
 
 .submitBtn:not(:disabled):hover {
-  filter: brightness(1.1);
+  background: var(--accent-gold-light);
+  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
 }

@@ -208,6 +208,7 @@ export interface ClientCallbacks {
   onProfileSwitchCompany: (companyId: number, companyName: string, ownerRole: string) => void;
 
   // Politics
+  onRequestPoliticsData: (townName: string, buildingX: number, buildingY: number) => void;
   onLaunchCampaign: (buildingX: number, buildingY: number) => void;
   onCancelCampaign: (buildingX: number, buildingY: number) => void;
   onQueryTycoonRole: (tycoonName: string) => void;

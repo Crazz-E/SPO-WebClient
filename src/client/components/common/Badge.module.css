@@ -37,6 +37,11 @@
   color: var(--info);
 }
 
+.danger {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
 .gold {
   background: var(--accent-gold-subtle);
   color: var(--accent-gold);

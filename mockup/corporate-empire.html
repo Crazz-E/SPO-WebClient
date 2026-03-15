@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPO WebClient — Corporate Empire Design Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   CORPORATE EMPIRE — Design Token System
+   ═══════════════════════════════════════════════════════ */
+:root {
+  /* Backgrounds — neutral dark, NO green tint */
+  --bg-primary: #0C0D10;
+  --bg-secondary: #141618;
+  --bg-tertiary: #1C1E22;
+  --bg-elevated: #24272C;
+  --bg-hover: #2C3038;
+
+  /* Surfaces (solid panels) */
+  --surface-primary: #141618;
+  --surface-border: rgba(255, 255, 255, 0.06);
+  --surface-border-active: rgba(255, 255, 255, 0.12);
+  --surface-divider: rgba(255, 255, 255, 0.04);
+
+  /* Glass (InfoWidget + minimap ONLY) */
+  --glass-bg: rgba(20, 22, 24, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  /* Text — neutral gray hierarchy (boosted contrast) */
+  --text-primary: #F0F0F2;
+  --text-secondary: #C4C8D0;
+  --text-tertiary: #9CA1AC;
+  --text-muted: #7D8492;
+  --text-placeholder: #565D68;
+  --text-disabled: #3A3F48;
+
+  /* Gold accent — empire identity */
+  --accent-gold: #D4A853;
+  --accent-gold-light: #E8C77B;
+  --accent-gold-dark: #B8912E;
+  --accent-gold-subtle: rgba(212, 168, 83, 0.1);
+
+  /* Primary (kept for positive/active) */
+  --primary: #10B981;
+  --primary-subtle: rgba(16, 185, 129, 0.1);
+
+  /* Semantic */
+  --success: #22C55E;
+  --success-bg: rgba(34, 197, 94, 0.1);
+  --warning: #F59E0B;
+  --warning-bg: rgba(245, 158, 11, 0.1);
+  --error: #EF4444;
+  --error-bg: rgba(239, 68, 68, 0.1);
+  --info: #06B6D4;
+  --info-bg: rgba(6, 182, 212, 0.1);
+
+  /* Financial */
+  --money-positive: #4ADE80;
+  --money-negative: #F87171;
+  --money-neutral: #94A3B8;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.3), 0 2px 4px -2px rgba(0,0,0,0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -4px rgba(0,0,0,0.2);
+  --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.15);
+  --shadow-gold-glow: 0 0 12px rgba(212, 168, 83, 0.2);
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* Transitions */
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESET & BASE
+   ═══════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════
+   MOCKUP LAYOUT
+   ═══════════════════════════════════════════════════════ */
+.mockup-header {
+  text-align: center;
+  padding: 48px 24px 32px;
+  border-bottom: 1px solid var(--surface-divider);
+}
+.mockup-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+.mockup-header p {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.mockup-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 24px;
+  border-bottom: 1px solid var(--surface-divider);
+}
+.mockup-section:last-child { border-bottom: none; }
+
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   1. COLOR PALETTE DISPLAY
+   ═══════════════════════════════════════════════════════ */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.swatch {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+}
+.swatch-color {
+  height: 56px;
+}
+.swatch-info {
+  padding: 8px 10px;
+  background: var(--surface-primary);
+}
+.swatch-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+.swatch-value {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════
+   2. TYPOGRAPHY
+   ═══════════════════════════════════════════════════════ */
+.type-row {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--surface-divider);
+}
+.type-label {
+  width: 140px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* Data typography utilities */
+.text-data-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.text-financial-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.text-data-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.text-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.text-rank {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════
+   3. GAME HUD MOCKUP
+   ═══════════════════════════════════════════════════════ */
+.game-viewport {
+  position: relative;
+  width: 100%;
+  height: 700px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  border: 1px solid var(--surface-border);
+}
+
+/* Fake isometric map background */
+.map-background {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, #0e1214 0%, #121518 25%, #0f1113 50%, #131619 75%, #0e1214 100%);
+  opacity: 0.8;
+}
+.map-background::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(255,255,255,0.01) 40px, rgba(255,255,255,0.01) 41px),
+    repeating-linear-gradient(-45deg, transparent, transparent 40px, rgba(255,255,255,0.01) 40px, rgba(255,255,255,0.01) 41px);
+}
+
+/* ─── TopBar ─── */
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+  background: rgba(12, 13, 16, 0.85);
+  border-bottom: 1px solid var(--surface-border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 16px;
+  z-index: 200;
+  backdrop-filter: blur(8px);
+}
+.topbar-logo {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  letter-spacing: 0.04em;
+}
+.topbar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--surface-border);
+}
+.topbar-item {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.topbar-item.active { color: var(--text-primary); }
+
+/* ─── InfoWidget (GLASS — keeps glassmorphism) ─── */
+.info-widget {
+  position: absolute;
+  top: 48px;
+  right: 16px;
+  width: 220px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: 14px;
+  z-index: 300;
+  box-shadow: var(--shadow-lg);
+}
+.iw-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--surface-divider);
+}
+.iw-server {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-gold);
+}
+.iw-date {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.iw-financial { margin-bottom: 12px; }
+.iw-cash {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.iw-income {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.iw-income-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.iw-income-value.positive { color: var(--money-positive); }
+.iw-income-value.negative { color: var(--money-negative); }
+
+/* Sparkline in InfoWidget */
+.iw-sparkline {
+  margin: 8px 0;
+  padding: 4px 0;
+}
+
+.iw-identity {
+  padding-top: 10px;
+  border-top: 1px solid var(--surface-divider);
+}
+.iw-identity-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.iw-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.iw-value {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.iw-company {
+  color: var(--accent-gold-light);
+  cursor: pointer;
+}
+.iw-company:hover { color: var(--accent-gold); }
+
+/* Rank Badge */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 7px;
+  border: 1px solid var(--accent-gold-dark);
+  border-radius: var(--radius-full);
+  background: var(--accent-gold-subtle);
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+}
+
+/* Progress bar (facilities) */
+.mini-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.mini-progress-track {
+  flex: 1;
+  height: 3px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.mini-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  transition: width var(--duration-slow) var(--ease-out);
+}
+.mini-progress-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Left Rail ─── */
+.left-rail {
+  position: absolute;
+  top: 48px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 200;
+}
+.rail-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-primary);
+  border: 1px solid var(--surface-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--duration-base) var(--ease-default);
+}
+.rail-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--surface-border-active);
+  color: var(--text-primary);
+}
+.rail-btn.active {
+  color: var(--accent-gold);
+  border-color: var(--accent-gold-dark);
+  box-shadow: var(--shadow-gold-glow);
+}
+.rail-divider {
+  width: 28px;
+  height: 1px;
+  background: var(--surface-border);
+  margin: 0 auto;
+}
+
+/* ─── Right Panel (SOLID — no glass) ─── */
+.right-panel {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  background: var(--surface-primary);
+  border-left: 1px solid var(--surface-border);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-xl);
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--surface-border);
+}
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.panel-close {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all var(--duration-fast);
+}
+.panel-close:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ─── Building Inspector inside panel ─── */
+.building-header {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  position: relative;
+}
+/* Ownership tint — gold left border for own buildings */
+.building-header.owned {
+  border-left: 3px solid var(--accent-gold);
+}
+.building-header.rival {
+  border-left: 3px solid var(--text-disabled);
+}
+.building-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.building-info { flex: 1; }
+.building-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.building-type {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.building-owner {
+  font-size: 11px;
+  color: var(--accent-gold-light);
+  margin-top: 2px;
+}
+
+/* ─── Tab Bar ─── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--surface-border);
+  margin-bottom: 16px;
+}
+.tab {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all var(--duration-base);
+}
+.tab:hover { color: var(--text-secondary); }
+.tab.active {
+  color: var(--accent-gold);
+  border-bottom-color: var(--accent-gold);
+}
+
+/* ═══════════════════════════════════════════════════════
+   4. DATA VISUALIZATION COMPONENTS
+   ═══════════════════════════════════════════════════════ */
+
+/* ─── StatCard ─── */
+.stat-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+}
+.stat-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.stat-card-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.stat-card-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.stat-card-value.gold { color: var(--accent-gold); }
+.stat-card-value.positive { color: var(--money-positive); }
+.stat-card-value.negative { color: var(--money-negative); }
+
+.stat-card-sparkline {
+  margin-top: 8px;
+}
+
+/* ─── Trend Indicator ─── */
+.trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.trend.positive { color: var(--money-positive); }
+.trend.negative { color: var(--money-negative); }
+.trend.neutral { color: var(--text-muted); }
+.trend-arrow {
+  font-size: 10px;
+}
+
+/* ─── MiniBar ─── */
+.minibar-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.minibar {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.minibar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--duration-slow) var(--ease-out);
+}
+.minibar-fill.primary { background: var(--primary); }
+.minibar-fill.gold { background: var(--accent-gold); }
+.minibar-fill.success { background: var(--success); }
+.minibar-fill.warning { background: var(--warning); }
+.minibar-fill.error { background: var(--error); }
+.minibar-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ─── DataTable ─── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.data-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--surface-border);
+  white-space: nowrap;
+}
+.data-table th.right { text-align: right; }
+.data-table td {
+  padding: 7px 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--surface-divider);
+  white-space: nowrap;
+}
+.data-table td.right { text-align: right; }
+.data-table tr.striped td {
+  background: var(--bg-tertiary);
+}
+.data-table td .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.data-table td .positive { color: var(--money-positive); }
+.data-table td .negative { color: var(--money-negative); }
+.data-table td .gold { color: var(--accent-gold); }
+.data-table tr:hover td {
+  background: var(--bg-elevated);
+}
+
+/* ─── Property Group (building inspector data rows) ─── */
+.prop-group {
+  margin-bottom: 16px;
+}
+.prop-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--surface-divider);
+}
+.prop-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+.prop-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.prop-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+/* ─── Sparkline SVG ─── */
+.sparkline-svg {
+  display: block;
+}
+.sparkline-line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sparkline-dot {
+  r: 2;
+}
+.sparkline-area {
+  opacity: 0.15;
+}
+.spark-positive .sparkline-line { stroke: var(--money-positive); }
+.spark-positive .sparkline-dot { fill: var(--money-positive); }
+.spark-positive .sparkline-area { fill: var(--money-positive); }
+.spark-negative .sparkline-line { stroke: var(--money-negative); }
+.spark-negative .sparkline-dot { fill: var(--money-negative); }
+.spark-negative .sparkline-area { fill: var(--money-negative); }
+.spark-gold .sparkline-line { stroke: var(--accent-gold); }
+.spark-gold .sparkline-dot { fill: var(--accent-gold); }
+.spark-gold .sparkline-area { fill: var(--accent-gold); }
+
+/* ═══════════════════════════════════════════════════════
+   5. STANDALONE COMPONENT SHOWCASE GRIDS
+   ═══════════════════════════════════════════════════════ */
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+.showcase-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+/* ─── Buttons ─── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-base) var(--ease-default);
+}
+.btn-primary {
+  background: var(--accent-gold);
+  color: var(--bg-primary);
+  border-color: var(--accent-gold);
+}
+.btn-primary:hover {
+  background: var(--accent-gold-light);
+  box-shadow: var(--shadow-gold-glow);
+}
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-color: var(--surface-border);
+}
+.btn-secondary:hover {
+  background: var(--bg-elevated);
+  border-color: var(--surface-border-active);
+  color: var(--text-primary);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+.btn-ghost:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* ─── Badge ─── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  line-height: 1.6;
+}
+.badge-default {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+.badge-success {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.badge-warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+.badge-error {
+  background: var(--error-bg);
+  color: var(--error);
+}
+.badge-danger {
+  background: var(--error-bg);
+  color: var(--error);
+}
+.badge-gold {
+  background: var(--accent-gold-subtle);
+  color: var(--accent-gold);
+}
+.badge-info {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+/* ─── Icon Button ─── */
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--surface-border);
+  background: var(--surface-primary);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  font-size: 16px;
+}
+.icon-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--surface-border-active);
+}
+.icon-btn.active {
+  color: var(--accent-gold);
+  border-color: var(--accent-gold-dark);
+}
+
+/* ─── Slider ─── */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.slider-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 60px;
+}
+.slider-track {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-full);
+  position: relative;
+}
+.slider-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-gold-dark), var(--accent-gold));
+  border-radius: var(--radius-full);
+}
+.slider-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-gold);
+  border: 2px solid white;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px rgba(212, 168, 83, 0.4);
+}
+.slider-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════
+   6. COMPARISON: BEFORE vs AFTER
+   ═══════════════════════════════════════════════════════ */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+.compare-card {
+  padding: 20px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--surface-border);
+}
+.compare-card.before {
+  /* Old green-tinted palette */
+  background: #0F2A2A;
+  border-color: rgba(16, 185, 129, 0.15);
+}
+.compare-card.after {
+  background: var(--surface-primary);
+}
+.compare-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+.before .compare-label {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6EE7B7;
+}
+.after .compare-label {
+  background: var(--accent-gold-subtle);
+  color: var(--accent-gold);
+}
+.compare-text-primary { margin-bottom: 4px; }
+.before .compare-text-primary { color: #F0FDF4; }
+.after .compare-text-primary { color: var(--text-primary); }
+
+.compare-text-secondary { font-size: 13px; margin-bottom: 4px; }
+.before .compare-text-secondary { color: #A7F3D0; }
+.after .compare-text-secondary { color: var(--text-secondary); }
+
+.compare-text-muted { font-size: 12px; }
+.before .compare-text-muted { color: #7BBDA8; }
+.after .compare-text-muted { color: var(--text-muted); }
+
+.compare-data-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 13px;
+}
+.before .compare-data-row span:first-child { color: #7BBDA8; }
+.after .compare-data-row span:first-child { color: var(--text-secondary); }
+.compare-data-row span:last-child {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════ */
+@keyframes goldPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(212, 168, 83, 0.2); }
+  50% { box-shadow: 0 0 16px rgba(212, 168, 83, 0.35); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s var(--ease-out) both;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .compare-grid, .showcase-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .right-panel {
+    width: 100%;
+  }
+  .info-widget {
+    display: none;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     HEADER
+     ═══════════════════════════════════════════════════════ -->
+<div class="mockup-header">
+  <h1>Corporate Empire</h1>
+  <p>SPO WebClient UI Redesign — Design Mockup</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 1: COLOR PALETTE
+     ═══════════════════════════════════════════════════════ -->
+<div class="mockup-section">
+  <div class="section-title">Color Palette — Neutral Dark + Gold Empire</div>
+  <div class="palette-grid">
+    <div class="swatch"><div class="swatch-color" style="background:#0C0D10"></div><div class="swatch-info"><div class="swatch-name">bg-primary</div><div class="swatch-value">#0C0D10</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#141618"></div><div class="swatch-info"><div class="swatch-name">bg-secondary</div><div class="swatch-value">#141618</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#1C1E22"></div><div class="swatch-info"><div class="swatch-name">bg-tertiary</div><div class="swatch-value">#1C1E22</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#24272C"></div><div class="swatch-info"><div class="swatch-name">bg-elevated</div><div class="swatch-value">#24272C</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#2C3038"></div><div class="swatch-info"><div class="swatch-name">bg-hover</div><div class="swatch-value">#2C3038</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#D4A853"></div><div class="swatch-info"><div class="swatch-name">accent-gold</div><div class="swatch-value">#D4A853</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#E8C77B"></div><div class="swatch-info"><div class="swatch-name">gold-light</div><div class="swatch-value">#E8C77B</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#B8912E"></div><div class="swatch-info"><div class="swatch-name">gold-dark</div><div class="swatch-value">#B8912E</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#F0F0F2"></div><div class="swatch-info"><div class="swatch-name">text-primary</div><div class="swatch-value">#F0F0F2</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#B0B4BC"></div><div class="swatch-info"><div class="swatch-name">text-secondary</div><div class="swatch-value">#B0B4BC</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#8A8F98"></div><div class="swatch-info"><div class="swatch-name">text-tertiary</div><div class="swatch-value">#8A8F98</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#6B7280"></div><div class="swatch-info"><div class="swatch-name">text-muted</div><div class="swatch-value">#6B7280</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#4ADE80"></div><div class="swatch-info"><div class="swatch-name">money +</div><div class="swatch-value">#4ADE80</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#F87171"></div><div class="swatch-info"><div class="swatch-name">money -</div><div class="swatch-value">#F87171</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#22C55E"></div><div class="swatch-info"><div class="swatch-name">success</div><div class="swatch-value">#22C55E</div></div></div>
+    <div class="swatch"><div class="swatch-color" style="background:#EF4444"></div><div class="swatch-info"><div class="swatch-name">error</div><div class="swatch-value">#EF4444</div></div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 2: BEFORE vs AFTER COMPARISON
+     ═══════════════════════════════════════════════════════ -->
+<div class="mockup-section">
+  <div class="section-title">Before vs After — Text Hierarchy & Data Readability</div>
+  <div class="compare-grid">
+    <!-- Before: green-tinted -->
+    <div class="compare-card before">
+      <div class="compare-label">Before — Green Tint</div>
+      <div class="compare-text-primary" style="font-size:15px">Revenue Overview</div>
+      <div class="compare-text-secondary">Annual financial performance</div>
+      <div class="compare-text-muted" style="margin-bottom:12px">Last updated 2 hours ago</div>
+      <div class="compare-data-row">
+        <span style="color:#7BBDA8">Revenue</span>
+        <span style="color:#F0FDF4">$42,100/h</span>
+      </div>
+      <div class="compare-data-row">
+        <span style="color:#7BBDA8">Expenses</span>
+        <span style="color:#F0FDF4">$18,300/h</span>
+      </div>
+      <div class="compare-data-row">
+        <span style="color:#7BBDA8">Profit</span>
+        <span style="color:#4ADE80">$23,800/h</span>
+      </div>
+      <div class="compare-data-row">
+        <span style="color:#7BBDA8">Facilities</span>
+        <span style="color:#F0FDF4">12 active</span>
+      </div>
+    </div>
+
+    <!-- After: neutral -->
+    <div class="compare-card after">
+      <div class="compare-label">After — Neutral Dark</div>
+      <div class="compare-text-primary" style="font-size:15px">Revenue Overview</div>
+      <div class="compare-text-secondary">Annual financial performance</div>
+      <div class="compare-text-muted" style="margin-bottom:12px">Last updated 2 hours ago</div>
+      <div class="compare-data-row">
+        <span style="color:var(--text-muted)">Revenue</span>
+        <span style="color:var(--text-primary)">$42,100/h</span>
+      </div>
+      <div class="compare-data-row">
+        <span style="color:var(--text-muted)">Expenses</span>
+        <span style="color:var(--text-primary)">$18,300/h</span>
+      </div>
+      <div class="compare-data-row">
+        <span style="color:var(--text-muted)">Profit</span>
+        <span style="color:var(--money-positive)">$23,800/h</span>
+      </div>
+      <div class="compare-data-row">
+        <span style="color:var(--text-muted)">Facilities</span>
+        <span style="color:var(--text-primary)">12 active</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 3: TYPOGRAPHY SHOWCASE
+     ═══════════════════════════════════════════════════════ -->
+<div class="mockup-section">
+  <div class="section-title">Typography — Data-Optimized Hierarchy</div>
+
+  <div class="type-row">
+    <div class="type-label">Section Label</div>
+    <div class="text-section-label">Financial Summary</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">Panel Title</div>
+    <div style="font-size:14px; font-weight:600; color:var(--text-primary)">Building Inspector</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">Data Label</div>
+    <div class="text-data-label">Revenue per Hour</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">Data Value</div>
+    <div class="text-data-value">$42,100.00</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">Financial Value</div>
+    <div class="text-financial-value" style="color:var(--accent-gold)">$1,247,830</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">Trend +</div>
+    <div class="trend positive"><span class="trend-arrow">&#9650;</span> +12.5%</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">Trend -</div>
+    <div class="trend negative"><span class="trend-arrow">&#9660;</span> -3.2%</div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">Rank Badge</div>
+    <div><span class="rank-badge">#3</span></div>
+  </div>
+  <div class="type-row">
+    <div class="type-label">Body Text</div>
+    <div style="font-size:13px; color:var(--text-secondary); max-width:400px">Your textile factory is producing at 72% capacity. Consider increasing the price to improve margins.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 4: STAT CARDS + DATA VIZ
+     ═══════════════════════════════════════════════════════ -->
+<div class="mockup-section">
+  <div class="section-title">Data Visualization — StatCards with Sparklines & Trends</div>
+  <div class="showcase-grid" style="margin-bottom:32px">
+    <!-- StatCard: Cash -->
+    <div class="stat-card">
+      <div class="stat-card-label">Total Cash</div>
+      <div class="stat-card-row">
+        <div class="stat-card-value gold">$1.24M</div>
+        <div class="trend positive"><span class="trend-arrow">&#9650;</span> +5.2%</div>
+      </div>
+      <div class="stat-card-sparkline spark-gold">
+        <svg class="sparkline-svg" width="100%" height="24" viewBox="0 0 200 24" preserveAspectRatio="none">
+          <path class="sparkline-area" d="M0,20 L20,18 L40,16 L60,17 L80,14 L100,12 L120,10 L140,13 L160,8 L180,6 L200,4 L200,24 L0,24 Z"/>
+          <polyline class="sparkline-line" points="0,20 20,18 40,16 60,17 80,14 100,12 120,10 140,13 160,8 180,6 200,4"/>
+          <circle class="sparkline-dot" cx="200" cy="4"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- StatCard: Revenue -->
+    <div class="stat-card">
+      <div class="stat-card-label">Revenue / Hour</div>
+      <div class="stat-card-row">
+        <div class="stat-card-value">$42,100</div>
+        <div class="trend positive"><span class="trend-arrow">&#9650;</span> +12.3%</div>
+      </div>
+      <div class="stat-card-sparkline spark-positive">
+        <svg class="sparkline-svg" width="100%" height="24" viewBox="0 0 200 24" preserveAspectRatio="none">
+          <path class="sparkline-area" d="M0,22 L25,20 L50,18 L75,19 L100,15 L125,12 L150,14 L175,8 L200,4 L200,24 L0,24 Z"/>
+          <polyline class="sparkline-line" points="0,22 25,20 50,18 75,19 100,15 125,12 150,14 175,8 200,4"/>
+          <circle class="sparkline-dot" cx="200" cy="4"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- StatCard: Expenses -->
+    <div class="stat-card">
+      <div class="stat-card-label">Expenses / Hour</div>
+      <div class="stat-card-row">
+        <div class="stat-card-value">$18,300</div>
+        <div class="trend negative"><span class="trend-arrow">&#9660;</span> -2.1%</div>
+      </div>
+      <div class="stat-card-sparkline spark-negative">
+        <svg class="sparkline-svg" width="100%" height="24" viewBox="0 0 200 24" preserveAspectRatio="none">
+          <path class="sparkline-area" d="M0,8 L25,10 L50,9 L75,12 L100,14 L125,13 L150,16 L175,18 L200,20 L200,24 L0,24 Z"/>
+          <polyline class="sparkline-line" points="0,8 25,10 50,9 75,12 100,14 125,13 150,16 175,18 200,20"/>
+          <circle class="sparkline-dot" cx="200" cy="20"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- StatCard: Facilities -->
+    <div class="stat-card">
+      <div class="stat-card-label">Active Facilities</div>
+      <div class="stat-card-row">
+        <div class="stat-card-value">12</div>
+        <div class="trend neutral">&#8212; 0%</div>
+      </div>
+      <div style="margin-top:8px">
+        <div class="minibar-container">
+          <div class="minibar"><div class="minibar-fill primary" style="width:72%"></div></div>
+          <div class="minibar-label">72%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 5: DATA TABLE
+     ═══════════════════════════════════════════════════════ -->
+<div class="mockup-section">
+  <div class="section-title">DataTable — Color-Coded Market Data</div>
+  <div style="background:var(--surface-primary); border:1px solid var(--surface-border); border-radius:var(--radius-lg); overflow:hidden;">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th class="right">Price</th>
+          <th>Supply</th>
+          <th>Demand</th>
+          <th class="right">Ratio</th>
+          <th class="right">Trend</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="color:var(--text-primary); font-weight:500">Fresh Food</td>
+          <td class="right"><span class="mono">$127.40</span></td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill success" style="width:85%"></div></div>
+              <div class="minibar-label">850</div>
+            </div>
+          </td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill warning" style="width:92%"></div></div>
+              <div class="minibar-label">920</div>
+            </div>
+          </td>
+          <td class="right"><span class="mono positive">92%</span></td>
+          <td class="right"><span class="trend positive" style="font-size:11px"><span class="trend-arrow">&#9650;</span> +4.2%</span></td>
+        </tr>
+        <tr class="striped">
+          <td style="color:var(--text-primary); font-weight:500">Steel</td>
+          <td class="right"><span class="mono">$89.20</span></td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill success" style="width:60%"></div></div>
+              <div class="minibar-label">600</div>
+            </div>
+          </td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill error" style="width:95%"></div></div>
+              <div class="minibar-label">950</div>
+            </div>
+          </td>
+          <td class="right"><span class="mono negative">63%</span></td>
+          <td class="right"><span class="trend negative" style="font-size:11px"><span class="trend-arrow">&#9660;</span> -8.1%</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-primary); font-weight:500">Textiles</td>
+          <td class="right"><span class="mono">$54.80</span></td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill success" style="width:75%"></div></div>
+              <div class="minibar-label">750</div>
+            </div>
+          </td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill success" style="width:70%"></div></div>
+              <div class="minibar-label">700</div>
+            </div>
+          </td>
+          <td class="right"><span class="mono positive">107%</span></td>
+          <td class="right"><span class="trend positive" style="font-size:11px"><span class="trend-arrow">&#9650;</span> +1.8%</span></td>
+        </tr>
+        <tr class="striped">
+          <td style="color:var(--text-primary); font-weight:500">Electronics</td>
+          <td class="right"><span class="mono gold">$312.60</span></td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill warning" style="width:30%"></div></div>
+              <div class="minibar-label">300</div>
+            </div>
+          </td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill error" style="width:88%"></div></div>
+              <div class="minibar-label">880</div>
+            </div>
+          </td>
+          <td class="right"><span class="mono negative">34%</span></td>
+          <td class="right"><span class="trend negative" style="font-size:11px"><span class="trend-arrow">&#9660;</span> -15.3%</span></td>
+        </tr>
+        <tr>
+          <td style="color:var(--text-primary); font-weight:500">Chemicals</td>
+          <td class="right"><span class="mono">$78.10</span></td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill success" style="width:82%"></div></div>
+              <div class="minibar-label">820</div>
+            </div>
+          </td>
+          <td>
+            <div class="minibar-container">
+              <div class="minibar" style="width:80px"><div class="minibar-fill success" style="width:78%"></div></div>
+              <div class="minibar-label">780</div>
+            </div>
+          </td>
+          <td class="right"><span class="mono positive">105%</span></td>
+          <td class="right"><span class="trend neutral" style="font-size:11px">&#8212; 0%</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 6: BUTTONS, BADGES, CONTROLS
+     ═══════════════════════════════════════════════════════ -->
+<div class="mockup-section">
+  <div class="section-title">UI Controls — Buttons, Badges, Sliders</div>
+
+  <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:24px;">
+    <button class="btn btn-primary">Build Factory</button>
+    <button class="btn btn-secondary">View Details</button>
+    <button class="btn btn-ghost">Cancel</button>
+    <button class="icon-btn">&#9776;</button>
+    <button class="icon-btn active">&#9733;</button>
+    <button class="icon-btn">&#128269;</button>
+  </div>
+
+  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:24px;">
+    <span class="badge badge-default">Default</span>
+    <span class="badge badge-success">Online</span>
+    <span class="badge badge-warning">Pending</span>
+    <span class="badge badge-error">Offline</span>
+    <span class="badge badge-danger">Bankrupt</span>
+    <span class="badge badge-gold">President</span>
+    <span class="badge badge-info">New</span>
+    <span class="rank-badge">#1</span>
+    <span class="rank-badge">#3</span>
+    <span class="rank-badge">#12</span>
+  </div>
+
+  <div style="max-width:400px;">
+    <div class="slider-row" style="margin-bottom:16px;">
+      <div class="slider-label">Price</div>
+      <div class="slider-track">
+        <div class="slider-fill" style="width:65%"></div>
+        <div class="slider-thumb" style="left:65%"></div>
+      </div>
+      <div class="slider-value">$65.00</div>
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">Demand</div>
+      <div class="slider-track">
+        <div class="slider-fill" style="width:40%"></div>
+        <div class="slider-thumb" style="left:40%"></div>
+      </div>
+      <div class="slider-value">40%</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 7: FULL GAME HUD MOCKUP
+     ═══════════════════════════════════════════════════════ -->
+<div class="mockup-section">
+  <div class="section-title">Full HUD Mockup — Game Screen with Building Inspector Open</div>
+  <div class="game-viewport">
+    <div class="map-background"></div>
+
+    <!-- TopBar -->
+    <div class="topbar">
+      <div class="topbar-logo">SPO</div>
+      <div class="topbar-sep"></div>
+      <div class="topbar-item">&#127760; Shamba</div>
+      <div class="topbar-sep"></div>
+      <div class="topbar-item active">BETA</div>
+      <div style="flex:1"></div>
+      <div class="topbar-item" style="font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:11px; color:var(--text-muted)">14 Mar 2026</div>
+    </div>
+
+    <!-- Left Rail -->
+    <div class="left-rail">
+      <div class="rail-btn" title="Build">&#9879;</div>
+      <div class="rail-btn active" title="Inspect" style="animation: goldPulse 1.5s infinite">&#128270;</div>
+      <div class="rail-btn" title="Empire">&#127970;</div>
+      <div class="rail-divider"></div>
+      <div class="rail-btn" title="Mail">&#9993;</div>
+      <div class="rail-btn" title="Chat">&#128172;</div>
+      <div class="rail-divider"></div>
+      <div class="rail-btn" title="Politics">&#9878;</div>
+      <div class="rail-btn" title="Search">&#128269;</div>
+    </div>
+
+    <!-- InfoWidget (GLASS - keeps glassmorphism) -->
+    <div class="info-widget" style="right:440px;">
+      <div class="iw-header">
+        <div class="iw-server">BETA Server</div>
+        <div class="iw-date">14/03/26</div>
+      </div>
+      <div class="iw-financial">
+        <div class="iw-cash">$1,247,830</div>
+        <div class="iw-income">
+          <span class="iw-income-value positive">+$23,800/h</span>
+          <span class="trend positive" style="font-size:10px"><span class="trend-arrow">&#9650;</span> 5.2%</span>
+        </div>
+        <!-- Sparkline -->
+        <div class="iw-sparkline spark-gold">
+          <svg class="sparkline-svg" width="100%" height="16" viewBox="0 0 190 16" preserveAspectRatio="none">
+            <polyline class="sparkline-line" points="0,14 16,12 32,11 48,13 64,10 80,8 96,9 112,6 128,7 144,4 160,5 176,3 190,2" style="stroke-width:1.2"/>
+            <circle class="sparkline-dot" cx="190" cy="2" r="1.5"/>
+          </svg>
+        </div>
+      </div>
+      <div class="iw-identity">
+        <div class="iw-identity-row">
+          <span class="rank-badge">#3</span>
+          <span class="iw-value">Tycoon McPlayer</span>
+        </div>
+        <div class="iw-identity-row">
+          <span class="iw-label">Company</span>
+          <span class="iw-value iw-company">Shamba Industries</span>
+        </div>
+        <div class="mini-progress">
+          <span class="iw-label" style="font-size:10px">Facilities</span>
+          <div class="mini-progress-track">
+            <div class="mini-progress-fill" style="width:72%"></div>
+          </div>
+          <span class="mini-progress-label">12/16</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel (SOLID - no glass) -->
+    <div class="right-panel">
+      <div class="panel-header">
+        <div class="panel-title">Building Inspector</div>
+        <button class="panel-close">&times;</button>
+      </div>
+      <div class="panel-content">
+        <!-- Building Header with ownership tint -->
+        <div class="building-header owned">
+          <div class="building-icon">&#127981;</div>
+          <div class="building-info">
+            <div class="building-name">Textile Factory #4</div>
+            <div class="building-type">Manufacturing &middot; Textiles</div>
+            <div class="building-owner">Shamba Industries</div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tab-bar">
+          <div class="tab active">General</div>
+          <div class="tab">Services</div>
+          <div class="tab">Supply</div>
+          <div class="tab">Sales</div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+          <div class="stat-card" style="padding:10px 12px">
+            <div class="stat-card-label" style="font-size:10px">Revenue</div>
+            <div class="stat-card-row">
+              <div class="stat-card-value" style="font-size:15px; color:var(--money-positive)">$3,420</div>
+              <div class="trend positive" style="font-size:10px"><span class="trend-arrow">&#9650;</span> 8%</div>
+            </div>
+          </div>
+          <div class="stat-card" style="padding:10px 12px">
+            <div class="stat-card-label" style="font-size:10px">Efficiency</div>
+            <div class="stat-card-row">
+              <div class="stat-card-value" style="font-size:15px">72%</div>
+            </div>
+            <div style="margin-top:4px">
+              <div class="minibar-container">
+                <div class="minibar"><div class="minibar-fill gold" style="width:72%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Property Group -->
+        <div class="prop-group">
+          <div class="prop-group-title">Production</div>
+          <div class="prop-row">
+            <span class="prop-label">Output</span>
+            <span class="prop-value">54 units/h</span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Capacity</span>
+            <span class="prop-value">75 units/h</span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Utilization</span>
+            <div class="minibar-container" style="width:140px">
+              <div class="minibar"><div class="minibar-fill primary" style="width:72%"></div></div>
+              <div class="minibar-label">72%</div>
+            </div>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Quality</span>
+            <div class="minibar-container" style="width:140px">
+              <div class="minibar"><div class="minibar-fill success" style="width:88%"></div></div>
+              <div class="minibar-label">88%</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="prop-group">
+          <div class="prop-group-title">Financial</div>
+          <div class="prop-row">
+            <span class="prop-label">Revenue</span>
+            <span class="prop-value" style="color:var(--money-positive)">$3,420/h</span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Expenses</span>
+            <span class="prop-value" style="color:var(--money-negative)">$1,280/h</span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Profit</span>
+            <span class="prop-value" style="color:var(--money-positive)">$2,140/h</span>
+          </div>
+          <div class="prop-row">
+            <span class="prop-label">Price</span>
+            <div style="display:flex; align-items:center; gap:8px">
+              <span class="prop-value">$54.80</span>
+              <span class="trend positive" style="font-size:10px"><span class="trend-arrow">&#9650;</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rival building example -->
+        <div style="margin-top:24px; padding-top:16px; border-top:1px solid var(--surface-divider);">
+          <div class="text-section-label" style="margin-bottom:8px; font-size:10px; color:var(--text-placeholder)">Nearby rival building:</div>
+          <div class="building-header rival" style="margin-bottom:0">
+            <div class="building-icon" style="opacity:0.6">&#127981;</div>
+            <div class="building-info">
+              <div class="building-name" style="color:var(--text-secondary)">Steel Mill #2</div>
+              <div class="building-type">Manufacturing &middot; Steel</div>
+              <div class="building-owner" style="color:var(--text-muted)">Rival Corp</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SECTION 8: KEY DESIGN PRINCIPLES
+     ═══════════════════════════════════════════════════════ -->
+<div class="mockup-section">
+  <div class="section-title">Design Principles</div>
+  <div class="showcase-grid" style="gap:20px">
+    <div class="stat-card" style="padding:20px">
+      <div style="font-size:20px; margin-bottom:8px">&#128200;</div>
+      <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:6px">Data First</div>
+      <div style="font-size:12px; color:var(--text-secondary); line-height:1.6">
+        Monospace numbers with tabular alignment. Sparklines & trend arrows inline. Every value scannable in under 2 seconds.
+      </div>
+    </div>
+    <div class="stat-card" style="padding:20px">
+      <div style="font-size:20px; margin-bottom:8px">&#127760;</div>
+      <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:6px">Neutral Dark</div>
+      <div style="font-size:12px; color:var(--text-secondary); line-height:1.6">
+        No green tint. Pure neutral backgrounds let data colors (green/red/gold) carry their full semantic weight.
+      </div>
+    </div>
+    <div class="stat-card" style="padding:20px">
+      <div style="font-size:20px; margin-bottom:8px">&#128081;</div>
+      <div style="font-size:14px; font-weight:600; color:var(--accent-gold); margin-bottom:6px">Gold = Your Empire</div>
+      <div style="font-size:12px; color:var(--text-secondary); line-height:1.6">
+        Gold accent reserved for identity, wealth, rank, and active selections. Everything "yours" glows gold.
+      </div>
+    </div>
+    <div class="stat-card" style="padding:20px">
+      <div style="font-size:20px; margin-bottom:8px">&#128187;</div>
+      <div style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:6px">Solid Panels</div>
+      <div style="font-size:12px; color:var(--text-secondary); line-height:1.6">
+        Glass only on InfoWidget & minimap. All data panels are solid and opaque for maximum readability.
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

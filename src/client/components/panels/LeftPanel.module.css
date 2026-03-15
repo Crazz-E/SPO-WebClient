@@ -8,7 +8,7 @@
   height: 100vh;
   z-index: var(--z-panel);
   background: var(--bg-secondary);
-  border-right: 1px solid var(--glass-border);
+  border-right: 1px solid var(--surface-border);
   display: flex;
   flex-direction: column;
   transition: transform 250ms var(--ease-out);
@@ -28,7 +28,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 

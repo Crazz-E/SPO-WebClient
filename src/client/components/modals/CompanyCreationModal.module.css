@@ -17,7 +17,7 @@
   width: min(900px, calc(100vw - var(--space-8)));
   max-height: 85vh;
   background: var(--bg-secondary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   display: flex;
@@ -33,7 +33,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 
@@ -66,7 +66,7 @@
   display: flex;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-5);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -120,7 +120,7 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--glass-border);
+  border-right: 1px solid var(--surface-border);
   overflow-y: auto;
   min-height: 0;
 }
@@ -130,7 +130,7 @@
   font-size: var(--text-xs);
   color: var(--text-secondary);
   line-height: 1.5;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .descriptionLoading {
@@ -223,7 +223,7 @@
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   background: var(--bg-tertiary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-md);
   transition: border-color var(--duration-fast) var(--ease-default);
 }
@@ -299,7 +299,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-5);
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 
@@ -307,7 +307,7 @@
   flex: 1;
   padding: var(--space-2) var(--space-3);
   background: var(--bg-tertiary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-lg);
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -371,7 +371,7 @@
 
   .sidebar {
     border-right: none;
-    border-bottom: 1px solid var(--glass-border);
+    border-bottom: 1px solid var(--surface-border);
     max-height: 200px;
     overflow-y: auto;
   }

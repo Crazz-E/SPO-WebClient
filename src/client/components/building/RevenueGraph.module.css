@@ -5,7 +5,7 @@
 .container {
   padding: var(--space-3);
   background: var(--bg-tertiary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-lg);
   position: relative;
 }
@@ -60,11 +60,11 @@
 
 .line {
   fill: none;
-  stroke: var(--primary);
+  stroke: var(--accent-gold);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.4));
+  filter: drop-shadow(0 0 4px rgba(212, 168, 83, 0.3));
 }
 
 .lineAnimated {
@@ -72,7 +72,7 @@
 }
 
 .areaPositive {
-  fill: rgba(74, 222, 128, 0.12);
+  fill: rgba(212, 168, 83, 0.15);
 }
 
 .areaNegative {
@@ -82,7 +82,7 @@
 /* ---- Grid & Axes ---- */
 
 .gridLine {
-  stroke: var(--glass-border);
+  stroke: var(--surface-border);
   stroke-width: 0.5;
   stroke-dasharray: 2 4;
 }

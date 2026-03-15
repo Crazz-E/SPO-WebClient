@@ -95,7 +95,7 @@
   overflow-x: hidden;
   padding: 0 var(--space-4) var(--space-4);
   scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
+  scrollbar-color: var(--surface-border) transparent;
 }
 
 /* Only visible on mobile */

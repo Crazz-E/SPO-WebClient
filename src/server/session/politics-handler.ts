@@ -11,6 +11,7 @@ import type { SessionContext } from './session-context';
 import type {
   FavoritesItem,
   PoliticsData,
+  PoliticsCampaignEntry,
   PoliticsRatingEntry,
   ConnectionSearchResult,
 } from '../../shared/types';
@@ -27,7 +28,7 @@ import fetch from 'node-fetch';
 // PRIVATE HELPERS
 // =========================================================================
 
-function parsePoliticsRatings(html: string): PoliticsRatingEntry[] {
+export function parsePoliticsRatings(html: string): PoliticsRatingEntry[] {
   const ratings: PoliticsRatingEntry[] = [];
   // Pattern: <td class=label>Name</td> ... <td class=value ...>Value%</td>
   const rowRegex = /<td\s+class=label>\s*([\s\S]*?)\s*<\/td>[\s\S]*?<td\s+class=value[^>]*>\s*([\d.]+)%?\s*<\/td>/gi;
@@ -45,22 +46,48 @@ function parsePoliticsRatings(html: string): PoliticsRatingEntry[] {
 async function fetchMayorDataFromBuilding(ctx: SessionContext, x: number, y: number): Promise<{
   mayorName: string; mayorPrestige: number; mayorRating: number;
   tycoonsRating: number; yearsToElections: number; campaignCount: number;
+  campaigns: PoliticsCampaignEntry[];
 }> {
+  const empty = { mayorName: '', mayorPrestige: 0, mayorRating: 0, tycoonsRating: 0, yearsToElections: 0, campaignCount: 0, campaigns: [] as PoliticsCampaignEntry[] };
   try {
-    const propNames = ['ActualRuler', 'RulerPrestige', 'RulerRating', 'TycoonsRating', 'YearsToElections', 'RulerPeriods'];
+    const propNames = ['ActualRuler', 'RulerPrestige', 'RulerRating', 'TycoonsRating', 'YearsToElections', 'CampaignCount'];
     const values = await ctx.getCacherPropertyListAt(x, y, propNames);
+    const campaignCount = parseInt(values[5]) || 0;
+
+    // Fetch campaign candidate data if any campaigns exist
+    const campaigns: PoliticsCampaignEntry[] = [];
+    if (campaignCount > 0) {
+      const candidateProps: string[] = [];
+      for (let i = 0; i < campaignCount; i++) {
+        candidateProps.push(`Candidate${i}`, `CmpRat${i}`);
+      }
+      try {
+        const candidateValues = await ctx.getCacherPropertyListAt(x, y, candidateProps);
+        for (let i = 0; i < campaignCount; i++) {
+          const name = candidateValues[i * 2] || '';
+          const rating = parseInt(candidateValues[i * 2 + 1]) || 0;
+          if (name) {
+            campaigns.push({ candidateName: name, rating });
+          }
+        }
+      } catch (e: unknown) {
+        ctx.log.debug(`[Politics] Could not fetch campaign candidates: ${toErrorMessage(e)}`);
+      }
+    }
+
     return {
       mayorName: values[0] || '',
       mayorPrestige: parseInt(values[1]) || 0,
       mayorRating: parseInt(values[2]) || 0,
       tycoonsRating: parseInt(values[3]) || 0,
       yearsToElections: parseInt(values[4]) || 0,
-      campaignCount: parseInt(values[5]) || 0,
+      campaignCount,
+      campaigns,
     };
   } catch (e: unknown) {
     ctx.log.debug(`[Politics] Could not fetch mayor data from building: ${toErrorMessage(e)}`);
   }
-  return { mayorName: '', mayorPrestige: 0, mayorRating: 0, tycoonsRating: 0, yearsToElections: 0, campaignCount: 0 };
+  return empty;
 }
 
 /**
@@ -93,7 +120,7 @@ function buildCampaignParams(
  * Denial: contains a `<div class=label>` with an error message.
  * Success: no denial div (may contain project sliders or empty body).
  */
-function parseCampaignResponse(html: string): { success: boolean; message: string } {
+export function parseCampaignResponse(html: string): { success: boolean; message: string } {
   // Check for denial message: <div class=label ...>message text</div>
   const denialMatch = html.match(/<div\s+class=label[^>]*>\s*([\s\S]*?)\s*<\/div>/i);
   if (denialMatch) {
@@ -236,12 +263,11 @@ export async function getPoliticsData(
     // Fetch mayor data from the town hall building properties
     const mayorData = await fetchMayorDataFromBuilding(ctx, buildingX, buildingY);
 
-    // Prestige-based campaign validation (Delphi: prestige >= 200 to run for mayor)
-    const canLaunchCampaign = mayorData.mayorPrestige >= 200
-      || (mayorData.mayorName === '' && mayorData.campaignCount === 0);
-    const campaignMessage = canLaunchCampaign
-      ? ''
-      : `Prestige of ${mayorData.mayorPrestige} is below the minimum 200 required to launch a campaign.`;
+    // Always enable the campaign button — server-side ASP (tycooncampaign.asp) validates
+    // prestige, timing, and eligibility and returns a specific denial message if rejected.
+    // The old check used mayorPrestige (the ruler's prestige, not the user's).
+    const canLaunchCampaign = true;
+    const campaignMessage = '';
 
     return {
       townName,
@@ -254,7 +280,7 @@ export async function getPoliticsData(
       popularRatings,
       ifelRatings,
       tycoonsRatings,
-      campaigns: [],
+      campaigns: mayorData.campaigns,
       canLaunchCampaign,
       campaignMessage,
     };

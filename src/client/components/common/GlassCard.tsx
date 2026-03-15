@@ -13,13 +13,16 @@ interface GlassCardProps {
   maxWidth?: number;
   /** Whether to use a lighter glass variant */
   light?: boolean;
+  /** Surface style: 'solid' (default, opaque) or 'glass' (translucent blur) */
+  variant?: 'solid' | 'glass';
   onClick?: () => void;
 }
 
-export function GlassCard({ children, className, maxWidth, light, onClick }: GlassCardProps) {
+export function GlassCard({ children, className, maxWidth, light, variant = 'solid', onClick }: GlassCardProps) {
+  const variantClass = variant === 'glass' ? styles.glass : styles.solid;
   return (
     <div
-      className={`${styles.card} ${light ? styles.light : ''} ${className ?? ''}`}
+      className={`${styles.card} ${variantClass} ${light ? styles.light : ''} ${className ?? ''}`}
       style={maxWidth ? { maxWidth: `${maxWidth}px` } : undefined}
       onClick={onClick}
       role={onClick ? 'button' : undefined}

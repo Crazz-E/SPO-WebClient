@@ -21,13 +21,13 @@
   max-height: 380px;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
+  scrollbar-color: var(--surface-border) transparent;
 }
 
 /* ─── Accordion group ─── */
 
 .group {
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .group:last-child {
@@ -234,7 +234,7 @@
 /* ─── Detail panel ─── */
 
 .detailPanel {
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid var(--surface-border);
   padding-top: var(--space-2);
   display: flex;
   flex-direction: column;
@@ -259,7 +259,7 @@
   max-height: 120px;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
+  scrollbar-color: var(--surface-border) transparent;
 }
 
 .detailDescription {

@@ -1,0 +1,68 @@
+/* DataTable — color-coded sortable data table */
+
+.wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--surface-border);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.table td {
+  padding: 7px 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--surface-divider);
+  white-space: nowrap;
+}
+
+.compact th { padding: 5px 8px; }
+.compact td { padding: 4px 8px; }
+
+.right { text-align: right; }
+
+.striped td {
+  background: var(--bg-tertiary);
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover td {
+  background: var(--bg-elevated);
+}
+
+.sortable {
+  cursor: pointer;
+}
+
+.sortable:hover {
+  color: var(--text-secondary);
+}
+
+.sortArrow {
+  color: var(--accent-gold);
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-placeholder);
+  padding: 24px 10px;
+  font-size: var(--text-sm);
+}

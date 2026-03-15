@@ -12,6 +12,7 @@
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
 import { NobilityBadge } from '../chat/NobilityBadge';
+import { Sparkline } from '../common';
 import { NOBILITY_TIERS } from '../../../shared/types/domain-types';
 import styles from './InfoWidget.module.css';
 
@@ -50,6 +51,7 @@ export function InfoWidget() {
   const tycoonStats = useGameStore((s) => s.tycoonStats);
   const gameDate = useGameStore((s) => s.gameDate);
   const ownerRole = useGameStore((s) => s.ownerRole);
+  const cashHistory = useGameStore((s) => s.cashHistory);
   const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
   const rightPanel = useUiStore((s) => s.rightPanel);
 
@@ -95,6 +97,11 @@ export function InfoWidget() {
               {formatIncome(tycoonStats.incomePerHour)}
             </span>
           </div>
+          {cashHistory.length >= 2 && (
+            <div className={styles.sparklineRow}>
+              <Sparkline data={cashHistory} color="gold" width={180} height={16} />
+            </div>
+          )}
         </div>
       )}
 
@@ -102,7 +109,7 @@ export function InfoWidget() {
       <div className={styles.identity}>
         {tycoonStats && (
           <div className={styles.row}>
-            <span className={styles.rank}>#{tycoonStats.ranking}</span>
+            <span className={styles.rankBadge}>#{tycoonStats.ranking}</span>
             <span className={styles.separator}>&middot;</span>
             <span className={styles.name}>{username || 'Unknown'}</span>
             {ownerRole && (

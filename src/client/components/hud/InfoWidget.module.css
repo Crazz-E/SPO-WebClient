@@ -28,8 +28,8 @@
 
 /* Debt warning tint */
 .debtTint {
-  background: rgba(220, 38, 38, 0.12);
-  border-color: rgba(220, 38, 38, 0.3);
+  background: var(--error-bg);
+  border-color: var(--error);
 }
 
 /* Critical alert — pulsing red */
@@ -39,10 +39,10 @@
 
 @keyframes debtPulse {
   0%, 100% {
-    background: rgba(220, 38, 38, 0.12);
+    background: var(--error-bg);
   }
   50% {
-    background: rgba(220, 38, 38, 0.25);
+    background: rgba(239, 68, 68, 0.25);
   }
 }
 
@@ -119,6 +119,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Sparkline row below cash/income */
+.sparklineRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
 /* --- Identity: rank, name, company, facilities --- */
 .identity {
   padding: var(--space-1) var(--space-3) var(--space-2);
@@ -137,6 +144,21 @@
 .rank {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.rankBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border: 1px solid var(--accent-gold-dark);
+  border-radius: var(--radius-full);
+  background: var(--accent-gold-subtle);
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
 }
 
 .name {

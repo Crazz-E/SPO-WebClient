@@ -21,7 +21,9 @@ import {
   getTemplateForVisualClass,
   collectTemplatePropertyNamesStructured,
 } from '../../shared/building-details';
-import { cleanPayload as cleanPayloadHelper } from '../rdo-helpers';
+import { cleanPayload as cleanPayloadHelper, parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
+import { RdoValue } from '../../shared/rdo-types';
+import { toErrorMessage } from '../../shared/error-utils';
 
 // =========================================================================
 // PUBLIC API
@@ -333,6 +335,33 @@ async function getBuildingDetailsImpl(
 
       if (groupValues.length > 0) {
         groups[group.id] = groupValues;
+      }
+    }
+
+    // Enrich votes tab with VoteOf (requires separate RDO call on CurrBlock)
+    if (groups['votes']) {
+      const currBlock = allValues.get('CurrBlock');
+      const username = ctx.activeUsername || ctx.cachedUsername || '';
+      if (currBlock && username) {
+        try {
+          if (!ctx.getSocket('construction')) {
+            await ctx.connectConstructionService();
+          }
+          const voteOfPacket = await ctx.sendRdoRequest('construction', {
+            verb: RdoVerb.SEL,
+            targetId: currBlock,
+            action: RdoAction.CALL,
+            member: 'RDOVoteOf',
+            separator: '"^"',
+            args: [RdoValue.string(username).format()],
+          });
+          const votedFor = parsePropertyResponseHelper(voteOfPacket.payload || '', 'res');
+          if (votedFor) {
+            groups['votes'].push({ name: 'VoteOf', value: votedFor });
+          }
+        } catch (e: unknown) {
+          ctx.log.debug(`[BuildingDetails] VoteOf enrichment failed: ${toErrorMessage(e)}`);
+        }
       }
     }
 

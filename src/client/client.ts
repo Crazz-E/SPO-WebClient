@@ -393,6 +393,12 @@ export class StarpeaceClient implements ClientHandlerContext {
         authHandler.profileSwitchCompany(this, companyId, companyName, ownerRole),
 
       // Politics
+      onRequestPoliticsData: (townName, buildingX, buildingY) => {
+        this.sendMessage({
+          type: WsMessageType.REQ_POLITICS_DATA,
+          townName, buildingX, buildingY,
+        });
+      },
       onLaunchCampaign: (buildingX, buildingY) => {
         const townName = usePoliticsStore.getState().townName;
         this.sendMessage({

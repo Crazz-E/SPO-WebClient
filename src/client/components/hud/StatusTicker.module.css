@@ -14,8 +14,8 @@
   padding: var(--space-2) var(--space-4);
   text-align: center;
 
-  background: rgba(10, 26, 26, 0.88);
-  border: 1px solid rgba(212, 168, 83, 0.2);
+  background: var(--surface-primary);
+  border: 1px solid var(--accent-gold-subtle);
   border-radius: var(--radius-md);
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.4),

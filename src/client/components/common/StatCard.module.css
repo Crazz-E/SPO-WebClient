@@ -1,0 +1,50 @@
+/* StatCard — compact data card with value, trend, sparkline */
+
+.card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+}
+
+.compact {
+  padding: 8px 10px;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: var(--font-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: var(--leading-dense);
+}
+
+.compact .value {
+  font-size: 15px;
+}
+
+.valueProfit { color: var(--money-positive); }
+.valueLoss { color: var(--money-negative); }
+.valueGold { color: var(--accent-gold); }
+
+.sparkline {
+  margin-top: 8px;
+}

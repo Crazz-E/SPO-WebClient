@@ -88,6 +88,9 @@ interface GameState {
   // Tycoon stats (updated by EVENT_TYCOON_UPDATE)
   tycoonStats: TycoonStats | null;
 
+  // Cash history for sparkline (last 12 values)
+  cashHistory: number[];
+
   // Game date (from server RefreshDate push)
   gameDate: Date | null;
 
@@ -180,6 +183,7 @@ export const useGameStore = create<GameState>((set) => ({
   companyId: '',
   companies: [],
   tycoonStats: null,
+  cashHistory: [],
   gameDate: null,
   isSwitchingCompany: false,
   isRoadBuildingMode: false,
@@ -213,7 +217,14 @@ export const useGameStore = create<GameState>((set) => ({
   setCompanies: (companies) => set({ companies }),
   setSwitchingCompany: (switching) => set({ isSwitchingCompany: switching }),
 
-  setTycoonStats: (stats) => set({ tycoonStats: stats }),
+  setTycoonStats: (stats) => set((state) => {
+    const cashNum = parseFloat(stats.cash.replace(/[^0-9.\-]/g, ''));
+    const prev = state.cashHistory;
+    const next = Number.isFinite(cashNum)
+      ? [...prev.slice(-(12 - 1)), cashNum]
+      : prev;
+    return { tycoonStats: stats, cashHistory: next };
+  }),
   setGameDate: (date) => set({ gameDate: date }),
 
   setRoadBuildingMode: (active) => set({ isRoadBuildingMode: active }),
@@ -279,6 +290,7 @@ export const useGameStore = create<GameState>((set) => ({
       companyId: '',
       companies: [],
       tycoonStats: null,
+      cashHistory: [],
       gameDate: null,
       isSwitchingCompany: false,
       isRoadBuildingMode: false,

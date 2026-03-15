@@ -17,7 +17,7 @@
   width: min(700px, calc(100vw - var(--space-8)));
   max-height: 80vh;
   background: var(--bg-secondary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   display: flex;
@@ -32,7 +32,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 
@@ -68,7 +68,7 @@
   overflow-y: auto;
   padding: var(--space-5);
   scrollbar-width: thin;
-  scrollbar-color: var(--glass-border) transparent;
+  scrollbar-color: var(--surface-border) transparent;
 }
 
 /* Category grid */
@@ -121,7 +121,7 @@
   min-height: 44px;
   padding: var(--space-3) var(--space-4);
   background: var(--bg-tertiary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-lg);
   cursor: pointer;
   font-family: var(--font-sans);
@@ -352,8 +352,8 @@
 .tileGrid {
   display: inline-grid;
   gap: 1px;
-  background: var(--glass-border);
-  border: 1px solid var(--glass-border);
+  background: var(--surface-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
@@ -370,25 +370,23 @@
   min-width: 120px;
   margin-top: var(--space-3);
   padding: var(--space-2) var(--space-5);
-  background: var(--accent-gold-subtle);
-  color: var(--accent-gold);
-  border: 1px solid var(--accent-gold-dark);
+  background: var(--accent-gold);
+  color: var(--bg-primary);
+  border: 1px solid var(--accent-gold);
   border-radius: var(--radius-lg);
   font-family: var(--font-sans);
-  font-weight: var(--font-semibold);
+  font-weight: 600;
   font-size: var(--text-sm);
   cursor: pointer;
   align-self: flex-end;
   transition:
     box-shadow var(--duration-fast) var(--ease-default),
-    background var(--duration-fast) var(--ease-default),
-    color var(--duration-fast) var(--ease-default);
+    background var(--duration-fast) var(--ease-default);
 }
 
 .placeBtn:hover {
-  box-shadow: var(--shadow-gold-glow);
-  background: var(--accent-gold-dark);
-  color: var(--text-primary);
+  background: var(--accent-gold-light);
+  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
 }
 
 .placeBtn:focus-visible {

@@ -17,7 +17,7 @@
   width: min(520px, calc(100vw - var(--space-8)));
   max-height: 70vh;
   background: var(--bg-secondary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   display: flex;
@@ -31,7 +31,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 
@@ -65,7 +65,7 @@
 /* Filters section */
 .filters {
   padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 
@@ -96,7 +96,7 @@
   box-sizing: border-box;
   padding: var(--space-1) var(--space-2);
   background: var(--bg-tertiary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: var(--text-xs);
@@ -213,7 +213,7 @@
 /* Footer */
 .footer {
   padding: var(--space-2) var(--space-5);
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid var(--surface-border);
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
@@ -223,7 +223,7 @@
 .secondaryBtn {
   padding: var(--space-1) var(--space-3);
   background: var(--bg-tertiary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: var(--text-xs);

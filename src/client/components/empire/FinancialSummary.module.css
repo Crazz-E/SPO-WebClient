@@ -4,8 +4,8 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1px;
-  background: var(--glass-border);
-  border-bottom: 1px solid var(--glass-border);
+  background: var(--surface-border);
+  border-bottom: 1px solid var(--surface-border);
   flex-shrink: 0;
 }
 

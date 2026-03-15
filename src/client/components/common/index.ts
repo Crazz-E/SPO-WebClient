@@ -9,3 +9,8 @@ export { IconButton } from './IconButton';
 export { ConfirmDialog } from './ConfirmDialog';
 export { PromptDialog } from './PromptDialog';
 export { ErrorBoundary } from './ErrorBoundary';
+export { Sparkline } from './Sparkline';
+export { TrendIndicator } from './TrendIndicator';
+export { DataTable } from './DataTable';
+export { MiniBar } from './MiniBar';
+export { StatCard } from './StatCard';

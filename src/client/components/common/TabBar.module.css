@@ -6,7 +6,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
   gap: 0;
 }
 
@@ -16,15 +16,17 @@
 
 .tab {
   flex-shrink: 0;
-  padding: var(--space-2) var(--space-4);
+  padding: 10px 20px;
   background: none;
   border: none;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   cursor: pointer;
   white-space: nowrap;
-  transition: color var(--duration-fast) var(--ease-default);
+  transition: color var(--duration-fast) var(--ease-default),
+    background var(--duration-fast) var(--ease-default);
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -32,10 +34,12 @@
 
 .tab:hover {
   color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .active {
   color: var(--accent-gold);
+  background: rgba(212, 168, 83, 0.08);
 }
 
 .badge {
@@ -52,9 +56,10 @@
 .indicator {
   position: absolute;
   bottom: 0;
-  height: 2px;
+  height: 3px;
   background: var(--accent-gold);
   border-radius: var(--radius-full);
+  box-shadow: 0 0 8px rgba(212, 168, 83, 0.4);
   transition: left var(--duration-base) var(--ease-default),
     width var(--duration-base) var(--ease-default);
 }

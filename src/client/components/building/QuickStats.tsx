@@ -3,7 +3,7 @@
  */
 
 import type { BuildingFocusInfo } from '@/shared/types';
-import { ProgressBar } from '../common';
+import { ProgressBar, MiniBar } from '../common';
 import { parseSalesLines, salesVariant } from './StatusOverlay';
 import styles from './QuickStats.module.css';
 
@@ -37,7 +37,7 @@ export function QuickStats({ focus }: QuickStatsProps) {
             <span className={styles.constructionLabel}>Construction</span>
             <span className={styles.constructionPct}>{constructionPct}%</span>
           </div>
-          <ProgressBar value={constructionPct / 100} variant="warning" height={4} />
+          <ProgressBar value={constructionPct / 100} variant="gold" height={4} />
         </div>
       ) : (
         focus.salesInfo && (() => {
@@ -50,9 +50,13 @@ export function QuickStats({ focus }: QuickStatsProps) {
                   <div key={i} className={styles.salesRow}>
                     <div className={styles.salesRowHeader}>
                       <span className={styles.salesCategory}>{line.category}</span>
-                      <span className={styles.salesPct}>{line.percent}%</span>
                     </div>
-                    <ProgressBar value={line.percent / 100} variant={salesVariant(line.percent)} height={3} />
+                    <MiniBar
+                      value={line.percent / 100}
+                      label={`${line.percent}%`}
+                      variant={line.percent >= 80 ? 'success' : line.percent >= 40 ? 'gold' : 'warning'}
+                      height={4}
+                    />
                   </div>
                 ))}
               </div>

@@ -22,10 +22,8 @@
   gap: var(--space-3);
   padding: var(--space-4) var(--space-4) var(--space-4) var(--space-3);
   border-radius: var(--radius-xl);
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: var(--surface-primary);
+  border: 1px solid var(--surface-border);
   box-shadow: var(--shadow-lg);
   pointer-events: auto;
   cursor: pointer;
@@ -37,7 +35,7 @@
 }
 
 .toast:hover {
-  border-color: var(--glass-border-active);
+  border-color: var(--surface-border-active);
   box-shadow: var(--shadow-glow);
 }
 

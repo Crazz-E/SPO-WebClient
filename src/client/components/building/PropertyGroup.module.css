@@ -11,8 +11,13 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-2) 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--surface-divider);
   gap: var(--space-3);
+  transition: background 0.15s;
+}
+
+.row:hover {
+  background: rgba(255, 255, 255, 0.015);
 }
 
 .name {
@@ -25,6 +30,8 @@
   font-size: var(--text-sm);
   color: var(--text-primary);
   text-align: right;
+  font-family: var(--font-mono);
+  font-weight: var(--font-semibold);
   font-variant-numeric: tabular-nums;
   word-break: break-all;
 }
@@ -37,15 +44,15 @@
 }
 
 /* Color classes */
-.positive { color: var(--color-success, #4caf50); }
-.negative { color: var(--color-error, #f44336); }
+.positive { color: var(--success); }
+.negative { color: var(--error); }
 .muted { color: var(--text-disabled); }
 
 /* Text input (editable widestring property, e.g. Name) */
 .textInput {
   flex: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border-active);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: var(--text-xs);
@@ -56,7 +63,7 @@
 
 .textInput:focus {
   border-color: var(--accent-primary);
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--surface-border-active);
 }
 
 .textInputWrapper {
@@ -78,7 +85,7 @@
   flex: 1;
   height: 4px;
   appearance: none;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-elevated);
   border-radius: 2px;
   outline: none;
   cursor: pointer;
@@ -89,7 +96,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--accent-gold, #d4a843);
+  background: var(--accent-gold);
   cursor: pointer;
 }
 
@@ -112,14 +119,14 @@
 .ratioBar {
   flex: 1;
   height: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .ratioFill {
   height: 100%;
-  background: var(--accent-gold, #d4a843);
+  background: var(--accent-gold);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
@@ -133,7 +140,7 @@
 
 /* Boolean checkbox */
 .checkbox {
-  accent-color: var(--accent-gold, #d4a843);
+  accent-color: var(--accent-gold);
   cursor: pointer;
   width: 16px;
   height: 16px;
@@ -152,7 +159,7 @@
   color: var(--text-muted);
   text-align: center;
   padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--bg-tertiary);
   line-height: var(--leading-dense);
 }
 
@@ -195,15 +202,15 @@
   padding: 2px 4px;
   font-size: var(--text-xs);
   text-align: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface-border);
+  border: 1px solid var(--surface-border-active);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   outline: none;
 }
 
 .salaryField:focus {
-  border-color: var(--accent-gold, #d4a843);
+  border-color: var(--accent-gold);
 }
 
 .salaryPercent {
@@ -226,7 +233,7 @@
 }
 
 .upgradePending {
-  color: var(--accent-gold, #d4a843);
+  color: var(--accent-gold);
   margin-left: var(--space-1);
 }
 
@@ -248,8 +255,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface-border);
+  border: 1px solid var(--surface-border-active);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   cursor: pointer;
@@ -257,7 +264,7 @@
 }
 
 .upgradeBtn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--surface-border-active);
 }
 
 .upgradeQty {
@@ -265,8 +272,8 @@
   padding: 2px 4px;
   font-size: var(--text-xs);
   text-align: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--surface-border);
+  border: 1px solid var(--surface-border-active);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   outline: none;
@@ -275,46 +282,50 @@
 .upgradeOkBtn {
   padding: 2px 10px;
   height: 24px;
-  background: rgba(52, 89, 80, 0.8);
-  border: 1px solid #4a7a6a;
+  background: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
   border-radius: var(--radius-sm);
-  color: var(--accent-gold, #d4a843);
+  color: var(--bg-primary);
   cursor: pointer;
   font-size: var(--text-xs);
+  font-weight: 600;
 }
 
 .upgradeOkBtn:hover {
-  background: rgba(74, 122, 106, 0.9);
+  background: var(--accent-gold-light);
+  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
 }
 
 .upgradeStopBtn {
   padding: var(--space-1) var(--space-3);
-  background: rgba(200, 60, 60, 0.6);
-  border: 1px solid rgba(200, 60, 60, 0.8);
+  background: var(--error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--error);
   cursor: pointer;
   font-size: var(--text-xs);
   font-weight: var(--font-bold);
 }
 
 .upgradeStopBtn:hover {
-  background: rgba(200, 60, 60, 0.8);
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .downgradeBtn {
   padding: var(--space-1) var(--space-3);
-  background: rgba(180, 80, 40, 0.5);
-  border: 1px solid rgba(180, 80, 40, 0.7);
+  background: var(--warning-bg);
+  border: 1px solid rgba(245, 158, 11, 0.2);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--warning);
   cursor: pointer;
   font-size: var(--text-xs);
   align-self: flex-start;
 }
 
 .downgradeBtn:hover {
-  background: rgba(180, 80, 40, 0.7);
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 /* Repair control */
@@ -323,7 +334,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--surface-divider);
 }
 
 .repairHeader {
@@ -334,21 +345,21 @@
 
 .repairPercent {
   font-size: var(--text-sm);
-  color: var(--accent-gold, #d4a843);
+  color: var(--accent-gold);
   font-weight: var(--font-medium);
   font-variant-numeric: tabular-nums;
 }
 
 .repairBar {
   height: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
   border-radius: 3px;
   overflow: hidden;
 }
 
 .repairFill {
   height: 100%;
-  background: var(--accent-gold, #d4a843);
+  background: var(--accent-gold);
   border-radius: 3px;
   transition: width 0.4s ease;
 }
@@ -361,27 +372,28 @@
 .repairStartBtn {
   flex: 1;
   padding: var(--space-1) var(--space-3);
-  background: rgba(52, 89, 80, 0.8);
-  border: 1px solid #4a7a6a;
+  background: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
   border-radius: var(--radius-sm);
-  color: var(--accent-gold, #d4a843);
+  color: var(--bg-primary);
   cursor: pointer;
   font-size: var(--text-xs);
-  transition: background 0.2s, border-color 0.2s;
+  font-weight: 600;
+  transition: background 0.2s, box-shadow 0.2s;
 }
 
 .repairStartBtn:hover {
-  background: rgba(74, 122, 106, 0.9);
-  border-color: var(--accent-gold, #d4a843);
+  background: var(--accent-gold-light);
+  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
 }
 
 .repairStopBtn {
   flex: 1;
   padding: var(--space-1) var(--space-3);
-  background: rgba(200, 60, 60, 0.6);
-  border: 1px solid rgba(200, 60, 60, 0.8);
+  background: var(--error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--error);
   cursor: pointer;
   font-size: var(--text-xs);
   font-weight: var(--font-bold);
@@ -389,7 +401,8 @@
 }
 
 .repairStopBtn:hover {
-  background: rgba(200, 60, 60, 0.8);
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 /* Product Sale Cards (used for both services on General tab and product summary) */
@@ -405,14 +418,14 @@
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-divider);
+  border: 1px solid var(--bg-tertiary);
   border-radius: var(--radius-sm);
   transition: background 150ms;
 }
 
 .pscCard:hover {
-  background: rgba(255, 215, 0, 0.06);
+  background: var(--accent-gold-subtle);
 }
 
 .pscHeader {
@@ -440,7 +453,7 @@
 }
 
 .pscSupplyGood {
-  color: var(--color-success, #4caf50);
+  color: var(--success);
 }
 
 .pscSupplyWarn {
@@ -448,7 +461,7 @@
 }
 
 .pscSupplyBad {
-  color: var(--color-error, #f44336);
+  color: var(--error);
 }
 
 .pscDemand {
@@ -459,7 +472,7 @@
 .pscPrice {
   font-size: var(--text-sm);
   font-weight: var(--font-semibold, 600);
-  color: var(--accent-gold, #d4a843);
+  color: var(--accent-gold);
   font-variant-numeric: tabular-nums;
 }
 
@@ -513,11 +526,13 @@
 }
 
 .pscSectionLabel {
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
+  font-size: 10px;
+  font-weight: var(--font-semibold);
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   padding: var(--space-2) 0 var(--space-1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--surface-divider);
   margin-bottom: var(--space-1);
 }
 
@@ -530,11 +545,15 @@
 }
 
 .dataTable th {
-  font-weight: var(--font-medium);
-  color: var(--text-muted);
+  background: var(--bg-elevated);
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: var(--font-bold);
   text-align: left;
   padding: var(--space-1) var(--space-2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--bg-tertiary);
   white-space: nowrap;
   line-height: var(--leading-dense);
 }
@@ -560,7 +579,7 @@
 }
 
 .supplyCard {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--bg-tertiary);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
@@ -571,7 +590,7 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-divider);
   border: none;
   cursor: pointer;
   text-align: left;
@@ -581,7 +600,7 @@
 }
 
 .supplyHeader:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
 }
 
 .supplyName {
@@ -606,7 +625,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--surface-border);
 }
 
 .connectionList {
@@ -618,7 +637,7 @@
 
 .connectionRow {
   padding: var(--space-1) 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--surface-divider);
 }
 
 .connectionName {
@@ -693,7 +712,7 @@
   text-align: left;
   line-height: var(--leading-dense);
   padding: 2px var(--space-1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--bg-tertiary);
   white-space: nowrap;
 }
 
@@ -703,7 +722,7 @@
 }
 
 .supplyTableRow:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--surface-border);
 }
 
 .supplyTableRowSelected {
@@ -720,7 +739,7 @@
 }
 
 .supplyConnectedIcon {
-  color: #4caf50;
+  color: var(--success);
   font-size: 12px;
 }
 
@@ -744,23 +763,27 @@
 }
 
 .hireBtn {
-  background: rgba(52, 89, 80, 0.8);
-  border-color: #4a7a6a;
-  color: var(--accent-gold, #d4a843);
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  color: var(--bg-primary);
+  font-weight: 600;
 }
 
 .hireBtn:hover {
-  background: rgba(74, 122, 106, 0.9);
+  background: var(--accent-gold-light);
+  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
 }
 
 .modifyBtn {
-  background: rgba(60, 60, 80, 0.8);
-  border-color: rgba(255, 255, 255, 0.15);
-  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border-color: var(--surface-border);
+  color: var(--text-secondary);
 }
 
 .modifyBtn:hover {
-  background: rgba(80, 80, 100, 0.9);
+  background: var(--bg-elevated);
+  border-color: var(--surface-border-active);
+  color: var(--text-primary);
 }
 
 .modifyBtn:disabled {
@@ -774,14 +797,15 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: var(--text-xs);
-  border: 1px solid rgba(220, 80, 80, 0.6);
-  background: rgba(180, 50, 50, 0.7);
-  color: #ff8a8a;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: var(--error-bg);
+  color: var(--error);
   transition: background 0.15s;
 }
 
 .fireBtn:hover {
-  background: rgba(200, 60, 60, 0.85);
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .fireBtn:disabled {
@@ -802,7 +826,7 @@
   margin: var(--space-2) 0;
   padding: var(--space-3);
   background: var(--bg-tertiary, rgba(30, 32, 40, 0.95));
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.1));
   border-radius: var(--radius-sm);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
@@ -855,39 +879,42 @@
 .overpayDeleteBtn {
   padding: 2px 10px;
   height: 24px;
-  background: rgba(180, 50, 50, 0.7);
-  border: 1px solid rgba(220, 80, 80, 0.6);
+  background: var(--error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   border-radius: var(--radius-sm);
-  color: #ff8a8a;
+  color: var(--error);
   cursor: pointer;
   font-size: var(--text-xs);
   margin-right: auto;
 }
 
 .overpayDeleteBtn:hover {
-  background: rgba(200, 60, 60, 0.85);
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .overpayOkBtn {
   padding: 2px 10px;
   height: 24px;
-  background: rgba(52, 89, 80, 0.8);
-  border: 1px solid #4a7a6a;
+  background: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
   border-radius: var(--radius-sm);
-  color: var(--accent-gold, #d4a843);
+  color: var(--bg-primary);
   cursor: pointer;
   font-size: var(--text-xs);
+  font-weight: 600;
 }
 
 .overpayOkBtn:hover {
-  background: rgba(74, 122, 106, 0.9);
+  background: var(--accent-gold-light);
+  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
 }
 
 .overpayCancelBtn {
   padding: 2px 10px;
   height: 24px;
-  background: rgba(60, 60, 80, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   cursor: pointer;
@@ -895,7 +922,9 @@
 }
 
 .overpayCancelBtn:hover {
-  background: rgba(80, 80, 100, 0.7);
+  background: var(--bg-elevated);
+  border-color: var(--surface-border-active);
+  color: var(--text-primary);
 }
 
 /* Supply stats row */
@@ -917,35 +946,36 @@
 /* Stop/Open toggle button (Close/Open building) */
 .stopToggleRow {
   padding: var(--space-2) 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--surface-divider);
 }
 
 .stopToggleBtn {
   width: 100%;
   padding: var(--space-2) var(--space-4);
-  background: rgba(52, 89, 80, 0.8);
-  border: 1px solid #4a7a6a;
+  background: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
   border-radius: var(--radius-sm);
-  color: var(--accent-gold, #d4a843);
+  color: var(--bg-primary);
   cursor: pointer;
   font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  transition: background 0.2s, border-color 0.2s;
+  font-weight: 600;
+  transition: background 0.2s, box-shadow 0.2s;
 }
 
 .stopToggleBtn:hover {
-  background: rgba(74, 122, 106, 0.9);
-  border-color: var(--accent-gold, #d4a843);
+  background: var(--accent-gold-light);
+  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
 }
 
 .stopToggleBtnDanger {
-  background: rgba(200, 60, 60, 0.6);
-  border-color: rgba(200, 60, 60, 0.8);
-  color: var(--text-primary);
+  background: var(--error-bg);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: var(--error);
 }
 
 .stopToggleBtnDanger:hover {
-  background: rgba(200, 60, 60, 0.8);
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 /* Action button */
@@ -956,18 +986,19 @@
 
 .actionBtn {
   padding: var(--space-2) var(--space-4);
-  background: rgba(52, 89, 80, 0.8);
-  border: 1px solid #4a7a6a;
+  background: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
   border-radius: var(--radius-sm);
-  color: var(--accent-gold, #d4a843);
+  color: var(--bg-primary);
   cursor: pointer;
   font-size: var(--text-sm);
-  transition: background 0.2s, border-color 0.2s;
+  font-weight: 600;
+  transition: background 0.2s, box-shadow 0.2s;
 }
 
 .actionBtn:hover {
-  background: rgba(74, 122, 106, 0.9);
-  border-color: var(--accent-gold, #d4a843);
+  background: var(--accent-gold-light);
+  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
 }
 
 /* Clone settings panel */
@@ -1000,7 +1031,7 @@
   flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-2) 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--surface-divider);
 }
 
 .tradeConnectRow {
@@ -1015,7 +1046,7 @@
   justify-content: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--surface-border-active);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   cursor: pointer;
@@ -1025,32 +1056,35 @@
 }
 
 .tradeConnectBtnLink {
-  background: rgba(40, 100, 70, 0.5);
-  border-color: rgba(40, 100, 70, 0.7);
+  background: var(--bg-tertiary);
+  border-color: var(--surface-border);
+  color: var(--text-secondary);
 }
 
 .tradeConnectBtnLink:hover {
-  background: rgba(50, 130, 90, 0.7);
-  border-color: rgba(80, 180, 120, 0.9);
+  background: var(--bg-elevated);
+  border-color: var(--accent-gold-dark);
+  color: var(--accent-gold);
 }
 
 .tradeConnectBtnUnlink {
-  background: rgba(140, 50, 50, 0.4);
-  border-color: rgba(140, 50, 50, 0.6);
+  background: var(--error-bg);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: var(--error);
 }
 
 .tradeConnectBtnUnlink:hover {
-  background: rgba(170, 60, 60, 0.6);
-  border-color: rgba(200, 80, 80, 0.8);
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 /* Inline table action button (e.g., Elect, Depose, Vote in Capitol tabs) */
 .tableActionBtn {
   padding: 3px 10px;
-  background: linear-gradient(135deg, rgba(52, 89, 80, 0.8), rgba(40, 75, 66, 0.9));
-  border: 1px solid rgba(74, 122, 106, 0.6);
+  background: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
   border-radius: 12px;
-  color: var(--accent-gold, #d4a843);
+  color: var(--bg-primary);
   cursor: pointer;
   font-size: var(--text-xs);
   font-weight: 600;
@@ -1061,17 +1095,16 @@
 }
 
 .tableActionBtn:hover {
-  background: linear-gradient(135deg, rgba(74, 122, 106, 0.9), rgba(52, 100, 86, 1));
-  border-color: var(--accent-gold, #d4a843);
-  box-shadow: 0 1px 6px rgba(212, 168, 67, 0.2);
+  background: var(--accent-gold-light);
+  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
 }
 
 .tableActionBtnDanger {
   padding: 3px 10px;
-  background: linear-gradient(135deg, rgba(140, 50, 50, 0.7), rgba(120, 40, 40, 0.85));
-  border: 1px solid rgba(180, 70, 70, 0.5);
+  background: var(--error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.2);
   border-radius: 12px;
-  color: #ff8a8a;
+  color: var(--error);
   cursor: pointer;
   font-size: var(--text-xs);
   font-weight: 600;
@@ -1082,9 +1115,9 @@
 }
 
 .tableActionBtnDanger:hover {
-  background: linear-gradient(135deg, rgba(170, 60, 60, 0.85), rgba(150, 50, 50, 1));
-  border-color: rgba(220, 80, 80, 0.7);
-  box-shadow: 0 1px 6px rgba(220, 80, 80, 0.2);
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 1px 6px rgba(239, 68, 68, 0.2);
 }
 
 /* Editable currency input in table cells */
@@ -1097,8 +1130,8 @@
 
 .currencyInput {
   width: 100%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border-active);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: var(--text-xs);
@@ -1109,7 +1142,7 @@
 
 .currencyInput:focus {
   border-color: var(--accent-primary);
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--surface-border-active);
 }
 
 .currencyConfirmBtn {
@@ -1125,7 +1158,7 @@
   background: rgba(76, 175, 80, 0.3);
   border: none;
   border-radius: 2px;
-  color: #4caf50;
+  color: var(--success);
   cursor: pointer;
   font-size: var(--text-2xs);
   line-height: 1;
@@ -1159,7 +1192,7 @@
 }
 
 .ciAccordionItem {
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
 }
 
@@ -1174,7 +1207,7 @@
   gap: var(--space-2);
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-divider);
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
@@ -1185,13 +1218,13 @@
 }
 
 .ciAccordionHeader:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-tertiary);
   color: var(--text-primary);
 }
 
 .ciAccordionHeaderActive {
   background: rgba(212, 168, 67, 0.1);
-  color: var(--accent-gold, #d4a843);
+  color: var(--accent-gold);
 }
 
 .ciAccordionName {
@@ -1206,7 +1239,7 @@
 /* Accordion body (expandable content) */
 .ciAccordionBody {
   padding: var(--space-3);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--surface-border);
   background: rgba(0, 0, 0, 0.15);
 }
 
@@ -1304,7 +1337,7 @@
 /* Warning hint */
 .ciWarning {
   font-size: var(--text-xs);
-  color: var(--accent-gold, #d4a843);
+  color: var(--accent-gold);
   text-align: center;
   padding: var(--space-1) 0;
 }
@@ -1326,7 +1359,7 @@
   color: var(--text-muted);
   line-height: var(--leading-dense);
   font-weight: 500;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--bg-tertiary);
 }
 
 .cnxTable td {
@@ -1354,7 +1387,7 @@
 .ciSupplyBar {
   flex: 1;
   height: 6px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-elevated);
   border-radius: 3px;
   overflow: hidden;
   position: relative;
@@ -1376,34 +1409,34 @@
   left: 0;
   top: 0;
   height: 100%;
-  background: var(--color-success, #4caf50);
+  background: var(--success);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
-.ciSupplyBarFill.ciBarWarn { background: var(--accent-gold, #d4a843); }
-.ciSupplyBarFill.ciBarCrit { background: var(--color-error, #f44336); }
+.ciSupplyBarFill.ciBarWarn { background: var(--accent-gold); }
+.ciSupplyBarFill.ciBarCrit { background: var(--error); }
 
 .ciLowSupply {
   font-size: var(--text-xs);
   padding: 0 var(--space-3);
 }
-.ciLowSupply.ciBarWarn { color: var(--accent-gold, #d4a843); }
-.ciLowSupply.ciBarCrit { color: var(--color-error, #f44336); }
+.ciLowSupply.ciBarWarn { color: var(--accent-gold); }
+.ciLowSupply.ciBarCrit { color: var(--error); }
 
 .ciDemandBelowCap {
   font-size: var(--text-xs);
   padding: 0 var(--space-3);
-  color: var(--accent-gold, #d4a843);
+  color: var(--accent-gold);
   opacity: 0;
   animation: fadeIn 0.4s ease forwards;
 }
 
 /* Status color classes */
-.healthy { color: var(--color-success, #4caf50); }
-.ciDot.healthy { background: var(--color-success, #4caf50); }
+.healthy { color: var(--success); }
+.ciDot.healthy { background: var(--success); }
 
-.warning { color: var(--accent-gold, #d4a843); }
-.ciDot.warning { background: var(--accent-gold, #d4a843); }
+.warning { color: var(--accent-gold); }
+.ciDot.warning { background: var(--accent-gold); }
 
-.critical { color: var(--color-error, #f44336); }
-.ciDot.critical { background: var(--color-error, #f44336); }
+.critical { color: var(--error); }
+.ciDot.critical { background: var(--error); }

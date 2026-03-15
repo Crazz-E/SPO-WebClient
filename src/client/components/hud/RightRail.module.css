@@ -25,7 +25,7 @@
 .divider {
   width: 28px;
   height: 1px;
-  background: var(--glass-border);
+  background: var(--surface-border);
   margin: var(--space-1) 0;
 }
 

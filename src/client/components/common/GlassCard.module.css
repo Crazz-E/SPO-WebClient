@@ -1,13 +1,23 @@
-/* GlassCard — glassmorphism container */
+/* GlassCard — solid (default) or glass container */
 
 .card {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   padding: var(--space-6);
   box-shadow: var(--shadow-lg);
+}
+
+/* Solid variant (default) — opaque panel */
+.solid {
+  background: var(--surface-primary);
+  border: 1px solid var(--surface-border);
+}
+
+/* Glass variant — translucent blur (InfoWidget, minimap, login) */
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 }
 
 .light {
@@ -22,7 +32,7 @@
 }
 
 .card[role='button']:hover {
-  border-color: var(--glass-border-active);
+  border-color: var(--surface-border-active);
   box-shadow: var(--shadow-glow);
 }
 

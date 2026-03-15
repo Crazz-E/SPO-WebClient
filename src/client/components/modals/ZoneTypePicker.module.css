@@ -16,7 +16,7 @@
   z-index: 400;
   width: min(280px, calc(100vw - var(--space-8)));
   background: var(--bg-secondary);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
   overflow: hidden;
@@ -28,7 +28,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .title {
@@ -54,7 +54,7 @@
 }
 
 .closeBtn:hover {
-  background: var(--glass-bg);
+  background: var(--surface-primary);
   color: var(--text-primary);
 }
 
@@ -81,7 +81,7 @@
 }
 
 .zoneItem:hover {
-  background: var(--glass-bg);
+  background: var(--surface-primary);
 }
 
 .swatch {

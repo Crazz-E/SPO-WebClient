@@ -600,7 +600,8 @@ async function voteForCandidateInline(ctx: ClientHandlerContext, buildingDetails
     candidateName,
   });
   ctx.showNotification(`Voted for ${candidateName}`, 'success');
-  refreshBuildingDetails(ctx, buildingDetails.x, buildingDetails.y);
+  // Delay refresh to allow void push ("*") to be processed by the server
+  setTimeout(() => refreshBuildingDetails(ctx, buildingDetails.x, buildingDetails.y), 500);
 }
 
 // ── Repair Actions ──────────────────────────────────────────────────────────

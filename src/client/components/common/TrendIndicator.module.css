@@ -1,0 +1,22 @@
+/* TrendIndicator — directional trend display */
+
+.trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.sm { font-size: var(--text-xs); }
+.md { font-size: var(--text-sm); }
+
+.arrow {
+  font-size: 0.75em;
+}
+
+.positive { color: var(--money-positive); }
+.negative { color: var(--money-negative); }
+.neutral { color: var(--text-muted); }
