@@ -14,6 +14,7 @@ import { CoordinateMapper } from './coordinate-mapper';
 import { TextureCache, getFallbackColor } from './texture-cache';
 import { TextureAtlasCache } from './texture-atlas-cache';
 import { ChunkCache, CHUNK_SIZE } from './chunk-cache';
+import { config as appConfig } from '../../shared/config';
 import { isSpecialTile, rotateLandId } from '../../shared/land-utils';
 import {
   Point,
@@ -204,7 +205,10 @@ export class IsometricTerrainRenderer {
     this.terrainPreviewLoading = true;
 
     try {
-      const url = `/api/terrain-preview/${encodeURIComponent(mapName)}/${encodeURIComponent(terrainType)}/${season}`;
+      const cdnUrl = appConfig.cdn.url;
+      const url = cdnUrl
+        ? `${cdnUrl}/chunks/${encodeURIComponent(mapName)}/${encodeURIComponent(terrainType)}/${season}/preview.png`
+        : `/api/terrain-preview/${encodeURIComponent(mapName)}/${encodeURIComponent(terrainType)}/${season}`;
       const response = await fetch(url);
 
       if (!response.ok) {

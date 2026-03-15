@@ -50,13 +50,13 @@ describe('ServerStartupScreen', () => {
         message: 'Loading...',
         services: [
           { name: 'update', status: 'complete', progress: 1 },
-          { name: 'textures', status: 'running', progress: 0.5 },
+          { name: 'facilities', status: 'running', progress: 0.5 },
         ],
       },
     });
     renderWithProviders(<ServerStartupScreen />);
     expect(screen.getByText('Downloading game assets')).toBeTruthy();
-    expect(screen.getByText('Processing terrain textures')).toBeTruthy();
+    expect(screen.getByText('Loading building catalog')).toBeTruthy();
   });
 
   it('renders unknown service name as-is', () => {

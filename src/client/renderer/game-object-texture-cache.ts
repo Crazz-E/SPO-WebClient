@@ -20,6 +20,7 @@
 
 import { parseGIF, decompressFrames } from 'gifuct-js';
 import { getFacilityDimensionsCache } from '../facility-dimensions-cache';
+import { config as appConfig } from '../../shared/config';
 
 /** A single frame of an animated GIF texture */
 export interface AnimatedFrame {
@@ -254,8 +255,12 @@ export class GameObjectTextureCache {
    * and stores them as an AnimatedTexture on the cache entry.
    */
   private async fetchTexture(category: TextureCategory, name: string): Promise<ImageBitmap | null> {
-    // URL pattern: /cache/{category}/{name}
-    const url = `/cache/${category}/${encodeURIComponent(name)}`;
+    // CDN serves baked PNGs for roads/concrete/cars; buildings stay on local server
+    const cdnUrl = appConfig.cdn.url;
+    const cdnEligible = cdnUrl && category !== 'BuildingImages';
+    const url = cdnEligible
+      ? `${cdnUrl}/cache/${category}/${encodeURIComponent(name)}`
+      : `/cache/${category}/${encodeURIComponent(name)}`;
 
     try {
       const response = await fetch(url);
@@ -455,8 +460,13 @@ export class GameObjectTextureCache {
   }
 
   private async _doLoadObjectAtlas(category: string): Promise<void> {
-    const atlasUrl = `/api/object-atlas/${encodeURIComponent(category)}`;
-    const manifestUrl = `/api/object-atlas/${encodeURIComponent(category)}/manifest`;
+    const cdnUrl = appConfig.cdn.url;
+    const atlasUrl = cdnUrl
+      ? `${cdnUrl}/objects/${encodeURIComponent(category)}-atlas.png`
+      : `/api/object-atlas/${encodeURIComponent(category)}`;
+    const manifestUrl = cdnUrl
+      ? `${cdnUrl}/objects/${encodeURIComponent(category)}-atlas.json`
+      : `/api/object-atlas/${encodeURIComponent(category)}/manifest`;
 
     try {
       const [atlasResponse, manifestResponse] = await Promise.all([

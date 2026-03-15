@@ -12,6 +12,7 @@
  */
 
 import { Season, SEASON_NAMES } from '../../shared/map-config';
+import { config as appConfig } from '../../shared/config';
 import { LandClass, landClassOf } from '../../shared/land-utils';
 
 /**
@@ -158,8 +159,13 @@ export class TextureAtlasCache {
 
   private async _doLoadAtlas(): Promise<void> {
     const terrainType = encodeURIComponent(this.terrainType);
-    const atlasUrl = `/api/terrain-atlas/${terrainType}/${this.season}`;
-    const manifestUrl = `/api/terrain-atlas/${terrainType}/${this.season}/manifest`;
+    const cdnUrl = appConfig.cdn.url;
+    const atlasUrl = cdnUrl
+      ? `${cdnUrl}/textures/${terrainType}/${this.season}/atlas.png`
+      : `/api/terrain-atlas/${terrainType}/${this.season}`;
+    const manifestUrl = cdnUrl
+      ? `${cdnUrl}/textures/${terrainType}/${this.season}/atlas.json`
+      : `/api/terrain-atlas/${terrainType}/${this.season}/manifest`;
 
     try {
       const [atlasResponse, manifestResponse] = await Promise.all([

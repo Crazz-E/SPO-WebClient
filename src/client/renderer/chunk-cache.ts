@@ -17,6 +17,7 @@
  */
 
 import { ZOOM_LEVELS, ZoomConfig, Point } from '../../shared/map-config';
+import { config as appConfig } from '../../shared/config';
 import { TextureCache, getFallbackColor } from './texture-cache';
 import { TextureAtlasCache } from './texture-atlas-cache';
 import { isSpecialTile } from '../../shared/land-utils';
@@ -461,7 +462,10 @@ export class ChunkCache {
 
     try {
       const t0 = performance.now();
-      const url = `/api/terrain-chunk/${encodeURIComponent(this.mapName)}/${encodeURIComponent(this.terrainType)}/${this.season}/${zoomLevel}/${chunkI}/${chunkJ}`;
+      const cdnUrl = appConfig.cdn.url;
+      const url = cdnUrl
+        ? `${cdnUrl}/chunks/${encodeURIComponent(this.mapName)}/${encodeURIComponent(this.terrainType)}/${this.season}/z${zoomLevel}/chunk_${chunkI}_${chunkJ}.webp`
+        : `/api/terrain-chunk/${encodeURIComponent(this.mapName)}/${encodeURIComponent(this.terrainType)}/${this.season}/${zoomLevel}/${chunkI}/${chunkJ}`;
       const response = await fetch(url);
       const tFetch = performance.now();
 

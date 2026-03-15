@@ -5,7 +5,7 @@
  *
  * Shows two sections:
  * 1. Cache steps — pre-service file indexing (fast, parallel)
- * 2. Services — heavyweight initialization (update, textures, etc.) with sub-steps
+ * 2. Services — heavyweight initialization (update, facilities, mapData) with sub-steps
  */
 
 import { useState, useEffect } from 'react';
@@ -16,10 +16,8 @@ import styles from './ServerStartupScreen.module.css';
 
 const SERVICE_LABELS: Record<string, string> = {
   update: 'Downloading game assets',
-  textures: 'Processing terrain textures',
   facilities: 'Loading building catalog',
   mapData: 'Indexing map data',
-  terrainChunks: 'Preparing terrain renderer',
 };
 
 const STATUS_ICON: Record<string, string> = {

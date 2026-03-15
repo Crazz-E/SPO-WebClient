@@ -117,8 +117,7 @@ src/
 │   ├── server.ts              # HTTP/WebSocket server + API endpoints
 │   ├── spo_session.ts         # RDO session manager
 │   ├── rdo.ts                 # RDO protocol parser
-│   ├── *-service.ts           # Background services (ServiceRegistry)
-│   └── terrain-chunk-renderer.ts, texture-extractor.ts
+│   └── *-service.ts           # Background services (ServiceRegistry)
 └── shared/
     ├── rdo-types.ts           # RDO type system (CRITICAL)
     ├── error-utils.ts         # toErrorMessage(err: unknown)
@@ -200,15 +199,8 @@ npm test -- --testNamePattern="X"  # Specific suite
 | `GET /api/road-block-classes` | Road block class definitions |
 | `GET /api/concrete-block-classes` | Concrete block class definitions |
 | `GET /api/car-classes` | Car class definitions |
-| `GET /api/terrain-info/:terrainType` | Terrain type metadata |
-| `GET /api/terrain-atlas/:type/:season` | Terrain atlas PNG |
-| `GET /api/terrain-atlas/:type/:season/manifest` | Terrain atlas JSON |
-| `GET /api/object-atlas/:category` | Road/concrete atlas PNG |
-| `GET /api/object-atlas/:category/manifest` | Road/concrete atlas JSON |
-| `GET /api/terrain-chunk/:map/:type/:season/:zoom/:i/:j` | Pre-rendered chunk PNG |
-| `GET /api/terrain-chunks/:map/:type/:season/manifest` | Chunk availability manifest |
-| `GET /api/terrain-texture/:type/:season/:id` | Individual texture fallback |
-| `GET /cache/:category/:filename` | Object texture (prefers pre-baked PNG) |
+| `GET /api/terrain-info/:terrainType` | Terrain type metadata (seasons) |
+| `GET /cache/:category/:filename` | Object texture (BuildingImages served locally) |
 | `GET /proxy-image?url=<url>` | Image proxy for remote assets |
 
 ## E2E Testing
@@ -231,9 +223,7 @@ Service files live flat in `src/server/` (no subdirectory).
 |---------|---------|--------------|
 | `update` | Sync game assets | none |
 | `facilities` | Building dimensions | update |
-| `textures` | Extract CAB textures | update |
 | `mapData` | Map data caching | update |
-| `terrainChunks` | Server-side chunk pre-rendering | textures, mapData |
 
 ## Troubleshooting
 

@@ -17,9 +17,7 @@
     "test:verbose": "jest --verbose",
     "test:changed": "jest --onlyChanged --bail",
     "test:smoke": "jest --selectProjects component --bail",
-    "release": "node scripts/release.js",
-    "cache:chunks": "node --disable-warning=DEP0040 dist/server/generate-chunks.js --skip-sync",
-    "cache:all": "node --disable-warning=DEP0040 dist/server/generate-chunks.js"
+    "release": "node scripts/release.js"
   },
   "keywords": [
     "starpeace",
@@ -66,7 +64,6 @@
     "esbuild": "^0.27.2",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
-    "sharp": "^0.34.5",
     "ts-jest": "^29.4.6",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"

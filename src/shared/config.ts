@@ -37,15 +37,18 @@ export const config = {
   },
 
   /**
-   * Chunk pre-generation
+   * Static asset CDN
+   *
+   * When set, the client fetches all static terrain/object assets from this CDN
+   * instead of the local server. Assets include: terrain chunks, atlases, object
+   * atlases, individual textures, terrain previews, and baked object textures.
+   *
+   * When empty, falls back to local server API endpoints.
+   *
+   * Set via CHUNK_CDN_URL environment variable (e.g., 'https://spo.zz.works').
    */
-  chunks: {
-    // In dev mode, only pre-generate chunks for these maps (saves time/disk).
-    // Set PREGENERATE_MAPS env var to override, or empty string to generate all.
-    // In production (NODE_ENV=production), all maps are generated unless PREGENERATE_MAPS is set.
-    devMaps: getEnv('NODE_ENV') !== 'production'
-      ? (getEnv('PREGENERATE_MAPS') ?? 'Shamba,Zorcon').split(',').map(s => s.trim()).filter(Boolean)
-      : (getEnv('PREGENERATE_MAPS') ?? '').split(',').map(s => s.trim()).filter(Boolean),
+  cdn: {
+    url: getEnv('CHUNK_CDN_URL') || '',
   },
 
   /**
