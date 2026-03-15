@@ -291,10 +291,14 @@ export class TextureCache {
    * so no client-side color keying is needed.
    */
   private async fetchTexture(paletteIndex: number): Promise<ImageBitmap | null> {
-    const cdnUrl = appConfig.cdn.url;
-    const url = cdnUrl
-      ? `${cdnUrl}/textures/${encodeURIComponent(this.terrainType)}/${this.season}/${paletteIndex}.png`
-      : `/api/terrain-texture/${encodeURIComponent(this.terrainType)}/${this.season}/${paletteIndex}`;
+    // When CDN is configured, individual textures are not available by palette index.
+    // The atlas (loaded separately) is the source of truth — skip individual fetches
+    // and let the renderer use fallback colors until the atlas is ready.
+    if (appConfig.cdn.url) {
+      return null;
+    }
+
+    const url = `/api/terrain-texture/${encodeURIComponent(this.terrainType)}/${this.season}/${paletteIndex}`;
 
     try {
       const response = await fetch(url);
