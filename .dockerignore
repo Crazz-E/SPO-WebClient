@@ -1,0 +1,14 @@
+node_modules/
+dist/
+cache/
+webclient-cache/
+coverage/
+screenshots/
+.env
+.env.*
+.git/
+.gitignore
+.claude/
+*.md
+!package.json
+deploy/

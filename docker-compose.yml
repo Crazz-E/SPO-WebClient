@@ -1,0 +1,32 @@
+services:
+  spo-webclient:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spo-webclient
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080" # Localhost only — nginx fronts all external traffic
+    env_file:
+      - .env
+    volumes:
+      - spo-cache:/app/cache                     # Game assets from update server (persists across restarts)
+      - spo-webclient-cache:/app/webclient-cache  # Downloaded images (dynamic cache)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+
+volumes:
+  spo-cache:
+    driver: local
+  spo-webclient-cache:
+    driver: local

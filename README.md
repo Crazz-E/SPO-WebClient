@@ -69,6 +69,31 @@ npm run dev        # Build all + start server on port 8080
 
 Then open `http://localhost:8080` in your browser.
 
+## Production Deployment
+
+Quick deploy with Docker + nginx + HTTPS on a VPS:
+
+```bash
+git clone <repo> /opt/spo-webclient && cd /opt/spo-webclient
+cp deploy/.env.example .env && chmod 600 .env
+docker compose build && docker compose up -d
+# Copy nginx config, obtain TLS cert, reload nginx
+sudo cp deploy/nginx/spo-webclient.conf /etc/nginx/sites-available/spo-webclient
+sudo ln -sf /etc/nginx/sites-available/spo-webclient /etc/nginx/sites-enabled/
+sudo certbot certonly --webroot -w /var/www/certbot -d spo.yourdomain.com
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+| Component | Config location |
+|-----------|----------------|
+| App env vars | `.env` (root, chmod 600) |
+| Docker | `docker-compose.yml` + `Dockerfile` |
+| Nginx | `deploy/nginx/spo-webclient.conf` |
+| TLS | Let's Encrypt via certbot |
+| Env template | `deploy/.env.example` |
+
+For the **full step-by-step guide** (VPS setup, firewall, SSH hardening, fail2ban, Docker install, DNS, TLS, security checklist, verification, troubleshooting): **[deploy/DEPLOY.md](deploy/DEPLOY.md)**
+
 ### Commands
 
 ```bash
