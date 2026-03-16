@@ -445,9 +445,11 @@ export class IsometricMapRenderer {
   // Per-building visual effects: upgrade flash/scale-pop and demolition shrink/fade
   private buildingEffects: Map<string, { type: 'upgrade' | 'demolish'; startTime: number; building: MapBuilding }> = new Map();
 
-  /** Portal facilities (6031) are non-interactive map decorations. */
+  /** Portal facilities (6031/6032) are non-interactive map decorations.
+   *  Base visual class 6031; Delphi GetVisualClassId returns 0 or 1
+   *  based on population flow, so the server alternates between 6031 and 6032. */
   private static isPortal(building: MapBuilding): boolean {
-    return building.visualClass === '6031';
+    return building.visualClass === '6031' || building.visualClass === '6032';
   }
 
   // Road drawing

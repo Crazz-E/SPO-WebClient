@@ -26,8 +26,8 @@ export function handleMapClick(ctx: ClientHandlerContext, x: number, y: number, 
     return;
   }
 
-  // Portal (visual class 6031) is not inspectable
-  if (visualClass === '6031') return;
+  // Portal (visual class 6031/6032) is not inspectable
+  if (visualClass === '6031' || visualClass === '6032') return;
 
   // Civic buildings skip overlay — open modal directly
   if (visualClass && isCivicBuilding(visualClass)) {
