@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0-beta] - 2026-03-15
+
+### Fixed
+- hardcode spo.zz.works as default CDN URL, remove Vite inject hack
+- skip individual texture fetches when CDN is configured
+- inject CDN URL at build time via Vite define, add CSP whitelist
+- disable hover, selection, and animation effects on Portal facilities (6031)
+
+### Changed
+- migrate static terrain assets to Cloudflare R2 CDN
+- redesign Capitol/TownHall modals — consolidated tabs, slider polish, UX fixes
+- consolidate Capitol/TownHall politics UI from 6 tabs to 4
+
+### Documentation
+- update README for CDN migration — remove deleted files, add static assets section
+
 ## [1.0.1-beta] - 2026-03-10
 
 ### Added

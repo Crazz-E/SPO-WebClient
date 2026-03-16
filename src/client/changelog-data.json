@@ -1,5 +1,39 @@
 [
   {
+    "version": "1.1.0-beta",
+    "date": "2026-03-15",
+    "entries": [
+      {
+        "type": "fixed",
+        "text": "hardcode spo.zz.works as default CDN URL, remove Vite inject hack"
+      },
+      {
+        "type": "fixed",
+        "text": "skip individual texture fetches when CDN is configured"
+      },
+      {
+        "type": "fixed",
+        "text": "inject CDN URL at build time via Vite define, add CSP whitelist"
+      },
+      {
+        "type": "fixed",
+        "text": "disable hover, selection, and animation effects on Portal facilities (6031)"
+      },
+      {
+        "type": "changed",
+        "text": "migrate static terrain assets to Cloudflare R2 CDN"
+      },
+      {
+        "type": "changed",
+        "text": "redesign Capitol/TownHall modals — consolidated tabs, slider polish, UX fixes"
+      },
+      {
+        "type": "changed",
+        "text": "consolidate Capitol/TownHall politics UI from 6 tabs to 4"
+      }
+    ]
+  },
+  {
     "version": "1.0.1-beta",
     "date": "2026-03-10",
     "entries": [
