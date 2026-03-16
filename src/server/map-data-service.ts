@@ -8,6 +8,7 @@ import * as path from 'path';
 import { MapMetadata, MapTownInfo } from '../shared/map-config';
 import { extractCabArchive } from './cab-extractor';
 import type { Service } from './service-registry';
+import { getCacheDir } from './paths';
 
 export class MapDataService implements Service {
   public readonly name = 'mapData';
@@ -15,7 +16,7 @@ export class MapDataService implements Service {
   private cacheRoot: string;
   private extracted: Set<string> = new Set();
 
-  constructor(cacheRoot: string = path.join(__dirname, '../../cache')) {
+  constructor(cacheRoot: string = getCacheDir()) {
     this.cacheRoot = cacheRoot;
   }
 

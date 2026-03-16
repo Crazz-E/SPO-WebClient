@@ -21,6 +21,8 @@ export const config = {
    */
   server: {
     port: Number(getEnv('PORT')) || 8080,
+    host: getEnv('HOST') || '0.0.0.0',
+    singleUserMode: getEnv('SINGLE_USER_MODE') === 'true',
   },
 
   /**
@@ -41,7 +43,9 @@ export const config = {
    * Override with CHUNK_CDN_URL env var if needed (e.g., local dev without CDN: set to '').
    */
   cdn: {
-    url: getEnv('CHUNK_CDN_URL') ?? 'https://spo.zz.works',
+    url: (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__SPO_CDN_URL__ !== undefined)
+      ? (window as unknown as Record<string, unknown>).__SPO_CDN_URL__ as string
+      : getEnv('CHUNK_CDN_URL') ?? 'https://spo.zz.works',
   },
 
   /**

@@ -77,6 +77,8 @@ export const TIMEOUTS = {
   RDO_REQUEST: 15000,
   /** Image download timeout */
   IMAGE_DOWNLOAD: 10000,
+  /** File download timeout (large assets like maps) */
+  FILE_DOWNLOAD: 60000,
 } as const;
 
 /**

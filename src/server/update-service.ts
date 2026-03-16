@@ -6,8 +6,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../shared/logger';
-import { UPDATE_SERVER } from '../shared/constants';
+import { UPDATE_SERVER, TIMEOUTS } from '../shared/constants';
 import { extractCabArchive, isCabExtractorAvailable } from './cab-extractor';
+import { getCacheDir } from './paths';
 
 const logger = createLogger('UpdateService');
 
@@ -67,7 +68,7 @@ export class UpdateService implements Service {
   constructor(cacheRoot?: string) {
     // Default to cache/ directory in project root
     // This mirrors the exact structure from update.starpeaceonline.com/five/client/cache/
-    this.CACHE_ROOT = cacheRoot || path.join(__dirname, '../../cache');
+    this.CACHE_ROOT = cacheRoot || getCacheDir();
     this.CAB_METADATA_FILE = path.join(this.CACHE_ROOT, '.cab-metadata.json');
     this.loadCabMetadata();
   }
@@ -269,7 +270,7 @@ export class UpdateService implements Service {
       : this.UPDATE_SERVER_BASE;
 
     try {
-      const response = await fetch(remoteUrl);
+      const response = await fetch(remoteUrl, { signal: AbortSignal.timeout(TIMEOUTS.FETCH) });
       if (!response.ok) {
         logger.warn(`[UpdateService] Cannot access ${relativePath || 'root'}: HTTP ${response.status}`);
         return items;
@@ -360,7 +361,7 @@ export class UpdateService implements Service {
         this.cleanupOldCabExtraction(item.path);
       }
 
-      const response = await fetch(item.url);
+      const response = await fetch(item.url, { signal: AbortSignal.timeout(TIMEOUTS.FILE_DOWNLOAD) });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }

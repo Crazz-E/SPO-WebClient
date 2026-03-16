@@ -257,10 +257,9 @@ export class GameObjectTextureCache {
   private async fetchTexture(category: TextureCategory, name: string): Promise<ImageBitmap | null> {
     // CDN serves baked PNGs for roads/concrete/cars; buildings stay on local server
     const cdnUrl = appConfig.cdn.url;
-    const cdnEligible = cdnUrl && category !== 'BuildingImages';
-    const url = cdnEligible
-      ? `${cdnUrl}/cache/${category}/${encodeURIComponent(name)}`
-      : `/cache/${category}/${encodeURIComponent(name)}`;
+    const cdnEligible = category !== 'BuildingImages';
+    const cachePath = `/cache/${category}/${encodeURIComponent(name)}`;
+    const url = (cdnEligible && cdnUrl) ? `${cdnUrl}${cachePath}` : cdnEligible ? `/cdn${cachePath}` : cachePath;
 
     try {
       const response = await fetch(url);
@@ -461,12 +460,10 @@ export class GameObjectTextureCache {
 
   private async _doLoadObjectAtlas(category: string): Promise<void> {
     const cdnUrl = appConfig.cdn.url;
-    const atlasUrl = cdnUrl
-      ? `${cdnUrl}/objects/${encodeURIComponent(category)}-atlas.png`
-      : `/api/object-atlas/${encodeURIComponent(category)}`;
-    const manifestUrl = cdnUrl
-      ? `${cdnUrl}/objects/${encodeURIComponent(category)}-atlas.json`
-      : `/api/object-atlas/${encodeURIComponent(category)}/manifest`;
+    const atlasPath = `/objects/${encodeURIComponent(category)}-atlas.png`;
+    const manifestPath = `/objects/${encodeURIComponent(category)}-atlas.json`;
+    const atlasUrl = cdnUrl ? `${cdnUrl}${atlasPath}` : `/cdn${atlasPath}`;
+    const manifestUrl = cdnUrl ? `${cdnUrl}${manifestPath}` : `/cdn${manifestPath}`;
 
     try {
       const [atlasResponse, manifestResponse] = await Promise.all([

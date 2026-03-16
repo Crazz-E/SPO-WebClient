@@ -290,34 +290,10 @@ export class TextureCache {
    * Textures are served as pre-baked PNGs with alpha channel already applied,
    * so no client-side color keying is needed.
    */
-  private async fetchTexture(paletteIndex: number): Promise<ImageBitmap | null> {
-    // When CDN is configured, individual textures are not available by palette index.
-    // The atlas (loaded separately) is the source of truth — skip individual fetches
-    // and let the renderer use fallback colors until the atlas is ready.
-    if (appConfig.cdn.url) {
-      return null;
-    }
-
-    const url = `/api/terrain-texture/${encodeURIComponent(this.terrainType)}/${this.season}/${paletteIndex}`;
-
-    try {
-      const response = await fetch(url);
-
-      // 204 means texture not available for this palette index
-      if (response.status === 204) {
-        return null;
-      }
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const blob = await response.blob();
-      return createImageBitmap(blob);
-    } catch (error: unknown) {
-      console.warn(`[TextureCache] Failed to load texture ${paletteIndex}:`, error);
-      return null;
-    }
+  private async fetchTexture(_paletteIndex: number): Promise<ImageBitmap | null> {
+    // Individual textures come from the atlas (loaded separately) — skip individual
+    // fetches and let the renderer use fallback colors until the atlas is ready.
+    return null;
   }
 
   /**

@@ -17,7 +17,8 @@
     "test:verbose": "jest --verbose",
     "test:changed": "jest --onlyChanged --bail",
     "test:smoke": "jest --selectProjects component --bail",
-    "release": "node scripts/release.js"
+    "release": "node scripts/release.js",
+    "electron": "npm run build:server && cd electron && npm start"
   },
   "keywords": [
     "starpeace",

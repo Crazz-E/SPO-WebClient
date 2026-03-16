@@ -93,7 +93,7 @@ describe('GameObjectTextureCache', () => {
 
     it('should trigger async load for uncached texture', () => {
       cache.getTextureSync('RoadBlockImages', 'Roadvert.bmp');
-      expect(global.fetch).toHaveBeenCalledWith('/cache/RoadBlockImages/Roadvert.bmp');
+      expect(global.fetch).toHaveBeenCalledWith('/cdn/cache/RoadBlockImages/Roadvert.bmp');
     });
 
     it('should not start multiple loads for same texture', () => {
@@ -147,13 +147,13 @@ describe('GameObjectTextureCache', () => {
 
     function setupAtlasMock() {
       (global.fetch as jest.Mock).mockImplementation((url: string) => {
-        if (url.endsWith('/manifest')) {
+        if (url.endsWith('-atlas.json')) {
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve(mockManifest),
           });
         }
-        if (url.includes('/api/object-atlas/')) {
+        if (url.endsWith('-atlas.png')) {
           return Promise.resolve({
             ok: true,
             blob: () => Promise.resolve(new Blob()),
@@ -168,8 +168,8 @@ describe('GameObjectTextureCache', () => {
       setupAtlasMock();
       await cache.loadObjectAtlas('road');
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/object-atlas/road');
-      expect(global.fetch).toHaveBeenCalledWith('/api/object-atlas/road/manifest');
+      expect(global.fetch).toHaveBeenCalledWith('/cdn/objects/road-atlas.png');
+      expect(global.fetch).toHaveBeenCalledWith('/cdn/objects/road-atlas.json');
       expect(cache.hasAtlas('road')).toBe(true);
     });
 
@@ -244,13 +244,13 @@ describe('GameObjectTextureCache', () => {
       };
 
       (global.fetch as jest.Mock).mockImplementation((url: string) => {
-        if (url.endsWith('/manifest')) {
+        if (url.endsWith('-atlas.json')) {
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve(concreteManifest),
           });
         }
-        if (url.includes('/api/object-atlas/')) {
+        if (url.endsWith('-atlas.png')) {
           return Promise.resolve({
             ok: true,
             blob: () => Promise.resolve(new Blob()),
@@ -289,10 +289,13 @@ describe('GameObjectTextureCache', () => {
       const mockBitmap = { width: 256, height: 128, close: jest.fn() };
 
       (global.fetch as jest.Mock).mockImplementation((url: string) => {
-        if (url.endsWith('/manifest')) {
+        if (url.endsWith('-atlas.json')) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(mockManifest) });
         }
-        return Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob()) });
+        if (url.endsWith('-atlas.png')) {
+          return Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob()) });
+        }
+        return Promise.resolve({ ok: false, status: 404 });
       });
       (global as any).createImageBitmap.mockResolvedValue(mockBitmap);
 

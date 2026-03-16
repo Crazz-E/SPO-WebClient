@@ -78,7 +78,7 @@ describe('TextureAtlasCache', () => {
       const mockBlob = new Blob();
 
       (global.fetch as jest.Mock).mockImplementation((url: string) => {
-        if (url.endsWith('/manifest')) {
+        if (url.endsWith('atlas.json')) {
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve(mockManifest),
@@ -94,8 +94,8 @@ describe('TextureAtlasCache', () => {
       await cache.loadAtlas();
 
       expect(global.fetch).toHaveBeenCalledTimes(2);
-      expect(global.fetch).toHaveBeenCalledWith('/api/terrain-atlas/Earth/2');
-      expect(global.fetch).toHaveBeenCalledWith('/api/terrain-atlas/Earth/2/manifest');
+      expect(global.fetch).toHaveBeenCalledWith('/cdn/textures/Earth/2/atlas.png');
+      expect(global.fetch).toHaveBeenCalledWith('/cdn/textures/Earth/2/atlas.json');
     });
 
     it('should be ready after successful load', async () => {
@@ -109,7 +109,7 @@ describe('TextureAtlasCache', () => {
       const mockBitmap = { width: 1024, height: 1536, close: jest.fn() };
 
       (global.fetch as jest.Mock).mockImplementation((url: string) => {
-        if (url.endsWith('/manifest')) {
+        if (url.endsWith('atlas.json')) {
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve(mockManifest),
@@ -162,7 +162,7 @@ describe('TextureAtlasCache', () => {
       const mockBitmap = { width: 1024, height: 1536, close: jest.fn() };
 
       (global.fetch as jest.Mock).mockImplementation((url: string) => {
-        if (url.endsWith('/manifest')) {
+        if (url.endsWith('atlas.json')) {
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve(mockManifest),
@@ -211,7 +211,7 @@ describe('TextureAtlasCache', () => {
       const mockBitmap = { width: 1024, height: 1536, close: jest.fn() };
 
       (global.fetch as jest.Mock).mockImplementation((url: string) => {
-        if (url.endsWith('/manifest')) {
+        if (url.endsWith('atlas.json')) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(mockManifest) });
         }
         return Promise.resolve({ ok: true, blob: () => Promise.resolve(new Blob()) });

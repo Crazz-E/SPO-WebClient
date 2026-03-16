@@ -27,6 +27,7 @@ import {
 import { toErrorMessage } from '../shared/error-utils';
 import { wsHandlerRegistry } from './ws-handlers';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
+import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 
 /**
  * Starpeace Gateway Server
@@ -37,9 +38,11 @@ import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '.
  */
 
 const logger = createLogger('Gateway');
-const PORT = config.server.port;
-const PUBLIC_DIR = path.join(__dirname, '../../public');
-const CACHE_DIR = path.join(__dirname, '../../cache');
+let PORT = config.server.port;
+let HOST = config.server.host;
+let SINGLE_USER_MODE = config.server.singleUserMode;
+const PUBLIC_DIR = getPublicDir();
+const CACHE_DIR = getCacheDir();
 
 // =============================================================================
 // Service Registration
@@ -73,7 +76,7 @@ const facilityDimensionsCache = () => serviceRegistry.get<FacilityDimensionsCach
 const mapDataService = () => serviceRegistry.get<MapDataService>('mapData');
 
 // Dynamic image cache directory (for facility images fetched from game server)
-const WEBCLIENT_CACHE_DIR = path.join(__dirname, '../../webclient-cache');
+const WEBCLIENT_CACHE_DIR = getWebclientCacheDir();
 if (!fs.existsSync(WEBCLIENT_CACHE_DIR)) {
   fs.mkdirSync(WEBCLIENT_CACHE_DIR, { recursive: true });
 }
@@ -90,7 +93,7 @@ const imageFileIndex = new Map<string, string>();
  */
 async function buildImageFileIndex(): Promise<void> {
   imageFileIndex.clear();
-  const CACHE_ROOT = path.join(__dirname, '../../cache');
+  const CACHE_ROOT = getCacheDir();
 
   // Index files in update server cache subdirectories
   try {
@@ -304,7 +307,7 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
     }
 
     // Not in index — try downloading from update server
-    const CACHE_ROOT = path.join(__dirname, '../../cache');
+    const CACHE_ROOT = getCacheDir();
     const imageDirs: string[] = [];
     for (const [, filePath] of imageFileIndex) {
       const dir = path.basename(path.dirname(filePath));
@@ -462,6 +465,20 @@ const server = http.createServer(async (req, res) => {
   setSecurityHeaders(res);
   const safePath = req.url === '/' ? '/index.html' : req.url || '/index.html';
 
+  // Runtime config script — serves CDN URL override as an external JS file (CSP-compliant).
+  // Only relevant when CHUNK_CDN_URL is overridden (e.g., Electron). In Docker, this returns
+  // an empty script since config.cdn.url matches the default.
+  if (safePath === '/spo-runtime-config.js') {
+    const cdnJson = JSON.stringify(config.cdn.url);
+    const body = `window.__SPO_CDN_URL__=${cdnJson};`;
+    res.writeHead(200, {
+      'Content-Type': 'text/javascript',
+      'Cache-Control': 'no-cache',
+    });
+    res.end(body);
+    return;
+  }
+
   // Startup status endpoint — SSE stream while initializing, JSON once ready
   if (safePath === '/api/startup-status') {
     if (serviceRegistry.isInitialized()) {
@@ -588,11 +605,35 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // NOTE: Terrain atlas, object atlas, terrain chunk, terrain preview, and terrain
-  // texture endpoints have been removed — these static assets are now served from
-  // Cloudflare R2 CDN (spo.zz.works). Set CHUNK_CDN_URL env var in production.
-  // See github.com/Crazz-E/SPO-WebClient-Chunks for the generation pipeline.
+  // CDN proxy — relays requests to the upstream CDN server-side, bypassing CORS.
+  // Used when the client sets cdn.url to '' (e.g., Electron / single-user mode).
+  // The client falls back to /cdn/* paths when CHUNK_CDN_URL is empty.
+  if (safePath.startsWith('/cdn/')) {
+    const cdnBaseUrl = config.cdn.url || 'https://spo.zz.works';
+    const cdnPath = safePath.substring('/cdn/'.length);
+    const cdnFullUrl = `${cdnBaseUrl}/${cdnPath}`;
 
+    try {
+      const cdnResp = await fetch(cdnFullUrl);
+      if (!cdnResp.ok) {
+        res.writeHead(cdnResp.status);
+        res.end();
+        return;
+      }
+      const contentType = cdnResp.headers.get('content-type') || 'application/octet-stream';
+      const buffer = Buffer.from(await cdnResp.arrayBuffer());
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000',
+      });
+      res.end(buffer);
+    } catch (error: unknown) {
+      logger.warn(`CDN proxy failed for ${cdnPath}: ${toErrorMessage(error)}`);
+      res.writeHead(502);
+      res.end('CDN fetch failed');
+    }
+    return;
+  }
 
   // Research inventions endpoint: /api/research-inventions
   // Returns parsed invention data from research.0.dat for client-side name resolution
@@ -623,7 +664,7 @@ const server = http.createServer(async (req, res) => {
 
     // Rate limit proxy-image requests
     const clientIp = getClientIp(req);
-    if (!checkRateLimit(clientIp, 'proxy', RATE_LIMIT_MAX_PROXY)) {
+    if (!SINGLE_USER_MODE && !checkRateLimit(clientIp, 'proxy', RATE_LIMIT_MAX_PROXY)) {
       res.writeHead(429, { 'Content-Type': 'text/plain' });
       res.end('Too many requests');
       return;
@@ -721,7 +762,17 @@ const server = http.createServer(async (req, res) => {
   };
 
   try {
-    const content = await fsp.readFile(filePath);
+    let content: string | Buffer = await fsp.readFile(filePath);
+
+    // Inject a runtime config script tag into index.html so the client can use
+    // the /cdn/ proxy when CHUNK_CDN_URL is overridden (e.g., Electron).
+    // Uses an external script (CSP-compliant) instead of inline script.
+    // In Docker/default mode, config.cdn.url is the default and no injection occurs.
+    if (ext === '.html' && config.cdn.url !== 'https://spo.zz.works') {
+      const injection = `<script src="/spo-runtime-config.js"></script>`;
+      content = content.toString('utf-8').replace('</head>', `${injection}</head>`);
+    }
+
     res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'text/plain' });
     res.end(content, 'utf-8');
   } catch (err: unknown) {
@@ -763,10 +814,10 @@ const wss = new WebSocketServer({
       return;
     }
 
-    // Per-IP connection limit
+    // Per-IP connection limit (skipped in single-user mode)
     const ip = getClientIp(info.req);
     const currentCount = wsConnectionsPerIp.get(ip) || 0;
-    if (currentCount >= WS_MAX_CONNECTIONS_PER_IP) {
+    if (!SINGLE_USER_MODE && currentCount >= WS_MAX_CONNECTIONS_PER_IP) {
       logger.warn(`[Gateway] WebSocket connection rejected: too many connections from ${ip}`);
       callback(false, 429, 'Too many connections');
       return;
@@ -915,7 +966,7 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
   // Rate limit authentication attempts
   const authTypes: string[] = [WsMessageType.REQ_AUTH_CHECK, WsMessageType.REQ_CONNECT_DIRECTORY, WsMessageType.REQ_LOGIN_WORLD];
   if (authTypes.includes(msg.type)) {
-    if (!checkRateLimit(clientIp, 'auth', RATE_LIMIT_MAX_AUTH)) {
+    if (!SINGLE_USER_MODE && !checkRateLimit(clientIp, 'auth', RATE_LIMIT_MAX_AUTH)) {
       const errorResp: WsRespError = {
         type: WsMessageType.RESP_ERROR,
         wsRequestId: msg.wsRequestId,
@@ -958,96 +1009,157 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
   }
 }
 
-// Start Server
-async function startServer() {
-  try {
-    // Start HTTP server FIRST so /api/startup-status SSE is reachable during cache building
-    await new Promise<void>((resolve) => {
-      server.listen(PORT, () => {
-        logger.info(`HTTP server listening on port ${PORT} (initializing...)`);
-        resolve();
-      });
-    });
+// =============================================================================
+// Gateway startup — exportable for embedding (e.g., Electron)
+// =============================================================================
 
-    // Setup graceful shutdown handlers (SIGTERM, SIGINT)
-    setupGracefulShutdown(serviceRegistry, server);
+export interface GatewayOptions {
+  host?: string;
+  port?: number;
+  singleUserMode?: boolean;
+}
 
-    // Build in-memory caches with granular progress reporting via SSE
-    const cacheSteps: import('./service-registry').CacheStepEntry[] = [
-      { name: 'inventionIndex', label: 'Parsing research data', status: 'pending' },
-      { name: 'imageIndex', label: 'Indexing image files', status: 'pending' },
-      { name: 'iniCache', label: 'Loading configuration', status: 'pending' },
-    ];
+export interface GatewayInstance {
+  server: http.Server;
+  port: number;
+  shutdown: () => Promise<void>;
+}
 
-    const emitCacheProgress = (message: string) => {
-      const pendingServices = serviceRegistry.getServiceNames().map(name => ({
-        name,
-        status: 'pending' as const,
-        progress: 0,
-      }));
-      serviceRegistry.emit('startup-progress', {
-        phase: 'initializing',
-        progress: 0,
-        message,
-        services: pendingServices,
-        cacheSteps: [...cacheSteps],
-      } satisfies import('./service-registry').StartupProgressEvent);
+export async function startGateway(options?: GatewayOptions): Promise<GatewayInstance> {
+  // Apply runtime overrides (takes precedence over env vars / config defaults)
+  if (options?.host !== undefined) HOST = options.host;
+  if (options?.port !== undefined) PORT = options.port;
+  if (options?.singleUserMode !== undefined) SINGLE_USER_MODE = options.singleUserMode;
+
+  // Start HTTP server FIRST so /api/startup-status SSE is reachable during cache building
+  await new Promise<void>((resolve, reject) => {
+    const onError = (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        reject(new Error(`Port ${PORT} is already in use. Set PORT env var or use port 0 for auto-assign.`));
+      } else {
+        reject(err);
+      }
     };
+    server.once('error', onError);
+    server.listen(PORT, HOST, () => {
+      server.removeListener('error', onError);
+      const addr = server.address();
+      if (addr && typeof addr === 'object') {
+        PORT = addr.port; // capture actual port (important when port=0)
+      }
+      logger.info(`HTTP server listening on ${HOST}:${PORT} (initializing...)`);
+      resolve();
+    });
+  });
 
-    logger.info('Building caches...');
-    emitCacheProgress('Building file indexes...');
+  // Build in-memory caches with granular progress reporting via SSE
+  const cacheSteps: import('./service-registry').CacheStepEntry[] = [
+    { name: 'inventionIndex', label: 'Parsing research data', status: 'pending' },
+    { name: 'imageIndex', label: 'Indexing image files', status: 'pending' },
+    { name: 'iniCache', label: 'Loading configuration', status: 'pending' },
+  ];
 
-    await Promise.all([
-      (async () => {
-        cacheSteps[0].status = 'running';
-        emitCacheProgress('Parsing research data...');
-        await loadInventionIndex();
-        cacheSteps[0].status = 'complete';
-        emitCacheProgress('Research data ready');
-      })(),
-      (async () => {
-        cacheSteps[1].status = 'running';
-        emitCacheProgress('Indexing image files...');
-        await buildImageFileIndex();
-        cacheSteps[1].status = 'complete';
-        emitCacheProgress('Image index ready');
-      })(),
-      (async () => {
-        cacheSteps[2].status = 'running';
-        emitCacheProgress('Loading configuration...');
-        await buildIniCache();
-        cacheSteps[2].status = 'complete';
-        emitCacheProgress('Configuration ready');
-      })(),
-    ]);
+  const emitCacheProgress = (message: string) => {
+    const pendingServices = serviceRegistry.getServiceNames().map(name => ({
+      name,
+      status: 'pending' as const,
+      progress: 0,
+    }));
+    serviceRegistry.emit('startup-progress', {
+      phase: 'initializing',
+      progress: 0,
+      message,
+      services: pendingServices,
+      cacheSteps: [...cacheSteps],
+    } satisfies import('./service-registry').StartupProgressEvent);
+  };
 
-    // Initialize services — facilities/mapData run in parallel (same depth)
-    logger.info('Initializing services...');
-    await serviceRegistry.initialize();
+  logger.info('Building caches...');
+  emitCacheProgress('Building file indexes...');
 
-    // Log service-specific statistics
-    const updateStats = serviceRegistry.get<UpdateService>('update').getStats();
-    logger.info(`Update service: ${updateStats.downloaded} downloaded, ${updateStats.extracted} CAB extracted, ${updateStats.skipped} skipped, ${updateStats.failed} failed`);
+  await Promise.all([
+    (async () => {
+      cacheSteps[0].status = 'running';
+      emitCacheProgress('Parsing research data...');
+      await loadInventionIndex();
+      cacheSteps[0].status = 'complete';
+      emitCacheProgress('Research data ready');
+    })(),
+    (async () => {
+      cacheSteps[1].status = 'running';
+      emitCacheProgress('Indexing image files...');
+      await buildImageFileIndex();
+      cacheSteps[1].status = 'complete';
+      emitCacheProgress('Image index ready');
+    })(),
+    (async () => {
+      cacheSteps[2].status = 'running';
+      emitCacheProgress('Loading configuration...');
+      await buildIniCache();
+      cacheSteps[2].status = 'complete';
+      emitCacheProgress('Configuration ready');
+    })(),
+  ]);
 
-    const facilityStats = facilityDimensionsCache().getStats();
-    logger.info(`Facility cache: ${facilityStats.total} facilities loaded`);
+  // Initialize services — facilities/mapData run in parallel (same depth)
+  logger.info('Initializing services...');
+  await serviceRegistry.initialize();
 
-    logger.info(`Server ready at http://localhost:${PORT}`);
+  // Log service-specific statistics
+  const updateStats = serviceRegistry.get<UpdateService>('update').getStats();
+  logger.info(`Update service: ${updateStats.downloaded} downloaded, ${updateStats.extracted} CAB extracted, ${updateStats.skipped} skipped, ${updateStats.failed} failed`);
+
+  const facilityStats = facilityDimensionsCache().getStats();
+  logger.info(`Facility cache: ${facilityStats.total} facilities loaded`);
+
+  logger.info(`Server ready at http://${HOST}:${PORT}`);
+
+  // Build shutdown function (does NOT call process.exit)
+  const shutdown = async (): Promise<void> => {
+    logger.info('[Gateway] Shutting down...');
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      // Force close after 2s if server.close() hangs
+      setTimeout(() => {
+        if ((server as { closeAllConnections?: () => void }).closeAllConnections) {
+          (server as { closeAllConnections: () => void }).closeAllConnections();
+        }
+        resolve();
+      }, 2000);
+    });
+    await serviceRegistry.shutdown();
+    logger.info('[Gateway] Shutdown complete');
+  };
+
+  return { server, port: PORT, shutdown };
+}
+
+// =============================================================================
+// Standalone entry point — when run directly (not imported by Electron/test)
+// =============================================================================
+
+function setupStandaloneErrorHandlers(): void {
+  process.on('uncaughtException', (error: Error) => {
+    logger.error('[Gateway] Uncaught exception:', error);
+  });
+  process.on('unhandledRejection', (reason: unknown, _promise: Promise<unknown>) => {
+    logger.error('[Gateway] Unhandled promise rejection:', reason);
+  });
+}
+
+async function main(): Promise<void> {
+  setupStandaloneErrorHandlers();
+  try {
+    const gateway = await startGateway();
+    setupGracefulShutdown(serviceRegistry, gateway.server);
   } catch (error: unknown) {
     logger.error(`Failed to start server: ${toErrorMessage(error)}`);
     process.exit(1);
   }
 }
 
-// Global error handlers to prevent process crashes
-process.on('uncaughtException', (error: Error) => {
-  logger.error('[Gateway] Uncaught exception:', error);
-  // Continue running - don't crash the server
-});
-
-process.on('unhandledRejection', (reason: unknown, _promise: Promise<unknown>) => {
-  logger.error('[Gateway] Unhandled promise rejection:', reason);
-  // Continue running - don't crash the server
-});
-
-startServer();
+// Auto-start only when run directly (not when imported as a module)
+const isDirectRun = typeof require !== 'undefined' && require.main === module;
+if (isDirectRun) {
+  main();
+}

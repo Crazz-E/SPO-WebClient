@@ -19,6 +19,7 @@ import { BuildingData, getConstructionTexture } from '../shared/types/building-d
 import { parseClassesBin } from './classes-bin-parser';
 import { registerInspectorTabs } from '../shared/building-details/property-templates';
 import type { Service } from './service-registry';
+import { getCacheDir } from './paths';
 
 const logger = createLogger('BuildingDataService');
 
@@ -68,7 +69,7 @@ export class BuildingDataService implements Service {
       logger.info('[BuildingDataService] Initializing...');
 
       // Load CLASSES.BIN (sole authoritative source — all 863 building classes)
-      const classesBinPath = path.join(__dirname, '../../cache/BuildingClasses/CLASSES.BIN');
+      const classesBinPath = path.join(getCacheDir(), 'BuildingClasses/CLASSES.BIN');
       if (fs.existsSync(classesBinPath)) {
         this.loadFromClassesBin(classesBinPath);
       } else {

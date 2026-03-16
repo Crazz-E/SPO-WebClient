@@ -134,16 +134,10 @@ describe('TextureCache', () => {
       expect(stats.misses).toBe(1);
     });
 
-    it('should start async load for uncached texture', () => {
+    it('should not fetch individual textures (atlas is source of truth)', () => {
       cache.getTextureSync(100);
-      // Default season is 2 (Summer)
-      expect(global.fetch).toHaveBeenCalledWith('/api/terrain-texture/Earth/2/100');
-    });
-
-    it('should use correct season in URL', () => {
-      cache.setSeason(Season.WINTER); // 0
-      cache.getTextureSync(100);
-      expect(global.fetch).toHaveBeenCalledWith('/api/terrain-texture/Earth/0/100');
+      // fetchTexture always returns null — atlas handles all textures
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('should not start multiple loads for same texture', () => {
@@ -151,8 +145,7 @@ describe('TextureCache', () => {
       cache.getTextureSync(100);
       cache.getTextureSync(100);
 
-      // Should only call fetch once
-      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 
@@ -162,19 +155,10 @@ describe('TextureCache', () => {
       expect(texture).toBeNull();
     });
 
-    it('should resolve to ImageBitmap for successful response', async () => {
-      const mockBitmap = { width: 32, height: 16, close: jest.fn() };
-      const mockBlob = new Blob();
-
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        blob: jest.fn().mockResolvedValue(mockBlob),
-      });
-      (global as any).createImageBitmap.mockResolvedValueOnce(mockBitmap);
-
+    it('should resolve to null (atlas is source of truth)', async () => {
       const texture = await cache.getTextureAsync(128);
-      expect(texture).toBe(mockBitmap);
+      expect(texture).toBeNull();
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 
@@ -216,22 +200,9 @@ describe('TextureCache', () => {
   });
 
   describe('preload', () => {
-    it('should load multiple textures', async () => {
-      // Default season is 2 (Summer)
+    it('should not fetch individual textures during preload (atlas handles all)', async () => {
       await cache.preload([100, 101, 102]);
-
-      expect(global.fetch).toHaveBeenCalledTimes(3);
-      expect(global.fetch).toHaveBeenCalledWith('/api/terrain-texture/Earth/2/100');
-      expect(global.fetch).toHaveBeenCalledWith('/api/terrain-texture/Earth/2/101');
-      expect(global.fetch).toHaveBeenCalledWith('/api/terrain-texture/Earth/2/102');
-    });
-
-    it('should use correct season in URL', async () => {
-      cache.setSeason(Season.AUTUMN); // 3
-      await cache.preload([100, 101]);
-
-      expect(global.fetch).toHaveBeenCalledWith('/api/terrain-texture/Earth/3/100');
-      expect(global.fetch).toHaveBeenCalledWith('/api/terrain-texture/Earth/3/101');
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 

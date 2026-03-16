@@ -206,9 +206,8 @@ export class IsometricTerrainRenderer {
 
     try {
       const cdnUrl = appConfig.cdn.url;
-      const url = cdnUrl
-        ? `${cdnUrl}/chunks/${encodeURIComponent(mapName)}/${encodeURIComponent(terrainType)}/${season}/preview.png`
-        : `/api/terrain-preview/${encodeURIComponent(mapName)}/${encodeURIComponent(terrainType)}/${season}`;
+      const previewPath = `/chunks/${encodeURIComponent(mapName)}/${encodeURIComponent(terrainType)}/${season}/preview.png`;
+      const url = cdnUrl ? `${cdnUrl}${previewPath}` : `/cdn${previewPath}`;
       const response = await fetch(url);
 
       if (!response.ok) {

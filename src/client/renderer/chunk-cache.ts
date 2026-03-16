@@ -463,9 +463,8 @@ export class ChunkCache {
     try {
       const t0 = performance.now();
       const cdnUrl = appConfig.cdn.url;
-      const url = cdnUrl
-        ? `${cdnUrl}/chunks/${encodeURIComponent(this.mapName)}/${encodeURIComponent(this.terrainType)}/${this.season}/z${zoomLevel}/chunk_${chunkI}_${chunkJ}.webp`
-        : `/api/terrain-chunk/${encodeURIComponent(this.mapName)}/${encodeURIComponent(this.terrainType)}/${this.season}/${zoomLevel}/${chunkI}/${chunkJ}`;
+      const cdnPath = `/chunks/${encodeURIComponent(this.mapName)}/${encodeURIComponent(this.terrainType)}/${this.season}/z${zoomLevel}/chunk_${chunkI}_${chunkJ}.webp`;
+      const url = cdnUrl ? `${cdnUrl}${cdnPath}` : `/cdn${cdnPath}`;
       const response = await fetch(url);
       const tFetch = performance.now();
 

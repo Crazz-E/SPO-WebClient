@@ -160,12 +160,10 @@ export class TextureAtlasCache {
   private async _doLoadAtlas(): Promise<void> {
     const terrainType = encodeURIComponent(this.terrainType);
     const cdnUrl = appConfig.cdn.url;
-    const atlasUrl = cdnUrl
-      ? `${cdnUrl}/textures/${terrainType}/${this.season}/atlas.png`
-      : `/api/terrain-atlas/${terrainType}/${this.season}`;
-    const manifestUrl = cdnUrl
-      ? `${cdnUrl}/textures/${terrainType}/${this.season}/atlas.json`
-      : `/api/terrain-atlas/${terrainType}/${this.season}/manifest`;
+    const atlasPath = `/textures/${terrainType}/${this.season}/atlas.png`;
+    const manifestPath = `/textures/${terrainType}/${this.season}/atlas.json`;
+    const atlasUrl = cdnUrl ? `${cdnUrl}${atlasPath}` : `/cdn${atlasPath}`;
+    const manifestUrl = cdnUrl ? `${cdnUrl}${manifestPath}` : `/cdn${manifestPath}`;
 
     try {
       const [atlasResponse, manifestResponse] = await Promise.all([

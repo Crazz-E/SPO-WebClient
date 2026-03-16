@@ -623,45 +623,6 @@
     }
   };
 
-  // src/shared/config.ts
-  var getEnv = (key) => {
-    return typeof process !== "undefined" && process.env ? process.env[key] : void 0;
-  };
-  var config = {
-    /**
-     * Configuration du serveur WebSocket
-     */
-    server: {
-      port: Number(getEnv("PORT")) || 8080
-    },
-    /**
-     * Configuration du protocole RDO
-     */
-    rdo: {
-      // Host du serveur Directory (utiliser 'localhost' pour mock_srv et www.starpeaceonline.com pour la production.)
-      directoryHost: getEnv("RDO_DIR_HOST") || "www.starpeaceonline.com",
-      // Ports standards du protocole
-      ports: {
-        directory: 1111
-      }
-    },
-    /**
-     * Static asset CDN — official Cloudflare R2 CDN for terrain/object assets.
-     * Override with CHUNK_CDN_URL env var if needed (e.g., local dev without CDN: set to '').
-     */
-    cdn: {
-      url: getEnv("CHUNK_CDN_URL") ?? "https://spo.zz.works"
-    },
-    /**
-     * Logging
-     */
-    logging: {
-      // Niveaux: 'debug' | 'info' | 'warn' | 'error'
-      level: getEnv("LOG_LEVEL") || "info",
-      colorize: getEnv("NODE_ENV") !== "production"
-    }
-  };
-
   // src/client/renderer/texture-cache.ts
   var TERRAIN_COLORS = {
     // Water (indices 192-255)
@@ -898,9 +859,7 @@
      * so no client-side color keying is needed.
      */
     async fetchTexture(paletteIndex) {
-      if (config.cdn.url) {
-        return null;
-      }
+      return null;
       const url = `/api/terrain-texture/${encodeURIComponent(this.terrainType)}/${this.season}/${paletteIndex}`;
       try {
         const response = await fetch(url);
@@ -990,6 +949,47 @@
         }
       }
       return count;
+    }
+  };
+
+  // src/shared/config.ts
+  var getEnv = (key) => {
+    return typeof process !== "undefined" && process.env ? process.env[key] : void 0;
+  };
+  var config = {
+    /**
+     * Configuration du serveur WebSocket
+     */
+    server: {
+      port: Number(getEnv("PORT")) || 8080,
+      host: getEnv("HOST") || "0.0.0.0",
+      singleUserMode: getEnv("SINGLE_USER_MODE") === "true"
+    },
+    /**
+     * Configuration du protocole RDO
+     */
+    rdo: {
+      // Host du serveur Directory (utiliser 'localhost' pour mock_srv et www.starpeaceonline.com pour la production.)
+      directoryHost: getEnv("RDO_DIR_HOST") || "www.starpeaceonline.com",
+      // Ports standards du protocole
+      ports: {
+        directory: 1111
+      }
+    },
+    /**
+     * Static asset CDN — official Cloudflare R2 CDN for terrain/object assets.
+     * Override with CHUNK_CDN_URL env var if needed (e.g., local dev without CDN: set to '').
+     */
+    cdn: {
+      url: typeof window !== "undefined" && window.__SPO_CDN_URL__ !== void 0 ? window.__SPO_CDN_URL__ : getEnv("CHUNK_CDN_URL") ?? "https://spo.zz.works"
+    },
+    /**
+     * Logging
+     */
+    logging: {
+      // Niveaux: 'debug' | 'info' | 'warn' | 'error'
+      level: getEnv("LOG_LEVEL") || "info",
+      colorize: getEnv("NODE_ENV") !== "production"
     }
   };
 
@@ -1115,8 +1115,10 @@
     async _doLoadAtlas() {
       const terrainType = encodeURIComponent(this.terrainType);
       const cdnUrl = config.cdn.url;
-      const atlasUrl = cdnUrl ? `${cdnUrl}/textures/${terrainType}/${this.season}/atlas.png` : `/api/terrain-atlas/${terrainType}/${this.season}`;
-      const manifestUrl = cdnUrl ? `${cdnUrl}/textures/${terrainType}/${this.season}/atlas.json` : `/api/terrain-atlas/${terrainType}/${this.season}/manifest`;
+      const atlasPath = `/textures/${terrainType}/${this.season}/atlas.png`;
+      const manifestPath = `/textures/${terrainType}/${this.season}/atlas.json`;
+      const atlasUrl = cdnUrl ? `${cdnUrl}${atlasPath}` : `/cdn${atlasPath}`;
+      const manifestUrl = cdnUrl ? `${cdnUrl}${manifestPath}` : `/cdn${manifestPath}`;
       try {
         const [atlasResponse, manifestResponse] = await Promise.all([
           fetch(atlasUrl),
@@ -1501,7 +1503,8 @@
       try {
         const t0 = performance.now();
         const cdnUrl = config.cdn.url;
-        const url = cdnUrl ? `${cdnUrl}/chunks/${encodeURIComponent(this.mapName)}/${encodeURIComponent(this.terrainType)}/${this.season}/z${zoomLevel}/chunk_${chunkI}_${chunkJ}.webp` : `/api/terrain-chunk/${encodeURIComponent(this.mapName)}/${encodeURIComponent(this.terrainType)}/${this.season}/${zoomLevel}/${chunkI}/${chunkJ}`;
+        const cdnPath = `/chunks/${encodeURIComponent(this.mapName)}/${encodeURIComponent(this.terrainType)}/${this.season}/z${zoomLevel}/chunk_${chunkI}_${chunkJ}.webp`;
+        const url = cdnUrl ? `${cdnUrl}${cdnPath}` : `/cdn${cdnPath}`;
         const response = await fetch(url);
         const tFetch = performance.now();
         if (!response.ok) {
@@ -2022,7 +2025,8 @@
       this.terrainPreviewLoading = true;
       try {
         const cdnUrl = config.cdn.url;
-        const url = cdnUrl ? `${cdnUrl}/chunks/${encodeURIComponent(mapName)}/${encodeURIComponent(terrainType)}/${season}/preview.png` : `/api/terrain-preview/${encodeURIComponent(mapName)}/${encodeURIComponent(terrainType)}/${season}`;
+        const previewPath = `/chunks/${encodeURIComponent(mapName)}/${encodeURIComponent(terrainType)}/${season}/preview.png`;
+        const url = cdnUrl ? `${cdnUrl}${previewPath}` : `/cdn${previewPath}`;
         const response = await fetch(url);
         if (!response.ok) {
           console.log(`[IsometricRenderer] Terrain preview not available (${response.status})`);
