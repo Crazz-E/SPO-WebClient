@@ -470,7 +470,10 @@ const server = http.createServer(async (req, res) => {
   // an empty script since config.cdn.url matches the default.
   if (safePath === '/spo-runtime-config.js') {
     const cdnJson = JSON.stringify(config.cdn.url);
-    const body = `window.__SPO_CDN_URL__=${cdnJson};`;
+    let body = `window.__SPO_CDN_URL__=${cdnJson};`;
+    if (SINGLE_USER_MODE) {
+      body += `\nwindow.__SPO_ELECTRON__=true;`;
+    }
     res.writeHead(200, {
       'Content-Type': 'text/javascript',
       'Cache-Control': 'no-cache',

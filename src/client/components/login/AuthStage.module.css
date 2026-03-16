@@ -79,6 +79,24 @@
   color: var(--text-disabled);
 }
 
+/* Remember username checkbox (Electron only) */
+.rememberMe {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rememberMe input[type="checkbox"] {
+  accent-color: var(--accent-gold);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 /* Connect button — gold gradient */
 .connectBtn {
   width: 100%;

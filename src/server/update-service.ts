@@ -21,6 +21,7 @@ interface RemoteItem {
 
 interface SyncStats {
   downloaded: number;
+  updated: number;
   deleted: number;
   skipped: number;
   failed: number;
@@ -43,7 +44,7 @@ export class UpdateService implements Service {
   private readonly UPDATE_SERVER_BASE = UPDATE_SERVER.CACHE_URL;
   private readonly CACHE_ROOT: string;
   private readonly CAB_METADATA_FILE: string;
-  private stats: SyncStats = { downloaded: 0, deleted: 0, skipped: 0, failed: 0, extracted: 0 };
+  private stats: SyncStats = { downloaded: 0, updated: 0, deleted: 0, skipped: 0, failed: 0, extracted: 0 };
   private cabMetadata: CabMetadata = {};
   private initialized: boolean = false;
 
@@ -439,6 +440,40 @@ export class UpdateService implements Service {
   }
 
   /**
+   * Check if a remote file has changed compared to the local copy.
+   * Uses HTTP HEAD to compare Content-Length and Last-Modified headers.
+   */
+  private async isFileChanged(item: RemoteItem, localPath: string): Promise<boolean> {
+    try {
+      const localStat = fs.statSync(localPath);
+      const headResponse = await fetch(item.url, {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(TIMEOUTS.FETCH),
+      });
+      if (!headResponse.ok) return false;
+
+      const remoteSize = headResponse.headers.get('content-length');
+      if (remoteSize !== null && parseInt(remoteSize, 10) !== localStat.size) {
+        logger.info(`[UpdateService] Size changed: ${item.path} (local=${localStat.size}, remote=${remoteSize})`);
+        return true;
+      }
+
+      const remoteModified = headResponse.headers.get('last-modified');
+      if (remoteModified) {
+        const remoteTime = new Date(remoteModified).getTime();
+        if (!isNaN(remoteTime) && remoteTime > localStat.mtimeMs) {
+          logger.info(`[UpdateService] Modified time changed: ${item.path}`);
+          return true;
+        }
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Check if a file is an extracted CAB file (should not be deleted as orphan)
    */
   private isExtractedCabFile(relativePath: string): boolean {
@@ -471,7 +506,7 @@ export class UpdateService implements Service {
    */
   async syncAll(reportProgress?: (subStep: string) => void): Promise<void> {
     logger.info('[UpdateService] Starting automatic synchronization...');
-    this.stats = { downloaded: 0, deleted: 0, skipped: 0, failed: 0, extracted: 0 };
+    this.stats = { downloaded: 0, updated: 0, deleted: 0, skipped: 0, failed: 0, extracted: 0 };
 
     const startTime = Date.now();
 
@@ -504,8 +539,8 @@ export class UpdateService implements Service {
     logger.info(`[UpdateService] Remote: ${remoteFiles.length} files, ${remoteDirs.length} directories`);
     logger.info(`[UpdateService] Local: ${localFiles.length} files, ${localDirs.length} directories`);
 
-    // Step 3: Download missing files and extract CAB files
-    logger.info('[UpdateService] Step 3/4: Downloading missing files and extracting CABs...');
+    // Step 3: Download new & updated files and extract CAB files
+    logger.info('[UpdateService] Step 3/4: Downloading new & updated files and extracting CABs...');
     reportProgress?.('Downloading & extracting files (3/4)');
     const remoteFilePaths = new Set(remoteFiles.map(f => f.path));
 
@@ -519,6 +554,15 @@ export class UpdateService implements Service {
       const isCabFile = remoteFile.path.toLowerCase().endsWith('.cab');
 
       if (fs.existsSync(localPath)) {
+        // Check if file has changed on remote (size or modification time)
+        const changed = await this.isFileChanged(remoteFile, localPath);
+        if (changed) {
+          logger.info(`[UpdateService] ↻ File changed on remote, re-downloading: ${remoteFile.path}`);
+          await this.downloadFile(remoteFile);
+          this.stats.updated++;
+          continue;
+        }
+
         this.stats.skipped++;
 
         // Check if existing CAB file needs extraction (first run or updated)
@@ -630,7 +674,7 @@ export class UpdateService implements Service {
 
     const duration = Date.now() - startTime;
     logger.info(`[UpdateService] Synchronization complete in ${duration}ms`);
-    logger.info(`[UpdateService] Downloaded: ${this.stats.downloaded} | Extracted: ${this.stats.extracted} | Deleted: ${this.stats.deleted} | Skipped: ${this.stats.skipped} | Failed: ${this.stats.failed}`);
+    logger.info(`[UpdateService] Downloaded: ${this.stats.downloaded} | Updated: ${this.stats.updated} | Extracted: ${this.stats.extracted} | Deleted: ${this.stats.deleted} | Skipped: ${this.stats.skipped} | Failed: ${this.stats.failed}`);
   }
 
   /**

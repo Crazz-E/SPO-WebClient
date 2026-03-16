@@ -1,12 +1,43 @@
 {
-  "name": "spo-electron",
-  "version": "1.0.0",
+  "name": "starpeace-online",
+  "version": "1.1.0-beta",
+  "productName": "Starpeace Online",
   "description": "Starpeace Online — Desktop Client",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.starpeaceonline.client",
+    "productName": "Starpeace Online",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "icons/**/*"
+    ],
+    "extraResources": [
+      { "from": "../dist", "to": "dist" },
+      { "from": "../public", "to": "public" }
+    ],
+    "win": {
+      "icon": "icons/icon.ico",
+      "target": "nsis"
+    },
+    "mac": {
+      "icon": "icons/icon.icns",
+      "target": "dmg"
+    },
+    "linux": {
+      "icon": "icons/icon.png",
+      "target": "AppImage"
+    }
   },
   "devDependencies": {
-    "electron": "^35.0.1"
+    "electron": "^35.0.1",
+    "electron-builder": "^26.0.0"
   }
 }

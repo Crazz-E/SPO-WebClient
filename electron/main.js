@@ -1,4 +1,5 @@
 const { app, BrowserWindow } = require('electron');
+const path = require('path');
 
 let mainWindow = null;
 let gateway = null;
@@ -9,6 +10,7 @@ async function createWindow() {
     width: 1280,
     height: 800,
     title: 'Starpeace Online — Starting gateway...',
+    icon: path.join(__dirname, 'icons', 'icon.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

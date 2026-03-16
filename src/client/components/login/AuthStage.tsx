@@ -5,7 +5,7 @@
  * Glassmorphed card with username/password + gold "Enter the World" button.
  */
 
-import { useState, useCallback, type KeyboardEvent } from 'react';
+import { useState, useCallback, useEffect, type KeyboardEvent } from 'react';
 import { GlassCard } from '../common';
 import { showToast } from '../common/Toast';
 import { APP_VERSION, BUILD_DATE } from '../../version';
@@ -17,17 +17,38 @@ interface AuthStageProps {
   status: string;
 }
 
+const isElectron = typeof window !== 'undefined' &&
+  (window as unknown as Record<string, unknown>).__SPO_ELECTRON__ === true;
+
 export function AuthStage({ onConnect, isLoading, status }: AuthStageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberUsername, setRememberUsername] = useState(false);
+
+  // Load saved username on mount (Electron only)
+  useEffect(() => {
+    if (!isElectron) return;
+    const saved = localStorage.getItem('spo_last_username');
+    if (saved) {
+      setUsername(saved);
+      setRememberUsername(true);
+    }
+  }, []);
 
   const handleConnect = useCallback(() => {
     if (!username.trim() || !password.trim()) {
       showToast('Enter username and password', 'warning');
       return;
     }
+    if (isElectron) {
+      if (rememberUsername) {
+        localStorage.setItem('spo_last_username', username);
+      } else {
+        localStorage.removeItem('spo_last_username');
+      }
+    }
     onConnect(username, password);
-  }, [username, password, onConnect]);
+  }, [username, password, rememberUsername, onConnect]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -63,6 +84,16 @@ export function AuthStage({ onConnect, isLoading, status }: AuthStageProps) {
             autoComplete="current-password"
           />
         </div>
+        {isElectron && (
+          <label className={styles.rememberMe}>
+            <input
+              type="checkbox"
+              checked={rememberUsername}
+              onChange={(e) => setRememberUsername(e.target.checked)}
+            />
+            Remember username
+          </label>
+        )}
         <button
           className={styles.connectBtn}
           onClick={handleConnect}
