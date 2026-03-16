@@ -39,6 +39,10 @@ export function toggleZonePaintingMode(ctx: ClientHandlerContext, zoneType: numb
     });
   }
 
+  // Auto-enable City Zones overlay so painted zones are visible
+  if (!ctx.isCityZonesEnabled) {
+    ctx.isCityZonesEnabled = true;
+  }
   ctx.toggleZoneOverlay(true, SurfaceType.ZONES);
   setupZonePaintingKeyboardHandler(ctx);
 
@@ -56,9 +60,9 @@ export function cancelZonePaintingMode(ctx: ClientHandlerContext): void {
     renderer.setCancelZonePaintingCallback(null);
   }
 
-  if (!ctx.isCityZonesEnabled) {
-    ctx.toggleZoneOverlay(false, SurfaceType.ZONES);
-  }
+  // Disable City Zones overlay when zone painting is cancelled
+  ctx.isCityZonesEnabled = false;
+  ctx.toggleZoneOverlay(false, SurfaceType.ZONES);
 
   // Store is updated automatically via ctx.isZonePaintingMode setter
   ClientBridge.log('Zone', 'Zone painting mode disabled');

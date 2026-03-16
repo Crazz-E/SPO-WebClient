@@ -75,7 +75,7 @@
 }
 
 .active.glass {
-  background: rgba(212, 168, 83, 0.1);
+  background: rgba(0, 0, 0, 0.85);
 }
 
 .danger {
