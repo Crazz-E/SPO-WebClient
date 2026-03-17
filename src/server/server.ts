@@ -27,7 +27,7 @@ import {
 import { toErrorMessage } from '../shared/error-utils';
 import { wsHandlerRegistry } from './ws-handlers';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
-import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
+import { getPublicDir, getCacheDir, getWebclientCacheDir, setElectronUserDataPath } from './paths';
 
 /**
  * Starpeace Gateway Server
@@ -41,8 +41,8 @@ const logger = createLogger('Gateway');
 let PORT = config.server.port;
 let HOST = config.server.host;
 let SINGLE_USER_MODE = config.server.singleUserMode;
-const PUBLIC_DIR = getPublicDir();
-const CACHE_DIR = getCacheDir();
+let PUBLIC_DIR = getPublicDir();
+let CACHE_DIR = getCacheDir();
 
 // =============================================================================
 // Service Registration
@@ -76,7 +76,7 @@ const facilityDimensionsCache = () => serviceRegistry.get<FacilityDimensionsCach
 const mapDataService = () => serviceRegistry.get<MapDataService>('mapData');
 
 // Dynamic image cache directory (for facility images fetched from game server)
-const WEBCLIENT_CACHE_DIR = getWebclientCacheDir();
+let WEBCLIENT_CACHE_DIR = getWebclientCacheDir();
 if (!fs.existsSync(WEBCLIENT_CACHE_DIR)) {
   fs.mkdirSync(WEBCLIENT_CACHE_DIR, { recursive: true });
 }
@@ -1020,6 +1020,8 @@ export interface GatewayOptions {
   host?: string;
   port?: number;
   singleUserMode?: boolean;
+  /** Electron: pass app.getPath('userData') to redirect writable dirs to %APPDATA% */
+  userDataPath?: string;
   onListening?: (port: number) => void;
 }
 
@@ -1034,6 +1036,17 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
   if (options?.host !== undefined) HOST = options.host;
   if (options?.port !== undefined) PORT = options.port;
   if (options?.singleUserMode !== undefined) SINGLE_USER_MODE = options.singleUserMode;
+
+  // Re-resolve paths if userDataPath is provided (Electron: writable dirs → %APPDATA%)
+  if (options?.userDataPath) {
+    setElectronUserDataPath(options.userDataPath);
+    PUBLIC_DIR = getPublicDir();
+    CACHE_DIR = getCacheDir();
+    WEBCLIENT_CACHE_DIR = getWebclientCacheDir();
+    if (!fs.existsSync(WEBCLIENT_CACHE_DIR)) {
+      fs.mkdirSync(WEBCLIENT_CACHE_DIR, { recursive: true });
+    }
+  }
 
   // Start HTTP server FIRST so /api/startup-status SSE is reachable during cache building
   await new Promise<void>((resolve, reject) => {

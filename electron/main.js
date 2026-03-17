@@ -113,31 +113,24 @@ async function createWindow() {
   mainWindow.setMenuBarVisibility(false);
 
   try {
-    // Set Electron user data path BEFORE importing gateway
-    // (app.getPath() only works after app.ready, so we do it here)
-    // Use bundled server in packaged app, individual files in dev
-    const serverPath = app.isPackaged
-      ? '../dist/server-bundle'
-      : '../dist/server/server';
-    const pathsModule = app.isPackaged
-      ? require('../dist/server-bundle')
-      : require('../dist/server/paths');
-    pathsModule.setElectronUserDataPath(app.getPath('userData'));
-
     // Route CDN requests through the local gateway proxy to bypass CORS
     // (the gateway's /cdn/* endpoint relays to spo.zz.works server-side)
     process.env.CHUNK_CDN_URL = '';
 
-    // Import gateway (triggers service registration at module level)
+    // Use bundled server in packaged app, individual files in dev
+    const serverPath = app.isPackaged
+      ? '../dist/server-bundle'
+      : '../dist/server/server';
     const { startGateway } = require(serverPath);
 
     // Start the embedded gateway on a random localhost port.
-    // The onListening callback fires as soon as the HTTP server is up,
-    // BEFORE caches and services finish — so the startup screen is visible.
+    // userDataPath redirects writable dirs (cache, webclient-cache) to %APPDATA%.
+    // onListening fires as soon as HTTP server is up, BEFORE caches/services finish.
     gateway = await startGateway({
       host: '127.0.0.1',
       port: 0,
       singleUserMode: true,
+      userDataPath: app.getPath('userData'),
       onListening: (port) => {
         console.log(`[Electron] Gateway listening on port ${port}`);
         mainWindow.setTitle('Starpeace Online');
