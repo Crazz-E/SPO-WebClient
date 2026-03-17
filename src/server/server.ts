@@ -681,7 +681,13 @@ const server = http.createServer(async (req, res) => {
   // Prefers pre-baked PNG (with alpha) over original BMP when available
   if (safePath.startsWith('/cache/')) {
     const relativePath = safePath.substring('/cache/'.length);
-    const filePath = path.join(CACHE_DIR, relativePath);
+    // Normalize filename to lowercase for cross-platform compatibility
+    // (CLASSES.BIN has mixed-case names from Windows, update server has lowercase files on Linux)
+    const lastSlash = relativePath.lastIndexOf('/');
+    const normalizedRelative = lastSlash >= 0
+      ? relativePath.substring(0, lastSlash + 1) + relativePath.substring(lastSlash + 1).toLowerCase()
+      : relativePath.toLowerCase();
+    const filePath = path.join(CACHE_DIR, normalizedRelative);
 
     // Security check: ensure path doesn't escape cache directory
     const normalizedPath = path.normalize(filePath);
