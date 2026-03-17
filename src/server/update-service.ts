@@ -62,6 +62,7 @@ export class UpdateService implements Service {
     'index.sync',    // Server index files
     'cindex.bat',    // Server batch scripts
     'pack.bat',      // Server batch scripts
+    'web.config',    // IIS server config (not a game asset)
     '..',            // Parent directory link
     '.'              // Current directory link
   ];
@@ -378,6 +379,15 @@ export class UpdateService implements Service {
 
       // Write file
       fs.writeFileSync(localPath, buffer);
+
+      // Preserve remote Last-Modified timestamp so isFileChanged() won't re-download
+      const lastModified = response.headers.get('last-modified');
+      if (lastModified) {
+        const remoteDate = new Date(lastModified);
+        if (!isNaN(remoteDate.getTime())) {
+          fs.utimesSync(localPath, remoteDate, remoteDate);
+        }
+      }
 
       this.stats.downloaded++;
       logger.info(`[UpdateService] ✓ Downloaded: ${item.path} (${buffer.length} bytes)`);
