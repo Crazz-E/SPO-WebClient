@@ -88,7 +88,7 @@ export class Logger {
 
     // Add metadata if present
     if (meta !== undefined) {
-      logMessage += ` ${JSON.stringify(meta)}`;
+      logMessage += ` ${meta instanceof Error ? (meta.stack ?? meta.message) : JSON.stringify(meta)}`;
     }
 
     // Output to console (possibility to add other transports)
