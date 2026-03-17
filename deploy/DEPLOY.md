@@ -185,13 +185,14 @@ dig +short spo.yourdomain.com
 sudo mkdir -p /opt/spo-webclient
 sudo chown spo:spo /opt/spo-webclient
 cd /opt/spo-webclient
-git clone https://github.com/YOUR_USERNAME/SPO-WebClient.git .
+git clone https://github.com/crazz-e/SPO-WebClient.git .
 ```
 
 ### 5.2 Create Environment File
 
 ```bash
 cp deploy/.env.example .env
+# It should take a lot of time.
 chmod 600 .env
 ```
 
