@@ -1,6 +1,8 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
-const { autoUpdater } = require('electron-updater');
 const path = require('path');
+
+// electron-updater is lazy-loaded after app.ready (it reads app.getVersion() at import time)
+let autoUpdater = null;
 
 let mainWindow = null;
 let gateway = null;
@@ -10,6 +12,9 @@ let gateway = null;
 // ---------------------------------------------------------------------------
 
 function setupAutoUpdater() {
+  // Lazy-load after app.ready — electron-updater reads app.getVersion() at require time
+  autoUpdater = require('electron-updater').autoUpdater;
+
   // Beta versions should see pre-release updates
   autoUpdater.allowPrerelease = true;
   autoUpdater.autoDownload = true;

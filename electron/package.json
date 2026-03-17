@@ -8,7 +8,7 @@
   "license": "ISC",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "node launch.js",
     "dist": "electron-builder"
   },
   "build": {
