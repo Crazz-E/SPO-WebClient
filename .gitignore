@@ -51,3 +51,8 @@ electron/node_modules/
 # Claude AI local overrides (settings.local.json only - shared config is tracked)
 .claude/settings.local.json
 .claude/memory/
+
+# Skill installer scripts (contain API key references)
+.claude/skillsmp-installer.js
+.claude/install-cdn-skills.js
+.claude/install-new-skills.js
