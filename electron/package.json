@@ -32,13 +32,17 @@
         "to": "dist/server-bundle.js"
       },
       {
+        "from": "../node_modules/7zip-min",
+        "to": "dist/node_modules/7zip-min"
+      },
+      {
+        "from": "../node_modules/7zip-bin",
+        "to": "dist/node_modules/7zip-bin"
+      },
+      {
         "from": "../public",
         "to": "public"
       }
-    ],
-    "asarUnpack": [
-      "**/7zip-min/**",
-      "**/7zip-bin/**"
     ],
     "publish": {
       "provider": "github",
@@ -79,8 +83,6 @@
     "electron-builder": "^26.0.0"
   },
   "dependencies": {
-    "7zip-bin": "^5.2.0",
-    "7zip-min": "^2.1.0",
     "electron-updater": "^6.8.3"
   }
 }
