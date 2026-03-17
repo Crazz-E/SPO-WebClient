@@ -34,10 +34,9 @@ nul
 # Regenerated automatically at startup and on-demand
 cache/
 
-# WebClient-specific cache (for game server fallback images and local needs)
-# Separate from update server structure — ignore everything except chunks (tracked via Git LFS)
-webclient-cache/*
-!webclient-cache/chunks/
+# WebClient-specific cache (runtime image proxy, objects, textures)
+# Chunks now served from CDN (SPO-WebClient-Chunks)
+webclient-cache/
 
 # Test coverage
 coverage/
