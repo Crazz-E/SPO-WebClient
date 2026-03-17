@@ -1,19 +1,21 @@
 /**
  * MapLoadingScreen — Full-viewport overlay shown while map resources load
- * after a company is selected. Fades out once the terrain + facility data
- * are ready, then unmounts.
+ * after a company is selected. Shows rotating funny quotes and an orbiting
+ * spinner, then fades out once data is ready.
  */
 
 import { useState, useEffect } from 'react';
 import { useGameStore } from '../../store/game-store';
 import { LoginBackground } from '../login/LoginBackground';
-import { ProgressBar } from '../common/ProgressBar';
+import { useRotatingQuote } from '../../hooks/useRotatingQuote';
 import styles from './MapLoadingScreen.module.css';
+import spinnerStyles from './LoadingSpinner.module.css';
 
 export function MapLoadingScreen() {
-  const { active, progress, message } = useGameStore((s) => s.mapLoading);
+  const { active, progress } = useGameStore((s) => s.mapLoading);
   const [exiting, setExiting] = useState(false);
   const [unmounted, setUnmounted] = useState(false);
+  const quote = useRotatingQuote('map', 2500);
 
   useEffect(() => {
     if (!active && !exiting && progress > 0) {
@@ -31,10 +33,16 @@ export function MapLoadingScreen() {
       <LoginBackground />
       <div className={styles.content}>
         <h2 className={styles.logo}>Starpeace Online</h2>
-        <div className={styles.progressWrap}>
-          <ProgressBar value={progress} variant="primary" height={6} showLabel />
+
+        <div className={spinnerStyles.spinner}>
+          <div className={spinnerStyles.dot} />
+          <div className={spinnerStyles.dot} />
+          <div className={spinnerStyles.dot} />
         </div>
-        {message && <p className={styles.message}>{message}</p>}
+
+        <div className={spinnerStyles.quoteWrap}>
+          <p className={spinnerStyles.quote} key={quote}>{quote}</p>
+        </div>
       </div>
     </div>
   );

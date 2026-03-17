@@ -20,7 +20,8 @@
     "test:smoke": "jest --selectProjects component --bail",
     "release": "node scripts/release.js",
     "electron": "npm run build:server && cd electron && npm start",
-    "electron:dist": "npm run build && npm run build:electron-bundle && cd electron && npm run dist"
+    "electron:validate": "node scripts/validate-electron-package.js",
+    "electron:dist": "npm run build && npm run build:electron-bundle && cd electron && npm run dist && cd .. && npm run electron:validate"
   },
   "keywords": [
     "starpeace",

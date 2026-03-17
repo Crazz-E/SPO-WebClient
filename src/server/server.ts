@@ -27,7 +27,7 @@ import {
 import { toErrorMessage } from '../shared/error-utils';
 import { wsHandlerRegistry } from './ws-handlers';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
-import { getPublicDir, getCacheDir, getWebclientCacheDir, setElectronUserDataPath } from './paths';
+import { getPublicDir, getCacheDir, getWebclientCacheDir, setElectronUserDataPath, setElectronResourcesPath } from './paths';
 
 /**
  * Starpeace Gateway Server
@@ -44,34 +44,7 @@ let SINGLE_USER_MODE = config.server.singleUserMode;
 let PUBLIC_DIR = getPublicDir();
 let CACHE_DIR = getCacheDir();
 
-// =============================================================================
-// Service Registration
-// =============================================================================
-// Register all singleton services with the ServiceRegistry
-// Dependencies are declared to ensure proper initialization order
-
-// Update service (syncs files from update server) - no dependencies
-serviceRegistry.register('update', new UpdateService(), {
-  progressWeight: 50,
-  progressMessage: 'Downloading game assets...',
-});
-
-// Facility dimensions cache - depends on update service (needs CLASSES.BIN)
-// Runs in parallel with mapData (same dependency depth)
-serviceRegistry.register('facilities', new FacilityDimensionsCache(), {
-  dependsOn: ['update'],
-  progressWeight: 10,
-  progressMessage: 'Loading building catalog...',
-});
-
-// Map data service - depends on update service (needs map files)
-serviceRegistry.register('mapData', new MapDataService(), {
-  dependsOn: ['update'],
-  progressWeight: 5,
-  progressMessage: 'Indexing map data...',
-});
-
-// Convenience getters for type-safe access to services
+// Convenience getters for type-safe access to services (registered in startGateway/registerServices)
 const facilityDimensionsCache = () => serviceRegistry.get<FacilityDimensionsCache>('facilities');
 const mapDataService = () => serviceRegistry.get<MapDataService>('mapData');
 
@@ -79,6 +52,32 @@ const mapDataService = () => serviceRegistry.get<MapDataService>('mapData');
 let WEBCLIENT_CACHE_DIR = getWebclientCacheDir();
 if (!fs.existsSync(WEBCLIENT_CACHE_DIR)) {
   fs.mkdirSync(WEBCLIENT_CACHE_DIR, { recursive: true });
+}
+
+// =============================================================================
+// Service Registration (called after paths are resolved)
+// =============================================================================
+// Services capture their cache directory at construction time, so they MUST be
+// created after Electron's userDataPath/resourcesPath have been applied.
+// Moving this to module level would cause services to capture stale paths.
+
+function registerServices(): void {
+  serviceRegistry.register('update', new UpdateService(), {
+    progressWeight: 50,
+    progressMessage: 'Downloading game assets...',
+  });
+
+  serviceRegistry.register('facilities', new FacilityDimensionsCache(), {
+    dependsOn: ['update'],
+    progressWeight: 10,
+    progressMessage: 'Loading building catalog...',
+  });
+
+  serviceRegistry.register('mapData', new MapDataService(), {
+    dependsOn: ['update'],
+    progressWeight: 5,
+    progressMessage: 'Indexing map data...',
+  });
 }
 
 // =============================================================================
@@ -1022,6 +1021,8 @@ export interface GatewayOptions {
   singleUserMode?: boolean;
   /** Electron: pass app.getPath('userData') to redirect writable dirs to %APPDATA% */
   userDataPath?: string;
+  /** Electron: pass process.resourcesPath so getPublicDir() resolves to resources/public */
+  resourcesPath?: string;
   onListening?: (port: number) => void;
 }
 
@@ -1037,16 +1038,26 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
   if (options?.port !== undefined) PORT = options.port;
   if (options?.singleUserMode !== undefined) SINGLE_USER_MODE = options.singleUserMode;
 
-  // Re-resolve paths if userDataPath is provided (Electron: writable dirs → %APPDATA%)
+  // Re-resolve paths for Electron (writable dirs → %APPDATA%, public → resources/)
+  if (options?.resourcesPath) {
+    setElectronResourcesPath(options.resourcesPath);
+  }
   if (options?.userDataPath) {
     setElectronUserDataPath(options.userDataPath);
+  }
+  if (options?.userDataPath || options?.resourcesPath) {
     PUBLIC_DIR = getPublicDir();
     CACHE_DIR = getCacheDir();
     WEBCLIENT_CACHE_DIR = getWebclientCacheDir();
-    if (!fs.existsSync(WEBCLIENT_CACHE_DIR)) {
-      fs.mkdirSync(WEBCLIENT_CACHE_DIR, { recursive: true });
+    for (const dir of [CACHE_DIR, WEBCLIENT_CACHE_DIR]) {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
     }
   }
+
+  // Register services AFTER paths are resolved — services capture cache dir at construction
+  registerServices();
 
   // Start HTTP server FIRST so /api/startup-status SSE is reachable during cache building
   await new Promise<void>((resolve, reject) => {

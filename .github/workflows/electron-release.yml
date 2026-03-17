@@ -52,8 +52,14 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Run tests (catches path resolution + bundle regressions)
+        run: npm test
+
       - name: Build server + client
         run: npm run build
+
+      - name: Build electron server bundle
+        run: npm run build:electron-bundle
 
       - name: Install electron dependencies
         working-directory: electron
@@ -73,6 +79,9 @@ jobs:
         run: npx electron-builder --win --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Validate packaged app structure
+        run: node scripts/validate-electron-package.js
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4

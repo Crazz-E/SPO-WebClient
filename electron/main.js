@@ -1,11 +1,49 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 // electron-updater is lazy-loaded after app.ready (it reads app.getVersion() at import time)
 let autoUpdater = null;
 
 let mainWindow = null;
 let gateway = null;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+}
+
+/**
+ * Validate that critical files exist before attempting to start the gateway.
+ * Throws with a clear diagnostic message if anything is missing.
+ */
+function validatePackagedFiles() {
+  if (!app.isPackaged) return; // dev mode — files are in dist/
+
+  const res = process.resourcesPath;
+  const required = [
+    { path: path.join(res, 'dist', 'server-bundle.js'), label: 'Server bundle' },
+    { path: path.join(res, 'public', 'index.html'),     label: 'index.html' },
+    { path: path.join(res, 'dist', 'node_modules', '7zip-min'), label: '7zip-min module', isDir: true },
+  ];
+
+  const missing = required.filter((f) =>
+    f.isDir ? !fs.existsSync(f.path) : !fs.existsSync(f.path),
+  );
+
+  if (missing.length > 0) {
+    const details = missing.map((f) => `  - ${f.label}: ${f.path}`).join('\n');
+    throw new Error(
+      `Packaged app is missing required files:\n${details}\n\n` +
+      'This usually means the electron-builder extraResources are misconfigured.',
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Auto-updater
@@ -113,17 +151,23 @@ async function createWindow() {
   mainWindow.setMenuBarVisibility(false);
 
   try {
+    // Validate that all required files exist in the packaged app
+    validatePackagedFiles();
+
     // Route CDN requests through the local gateway proxy to bypass CORS
     // (the gateway's /cdn/* endpoint relays to spo.zz.works server-side)
     process.env.CHUNK_CDN_URL = '';
 
-    // Use bundled server in packaged app, individual files in dev
+    // Use bundled server in packaged app, individual files in dev.
+    // Packaged: explicit path via process.resourcesPath (no asar boundary guessing).
+    // Dev: relative path from electron/ to project dist/.
     const serverPath = app.isPackaged
-      ? '../dist/server-bundle'
-      : '../dist/server/server';
+      ? path.join(process.resourcesPath, 'dist', 'server-bundle')
+      : path.join(__dirname, '..', 'dist', 'server', 'server');
     const { startGateway } = require(serverPath);
 
     // Start the embedded gateway on a random localhost port.
+    // resourcesPath tells getPublicDir() where extraResources live.
     // userDataPath redirects writable dirs (cache, webclient-cache) to %APPDATA%.
     // onListening fires as soon as HTTP server is up, BEFORE caches/services finish.
     gateway = await startGateway({
@@ -131,6 +175,7 @@ async function createWindow() {
       port: 0,
       singleUserMode: true,
       userDataPath: app.getPath('userData'),
+      resourcesPath: process.resourcesPath,
       onListening: (port) => {
         console.log(`[Electron] Gateway listening on port ${port}`);
         mainWindow.setTitle('Starpeace Online');
@@ -142,7 +187,9 @@ async function createWindow() {
   } catch (err) {
     console.error('[Electron] Gateway failed to start:', err);
     mainWindow.setTitle('Starpeace Online — Error');
-    mainWindow.loadURL(`data:text/html,<h1>Gateway failed to start</h1><pre>${err.message}</pre>`);
+    mainWindow.loadURL(
+      `data:text/html,<h1>Gateway failed to start</h1><pre>${escapeHtml(err.message)}</pre>`,
+    );
   }
 
   mainWindow.on('closed', () => {

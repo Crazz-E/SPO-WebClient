@@ -48,14 +48,3 @@
   text-transform: uppercase;
 }
 
-.progressWrap {
-  width: 100%;
-}
-
-.message {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  text-align: center;
-  min-height: 1.25em;
-  animation: pulse 1.5s ease-in-out infinite;
-}
