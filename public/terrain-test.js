@@ -858,23 +858,8 @@
      * Textures are served as pre-baked PNGs with alpha channel already applied,
      * so no client-side color keying is needed.
      */
-    async fetchTexture(paletteIndex) {
+    async fetchTexture(_paletteIndex) {
       return null;
-      const url = `/api/terrain-texture/${encodeURIComponent(this.terrainType)}/${this.season}/${paletteIndex}`;
-      try {
-        const response = await fetch(url);
-        if (response.status === 204) {
-          return null;
-        }
-        if (!response.ok) {
-          return null;
-        }
-        const blob = await response.blob();
-        return createImageBitmap(blob);
-      } catch (error) {
-        console.warn(`[TextureCache] Failed to load texture ${paletteIndex}:`, error);
-        return null;
-      }
     }
     /**
      * Evict least recently used entries if cache is over capacity.
