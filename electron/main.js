@@ -154,9 +154,10 @@ async function createWindow() {
     // Validate that all required files exist in the packaged app
     validatePackagedFiles();
 
-    // Route CDN requests through the local gateway proxy to bypass CORS
-    // (the gateway's /cdn/* endpoint relays to spo.zz.works server-side)
-    process.env.CHUNK_CDN_URL = '';
+    // Use direct CDN URL (Cloudflare R2 custom domain with Vary: Origin transform rule).
+    // Previously routed through /cdn/ proxy to bypass CORS, but CORS is now handled
+    // by Cloudflare cache purge + Vary: Origin header on spo.zz.works.
+    // Omit CHUNK_CDN_URL to use the default (https://spo.zz.works) from config.ts.
 
     // Use bundled server in packaged app, individual files in dev.
     // Packaged: explicit path via process.resourcesPath (no asar boundary guessing).
