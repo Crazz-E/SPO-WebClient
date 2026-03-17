@@ -1,8 +1,94 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
 let mainWindow = null;
 let gateway = null;
+
+// ---------------------------------------------------------------------------
+// Auto-updater
+// ---------------------------------------------------------------------------
+
+function setupAutoUpdater() {
+  // Beta versions should see pre-release updates
+  autoUpdater.allowPrerelease = true;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  // Log to stdout (visible in dev; in packaged builds consider electron-log)
+  autoUpdater.logger = {
+    info: (...args) => console.log('[AutoUpdater]', ...args),
+    warn: (...args) => console.warn('[AutoUpdater]', ...args),
+    error: (...args) => console.error('[AutoUpdater]', ...args),
+    debug: (...args) => console.log('[AutoUpdater:debug]', ...args),
+  };
+
+  autoUpdater.on('checking-for-update', () => {
+    sendUpdateStatus('checking');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[AutoUpdater] Update available: ${info.version}`);
+    sendUpdateStatus('available', { version: info.version });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    sendUpdateStatus('not-available');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    sendUpdateStatus('downloading', { percent: Math.round(progress.percent) });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`[AutoUpdater] Update downloaded: ${info.version}`);
+    sendUpdateStatus('downloaded', { version: info.version });
+
+    // Prompt user via native dialog
+    dialog
+      .showMessageBox(mainWindow, {
+        type: 'info',
+        buttons: ['Restart Now', 'Later'],
+        defaultId: 0,
+        title: 'Update Ready',
+        message: `Version ${info.version} has been downloaded.`,
+        detail: 'Restart the application to apply the update.',
+      })
+      .then((result) => {
+        if (result.response === 0) {
+          // Small delay to avoid NSIS first-attempt failure (electron-builder #6555)
+          setTimeout(() => autoUpdater.quitAndInstall(false, true), 1000);
+        }
+      });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.warn('[AutoUpdater] Error:', err.message);
+    sendUpdateStatus('error', { message: err.message });
+    // Silently continue — user is offline, rate limited, or no releases exist
+  });
+
+  // IPC: renderer can request install or manual check
+  ipcMain.on('install-update', () => {
+    setTimeout(() => autoUpdater.quitAndInstall(false, true), 1000);
+  });
+  ipcMain.on('check-for-update', () => {
+    autoUpdater.checkForUpdates().catch(() => {});
+  });
+
+  // Check for updates (non-blocking, errors are caught by the 'error' event)
+  autoUpdater.checkForUpdates().catch(() => {});
+}
+
+function sendUpdateStatus(status, data = {}) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', { status, ...data });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Window + Gateway
+// ---------------------------------------------------------------------------
 
 async function createWindow() {
   // Show a splash message in the title while gateway starts
@@ -14,6 +100,7 @@ async function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -56,7 +143,10 @@ async function createWindow() {
   });
 }
 
-app.on('ready', createWindow);
+app.on('ready', async () => {
+  await createWindow();
+  setupAutoUpdater();
+});
 
 app.on('window-all-closed', async () => {
   if (gateway) {

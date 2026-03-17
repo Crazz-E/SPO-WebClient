@@ -45,6 +45,10 @@ coverage/
 # E2E session screenshots
 screenshots/
 
+# Electron build artifacts
+electron/release/
+electron/node_modules/
+
 # Claude AI local overrides (settings.local.json only - shared config is tracked)
 .claude/settings.local.json
 .claude/memory/

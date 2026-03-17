@@ -3,6 +3,9 @@
   "version": "1.1.0-beta",
   "productName": "Starpeace Online",
   "description": "Starpeace Online — Desktop Client",
+  "author": "Starpeace Online Contributors",
+  "homepage": "https://starpeaceonline.com",
+  "license": "ISC",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -20,12 +23,42 @@
       "icons/**/*"
     ],
     "extraResources": [
-      { "from": "../dist", "to": "dist" },
-      { "from": "../public", "to": "public" }
+      {
+        "from": "../dist",
+        "to": "dist"
+      },
+      {
+        "from": "../public",
+        "to": "public"
+      }
     ],
+    "asarUnpack": [
+      "**/7zip-min/**"
+    ],
+    "publish": {
+      "provider": "github",
+      "releaseType": "prerelease"
+    },
+    "generateUpdatesFilesForAllChannels": true,
     "win": {
       "icon": "icons/icon.ico",
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Starpeace Online",
+      "differentialPackage": true
     },
     "mac": {
       "icon": "icons/icon.icns",
@@ -39,5 +72,8 @@
   "devDependencies": {
     "electron": "^35.0.1",
     "electron-builder": "^26.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }
