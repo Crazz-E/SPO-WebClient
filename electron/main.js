@@ -115,28 +115,37 @@ async function createWindow() {
   try {
     // Set Electron user data path BEFORE importing gateway
     // (app.getPath() only works after app.ready, so we do it here)
-    const { setElectronUserDataPath } = require('../dist/server/paths');
-    setElectronUserDataPath(app.getPath('userData'));
+    // Use bundled server in packaged app, individual files in dev
+    const serverPath = app.isPackaged
+      ? '../dist/server-bundle'
+      : '../dist/server/server';
+    const pathsModule = app.isPackaged
+      ? require('../dist/server-bundle')
+      : require('../dist/server/paths');
+    pathsModule.setElectronUserDataPath(app.getPath('userData'));
 
     // Route CDN requests through the local gateway proxy to bypass CORS
     // (the gateway's /cdn/* endpoint relays to spo.zz.works server-side)
     process.env.CHUNK_CDN_URL = '';
 
     // Import gateway (triggers service registration at module level)
-    const { startGateway } = require('../dist/server/server');
+    const { startGateway } = require(serverPath);
 
-    // Start the embedded gateway on a random localhost port
+    // Start the embedded gateway on a random localhost port.
+    // The onListening callback fires as soon as the HTTP server is up,
+    // BEFORE caches and services finish — so the startup screen is visible.
     gateway = await startGateway({
       host: '127.0.0.1',
       port: 0,
       singleUserMode: true,
+      onListening: (port) => {
+        console.log(`[Electron] Gateway listening on port ${port}`);
+        mainWindow.setTitle('Starpeace Online');
+        mainWindow.loadURL(`http://127.0.0.1:${port}`);
+      },
     });
 
-    console.log(`[Electron] Gateway ready on port ${gateway.port}`);
-    mainWindow.setTitle('Starpeace Online');
-
-    // Load the web client from the embedded HTTP server
-    mainWindow.loadURL(`http://127.0.0.1:${gateway.port}`);
+    console.log(`[Electron] Gateway fully ready on port ${gateway.port}`);
   } catch (err) {
     console.error('[Electron] Gateway failed to start:', err);
     mainWindow.setTitle('Starpeace Online — Error');
@@ -156,7 +165,9 @@ app.on('ready', async () => {
 app.on('window-all-closed', async () => {
   if (gateway) {
     console.log('[Electron] Shutting down gateway...');
-    await gateway.shutdown();
+    const shutdownPromise = gateway.shutdown();
+    const timeout = new Promise(r => setTimeout(r, 8000));
+    await Promise.race([shutdownPromise, timeout]);
     console.log('[Electron] Gateway shutdown complete');
   }
   app.quit();

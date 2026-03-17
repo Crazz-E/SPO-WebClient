@@ -28,8 +28,8 @@
     ],
     "extraResources": [
       {
-        "from": "../dist",
-        "to": "dist"
+        "from": "../dist/server-bundle.js",
+        "to": "dist/server-bundle.js"
       },
       {
         "from": "../public",
@@ -37,7 +37,8 @@
       }
     ],
     "asarUnpack": [
-      "**/7zip-min/**"
+      "**/7zip-min/**",
+      "**/7zip-bin/**"
     ],
     "publish": {
       "provider": "github",
@@ -78,6 +79,8 @@
     "electron-builder": "^26.0.0"
   },
   "dependencies": {
+    "7zip-bin": "^5.2.0",
+    "7zip-min": "^2.1.0",
     "electron-updater": "^6.8.3"
   }
 }

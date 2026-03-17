@@ -1020,6 +1020,7 @@ export interface GatewayOptions {
   host?: string;
   port?: number;
   singleUserMode?: boolean;
+  onListening?: (port: number) => void;
 }
 
 export interface GatewayInstance {
@@ -1051,6 +1052,7 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
         PORT = addr.port; // capture actual port (important when port=0)
       }
       logger.info(`HTTP server listening on ${HOST}:${PORT} (initializing...)`);
+      options?.onListening?.(PORT);
       resolve();
     });
   });
@@ -1108,6 +1110,11 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
   logger.info('Initializing services...');
   await serviceRegistry.initialize();
 
+  // Rebuild caches now that UpdateService has downloaded files
+  await buildIniCache();
+  await buildImageFileIndex();
+  logger.info(`Caches rebuilt after service init: road=${iniCache['roadBlockClasses']?.files.length ?? 0}, concrete=${iniCache['concreteBlockClasses']?.files.length ?? 0}, car=${iniCache['carClasses']?.files.length ?? 0}, images=${imageFileIndex.size}`);
+
   // Log service-specific statistics
   const updateStats = serviceRegistry.get<UpdateService>('update').getStats();
   logger.info(`Update service: ${updateStats.downloaded} downloaded, ${updateStats.extracted} CAB extracted, ${updateStats.skipped} skipped, ${updateStats.failed} failed`);
@@ -1120,6 +1127,15 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
   // Build shutdown function (does NOT call process.exit)
   const shutdown = async (): Promise<void> => {
     logger.info('[Gateway] Shutting down...');
+
+    // Close all active WebSocket connections before stopping the HTTP server
+    for (const client of wss.clients) {
+      if (client.readyState === WebSocket.OPEN || client.readyState === WebSocket.CONNECTING) {
+        client.close(1001, 'Server shutting down');
+      }
+    }
+    logger.info(`[Gateway] Closed ${wss.clients.size} WebSocket client(s)`);
+
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
       // Force close after 2s if server.close() hangs
@@ -1130,7 +1146,12 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
         resolve();
       }, 2000);
     });
-    await serviceRegistry.shutdown();
+
+    // Shut down services with a 10s overall timeout
+    await Promise.race([
+      serviceRegistry.shutdown(),
+      new Promise<void>((resolve) => setTimeout(resolve, 10_000)),
+    ]);
     logger.info('[Gateway] Shutdown complete');
   };
 

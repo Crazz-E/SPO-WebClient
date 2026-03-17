@@ -7,6 +7,7 @@
     "build:server": "tsc",
     "build:client": "vite build",
     "build:terrain-test": "esbuild src/client/terrain-test.ts --bundle --outfile=public/terrain-test.js --format=iife",
+    "build:electron-bundle": "esbuild dist/server/server.js --bundle --platform=node --target=node18 --format=cjs --outfile=dist/server-bundle.js --external:electron --external:7zip-min --external:7zip-bin",
     "build": "npm run build:server && npm run build:client && npm run build:terrain-test",
     "start": "node --disable-warning=DEP0040 dist/server/server.js",
     "dev": "npm run build && npm start",
@@ -19,7 +20,7 @@
     "test:smoke": "jest --selectProjects component --bail",
     "release": "node scripts/release.js",
     "electron": "npm run build:server && cd electron && npm start",
-    "electron:dist": "npm run build && cd electron && npm run dist"
+    "electron:dist": "npm run build && npm run build:electron-bundle && cd electron && npm run dist"
   },
   "keywords": [
     "starpeace",

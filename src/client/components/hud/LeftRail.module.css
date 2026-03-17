@@ -46,6 +46,19 @@
   gap: var(--rail-gap);
 }
 
+/* Short viewport — collapse to 2-column grid so buttons don't overlap minimap */
+@media (max-height: 900px) {
+  .group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--rail-gap);
+  }
+
+  .roadRow {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Mobile — horizontal bottom bar instead */
 @media (max-width: 767px) {
   .rail {
