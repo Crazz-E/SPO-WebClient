@@ -15,9 +15,45 @@ export class MapDataService implements Service {
 
   private cacheRoot: string;
   private extracted: Set<string> = new Set();
+  /** Maps lowercase map name → actual directory name on disk (case-sensitive Linux fix) */
+  private nameCache: Map<string, string> = new Map();
 
   constructor(cacheRoot: string = getCacheDir()) {
     this.cacheRoot = cacheRoot;
+  }
+
+  /**
+   * Resolve a map name to the actual directory name on disk.
+   * The RDO directory server returns lowercase world names (e.g. 'shamba')
+   * but the update server stores them with original casing (e.g. 'Shamba').
+   * On Linux (Docker) the filesystem is case-sensitive, so we must match exactly.
+   */
+  private resolveMapName(mapName: string): string {
+    const key = mapName.toLowerCase();
+    const cached = this.nameCache.get(key);
+    if (cached) return cached;
+
+    // Fast path: exact match
+    const exactDir = path.join(this.cacheRoot, 'Maps', mapName);
+    if (fs.existsSync(exactDir)) {
+      this.nameCache.set(key, mapName);
+      return mapName;
+    }
+
+    // Case-insensitive scan of Maps/ directory
+    const mapsDir = path.join(this.cacheRoot, 'Maps');
+    if (fs.existsSync(mapsDir)) {
+      const entries = fs.readdirSync(mapsDir);
+      for (const entry of entries) {
+        if (entry.toLowerCase() === key) {
+          this.nameCache.set(key, entry);
+          return entry;
+        }
+      }
+    }
+
+    // No match found — return original (will fail downstream with a clear error)
+    return mapName;
   }
 
   /**
@@ -25,64 +61,68 @@ export class MapDataService implements Service {
    * Uses 7zip-min via cab-extractor to extract images.cab into the map directory.
    */
   async extractCabFile(mapName: string): Promise<void> {
-    if (this.extracted.has(mapName)) {
+    const resolved = this.resolveMapName(mapName);
+
+    if (this.extracted.has(resolved)) {
       return; // Already extracted
     }
 
-    const mapDir = path.join(this.cacheRoot, 'Maps', mapName);
-    const bmpPath = path.join(mapDir, `${mapName}.bmp`);
-    const iniPath = path.join(mapDir, `${mapName}.ini`);
+    const mapDir = path.join(this.cacheRoot, 'Maps', resolved);
+    const bmpPath = path.join(mapDir, `${resolved}.bmp`);
+    const iniPath = path.join(mapDir, `${resolved}.ini`);
 
     // Check if files already exist
     if (fs.existsSync(bmpPath) && fs.existsSync(iniPath)) {
-      console.log(`[MapDataService] Map ${mapName} already extracted`);
-      this.extracted.add(mapName);
+      console.log(`[MapDataService] Map ${resolved} already extracted`);
+      this.extracted.add(resolved);
       return;
     }
 
     // Check if CAB file exists
     const cabPath = path.join(mapDir, 'images.cab');
     if (!fs.existsSync(cabPath)) {
-      throw new Error(`CAB file not found for map ${mapName}: ${cabPath}`);
+      throw new Error(`CAB file not found for map ${resolved}: ${cabPath}`);
     }
 
-    console.log(`[MapDataService] Extracting CAB for ${mapName}...`);
+    console.log(`[MapDataService] Extracting CAB for ${resolved}...`);
 
     const result = await extractCabArchive(cabPath, mapDir);
 
     if (!result.success) {
-      throw new Error(`Failed to extract CAB for map ${mapName}: ${result.errors.join(', ')}`);
+      throw new Error(`Failed to extract CAB for map ${resolved}: ${result.errors.join(', ')}`);
     }
 
-    console.log(`[MapDataService] Extracted ${result.extractedFiles.length} files for map ${mapName}`);
+    console.log(`[MapDataService] Extracted ${result.extractedFiles.length} files for map ${resolved}`);
 
     // Verify expected files exist after extraction
     if (!fs.existsSync(bmpPath) || !fs.existsSync(iniPath)) {
-      throw new Error(`CAB extracted but expected files missing for map ${mapName}: ${mapName}.bmp and/or ${mapName}.ini`);
+      throw new Error(`CAB extracted but expected files missing for map ${resolved}: ${resolved}.bmp and/or ${resolved}.ini`);
     }
 
-    this.extracted.add(mapName);
+    this.extracted.add(resolved);
   }
 
   /**
    * Parse INI file and return map metadata
    */
   async getMapMetadata(mapName: string): Promise<MapMetadata> {
-    const iniPath = path.join(this.cacheRoot, 'Maps', mapName, `${mapName}.ini`);
+    const resolved = this.resolveMapName(mapName);
+    const iniPath = path.join(this.cacheRoot, 'Maps', resolved, `${resolved}.ini`);
 
     if (!fs.existsSync(iniPath)) {
       throw new Error(`INI file not found: ${iniPath}`);
     }
 
     const iniContent = fs.readFileSync(iniPath, 'utf-8');
-    return this.parseINI(iniContent, mapName);
+    return this.parseINI(iniContent, resolved);
   }
 
   /**
    * Get absolute path to BMP file
    */
   getBmpFilePath(mapName: string): string {
-    return path.join(this.cacheRoot, 'Maps', mapName, `${mapName}.bmp`);
+    const resolved = this.resolveMapName(mapName);
+    return path.join(this.cacheRoot, 'Maps', resolved, `${resolved}.bmp`);
   }
 
   /**
@@ -91,6 +131,7 @@ export class MapDataService implements Service {
   async shutdown(): Promise<void> {
     console.log('[MapDataService] Shutting down...');
     this.extracted.clear();
+    this.nameCache.clear();
     console.log('[MapDataService] Shutdown complete');
   }
 

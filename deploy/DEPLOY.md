@@ -35,7 +35,7 @@ ssh root@YOUR_VPS_IP
 
 ```bash
 apt update && apt upgrade -y
-timedatectl set-timezone UTC
+sudo 
 apt install -y curl wget git ufw fail2ban unattended-upgrades \
   apt-transport-https ca-certificates gnupg lsb-release
 ```
@@ -192,7 +192,6 @@ git clone https://github.com/crazz-e/SPO-WebClient.git .
 
 ```bash
 cp deploy/.env.example .env
-# It should take a lot of time.
 chmod 600 .env
 ```
 
@@ -278,10 +277,10 @@ sudo apt install -y certbot
 
 sudo certbot certonly --webroot \
     -w /var/www/certbot \
-    -d spo.yourdomain.com \
+    -d starpeace.zz.works \
     --non-interactive \
     --agree-tos \
-    --email your-email@example.com
+    --email cr@zz.works
 ```
 
 ---
