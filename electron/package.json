@@ -6,10 +6,14 @@
   "author": "Starpeace Online Contributors",
   "homepage": "https://starpeaceonline.com",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Crazysky/SPO-WebClient.git"
+  },
   "main": "main.js",
   "scripts": {
     "start": "node launch.js",
-    "dist": "electron-builder"
+    "dist": "node dist.js"
   },
   "build": {
     "appId": "com.starpeaceonline.client",
