@@ -824,12 +824,9 @@ export class IsometricMapRenderer {
       },
       onSingleTap: (x, y) => {
         if (this.placementMode && this.placementPreview) {
-          // In placement mode: tap confirms placement at current screen-center preview
-          if (this.onPlacementConfirm && !this.placementInvalid) {
-            const p = this.placementPreview;
-            const { nwI, nwJ } = this.placementNWCorner(p.i, p.j, p.xsize, p.ysize);
-            this.onPlacementConfirm(nwJ, nwI); // j=x (col), i=y (row)
-          }
+          // In placement mode on mobile: ignore taps — user confirms via PlacementHUD button only.
+          // Pan to position the centered preview, then tap the green check.
+          return;
         } else {
           // Normal map tap: building selection (same logic as mouse left-click)
           const raw = this.terrainRenderer.screenToMap(x, y);
@@ -1905,9 +1902,21 @@ export class IsometricMapRenderer {
   ) {
     this.placementMode = enabled;
     if (enabled && buildingName) {
+      // On mobile (no mouse), initialize preview at screen center instead of (0,0)
+      let initI = this.mouseMapI;
+      let initJ = this.mouseMapJ;
+      if (!this.mouseHasEnteredCanvas) {
+        const cx = this.canvas.width / 2;
+        const cy = this.canvas.height / 2;
+        const raw = this.terrainRenderer.screenToMap(cx, cy);
+        initI = Math.floor(raw.x);
+        initJ = Math.floor(raw.y);
+        // Allow preview to render on touch-only devices
+        this.mouseHasEnteredCanvas = true;
+      }
       this.placementPreview = {
-        i: this.mouseMapI,
-        j: this.mouseMapJ,
+        i: initI,
+        j: initJ,
         buildingName,
         cost,
         area,
