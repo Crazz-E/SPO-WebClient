@@ -104,14 +104,13 @@ export async function login(ctx: ClientHandlerContext, worldName: string): Promi
     if (resp.worldYSize !== undefined) ctx.worldYSize = resp.worldYSize;
     if (resp.worldSeason !== undefined) ctx.worldSeason = resp.worldSeason;
 
-    if (resp.companies && resp.companies.length > 0) {
-      ctx.availableCompanies = resp.companies;
-      ClientBridge.log('Login', `Found ${resp.companies.length} compan${resp.companies.length > 1 ? 'ies' : 'y'}`);
-      ClientBridge.showCompanies(resp.companies || []);
+    ctx.availableCompanies = resp.companies ?? [];
+    if (ctx.availableCompanies.length > 0) {
+      ClientBridge.log('Login', `Found ${ctx.availableCompanies.length} compan${ctx.availableCompanies.length > 1 ? 'ies' : 'y'}`);
     } else {
-      ClientBridge.log('Error', 'No companies found - cannot proceed');
-      ctx.showNotification('No companies available for this account', 'error');
+      ClientBridge.log('Login', 'No companies found — showing company creation');
     }
+    ClientBridge.showCompanies(ctx.availableCompanies);
 
   } catch (err: unknown) {
     ClientBridge.log('Error', `Login failed: ${toErrorMessage(err)}`);
@@ -236,7 +235,7 @@ export async function selectCompanyAndStart(ctx: ClientHandlerContext, companyId
           progress: 0.95,
           message: `Loading terrain: 0/${chunkTotal} chunks`,
         });
-        await chunkCache.awaitChunksReady(visibleChunks, zoomLevel, 15_000, (done, total) => {
+        await chunkCache.awaitChunksReady(visibleChunks, zoomLevel, 15_000, (done: number, total: number) => {
           const pct = 0.95 + (total > 0 ? (done / total) * 0.04 : 0);
           ClientBridge.setMapLoadingProgress({
             progress: pct,

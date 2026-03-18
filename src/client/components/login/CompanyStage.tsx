@@ -52,9 +52,15 @@ export function CompanyStage({
       </button>
 
       <div className={styles.header}>
-        <h2 className={styles.title}>Select a Company</h2>
+        <h2 className={styles.title}>{companies.length > 0 ? 'Select a Company' : 'Get Started'}</h2>
         <span className={styles.worldTag}>{worldName}</span>
       </div>
+
+      {companies.length === 0 && (
+        <p className={styles.emptyMessage}>
+          Welcome to {worldName}! Create your first company to start building your empire.
+        </p>
+      )}
 
       {/* Player-owned companies */}
       {owned.length > 0 && (
