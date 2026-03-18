@@ -1,8 +1,0 @@
-visualClass,Name,FacId_Name,XSize,YSize,Level,FID_Constant
-123,Office Building,FID_Office,2,3,1,100
-456,Large Factory,FID_Factory,5,5,2,101
-789,Small Store,FID_Store,1,1,1,102
-1001,Warehouse,FID_Warehouse,3,4,1,103
-NOT_FOUND,Unknown Building,FID_Unknown,1,1,1,999
-1002,Duplicate Test,FID_Dup1,2,2,1,104
-1002,Duplicate Test 2,FID_Dup2,3,3,2,105

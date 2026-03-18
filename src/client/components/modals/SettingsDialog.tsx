@@ -54,8 +54,8 @@ export function SettingsDialog() {
             <h3 className={styles.sectionTitle}>Visual</h3>
             <ToggleRow
               label="Hide vegetation on move"
-              checked={settings.hideVegetationOnMove}
-              onChange={(v) => handleSettingChange({ hideVegetationOnMove: v })}
+              checked={settings.isVegetationHiddenOnMove}
+              onChange={(v) => handleSettingChange({ isVegetationHiddenOnMove: v })}
             />
             <ToggleRow
               label="Vehicle animations"
@@ -64,8 +64,8 @@ export function SettingsDialog() {
             />
             <ToggleRow
               label="Debug overlay"
-              checked={settings.debugOverlay}
-              onChange={(v) => handleSettingChange({ debugOverlay: v })}
+              checked={settings.isDebugOverlay}
+              onChange={(v) => handleSettingChange({ isDebugOverlay: v })}
             />
             <SizeSelector
               label="Minimap size"
@@ -79,8 +79,8 @@ export function SettingsDialog() {
             <h3 className={styles.sectionTitle}>Audio</h3>
             <ToggleRow
               label="Sound enabled"
-              checked={settings.soundEnabled}
-              onChange={(v) => handleSettingChange({ soundEnabled: v })}
+              checked={settings.isSoundEnabled}
+              onChange={(v) => handleSettingChange({ isSoundEnabled: v })}
             />
             <div className={styles.sliderRow}>
               <span className={styles.sliderLabel}>Volume</span>

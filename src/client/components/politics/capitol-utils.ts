@@ -35,7 +35,3 @@ export function isMayorRole(ownerRole: string): boolean {
   return role.includes('mayor') || role.includes('maire');
 }
 
-/** Check if the ownerRole indicates the user owns the civic facility (mayor or president). */
-export function isFacilityOwnerRole(ownerRole: string): boolean {
-  return isPresidentRole(ownerRole) || isMayorRole(ownerRole);
-}

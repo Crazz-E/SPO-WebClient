@@ -70,7 +70,7 @@ import {
   ConcreteMapData,
   ConcreteCfg
 } from './concrete-texture-system';
-// painter-algorithm's (i+j) sort is NORTH-only; we use screenY-based sort instead
+// The painter's algorithm (i+j) sort is NORTH-only; we use screenY-based sort instead
 import { CarClassManager } from './car-class-system';
 import { VehicleAnimationSystem } from './vehicle-animation-system';
 import { validatePlacementZones } from './placement-validation';
@@ -500,7 +500,7 @@ export class IsometricMapRenderer {
 
   // Vegetation display control
   private vegetationEnabled: boolean = true;
-  private hideVegetationOnMove: boolean = false;
+  private isVegetationHiddenOnMove: boolean = false;
   private isCameraMoving: boolean = false;
   private cameraStopTimer: number | null = null;
   private readonly CAMERA_STOP_DEBOUNCE_MS = 200;
@@ -2847,7 +2847,7 @@ export class IsometricMapRenderer {
     if (currentZoom === 0) return;
     // At z1, auto-enable hide-on-move behavior for performance.
     // At z3 (closest zoom), always show vegetation — detail is important at this level.
-    if (currentZoom !== 3 && (this.hideVegetationOnMove || currentZoom === 1) && this.isCameraMoving) return;
+    if (currentZoom !== 3 && (this.isVegetationHiddenOnMove || currentZoom === 1) && this.isCameraMoving) return;
 
     const ctx = this.ctx;
     const config = ZOOM_LEVELS[this.terrainRenderer.getZoomLevel()];
@@ -4802,14 +4802,14 @@ export class IsometricMapRenderer {
    * Enable/disable hiding vegetation during camera movement
    */
   public setHideVegetationOnMove(enabled: boolean): void {
-    this.hideVegetationOnMove = enabled;
+    this.isVegetationHiddenOnMove = enabled;
   }
 
   /**
    * Check if hide-vegetation-on-move is enabled
    */
   public isHideVegetationOnMove(): boolean {
-    return this.hideVegetationOnMove;
+    return this.isVegetationHiddenOnMove;
   }
 
   public setDebugMode(enabled: boolean): void {

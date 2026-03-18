@@ -16,6 +16,7 @@ import { MapDataService } from './map-data-service';
 import { serviceRegistry, setupGracefulShutdown } from './service-registry';
 import {
   WsMessageType,
+  SessionPhase,
   type WsMessage,
   type WorldInfo,
   type WsReqLoginWorld,
@@ -41,6 +42,26 @@ const logger = createLogger('Gateway');
 let PORT = config.server.port;
 let HOST = config.server.host;
 let SINGLE_USER_MODE = config.server.singleUserMode;
+
+/** Message types allowed at each session phase. null = all allowed. */
+const PHASE_ALLOWED_MESSAGES: Record<SessionPhase, ReadonlySet<string> | null> = {
+  [SessionPhase.DISCONNECTED]: new Set([
+    WsMessageType.REQ_AUTH_CHECK,
+    WsMessageType.REQ_CONNECT_DIRECTORY,
+  ]),
+  [SessionPhase.DIRECTORY_CONNECTED]: new Set([
+    WsMessageType.REQ_AUTH_CHECK,
+    WsMessageType.REQ_CONNECT_DIRECTORY,
+    WsMessageType.REQ_LOGIN_WORLD,
+    WsMessageType.REQ_SELECT_COMPANY,
+  ]),
+  [SessionPhase.WORLD_CONNECTING]: new Set([
+    WsMessageType.REQ_SELECT_COMPANY,
+    WsMessageType.REQ_SWITCH_COMPANY,
+  ]),
+  [SessionPhase.WORLD_CONNECTED]: null,
+};
+
 let PUBLIC_DIR = getPublicDir();
 let CACHE_DIR = getCacheDir();
 
@@ -270,6 +291,9 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
         hostname === '127.0.0.1' ||
         hostname === '::1' ||
         hostname === '[::1]' ||
+        hostname === '0.0.0.0' ||
+        hostname === '255.255.255.255' ||
+        hostname.startsWith('0.') ||
         hostname.startsWith('10.') ||
         hostname.startsWith('192.168.') ||
         hostname.startsWith('169.254.') ||
@@ -613,6 +637,13 @@ const server = http.createServer(async (req, res) => {
   if (safePath.startsWith('/cdn/')) {
     const cdnBaseUrl = config.cdn.url || 'https://spo.zz.works';
     const cdnPath = safePath.substring('/cdn/'.length);
+
+    if (!cdnPath || cdnPath.includes('..') || cdnPath.includes('\\') || cdnPath.includes('\0')) {
+      res.writeHead(400);
+      res.end('Invalid CDN path');
+      return;
+    }
+
     const cdnFullUrl = `${cdnBaseUrl}/${cdnPath}`;
 
     try {
@@ -816,6 +847,12 @@ const wss = new WebSocketServer({
       'http://127.0.0.1:8080',
     ];
 
+    if (!SINGLE_USER_MODE && !origin) {
+      logger.warn('[Gateway] WebSocket connection rejected: missing origin header');
+      callback(false, 403, 'Forbidden: missing origin');
+      return;
+    }
+
     if (origin && !allowedOrigins.includes(origin)) {
       logger.warn(`[Gateway] WebSocket connection rejected: invalid origin "${origin}"`);
       callback(false, 403, 'Forbidden: invalid origin');
@@ -984,6 +1021,21 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
       ws.send(JSON.stringify(errorResp));
       return;
     }
+  }
+
+  // Phase-based message gate: reject messages not allowed for current session phase
+  const phase = session.getPhase();
+  const allowed = PHASE_ALLOWED_MESSAGES[phase];
+  if (allowed !== null && msg.type !== WsMessageType.REQ_LOGOUT && !allowed.has(msg.type)) {
+    logger.warn(`[Gateway] Message ${msg.type} rejected: not allowed in phase ${phase}`);
+    const errorResp: WsRespError = {
+      type: WsMessageType.RESP_ERROR,
+      wsRequestId: msg.wsRequestId,
+      errorMessage: `Operation not allowed in current session state`,
+      code: ErrorCodes.ERROR_AccessDenied
+    };
+    ws.send(JSON.stringify(errorResp));
+    return;
   }
 
   const handler = wsHandlerRegistry[msg.type as WsMessageType];

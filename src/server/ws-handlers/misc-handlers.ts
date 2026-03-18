@@ -20,6 +20,7 @@ import {
   type WsRespResearchInventory,
   type WsReqResearchDetails,
   type WsRespResearchDetails,
+  SessionPhase,
 } from '../../shared/types';
 import * as ErrorCodes from '../../shared/error-codes';
 import type { WsHandlerContext, WsHandler } from './types';
@@ -144,20 +145,35 @@ export const handleEmpireFacilities: WsHandler = async (ctx: WsHandlerContext, m
 };
 
 export const handleRdoDirect: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
-  const req = msg as WsReqRdoDirect;
-  const result = await ctx.session.executeRdo('world', {
-    verb: req.verb,
-    targetId: req.targetId,
-    action: req.action,
-    member: req.member,
-    args: req.args,
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_AccessDenied, async () => {
+    if (ctx.session.getPhase() !== SessionPhase.WORLD_CONNECTED) {
+      throw new Error('RDO direct requires an active world connection');
+    }
+
+    const req = msg as WsReqRdoDirect;
+
+    if (!['get', 'set', 'call', 'sel'].includes(req.verb)) {
+      throw new Error(`Invalid RDO verb: ${req.verb}`);
+    }
+
+    if (!req.targetId || !req.action || !req.member) {
+      throw new Error('Missing required RDO fields: targetId, action, and member are required');
+    }
+
+    const result = await ctx.session.executeRdo('world', {
+      verb: req.verb,
+      targetId: req.targetId,
+      action: req.action,
+      member: req.member,
+      args: req.args,
+    });
+    const response: WsRespRdoResult = {
+      type: WsMessageType.RESP_RDO_RESULT,
+      wsRequestId: msg.wsRequestId,
+      result,
+    };
+    sendResponse(ctx.ws, response);
   });
-  const response: WsRespRdoResult = {
-    type: WsMessageType.RESP_RDO_RESULT,
-    wsRequestId: msg.wsRequestId,
-    result,
-  };
-  sendResponse(ctx.ws, response);
 };
 
 export const handleResearchInventory: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {

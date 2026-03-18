@@ -55,20 +55,20 @@ export interface MapLoadingState {
 }
 
 export interface GameSettings {
-  hideVegetationOnMove: boolean;
+  isVegetationHiddenOnMove: boolean;
   vehicleAnimations: boolean;
-  soundEnabled: boolean;
+  isSoundEnabled: boolean;
   soundVolume: number;
-  debugOverlay: boolean;
+  isDebugOverlay: boolean;
   minimapSize: MinimapSize;
 }
 
 const DEFAULT_SETTINGS: GameSettings = {
-  hideVegetationOnMove: false,
+  isVegetationHiddenOnMove: false,
   vehicleAnimations: true,
-  soundEnabled: true,
+  isSoundEnabled: true,
   soundVolume: 0.5,
-  debugOverlay: false,
+  isDebugOverlay: false,
   minimapSize: 'medium',
 };
 

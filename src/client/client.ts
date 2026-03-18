@@ -46,8 +46,7 @@ import * as zoneHandler from './handlers/zone-handler';
 import * as buildMenuHandler from './handlers/build-menu-handler';
 import * as mapHandler from './handlers/map-handler';
 
-// [E2E-DEBUG] Wire-level debug tracker exposed on window.__spoDebug
-// To remove all E2E debug code: search for "[E2E-DEBUG]" and delete those lines/blocks
+// Wire-level debug tracker exposed on window.__spoDebug (permanent instrumentation)
 interface SpoDebugWire {
   sent: number;
   received: number;
@@ -95,11 +94,11 @@ interface SpoDebugState {
     coords: { x: number; y: number };
   } | null;
   settings: {
-    hideVegetationOnMove: boolean;
+    isVegetationHiddenOnMove: boolean;
     vehicleAnimations: boolean;
-    soundEnabled: boolean;
+    isSoundEnabled: boolean;
     soundVolume: number;
-    debugOverlay: boolean;
+    isDebugOverlay: boolean;
   } | null;
   wire: {
     sent: number;
@@ -665,12 +664,12 @@ export class StarpeaceClient implements ClientHandlerContext {
     if (this.mapNavigationUI) {
       const renderer = this.mapNavigationUI.getRenderer();
       if (renderer) {
-        renderer.setHideVegetationOnMove(settings.hideVegetationOnMove);
-        renderer.setDebugMode(settings.debugOverlay);
+        renderer.setHideVegetationOnMove(settings.isVegetationHiddenOnMove);
+        renderer.setDebugMode(settings.isDebugOverlay);
         renderer.setVehicleAnimationsEnabled(settings.vehicleAnimations);
       }
     }
-    this.soundManager.setEnabled(settings.soundEnabled);
+    this.soundManager.setEnabled(settings.isSoundEnabled);
     this.soundManager.setVolume(settings.soundVolume);
     if (this.minimapUI) {
       this.minimapUI.setSize(settings.minimapSize);
