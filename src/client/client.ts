@@ -430,6 +430,11 @@ export class StarpeaceClient implements ClientHandlerContext {
       // Overlays
       onToggleCityZones: () => mapHandler.toggleCityZones(this),
       onSetOverlay: (surfaceType: SurfaceType | null) => mapHandler.setOverlay(this, surfaceType),
+
+      // Mobile placement controls
+      onCancelBuildingPlacement: () => buildMenuHandler.cancelBuildingPlacement(this),
+      onConfirmBuildingPlacement: () => this.mapNavigationUI?.getRenderer()?.confirmCurrentPlacement(),
+      onRotateCW: () => this.mapNavigationUI?.getRenderer()?.rotateCW(),
     };
 
     this.callbacks = callbacks as ClientCallbacks;

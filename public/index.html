@@ -20,6 +20,8 @@
             height: 100vh;
             overflow: hidden;
             background: radial-gradient(ellipse at top, #1e293b 0%, #0f172a 50%, #020617 100%);
+            overscroll-behavior: none;    /* prevent iOS rubber-band eating first touchmove */
+            touch-action: none;           /* delegate all touch handling to canvas JS */
         }
 
         /* Game panel: canvas container, filled by MapNavigationUI */
@@ -28,6 +30,7 @@
             position: fixed;
             inset: 0;
             background: transparent;
+            touch-action: none;           /* canvas container must not scroll */
         }
 
     </style>

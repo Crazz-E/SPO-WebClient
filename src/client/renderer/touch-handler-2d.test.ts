@@ -1,5 +1,8 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { TouchHandler2D, TouchCallbacks } from './touch-handler-2d';
+
+// DOUBLE_TAP_DELAY must match the constant in touch-handler-2d.ts
+const DOUBLE_TAP_DELAY = 300;
 
 // Mock canvas with touch event listeners
 function createMockCanvas() {
@@ -45,14 +48,21 @@ describe('TouchHandler2D', () => {
   let handler: TouchHandler2D;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     canvas = createMockCanvas();
     callbacks = {
       onPan: jest.fn(),
       onZoom: jest.fn(),
       onRotate: jest.fn(),
       onDoubleTap: jest.fn(),
+      onSingleTap: jest.fn(),
     };
     handler = new TouchHandler2D(canvas as any, callbacks);
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
   });
 
   describe('initialization', () => {
@@ -165,12 +175,74 @@ describe('TouchHandler2D', () => {
     });
   });
 
+  describe('single tap', () => {
+    it('should fire onSingleTap after DOUBLE_TAP_DELAY when no second tap follows', () => {
+      canvas._dispatch('touchstart', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+      canvas._dispatch('touchend', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+
+      expect(callbacks.onSingleTap).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(DOUBLE_TAP_DELAY);
+      expect(callbacks.onSingleTap).toHaveBeenCalledWith(100, 100);
+    });
+
+    it('should not fire onSingleTap when finger moves more than 12px (drag)', () => {
+      canvas._dispatch('touchstart', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+      canvas._dispatch('touchmove', createMockTouchEvent([{ id: 0, x: 120, y: 115 }]));
+      canvas._dispatch('touchend', createMockTouchEvent([{ id: 0, x: 120, y: 115 }]));
+
+      jest.advanceTimersByTime(DOUBLE_TAP_DELAY + 50);
+      expect(callbacks.onSingleTap).not.toHaveBeenCalled();
+    });
+
+    it('should not fire onSingleTap when touch duration exceeds 200ms', () => {
+      canvas._dispatch('touchstart', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+      // Advance time to simulate a long press before touchend
+      jest.advanceTimersByTime(250);
+      canvas._dispatch('touchend', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+
+      jest.advanceTimersByTime(DOUBLE_TAP_DELAY + 50);
+      expect(callbacks.onSingleTap).not.toHaveBeenCalled();
+    });
+
+    it('should not fire onSingleTap when onSingleTap callback is not provided', () => {
+      const cbsWithout: TouchCallbacks = {
+        onPan: jest.fn(),
+        onZoom: jest.fn(),
+        onRotate: jest.fn(),
+        onDoubleTap: jest.fn(),
+      };
+      const h = new TouchHandler2D(canvas as any, cbsWithout);
+      canvas._dispatch('touchstart', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+      canvas._dispatch('touchend', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+      jest.advanceTimersByTime(DOUBLE_TAP_DELAY + 50);
+      // No error thrown, no callback called
+      h.destroy();
+    });
+  });
+
   describe('double tap', () => {
-    it('should not fire on single tap', () => {
+    it('should not fire onDoubleTap on single tap', () => {
       canvas._dispatch('touchstart', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
       canvas._dispatch('touchend', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
 
       expect(callbacks.onDoubleTap).not.toHaveBeenCalled();
+    });
+
+    it('should fire onDoubleTap on two quick taps and cancel pending single tap', () => {
+      // First tap
+      canvas._dispatch('touchstart', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+      canvas._dispatch('touchend', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+
+      // Second tap within DOUBLE_TAP_DELAY
+      jest.advanceTimersByTime(100);
+      canvas._dispatch('touchstart', createMockTouchEvent([{ id: 0, x: 102, y: 101 }]));
+      canvas._dispatch('touchend', createMockTouchEvent([{ id: 0, x: 102, y: 101 }]));
+
+      expect(callbacks.onDoubleTap).toHaveBeenCalledTimes(1);
+
+      // Single tap timer should have been cancelled
+      jest.advanceTimersByTime(DOUBLE_TAP_DELAY + 50);
+      expect(callbacks.onSingleTap).not.toHaveBeenCalled();
     });
   });
 
@@ -190,6 +262,18 @@ describe('TouchHandler2D', () => {
       expect(canvas.removeEventListener).toHaveBeenCalledWith('touchmove', expect.any(Function));
       expect(canvas.removeEventListener).toHaveBeenCalledWith('touchend', expect.any(Function));
       expect(canvas.removeEventListener).toHaveBeenCalledWith('touchcancel', expect.any(Function));
+    });
+
+    it('should cancel pending single-tap timer on destroy', () => {
+      // Start a single tap (starts the timer)
+      canvas._dispatch('touchstart', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+      canvas._dispatch('touchend', createMockTouchEvent([{ id: 0, x: 100, y: 100 }]));
+
+      // Destroy before timer fires
+      handler.destroy();
+      jest.advanceTimersByTime(DOUBLE_TAP_DELAY + 50);
+
+      expect(callbacks.onSingleTap).not.toHaveBeenCalled();
     });
   });
 });

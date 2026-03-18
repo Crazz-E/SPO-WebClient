@@ -8,6 +8,7 @@
 
 import { useUiStore, type MobileTab } from '../../store/ui-store';
 import { useResponsive } from '../../hooks/useResponsive';
+import { useClient } from '../../context';
 import { EmpireOverview } from '../empire';
 import { MailPanel } from '../mail';
 import { BuildingInspector } from '../building';
@@ -21,6 +22,7 @@ import { ChatBanner } from './ChatBanner';
 import { MobileBuildContent } from './MobileBuildContent';
 import { MobileInfoBar } from './MobileInfoBar';
 import { MobileMenu } from './MobileMenu';
+import { PlacementHUD } from './PlacementHUD';
 import styles from './MobileShell.module.css';
 
 /** Map mobileTab → sheet title */
@@ -78,6 +80,9 @@ export function MobileShell() {
   const rightPanel = useUiStore((s) => s.rightPanel);
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
   const setMobileTab = useUiStore((s) => s.setMobileTab);
+  const isPlacingBuilding = useUiStore((s) => s.isPlacingBuilding);
+  const placementValid = useUiStore((s) => s.placementValid);
+  const client = useClient();
 
   if (!isMobile) return null;
 
@@ -115,8 +120,17 @@ export function MobileShell() {
         <SheetContent />
       </BottomSheet>
 
-      {/* Bottom navigation */}
-      <BottomNav />
+      {/* Bottom navigation — replaced by PlacementHUD during building placement */}
+      {isPlacingBuilding ? (
+        <PlacementHUD
+          onCancel={() => client.onCancelBuildingPlacement()}
+          onRotate={() => client.onRotateCW()}
+          onConfirm={() => client.onConfirmBuildingPlacement()}
+          canConfirm={placementValid}
+        />
+      ) : (
+        <BottomNav />
+      )}
     </div>
   );
 }

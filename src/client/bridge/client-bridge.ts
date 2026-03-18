@@ -223,6 +223,11 @@ export interface ClientCallbacks {
   // Overlays
   onToggleCityZones: () => void;
   onSetOverlay: (surfaceType: SurfaceType | null) => void;
+
+  // Mobile placement controls
+  onCancelBuildingPlacement: () => void;
+  onConfirmBuildingPlacement: () => void;
+  onRotateCW: () => void;
 }
 
 /**

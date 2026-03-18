@@ -85,6 +85,7 @@ export class MapNavigationUI {
     this.canvas.style.width = '100%';
     this.canvas.style.height = '100%';
     this.canvas.style.backgroundColor = '#111';
+    this.canvas.style.touchAction = 'none'; // prevent browser scroll/zoom intercepting touch
     this.gamePanel.appendChild(this.canvas);
 
     // Initialize Canvas 2D isometric renderer

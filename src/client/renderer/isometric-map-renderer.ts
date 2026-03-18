@@ -419,6 +419,8 @@ export class IsometricMapRenderer {
   private onBuildingClick: ((x: number, y: number, visualClass?: string) => void) | null = null;
   private onCancelPlacement: (() => void) | null = null;
   private onPlacementConfirm: ((x: number, y: number) => void) | null = null;
+  private onPlacementValidityChange: ((valid: boolean) => void) | null = null;
+  private prevPlacementInvalid: boolean = false;
   private onFetchFacilityDimensions: ((visualClass: string) => Promise<FacilityDimensions | null>) | null = null;
   private onRoadSegmentComplete: ((x1: number, y1: number, x2: number, y2: number) => void) | null = null;
   private onCancelRoadDrawing: (() => void) | null = null;
@@ -762,6 +764,15 @@ export class IsometricMapRenderer {
           this.zoneRequestManager.markMoving();
         }
 
+        // In placement mode: keep ghost at screen center as map pans beneath it
+        if (this.placementMode && this.placementPreview) {
+          const cx = this.canvas.width / 2;
+          const cy = this.canvas.height / 2;
+          const raw = this.terrainRenderer.screenToMap(cx, cy);
+          this.placementPreview.i = Math.floor(raw.x); // row
+          this.placementPreview.j = Math.floor(raw.y); // col
+        }
+
         this.requestRender();
       },
       onPanEnd: () => {
@@ -810,6 +821,27 @@ export class IsometricMapRenderer {
         const mapPos = this.terrainRenderer.screenToMap(x, y);
         this.terrainRenderer.centerOn(mapPos.x, mapPos.y);
         this.requestRender();
+      },
+      onSingleTap: (x, y) => {
+        if (this.placementMode && this.placementPreview) {
+          // In placement mode: tap confirms placement at current screen-center preview
+          if (this.onPlacementConfirm && !this.placementInvalid) {
+            const p = this.placementPreview;
+            const { nwI, nwJ } = this.placementNWCorner(p.i, p.j, p.xsize, p.ysize);
+            this.onPlacementConfirm(nwJ, nwI); // j=x (col), i=y (row)
+          }
+        } else {
+          // Normal map tap: building selection (same logic as mouse left-click)
+          const raw = this.terrainRenderer.screenToMap(x, y);
+          const mapI = Math.floor(raw.x); // row
+          const mapJ = Math.floor(raw.y); // col
+          const building = this.getBuildingAt(mapJ, mapI);
+          if (building && !IsometricMapRenderer.isPortal(building) && this.onBuildingClick) {
+            this.onBuildingClick(building.x, building.y, building.visualClass);
+          } else if (!building && this.onEmptyMapClick) {
+            this.onEmptyMapClick();
+          }
+        }
       },
     });
   }
@@ -1597,6 +1629,19 @@ export class IsometricMapRenderer {
 
   public setPlacementConfirmCallback(callback: (x: number, y: number) => void) {
     this.onPlacementConfirm = callback;
+  }
+
+  public setPlacementValidityCallback(callback: (valid: boolean) => void) {
+    this.onPlacementValidityChange = callback;
+  }
+
+  /** Confirm placement at the current preview position (used by mobile PlacementHUD). */
+  public confirmCurrentPlacement(): void {
+    if (this.placementMode && this.placementPreview && !this.placementInvalid && this.onPlacementConfirm) {
+      const p = this.placementPreview;
+      const { nwI, nwJ } = this.placementNWCorner(p.i, p.j, p.xsize, p.ysize);
+      this.onPlacementConfirm(nwJ, nwI); // j=x (col), i=y (row)
+    }
   }
 
   public setFetchFacilityDimensionsCallback(callback: (visualClass: string) => Promise<FacilityDimensions | null>) {
@@ -3850,6 +3895,10 @@ export class IsometricMapRenderer {
     const validation = validatePlacementZones(tileZones, requiredZoneValue, hasCollision);
     const isInvalid = validation.isInvalid;
     this.placementInvalid = isInvalid;
+    if (isInvalid !== this.prevPlacementInvalid) {
+      this.prevPlacementInvalid = isInvalid;
+      this.onPlacementValidityChange?.(!isInvalid);
+    }
 
     // Lerp placement color smoothly between valid (green) and invalid (red) — ~120ms crossfade
     const now = performance.now();

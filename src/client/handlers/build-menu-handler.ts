@@ -249,10 +249,20 @@ async function startBuildingPlacement(ctx: ClientHandlerContext, building: Build
   ctx.currentBuildingXSize = xsize;
   ctx.currentBuildingYSize = ysize;
 
-  ctx.showNotification(`${building.name} placement mode - Click map to place, ESC to cancel`, 'info');
+  const isMobile = window.innerWidth < 768;
+  const notifText = isMobile
+    ? `${building.name} — Pan map to position, tap to place`
+    : `${building.name} placement mode — Click map to place, ESC to cancel`;
+  ctx.showNotification(notifText, 'info');
+
+  useUiStore.getState().setIsPlacingBuilding(true);
+  useUiStore.getState().setPlacementValid(true);
 
   const renderer = ctx.getRenderer();
   if (renderer) {
+    renderer.setPlacementValidityCallback((valid) => {
+      useUiStore.getState().setPlacementValid(valid);
+    });
     renderer.setPlacementMode(
       true,
       building.name,
@@ -375,6 +385,9 @@ function restoreOverlayAfterPlacement(ctx: ClientHandlerContext): void {
 
 export function cancelBuildingPlacement(ctx: ClientHandlerContext): void {
   ctx.currentBuildingToPlace = null;
+
+  useUiStore.getState().setIsPlacingBuilding(false);
+  useUiStore.getState().setPlacementValid(false);
 
   const notification = document.getElementById('placement-notification');
   if (notification) notification.remove();

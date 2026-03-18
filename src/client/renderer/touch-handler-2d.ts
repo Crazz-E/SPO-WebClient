@@ -14,6 +14,7 @@ export interface TouchCallbacks {
   onZoom: (delta: number) => void;
   onRotate: (direction: 'cw' | 'ccw') => void;
   onDoubleTap: (x: number, y: number) => void;
+  onSingleTap?: (x: number, y: number) => void; // Building selection / placement confirm
 }
 
 // Minimum angle change (radians) to trigger a 90° rotation snap
@@ -44,6 +45,12 @@ export class TouchHandler2D {
   private lastTapTime = 0;
   private lastTapX = 0;
   private lastTapY = 0;
+
+  // Single-tap detection
+  private touchStartTime = 0;
+  private touchStartX = 0;
+  private touchStartY = 0;
+  private singleTapTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Bound handlers (for cleanup)
   private boundHandlers: {
@@ -81,6 +88,11 @@ export class TouchHandler2D {
 
     if (this.activeTouches.size === 1) {
       this.isPanning = true;
+      // Record start position/time for tap detection
+      this.touchStartTime = Date.now();
+      const t = e.changedTouches[0];
+      this.touchStartX = t.clientX;
+      this.touchStartY = t.clientY;
     } else if (this.activeTouches.size === 2) {
       // Switch to pinch/rotate mode
       this.isPanning = false;
@@ -115,27 +127,45 @@ export class TouchHandler2D {
   private onTouchEnd(e: TouchEvent): void {
     e.preventDefault();
 
-    // Check for double-tap (single finger, quick release)
+    // Tap detection (single finger, quick release with minimal movement)
     if (e.changedTouches.length === 1 && this.activeTouches.size === 1) {
       const touch = e.changedTouches[0];
       const now = Date.now();
+      const elapsed = now - this.touchStartTime;
+      const moveDx = touch.clientX - this.touchStartX;
+      const moveDy = touch.clientY - this.touchStartY;
+      const moved = Math.sqrt(moveDx * moveDx + moveDy * moveDy);
+      const isTap = elapsed < 200 && moved < 12;
+
       const dx = touch.clientX - this.lastTapX;
       const dy = touch.clientY - this.lastTapY;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      if (now - this.lastTapTime < DOUBLE_TAP_DELAY && dist < DOUBLE_TAP_DISTANCE) {
-        // Double-tap detected
+      if (isTap && now - this.lastTapTime < DOUBLE_TAP_DELAY && dist < DOUBLE_TAP_DISTANCE) {
+        // Double-tap — cancel any pending single-tap
+        if (this.singleTapTimer !== null) {
+          clearTimeout(this.singleTapTimer);
+          this.singleTapTimer = null;
+        }
         const rect = this.canvas.getBoundingClientRect();
-        this.callbacks.onDoubleTap(
-          touch.clientX - rect.left,
-          touch.clientY - rect.top
-        );
+        this.callbacks.onDoubleTap(touch.clientX - rect.left, touch.clientY - rect.top);
         this.lastTapTime = 0; // Reset to prevent triple-tap
-      } else {
+      } else if (isTap) {
+        // Potential single-tap — wait for double-tap window before firing
         this.lastTapTime = now;
         this.lastTapX = touch.clientX;
         this.lastTapY = touch.clientY;
+        if (this.callbacks.onSingleTap) {
+          const rect = this.canvas.getBoundingClientRect();
+          const tx = touch.clientX - rect.left;
+          const ty = touch.clientY - rect.top;
+          this.singleTapTimer = setTimeout(() => {
+            this.singleTapTimer = null;
+            this.callbacks.onSingleTap!(tx, ty);
+          }, DOUBLE_TAP_DELAY);
+        }
       }
+      // else: drag ended — not a tap, ignore for click purposes
     }
 
     // Remove ended touches
@@ -213,13 +243,17 @@ export class TouchHandler2D {
   }
 
   /**
-   * Remove all event listeners
+   * Remove all event listeners and cancel pending timers
    */
   destroy(): void {
     this.canvas.removeEventListener('touchstart', this.boundHandlers.touchstart);
     this.canvas.removeEventListener('touchmove', this.boundHandlers.touchmove);
     this.canvas.removeEventListener('touchend', this.boundHandlers.touchend);
     this.canvas.removeEventListener('touchcancel', this.boundHandlers.touchcancel);
+    if (this.singleTapTimer !== null) {
+      clearTimeout(this.singleTapTimer);
+      this.singleTapTimer = null;
+    }
     this.activeTouches.clear();
   }
 }

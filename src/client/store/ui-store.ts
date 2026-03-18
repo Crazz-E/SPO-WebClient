@@ -38,6 +38,10 @@ interface UiState {
   mobileTab: MobileTab;
   mobileSheetSnap: SnapPoint;
 
+  // Placement mode (building placement on map)
+  isPlacingBuilding: boolean;
+  placementValid: boolean;
+
   // Actions — Panels
   openRightPanel: (type: RightPanelType) => void;
   closeRightPanel: () => void;
@@ -67,6 +71,10 @@ interface UiState {
   setMobileTab: (tab: MobileTab) => void;
   setMobileSheetSnap: (snap: SnapPoint) => void;
 
+  // Actions — Placement
+  setIsPlacingBuilding: (v: boolean) => void;
+  setPlacementValid: (v: boolean) => void;
+
   // Actions — Escape (close topmost layer)
   dismissTopmost: () => void;
 }
@@ -83,6 +91,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   commandPaletteOpen: false,
   mobileTab: 'map',
   mobileSheetSnap: 'half' as SnapPoint,
+  isPlacingBuilding: false,
+  placementValid: false,
 
   // Panels
   openRightPanel: (type) => set({ rightPanel: type }),
@@ -129,6 +139,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   // Mobile
   setMobileTab: (tab) => set({ mobileTab: tab }),
   setMobileSheetSnap: (snap) => set({ mobileSheetSnap: snap }),
+
+  // Placement
+  setIsPlacingBuilding: (v) => set({ isPlacingBuilding: v }),
+  setPlacementValid: (v) => set({ placementValid: v }),
 
   // Escape — dismiss topmost layer in priority order
   dismissTopmost: () => {
