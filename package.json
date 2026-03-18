@@ -1,6 +1,6 @@
 {
   "name": "starpeace-online-client",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "TypeScript web client for Starpeace Online - A browser-based multiplayer tycoon/simulation game",
   "main": "dist/server/server.js",
   "scripts": {
