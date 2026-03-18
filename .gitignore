@@ -6,6 +6,7 @@ dist/
 public/app.js
 public/app.js.map
 public/app.css
+public/assets/
 
 # Environment variables
 .env
