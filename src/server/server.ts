@@ -712,17 +712,16 @@ const server = http.createServer(async (req, res) => {
   // Prefers pre-baked PNG (with alpha) over original BMP when available
   if (safePath.startsWith('/cache/')) {
     const relativePath = safePath.substring('/cache/'.length);
-    // Normalize filename to lowercase for cross-platform compatibility
-    // (CLASSES.BIN has mixed-case names from Windows, update server has lowercase files on Linux)
+    // Use imageFileIndex for case-insensitive lookup (handles mixed-case filenames on Linux)
     const lastSlash = relativePath.lastIndexOf('/');
-    const normalizedRelative = lastSlash >= 0
-      ? relativePath.substring(0, lastSlash + 1) + relativePath.substring(lastSlash + 1).toLowerCase()
-      : relativePath.toLowerCase();
-    const filePath = path.join(CACHE_DIR, normalizedRelative);
+    const filename = lastSlash >= 0 ? relativePath.substring(lastSlash + 1) : relativePath;
+    const indexedPath = imageFileIndex.get(filename.toLowerCase());
+    const filePath = indexedPath ?? path.join(CACHE_DIR, relativePath);
 
-    // Security check: ensure path doesn't escape cache directory
+    // Security check: ensure path doesn't escape allowed cache directories
     const normalizedPath = path.normalize(filePath);
-    if (!normalizedPath.startsWith(path.normalize(CACHE_DIR))) {
+    if (!normalizedPath.startsWith(path.normalize(CACHE_DIR)) &&
+        !normalizedPath.startsWith(path.normalize(WEBCLIENT_CACHE_DIR))) {
       res.writeHead(403);
       res.end('Access Denied');
       return;
@@ -742,16 +741,20 @@ const server = http.createServer(async (req, res) => {
 
     // If requesting a BMP, check if a pre-baked PNG exists (has alpha channel pre-applied)
     const ext = path.extname(filePath).toLowerCase();
-    const pngPath = ext === '.bmp' ? filePath.replace(/\.bmp$/i, '.png') : null;
-
-    // Try PNG first (async), fall back to original path
     let servePath = filePath;
-    if (pngPath) {
-      try {
-        await fsp.access(pngPath);
-        servePath = pngPath;
-      } catch {
-        // PNG doesn't exist, use original BMP path
+    if (ext === '.bmp') {
+      const pngFilename = filename.replace(/\.bmp$/i, '.png');
+      const indexedPng = imageFileIndex.get(pngFilename.toLowerCase());
+      if (indexedPng) {
+        servePath = indexedPng;
+      } else {
+        const pngPath = filePath.replace(/\.bmp$/i, '.png');
+        try {
+          await fsp.access(pngPath);
+          servePath = pngPath;
+        } catch {
+          // PNG doesn't exist, use original BMP path
+        }
       }
     }
     const serveExt = path.extname(servePath).toLowerCase();
