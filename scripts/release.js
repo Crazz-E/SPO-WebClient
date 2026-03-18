@@ -15,6 +15,9 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const PKG_PATH = path.join(ROOT, 'package.json');
+const ELECTRON_PKG_PATH = path.join(ROOT, 'electron', 'package.json');
+const README_PATH = path.join(ROOT, 'README.md');
+const CLAUDE_MD_PATH = path.join(ROOT, 'CLAUDE.md');
 const CHANGELOG_PATH = path.join(ROOT, 'CHANGELOG.md');
 const CHANGELOG_JSON_PATH = path.join(ROOT, 'src', 'client', 'changelog-data.json');
 
@@ -193,9 +196,36 @@ function main() {
   fs.writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
   console.log(`Bumped package.json version to ${newVersion}`);
 
-  // 4. Print next steps
+  // 4. Sync electron/package.json version
+  if (fs.existsSync(ELECTRON_PKG_PATH)) {
+    const electronPkg = JSON.parse(fs.readFileSync(ELECTRON_PKG_PATH, 'utf-8'));
+    electronPkg.version = newVersion;
+    fs.writeFileSync(ELECTRON_PKG_PATH, JSON.stringify(electronPkg, null, 2) + '\n', 'utf-8');
+    console.log(`Synced electron/package.json version to ${newVersion}`);
+  }
+
+  // 5. Update README.md version badge
+  if (fs.existsSync(README_PATH)) {
+    const readme = fs.readFileSync(README_PATH, 'utf-8');
+    const updatedReadme = readme.replace(/> \*\*Beta \d+\.\d+\.\d+\S*\*\*/, `> **Beta ${newVersion}**`);
+    fs.writeFileSync(README_PATH, updatedReadme, 'utf-8');
+    console.log(`Updated README.md version badge to Beta ${newVersion}`);
+  }
+
+  // 6. Update CLAUDE.md version reference
+  if (fs.existsSync(CLAUDE_MD_PATH)) {
+    const claudeMd = fs.readFileSync(CLAUDE_MD_PATH, 'utf-8');
+    const updatedClaudeMd = claudeMd.replace(
+      /\| RDO protocol \| Beta \d+\.\d+\.\d+\S*/,
+      `| RDO protocol | Beta ${newVersion}`
+    );
+    fs.writeFileSync(CLAUDE_MD_PATH, updatedClaudeMd, 'utf-8');
+    console.log(`Updated CLAUDE.md version to Beta ${newVersion}`);
+  }
+
+  // 7. Print next steps
   console.log('\n--- Next steps ---');
-  console.log(`git add package.json CHANGELOG.md src/client/changelog-data.json`);
+  console.log(`git add package.json electron/package.json README.md CLAUDE.md CHANGELOG.md src/client/changelog-data.json`);
   console.log(`git commit -m "chore: release v${newVersion}"`);
   console.log(`git tag v${newVersion}`);
   console.log(`git push --follow-tags`);
