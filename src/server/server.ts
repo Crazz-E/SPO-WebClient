@@ -505,11 +505,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Startup status endpoint — SSE stream while initializing, JSON once ready
+  // Startup status endpoint — always SSE so EventSource clients work
   if (safePath === '/api/startup-status') {
     if (serviceRegistry.isInitialized()) {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ phase: 'ready', progress: 1, message: 'Server ready', services: [] }));
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+      res.write(`event: status\ndata: ${JSON.stringify({ phase: 'ready', progress: 1, message: 'Server ready', services: [] })}\n\n`);
+      res.end();
       return;
     }
     res.writeHead(200, {
