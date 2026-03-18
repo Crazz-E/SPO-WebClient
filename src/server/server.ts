@@ -58,6 +58,9 @@ const PHASE_ALLOWED_MESSAGES: Record<SessionPhase, ReadonlySet<string> | null> =
   [SessionPhase.WORLD_CONNECTING]: new Set([
     WsMessageType.REQ_SELECT_COMPANY,
     WsMessageType.REQ_SWITCH_COMPANY,
+    WsMessageType.REQ_CREATE_COMPANY,
+    WsMessageType.REQ_CLUSTER_INFO,
+    WsMessageType.REQ_CLUSTER_FACILITIES,
   ]),
   [SessionPhase.WORLD_CONNECTED]: null,
 };
