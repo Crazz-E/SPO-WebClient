@@ -118,6 +118,8 @@ export class MinimapUI {
   }
 
   public show(): void {
+    // Never show minimap on mobile — MobileInfoBar replaces it
+    if (typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth < 768) return;
     if (this.visible) return;
     this.visible = true;
     this.ensureDOM();

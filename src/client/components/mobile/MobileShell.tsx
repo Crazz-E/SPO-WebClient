@@ -1,60 +1,72 @@
 /**
- * MobileShell — Mobile-only layout wrapper.
+ * MobileShell — Map-first mobile layout.
  *
- * Replaces the desktop HUD on small screens (< 768px).
- * Shows TopBar (slim) at top, active tab content in middle, BottomNav at bottom.
- * The MobileShell is rendered alongside desktop HUD — CSS handles visibility.
+ * The canvas map is ALWAYS visible at 100% viewport.
+ * All UI floats on top: MobileInfoBar (top), BottomSheet (content), BottomNav (bottom).
+ * Tab content is routed into the BottomSheet — no opaque content layer.
  */
 
-import { useUiStore } from '../../store/ui-store';
+import { useUiStore, type MobileTab } from '../../store/ui-store';
 import { useResponsive } from '../../hooks/useResponsive';
 import { EmpireOverview } from '../empire';
 import { MailPanel } from '../mail';
 import { BuildingInspector } from '../building';
-import { BuildMenu } from '../modals';
 import { ChatStrip } from '../chat';
 import { SearchPanel } from '../search';
 import { TransportPanel } from '../transport';
+import { useChatStore } from '../../store/chat-store';
 import { BottomNav } from './BottomNav';
 import { BottomSheet } from './BottomSheet';
+import { ChatBanner } from './ChatBanner';
+import { MobileBuildContent } from './MobileBuildContent';
+import { MobileInfoBar } from './MobileInfoBar';
+import { MobileMenu } from './MobileMenu';
 import styles from './MobileShell.module.css';
 
-/** "More" sub-menu items */
-function MoreMenu() {
-  const openRightPanel = useUiStore((s) => s.openRightPanel);
+/** Map mobileTab → sheet title */
+const SHEET_TITLES: Record<MobileTab, string> = {
+  map: '',
+  chat: 'Chat',
+  build: 'Build',
+  favorites: 'My Facilities',
+  more: 'Menu',
+};
 
-  return (
-    <div className={styles.moreMenu}>
-      <button className={styles.moreItem} onClick={() => openRightPanel('search')}>
-        Search
-      </button>
-      <button className={styles.moreItem} onClick={() => openRightPanel('transport')}>
-        Transport
-      </button>
-    </div>
-  );
-}
+/** Right panel override titles */
+const PANEL_TITLES: Record<string, string> = {
+  building: 'Building Inspector',
+  mail: 'Mail',
+  search: 'Search',
+  transport: 'Transport',
+  politics: 'Capitol',
+};
 
-/** Content for the active tab on mobile */
-function MobileTabContent() {
+/** Content rendered inside the BottomSheet based on active tab or right panel */
+function SheetContent() {
   const mobileTab = useUiStore((s) => s.mobileTab);
   const rightPanel = useUiStore((s) => s.rightPanel);
+  const resetUnreadChat = useChatStore((s) => s.resetUnreadChat);
 
-  // If a right panel is explicitly open (e.g. from More menu), show it
+  // Reset unread chat count when chat tab is active
+  if (mobileTab === 'chat' && !rightPanel) {
+    resetUnreadChat();
+  }
+
+  // Right panel overrides take priority
+  if (rightPanel === 'building') return <BuildingInspector />;
+  if (rightPanel === 'mail') return <MailPanel />;
   if (rightPanel === 'search') return <SearchPanel />;
   if (rightPanel === 'transport') return <TransportPanel />;
 
   switch (mobileTab) {
-    case 'map':
-      return <div className={styles.mapTab}>Map view active</div>;
-    case 'empire':
-      return <EmpireOverview />;
+    case 'chat':
+      return <ChatStrip mode="embedded" />;
     case 'build':
-      return <BuildMenu />;
-    case 'mail':
-      return <MailPanel />;
+      return <MobileBuildContent />;
+    case 'favorites':
+      return <EmpireOverview />;
     case 'more':
-      return <MoreMenu />;
+      return <MobileMenu />;
     default:
       return null;
   }
@@ -62,33 +74,49 @@ function MobileTabContent() {
 
 export function MobileShell() {
   const { isMobile } = useResponsive();
+  const mobileTab = useUiStore((s) => s.mobileTab);
   const rightPanel = useUiStore((s) => s.rightPanel);
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
+  const setMobileTab = useUiStore((s) => s.setMobileTab);
 
-  // Only render on mobile
   if (!isMobile) return null;
+
+  // Determine if the BottomSheet should be open
+  const hasRightPanel = rightPanel != null;
+  const sheetOpen = mobileTab !== 'map' || hasRightPanel;
+
+  // Sheet title from right panel override or active tab
+  const sheetTitle = hasRightPanel
+    ? (PANEL_TITLES[rightPanel] ?? '')
+    : SHEET_TITLES[mobileTab];
+
+  const handleSheetClose = () => {
+    if (hasRightPanel) {
+      closeRightPanel();
+    } else {
+      setMobileTab('map');
+    }
+  };
 
   return (
     <div className={styles.shell}>
-      {/* Main content area between TopBar and BottomNav */}
-      <div className={styles.content}>
-        <MobileTabContent />
-      </div>
+      {/* Compact info bar at top */}
+      <MobileInfoBar />
+
+      {/* Chat banner — only visible on map tab */}
+      {mobileTab === 'map' && !hasRightPanel && <ChatBanner />}
+
+      {/* Universal BottomSheet — all non-map content goes here */}
+      <BottomSheet
+        open={sheetOpen}
+        onClose={handleSheetClose}
+        title={sheetTitle}
+      >
+        <SheetContent />
+      </BottomSheet>
 
       {/* Bottom navigation */}
       <BottomNav />
-
-      {/* Bottom sheet for building inspector on mobile */}
-      <BottomSheet
-        open={rightPanel === 'building'}
-        onClose={closeRightPanel}
-        title="Building Inspector"
-      >
-        <BuildingInspector />
-      </BottomSheet>
-
-      {/* Chat: hidden strip on mobile, accessible via expanded more menu later */}
-      <ChatStrip />
     </div>
   );
 }

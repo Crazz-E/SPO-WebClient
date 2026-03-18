@@ -1,15 +1,16 @@
 /**
- * BottomSheet — Slide-up panel for mobile building inspector.
+ * BottomSheet — Gesture-driven slide-up panel for all mobile content.
  *
- * Shows a drag handle at top, content area scrolls.
- * Three states: collapsed (peek header), half-screen, full-screen.
+ * Integrates useSheetGesture for drag-to-snap (peek/half/full).
+ * Semi-transparent backdrop keeps the map visible behind.
+ * Sits above BottomNav (56px offset).
  */
 
-import { type ReactNode, useState, useCallback } from 'react';
+import { type ReactNode, useCallback, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useSheetGesture, type SnapPoint } from '../../hooks/useSheetGesture';
+import { useUiStore } from '../../store/ui-store';
 import styles from './BottomSheet.module.css';
-
-type SheetHeight = 'peek' | 'half' | 'full';
 
 interface BottomSheetProps {
   open: boolean;
@@ -19,29 +20,73 @@ interface BottomSheetProps {
 }
 
 export function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
-  const [height, setHeight] = useState<SheetHeight>('half');
+  const sheetSnap = useUiStore((s) => s.mobileSheetSnap);
+  const setSheetSnap = useUiStore((s) => s.setMobileSheetSnap);
 
+  const {
+    snap,
+    setSnap,
+    dragOffset,
+    isDragging,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+  } = useSheetGesture({
+    onDismiss: onClose,
+    initialSnap: sheetSnap,
+  });
+
+  // Sync gesture snap to store
+  useEffect(() => {
+    setSheetSnap(snap);
+  }, [snap, setSheetSnap]);
+
+  // Reset to half when sheet opens with new content
+  useEffect(() => {
+    if (open) {
+      setSnap('half');
+    }
+  }, [open, setSnap]);
+
+  // Click-to-cycle as fallback for non-touch
   const cycleHeight = useCallback(() => {
-    setHeight((prev) => {
-      if (prev === 'peek') return 'half';
-      if (prev === 'half') return 'full';
-      return 'half';
-    });
-  }, []);
+    if (snap === 'peek') setSnap('half');
+    else if (snap === 'half') setSnap('full');
+    else setSnap('half');
+  }, [snap, setSnap]);
 
   if (!open) return null;
 
   const heightClass =
-    height === 'full' ? styles.full : height === 'half' ? styles.half : styles.peek;
+    snap === 'full' ? styles.full : snap === 'half' ? styles.half : styles.peek;
+
+  // During drag, apply translateY for 60fps performance
+  const dragStyle = isDragging
+    ? { transform: `translateY(${dragOffset}px)`, transition: 'none' }
+    : undefined;
 
   return (
     <>
       <div className={styles.backdrop} onClick={onClose} aria-hidden="true" />
-      <div className={`${styles.sheet} ${heightClass}`} role="dialog" aria-label={title}>
+      <div
+        className={`${styles.sheet} ${heightClass} ${isDragging ? styles.dragging : ''}`}
+        style={dragStyle}
+        role="dialog"
+        aria-label={title}
+      >
         {/* Drag handle */}
-        <button className={styles.handleArea} onClick={cycleHeight} aria-label="Resize panel">
+        <div
+          className={styles.handleArea}
+          onClick={cycleHeight}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          role="button"
+          tabIndex={0}
+          aria-label="Resize panel"
+        >
           <span className={styles.handle} />
-        </button>
+        </div>
 
         {/* Header */}
         <div className={styles.header}>

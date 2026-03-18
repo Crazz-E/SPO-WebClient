@@ -20,7 +20,7 @@ export function ChatBanner() {
 
   const currentChannel = useChatStore((s) => s.currentChannel);
   const messages = useChatStore((s) => s.messages);
-  const openRightPanel = useUiStore((s) => s.openRightPanel);
+  const setMobileTab = useUiStore((s) => s.setMobileTab);
   const mobileTab = useUiStore((s) => s.mobileTab);
 
   const channelMessages = messages[currentChannel];
@@ -46,7 +46,7 @@ export function ChatBanner() {
 
   const handleClick = () => {
     setVisible(false);
-    openRightPanel('search'); // placeholder — chat panel not yet a RightPanelType
+    setMobileTab('chat');
   };
 
   return (

@@ -488,18 +488,15 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should use MOBILE_SIZE=140 with square wrapper when innerWidth is mobile', () => {
+    it('should NOT show minimap on mobile (innerWidth < 768)', () => {
       const origWindow = (globalThis as Record<string, unknown>).window;
       (globalThis as Record<string, unknown>).window = { innerWidth: 375 };
 
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
-      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
-      expect(wrapper).toBeDefined();
-      // MOBILE_SIZE=140, wrapper is square
-      expect(wrapper!.style.cssText).toContain('width: 140px');
-      expect(wrapper!.style.cssText).toContain('height: 140px');
+      // Minimap should not be visible on mobile
+      expect(minimap.isVisible()).toBe(false);
 
       minimap.destroy();
       (globalThis as Record<string, unknown>).window = origWindow;
@@ -537,18 +534,17 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('should ignore setSize on mobile', () => {
+    it('should ignore setSize on mobile (minimap hidden)', () => {
       const origWindow = (globalThis as Record<string, unknown>).window;
       (globalThis as Record<string, unknown>).window = { innerWidth: 375 };
 
       const minimap = new MinimapUI();
       minimap.setRenderer(createMockRenderer());
 
+      // Minimap should not be visible on mobile, so setSize is irrelevant
+      expect(minimap.isVisible()).toBe(false);
       minimap.setSize('large');
-
-      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
-      // Should remain at MOBILE_SIZE=140, not large=320
-      expect(wrapper!.style.cssText).toContain('width: 140px');
+      expect(minimap.isVisible()).toBe(false);
 
       minimap.destroy();
       (globalThis as Record<string, unknown>).window = origWindow;

@@ -157,7 +157,14 @@ function FacilityCard({ facility, isExpanded, onToggleExpand, onSelect }: {
   );
 }
 
-export function BuildMenu() {
+interface BuildMenuProps {
+  /** When true, renders inline without modal wrapper (used in mobile BottomSheet). */
+  embedded?: boolean;
+  /** Called when a building is selected in embedded mode. */
+  onClose?: () => void;
+}
+
+export function BuildMenu({ embedded = false, onClose }: BuildMenuProps = {}) {
   const modal = useUiStore((s) => s.modal);
   const closeModal = useUiStore((s) => s.closeModal);
   const categories = useUiStore((s) => s.buildMenuCategories);
@@ -171,14 +178,14 @@ export function BuildMenu() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedFacility, setExpandedFacility] = useState<string | null>(null);
 
-  // Load categories when opened
+  // Load categories when opened (modal mode or embedded mode)
   useEffect(() => {
-    if (modal !== 'buildMenu') return;
+    if (!embedded && modal !== 'buildMenu') return;
     setPhase('categories');
     setIsLoading(true);
     setExpandedFacility(null);
     client.onRequestBuildingCategories();
-  }, [modal, client]);
+  }, [modal, client, embedded]);
 
   // Stop loading when store receives data
   useEffect(() => {
@@ -204,17 +211,25 @@ export function BuildMenu() {
     [client],
   );
 
+  const dismiss = useCallback(() => {
+    if (embedded) {
+      onClose?.();
+    } else {
+      closeModal();
+    }
+  }, [embedded, onClose, closeModal]);
+
   const handleBuildCapitol = useCallback(() => {
-    closeModal();
+    dismiss();
     client.onBuildCapitol();
-  }, [closeModal, client]);
+  }, [dismiss, client]);
 
   const handleFacilitySelect = useCallback(
     (facility: { facilityClass: string; visualClassId: string; available: boolean }) => {
-      closeModal();
+      dismiss();
       client.onPlaceBuilding(facility.facilityClass, facility.visualClassId);
     },
-    [closeModal, client],
+    [dismiss, client],
   );
 
   const handleToggleExpand = useCallback((facilityClass: string) => {
@@ -237,7 +252,87 @@ export function BuildMenu() {
     />
   ), [expandedFacility, handleToggleExpand, handleFacilitySelect]);
 
-  if (modal !== 'buildMenu') return null;
+  if (!embedded && modal !== 'buildMenu') return null;
+
+  // Embedded mode: render content directly without modal wrapper
+  if (embedded) {
+    return (
+      <div>
+        {/* Header */}
+        <div className={styles.header}>
+          {phase === 'facilities' && (
+            <button className={styles.backBtn} onClick={() => setPhase('categories')}>
+              <ArrowLeft size={16} />
+            </button>
+          )}
+          <h2 className={styles.title}>
+            {phase === 'categories' ? 'Buildings' : selectedCategory}
+          </h2>
+        </div>
+
+        {/* Content */}
+        <div className={styles.content}>
+          {isLoading && (
+            <div className={styles.loadingGrid}>
+              {Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} width="100%" height="80px" />
+              ))}
+            </div>
+          )}
+
+          {!isLoading && phase === 'categories' && (
+            <div className={styles.categoryGrid}>
+              {categories.map((cat) => (
+                <GlassCard
+                  key={cat.kind}
+                  className={styles.categoryCard}
+                  onClick={() => handleCategorySelect(cat)}
+                >
+                  {cat.iconPath && (
+                    <img src={cat.iconPath} alt={cat.kindName} className={styles.categoryIcon} />
+                  )}
+                  <span className={styles.categoryName}>{cat.kindName}</span>
+                </GlassCard>
+              ))}
+              {isPublicOfficeRole && capitolIconUrl && (
+                <GlassCard
+                  className={`${styles.categoryCard} ${styles.capitolCard}`}
+                  onClick={handleBuildCapitol}
+                >
+                  <img src={capitolIconUrl} alt="Capitol" className={styles.categoryIcon} />
+                  <span className={styles.categoryName}>Capitol</span>
+                  <span className={styles.officeBadge}>Public Office</span>
+                </GlassCard>
+              )}
+            </div>
+          )}
+
+          {!isLoading && phase === 'facilities' && (
+            <div className={styles.facilityList}>
+              {hasResidenceGroups
+                ? <>
+                    {RESIDENCE_GROUPS.map(({ key, label, styleClass }) => {
+                      const group = facilities.filter((f) => f.residenceClass === key);
+                      if (group.length === 0) return null;
+                      return (
+                        <div key={key} className={styles.resGroup}>
+                          <div className={`${styles.resGroupHeader} ${styleClass}`}>{label}</div>
+                          {group.map(renderFacilityCard)}
+                        </div>
+                      );
+                    })}
+                    {facilities.filter((f) => !f.residenceClass).map(renderFacilityCard)}
+                  </>
+                : facilities.map(renderFacilityCard)}
+              {facilities.length === 0 && (
+                <div className={styles.empty}>No buildings available in this category</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

@@ -14,9 +14,9 @@ describe('BottomNav', () => {
   it('renders all 5 tabs', () => {
     renderWithProviders(<BottomNav />);
     expect(screen.getByLabelText('Map')).toBeTruthy();
-    expect(screen.getByLabelText('Empire')).toBeTruthy();
+    expect(screen.getByLabelText('Chat')).toBeTruthy();
     expect(screen.getByLabelText('Build')).toBeTruthy();
-    expect(screen.getByLabelText('Mail')).toBeTruthy();
+    expect(screen.getByLabelText('Fav')).toBeTruthy();
     expect(screen.getByLabelText('More')).toBeTruthy();
   });
 

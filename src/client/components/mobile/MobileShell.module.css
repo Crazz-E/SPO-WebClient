@@ -1,71 +1,26 @@
-/* MobileShell — mobile companion layout */
+/* MobileShell — transparent overlay, map always visible */
 
 .shell {
   display: none; /* Only on mobile */
   position: fixed;
   inset: 0;
-  flex-direction: column;
   z-index: 250; /* Above canvas, below panels */
   pointer-events: none;
 }
 
-/* Main content area — below TopBar, above BottomNav */
-.content {
-  position: fixed;
-  top: var(--topbar-height);
-  left: 0;
-  right: 0;
-  bottom: 56px; /* BottomNav height */
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: var(--bg-primary);
-  pointer-events: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--surface-border) transparent;
-}
-
-/* Map tab — transparent to show canvas beneath */
-.mapTab {
+/* Placeholder for content not yet implemented */
+.placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  height: 120px;
   color: var(--text-disabled);
   font-size: var(--text-sm);
-  background: transparent;
-  pointer-events: none; /* Let touches pass to canvas */
-}
-
-/* More menu */
-.moreMenu {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-4);
-  gap: var(--space-2);
-}
-
-.moreItem {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: border-color var(--duration-fast) var(--ease-default);
-}
-
-.moreItem:active {
-  border-color: var(--accent-gold);
 }
 
 /* Only show on mobile */
 @media (max-width: 767px) {
   .shell {
-    display: flex;
+    display: block;
   }
 }

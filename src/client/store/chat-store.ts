@@ -29,6 +29,8 @@ interface ChatState {
   typingUsers: Set<string>;
   isExpanded: boolean;
   activeTab: ChatTab;
+  /** Unread message count for mobile chat tab badge */
+  unreadChatCount: number;
 
   // Actions
   setCurrentChannel: (channel: string) => void;
@@ -41,6 +43,7 @@ interface ChatState {
   setExpanded: (expanded: boolean) => void;
   toggleExpanded: () => void;
   setActiveTab: (tab: ChatTab) => void;
+  resetUnreadChat: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -51,6 +54,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   typingUsers: new Set(),
   isExpanded: true,
   activeTab: 'chat' as ChatTab,
+  unreadChatCount: 0,
 
   setCurrentChannel: (channel) => set({ currentChannel: channel }),
 
@@ -63,7 +67,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => {
       const existing = state.messages[channel] ?? [];
       const updated = [...existing, message].slice(-MAX_MESSAGES_PER_CHANNEL);
-      return { messages: { ...state.messages, [channel]: updated } };
+      return {
+        messages: { ...state.messages, [channel]: updated },
+        unreadChatCount: state.unreadChatCount + (message.isSystem ? 0 : 1),
+      };
     }),
 
   setUsers: (users) => {
@@ -101,4 +108,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   toggleExpanded: () => set((state) => ({ isExpanded: !state.isExpanded })),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
+
+  resetUnreadChat: () => set({ unreadChatCount: 0 }),
 }));

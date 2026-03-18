@@ -227,15 +227,9 @@
   transition: width var(--duration-base) var(--ease-default);
 }
 
-/* Mobile — compact */
+/* Mobile — hidden, replaced by MobileInfoBar */
 @media (max-width: 767px) {
   .widget {
-    min-width: 160px;
-    max-width: 220px;
-    right: var(--space-2);
-    top: var(--space-2);
-  }
-  .cash {
-    font-size: var(--text-base);
+    display: none;
   }
 }

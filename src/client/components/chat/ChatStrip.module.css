@@ -449,11 +449,40 @@
 }
 
 /* ========================================================================= */
-/* MOBILE — hidden (chat on mobile is via "More" tab)                        */
+/* EMBEDDED MODE — fills parent, no fixed positioning (used in BottomSheet)  */
+/* ========================================================================= */
+
+.embedded {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  z-index: auto;
+}
+
+.embedded.expanded {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+}
+
+/* Hide user sidebar in embedded mode on narrow screens */
+.embedded .userSidebar {
+  display: none;
+}
+
+/* ========================================================================= */
+/* MOBILE — hidden in desktop mode (chat on mobile is via Chat tab)          */
 /* ========================================================================= */
 
 @media (max-width: 767px) {
-  .strip {
+  .strip:not(.embedded) {
     display: none;
   }
 }

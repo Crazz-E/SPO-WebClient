@@ -1,15 +1,26 @@
 /**
- * MobileMenu — Drawer menu replacing the old "More" tab.
+ * MobileMenu — Full-feature "More" menu for mobile.
  *
- * Lists secondary features: Mail, Chat, Search, Transport, Settings.
- * Each item opens the corresponding panel/modal and dismisses the menu.
+ * Grouped menu covering ALL desktop features not available via bottom tabs:
+ * Communication (Mail), Exploration (Search, Transport, Capitol),
+ * Map Controls (Zoom, Overlays, Refresh), System (Settings, Server Switch, Debug).
  */
 
-import { Mail, MessageSquare, Search, Train, Settings } from 'lucide-react';
+import {
+  Mail, Search, Train, Landmark,
+  ZoomIn, ZoomOut, Layers, RefreshCw,
+  Settings, Globe, Bug,
+} from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useMailStore } from '../../store/mail-store';
+import { useClient } from '../../context';
 import { Badge } from '../common';
 import styles from './MobileMenu.module.css';
+
+interface MenuGroup {
+  label: string;
+  items: MenuItem[];
+}
 
 interface MenuItem {
   label: string;
@@ -21,34 +32,74 @@ interface MenuItem {
 export function MobileMenu() {
   const openRightPanel = useUiStore((s) => s.openRightPanel);
   const openModal = useUiStore((s) => s.openModal);
+  const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
   const setMobileTab = useUiStore((s) => s.setMobileTab);
   const unreadCount = useMailStore((s) => s.unreadCount);
+  const client = useClient();
 
-  const goTo = (fn: () => void) => {
+  /** Open a panel and stay on map so the BottomSheet shows panel content */
+  const openPanel = (fn: () => void) => {
     fn();
     setMobileTab('map');
   };
 
-  const items: MenuItem[] = [
-    { label: 'Mail', icon: Mail, action: () => goTo(() => openRightPanel('mail')), badge: unreadCount },
-    { label: 'Chat', icon: MessageSquare, action: () => goTo(() => openRightPanel('search')) }, // placeholder — chat not yet a panel
-    { label: 'Search', icon: Search, action: () => goTo(() => openRightPanel('search')) },
-    { label: 'Transport', icon: Train, action: () => goTo(() => openRightPanel('transport')) },
-    { label: 'Settings', icon: Settings, action: () => goTo(() => openModal('settings')) },
+  /** Perform an action and return to map */
+  const doAction = (fn: () => void) => {
+    fn();
+    setMobileTab('map');
+  };
+
+  const groups: MenuGroup[] = [
+    {
+      label: 'Communication',
+      items: [
+        { label: 'Mail', icon: Mail, action: () => openPanel(() => openRightPanel('mail')), badge: unreadCount },
+      ],
+    },
+    {
+      label: 'Exploration',
+      items: [
+        { label: 'Search', icon: Search, action: () => openPanel(() => openRightPanel('search')) },
+        { label: 'Transport', icon: Train, action: () => openPanel(() => openRightPanel('transport')) },
+        { label: 'Capitol / Politics', icon: Landmark, action: () => openPanel(() => openRightPanel('politics')) },
+      ],
+    },
+    {
+      label: 'Map Controls',
+      items: [
+        { label: 'Zoom In', icon: ZoomIn, action: () => doAction(() => client.onZoomIn()) },
+        { label: 'Zoom Out', icon: ZoomOut, action: () => doAction(() => client.onZoomOut()) },
+        { label: 'Map Overlays', icon: Layers, action: () => doAction(() => toggleLeftPanel('overlays')) },
+        { label: 'Refresh Map', icon: RefreshCw, action: () => doAction(() => client.onRefreshMap()) },
+      ],
+    },
+    {
+      label: 'System',
+      items: [
+        { label: 'Settings', icon: Settings, action: () => doAction(() => openModal('settings')) },
+        { label: 'Switch Server', icon: Globe, action: () => doAction(() => client.onSwitchServer()) },
+        { label: 'Debug Overlay', icon: Bug, action: () => doAction(() => client.onToggleDebugOverlay()) },
+      ],
+    },
   ];
 
   return (
     <div className={styles.menu}>
-      {items.map(({ label, icon: Icon, action, badge }) => (
-        <button key={label} className={styles.item} onClick={action}>
-          <Icon size={20} className={styles.icon} />
-          <span className={styles.label}>{label}</span>
-          {badge != null && badge > 0 && (
-            <Badge variant="danger" className={styles.badge}>
-              {badge > 9 ? '9+' : badge}
-            </Badge>
-          )}
-        </button>
+      {groups.map(({ label, items }) => (
+        <div key={label} className={styles.group}>
+          <span className={styles.groupLabel}>{label}</span>
+          {items.map(({ label: itemLabel, icon: Icon, action, badge }) => (
+            <button key={itemLabel} className={styles.item} onClick={action}>
+              <Icon size={18} className={styles.icon} />
+              <span className={styles.label}>{itemLabel}</span>
+              {badge != null && badge > 0 && (
+                <Badge variant="danger" className={styles.badge}>
+                  {badge > 9 ? '9+' : badge}
+                </Badge>
+              )}
+            </button>
+          ))}
+        </div>
       ))}
     </div>
   );

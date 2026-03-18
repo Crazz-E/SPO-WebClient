@@ -1,29 +1,48 @@
-/* MobileMenu — drawer menu for secondary features */
+/* MobileMenu — grouped full-feature menu */
 
 .menu {
   display: flex;
   flex-direction: column;
-  padding: var(--space-4);
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
 
+/* Section group */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.groupLabel {
+  font-size: var(--text-2xs, 0.65rem);
+  font-weight: var(--font-semibold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+/* Menu item */
 .item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  min-height: 44px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--surface-border);
+  padding: var(--space-2) var(--space-3);
+  min-height: 44px; /* Touch-friendly */
+  background: none;
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: border-color var(--duration-fast) var(--ease-default);
+  transition: background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
 }
 
 .item:active {
+  background: var(--bg-tertiary);
   border-color: var(--accent-gold);
 }
 

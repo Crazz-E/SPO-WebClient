@@ -36,7 +36,12 @@ const ChatMessage = memo(function ChatMessage({ from, text, isSystem, isGM }: Ch
   );
 });
 
-export function ChatStrip() {
+interface ChatStripProps {
+  /** 'desktop' (default): positioned bottom-center. 'embedded': fills parent, always expanded. */
+  mode?: 'desktop' | 'embedded';
+}
+
+export function ChatStrip({ mode = 'desktop' }: ChatStripProps) {
   const currentChannel = useChatStore((s) => s.currentChannel);
   const channels = useChatStore((s) => s.channels);
   const messages = useChatStore((s) => s.messages);
@@ -104,10 +109,20 @@ export function ChatStrip() {
     ? Array.from(typingUsers).slice(0, 3).join(', ') + (typingUsers.size > 3 ? '...' : '') + ' typing...'
     : null, [typingUsers]);
 
+  const isEmbedded = mode === 'embedded';
+  // In embedded mode, always show expanded view
+  const showExpanded = isEmbedded || isExpanded;
+
+  const stripClass = [
+    styles.strip,
+    showExpanded ? styles.expanded : '',
+    isEmbedded ? styles.embedded : '',
+  ].filter(Boolean).join(' ');
+
   return (
-    <div className={`${styles.strip} ${isExpanded ? styles.expanded : ''}`}>
+    <div className={stripClass}>
       {/* ================= EXPANDED: Header ================= */}
-      {isExpanded && (
+      {showExpanded && (
         <div className={styles.header}>
           {/* Channel dropdown */}
           <div className={styles.channelSelect} ref={dropdownRef}>
@@ -145,19 +160,21 @@ export function ChatStrip() {
           {/* Title */}
           <span className={styles.headerTitle}>Chat</span>
 
-          {/* Collapse */}
-          <button
-            className={styles.collapseBtn}
-            onClick={toggleExpanded}
-            aria-label="Collapse chat"
-          >
-            <ChevronDown size={16} />
-          </button>
+          {/* Collapse (hidden in embedded mode) */}
+          {!isEmbedded && (
+            <button
+              className={styles.collapseBtn}
+              onClick={toggleExpanded}
+              aria-label="Collapse chat"
+            >
+              <ChevronDown size={16} />
+            </button>
+          )}
         </div>
       )}
 
       {/* ================= EXPANDED: Content (messages left + users right) ================= */}
-      {isExpanded && (
+      {showExpanded && (
         <div className={styles.contentArea}>
           {/* Chat messages (left) */}
           <div className={styles.messageArea}>
@@ -197,8 +214,8 @@ export function ChatStrip() {
         </div>
       )}
 
-      {/* ================= REDUCED: Preview row ================= */}
-      {!isExpanded && (
+      {/* ================= REDUCED: Preview row (hidden in embedded mode) ================= */}
+      {!showExpanded && (
         <div className={styles.reducedRow} onClick={toggleExpanded}>
           {/* Online badge */}
           <div

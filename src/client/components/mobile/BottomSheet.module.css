@@ -1,15 +1,15 @@
-/* BottomSheet — slide-up mobile panel */
+/* BottomSheet — gesture-driven slide-up panel, semi-transparent backdrop */
 
 .backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.25); /* Semi-transparent — map visible behind */
   z-index: 450;
 }
 
 .sheet {
   position: fixed;
-  bottom: 0;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px)); /* Above BottomNav */
   left: 0;
   right: 0;
   z-index: 451;
@@ -20,13 +20,19 @@
   flex-direction: column;
   transition: height 250ms var(--ease-out);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
-  max-height: calc(100vh - 56px); /* Leave space for TopBar */
+  max-height: calc(100vh - 56px - env(safe-area-inset-bottom, 0px));
   overflow: hidden;
+  will-change: transform;
+}
+
+/* Disable CSS transition during drag for 60fps */
+.dragging {
+  transition: none !important;
 }
 
 /* Height states */
 .peek {
-  height: 120px;
+  height: 140px;
 }
 
 .half {
@@ -34,7 +40,7 @@
 }
 
 .full {
-  height: calc(100vh - 56px);
+  height: calc(100vh - 56px - env(safe-area-inset-bottom, 0px));
 }
 
 /* Drag handle */
@@ -46,6 +52,9 @@
   background: none;
   border: none;
   flex-shrink: 0;
+  touch-action: none; /* Prevent browser scroll during drag */
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .handle {

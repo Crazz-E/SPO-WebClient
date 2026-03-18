@@ -7,11 +7,12 @@ import { create } from 'zustand';
 import type { BuildingCategory, BuildingInfo } from '@/shared/types';
 import { useBuildingStore } from './building-store';
 import { useGameStore } from './game-store';
+import type { SnapPoint } from '../hooks/useSheetGesture';
 
 export type RightPanelType = 'building' | 'mail' | 'politics' | 'search' | 'transport';
 export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
 export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'prompt' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector' | 'changelog';
-export type MobileTab = 'map' | 'empire' | 'build' | 'mail' | 'more';
+export type MobileTab = 'map' | 'chat' | 'build' | 'favorites' | 'more';
 
 interface UiState {
   // Panels
@@ -35,6 +36,7 @@ interface UiState {
 
   // Mobile
   mobileTab: MobileTab;
+  mobileSheetSnap: SnapPoint;
 
   // Actions — Panels
   openRightPanel: (type: RightPanelType) => void;
@@ -63,6 +65,7 @@ interface UiState {
 
   // Actions — Mobile
   setMobileTab: (tab: MobileTab) => void;
+  setMobileSheetSnap: (snap: SnapPoint) => void;
 
   // Actions — Escape (close topmost layer)
   dismissTopmost: () => void;
@@ -78,7 +81,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   buildMenuFacilities: [],
   capitolIconUrl: '',
   commandPaletteOpen: false,
-  mobileTab: 'empire',
+  mobileTab: 'map',
+  mobileSheetSnap: 'half' as SnapPoint,
 
   // Panels
   openRightPanel: (type) => set({ rightPanel: type }),
@@ -124,6 +128,7 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   // Mobile
   setMobileTab: (tab) => set({ mobileTab: tab }),
+  setMobileSheetSnap: (snap) => set({ mobileSheetSnap: snap }),
 
   // Escape — dismiss topmost layer in priority order
   dismissTopmost: () => {

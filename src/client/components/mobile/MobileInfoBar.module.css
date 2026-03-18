@@ -1,0 +1,90 @@
+/* MobileInfoBar — slim horizontal top bar, glass background */
+
+.bar {
+  display: none; /* Only on mobile */
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  height: 36px;
+  z-index: 300;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--glass-border);
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  pointer-events: auto;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+
+  /* Reset button styles */
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs, 0.65rem);
+}
+
+.bar:active {
+  background: var(--glass-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.world {
+  color: var(--accent-gold);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+.date {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.cash {
+  color: var(--accent-gold);
+  font-weight: var(--font-bold);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto; /* Push financial to center-right */
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.incomePositive {
+  color: var(--money-positive);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.incomeNegative {
+  color: var(--money-negative);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.incomeNeutral {
+  color: var(--money-neutral);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.identity {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Only show on mobile */
+@media (max-width: 767px) {
+  .bar {
+    display: flex;
+  }
+}
