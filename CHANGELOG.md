@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.2.0] - 2026-03-18
+
+### Added
+- Electron desktop client with embedded gateway, auto-update, and incremental asset caching
+- Docker + nginx production deployment pipeline with HTTPS via Let's Encrypt
+- Auto-reconnect on mobile tab switch — no re-login required
+- Mobile UI overhaul — map-first architecture with gesture-driven BottomSheet
+- Mobile UX components, sheet gesture hook, and startup test fixes
+- Electron CI/CD pipeline and auto-update support
+
+### Fixed
+- Mobile placement preview — center ghost on screen, confirm via HUD only
+- Mobile touch — resolve CSS cascade blocking canvas touch events
+- Mobile touch interaction — map pan, building tap, and placement HUD
+- Case-insensitive cache lookups on Linux (imageFileIndex + map name)
+- Direct CDN URL in Electron instead of /cdn/ proxy
+- Prevent unnecessary re-downloads by preserving remote timestamps
+- Log Error stack traces instead of empty JSON in logger
+- Electron path resolution bugs and packaging validation
+- Remove hardcoded SkillsMP API key from tracked files
+- Resolve EPERM by passing userDataPath via GatewayOptions
+- Move 7zip-min/7zip-bin from electron deps to extraResources
+- Resolve 5 Electron client issues from first real-world test
+- Resolve electron-builder signing and repository detection
+- Resolve ELECTRON_RUN_AS_NODE breaking require('electron')
+
+### Changed
+- Full project cleanup — dead code removal, security hardening, god file decomposition
+- Remove webclient-cache/chunks from repo — now served from CDN
+- Remove dead fetchTexture code in terrain-test
+
 ## [1.1.0-beta] - 2026-03-15
 
 ### Fixed

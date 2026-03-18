@@ -1,5 +1,51 @@
 [
   {
+    "version": "1.2.0",
+    "date": "2026-03-18",
+    "entries": [
+      {
+        "type": "added",
+        "text": "Electron desktop client with embedded gateway, auto-update, and incremental caching"
+      },
+      {
+        "type": "added",
+        "text": "Docker + nginx production deployment with HTTPS"
+      },
+      {
+        "type": "added",
+        "text": "Auto-reconnect on mobile tab switch — no re-login required"
+      },
+      {
+        "type": "added",
+        "text": "Mobile UI overhaul — map-first architecture with gesture-driven BottomSheet"
+      },
+      {
+        "type": "added",
+        "text": "Electron CI/CD pipeline and auto-update support"
+      },
+      {
+        "type": "fixed",
+        "text": "Mobile placement preview, touch interaction, and CSS cascade issues"
+      },
+      {
+        "type": "fixed",
+        "text": "Case-insensitive cache lookups on Linux (Docker)"
+      },
+      {
+        "type": "fixed",
+        "text": "Electron packaging, path resolution, and signing issues"
+      },
+      {
+        "type": "changed",
+        "text": "Full project cleanup — dead code removal, security hardening, god file decomposition"
+      },
+      {
+        "type": "changed",
+        "text": "Static chunks removed from repo — now served exclusively from CDN"
+      }
+    ]
+  },
+  {
     "version": "1.1.0-beta",
     "date": "2026-03-15",
     "entries": [

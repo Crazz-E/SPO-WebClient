@@ -2,7 +2,7 @@
 
 A browser-based multiplayer tycoon game client for [Starpeace Online](http://www.starpeaceonline.com), rebuilt from scratch in TypeScript with React 19 and a custom Canvas 2D isometric renderer.
 
-> **Beta 1.0.0**
+> **Beta 1.2.0**
 
 ## Overview
 
@@ -52,6 +52,9 @@ Browser Client ──WebSocket──> Node.js Gateway ──RDO/TCP──> Game 
 - **Mock server** — Capture-based replay engine with 8+ scenarios for offline development without a live game server
 - **Service registry** — Managed service lifecycle with dependency ordering, health checks, and graceful shutdown
 - **In-app changelog** — Version badge with changelog modal for tracking updates
+- **Electron desktop client** — Native desktop app with embedded gateway, auto-update, and incremental asset caching
+- **Docker deployment** — Production-ready containerization with nginx reverse proxy and HTTPS via Let's Encrypt
+- **Auto-reconnect** — Seamless session recovery on mobile tab switch without re-login
 
 ## Getting Started
 
@@ -325,7 +328,7 @@ npm run release    # Run release script
 ## Testing
 
 - **Framework:** Jest 30 with ts-jest, two projects: `unit` (Node.js env) and `component` (jsdom env)
-- **Stats:** ~143 test suites, all passing
+- **Stats:** ~145 test suites, all passing
 - **Convention:** `module.ts` -> `module.test.ts` in the same directory
 - **Coverage thresholds:** 35% global, 50% for `shared/`, 90% for `shared/building-details/`
 - **Custom matchers:** `toContainRdoCommand()`, `toMatchRdoCallFormat()`, `toMatchRdoSetFormat()`, `toHaveRdoTypePrefix()`

@@ -46,7 +46,7 @@ Always inform the user the list of skills used to respond to each request when y
 ## Project
 
 **Starpeace Online WebClient** — Browser-based multiplayer tycoon game client
-TypeScript + Node.js + WebSocket + Canvas 2D Isometric | RDO protocol | Beta 1.1.0
+TypeScript + Node.js + WebSocket + Canvas 2D Isometric | RDO protocol | Beta 1.2.0
 
 ```
 Browser Client --WebSocket--> Node.js Gateway --RDO Protocol--> Game Servers
