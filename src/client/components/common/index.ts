@@ -14,3 +14,4 @@ export { TrendIndicator } from './TrendIndicator';
 export { DataTable } from './DataTable';
 export { MiniBar } from './MiniBar';
 export { StatCard } from './StatCard';
+export { ReconnectingOverlay } from './ReconnectingOverlay';

@@ -36,7 +36,7 @@ export interface TycoonStats {
 
 export type MinimapSize = 'small' | 'medium' | 'large';
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'reconnecting' | 'connected';
 
 export type ServiceStatus = 'pending' | 'running' | 'complete' | 'failed';
 
@@ -81,6 +81,7 @@ interface GameState {
   worldName: string;
   companyName: string;
   companyId: string;
+  reconnectAttempt: number;
 
   // World data
   companies: CompanyInfo[];
@@ -140,6 +141,7 @@ interface GameState {
 
   // Actions
   setStatus: (status: ConnectionStatus) => void;
+  setReconnectAttempt: (attempt: number) => void;
   setCredentials: (username: string) => void;
   setWorld: (worldName: string) => void;
   setCompany: (name: string, id: string) => void;
@@ -181,6 +183,7 @@ export const useGameStore = create<GameState>((set) => ({
   worldName: '',
   companyName: '',
   companyId: '',
+  reconnectAttempt: 0,
   companies: [],
   tycoonStats: null,
   cashHistory: [],
@@ -211,6 +214,7 @@ export const useGameStore = create<GameState>((set) => ({
   mapLoading: { active: false, progress: 0, message: '' },
   // Actions
   setStatus: (status) => set({ status }),
+  setReconnectAttempt: (attempt) => set({ reconnectAttempt: attempt }),
   setCredentials: (username) => set({ username }),
   setWorld: (worldName) => set({ worldName }),
   setCompany: (name, id) => set({ companyName: name, companyId: id }),
@@ -288,6 +292,7 @@ export const useGameStore = create<GameState>((set) => ({
       worldName: '',
       companyName: '',
       companyId: '',
+      reconnectAttempt: 0,
       companies: [],
       tycoonStats: null,
       cashHistory: [],

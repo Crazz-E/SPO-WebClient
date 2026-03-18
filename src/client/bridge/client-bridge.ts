@@ -140,6 +140,7 @@ export interface ClientCallbacks {
   onToggleMinimap: () => void;
   onToggleDebugOverlay: () => void;
   onLogout: () => void;
+  onTriggerReconnect: () => void;
 
   // Chat
   onSendChatMessage: (message: string) => void;
@@ -312,6 +313,10 @@ export const ClientBridge = {
 
   setDisconnected(): void {
     useGameStore.getState().setStatus('disconnected');
+  },
+
+  setReconnecting(): void {
+    useGameStore.getState().setStatus('reconnecting');
   },
 
   setCredentials(username: string): void {

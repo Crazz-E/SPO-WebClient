@@ -1,0 +1,74 @@
+/* ReconnectingOverlay — semi-transparent layer over GameScreen during auto-reconnect */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 600; /* above CommandPalette (z-500) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  animation: fadeIn 200ms var(--ease-out) both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  background: var(--glass-bg, rgba(15, 23, 42, 0.85));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  min-width: 220px;
+  max-width: 320px;
+  text-align: center;
+  animation: slideUp 200ms var(--ease-out) both;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.attempt {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.retryBtn {
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-primary, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: background 150ms;
+}
+
+.retryBtn:hover {
+  background: var(--color-primary-light, #60a5fa);
+}
+
+.retryBtn:active {
+  background: var(--color-primary-dark, #2563eb);
+}

@@ -45,6 +45,7 @@ import * as roadHandler from './handlers/road-handler';
 import * as zoneHandler from './handlers/zone-handler';
 import * as buildMenuHandler from './handlers/build-menu-handler';
 import * as mapHandler from './handlers/map-handler';
+import { getReconnectDelay, isMaxAttempts, MAX_RECONNECT_ATTEMPTS } from './handlers/reconnect-utils';
 
 // Wire-level debug tracker exposed on window.__spoDebug (permanent instrumentation)
 interface SpoDebugWire {
@@ -222,6 +223,9 @@ export class StarpeaceClient implements ClientHandlerContext {
   private cameraUpdateTimer: ReturnType<typeof setTimeout> | null = null;
   private viewportHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private beforeUnloadHandler: (() => void) | null = null;
+  private reconnectAttempt: number = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private visibilityHandler: (() => void) | null = null;
   private debugWire: SpoDebugWire; // [E2E-DEBUG]
 
   constructor() {
@@ -435,6 +439,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       onCancelBuildingPlacement: () => buildMenuHandler.cancelBuildingPlacement(this),
       onConfirmBuildingPlacement: () => this.mapNavigationUI?.getRenderer()?.confirmCurrentPlacement(),
       onRotateCW: () => this.mapNavigationUI?.getRenderer()?.rotateCW(),
+      onTriggerReconnect: () => this.triggerImmediateReconnect(),
     };
 
     this.callbacks = callbacks as ClientCallbacks;
@@ -796,8 +801,23 @@ export class StarpeaceClient implements ClientHandlerContext {
     this.ws.onclose = () => {
       this.isConnected = false;
       this.cleanupTimers();
+      // Drain pending requests immediately to avoid noisy 15s timeouts
+      this.pendingRequests.forEach(({ reject }) => reject(new Error('Disconnected')));
+      this.pendingRequests.clear();
+      this.isSelectingCompany = false;
       ClientBridge.log('System', 'Gateway Disconnected.');
-      ClientBridge.setDisconnected();
+
+      if (this.isLoggingOut) {
+        this.isLoggingOut = false;
+        ClientBridge.setDisconnected();
+        return;
+      }
+      if (!this.storedUsername || !this.storedPassword) {
+        ClientBridge.setDisconnected();
+        return;
+      }
+      ClientBridge.setReconnecting();
+      this.scheduleReconnect();
     };
 
     this.ws.onerror = (error) => {
@@ -810,6 +830,28 @@ export class StarpeaceClient implements ClientHandlerContext {
       this.sendLogoutBeacon();
     };
     window.addEventListener('beforeunload', this.beforeUnloadHandler);
+
+    // Page Visibility API — pause heartbeat when hidden; fast-reconnect when foregrounded
+    this.visibilityHandler = () => {
+      if (document.hidden) {
+        if (this.viewportHeartbeatTimer !== null) {
+          clearInterval(this.viewportHeartbeatTimer);
+          this.viewportHeartbeatTimer = null;
+        }
+      } else {
+        const status = useGameStore.getState().status;
+        if (status === 'reconnecting' && this.storedUsername && this.storedPassword) {
+          if (this.reconnectTimer !== null) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+          }
+          this.attemptReconnect();
+        } else if (status === 'connected' && !this.viewportHeartbeatTimer) {
+          this.viewportHeartbeatTimer = setInterval(() => this.sendCameraPositionNow(), 30_000);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', this.visibilityHandler);
   }
 
   private handleMessage(msg: WsMessage) {
@@ -853,10 +895,122 @@ export class StarpeaceClient implements ClientHandlerContext {
       clearTimeout(this.cameraUpdateTimer);
       this.cameraUpdateTimer = null;
     }
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.beforeUnloadHandler) {
       window.removeEventListener('beforeunload', this.beforeUnloadHandler);
       this.beforeUnloadHandler = null;
     }
+    if (this.visibilityHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      this.visibilityHandler = null;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (isMaxAttempts(this.reconnectAttempt)) {
+      ClientBridge.log('System', 'Max reconnect attempts reached — returning to login.');
+      this.reconnectAttempt = 0;
+      useGameStore.getState().setReconnectAttempt(0);
+      ClientBridge.setDisconnected();
+      return;
+    }
+
+    const delayMs = getReconnectDelay(this.reconnectAttempt);
+    this.reconnectAttempt++;
+    useGameStore.getState().setReconnectAttempt(this.reconnectAttempt);
+    ClientBridge.log('System', `Reconnect attempt ${this.reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS} in ${delayMs / 1000}s…`);
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.attemptReconnect();
+    }, delayMs);
+  }
+
+  private attemptReconnect(): void {
+    if (useGameStore.getState().status !== 'reconnecting') return;
+
+    const { storedUsername, storedPassword, currentWorldName } = this;
+    const companyId = useGameStore.getState().companyId;
+
+    if (!storedUsername || !storedPassword || !currentWorldName || !companyId) {
+      ClientBridge.log('System', 'Missing session data — returning to login.');
+      this.reconnectAttempt = 0;
+      useGameStore.getState().setReconnectAttempt(0);
+      ClientBridge.setDisconnected();
+      return;
+    }
+
+    ClientBridge.log('System', 'Reconnecting WebSocket…');
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${protocol}//${window.location.host}/ws`;
+
+    this.ws = new WebSocket(url);
+
+    this.ws.onopen = () => {
+      this.isConnected = true;
+      this.reconnectAttempt = 0;
+      useGameStore.getState().setReconnectAttempt(0);
+      ClientBridge.log('System', 'Gateway reconnected — replaying login…');
+
+      authHandler.login(this, currentWorldName)
+        .then(() => authHandler.selectCompanyAndStart(this, companyId))
+        .catch((err: unknown) => {
+          ClientBridge.log('Error', `Reconnect failed: ${toErrorMessage(err)}`);
+          if (this.storedUsername && this.storedPassword) {
+            ClientBridge.setReconnecting();
+            this.scheduleReconnect();
+          } else {
+            ClientBridge.setDisconnected();
+          }
+        });
+    };
+
+    this.ws.onmessage = (event) => {
+      try {
+        const msg: WsMessage = JSON.parse(event.data);
+        this.handleMessage(msg);
+      } catch (e: unknown) {
+        console.error('[Client] Failed to parse message:', e);
+      }
+    };
+
+    this.ws.onclose = () => {
+      this.isConnected = false;
+      this.cleanupTimers();
+      this.pendingRequests.forEach(({ reject }) => reject(new Error('Disconnected')));
+      this.pendingRequests.clear();
+      this.isSelectingCompany = false;
+      ClientBridge.log('System', 'Reconnect attempt lost connection.');
+
+      if (this.isLoggingOut) {
+        this.isLoggingOut = false;
+        ClientBridge.setDisconnected();
+        return;
+      }
+      if (this.storedUsername && this.storedPassword) {
+        ClientBridge.setReconnecting();
+        this.scheduleReconnect();
+      } else {
+        ClientBridge.setDisconnected();
+      }
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('[Client] WebSocket error during reconnect:', error);
+    };
+  }
+
+  public triggerImmediateReconnect(): void {
+    if (useGameStore.getState().status !== 'reconnecting') return;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.attemptReconnect();
   }
 
   private sendCameraPositionDebounced(): void {

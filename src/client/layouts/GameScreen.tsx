@@ -28,7 +28,7 @@ import { ServerSwitchOverlay, ZoneTypePicker } from '../components/modals';
 import { useChangelogCheck } from '../hooks/useChangelogCheck';
 import { CommandPalette } from '../components/command-palette';
 import { MobileShell } from '../components/mobile';
-import { ErrorBoundary, ConfirmDialog, PromptDialog } from '../components/common';
+import { ErrorBoundary, ConfirmDialog, PromptDialog, ReconnectingOverlay } from '../components/common';
 import { User, Heart, Layers } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -177,6 +177,9 @@ export function GameScreen() {
 
       {/* Command Palette — z-500 */}
       <CommandPalette />
+
+      {/* Reconnecting overlay — z-600, shown when WebSocket drops unexpectedly */}
+      <ReconnectingOverlay />
     </div>
   );
 }

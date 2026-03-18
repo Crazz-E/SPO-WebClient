@@ -41,7 +41,7 @@ export function App() {
 
   return (
     <>
-      {status !== 'connected' ? <LoginScreen /> : <GameScreen />}
+      {status === 'connected' || status === 'reconnecting' ? <GameScreen /> : <LoginScreen />}
       <MapLoadingScreen />
       <Suspense fallback={null}>
         <CompanyCreationModal />
