@@ -1,6 +1,6 @@
 /**
  * Smoke tests for ServerStartupScreen and MapLoadingScreen.
- * Verifies rendering, progress display, and visibility logic.
+ * Verifies rendering, rotating quotes, and visibility logic.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -34,40 +34,22 @@ describe('ServerStartupScreen', () => {
     expect(screen.getByText(/starpeace online/i)).toBeTruthy();
   });
 
-  it('shows current progress message', () => {
-    useGameStore.setState({
-      serverStartup: { ready: false, progress: 0.5, message: 'Processing terrain textures...', services: [] },
-    });
+  it('shows tagline', () => {
     renderWithProviders(<ServerStartupScreen />);
-    expect(screen.getByText('Processing terrain textures...')).toBeTruthy();
+    expect(screen.getByText('Preparing your empire')).toBeTruthy();
   });
 
-  it('renders service list when services are present', () => {
-    useGameStore.setState({
-      serverStartup: {
-        ready: false,
-        progress: 0.5,
-        message: 'Loading...',
-        services: [
-          { name: 'update', status: 'complete', progress: 1 },
-          { name: 'facilities', status: 'running', progress: 0.5 },
-        ],
-      },
-    });
-    renderWithProviders(<ServerStartupScreen />);
-    expect(screen.getByText('Downloading game assets')).toBeTruthy();
-    expect(screen.getByText('Loading building catalog')).toBeTruthy();
+  it('shows a rotating quote', () => {
+    const { container } = renderWithProviders(<ServerStartupScreen />);
+    const quote = container.querySelector('[class*="quote"]');
+    expect(quote).toBeTruthy();
+    expect(quote?.textContent?.length).toBeGreaterThan(0);
   });
 
-  it('renders unknown service name as-is', () => {
-    useGameStore.setState({
-      serverStartup: {
-        ready: false, progress: 0, message: '',
-        services: [{ name: 'customSvc', status: 'pending', progress: 0 }],
-      },
-    });
-    renderWithProviders(<ServerStartupScreen />);
-    expect(screen.getByText('customSvc')).toBeTruthy();
+  it('renders spinner dots', () => {
+    const { container } = renderWithProviders(<ServerStartupScreen />);
+    const dots = container.querySelectorAll('[class*="dot"]');
+    expect(dots.length).toBe(3);
   });
 
   it('begins exiting when server becomes ready', async () => {
@@ -100,24 +82,19 @@ describe('MapLoadingScreen', () => {
     expect(screen.getByText(/starpeace online/i)).toBeTruthy();
   });
 
-  it('shows message when active', () => {
-    useGameStore.setState({ mapLoading: { active: true, progress: 0.3, message: 'Building data ready...' } });
-    renderWithProviders(<MapLoadingScreen />);
-    expect(screen.getByText('Building data ready...')).toBeTruthy();
+  it('shows a rotating quote when active', () => {
+    useGameStore.setState({ mapLoading: { active: true, progress: 0.3, message: '' } });
+    const { container } = renderWithProviders(<MapLoadingScreen />);
+    const quote = container.querySelector('[class*="quote"]');
+    expect(quote).toBeTruthy();
+    expect(quote?.textContent?.length).toBeGreaterThan(0);
   });
 
-  it('shows no message when message is empty', () => {
+  it('renders spinner dots when active', () => {
     useGameStore.setState({ mapLoading: { active: true, progress: 0, message: '' } });
     const { container } = renderWithProviders(<MapLoadingScreen />);
-    expect(container.querySelector('p')).toBeNull();
-  });
-
-  it('contains a progress bar with correct value', () => {
-    useGameStore.setState({ mapLoading: { active: true, progress: 0.6, message: '' } });
-    const { container } = renderWithProviders(<MapLoadingScreen />);
-    const bar = container.querySelector('[role="progressbar"]');
-    expect(bar).toBeTruthy();
-    expect(bar?.getAttribute('aria-valuenow')).toBe('60');
+    const dots = container.querySelectorAll('[class*="dot"]');
+    expect(dots.length).toBe(3);
   });
 
   it('begins exiting when active becomes false after progress > 0', async () => {

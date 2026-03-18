@@ -1,0 +1,70 @@
+/* PlacementHUD — mobile building placement controls */
+
+.hud {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--bottomnav-height);
+  z-index: var(--z-bottomnav);
+  display: none; /* Only on mobile */
+  align-items: stretch;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--surface-border);
+  padding-bottom: var(--sai-bottom);
+}
+
+.btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: opacity var(--duration-fast) var(--ease-default);
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cancel {
+  color: var(--error);
+}
+
+.rotate {
+  color: var(--text-secondary);
+}
+
+.confirm {
+  color: var(--success);
+}
+
+.label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  line-height: 1;
+}
+
+@media (max-width: 767px) {
+  .hud {
+    display: flex;
+  }
+}
+
+/* Landscape — compact */
+@media (max-width: 767px) and (orientation: landscape) {
+  .hud {
+    height: var(--bottomnav-height); /* 44px in landscape via token */
+  }
+
+  .label {
+    display: none;
+  }
+}

@@ -1,0 +1,42 @@
+/* MobileMenu — drawer menu for secondary features */
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+  gap: var(--space-2);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  min-height: 44px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-default);
+}
+
+.item:active {
+  border-color: var(--accent-gold);
+}
+
+.icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.label {
+  flex: 1;
+  text-align: left;
+}
+
+.badge {
+  flex-shrink: 0;
+}

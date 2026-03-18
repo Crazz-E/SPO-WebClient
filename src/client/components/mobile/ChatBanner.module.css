@@ -1,0 +1,62 @@
+/* ChatBanner — toast-style chat notification on mobile */
+
+.banner {
+  display: none; /* Only on mobile */
+  position: fixed;
+  top: calc(var(--content-top) + var(--space-2));
+  left: var(--space-3);
+  right: var(--space-3);
+  z-index: var(--z-ticker);
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  min-height: 44px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  animation: slideIn var(--duration-slow) var(--ease-out);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.icon {
+  color: var(--accent-gold);
+  flex-shrink: 0;
+}
+
+.sender {
+  font-weight: var(--font-semibold);
+  color: var(--accent-gold-light);
+  flex-shrink: 0;
+}
+
+.text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 767px) {
+  .banner {
+    display: flex;
+  }
+}
