@@ -20,6 +20,7 @@
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   cursor: pointer;
+  pointer-events: auto; /* override inherited none from .shell */
   animation: slideIn var(--duration-slow) var(--ease-out);
   overflow: hidden;
   white-space: nowrap;

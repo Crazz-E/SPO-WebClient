@@ -12,6 +12,7 @@
   background: var(--bg-secondary);
   border-top: 1px solid var(--surface-border);
   padding-bottom: var(--sai-bottom);
+  pointer-events: auto; /* override inherited none from .shell */
 }
 
 .btn {

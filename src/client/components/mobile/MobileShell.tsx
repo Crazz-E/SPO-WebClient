@@ -104,7 +104,7 @@ export function MobileShell() {
   };
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} style={{ pointerEvents: 'none' }}>
       {/* Compact info bar at top */}
       <MobileInfoBar />
 

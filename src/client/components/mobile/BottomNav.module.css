@@ -12,6 +12,7 @@
   display: none; /* Only show on mobile */
   align-items: stretch;
   padding-bottom: env(safe-area-inset-bottom, 0);
+  pointer-events: auto; /* override inherited none from .shell */
 }
 
 .tab {
