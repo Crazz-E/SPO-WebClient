@@ -513,6 +513,20 @@ export interface CompInputData {
 }
 
 /**
+ * Warehouse ware/gate data — one entry per input gate.
+ * Populated from GetInputNames RDO call + GateMap binary string.
+ * Archaeology: WHGeneralSheet.pas clbNames checklist, TWareInfo record
+ */
+export interface WarehouseWareData {
+  /** Ware display name (from GetInputNames path parsing) */
+  name: string;
+  /** Whether this gate is enabled (GateMap char = '1') */
+  enabled: boolean;
+  /** Gate index (0-based) */
+  index: number;
+}
+
+/**
  * Tab metadata sent from server to client.
  * Driven by CLASSES.BIN [InspectorInfo] section — each building class
  * defines exactly which tabs to display.
@@ -562,6 +576,8 @@ export interface BuildingDetailsResponse {
   products?: BuildingProductData[];
   /** Company input data — eagerly fetched via cInputCount + cInput{i}.* indexed properties */
   compInputs?: CompInputData[];
+  /** Warehouse ware data — gate names + enable/disable state from GateMap */
+  warehouseWares?: WarehouseWareData[];
   /** Money graph data points */
   moneyGraph?: number[];
   /** Timestamp */

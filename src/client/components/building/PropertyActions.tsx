@@ -11,7 +11,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import type { BuildingPropertyValue } from '@/shared/types';
+import type { BuildingPropertyValue, WarehouseWareData } from '@/shared/types';
 import type { PropertyDefinition } from '@/shared/building-details';
 import { formatCurrency } from '@/shared/building-details';
 import { parseCloneMenu } from './property-utils';
@@ -298,6 +298,58 @@ export function CloneSettings({
           Apply Clone
         </button>
       </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// WAREHOUSE WARES (PropertyType.WARE_CHECKLIST)
+// =============================================================================
+
+/**
+ * Warehouse Wares checklist — toggles individual warehouse gates on/off.
+ * Each ware shows a checkbox (enabled state from GateMap) + ware name.
+ * Owner can toggle via RDOSelectWare(index, value).
+ * Archaeology: WHGeneralSheet.pas clbNames checklist
+ */
+export function WarehouseWares({
+  wares,
+  buildingX,
+  buildingY,
+  onPropertyChange,
+}: {
+  wares: WarehouseWareData[];
+  buildingX: number;
+  buildingY: number;
+  onPropertyChange: (rdoName: string, value: string, params?: Record<string, string>) => void;
+}) {
+  const isOwner = useBuildingStore((s) => s.isOwner);
+
+  const handleToggle = useCallback((index: number, currentEnabled: boolean) => {
+    // RDOSelectWare(index, value): value = -1 (enable/wordbool true) or 0 (disable/wordbool false)
+    const newValue = currentEnabled ? '0' : '-1';
+    onPropertyChange('RDOSelectWare', newValue, { index: String(index) });
+  }, [onPropertyChange]);
+
+  if (wares.length === 0) {
+    return <span className={styles.value}>No wares</span>;
+  }
+
+  return (
+    <div className={styles.wareChecklist}>
+      <div className={styles.wareChecklistLabel}>Wares</div>
+      {wares.map((ware) => (
+        <label key={ware.index} className={styles.wareItem}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            checked={ware.enabled}
+            disabled={!isOwner}
+            onChange={() => handleToggle(ware.index, ware.enabled)}
+          />
+          <span className={styles.wareName}>{ware.name}</span>
+        </label>
+      ))}
     </div>
   );
 }

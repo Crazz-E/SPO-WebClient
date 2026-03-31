@@ -66,6 +66,13 @@ export enum PropertyType {
    * Archaeology: ManagementSheet.pas:132-149, CloneOptions.pas
    */
   CLONE_SETTINGS = 'CLONE_SETTINGS',
+  /**
+   * Warehouse ware checklist: checkbox list of gates with names and enable/disable toggles.
+   * Data source: GateMap (binary string) + GetInputNames (ware names from server).
+   * Owner can toggle via RDOSelectWare(index, value).
+   * Archaeology: WHGeneralSheet.pas clbNames checklist
+   */
+  WARE_CHECKLIST = 'WARE_CHECKLIST',
 }
 
 /**

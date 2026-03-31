@@ -30,7 +30,7 @@ import { resolveRdoCommand, computePendingKey, checkIsMayor, getColorClass } fro
 import { SliderInput, TextInput } from './PropertyInputs';
 import { RatioValue, BooleanValue, StopToggle } from './PropertyDisplays';
 import { WorkforceTable, DataTable, ServiceCardList, ProductSummaryCards } from './PropertyTables';
-import { UpgradeActions, RepairControl, TradeConnectButtons, ActionButton, CloneSettings } from './PropertyActions';
+import { UpgradeActions, RepairControl, TradeConnectButtons, ActionButton, CloneSettings, WarehouseWares } from './PropertyActions';
 import styles from './PropertyGroup.module.css';
 
 // Re-export utility functions for backward compatibility (tests import from here)
@@ -326,6 +326,24 @@ function DefinedProperties({
           key={`action-${def.actionId ?? def.rdoName}`}
           def={def}
           onAction={handleActionButton}
+        />,
+      );
+      rendered.add(def.rdoName);
+      continue;
+    }
+
+    // Warehouse wares checklist (checkbox list of gate names from GetInputNames)
+    if (def.type === PropertyType.WARE_CHECKLIST) {
+      const wares = details?.warehouseWares ?? [];
+      elements.push(
+        <WarehouseWares
+          key="warehouse-wares"
+          wares={wares}
+          buildingX={buildingX}
+          buildingY={buildingY}
+          onPropertyChange={(rdoName, value, params) => {
+            client.onSetBuildingProperty(buildingX, buildingY, rdoName, value, params);
+          }}
         />,
       );
       rendered.add(def.rdoName);

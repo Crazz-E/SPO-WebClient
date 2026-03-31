@@ -15,6 +15,7 @@ import type {
   BuildingProductData,
   BuildingConnectionData,
   CompInputData,
+  WarehouseWareData,
 } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import {
@@ -378,10 +379,14 @@ async function getBuildingDetailsImpl(
     const suppliesGroup = template.groups.find(g => g.special === 'supplies');
     const productsGroup = template.groups.find(g => g.special === 'products');
     const compInputsGroup = template.groups.find(g => g.special === 'compInputs');
+    const isWarehouse = template.groups.some(g => g.id === 'whGeneral');
 
     const supplyPaths = suppliesGroup ? await getSupplyPaths(ctx, tempObjectId) : [];
     const productPaths = productsGroup ? await getProductPaths(ctx, tempObjectId) : [];
     const compInputs = compInputsGroup ? await fetchCompInputData(ctx, tempObjectId) : undefined;
+    const warehouseWares = isWarehouse
+      ? await getWarehouseWareNames(ctx, tempObjectId, allValues.get('GateMap') || '')
+      : undefined;
 
     // Phase 4: Iterate supply/product paths using SetPath on the SAME object.
     // Delphi TCachedObjectWrap.SetPath() fully resets internal state (fProperties,
@@ -432,6 +437,7 @@ async function getBuildingDetailsImpl(
       supplies,
       products,
       compInputs,
+      warehouseWares,
       moneyGraph,
       timestamp: Date.now(),
     };
@@ -503,6 +509,70 @@ async function getSupplyPaths(
     result.push({ path, name });
   }
   return result;
+}
+
+/**
+ * Fetch warehouse ware names via GetInputNames and combine with GateMap.
+ * Reuses the same GetInputNames RDO call as getSupplyPaths but only extracts
+ * the ware name (last segment after '::') and combines with the GateMap
+ * binary string to produce WarehouseWareData[].
+ *
+ * Archaeology: WHGeneralSheet.pas — UpdateFingersToList calls
+ * Proxy.GetInputNames(0, ActiveLanguage) then populates clbNames checklist.
+ */
+async function getWarehouseWareNames(
+  ctx: SessionContext,
+  tempObjectId: string,
+  gateMap: string
+): Promise<WarehouseWareData[]> {
+  try {
+    const inputNamesPacket = await ctx.sendRdoRequest('map', {
+      verb: RdoVerb.SEL,
+      targetId: tempObjectId,
+      action: RdoAction.CALL,
+      member: 'GetInputNames',
+      args: ['0', '0'],
+    });
+
+    const inputNamesRaw = cleanPayloadHelper(inputNamesPacket.payload || '');
+    if (!inputNamesRaw || inputNamesRaw === '0' || inputNamesRaw === '-1') {
+      return [];
+    }
+
+    const entries = inputNamesRaw.split('\r').map(e => e.trim()).filter(Boolean);
+    const result: WarehouseWareData[] = [];
+
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      // Format: "path::name" — extract name after '::'
+      const separatorIdx = entry.indexOf('::');
+      let name: string;
+      if (separatorIdx !== -1) {
+        name = entry.substring(separatorIdx + 2);
+      } else {
+        // Fallback: extract name after last ':' + 2 chars (same as getSupplyPaths)
+        const colonIdx = entry.indexOf(':');
+        name = colonIdx !== -1 ? entry.substring(colonIdx + 3) : entry;
+      }
+
+      const nullIdx = name.indexOf('\0');
+      if (nullIdx !== -1) {
+        name = name.substring(0, nullIdx);
+      }
+
+      result.push({
+        name: name || `Ware ${i}`,
+        enabled: i < gateMap.length ? gateMap[i] === '1' : false,
+        index: i,
+      });
+    }
+
+    ctx.log.debug(`[BuildingDetails] Warehouse wares: ${result.length} gates, GateMap="${gateMap}"`);
+    return result;
+  } catch (e: unknown) {
+    ctx.log.warn(`[BuildingDetails] Error fetching warehouse ware names:`, toErrorMessage(e));
+    return [];
+  }
 }
 
 /**

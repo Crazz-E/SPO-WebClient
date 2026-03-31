@@ -35,6 +35,7 @@ interface MockBuilding {
   groups: Record<string, BuildingPropertyValue[]>;
   supplies?: BuildingDetailsResponse['supplies'];
   products?: BuildingDetailsResponse['products'];
+  warehouseWares?: BuildingDetailsResponse['warehouseWares'];
   moneyGraph?: number[];
 }
 
@@ -631,12 +632,18 @@ const MOCK_WAREHOUSE: MockBuilding = {
       { name: 'Creator', value: 'Yellow Inc.' },
       { name: 'Cost', value: '350000' },
       { name: 'ROI', value: '3' },
+      { name: 'Years', value: '5' },
       { name: 'Trouble', value: '0' },
       { name: 'TradeRole', value: '2' },
       { name: 'TradeLevel', value: '3' },
-      { name: 'GateMap', value: '' },
+      { name: 'GateMap', value: '101' },
     ],
   },
+  warehouseWares: [
+    { name: 'Pharmaceutics', enabled: true, index: 0 },
+    { name: 'Processed Food', enabled: false, index: 1 },
+    { name: 'Fresh Food', enabled: true, index: 2 },
+  ],
 };
 
 // -----------------------------------------------------------------------------
@@ -698,6 +705,7 @@ function buildDetailsResponse(
     groups: building.groups,
     supplies: building.supplies,
     products: building.products,
+    warehouseWares: building.warehouseWares,
     moneyGraph: building.moneyGraph,
     timestamp: Date.now(),
   };

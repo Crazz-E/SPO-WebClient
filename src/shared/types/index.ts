@@ -53,6 +53,7 @@ export type {
   BuildingSupplyData,
   BuildingProductData,
   CompInputData,
+  WarehouseWareData,
   BuildingDetailsTab,
   BuildingDetailsResponse,
   SearchMenuCategory,

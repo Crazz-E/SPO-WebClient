@@ -495,10 +495,18 @@ describe('WHGeneral', () => {
     expect(prop!.editable).toBe(true);
   });
 
-  it('GateMap: hideEmpty=true so it only shows when present', () => {
+  it('GateMap: WARE_CHECKLIST type for warehouse ware toggles', () => {
     const prop = getProp(WH_GENERAL_GROUP, 'GateMap');
     expect(prop).toBeDefined();
-    expect(prop!.hideEmpty).toBe(true);
+    expect(prop!.type).toBe(PropertyType.WARE_CHECKLIST);
+    expect(prop!.displayName).toBe('Wares');
+  });
+
+  it('Years: NUMBER type with years unit', () => {
+    const prop = getProp(WH_GENERAL_GROUP, 'Years');
+    expect(prop).toBeDefined();
+    expect(prop!.type).toBe(PropertyType.NUMBER);
+    expect(prop!.unit).toBe('years');
   });
 });
 
