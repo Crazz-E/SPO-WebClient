@@ -512,13 +512,13 @@ async function getSupplyPaths(
 }
 
 /**
- * Fetch warehouse ware names via GetInputNames and combine with GateMap.
- * Reuses the same GetInputNames RDO call as getSupplyPaths but only extracts
- * the ware name (last segment after '::') and combines with the GateMap
- * binary string to produce WarehouseWareData[].
+ * Fetch warehouse ware names via InputCount + Input{i}.0 indexed properties.
+ * These cached properties contain the MLS fluid name for each warehouse gate.
+ * Combined with GateMap binary string to produce WarehouseWareData[].
  *
- * Archaeology: WHGeneralSheet.pas — UpdateFingersToList calls
- * Proxy.GetInputNames(0, ActiveLanguage) then populates clbNames checklist.
+ * Archaeology: Kernel.pas:5840-5854 — WriteString('Input' + i + '.', MetaFluid.Name_MLS)
+ * Cache stores: InputCount (integer), Input0.0, Input1.0, ... (English ware names)
+ * WHGeneralSheet.pas — clbNames checklist populated from these properties.
  */
 async function getWarehouseWareNames(
   ctx: SessionContext,
@@ -526,40 +526,26 @@ async function getWarehouseWareNames(
   gateMap: string
 ): Promise<WarehouseWareData[]> {
   try {
-    const inputNamesPacket = await ctx.sendRdoRequest('map', {
-      verb: RdoVerb.SEL,
-      targetId: tempObjectId,
-      action: RdoAction.CALL,
-      member: 'GetInputNames',
-      args: ['0', '0'],
-    });
+    // First fetch InputCount to know how many wares exist
+    const countValues = await ctx.cacherGetPropertyList(tempObjectId, ['InputCount']);
+    const inputCount = parseInt(countValues[0] || '0', 10);
 
-    const inputNamesRaw = cleanPayloadHelper(inputNamesPacket.payload || '');
-    if (!inputNamesRaw || inputNamesRaw === '0' || inputNamesRaw === '-1') {
+    if (inputCount <= 0 || inputCount > 50) {
+      ctx.log.debug(`[BuildingDetails] Warehouse InputCount=${inputCount}, skipping ware names`);
       return [];
     }
 
-    const entries = inputNamesRaw.split('\r').map(e => e.trim()).filter(Boolean);
+    // Fetch Input{i}.0 for each ware (MLS suffix .0 = English)
+    const nameProps: string[] = [];
+    for (let i = 0; i < inputCount; i++) {
+      nameProps.push(`Input${i}.0`);
+    }
+
+    const nameValues = await ctx.cacherGetPropertyList(tempObjectId, nameProps);
     const result: WarehouseWareData[] = [];
 
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
-      // Format: "path::name" — extract name after '::'
-      const separatorIdx = entry.indexOf('::');
-      let name: string;
-      if (separatorIdx !== -1) {
-        name = entry.substring(separatorIdx + 2);
-      } else {
-        // Fallback: extract name after last ':' + 2 chars (same as getSupplyPaths)
-        const colonIdx = entry.indexOf(':');
-        name = colonIdx !== -1 ? entry.substring(colonIdx + 3) : entry;
-      }
-
-      const nullIdx = name.indexOf('\0');
-      if (nullIdx !== -1) {
-        name = name.substring(0, nullIdx);
-      }
-
+    for (let i = 0; i < inputCount; i++) {
+      const name = nameValues[i] || '';
       result.push({
         name: name || `Ware ${i}`,
         enabled: i < gateMap.length ? gateMap[i] === '1' : false,

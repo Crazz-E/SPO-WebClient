@@ -62,12 +62,20 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
   const isCivic = isCivicBuilding(visualClass);
   const canEdit = isTownTab ? checkIsMayor(properties) : (isOwner || (isCivic && isPublicOfficeRole));
 
+  // For warehouses, filter supplies/products to only show selected wares (GateMap enabled).
+  // Archaeology: WHGeneralSheet.pas — only selected wares (clbNames checked) are operational.
+  const warehouseWares = details?.warehouseWares;
+
   // Special: supplies tab — render structured supply UI from details.supplies
   if (activeGroup?.special === 'supplies') {
+    let supplies = details?.supplies ?? [];
+    if (warehouseWares && warehouseWares.length > 0) {
+      supplies = supplies.filter((_, i) => warehouseWares[i]?.enabled !== false);
+    }
     return (
       <div className={styles.group}>
         <SuppliesPanel
-          supplies={details?.supplies ?? []}
+          supplies={supplies}
           canEdit={canEdit}
           buildingX={buildingX}
           buildingY={buildingY}
@@ -78,10 +86,14 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
 
   // Special: products tab — render structured product UI from details.products
   if (activeGroup?.special === 'products') {
+    let products = details?.products ?? [];
+    if (warehouseWares && warehouseWares.length > 0) {
+      products = products.filter((_, i) => warehouseWares[i]?.enabled !== false);
+    }
     return (
       <div className={styles.group}>
         <ProductsPanel
-          products={details?.products ?? []}
+          products={products}
           canEdit={canEdit}
           buildingX={buildingX}
           buildingY={buildingY}
