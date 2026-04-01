@@ -68,6 +68,35 @@ const PHASE_ALLOWED_MESSAGES: Record<SessionPhase, ReadonlySet<string> | null> =
 let PUBLIC_DIR = getPublicDir();
 let CACHE_DIR = getCacheDir();
 
+// Vite manifest: maps source entries to hashed output filenames for cache-busting.
+// Loaded once at startup; rebuilt on each `npm run build`.
+interface ViteManifestEntry { file: string; css?: string[]; src?: string }
+let viteManifest: Record<string, ViteManifestEntry> = {};
+
+function loadViteManifest(): void {
+  const manifestPath = path.join(PUBLIC_DIR, '.vite', 'manifest.json');
+  try {
+    const raw = fs.readFileSync(manifestPath, 'utf-8');
+    viteManifest = JSON.parse(raw) as Record<string, ViteManifestEntry>;
+    logger.info(`Loaded Vite manifest (${Object.keys(viteManifest).length} entries)`);
+  } catch {
+    logger.warn('Vite manifest not found — falling back to app.js/app.css (run npm run build)');
+    viteManifest = {};
+  }
+}
+
+/** Returns the hashed asset paths from the Vite manifest, or fallbacks. */
+function getHashedAssets(): { jsPath: string; cssPaths: string[] } {
+  const entry = viteManifest['src/client/main.tsx'];
+  if (entry) {
+    return {
+      jsPath: entry.file,
+      cssPaths: entry.css ?? [],
+    };
+  }
+  return { jsPath: 'app.js', cssPaths: ['app.css'] };
+}
+
 // Convenience getters for type-safe access to services (registered in startGateway/registerServices)
 const facilityDimensionsCache = () => serviceRegistry.get<FacilityDimensionsCache>('facilities');
 const mapDataService = () => serviceRegistry.get<MapDataService>('mapData');
@@ -566,7 +595,10 @@ const server = http.createServer(async (req, res) => {
       const bmpPath = mapDataService().getBmpFilePath(mapName);
       const bmpUrl = fileToProxyUrl(bmpPath);
 
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=300',
+      });
       res.end(JSON.stringify({ metadata, bmpUrl }));
     } catch (error: unknown) {
       logger.error(`MapDataService: Error loading map: ${toErrorMessage(error)}`);
@@ -814,17 +846,41 @@ const server = http.createServer(async (req, res) => {
   try {
     let content: string | Buffer = await fsp.readFile(filePath);
 
-    // Inject a runtime config script tag into index.html so the client can use
-    // the /cdn/ proxy when CHUNK_CDN_URL is overridden (e.g., Electron).
-    // Uses an external script (CSP-compliant) instead of inline script.
-    // In Docker/default mode, config.cdn.url is the default and no injection occurs.
-    if (ext === '.html' && config.cdn.url !== 'https://spo.zz.works') {
-      const injection = `<script src="/spo-runtime-config.js"></script>`;
-      content = content.toString('utf-8').replace('</head>', `${injection}</head>`);
-    }
+    if (ext === '.html') {
+      let html = content.toString('utf-8');
 
-    res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'text/plain' });
-    res.end(content, 'utf-8');
+      // Rewrite asset references to content-hashed filenames from Vite manifest
+      const { jsPath, cssPaths } = getHashedAssets();
+      html = html.replace('src="app.js"', `src="${jsPath}"`);
+      html = html.replace('href="app.css"', cssPaths.map(p => `href="${p}"`).join('" />\n    <link rel="stylesheet" '));
+
+      // Inject a runtime config script tag into index.html so the client can use
+      // the /cdn/ proxy when CHUNK_CDN_URL is overridden (e.g., Electron).
+      // Uses an external script (CSP-compliant) instead of inline script.
+      // In Docker/default mode, config.cdn.url is the default and no injection occurs.
+      if (config.cdn.url !== 'https://spo.zz.works') {
+        const injection = `<script src="/spo-runtime-config.js"></script>`;
+        html = html.replace('</head>', `${injection}</head>`);
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/html',
+        'Cache-Control': 'no-cache',
+      });
+      res.end(html, 'utf-8');
+    } else {
+      // Hashed assets (assets/*) get immutable long-cache; other static files get no-cache
+      const isHashedAsset = safePath.startsWith('/assets/');
+      const cacheControl = isHashedAsset
+        ? 'public, max-age=31536000, immutable'
+        : 'no-cache';
+
+      res.writeHead(200, {
+        'Content-Type': contentTypes[ext] || 'text/plain',
+        'Cache-Control': cacheControl,
+      });
+      res.end(content, 'utf-8');
+    }
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') {
@@ -1124,6 +1180,9 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
       }
     }
   }
+
+  // Load Vite manifest for content-hashed asset resolution
+  loadViteManifest();
 
   // Register services AFTER paths are resolved — services capture cache dir at construction
   registerServices();

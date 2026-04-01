@@ -18,11 +18,12 @@ export default defineConfig({
   build: {
     outDir: 'public',
     emptyOutDir: false, // Don't wipe public/ (contains index.html, old CSS, assets)
+    manifest: true,     // Generates .vite/manifest.json for server-side asset resolution
     rollupOptions: {
       input: 'src/client/main.tsx',
       output: {
-        entryFileNames: 'app.js',
-        assetFileNames: 'app.[ext]',
+        entryFileNames: 'assets/app.[hash].js',
+        assetFileNames: 'assets/app.[hash].[ext]',
         manualChunks: undefined,
       },
     },
