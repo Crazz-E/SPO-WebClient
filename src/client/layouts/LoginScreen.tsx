@@ -11,7 +11,7 @@
  * Each stage is a self-contained component that receives callbacks.
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useGameStore } from '../store';
 import { useClient } from '../context';
 import { LoginBackground, AuthStage, AuthErrorModal, ZoneStage, WorldStage, CompanyStage } from '../components/login';
@@ -80,22 +80,18 @@ export function LoginScreen() {
     [client, setLoginLoading],
   );
 
-  // Auto-advance zone + world stages when SPO_FORCE_WORLD is set (test phase)
-  const forceAdvancedRef = useRef<{ zones: boolean; worlds: boolean }>({ zones: false, worlds: false });
+  // Auto-advance zone + world stages when SPO_FORCE_WORLD is set (test phase).
+  // Uses !authError as guard so the effect retries after a transient failure is dismissed.
   useEffect(() => {
-    if (!forceWorldConfig) return;
-    if (stage === 'zones' && !isLoading && !forceAdvancedRef.current.zones) {
+    if (!forceWorldConfig || isLoading || authError) return;
+    if (stage === 'zones') {
       const zone = WORLD_ZONES.find((z) => z.id === forceWorldConfig.zoneId);
-      if (zone) {
-        forceAdvancedRef.current.zones = true;
-        handleZoneSelect(zone);
-      }
+      if (zone) handleZoneSelect(zone);
     }
-    if (stage === 'worlds' && !isLoading && !forceAdvancedRef.current.worlds) {
-      forceAdvancedRef.current.worlds = true;
+    if (stage === 'worlds') {
       handleWorldSelect(forceWorldConfig.worldName);
     }
-  }, [stage, isLoading, handleZoneSelect, handleWorldSelect]);
+  }, [stage, isLoading, authError, handleZoneSelect, handleWorldSelect]);
 
   // Stage D → game: select company
   const handleCompanySelect = useCallback(
