@@ -277,6 +277,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       onUpgradeBuilding: (x, y, action, count) =>
         buildingActionHandler.upgradeBuildingAction(this, x, y, action as 'DOWNGRADE' | 'START_UPGRADE' | 'STOP_UPGRADE', count),
       onRefreshBuilding: (x, y) => buildingActionHandler.refreshBuildingDetails(this, x, y),
+      onRequestTabData: (x, y, tabId, visualClass) => buildingActionHandler.requestTabData(this, x, y, tabId, visualClass),
       onRenameBuilding: (x, y, newName) => buildingActionHandler.renameFacility(this, x, y, newName),
       onDeleteBuilding: (x, y) => buildingActionHandler.deleteFacility(this, x, y).then(success => {
         if (success) ClientBridge.hideBuildingPanel();

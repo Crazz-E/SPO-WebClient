@@ -13,6 +13,8 @@ import {
   type WsRespCapitolPlaced,
   type WsReqBuildingDetails,
   type WsRespBuildingDetails,
+  type WsReqBuildingTabData,
+  type WsRespBuildingTabData,
   type WsReqBuildingSetProperty,
   type WsRespBuildingSetProperty,
   type WsReqCloneFacility,
@@ -156,6 +158,24 @@ export async function handleBuildingDetails(ctx: WsHandlerContext, msg: WsMessag
       type: WsMessageType.RESP_BUILDING_DETAILS,
       wsRequestId: msg.wsRequestId,
       details,
+    };
+    sendResponse(ctx.ws, response);
+  });
+}
+
+export async function handleBuildingTabData(ctx: WsHandlerContext, msg: WsMessage): Promise<void> {
+  const req = msg as WsReqBuildingTabData;
+
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_FacilityNotFound, async () => {
+    const tabData = await ctx.session.getBuildingTabData(req.x, req.y, req.tabId);
+
+    const response: WsRespBuildingTabData = {
+      type: WsMessageType.RESP_BUILDING_TAB_DATA,
+      wsRequestId: msg.wsRequestId,
+      x: req.x,
+      y: req.y,
+      tabId: req.tabId,
+      ...tabData,
     };
     sendResponse(ctx.ws, response);
   });

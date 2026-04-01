@@ -18,7 +18,7 @@ import { handleMapLoad, handleUpdateCamera, handleGetSurface, handleGetAllFacili
 import { handleChatGetUsers, handleChatGetChannels, handleChatGetChannelInfo, handleChatJoinChannel, handleChatSendMessage, handleChatTypingStatus, handleGmChatSend } from './chat-handlers';
 
 // Building inspection & management
-import { handleBuildingFocus, handleBuildingUnfocus, handleGetBuildingCategories, handleGetBuildingFacilities, handlePlaceBuilding, handleBuildCapitol, handleBuildingDetails, handleBuildingSetProperty, handleCloneFacility, handleBuildingUpgrade, handleRenameFacility, handleDeleteFacility, handleConnectFacilities } from './building-handlers';
+import { handleBuildingFocus, handleBuildingUnfocus, handleGetBuildingCategories, handleGetBuildingFacilities, handlePlaceBuilding, handleBuildCapitol, handleBuildingDetails, handleBuildingTabData, handleBuildingSetProperty, handleCloneFacility, handleBuildingUpgrade, handleRenameFacility, handleDeleteFacility, handleConnectFacilities } from './building-handlers';
 
 // Roads
 import { handleBuildRoad, handleGetRoadCost, handleDemolishRoad, handleDemolishRoadArea } from './road-handlers';
@@ -70,6 +70,7 @@ export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   [WsMessageType.REQ_PLACE_BUILDING]: handlePlaceBuilding,
   [WsMessageType.REQ_BUILD_CAPITOL]: handleBuildCapitol,
   [WsMessageType.REQ_BUILDING_DETAILS]: handleBuildingDetails,
+  [WsMessageType.REQ_BUILDING_TAB_DATA]: handleBuildingTabData,
   [WsMessageType.REQ_BUILDING_SET_PROPERTY]: handleBuildingSetProperty,
   [WsMessageType.REQ_CLONE_FACILITY]: handleCloneFacility,
   [WsMessageType.REQ_BUILDING_UPGRADE]: handleBuildingUpgrade,

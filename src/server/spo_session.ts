@@ -1949,6 +1949,23 @@ private handlePush(socketName: string, packet: RdoPacket) {
     return buildingDetailsHandler.getBuildingDetails(this, x, y, visualClass);
   }
 
+  public async getBuildingBasicDetails(x: number, y: number, visualClass: string): Promise<BuildingDetailsResponse> {
+    return buildingDetailsHandler.getBuildingBasicDetails(this, x, y, visualClass);
+  }
+
+  public async getBuildingTabData(x: number, y: number, tabId: string): Promise<{
+    supplies?: import('../shared/types').BuildingSupplyData[];
+    products?: import('../shared/types').BuildingProductData[];
+    compInputs?: import('../shared/types').CompInputData[];
+    warehouseWares?: import('../shared/types').WarehouseWareData[];
+  }> {
+    return buildingDetailsHandler.getBuildingTabData(this, x, y, tabId);
+  }
+
+  public releaseInspector(): void {
+    buildingDetailsHandler.releaseInspector(this);
+  }
+
   // -- BUILDING PROPERTY (facade -> building-property-handler) --------------
   public async setBuildingProperty(x: number, y: number, propertyName: string, value: string, additionalParams?: Record<string, string>): Promise<{ success: boolean; newValue: string }> {
     return buildingPropertyHandler.setBuildingProperty(this, x, y, propertyName, value, additionalParams);

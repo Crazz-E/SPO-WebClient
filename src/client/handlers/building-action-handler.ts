@@ -11,6 +11,8 @@ import {
   WsMessage,
   WsReqBuildingDetails,
   WsRespBuildingDetails,
+  WsReqBuildingTabData,
+  WsRespBuildingTabData,
   WsReqBuildingSetProperty,
   WsRespBuildingSetProperty,
   WsReqBuildingUpgrade,
@@ -81,6 +83,52 @@ export async function refreshBuildingDetails(ctx: ClientHandlerContext, x: numbe
   const details = await requestBuildingDetails(ctx, x, y, vc);
   if (details) {
     ClientBridge.updateBuildingDetails(details);
+  }
+}
+
+// ── Tab Data (Lazy Loading) ─────────────────────────────────────────────────
+
+/** Special tab IDs that require lazy loading. */
+const LAZY_TAB_IDS = new Set(['supplies', 'products', 'compInputs', 'whGeneral']);
+
+export function isLazyTab(tabId: string): boolean {
+  return LAZY_TAB_IDS.has(tabId);
+}
+
+export async function requestTabData(
+  ctx: ClientHandlerContext,
+  x: number,
+  y: number,
+  tabId: string,
+  visualClass: string,
+): Promise<void> {
+  const store = useBuildingStore.getState();
+
+  // Already loaded or loading — skip
+  const state = store.tabLoadingStates[tabId];
+  if (state === 'loaded' || state === 'loading') return;
+
+  ClientBridge.log('Building', `Requesting tab data: ${tabId} at (${x},${y})`);
+  store.setTabLoading(tabId);
+
+  try {
+    const req: WsReqBuildingTabData = {
+      type: WsMessageType.REQ_BUILDING_TAB_DATA,
+      x,
+      y,
+      tabId,
+      visualClass,
+    };
+
+    const response = await ctx.sendRequest(req, 30000) as WsRespBuildingTabData;
+    store.mergeTabData(tabId, response);
+    ClientBridge.log('Building', `Tab data received: ${tabId}`);
+  } catch (err: unknown) {
+    ClientBridge.log('Error', `Failed to get tab data ${tabId}: ${toErrorMessage(err)}`);
+    // Reset to idle so user can retry
+    useBuildingStore.setState((s) => ({
+      tabLoadingStates: { ...s.tabLoadingStates, [tabId]: 'idle' },
+    }));
   }
 }
 

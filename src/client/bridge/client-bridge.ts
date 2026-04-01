@@ -160,6 +160,7 @@ export interface ClientCallbacks {
   onSetBuildingProperty: (x: number, y: number, propertyName: string, value: string, additionalParams?: Record<string, string>) => void;
   onUpgradeBuilding: (x: number, y: number, action: string, count?: number) => void;
   onRefreshBuilding: (x: number, y: number) => void;
+  onRequestTabData: (x: number, y: number, tabId: string, visualClass: string) => void;
   onRenameBuilding: (x: number, y: number, newName: string) => void;
   onDeleteBuilding: (x: number, y: number) => void;
   onNavigateToBuilding: (x: number, y: number) => void;

@@ -167,6 +167,8 @@ export type {
   // Building details messages
   WsReqBuildingDetails,
   WsRespBuildingDetails,
+  WsReqBuildingTabData,
+  WsRespBuildingTabData,
   WsReqBuildingSetProperty,
   WsRespBuildingSetProperty,
   WsReqBuildingUpgrade,

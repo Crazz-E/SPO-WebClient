@@ -14,6 +14,7 @@ import { usePoliticsStore } from '../../store/politics-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store';
 import { useClient } from '../../context';
+import { isLazyTab } from '../../handlers/building-action-handler';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
 import type { BuildingDetailsTab, BuildingPropertyValue } from '@/shared/types';
 import { IconButton, Skeleton, TabBar } from '../common';
@@ -102,18 +103,36 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     setIsRenaming(false);
   }, []);
 
-  // Auto-refresh building details while panel is open
+  // Auto-refresh building details while panel is open.
+  // Refreshes basic properties and resets the active lazy tab so it re-fetches.
   const refreshTimer = useRef<ReturnType<typeof setInterval>>(undefined);
   useEffect(() => {
     if (!details) return;
     const x = details.x;
     const y = details.y;
+    const vc = details.visualClass;
+
+    const doRefresh = () => {
+      client.onRefreshBuilding(x, y);
+
+      // Reset the active lazy tab so it re-fetches after the basic refresh
+      const activeTab = details.tabs.find((t) => t.id === currentTab);
+      const lazyId = activeTab?.special && isLazyTab(activeTab.special)
+        ? activeTab.special
+        : activeTab && isLazyTab(activeTab.id) ? activeTab.id : null;
+      if (lazyId) {
+        // Mark as idle so the lazy-load effect re-triggers
+        useBuildingStore.setState((s) => ({
+          tabLoadingStates: { ...s.tabLoadingStates, [lazyId]: 'idle' },
+        }));
+        // Re-request the tab data
+        client.onRequestTabData(x, y, lazyId, vc);
+      }
+    };
 
     const startTimer = () => {
       clearInterval(refreshTimer.current);
-      refreshTimer.current = setInterval(() => {
-        client.onRefreshBuilding(x, y);
-      }, AUTO_REFRESH_INTERVAL);
+      refreshTimer.current = setInterval(doRefresh, AUTO_REFRESH_INTERVAL);
     };
 
     const onVisibilityChange = () => {
@@ -130,7 +149,27 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
       clearInterval(refreshTimer.current);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [details?.x, details?.y, client]);
+  }, [details?.x, details?.y, details?.visualClass, details?.tabs, currentTab, client]);
+
+  // Lazy tab loading state
+  const tabLoadingStates = useBuildingStore((s) => s.tabLoadingStates);
+
+  // Trigger lazy fetch when switching to a tab that needs on-demand data
+  useEffect(() => {
+    if (!details || isCivic) return;
+
+    // Find the active tab's special field
+    const activeTab = details.tabs.find((t) => t.id === currentTab);
+    const tabSpecial = activeTab?.special;
+    // Also check the tab id itself (e.g. 'whGeneral' is the tab id for warehouse)
+    const lazyId = tabSpecial && isLazyTab(tabSpecial) ? tabSpecial
+      : activeTab && isLazyTab(activeTab.id) ? activeTab.id
+      : null;
+
+    if (lazyId && tabLoadingStates[lazyId] !== 'loaded' && tabLoadingStates[lazyId] !== 'loading') {
+      client.onRequestTabData(details.x, details.y, lazyId, details.visualClass);
+    }
+  }, [currentTab, details?.x, details?.y, details?.visualClass, details?.tabs, isCivic, tabLoadingStates, client]);
 
   // Loading state
   if (isLoading || (!details && focusedBuilding)) {
@@ -291,13 +330,32 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
             isCandidate={isCandidate}
             holdsOffice={holdsOffice}
           />
-        ) : (
-          <PropertyGroup
-            properties={standardProperties}
-            buildingX={details.x}
-            buildingY={details.y}
-          />
-        )}
+        ) : (() => {
+          // Check if active tab needs lazy data that's still loading
+          const activeTabDef = details.tabs.find((t) => t.id === currentTab);
+          const lazyId = activeTabDef?.special && isLazyTab(activeTabDef.special)
+            ? activeTabDef.special
+            : activeTabDef && isLazyTab(activeTabDef.id) ? activeTabDef.id : null;
+          const tabState = lazyId ? tabLoadingStates[lazyId] : undefined;
+
+          if (lazyId && tabState === 'loading') {
+            return (
+              <div className={styles.loadingState}>
+                <Skeleton width="100%" height="24px" />
+                <Skeleton width="80%" height="18px" />
+                <Skeleton width="100%" height="120px" />
+              </div>
+            );
+          }
+
+          return (
+            <PropertyGroup
+              properties={standardProperties}
+              buildingX={details.x}
+              buildingY={details.y}
+            />
+          );
+        })()}
       </div>
     </div>
   );

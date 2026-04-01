@@ -1,10 +1,13 @@
 /**
  * Building details handler — extracted from StarpeaceSession.
  *
- * Every public function takes `ctx: SessionContext` as its first argument.
- * Private helpers (`parseMoneyGraph`, `getSupplyPaths`, `fetchSupplyDetails`,
- * `fetchCompInputData`, `getProductPaths`, `fetchProductDetails`,
- * `fetchSubObjectProperties`) are module-private functions (not exported).
+ * Supports lazy tab loading: `getBuildingBasicDetails` fetches lightweight
+ * building info (Phase 1+2), while `getBuildingTabData` fetches heavy
+ * tab-specific data (supplies, products, compInputs, warehouseWares) on demand.
+ *
+ * An `ActiveInspector` keeps the Delphi temp object alive between tab requests.
+ * An `AsyncMutex` serializes SetPath calls on the same object to prevent
+ * state corruption from concurrent tab clicks.
  */
 
 import type { SessionContext } from './session-context';
@@ -27,14 +30,86 @@ import { RdoValue } from '../../shared/rdo-types';
 import { toErrorMessage } from '../../shared/error-utils';
 
 // =========================================================================
+// ASYNC MUTEX — serializes SetPath calls on a shared Delphi temp object
+// =========================================================================
+
+class AsyncMutex {
+  private queue: Array<() => void> = [];
+  private locked = false;
+
+  async acquire(): Promise<() => void> {
+    if (!this.locked) {
+      this.locked = true;
+      return () => this.release();
+    }
+    return new Promise<() => void>((resolve) => {
+      this.queue.push(() => { resolve(() => this.release()); });
+    });
+  }
+
+  private release(): void {
+    const next = this.queue.shift();
+    if (next) {
+      next();
+    } else {
+      this.locked = false;
+    }
+  }
+}
+
+// =========================================================================
+// ACTIVE INSPECTOR — keeps Delphi temp object alive between tab requests
+// =========================================================================
+
+export interface ActiveInspector {
+  tempObjectId: string;
+  x: number;
+  y: number;
+  visualClass: string;
+  mutex: AsyncMutex;
+  gateMap: string;
+  /** Cached template for tab-to-special mapping. */
+  hasSupplies: boolean;
+  hasProducts: boolean;
+  hasCompInputs: boolean;
+  isWarehouse: boolean;
+}
+
+/** Per-session active inspector keyed by session context. */
+const activeInspectors = new WeakMap<SessionContext, ActiveInspector>();
+
+/**
+ * Release the active inspector's Delphi temp object.
+ * Called on building deselect, new building select, or session disconnect.
+ */
+export function releaseInspector(ctx: SessionContext): void {
+  const inspector = activeInspectors.get(ctx);
+  if (inspector) {
+    ctx.log.debug(`[BuildingDetails] Releasing inspector object ${inspector.tempObjectId} at (${inspector.x},${inspector.y})`);
+    ctx.cacherCloseObject(inspector.tempObjectId);
+    activeInspectors.delete(ctx);
+  }
+}
+
+/**
+ * Get the active inspector for a session (if any, and if coordinates match).
+ */
+export function getActiveInspector(ctx: SessionContext, x: number, y: number): ActiveInspector | undefined {
+  const inspector = activeInspectors.get(ctx);
+  if (inspector && inspector.x === x && inspector.y === y) {
+    return inspector;
+  }
+  return undefined;
+}
+
+// =========================================================================
 // PUBLIC API
 // =========================================================================
 
 /**
  * Get building details with deduplication of concurrent requests.
- * The client fires speculative prefetch, event refresh, and retry requests
- * that can create 10+ concurrent calls — each spawning temp objects and
- * product queries on the Delphi server. Return the same promise instead.
+ * Legacy full-fetch path: loads basic + all tab data in one call.
+ * Used by auto-refresh and backward-compatible code paths.
  */
 export async function getBuildingDetails(
   ctx: SessionContext,
@@ -58,27 +133,28 @@ export async function getBuildingDetails(
   }
 }
 
-// =========================================================================
-// PRIVATE HELPERS
-// =========================================================================
-
 /**
- * Full building details implementation — fetches properties, supplies,
- * products, and company inputs via the cacher object pool.
+ * Lazy Phase 1+2: Fetch basic building details (properties, tabs, moneyGraph).
+ * Keeps the Delphi temp object alive as an ActiveInspector for subsequent
+ * tab-specific requests via `getBuildingTabData`.
  */
-async function getBuildingDetailsImpl(
+export async function getBuildingBasicDetails(
   ctx: SessionContext,
   x: number,
   y: number,
   visualClass: string
 ): Promise<BuildingDetailsResponse> {
-  ctx.log.debug(`[BuildingDetails] Fetching details for building at (${x}, ${y}), visualClass: ${visualClass}`);
+  // Release any previous inspector for a different building
+  const prev = activeInspectors.get(ctx);
+  if (prev && (prev.x !== x || prev.y !== y)) {
+    releaseInspector(ctx);
+  }
 
-  // Get template for this building type
+  ctx.log.debug(`[BuildingDetails] Basic details for (${x},${y}), vc=${visualClass}`);
+
   const template = getTemplateForVisualClass(visualClass);
-  ctx.log.debug(`[BuildingDetails] Using template: ${template.name}`);
 
-  // First, get basic building info via focusBuilding (this always works)
+  // Focus building
   let buildingName = '';
   let ownerName = '';
   let buildingId = '';
@@ -87,7 +163,6 @@ async function getBuildingDetailsImpl(
     buildingName = focusInfo.buildingName;
     ownerName = focusInfo.ownerName;
     buildingId = focusInfo.buildingId;
-    ctx.log.debug(`[BuildingDetails] Focus info: name="${buildingName}", owner="${ownerName}"`);
   } catch (e: unknown) {
     ctx.log.warn(`[BuildingDetails] Could not focus building:`, e);
   }
@@ -102,280 +177,191 @@ async function getBuildingDetailsImpl(
   const tempObjectId = await ctx.cacherCreateObject();
 
   try {
-    // Set object to the building coordinates
     await ctx.cacherSetObject(tempObjectId, x, y);
 
-    // Collect property names with structured output for two-phase fetching
-    const collected = collectTemplatePropertyNamesStructured(template);
-    const allValues = new Map<string, string>();
-    const BATCH_SIZE = 50;
+    // Phase 1+2: Fetch properties (same as getBuildingDetailsImpl)
+    const { allValues, groups, moneyGraph } = await fetchPropertiesAndGroups(ctx, tempObjectId, template);
 
-    // Phase 1: Fetch regular properties and count properties
-    const phase1Props = [...collected.regularProperties, ...collected.countProperties];
+    // Enrich votes tab
+    await enrichVotesTab(ctx, groups, allValues);
 
-    for (let i = 0; i < phase1Props.length; i += BATCH_SIZE) {
-      const batch = phase1Props.slice(i, i + BATCH_SIZE);
-      const values = await ctx.cacherGetPropertyList(tempObjectId, batch);
+    // Determine which special tabs exist
+    const hasSupplies = template.groups.some(g => g.special === 'supplies');
+    const hasProducts = template.groups.some(g => g.special === 'products');
+    const hasCompInputs = template.groups.some(g => g.special === 'compInputs');
+    const isWarehouse = template.groups.some(g => g.id === 'whGeneral');
 
-      for (let j = 0; j < batch.length; j++) {
-        const value = j < values.length ? values[j] : '';
-        // Allow empty strings — server returns '' for unset properties (e.g. blank Name field)
-        if (value !== 'error') {
-          allValues.set(batch[j], value);
-        }
-      }
-    }
+    // Store as active inspector (keep temp object alive)
+    const inspector: ActiveInspector = {
+      tempObjectId,
+      x,
+      y,
+      visualClass,
+      mutex: new AsyncMutex(),
+      gateMap: allValues.get('GateMap') || '',
+      hasSupplies,
+      hasProducts,
+      hasCompInputs,
+      isWarehouse,
+    };
+    activeInspectors.set(ctx, inspector);
 
-    ctx.log.debug(`[BuildingDetails] Phase 1 done (${allValues.size} values, ${collected.countProperties.length} count props, groups=${template.groups.length})`);
+    const response: BuildingDetailsResponse = {
+      buildingId: buildingId || allValues.get('ObjectId') || allValues.get('CurrBlock') || '',
+      x,
+      y,
+      visualClass,
+      templateName: template.name,
+      buildingName,
+      ownerName,
+      securityId: allValues.get('SecurityId') || '',
+      tabs: template.groups.map(g => ({
+        id: g.id,
+        name: g.name,
+        icon: g.icon || '',
+        order: g.order,
+        special: g.special,
+        handlerName: g.handlerName || '',
+      })),
+      groups,
+      // Lazy: supplies/products/compInputs/warehouseWares not fetched yet
+      supplies: undefined,
+      products: undefined,
+      compInputs: undefined,
+      warehouseWares: undefined,
+      moneyGraph,
+      timestamp: Date.now(),
+    };
 
-    // Phase 2: Fetch indexed properties based on count values
-		const indexedProps: string[] = [];
-		const countValues = new Map<string, number>();
+    return response;
+  } catch (e: unknown) {
+    // On error, clean up the temp object
+    ctx.cacherCloseObject(tempObjectId);
+    activeInspectors.delete(ctx);
+    throw e;
+  }
+}
 
-		for (const countProp of collected.countProperties) {
-		  const countStr = allValues.get(countProp);
-		  const count = countStr ? parseInt(countStr, 10) : 0;
-		  countValues.set(countProp, count);
-		  ctx.log.debug(`[BuildingDetails] Count: ${countProp} = "${countStr}" (parsed: ${count})`);
-		  if (count > 50) {
-		    ctx.log.warn(`[BuildingDetails] Unusually high count: ${countProp} = ${count}`);
-		  }
+/**
+ * Lazy Phase 3+4: Fetch tab-specific data using the active inspector's temp object.
+ * Serialized via mutex to prevent SetPath race conditions.
+ */
+export async function getBuildingTabData(
+  ctx: SessionContext,
+  x: number,
+  y: number,
+  tabId: string,
+): Promise<{
+  supplies?: BuildingSupplyData[];
+  products?: BuildingProductData[];
+  compInputs?: CompInputData[];
+  warehouseWares?: WarehouseWareData[];
+}> {
+  const inspector = getActiveInspector(ctx, x, y);
+  if (!inspector) {
+    ctx.log.warn(`[BuildingDetails] No active inspector for (${x},${y}), tab=${tabId}`);
+    throw new Error(`No active inspector for building at (${x},${y})`);
+  }
 
-		  // Build indexed property names based on actual count
-		  const indexedDefs = collected.indexedByCount.get(countProp) || [];
-		  for (const def of indexedDefs) {
-			const suffix = def.indexSuffix || '';
+  const { tempObjectId, mutex, gateMap } = inspector;
+  const release = await mutex.acquire();
 
-			if (def.columns) {
-			  // TABLE type: columns loop generates all needed property names
-			  // (skip base rdoName to avoid duplicates when a column rdoSuffix matches it)
-			  for (const col of def.columns) {
-				const colSuffix = col.indexSuffix !== undefined ? col.indexSuffix : suffix;
-				for (let idx = 0; idx < count; idx++) {
-				  indexedProps.push(`${col.rdoSuffix}${idx}${col.columnSuffix || ''}${colSuffix}`);
-				}
-			  }
-			} else {
-			  // Non-TABLE indexed property
-			  for (let idx = 0; idx < count; idx++) {
-				indexedProps.push(`${def.rdoName}${idx}${suffix}`);
-				if (def.maxProperty) {
-				  indexedProps.push(`${def.maxProperty}${idx}${suffix}`);
-				}
-			  }
-			}
-		  }
-		}
+  try {
+    ctx.log.debug(`[BuildingDetails] Tab data for (${x},${y}), tab=${tabId}`);
 
-    // Fetch indexed properties
-    if (indexedProps.length > 0) {
-      ctx.log.debug(`[BuildingDetails] Fetching ${indexedProps.length} indexed properties: ${indexedProps.slice(0, 20).join(', ')}${indexedProps.length > 20 ? '...' : ''}`);
-      for (let i = 0; i < indexedProps.length; i += BATCH_SIZE) {
-        const batch = indexedProps.slice(i, i + BATCH_SIZE);
-        const values = await ctx.cacherGetPropertyList(tempObjectId, batch);
-
-        for (let j = 0; j < batch.length; j++) {
-          const value = j < values.length ? values[j] : '';
-          // Allow empty strings — server returns '' for unset properties (e.g. blank Name field)
-          if (value !== 'error') {
-            allValues.set(batch[j], value);
-            // Log TABLE column values for debugging (srvNames/srvPrices/etc.)
-            if (batch[j].startsWith('srv')) {
-              ctx.log.debug(`[BuildingDetails] TABLE: ${batch[j]} = "${value}"`);
-            }
-          }
-        }
-      }
-    }
-
-    // Build response grouped by tabs
-    // Build response grouped by tabs
-		const groups: { [groupId: string]: BuildingPropertyValue[] } = {};
-
-		for (const group of template.groups) {
-		  const groupValues: BuildingPropertyValue[] = [];
-		  const includedCountProps = new Set<string>();
-
-		  for (const prop of group.properties) {
-			const suffix = prop.indexSuffix || '';
-
-			// Handle WORKFORCE_TABLE type specially
-			if (prop.type === 'WORKFORCE_TABLE') {
-			  // Add all workforce properties for 3 worker classes (0, 1, 2)
-			  for (let i = 0; i < 3; i++) {
-				const workerProps = [
-				  `Workers${i}`,
-				  `WorkersMax${i}`,
-				  `WorkersK${i}`,
-				  `Salaries${i}`,
-				  `WorkForcePrice${i}`,
-				];
-
-				for (const propName of workerProps) {
-				  const value = allValues.get(propName);
-				  if (value !== undefined) {
-					groupValues.push({
-					  name: propName,
-					  value: value,
-					  index: i,
-					});
-				  }
-				}
-			  }
-			  continue;
-			}
-
-			if ((prop.type === 'TABLE' || prop.type === 'SERVICE_CARDS') && prop.columns && prop.countProperty) {
-			  // TABLE/SERVICE_CARDS type: include count + individual column values grouped by row index
-			  const count = countValues.get(prop.countProperty) || 0;
-			  // Include the count property so the client renderer knows how many rows to render
-			  const countVal = allValues.get(prop.countProperty);
-			  if (countVal !== undefined) {
-				groupValues.push({ name: prop.countProperty, value: countVal });
-			  }
-			  for (let idx = 0; idx < count; idx++) {
-				for (const col of prop.columns) {
-				  const colSuffix = col.indexSuffix !== undefined ? col.indexSuffix : suffix;
-				  const colName = `${col.rdoSuffix}${idx}${col.columnSuffix || ''}${colSuffix}`;
-				  const colValue = allValues.get(colName);
-				  if (colValue !== undefined) {
-					groupValues.push({
-					  name: colName,
-					  value: colValue,
-					  index: idx,
-					});
-				  }
-				}
-			  }
-			} else if (prop.indexed && prop.countProperty) {
-			  // Handle indexed properties using the count value
-			  const count = countValues.get(prop.countProperty) || 0;
-
-			  // Include the count property so the client knows how many items exist
-			  if (!includedCountProps.has(prop.countProperty)) {
-				includedCountProps.add(prop.countProperty);
-				const countVal = allValues.get(prop.countProperty);
-				if (countVal !== undefined) {
-				  groupValues.push({ name: prop.countProperty, value: countVal });
-				}
-			  }
-
-			  for (let idx = 0; idx < count; idx++) {
-				const propName = `${prop.rdoName}${idx}${suffix}`;
-				const value = allValues.get(propName);
-
-				if (value !== undefined) {
-				  groupValues.push({
-					name: propName,
-					value: value,
-					index: idx,
-				  });
-				}
-
-				// Also get max property if defined
-				if (prop.maxProperty) {
-				  const maxPropName = `${prop.maxProperty}${idx}${suffix}`;
-				  const maxValue = allValues.get(maxPropName);
-				  if (maxValue !== undefined) {
-					groupValues.push({
-					  name: maxPropName,
-					  value: maxValue,
-					  index: idx,
-					});
-				  }
-				}
-			  }
-			} else if (prop.indexed) {
-			  // Indexed without count property - use fixed range (0-9)
-			  for (let idx = 0; idx < 10; idx++) {
-				const propName = `${prop.rdoName}${idx}${suffix}`;
-				const value = allValues.get(propName);
-
-				if (value !== undefined) {
-				  groupValues.push({
-					name: propName,
-					value: value,
-					index: idx,
-				  });
-
-				  if (prop.maxProperty) {
-					const maxPropName = `${prop.maxProperty}${idx}${suffix}`;
-					const maxValue = allValues.get(maxPropName);
-					if (maxValue !== undefined) {
-					  groupValues.push({
-						name: maxPropName,
-						value: maxValue,
-						index: idx,
-					  });
-					}
-				  }
-				}
-			  }
-			} else {
-          // Regular property
-          const value = allValues.get(prop.rdoName);
-          if (value !== undefined) {
-            groupValues.push({
-              name: prop.rdoName,
-              value: value,
-            });
-
-            // Also get max property if defined
-            if (prop.maxProperty) {
-              const maxValue = allValues.get(prop.maxProperty);
-              if (maxValue !== undefined) {
-                groupValues.push({
-                  name: prop.maxProperty,
-                  value: maxValue,
-                });
-              }
-            }
-          }
-        }
-      }
-
-      if (groupValues.length > 0) {
-        groups[group.id] = groupValues;
-      }
-    }
-
-    // Enrich votes tab with VoteOf (requires separate RDO call on CurrBlock)
-    if (groups['votes']) {
-      const currBlock = allValues.get('CurrBlock');
-      const username = ctx.activeUsername || ctx.cachedUsername || '';
-      if (currBlock && username) {
+    if (tabId === 'supplies' && inspector.hasSupplies) {
+      const supplyPaths = await getSupplyPaths(ctx, tempObjectId);
+      const supplies: BuildingSupplyData[] = [];
+      for (const { path, name } of supplyPaths) {
         try {
-          if (!ctx.getSocket('construction')) {
-            await ctx.connectConstructionService();
-          }
-          const voteOfPacket = await ctx.sendRdoRequest('construction', {
-            verb: RdoVerb.SEL,
-            targetId: currBlock,
-            action: RdoAction.CALL,
-            member: 'RDOVoteOf',
-            separator: '"^"',
-            args: [RdoValue.string(username).format()],
-          });
-          const votedFor = parsePropertyResponseHelper(voteOfPacket.payload || '', 'res');
-          if (votedFor) {
-            groups['votes'].push({ name: 'VoteOf', value: votedFor });
-          }
+          const detail = await fetchSupplyDetails(ctx, tempObjectId, path, name);
+          if (detail) supplies.push(detail);
         } catch (e: unknown) {
-          ctx.log.debug(`[BuildingDetails] VoteOf enrichment failed: ${toErrorMessage(e)}`);
+          ctx.log.warn(`[BuildingDetails] Error fetching supply ${path}:`, e);
         }
       }
+      return { supplies };
     }
 
-    // Parse money graph if available
-    let moneyGraph: number[] | undefined;
-    const moneyGraphInfo = allValues.get('MoneyGraphInfo');
-    if (moneyGraphInfo) {
-      moneyGraph = parseMoneyGraph(moneyGraphInfo);
+    if (tabId === 'products' && inspector.hasProducts) {
+      const productPaths = await getProductPaths(ctx, tempObjectId);
+      const products: BuildingProductData[] = [];
+      for (const { path, name } of productPaths) {
+        try {
+          const detail = await fetchProductDetails(ctx, tempObjectId, path, name);
+          if (detail) products.push(detail);
+        } catch (e: unknown) {
+          ctx.log.warn(`[BuildingDetails] Error fetching product ${path}:`, e);
+        }
+      }
+      return { products };
     }
+
+    if (tabId === 'compInputs' && inspector.hasCompInputs) {
+      const compInputs = await fetchCompInputData(ctx, tempObjectId);
+      return { compInputs };
+    }
+
+    if (tabId === 'whGeneral' && inspector.isWarehouse) {
+      const warehouseWares = await getWarehouseWareNames(ctx, tempObjectId, gateMap);
+      return { warehouseWares };
+    }
+
+    // Tab doesn't need lazy data (already in basic response)
+    return {};
+  } finally {
+    release();
+  }
+}
+
+// =========================================================================
+// PRIVATE HELPERS
+// =========================================================================
+
+/**
+ * Full building details implementation — fetches properties, supplies,
+ * products, and company inputs via the cacher object pool.
+ * Legacy path: loads everything in one shot, closes temp object when done.
+ */
+async function getBuildingDetailsImpl(
+  ctx: SessionContext,
+  x: number,
+  y: number,
+  visualClass: string
+): Promise<BuildingDetailsResponse> {
+  ctx.log.debug(`[BuildingDetails] Fetching details for building at (${x}, ${y}), visualClass: ${visualClass}`);
+
+  const template = getTemplateForVisualClass(visualClass);
+
+  let buildingName = '';
+  let ownerName = '';
+  let buildingId = '';
+  try {
+    const focusInfo = await ctx.focusBuilding(x, y);
+    buildingName = focusInfo.buildingName;
+    ownerName = focusInfo.ownerName;
+    buildingId = focusInfo.buildingId;
+  } catch (e: unknown) {
+    ctx.log.warn(`[BuildingDetails] Could not focus building:`, e);
+  }
+
+  await ctx.connectMapService();
+  if (!ctx.cacherId) {
+    throw new Error('Map service not initialized');
+  }
+
+  const tempObjectId = await ctx.cacherCreateObject();
+
+  try {
+    await ctx.cacherSetObject(tempObjectId, x, y);
+
+    // Phase 1+2: Fetch properties and build groups
+    const { allValues, groups, moneyGraph } = await fetchPropertiesAndGroups(ctx, tempObjectId, template);
+
+    // Enrich votes tab
+    await enrichVotesTab(ctx, groups, allValues);
 
     // Phase 3: Collect supply/product paths while object still points at building.
-    // All building-level queries (GetInputNames, GetOutputNames, compInputs) must
-    // complete BEFORE any SetPath calls, since SetPath changes the object's context.
     const suppliesGroup = template.groups.find(g => g.special === 'supplies');
     const productsGroup = template.groups.find(g => g.special === 'products');
     const compInputsGroup = template.groups.find(g => g.special === 'compInputs');
@@ -389,8 +375,6 @@ async function getBuildingDetailsImpl(
       : undefined;
 
     // Phase 4: Iterate supply/product paths using SetPath on the SAME object.
-    // Delphi TCachedObjectWrap.SetPath() fully resets internal state (fProperties,
-    // fStream) — no need for CreateObject/SetObject/CloseObject per path.
     let supplies: BuildingSupplyData[] | undefined;
     if (supplyPaths.length > 0) {
       supplies = [];
@@ -416,7 +400,8 @@ async function getBuildingDetailsImpl(
         }
       }
     }
-    const response: BuildingDetailsResponse = {
+
+    return {
       buildingId: buildingId || allValues.get('ObjectId') || allValues.get('CurrBlock') || '',
       x,
       y,
@@ -442,10 +427,245 @@ async function getBuildingDetailsImpl(
       timestamp: Date.now(),
     };
 
-    return response;
-
   } finally {
     await ctx.cacherCloseObject(tempObjectId);
+  }
+}
+
+// =========================================================================
+// SHARED HELPERS — used by both legacy getBuildingDetailsImpl and lazy paths
+// =========================================================================
+
+/**
+ * Phase 1+2: Fetch all template properties (regular + indexed) and build
+ * grouped response. Returns the raw allValues map, groups dict, and moneyGraph.
+ */
+async function fetchPropertiesAndGroups(
+  ctx: SessionContext,
+  tempObjectId: string,
+  template: ReturnType<typeof getTemplateForVisualClass>,
+): Promise<{
+  allValues: Map<string, string>;
+  groups: { [groupId: string]: BuildingPropertyValue[] };
+  moneyGraph: number[] | undefined;
+}> {
+  const collected = collectTemplatePropertyNamesStructured(template);
+  const allValues = new Map<string, string>();
+  const BATCH_SIZE = 50;
+
+  // Phase 1: Fetch regular properties and count properties
+  const phase1Props = [...collected.regularProperties, ...collected.countProperties];
+
+  for (let i = 0; i < phase1Props.length; i += BATCH_SIZE) {
+    const batch = phase1Props.slice(i, i + BATCH_SIZE);
+    const values = await ctx.cacherGetPropertyList(tempObjectId, batch);
+
+    for (let j = 0; j < batch.length; j++) {
+      const value = j < values.length ? values[j] : '';
+      if (value !== 'error') {
+        allValues.set(batch[j], value);
+      }
+    }
+  }
+
+  ctx.log.debug(`[BuildingDetails] Phase 1 done (${allValues.size} values, ${collected.countProperties.length} count props, groups=${template.groups.length})`);
+
+  // Phase 2: Fetch indexed properties based on count values
+  const indexedProps: string[] = [];
+  const countValues = new Map<string, number>();
+
+  for (const countProp of collected.countProperties) {
+    const countStr = allValues.get(countProp);
+    const count = countStr ? parseInt(countStr, 10) : 0;
+    countValues.set(countProp, count);
+    ctx.log.debug(`[BuildingDetails] Count: ${countProp} = "${countStr}" (parsed: ${count})`);
+    if (count > 50) {
+      ctx.log.warn(`[BuildingDetails] Unusually high count: ${countProp} = ${count}`);
+    }
+
+    const indexedDefs = collected.indexedByCount.get(countProp) || [];
+    for (const def of indexedDefs) {
+      const suffix = def.indexSuffix || '';
+
+      if (def.columns) {
+        for (const col of def.columns) {
+          const colSuffix = col.indexSuffix !== undefined ? col.indexSuffix : suffix;
+          for (let idx = 0; idx < count; idx++) {
+            indexedProps.push(`${col.rdoSuffix}${idx}${col.columnSuffix || ''}${colSuffix}`);
+          }
+        }
+      } else {
+        for (let idx = 0; idx < count; idx++) {
+          indexedProps.push(`${def.rdoName}${idx}${suffix}`);
+          if (def.maxProperty) {
+            indexedProps.push(`${def.maxProperty}${idx}${suffix}`);
+          }
+        }
+      }
+    }
+  }
+
+  if (indexedProps.length > 0) {
+    ctx.log.debug(`[BuildingDetails] Fetching ${indexedProps.length} indexed properties: ${indexedProps.slice(0, 20).join(', ')}${indexedProps.length > 20 ? '...' : ''}`);
+    for (let i = 0; i < indexedProps.length; i += BATCH_SIZE) {
+      const batch = indexedProps.slice(i, i + BATCH_SIZE);
+      const values = await ctx.cacherGetPropertyList(tempObjectId, batch);
+
+      for (let j = 0; j < batch.length; j++) {
+        const value = j < values.length ? values[j] : '';
+        if (value !== 'error') {
+          allValues.set(batch[j], value);
+          if (batch[j].startsWith('srv')) {
+            ctx.log.debug(`[BuildingDetails] TABLE: ${batch[j]} = "${value}"`);
+          }
+        }
+      }
+    }
+  }
+
+  // Build response grouped by tabs
+  const groups: { [groupId: string]: BuildingPropertyValue[] } = {};
+
+  for (const group of template.groups) {
+    const groupValues: BuildingPropertyValue[] = [];
+    const includedCountProps = new Set<string>();
+
+    for (const prop of group.properties) {
+      const suffix = prop.indexSuffix || '';
+
+      if (prop.type === 'WORKFORCE_TABLE') {
+        for (let i = 0; i < 3; i++) {
+          const workerProps = [
+            `Workers${i}`, `WorkersMax${i}`, `WorkersK${i}`,
+            `Salaries${i}`, `WorkForcePrice${i}`,
+          ];
+          for (const propName of workerProps) {
+            const value = allValues.get(propName);
+            if (value !== undefined) {
+              groupValues.push({ name: propName, value, index: i });
+            }
+          }
+        }
+        continue;
+      }
+
+      if ((prop.type === 'TABLE' || prop.type === 'SERVICE_CARDS') && prop.columns && prop.countProperty) {
+        const count = countValues.get(prop.countProperty) || 0;
+        const countVal = allValues.get(prop.countProperty);
+        if (countVal !== undefined) {
+          groupValues.push({ name: prop.countProperty, value: countVal });
+        }
+        for (let idx = 0; idx < count; idx++) {
+          for (const col of prop.columns) {
+            const colSuffix = col.indexSuffix !== undefined ? col.indexSuffix : suffix;
+            const colName = `${col.rdoSuffix}${idx}${col.columnSuffix || ''}${colSuffix}`;
+            const colValue = allValues.get(colName);
+            if (colValue !== undefined) {
+              groupValues.push({ name: colName, value: colValue, index: idx });
+            }
+          }
+        }
+      } else if (prop.indexed && prop.countProperty) {
+        const count = countValues.get(prop.countProperty) || 0;
+
+        if (!includedCountProps.has(prop.countProperty)) {
+          includedCountProps.add(prop.countProperty);
+          const countVal = allValues.get(prop.countProperty);
+          if (countVal !== undefined) {
+            groupValues.push({ name: prop.countProperty, value: countVal });
+          }
+        }
+
+        for (let idx = 0; idx < count; idx++) {
+          const propName = `${prop.rdoName}${idx}${suffix}`;
+          const value = allValues.get(propName);
+          if (value !== undefined) {
+            groupValues.push({ name: propName, value, index: idx });
+          }
+          if (prop.maxProperty) {
+            const maxPropName = `${prop.maxProperty}${idx}${suffix}`;
+            const maxValue = allValues.get(maxPropName);
+            if (maxValue !== undefined) {
+              groupValues.push({ name: maxPropName, value: maxValue, index: idx });
+            }
+          }
+        }
+      } else if (prop.indexed) {
+        for (let idx = 0; idx < 10; idx++) {
+          const propName = `${prop.rdoName}${idx}${suffix}`;
+          const value = allValues.get(propName);
+          if (value !== undefined) {
+            groupValues.push({ name: propName, value, index: idx });
+            if (prop.maxProperty) {
+              const maxPropName = `${prop.maxProperty}${idx}${suffix}`;
+              const maxValue = allValues.get(maxPropName);
+              if (maxValue !== undefined) {
+                groupValues.push({ name: maxPropName, value: maxValue, index: idx });
+              }
+            }
+          }
+        }
+      } else {
+        const value = allValues.get(prop.rdoName);
+        if (value !== undefined) {
+          groupValues.push({ name: prop.rdoName, value });
+          if (prop.maxProperty) {
+            const maxValue = allValues.get(prop.maxProperty);
+            if (maxValue !== undefined) {
+              groupValues.push({ name: prop.maxProperty, value: maxValue });
+            }
+          }
+        }
+      }
+    }
+
+    if (groupValues.length > 0) {
+      groups[group.id] = groupValues;
+    }
+  }
+
+  // Parse money graph
+  let moneyGraph: number[] | undefined;
+  const moneyGraphInfo = allValues.get('MoneyGraphInfo');
+  if (moneyGraphInfo) {
+    moneyGraph = parseMoneyGraph(moneyGraphInfo);
+  }
+
+  return { allValues, groups, moneyGraph };
+}
+
+/**
+ * Enrich votes tab with VoteOf (requires separate RDO call on CurrBlock).
+ */
+async function enrichVotesTab(
+  ctx: SessionContext,
+  groups: { [groupId: string]: BuildingPropertyValue[] },
+  allValues: Map<string, string>,
+): Promise<void> {
+  if (!groups['votes']) return;
+
+  const currBlock = allValues.get('CurrBlock');
+  const username = ctx.activeUsername || ctx.cachedUsername || '';
+  if (!currBlock || !username) return;
+
+  try {
+    if (!ctx.getSocket('construction')) {
+      await ctx.connectConstructionService();
+    }
+    const voteOfPacket = await ctx.sendRdoRequest('construction', {
+      verb: RdoVerb.SEL,
+      targetId: currBlock,
+      action: RdoAction.CALL,
+      member: 'RDOVoteOf',
+      separator: '"^"',
+      args: [RdoValue.string(username).format()],
+    });
+    const votedFor = parsePropertyResponseHelper(voteOfPacket.payload || '', 'res');
+    if (votedFor) {
+      groups['votes'].push({ name: 'VoteOf', value: votedFor });
+    }
+  } catch (e: unknown) {
+    ctx.log.debug(`[BuildingDetails] VoteOf enrichment failed: ${toErrorMessage(e)}`);
   }
 }
 
@@ -562,6 +782,32 @@ async function getWarehouseWareNames(
 }
 
 /**
+ * Run async tasks with bounded concurrency.
+ * Delphi server has a global critical section + MAX_BUFFER_SIZE=5,
+ * so we limit to 3 concurrent RDO requests to avoid buffer overflow.
+ */
+const MAX_CONCURRENT_CONNECTIONS = 3;
+
+async function batchedParallel<T>(
+  count: number,
+  fn: (index: number) => Promise<T>,
+): Promise<T[]> {
+  const results: T[] = new Array(count);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < count) {
+      const i = nextIndex++;
+      results[i] = await fn(i);
+    }
+  }
+
+  const workerCount = Math.min(MAX_CONCURRENT_CONNECTIONS, count);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+/**
  * Fetch details for a single supply path.
  * Reuses the caller's tempObjectId via SetPath (no CreateObject/CloseObject).
  * SetPath fully resets TCachedObjectWrap internal state on the Delphi server.
@@ -592,11 +838,11 @@ async function fetchSupplyDetails(
   ]);
 
   const connectionCount = parseInt(supplyProps[7] || '0', 10);
-  const connections: BuildingConnectionData[] = [];
+  const clampedCount = Math.min(connectionCount, 20);
 
-  // Fetch connection details
-  for (let i = 0; i < connectionCount && i < 20; i++) {
-    const cnxProps = await fetchSubObjectProperties(ctx, tempObjectId, i, [
+  // Fetch connection details (conservative parallelism: max 3 concurrent)
+  const cnxResults = await batchedParallel(clampedCount, (i) =>
+    fetchSubObjectProperties(ctx, tempObjectId, i, [
       `cnxFacilityName${i}`,
       `cnxCreatedBy${i}`,
       `cnxCompanyName${i}`,
@@ -608,8 +854,11 @@ async function fetchSupplyDetails(
       `ConnectedCnxInfo${i}`,
       `cnxXPos${i}`,
       `cnxYPos${i}`,
-    ]);
+    ])
+  );
 
+  const connections: BuildingConnectionData[] = [];
+  for (const cnxProps of cnxResults) {
     if (cnxProps.length >= 11) {
       connections.push({
         facilityName: cnxProps[0] || '',
@@ -776,11 +1025,11 @@ async function fetchProductDetails(
   ]);
 
   const connectionCount = parseInt(outputProps[6] || '0', 10);
-  const connections: BuildingConnectionData[] = [];
+  const clampedCount = Math.min(connectionCount, 20);
 
-  // Fetch connection details (clients/buyers of this output)
-  for (let i = 0; i < connectionCount && i < 20; i++) {
-    const cnxProps = await fetchSubObjectProperties(ctx, tempObjectId, i, [
+  // Fetch connection details (conservative parallelism: max 3 concurrent)
+  const cnxResults = await batchedParallel(clampedCount, (i) =>
+    fetchSubObjectProperties(ctx, tempObjectId, i, [
       `cnxFacilityName${i}`,
       `cnxCompanyName${i}`,
       `LastValueCnxInfo${i}`,
@@ -788,8 +1037,11 @@ async function fetchProductDetails(
       `tCostCnxInfo${i}`,
       `cnxXPos${i}`,
       `cnxYPos${i}`,
-    ]);
+    ])
+  );
 
+  const connections: BuildingConnectionData[] = [];
+  for (const cnxProps of cnxResults) {
     if (cnxProps.length >= 7) {
       connections.push({
         facilityName: cnxProps[0] || '',

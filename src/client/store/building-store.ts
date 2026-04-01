@@ -46,6 +46,9 @@ interface ConfirmedUpdate {
   timestamp: number;
 }
 
+/** Loading state for lazy tab data. */
+type TabLoadState = 'idle' | 'loading' | 'loaded';
+
 interface BuildingState {
   // Focus
   focusedBuilding: BuildingFocusInfo | null;
@@ -57,6 +60,9 @@ interface BuildingState {
   details: BuildingDetailsResponse | null;
   currentTab: string;
   isLoading: boolean;
+
+  // Lazy tab loading states (keyed by tab special id: 'supplies', 'products', etc.)
+  tabLoadingStates: Record<string, TabLoadState>;
 
   // Ownership context (set by client.ts when showing panel)
   currentCompanyName: string;
@@ -99,6 +105,11 @@ interface BuildingState {
   setConnectionSearching: (searching: boolean) => void;
   clearConnectionPicker: () => void;
 
+  // Lazy tab loading actions
+  setTabLoading: (tabId: string) => void;
+  mergeTabData: (tabId: string, data: Partial<BuildingDetailsResponse>) => void;
+  resetTabLoadingStates: () => void;
+
   // Optimistic SET actions
   setPending: (key: string, value: string) => void;
   confirmPending: (key: string) => void;
@@ -136,6 +147,9 @@ export const useBuildingStore = create<BuildingState>((set) => ({
   currentCompanyName: '',
   ownedCompanyNames: new Set<string>(),
   isOwner: false,
+
+  // Lazy tab loading
+  tabLoadingStates: {},
 
   // Optimistic SET feedback
   pendingUpdates: new Map(),
@@ -202,6 +216,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       isLoading: false,
       isOwner: false,
       research: null,
+      tabLoadingStates: {},
       pendingUpdates: new Map(),
       failedUpdates: new Map(),
       confirmedUpdates: new Map(),
@@ -214,12 +229,36 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       isLoading: true,
       isOwner: false,
       research: null,
+      tabLoadingStates: {},
       pendingUpdates: new Map(),
       failedUpdates: new Map(),
       confirmedUpdates: new Map(),
     }),
 
   clearOverlay: () => set({ isOverlayMode: false }),
+
+  // Lazy tab loading actions
+  setTabLoading: (tabId) =>
+    set((state) => ({
+      tabLoadingStates: { ...state.tabLoadingStates, [tabId]: 'loading' as TabLoadState },
+    })),
+
+  mergeTabData: (tabId, data) =>
+    set((state) => {
+      if (!state.details) return state;
+      return {
+        details: {
+          ...state.details,
+          ...(data.supplies !== undefined ? { supplies: data.supplies } : {}),
+          ...(data.products !== undefined ? { products: data.products } : {}),
+          ...(data.compInputs !== undefined ? { compInputs: data.compInputs } : {}),
+          ...(data.warehouseWares !== undefined ? { warehouseWares: data.warehouseWares } : {}),
+        },
+        tabLoadingStates: { ...state.tabLoadingStates, [tabId]: 'loaded' as TabLoadState },
+      };
+    }),
+
+  resetTabLoadingStates: () => set({ tabLoadingStates: {} }),
 
   // Optimistic SET actions
   setPending: (key, value) =>

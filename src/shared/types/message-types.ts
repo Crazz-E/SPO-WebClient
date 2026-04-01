@@ -15,6 +15,9 @@ import type {
   FacilityDimensions,
   BuildingDetailsResponse,
   BuildingSupplyData,
+  BuildingProductData,
+  CompInputData,
+  WarehouseWareData,
   SearchMenuCategory,
   TownInfo,
   TycoonProfile,
@@ -120,6 +123,8 @@ export enum WsMessageType {
   // Building Details
   REQ_BUILDING_DETAILS = 'REQ_BUILDING_DETAILS',
   RESP_BUILDING_DETAILS = 'RESP_BUILDING_DETAILS',
+  REQ_BUILDING_TAB_DATA = 'REQ_BUILDING_TAB_DATA',
+  RESP_BUILDING_TAB_DATA = 'RESP_BUILDING_TAB_DATA',
   REQ_BUILDING_SET_PROPERTY = 'REQ_BUILDING_SET_PROPERTY',
   RESP_BUILDING_SET_PROPERTY = 'RESP_BUILDING_SET_PROPERTY',
 
@@ -629,6 +634,25 @@ export interface WsReqBuildingDetails extends WsMessage {
 export interface WsRespBuildingDetails extends WsMessage {
   type: WsMessageType.RESP_BUILDING_DETAILS;
   details: BuildingDetailsResponse;
+}
+
+export interface WsReqBuildingTabData extends WsMessage {
+  type: WsMessageType.REQ_BUILDING_TAB_DATA;
+  x: number;
+  y: number;
+  tabId: string;
+  visualClass: string;
+}
+
+export interface WsRespBuildingTabData extends WsMessage {
+  type: WsMessageType.RESP_BUILDING_TAB_DATA;
+  x: number;
+  y: number;
+  tabId: string;
+  supplies?: BuildingSupplyData[];
+  products?: BuildingProductData[];
+  compInputs?: CompInputData[];
+  warehouseWares?: WarehouseWareData[];
 }
 
 export interface WsReqBuildingSetProperty extends WsMessage {
