@@ -67,7 +67,7 @@
   line-height: var(--leading-tight);
 }
 
-/* Sales/occupancy info line */
+/* Sales/occupancy info line (fallback single-line) */
 .salesInfo {
   font-size: var(--text-2xs);
   color: var(--text-secondary);
@@ -79,12 +79,12 @@
   line-height: var(--leading-tight);
 }
 
-/* Multi-line structured sales list */
+/* Multi-line structured sales list — each RDO line = one row */
 .salesList {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-top: 2px;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
 }
 
 .salesRow {
@@ -98,12 +98,13 @@
   justify-content: space-between;
   align-items: baseline;
   gap: var(--space-1);
+  min-width: 0;
 }
 
 .salesCategory {
   font-size: var(--text-2xs);
   color: var(--text-secondary);
-  opacity: 0.7;
+  opacity: 0.8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -113,7 +114,7 @@
 
 .salesPercent {
   font-size: var(--text-2xs);
-  font-weight: var(--font-medium);
+  font-weight: var(--font-semibold);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
@@ -135,7 +136,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin-top: 2px;
+  margin-top: var(--space-1);
+  min-width: 0;
 }
 
 /* Owner/company name */
@@ -157,6 +159,7 @@
   gap: 3px;
   font-size: var(--text-2xs);
   font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   flex-shrink: 0;
 }

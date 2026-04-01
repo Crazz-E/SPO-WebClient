@@ -1,9 +1,21 @@
 /* PropertyGroup — property key-value rows + editable controls */
 
+/* Property grid — 2 columns on desktop, 1 column on tablet/mobile */
 .group {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 1px;
+}
+
+/* Full-width items (tables, upgrade actions, special components) */
+.group > :not(.row) {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1023px) {
+  .group {
+    grid-template-columns: 1fr;
+  }
 }
 
 .row {
@@ -12,8 +24,9 @@
   justify-content: space-between;
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--surface-divider);
-  gap: var(--space-3);
+  gap: var(--space-2);
   transition: background 0.15s;
+  min-width: 0;
 }
 
 .row:hover {
@@ -23,17 +36,21 @@
 .name {
   font-size: var(--text-xs);
   color: var(--text-muted);
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .value {
   font-size: var(--text-sm);
   color: var(--text-primary);
   text-align: right;
-  font-family: var(--font-mono);
   font-weight: var(--font-semibold);
   font-variant-numeric: tabular-nums;
-  word-break: break-all;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .empty {
