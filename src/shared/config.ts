@@ -23,6 +23,10 @@ export const config = {
     port: Number(getEnv('PORT')) || 8080,
     host: getEnv('HOST') || '0.0.0.0',
     singleUserMode: getEnv('SINGLE_USER_MODE') === 'true',
+    /** Force all players into a specific world (format: "zoneId/worldName", e.g. "beta/Shamba"). Temporary test-phase override. */
+    forceWorld: (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__SPO_FORCE_WORLD__ !== undefined)
+      ? (window as unknown as Record<string, unknown>).__SPO_FORCE_WORLD__ as string
+      : getEnv('SPO_FORCE_WORLD') ?? undefined,
   },
 
   /**

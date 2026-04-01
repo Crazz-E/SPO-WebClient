@@ -529,6 +529,9 @@ const server = http.createServer(async (req, res) => {
     if (SINGLE_USER_MODE) {
       body += `\nwindow.__SPO_ELECTRON__=true;`;
     }
+    if (config.server.forceWorld) {
+      body += `\nwindow.__SPO_FORCE_WORLD__=${JSON.stringify(config.server.forceWorld)};`;
+    }
     res.writeHead(200, {
       'Content-Type': 'text/javascript',
       'Cache-Control': 'no-cache',
@@ -858,7 +861,7 @@ const server = http.createServer(async (req, res) => {
       // the /cdn/ proxy when CHUNK_CDN_URL is overridden (e.g., Electron).
       // Uses an external script (CSP-compliant) instead of inline script.
       // In Docker/default mode, config.cdn.url is the default and no injection occurs.
-      if (config.cdn.url !== 'https://spo.zz.works') {
+      if (config.cdn.url !== 'https://spo.zz.works' || config.server.forceWorld) {
         const injection = `<script src="/spo-runtime-config.js"></script>`;
         html = html.replace('</head>', `${injection}</head>`);
       }

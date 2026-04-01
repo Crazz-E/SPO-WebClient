@@ -11,12 +11,24 @@
  * Each stage is a self-contained component that receives callbacks.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useGameStore } from '../store';
 import { useClient } from '../context';
 import { LoginBackground, AuthStage, AuthErrorModal, ZoneStage, WorldStage, CompanyStage } from '../components/login';
+import { config } from '@/shared/config';
+import { WORLD_ZONES } from '@/shared/types/protocol-types';
 import type { WorldZone } from '@/shared/types';
 import styles from './LoginScreen.module.css';
+
+/** Parse "zoneId/worldName" into its parts, or return undefined if invalid. */
+function parseForceWorld(value: string | undefined): { zoneId: string; worldName: string } | undefined {
+  if (!value) return undefined;
+  const slash = value.indexOf('/');
+  if (slash <= 0 || slash === value.length - 1) return undefined;
+  return { zoneId: value.slice(0, slash), worldName: value.slice(slash + 1) };
+}
+
+const forceWorldConfig = parseForceWorld(config.server.forceWorld);
 
 export function LoginScreen() {
   const status = useGameStore((s) => s.status);
@@ -67,6 +79,23 @@ export function LoginScreen() {
     },
     [client, setLoginLoading],
   );
+
+  // Auto-advance zone + world stages when SPO_FORCE_WORLD is set (test phase)
+  const forceAdvancedRef = useRef<{ zones: boolean; worlds: boolean }>({ zones: false, worlds: false });
+  useEffect(() => {
+    if (!forceWorldConfig) return;
+    if (stage === 'zones' && !isLoading && !forceAdvancedRef.current.zones) {
+      const zone = WORLD_ZONES.find((z) => z.id === forceWorldConfig.zoneId);
+      if (zone) {
+        forceAdvancedRef.current.zones = true;
+        handleZoneSelect(zone);
+      }
+    }
+    if (stage === 'worlds' && !isLoading && !forceAdvancedRef.current.worlds) {
+      forceAdvancedRef.current.worlds = true;
+      handleWorldSelect(forceWorldConfig.worldName);
+    }
+  }, [stage, isLoading, handleZoneSelect, handleWorldSelect]);
 
   // Stage D → game: select company
   const handleCompanySelect = useCallback(
