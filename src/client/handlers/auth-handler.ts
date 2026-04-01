@@ -287,11 +287,11 @@ export async function handleCreateCompany(ctx: ClientHandlerContext, companyName
   if (ctx.getMapNavigationUI()) {
     // Full company switch so the server re-authenticates with the new
     // company's context (worldContextId, interfaceServerId, selectCompany)
-    profileSwitchCompany(ctx, resp.companyId, resp.companyName, newCompany.ownerRole);
+    await profileSwitchCompany(ctx, resp.companyId, resp.companyName, newCompany.ownerRole);
     return;
   }
 
-  selectCompanyAndStart(ctx, resp.companyId);
+  await selectCompanyAndStart(ctx, resp.companyId);
 }
 
 export function requestClusterInfo(ctx: ClientHandlerContext, clusterName: string): void {
@@ -330,13 +330,15 @@ export function serverSwitchZoneSelect(ctx: ClientHandlerContext, zonePath: stri
   performDirectoryLogin(ctx, ctx.storedUsername, ctx.storedPassword, zonePath);
 }
 
-export function profileSwitchCompany(ctx: ClientHandlerContext, companyId: number | string, companyName: string, ownerRole: string): void {
+export async function profileSwitchCompany(ctx: ClientHandlerContext, companyId: number | string, companyName: string, ownerRole: string): Promise<void> {
   const company: CompanyInfo = { id: String(companyId), name: companyName, ownerRole };
   useGameStore.getState().setSwitchingCompany(true);
-  ctx.sendRequest({
-    type: WsMessageType.REQ_SWITCH_COMPANY,
-    company,
-  } as WsReqSwitchCompany).then(() => {
+  try {
+    await ctx.sendRequest({
+      type: WsMessageType.REQ_SWITCH_COMPANY,
+      company,
+    } as WsReqSwitchCompany);
+
     ctx.currentCompanyName = companyName;
     ClientBridge.setCompany(companyName, String(companyId));
     ClientBridge.showSuccess(`Switched to ${companyName}`);
@@ -349,11 +351,11 @@ export function profileSwitchCompany(ctx: ClientHandlerContext, companyId: numbe
     useProfileStore.getState().reset();
     useBuildingStore.getState().clearFocus();
     useUiStore.getState().clearBuildMenuData();
-  }).catch((err: unknown) => {
+  } catch (err: unknown) {
     ClientBridge.showError(`Failed to switch company: ${toErrorMessage(err)}`);
-  }).finally(() => {
+  } finally {
     useGameStore.getState().setSwitchingCompany(false);
-  });
+  }
 }
 
 export async function logout(ctx: ClientHandlerContext): Promise<void> {

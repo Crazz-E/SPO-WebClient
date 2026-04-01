@@ -681,6 +681,14 @@ export async function switchCompany(ctx: LoginContext, company: CompanyInfo): Pr
   ctx.log.debug(`[Session] Re-logged in as "${loginUsername}", contextId: ${result.contextId}`);
   ctx.log.debug(`[Session] After switchCompany - interfaceServerId: ${ctx.interfaceServerId}, worldId: ${ctx.worldId}`);
 
+  // Ensure the target company exists in the refreshed list — the ASP endpoint
+  // may serve a cached response that does not yet include a freshly created company.
+  const exists = ctx.getAvailableCompanies().find(c => c.id === company.id);
+  if (!exists) {
+    ctx.log.warn(`[Session] Company "${company.name}" (${company.id}) missing from refreshed list — re-injecting`);
+    ctx.pushAvailableCompany(company);
+  }
+
   // Small delay to ensure socket is fully ready before selecting company
   await new Promise(resolve => setTimeout(resolve, 200));
 

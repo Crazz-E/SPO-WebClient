@@ -327,7 +327,11 @@ export class StarpeaceSession extends EventEmitter {
   public setAvailableWorlds(worlds: Map<string, WorldInfo>): void { this.availableWorlds = worlds; }
   public getAvailableCompanies(): CompanyInfo[] { return this.availableCompanies; }
   public setAvailableCompanies(companies: CompanyInfo[]): void { this.availableCompanies = companies; }
-  public pushAvailableCompany(company: CompanyInfo): void { this.availableCompanies.push(company); }
+  public pushAvailableCompany(company: CompanyInfo): void {
+    if (!this.availableCompanies.some(c => c.id === company.id)) {
+      this.availableCompanies.push(company);
+    }
+  }
   public setKnownObject(name: string, id: string): void { this.knownObjects.set(name, id); }
   public getInitClientReceived(): Promise<void> | null { return this.initClientReceived; }
   public setInitClientReceived(value: Promise<void> | null): void { this.initClientReceived = value; }
