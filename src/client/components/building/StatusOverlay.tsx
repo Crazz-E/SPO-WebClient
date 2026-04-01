@@ -15,6 +15,7 @@ import { worldToScreenCentered } from '../../bridge/client-bridge';
 import { useClient } from '../../context/ClientContext';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
 import { ProgressBar } from '../common';
+import { parseDetailsText } from './QuickStats';
 import styles from './StatusOverlay.module.css';
 
 /** Gap between caret tip and texture top (pixels). */
@@ -159,6 +160,27 @@ export function StatusOverlay() {
         // Fallback: single-line display for non-sales formats
         return <div className={styles.salesInfo}>{building.salesInfo}</div>;
       })()}
+
+      {building.detailsText && (() => {
+        const entries = parseDetailsText(building.detailsText);
+        if (entries.length > 0) {
+          return (
+            <div className={styles.detailGrid}>
+              {entries.map((entry, i) => (
+                <div key={i} className={styles.detailRow}>
+                  <span className={styles.detailLabel}>{entry.label}</span>
+                  <span className={styles.detailValue}>{entry.value}</span>
+                </div>
+              ))}
+            </div>
+          );
+        }
+        return null;
+      })()}
+
+      {building.hintsText && building.hintsText !== 'No hints for this facility.' && (
+        <div className={styles.hint}>{building.hintsText}</div>
+      )}
 
       <div className={styles.infoRow}>
         {building.ownerName && (
