@@ -21,6 +21,7 @@ import { BottomSheet } from './BottomSheet';
 import { ChatBanner } from './ChatBanner';
 import { MobileBuildContent } from './MobileBuildContent';
 import { MobileInfoBar } from './MobileInfoBar';
+import { MinimapToggleButton } from './MinimapToggleButton';
 import { MobileMenu } from './MobileMenu';
 import { PlacementHUD } from './PlacementHUD';
 import styles from './MobileShell.module.css';
@@ -107,6 +108,11 @@ export function MobileShell() {
     <div className={styles.shell} style={{ pointerEvents: 'none' }}>
       {/* Compact info bar at top */}
       <MobileInfoBar />
+
+      {/* Minimap trigger — top-right triangle, only on map tab */}
+      {mobileTab === 'map' && !hasRightPanel && !isPlacingBuilding && (
+        <MinimapToggleButton />
+      )}
 
       {/* Chat banner — only visible on map tab */}
       {mobileTab === 'map' && !hasRightPanel && <ChatBanner />}

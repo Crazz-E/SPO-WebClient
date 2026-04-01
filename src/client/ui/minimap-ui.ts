@@ -93,12 +93,14 @@ export class MinimapUI {
   private renderer: MinimapRendererAPI | null = null;
 
   private visible = false;
+  private fullscreen = false;
   private updateTimer: ReturnType<typeof setInterval> | null = null;
 
   /** Current diamond bounding-box side (always square). */
   private currentSize: number = SIZE_MAP.medium;
 
   private unsubPanel: (() => void) | null = null;
+  private unsubFullscreen: (() => void) | null = null;
 
   /** Cached downsampled terrain colormap canvas. */
   private terrainCanvas: HTMLCanvasElement | null = null;
@@ -118,8 +120,14 @@ export class MinimapUI {
   }
 
   public show(): void {
-    // Never show minimap on mobile — MobileInfoBar replaces it
-    if (typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth < 768) return;
+    // On mobile, DOM is created but hidden — fullscreen store state controls visibility
+    if (this.isMobile()) {
+      this.ensureDOM();
+      if (this.wrapper) this.wrapper.style.display = 'none';
+      this.subscribeFullscreen();
+      return;
+    }
+
     if (this.visible) return;
     this.visible = true;
     this.ensureDOM();
@@ -151,8 +159,10 @@ export class MinimapUI {
 
   public destroy(): void {
     this.visible = false;
+    this.fullscreen = false;
     this.stopUpdating();
     if (this.unsubPanel) { this.unsubPanel(); this.unsubPanel = null; }
+    if (this.unsubFullscreen) { this.unsubFullscreen(); this.unsubFullscreen = null; }
     if (this.wrapper?.parentElement) {
       this.wrapper.parentElement.removeChild(this.wrapper);
     }
@@ -196,6 +206,78 @@ export class MinimapUI {
         this.wrapper.style.left = `${DESKTOP_PAD}px`;
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fullscreen mode (mobile)
+  // ---------------------------------------------------------------------------
+
+  private subscribeFullscreen(): void {
+    if (this.unsubFullscreen) return;
+    let prev = useUiStore.getState().minimapFullscreen;
+    this.unsubFullscreen = useUiStore.subscribe(() => {
+      const next = useUiStore.getState().minimapFullscreen;
+      if (next !== prev) {
+        prev = next;
+        next ? this.enterFullscreen() : this.exitFullscreen();
+      }
+    });
+  }
+
+  private enterFullscreen(): void {
+    if (!this.wrapper || !this.container || !this.canvas) return;
+    this.fullscreen = true;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const fsSize = Math.min(vw, vh);
+    this.currentSize = fsSize;
+
+    // Wrapper: fill viewport as scrim
+    this.wrapper.style.cssText = `
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 500;
+      pointer-events: auto;
+      background: rgba(0,0,0,0.6);
+    `;
+
+    // Scrim tap → close (diamond stopPropagation prevents conflict)
+    this.wrapper.onclick = () => {
+      useUiStore.getState().setMinimapFullscreen(false);
+    };
+
+    // Container: centered diamond
+    this.container.style.position = 'absolute';
+    this.container.style.inset = '';
+    this.container.style.width = `${fsSize}px`;
+    this.container.style.height = `${fsSize}px`;
+    this.container.style.top = '50%';
+    this.container.style.left = '50%';
+    this.container.style.transform = 'translate(-50%, -50%)';
+
+    // Canvas
+    this.canvas.width = fsSize;
+    this.canvas.height = fsSize;
+
+    this.wrapper.style.display = 'block';
+    this.startUpdating();
+  }
+
+  private exitFullscreen(): void {
+    this.fullscreen = false;
+    if (!this.wrapper || !this.container) return;
+
+    this.stopUpdating();
+    this.wrapper.style.display = 'none';
+    this.wrapper.onclick = null;
+
+    // Reset container transform for next open
+    this.container.style.transform = '';
+    this.container.style.top = '';
+    this.container.style.left = '';
   }
 
   // ---------------------------------------------------------------------------
@@ -603,5 +685,10 @@ export class MinimapUI {
       Math.max(0, Math.min(dims.width  - 1, Math.round(tileJ))),
       Math.max(0, Math.min(dims.height - 1, Math.round(tileI))),
     );
+
+    // Auto-close fullscreen minimap after navigation
+    if (this.fullscreen) {
+      useUiStore.getState().setMinimapFullscreen(false);
+    }
   }
 }

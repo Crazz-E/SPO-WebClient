@@ -1,0 +1,33 @@
+/* MinimapToggleButton — top-right triangle trigger for fullscreen minimap */
+
+.trigger {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  right: 0;
+  width: 48px;
+  height: 48px;
+  z-index: var(--z-overlay);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  clip-path: polygon(100% 0%, 100% 100%, 0% 0%);
+  border: none;
+  cursor: pointer;
+  pointer-events: auto;
+  display: none; /* mobile only */
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 6px 6px 0 0;
+  color: var(--accent-gold);
+  transition: background var(--duration-fast, 150ms) var(--ease-default, ease);
+}
+
+.trigger:active {
+  background: var(--glass-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+@media (max-width: 767px) {
+  .trigger {
+    display: flex;
+  }
+}

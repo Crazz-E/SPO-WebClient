@@ -38,6 +38,9 @@ interface UiState {
   mobileTab: MobileTab;
   mobileSheetSnap: SnapPoint;
 
+  // Minimap fullscreen (mobile)
+  minimapFullscreen: boolean;
+
   // Placement mode (building placement on map)
   isPlacingBuilding: boolean;
   placementValid: boolean;
@@ -71,6 +74,10 @@ interface UiState {
   setMobileTab: (tab: MobileTab) => void;
   setMobileSheetSnap: (snap: SnapPoint) => void;
 
+  // Actions — Minimap fullscreen
+  setMinimapFullscreen: (open: boolean) => void;
+  toggleMinimapFullscreen: () => void;
+
   // Actions — Placement
   setIsPlacingBuilding: (v: boolean) => void;
   setPlacementValid: (v: boolean) => void;
@@ -91,6 +98,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   commandPaletteOpen: false,
   mobileTab: 'map',
   mobileSheetSnap: 'half' as SnapPoint,
+  minimapFullscreen: false,
   isPlacingBuilding: false,
   placementValid: false,
 
@@ -156,6 +164,10 @@ export const useUiStore = create<UiState>((set, get) => ({
   setMobileTab: (tab) => set({ mobileTab: tab }),
   setMobileSheetSnap: (snap) => set({ mobileSheetSnap: snap }),
 
+  // Minimap fullscreen
+  setMinimapFullscreen: (open) => set({ minimapFullscreen: open }),
+  toggleMinimapFullscreen: () => set((s) => ({ minimapFullscreen: !s.minimapFullscreen })),
+
   // Placement
   setIsPlacingBuilding: (v) => set({ isPlacingBuilding: v }),
   setPlacementValid: (v) => set({ placementValid: v }),
@@ -163,7 +175,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   // Escape — dismiss topmost layer in priority order
   dismissTopmost: () => {
     const state = get();
-    if (state.commandPaletteOpen) {
+    if (state.minimapFullscreen) {
+      set({ minimapFullscreen: false });
+    } else if (state.commandPaletteOpen) {
       set({ commandPaletteOpen: false });
     } else {
       // Server switch overlay sits at z-450 (above modals z-400)
