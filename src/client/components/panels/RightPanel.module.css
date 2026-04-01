@@ -19,7 +19,7 @@
   position: fixed;
   top: 0;
   right: 0;
-  width: var(--panel-width-desktop, 420px);
+  width: var(--panel-width-desktop, 560px);
   height: 100vh;
   z-index: var(--z-panel);
   background: var(--bg-secondary);
@@ -100,7 +100,7 @@
 /* Tablet */
 @media (max-width: 1023px) {
   .panel {
-    width: var(--panel-width-tablet, 320px);
+    width: var(--panel-width-tablet, 360px);
   }
 }
 

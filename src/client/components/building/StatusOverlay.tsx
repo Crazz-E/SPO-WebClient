@@ -29,17 +29,38 @@ export interface SalesLine {
   percent: number;
 }
 
-/** Parse multi-line salesInfo into structured data. */
+/** Parse multi-line salesInfo into structured data.
+ *  Supports two formats:
+ *  - "Category sales at N%" (one per line, commerce buildings)
+ *  - "Category1: N% Category2: M%..." (inline, storage/warehouse buildings)
+ */
 export function parseSalesLines(salesInfo: string): SalesLine[] {
-  return salesInfo
+  // Try newline-separated "X sales at N%" format first
+  const lines = salesInfo
     .split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 0)
+    .filter(line => line.length > 0);
+
+  const salesAtResults = lines
     .map(line => {
       const match = line.match(/^(.+?)\s+sales\s+at\s+(\d+)%$/i);
       return match ? { category: match[1], percent: parseInt(match[2], 10) } : null;
     })
     .filter((item): item is SalesLine => item !== null);
+
+  if (salesAtResults.length > 0) return salesAtResults;
+
+  // Try inline "Category: N%" format (e.g. "Books: 0% Fresh Food: 4% Organic Materials: 4%.")
+  // Pattern: one or more "Name: digits%" segments separated by spaces
+  const full = salesInfo.trim().replace(/\.$/, ''); // strip trailing period
+  const inlinePattern = /([A-Za-z][A-Za-z &]+?):\s*(\d+)%/g;
+  const inlineResults: SalesLine[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = inlinePattern.exec(full)) !== null) {
+    inlineResults.push({ category: m[1].trim(), percent: parseInt(m[2], 10) });
+  }
+
+  return inlineResults;
 }
 
 /** Determine ProgressBar variant from sales percentage. */

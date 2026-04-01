@@ -254,6 +254,26 @@ describe('StatusOverlay — parseSalesLines()', () => {
     const result = parseSalesLines(input);
     expect(result).toHaveLength(2);
   });
+
+  it('parses inline "Category: N%" format (storage/warehouse)', () => {
+    const input = 'Books: 0% Fresh Food: 4% Organic Materials: 4%.';
+    const result = parseSalesLines(input);
+    expect(result).toHaveLength(3);
+    expect(result[0]).toEqual({ category: 'Books', percent: 0 });
+    expect(result[1]).toEqual({ category: 'Fresh Food', percent: 4 });
+    expect(result[2]).toEqual({ category: 'Organic Materials', percent: 4 });
+  });
+
+  it('parses single inline "Category: N%" entry', () => {
+    expect(parseSalesLines('Books: 100%'))
+      .toEqual([{ category: 'Books', percent: 100 }]);
+  });
+
+  it('prefers "sales at" format over inline when both could match', () => {
+    const input = 'Fresh Food sales at 50%';
+    const result = parseSalesLines(input);
+    expect(result).toEqual([{ category: 'Fresh Food', percent: 50 }]);
+  });
 });
 
 describe('StatusOverlay — salesVariant()', () => {
