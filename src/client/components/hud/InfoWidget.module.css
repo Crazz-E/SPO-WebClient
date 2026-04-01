@@ -4,7 +4,7 @@
   position: absolute;
   top: var(--space-3);
   right: var(--space-3);
-  z-index: 300;
+  z-index: var(--z-overlay);
   min-width: 200px;
   max-width: 260px;
   background: var(--glass-bg);
@@ -233,6 +233,13 @@
   font-size: var(--text-2xs, 0.65rem);
   text-align: right;
   margin-top: 1px;
+}
+
+/* Tablet — use correct panel width for shift */
+@media (max-width: 1023px) {
+  .shifted {
+    right: calc(var(--panel-width-tablet) + var(--space-3));
+  }
 }
 
 /* Mobile — hidden, replaced by MobileInfoBar */

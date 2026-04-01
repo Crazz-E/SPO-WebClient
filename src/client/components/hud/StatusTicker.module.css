@@ -7,7 +7,7 @@
   top: 60px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 350;
+  z-index: calc(var(--z-panel) - 50);
   pointer-events: none;
   max-width: 720px;
   min-width: 200px;

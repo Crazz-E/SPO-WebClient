@@ -4,7 +4,7 @@
   display: none; /* Only on mobile */
   position: fixed;
   inset: 0;
-  z-index: 250; /* Above canvas, below panels */
+  z-index: calc(var(--z-overlay) - 50); /* Above canvas, below panels */
   pointer-events: none;
 }
 

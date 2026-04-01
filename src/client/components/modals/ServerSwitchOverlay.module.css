@@ -3,7 +3,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 449;
+  z-index: calc(var(--z-modal) - 1);
   background: rgba(0, 0, 0, 0.75);
   animation: fadeIn var(--duration-fast) var(--ease-default);
 }
@@ -11,7 +11,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 450;
+  z-index: var(--z-modal);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -24,7 +24,7 @@
   position: fixed;
   top: var(--space-4);
   left: var(--space-4);
-  z-index: 451;
+  z-index: calc(var(--z-modal) + 1);
   display: flex;
   align-items: center;
   gap: var(--space-2);

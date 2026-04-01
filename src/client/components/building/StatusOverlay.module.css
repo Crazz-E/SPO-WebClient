@@ -3,7 +3,7 @@
 
 .overlay {
   position: fixed;
-  z-index: 250;
+  z-index: calc(var(--z-overlay) - 50);
   pointer-events: auto;
   transform: translateX(-50%) translateY(-100%);
   max-width: 300px;

@@ -3,7 +3,7 @@
 .root {
   position: fixed;
   inset: 0;
-  z-index: 300; /* var(--z-overlay): above canvas, below HUD panels */
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;

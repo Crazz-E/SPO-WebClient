@@ -116,10 +116,11 @@
   --z-dropdown: 100;
   --z-sticky: 200;
   --z-overlay: 300;
-  --z-modal: 400;
-  --z-panel: 500;
+  --z-panel: 400;
+  --z-modal: 500;
   --z-toast: 600;
   --z-tooltip: 700;
+  --z-startup: 1000;
 
   /* ---- Transitions ---- */
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
@@ -148,9 +149,17 @@
   --palette-max-height: 400px;
 
   /* ---- Breakpoints (for reference — use in @media queries) ---- */
-  /* --bp-mobile: 480px → 767px  */
-  /* --bp-tablet: 768px → 1023px */
-  /* --bp-desktop: 1024px+       */
+  /* --bp-mobile: 480px → 767px     */
+  /* --bp-tablet: 768px → 1023px    */
+  /* --bp-narrow-desktop: 1024px → 1399px */
+  /* --bp-desktop: 1400px+          */
+}
+
+/* ---- Narrow desktop — reduce panel width to avoid overlap ---- */
+@media (min-width: 1024px) and (max-width: 1399px) {
+  :root {
+    --panel-width-desktop: 420px;
+  }
 }
 
 /* ---- Responsive adjustments ---- */

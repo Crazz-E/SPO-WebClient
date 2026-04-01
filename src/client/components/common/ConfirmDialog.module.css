@@ -1,7 +1,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 500;
+  z-index: var(--z-modal);
   background: rgba(0, 0, 0, 0.6);
   animation: fadeIn var(--duration-fast) var(--ease-default);
   display: flex;

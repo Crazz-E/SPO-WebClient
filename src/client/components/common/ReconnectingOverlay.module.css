@@ -3,7 +3,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 600; /* above CommandPalette (z-500) */
+  z-index: var(--z-toast);
   display: flex;
   align-items: center;
   justify-content: center;

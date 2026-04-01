@@ -6,7 +6,7 @@
   left: 0;
   right: 0;
   height: 56px;
-  z-index: 400;
+  z-index: var(--z-panel);
   background: var(--bg-secondary);
   border-top: 1px solid var(--surface-border);
   display: none; /* Only show on mobile */

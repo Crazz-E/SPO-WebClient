@@ -3,7 +3,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 499;
+  z-index: calc(var(--z-modal) - 1);
   background: rgba(0, 0, 0, 0.4);
   animation: fadeIn var(--duration-fast) var(--ease-default);
 }
@@ -13,7 +13,7 @@
   top: 15vh;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 500;
+  z-index: var(--z-modal);
   width: min(var(--palette-width), calc(100vw - var(--space-8)));
   max-height: var(--palette-max-height);
   background: var(--bg-secondary);

@@ -5,7 +5,7 @@
   bottom: var(--space-2);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 150;
+  z-index: calc(var(--z-sticky) - 50);
   width: var(--chat-box-width);
   max-width: calc(100vw - 140px);
   height: var(--chatstrip-collapsed);
@@ -49,7 +49,7 @@
 /* Channel dropdown */
 .channelSelect {
   position: relative;
-  z-index: 200;
+  z-index: var(--z-sticky);
 }
 
 .channelBtn {
@@ -83,7 +83,7 @@
   border-radius: var(--radius-lg);
   padding: var(--space-1) 0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
-  z-index: 300;
+  z-index: var(--z-overlay);
 }
 
 .channelOption {

@@ -4,7 +4,7 @@
   position: absolute;
   bottom: var(--space-3);
   right: var(--space-3);
-  z-index: 200;
+  z-index: var(--z-sticky);
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -27,6 +27,13 @@
   height: 1px;
   background: var(--surface-border);
   margin: var(--space-1) 0;
+}
+
+/* Tablet — use correct panel width for shift */
+@media (max-width: 1023px) {
+  .shifted {
+    right: calc(var(--panel-width-tablet) + var(--space-3));
+  }
 }
 
 /* Mobile — hidden (map controls not useful on mobile) */

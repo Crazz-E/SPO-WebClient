@@ -94,19 +94,35 @@ export const useUiStore = create<UiState>((set, get) => ({
   isPlacingBuilding: false,
   placementValid: false,
 
-  // Panels
-  openRightPanel: (type) => set({ rightPanel: type }),
+  // Panels — mutual exclusion below 1200px to prevent overlap
+  openRightPanel: (type) => {
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 9999;
+    set({ rightPanel: type, ...(vw < 1200 ? { leftPanel: null } : {}) });
+  },
   closeRightPanel: () => set({ rightPanel: null }),
   toggleRightPanel: (type) => {
     const current = get().rightPanel;
-    set({ rightPanel: current === type ? null : type });
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 9999;
+    if (current === type) {
+      set({ rightPanel: null });
+    } else {
+      set({ rightPanel: type, ...(vw < 1200 ? { leftPanel: null } : {}) });
+    }
   },
 
-  openLeftPanel: (type) => set({ leftPanel: type }),
+  openLeftPanel: (type) => {
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 9999;
+    set({ leftPanel: type, ...(vw < 1200 ? { rightPanel: null } : {}) });
+  },
   closeLeftPanel: () => set({ leftPanel: null }),
   toggleLeftPanel: (type) => {
     const current = get().leftPanel;
-    set({ leftPanel: current === type ? null : type });
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 9999;
+    if (current === type) {
+      set({ leftPanel: null });
+    } else {
+      set({ leftPanel: type, ...(vw < 1200 ? { rightPanel: null } : {}) });
+    }
   },
 
   closeAllPanels: () => set({ rightPanel: null, leftPanel: null }),

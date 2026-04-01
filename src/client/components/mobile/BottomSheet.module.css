@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.25); /* Semi-transparent — map visible behind */
-  z-index: 450;
+  z-index: calc(var(--z-modal) - 50);
   pointer-events: auto; /* override inherited none from .shell */
 }
 
@@ -13,7 +13,7 @@
   bottom: calc(56px + env(safe-area-inset-bottom, 0px)); /* Above BottomNav */
   left: 0;
   right: 0;
-  z-index: 451;
+  z-index: calc(var(--z-modal) - 49);
   pointer-events: auto; /* override inherited none from .shell */
   background: var(--bg-secondary);
   border-top-left-radius: var(--radius-xl);

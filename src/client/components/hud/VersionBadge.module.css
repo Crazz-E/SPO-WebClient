@@ -2,7 +2,7 @@
   position: fixed;
   bottom: var(--space-2);
   right: var(--space-3);
-  z-index: 100;
+  z-index: var(--z-dropdown);
   font-size: var(--text-xs);
   color: var(--text-disabled);
   text-align: right;
