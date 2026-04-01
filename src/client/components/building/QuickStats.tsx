@@ -23,29 +23,77 @@ export interface DetailEntry {
   value: string;
 }
 
+/** Known detail keys from the SPO server.
+ *  Ordered longest-first so greedy match picks the right key.
+ *  Expand this list as new formats are discovered via [DETAILS-DEBUG] logging. */
+const KNOWN_DETAIL_KEYS: string[] = [
+  'Potential customers (per day)',
+  'Research Implementation',
+  'Actual customers',
+  'Upgrade Level',
+  'Desirability',
+  'Professionals',
+  'Items Sold',
+  'Efficiency',
+  'Producing',
+  'Storing',
+  'Workers',
+];
+
+/** Build the key-matching regex once.
+ *  Matches known keys literally, dynamic "X Coverage" keys, and
+ *  a generic fallback for any "CapitalWord(s):" pattern. */
+const KEY_PATTERN = new RegExp(
+  '(' +
+  KNOWN_DETAIL_KEYS.map(k => k.replace(/[()]/g, '\\$&')).join('|') +
+  '|[A-Z][a-z]+ Coverage' +       // dynamic coverage keys (School, Hospital, etc.)
+  '|[A-Z][A-Za-z]+(?: [A-Za-z]+)?' + // generic 1-2 word capitalized key
+  '):\\s*',
+  'g',
+);
+
 /** Parse detailsText into structured key-value entries.
- *  Handles formats like:
- *  - "Upgrade Level: 1  Storing: 211370 kg of Fresh Food at 51% qualiy index."
- *  - "Drug Store.  Upgrade Level: 1  Items Sold: 18/h  Efficiency: 92%"
- *  Returns empty array if text doesn't contain "Key: value" patterns.
+ *  Uses a hybrid known-key dictionary + generic fallback approach.
+ *  Handles all known SPO building formats including production, retail,
+ *  public facilities, storage, and workforce details.
  */
 export function parseDetailsText(text: string): DetailEntry[] {
   if (!text || !text.includes(':')) return [];
 
-  // Split on key boundaries: a capital letter word followed by colon,
-  // preceded by double-space or sentence boundary (period + space).
-  // We use a lookahead split to keep the keys.
-  const segments = text.split(/(?:^|\s{2,}|(?<=\.)\s+)(?=[A-Z][A-Za-z ]*:)/);
+  // Normalize: insert space after period before uppercase to fix "1.Workers" → "1. Workers"
+  let normalized = text.replace(/\.(?=[A-Z])/g, '. ');
+
+  // Strip preamble: leading text before first key that has no colon (e.g. "Drug Store.")
+  const firstKeyMatch = KEY_PATTERN.exec(normalized);
+  KEY_PATTERN.lastIndex = 0; // reset stateful regex
+  if (firstKeyMatch && firstKeyMatch.index > 0) {
+    const preamble = normalized.substring(0, firstKeyMatch.index).trim();
+    // Only strip if preamble contains no colon (pure label text, not a key:value)
+    if (!preamble.includes(':')) {
+      normalized = normalized.substring(firstKeyMatch.index);
+    }
+  }
+
+  // Scan for all key positions using matchAll
+  const matches = [...normalized.matchAll(KEY_PATTERN)];
+  if (matches.length === 0) return [];
+
   const entries: DetailEntry[] = [];
 
-  for (const seg of segments) {
-    const trimmed = seg.trim();
-    if (!trimmed) continue;
-    const colonIdx = trimmed.indexOf(':');
-    if (colonIdx < 0 || colonIdx === 0) continue;
-    const label = trimmed.substring(0, colonIdx).trim();
-    const value = trimmed.substring(colonIdx + 1).trim().replace(/\.$/, '');
-    if (label && value) {
+  // Collect any non-key text before the first match as a "Status" entry
+  if (matches[0].index > 0) {
+    const before = normalized.substring(0, matches[0].index).trim().replace(/\.$/, '');
+    if (before) {
+      entries.push({ label: 'Status', value: before });
+    }
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const label = matches[i][1];
+    const valueStart = matches[i].index + matches[i][0].length;
+    const valueEnd = i + 1 < matches.length ? matches[i + 1].index : normalized.length;
+    const value = normalized.substring(valueStart, valueEnd).trim().replace(/\.?\s*$/, '');
+    if (value) {
       entries.push({ label, value });
     }
   }
