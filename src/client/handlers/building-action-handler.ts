@@ -24,6 +24,7 @@ import {
   WsReqCloneFacility,
   WsRespCloneFacility,
   WsReqSearchConnections,
+  WsReqPoliticsVote,
   BuildingDetailsResponse,
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
@@ -524,12 +525,13 @@ async function voteForCandidate(ctx: ClientHandlerContext, buildingDetails: Buil
   }
 
   const candidateName = candidateNames[idx];
-  ctx.rawSend({
+  const voteReq: WsReqPoliticsVote = {
     type: WsMessageType.REQ_POLITICS_VOTE,
     buildingX: buildingDetails.x,
     buildingY: buildingDetails.y,
     candidateName,
-  });
+  };
+  ctx.rawSend(voteReq);
   ctx.showNotification(`Voted for ${candidateName}`, 'success');
 }
 
@@ -648,12 +650,13 @@ async function voteForCandidateInline(ctx: ClientHandlerContext, buildingDetails
     ctx.showNotification('No candidate selected', 'error');
     return;
   }
-  ctx.rawSend({
+  const voteReq: WsReqPoliticsVote = {
     type: WsMessageType.REQ_POLITICS_VOTE,
     buildingX: buildingDetails.x,
     buildingY: buildingDetails.y,
     candidateName,
-  });
+  };
+  ctx.rawSend(voteReq);
   ctx.showNotification(`Voted for ${candidateName}`, 'success');
   // Delay refresh to allow void push ("*") to be processed by the server
   setTimeout(() => refreshBuildingDetails(ctx, buildingDetails.x, buildingDetails.y), 500);
