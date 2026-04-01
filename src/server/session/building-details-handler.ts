@@ -349,6 +349,12 @@ export async function getBuildingTabData(
           ctx.log.warn(`[BuildingDetails] Error fetching supply ${path}:`, e);
         }
       }
+      // For warehouses, also return warehouseWares so the client can filter
+      // supplies by GateMap (only show enabled wares).
+      if (inspector.isWarehouse) {
+        const warehouseWares = await getWarehouseWareNames(ctx, tempObjectId, gateMap);
+        return { supplies, warehouseWares };
+      }
       return { supplies };
     }
 
@@ -362,6 +368,12 @@ export async function getBuildingTabData(
         } catch (e: unknown) {
           ctx.log.warn(`[BuildingDetails] Error fetching product ${path}:`, e);
         }
+      }
+      // For warehouses, also return warehouseWares so the client can filter
+      // products by GateMap (only show enabled wares).
+      if (inspector.isWarehouse) {
+        const warehouseWares = await getWarehouseWareNames(ctx, tempObjectId, gateMap);
+        return { products, warehouseWares };
       }
       return { products };
     }
