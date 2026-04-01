@@ -1953,13 +1953,13 @@ private handlePush(socketName: string, packet: RdoPacket) {
     return buildingDetailsHandler.getBuildingBasicDetails(this, x, y, visualClass);
   }
 
-  public async getBuildingTabData(x: number, y: number, tabId: string): Promise<{
+  public async getBuildingTabData(x: number, y: number, tabId: string, visualClass?: string): Promise<{
     supplies?: import('../shared/types').BuildingSupplyData[];
     products?: import('../shared/types').BuildingProductData[];
     compInputs?: import('../shared/types').CompInputData[];
     warehouseWares?: import('../shared/types').WarehouseWareData[];
   }> {
-    return buildingDetailsHandler.getBuildingTabData(this, x, y, tabId);
+    return buildingDetailsHandler.getBuildingTabData(this, x, y, tabId, visualClass);
   }
 
   public releaseInspector(): void {

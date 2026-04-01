@@ -125,9 +125,10 @@ export async function requestTabData(
     ClientBridge.log('Building', `Tab data received: ${tabId}`);
   } catch (err: unknown) {
     ClientBridge.log('Error', `Failed to get tab data ${tabId}: ${toErrorMessage(err)}`);
-    // Reset to idle so user can retry
+    // Mark as error (not idle) to prevent useEffect retry loop.
+    // Manual refresh or building re-select will reset to idle.
     useBuildingStore.setState((s) => ({
-      tabLoadingStates: { ...s.tabLoadingStates, [tabId]: 'idle' },
+      tabLoadingStates: { ...s.tabLoadingStates, [tabId]: 'error' },
     }));
   }
 }

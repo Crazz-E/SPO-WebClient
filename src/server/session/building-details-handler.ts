@@ -102,6 +102,61 @@ export function getActiveInspector(ctx: SessionContext, x: number, y: number): A
   return undefined;
 }
 
+/**
+ * Create an ActiveInspector on-the-fly for a building.
+ * Used as fallback when the legacy `getBuildingDetails` path was used (which
+ * doesn't create an inspector) but the client then requests lazy tab data.
+ * Only creates the Delphi temp object + determines tab capabilities — does NOT
+ * fetch properties (those were already fetched by the legacy path).
+ */
+async function createInspectorForBuilding(
+  ctx: SessionContext,
+  x: number,
+  y: number,
+  visualClass: string,
+): Promise<ActiveInspector> {
+  // Release any stale inspector
+  releaseInspector(ctx);
+
+  await ctx.connectMapService();
+  if (!ctx.cacherId) {
+    throw new Error('Map service not initialized');
+  }
+
+  const template = getTemplateForVisualClass(visualClass);
+  const tempObjectId = await ctx.cacherCreateObject();
+  await ctx.cacherSetObject(tempObjectId, x, y);
+
+  // Fetch GateMap for warehouse wares (lightweight — single property)
+  let gateMap = '';
+  const isWarehouse = template.groups.some(g => g.id === 'whGeneral');
+  if (isWarehouse) {
+    try {
+      const vals = await ctx.cacherGetPropertyList(tempObjectId, ['GateMap']);
+      gateMap = vals[0] || '';
+    } catch {
+      // Non-critical — warehouse wares will just show all disabled
+    }
+  }
+
+  const inspector: ActiveInspector = {
+    tempObjectId,
+    x,
+    y,
+    visualClass,
+    mutex: new AsyncMutex(),
+    gateMap,
+    hasSupplies: template.groups.some(g => g.special === 'supplies'),
+    hasProducts: template.groups.some(g => g.special === 'products'),
+    hasCompInputs: template.groups.some(g => g.special === 'compInputs'),
+    isWarehouse,
+  };
+
+  activeInspectors.set(ctx, inspector);
+  ctx.log.debug(`[BuildingDetails] On-demand inspector created: obj=${tempObjectId} at (${x},${y})`);
+  return inspector;
+}
+
 // =========================================================================
 // PUBLIC API
 // =========================================================================
@@ -245,22 +300,29 @@ export async function getBuildingBasicDetails(
 /**
  * Lazy Phase 3+4: Fetch tab-specific data using the active inspector's temp object.
  * Serialized via mutex to prevent SetPath race conditions.
+ *
+ * If no ActiveInspector exists (e.g., the building was loaded via the legacy
+ * `getBuildingDetails` path), one is created on-the-fly so tab data still works.
  */
 export async function getBuildingTabData(
   ctx: SessionContext,
   x: number,
   y: number,
   tabId: string,
+  visualClass?: string,
 ): Promise<{
   supplies?: BuildingSupplyData[];
   products?: BuildingProductData[];
   compInputs?: CompInputData[];
   warehouseWares?: WarehouseWareData[];
 }> {
-  const inspector = getActiveInspector(ctx, x, y);
+  let inspector = getActiveInspector(ctx, x, y);
+
+  // Fallback: create an inspector on-the-fly when none exists
+  // (happens when building was loaded via the legacy full-fetch path).
   if (!inspector) {
-    ctx.log.warn(`[BuildingDetails] No active inspector for (${x},${y}), tab=${tabId}`);
-    throw new Error(`No active inspector for building at (${x},${y})`);
+    ctx.log.debug(`[BuildingDetails] Creating on-demand inspector for (${x},${y}), tab=${tabId}`);
+    inspector = await createInspectorForBuilding(ctx, x, y, visualClass || '0');
   }
 
   const { tempObjectId, mutex, gateMap } = inspector;

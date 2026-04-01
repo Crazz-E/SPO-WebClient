@@ -167,7 +167,7 @@ export async function handleBuildingTabData(ctx: WsHandlerContext, msg: WsMessag
   const req = msg as WsReqBuildingTabData;
 
   await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_FacilityNotFound, async () => {
-    const tabData = await ctx.session.getBuildingTabData(req.x, req.y, req.tabId);
+    const tabData = await ctx.session.getBuildingTabData(req.x, req.y, req.tabId, req.visualClass);
 
     const response: WsRespBuildingTabData = {
       type: WsMessageType.RESP_BUILDING_TAB_DATA,

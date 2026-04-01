@@ -47,7 +47,7 @@ interface ConfirmedUpdate {
 }
 
 /** Loading state for lazy tab data. */
-type TabLoadState = 'idle' | 'loading' | 'loaded';
+type TabLoadState = 'idle' | 'loading' | 'loaded' | 'error';
 
 interface BuildingState {
   // Focus
