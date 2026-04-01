@@ -113,20 +113,24 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     const vc = details.visualClass;
 
     const doRefresh = () => {
+      // Refresh basic properties via legacy path (lightweight for non-lazy tabs)
       client.onRefreshBuilding(x, y);
 
-      // Reset the active lazy tab so it re-fetches after the basic refresh
+      // If the active tab is a lazy tab, re-fetch its data separately.
+      // Don't fire concurrently with the legacy path — use a short delay
+      // so the legacy request completes first and doesn't conflict with
+      // the inspector's temp object.
       const activeTab = details.tabs.find((t) => t.id === currentTab);
       const lazyId = activeTab?.special && isLazyTab(activeTab.special)
         ? activeTab.special
         : activeTab && isLazyTab(activeTab.id) ? activeTab.id : null;
       if (lazyId) {
-        // Mark as idle so the lazy-load effect re-triggers
-        useBuildingStore.setState((s) => ({
-          tabLoadingStates: { ...s.tabLoadingStates, [lazyId]: 'idle' },
-        }));
-        // Re-request the tab data
-        client.onRequestTabData(x, y, lazyId, vc);
+        setTimeout(() => {
+          useBuildingStore.setState((s) => ({
+            tabLoadingStates: { ...s.tabLoadingStates, [lazyId]: 'idle' },
+          }));
+          client.onRequestTabData(x, y, lazyId, vc);
+        }, 2000);
       }
     };
 

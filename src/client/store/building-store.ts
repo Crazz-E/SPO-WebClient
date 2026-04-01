@@ -173,10 +173,13 @@ export const useBuildingStore = create<BuildingState>((set) => ({
     }
     set((state) => {
       const ownerName = details.ownerName || state.focusedBuilding?.ownerName || '';
+      // Reset tab loading states when switching to a different building
+      const isSameBuilding = state.details?.x === details.x && state.details?.y === details.y;
       return {
         details,
         isLoading: false,
         isOwner: ownerName !== '' && state.ownedCompanyNames.has(ownerName),
+        ...(isSameBuilding ? {} : { tabLoadingStates: {} }),
       };
     });
   },
