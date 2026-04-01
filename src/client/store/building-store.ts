@@ -173,13 +173,23 @@ export const useBuildingStore = create<BuildingState>((set) => ({
     }
     set((state) => {
       const ownerName = details.ownerName || state.focusedBuilding?.ownerName || '';
-      // Reset tab loading states when switching to a different building
       const isSameBuilding = state.details?.x === details.x && state.details?.y === details.y;
+
+      // Auto-mark lazy tabs as 'loaded' if the legacy path already fetched their data.
+      // This prevents the lazy useEffect from re-fetching data that's already present.
+      const preloaded: Record<string, TabLoadState> = {};
+      if (details.supplies) preloaded['supplies'] = 'loaded';
+      if (details.products) preloaded['products'] = 'loaded';
+      if (details.compInputs) preloaded['compInputs'] = 'loaded';
+      if (details.warehouseWares) preloaded['whGeneral'] = 'loaded';
+
       return {
         details,
         isLoading: false,
         isOwner: ownerName !== '' && state.ownedCompanyNames.has(ownerName),
-        ...(isSameBuilding ? {} : { tabLoadingStates: {} }),
+        tabLoadingStates: isSameBuilding
+          ? { ...state.tabLoadingStates, ...preloaded }
+          : preloaded,
       };
     });
   },
