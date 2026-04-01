@@ -125,36 +125,43 @@ async function createInspectorForBuilding(
 
   const template = getTemplateForVisualClass(visualClass);
   const tempObjectId = await ctx.cacherCreateObject();
-  await ctx.cacherSetObject(tempObjectId, x, y);
 
-  // Fetch GateMap for warehouse wares (lightweight — single property)
-  let gateMap = '';
-  const isWarehouse = template.groups.some(g => g.id === 'whGeneral');
-  if (isWarehouse) {
-    try {
-      const vals = await ctx.cacherGetPropertyList(tempObjectId, ['GateMap']);
-      gateMap = vals[0] || '';
-    } catch {
-      // Non-critical — warehouse wares will just show all disabled
+  try {
+    await ctx.cacherSetObject(tempObjectId, x, y);
+
+    // Fetch GateMap for warehouse wares (lightweight — single property)
+    let gateMap = '';
+    const isWarehouse = template.groups.some(g => g.id === 'whGeneral');
+    if (isWarehouse) {
+      try {
+        const vals = await ctx.cacherGetPropertyList(tempObjectId, ['GateMap']);
+        gateMap = vals[0] || '';
+      } catch {
+        // Non-critical — warehouse wares will just show all disabled
+      }
     }
+
+    const inspector: ActiveInspector = {
+      tempObjectId,
+      x,
+      y,
+      visualClass,
+      mutex: new AsyncMutex(),
+      gateMap,
+      hasSupplies: template.groups.some(g => g.special === 'supplies'),
+      hasProducts: template.groups.some(g => g.special === 'products'),
+      hasCompInputs: template.groups.some(g => g.special === 'compInputs'),
+      isWarehouse,
+    };
+
+    activeInspectors.set(ctx, inspector);
+    ctx.log.debug(`[BuildingDetails] On-demand inspector created: obj=${tempObjectId} at (${x},${y})`);
+    return inspector;
+  } catch (e: unknown) {
+    // Close temp object to prevent Delphi-side leak
+    ctx.cacherCloseObject(tempObjectId);
+    throw e;
   }
-
-  const inspector: ActiveInspector = {
-    tempObjectId,
-    x,
-    y,
-    visualClass,
-    mutex: new AsyncMutex(),
-    gateMap,
-    hasSupplies: template.groups.some(g => g.special === 'supplies'),
-    hasProducts: template.groups.some(g => g.special === 'products'),
-    hasCompInputs: template.groups.some(g => g.special === 'compInputs'),
-    isWarehouse,
-  };
-
-  activeInspectors.set(ctx, inspector);
-  ctx.log.debug(`[BuildingDetails] On-demand inspector created: obj=${tempObjectId} at (${x},${y})`);
-  return inspector;
 }
 
 // =========================================================================

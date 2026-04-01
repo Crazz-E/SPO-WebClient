@@ -508,6 +508,9 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 		this.log.debug('[Session] Sent UnfocusObject push command');
 	  }
 
+	  // Release inspector temp object (no longer needed after unfocus)
+	  this.releaseInspector();
+
 	  // Reset tracking
 	  this.currentFocusedBuildingId = null;
 	  this.currentFocusedCoords = null;
@@ -1859,6 +1862,10 @@ private handlePush(socketName: string, packet: RdoPacket) {
    */
   public destroy(): void {
     this.log.debug('[Session] Destroying session and cleaning up resources...');
+
+    // Release active inspector temp object BEFORE closing sockets
+    // (CloseObject needs the map socket to send the fire-and-forget command)
+    this.releaseInspector();
 
     // Stop ServerBusy polling
     this.stopServerBusyPolling();
