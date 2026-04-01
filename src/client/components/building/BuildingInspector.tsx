@@ -56,6 +56,8 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   const isCivic = details ? isCivicBuilding(details.visualClass) : false;
   const username = useGameStore((s) => s.username);
   const holdsOffice = useGameStore((s) => s.isPublicOfficeRole);
+  const connectionStatus = useGameStore((s) => s.status);
+  const isConnected = connectionStatus === 'connected';
 
   // Build civic tabs from server groups (only for civic buildings)
   const civicTabs = useMemo(() => {
@@ -107,25 +109,22 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   // Refreshes basic properties and resets the active lazy tab so it re-fetches.
   const refreshTimer = useRef<ReturnType<typeof setInterval>>(undefined);
   useEffect(() => {
-    if (!details) return;
+    if (!details || !isConnected) return;
     const x = details.x;
     const y = details.y;
     const vc = details.visualClass;
 
     const doRefresh = () => {
-      // Refresh basic properties via legacy path (lightweight for non-lazy tabs)
+      if (!isConnected) return;
       client.onRefreshBuilding(x, y);
 
-      // If the active tab is a lazy tab, re-fetch its data separately.
-      // Don't fire concurrently with the legacy path — use a short delay
-      // so the legacy request completes first and doesn't conflict with
-      // the inspector's temp object.
       const activeTab = details.tabs.find((t) => t.id === currentTab);
       const lazyId = activeTab?.special && isLazyTab(activeTab.special)
         ? activeTab.special
         : activeTab && isLazyTab(activeTab.id) ? activeTab.id : null;
       if (lazyId) {
         setTimeout(() => {
+          if (useGameStore.getState().status !== 'connected') return;
           useBuildingStore.setState((s) => ({
             tabLoadingStates: { ...s.tabLoadingStates, [lazyId]: 'idle' },
           }));
@@ -153,27 +152,25 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
       clearInterval(refreshTimer.current);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [details?.x, details?.y, details?.visualClass, details?.tabs, currentTab, client]);
+  }, [details?.x, details?.y, details?.visualClass, details?.tabs, currentTab, isConnected, client]);
 
   // Lazy tab loading state
   const tabLoadingStates = useBuildingStore((s) => s.tabLoadingStates);
 
   // Trigger lazy fetch when switching to a tab that needs on-demand data
   useEffect(() => {
-    if (!details || isCivic) return;
+    if (!details || isCivic || !isConnected) return;
 
-    // Find the active tab's special field
     const activeTab = details.tabs.find((t) => t.id === currentTab);
     const tabSpecial = activeTab?.special;
-    // Also check the tab id itself (e.g. 'whGeneral' is the tab id for warehouse)
     const lazyId = tabSpecial && isLazyTab(tabSpecial) ? tabSpecial
       : activeTab && isLazyTab(activeTab.id) ? activeTab.id
       : null;
 
-    if (lazyId && tabLoadingStates[lazyId] !== 'loaded' && tabLoadingStates[lazyId] !== 'loading') {
+    if (lazyId && tabLoadingStates[lazyId] !== 'loaded' && tabLoadingStates[lazyId] !== 'loading' && tabLoadingStates[lazyId] !== 'error') {
       client.onRequestTabData(details.x, details.y, lazyId, details.visualClass);
     }
-  }, [currentTab, details?.x, details?.y, details?.visualClass, details?.tabs, isCivic, tabLoadingStates, client]);
+  }, [currentTab, details?.x, details?.y, details?.visualClass, details?.tabs, isCivic, isConnected, tabLoadingStates, client]);
 
   // Loading state
   if (isLoading || (!details && focusedBuilding)) {

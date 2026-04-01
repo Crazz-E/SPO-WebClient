@@ -29,6 +29,7 @@ import {
 import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';
 import { useBuildingStore } from '../store/building-store';
+import { useGameStore } from '../store/game-store';
 import { useUiStore } from '../store/ui-store';
 import type { ClientHandlerContext } from './client-context';
 
@@ -102,6 +103,9 @@ export async function requestTabData(
   tabId: string,
   visualClass: string,
 ): Promise<void> {
+  // Don't send requests when disconnected
+  if (useGameStore.getState().status !== 'connected') return;
+
   const store = useBuildingStore.getState();
 
   // Already loaded or loading — skip
