@@ -89,6 +89,9 @@ interface GameState {
   // Tycoon stats (updated by EVENT_TYCOON_UPDATE)
   tycoonStats: TycoonStats | null;
 
+  // Timestamp of the last tycoonStats update from the server (epoch ms)
+  lastStatsUpdate: number | null;
+
   // Cash history for sparkline (last 12 values)
   cashHistory: number[];
 
@@ -186,6 +189,7 @@ export const useGameStore = create<GameState>((set) => ({
   reconnectAttempt: 0,
   companies: [],
   tycoonStats: null,
+  lastStatsUpdate: null,
   cashHistory: [],
   gameDate: null,
   isSwitchingCompany: false,
@@ -227,7 +231,7 @@ export const useGameStore = create<GameState>((set) => ({
     const next = Number.isFinite(cashNum)
       ? [...prev.slice(-(12 - 1)), cashNum]
       : prev;
-    return { tycoonStats: stats, cashHistory: next };
+    return { tycoonStats: stats, lastStatsUpdate: Date.now(), cashHistory: next };
   }),
   setGameDate: (date) => set({ gameDate: date }),
 
@@ -295,6 +299,7 @@ export const useGameStore = create<GameState>((set) => ({
       reconnectAttempt: 0,
       companies: [],
       tycoonStats: null,
+      lastStatsUpdate: null,
       cashHistory: [],
       gameDate: null,
       isSwitchingCompany: false,

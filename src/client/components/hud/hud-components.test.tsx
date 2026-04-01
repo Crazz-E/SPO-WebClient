@@ -195,6 +195,24 @@ describe('InfoWidget', () => {
     expect(screen.getByText('+$500/h')).toBeTruthy();
   });
 
+  it('renders "Xs ago" when lastStatsUpdate is set', () => {
+    useGameStore.setState({
+      tycoonStats: {
+        username: 'P', ranking: 1, cash: '100',
+        incomePerHour: '100', buildingCount: 1, maxBuildings: 10, failureLevel: 0,
+      },
+      lastStatsUpdate: Date.now(),
+    });
+    renderWithProviders(<InfoWidget />);
+    expect(screen.getByText('0s ago')).toBeTruthy();
+  });
+
+  it('does not render timestamp when lastStatsUpdate is null', () => {
+    useGameStore.setState({ lastStatsUpdate: null });
+    renderWithProviders(<InfoWidget />);
+    expect(screen.queryByText(/ago$/)).toBeNull();
+  });
+
   it('renders negative income with sign', () => {
     useGameStore.setState({
       tycoonStats: {

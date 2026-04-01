@@ -9,6 +9,7 @@
  * Debt tint at failureLevel >= 1, pulsing alert at >= 2.
  */
 
+import { useEffect, useState } from 'react';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
 import { NobilityBadge } from '../chat/NobilityBadge';
@@ -25,6 +26,15 @@ const COMPACT_DATE: Intl.DateTimeFormatOptions = {
 function formatCompactDate(date: Date | null): string {
   if (!date) return '...';
   return date.toLocaleDateString('en-US', COMPACT_DATE);
+}
+
+/** Format a timestamp as a relative "Xs ago" / "Xm ago" string. */
+function formatTimeAgo(timestamp: number | null): string {
+  if (!timestamp) return '';
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ago`;
 }
 
 /** Determine sign of income string for color coding. */
@@ -52,8 +62,18 @@ export function InfoWidget() {
   const gameDate = useGameStore((s) => s.gameDate);
   const ownerRole = useGameStore((s) => s.ownerRole);
   const cashHistory = useGameStore((s) => s.cashHistory);
+  const lastStatsUpdate = useGameStore((s) => s.lastStatsUpdate);
   const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
   const rightPanel = useUiStore((s) => s.rightPanel);
+
+  // Tick every second to keep the "Xs ago" label fresh
+  const [timeAgo, setTimeAgo] = useState(() => formatTimeAgo(lastStatsUpdate));
+  useEffect(() => {
+    setTimeAgo(formatTimeAgo(lastStatsUpdate));
+    if (!lastStatsUpdate) return;
+    const id = setInterval(() => setTimeAgo(formatTimeAgo(lastStatsUpdate)), 1000);
+    return () => clearInterval(id);
+  }, [lastStatsUpdate]);
 
   const failureLevel = tycoonStats?.failureLevel ?? 0;
 
@@ -161,6 +181,10 @@ export function InfoWidget() {
               />
             </div>
           </div>
+        )}
+
+        {timeAgo && (
+          <span className={styles.lastUpdate}>{timeAgo}</span>
         )}
       </div>
     </div>

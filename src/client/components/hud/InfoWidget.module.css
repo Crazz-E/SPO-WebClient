@@ -227,6 +227,14 @@
   transition: width var(--duration-base) var(--ease-default);
 }
 
+/* Last-update relative timestamp */
+.lastUpdate {
+  color: var(--text-disabled);
+  font-size: var(--text-2xs, 0.65rem);
+  text-align: right;
+  margin-top: 1px;
+}
+
 /* Mobile — hidden, replaced by MobileInfoBar */
 @media (max-width: 767px) {
   .widget {
