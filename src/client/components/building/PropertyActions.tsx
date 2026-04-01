@@ -306,10 +306,17 @@ export function CloneSettings({
 // WAREHOUSE WARES (PropertyType.WARE_CHECKLIST)
 // =============================================================================
 
+/** Show filter input when ware count exceeds this threshold. */
+const WARE_FILTER_THRESHOLD = 8;
+
 /**
  * Warehouse Wares checklist — toggles individual warehouse gates on/off.
  * Each ware shows a checkbox (enabled state from GateMap) + ware name.
  * Owner can toggle via RDOSelectWare(index, value).
+ *
+ * Features: search filter (>8 wares), summary counter, toggle all/none,
+ * two-column grid layout, visual dimming for disabled wares.
+ *
  * Archaeology: WHGeneralSheet.pas clbNames checklist
  */
 export function WarehouseWares({
@@ -324,6 +331,7 @@ export function WarehouseWares({
   onPropertyChange: (rdoName: string, value: string, params?: Record<string, string>) => void;
 }) {
   const isOwner = useBuildingStore((s) => s.isOwner);
+  const [filter, setFilter] = useState('');
 
   const handleToggle = useCallback((index: number, currentEnabled: boolean) => {
     // RDOSelectWare(index, value): value = -1 (enable/wordbool true) or 0 (disable/wordbool false)
@@ -331,25 +339,70 @@ export function WarehouseWares({
     onPropertyChange('RDOSelectWare', newValue, { index: String(index) });
   }, [onPropertyChange]);
 
+  const handleToggleAll = useCallback((enable: boolean) => {
+    const value = enable ? '-1' : '0';
+    for (const ware of wares) {
+      if (ware.enabled !== enable) {
+        onPropertyChange('RDOSelectWare', value, { index: String(ware.index) });
+      }
+    }
+  }, [wares, onPropertyChange]);
+
   if (wares.length === 0) {
     return <span className={styles.value}>No wares</span>;
   }
 
+  const enabledCount = wares.filter(w => w.enabled).length;
+  const lowerFilter = filter.toLowerCase();
+  const filtered = filter
+    ? wares.filter(w => w.name.toLowerCase().includes(lowerFilter))
+    : wares;
+
   return (
     <div className={styles.wareChecklist}>
       <div className={styles.wareChecklistLabel}>Wares</div>
-      {wares.map((ware) => (
-        <label key={ware.index} className={styles.wareItem}>
+
+      {/* Summary + bulk toggle */}
+      <div className={styles.wareToolbar}>
+        <span className={styles.wareSummary}>{enabledCount} / {wares.length} enabled</span>
+        {isOwner && (
+          <div className={styles.wareBulkBtns}>
+            <button className={styles.wareBulkBtn} onClick={() => handleToggleAll(true)}>All</button>
+            <button className={styles.wareBulkBtn} onClick={() => handleToggleAll(false)}>None</button>
+          </div>
+        )}
+      </div>
+
+      {/* Filter input (only for long lists) */}
+      {wares.length > WARE_FILTER_THRESHOLD && (
+        <div className={styles.wareFilterWrap}>
           <input
-            type="checkbox"
-            className={styles.checkbox}
-            checked={ware.enabled}
-            disabled={!isOwner}
-            onChange={() => handleToggle(ware.index, ware.enabled)}
+            type="text"
+            className={styles.wareFilterInput}
+            placeholder="Filter wares..."
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
           />
-          <span className={styles.wareName}>{ware.name}</span>
-        </label>
-      ))}
+        </div>
+      )}
+
+      {/* Ware items (two-column grid via CSS) */}
+      {filtered.length === 0 ? (
+        <div className={styles.wareEmpty}>No wares matching "{filter}"</div>
+      ) : (
+        filtered.map((ware) => (
+          <label key={ware.index} className={styles.wareItem}>
+            <input
+              type="checkbox"
+              className={styles.checkbox}
+              checked={ware.enabled}
+              disabled={!isOwner}
+              onChange={() => handleToggle(ware.index, ware.enabled)}
+            />
+            <span className={styles.wareName}>{ware.name}</span>
+          </label>
+        ))
+      )}
     </div>
   );
 }

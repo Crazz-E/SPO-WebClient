@@ -1486,12 +1486,25 @@
 .critical { color: var(--error); }
 .ciDot.critical { background: var(--error); }
 
-/* Warehouse wares checklist */
+/* Warehouse wares checklist — two-column grid with filter + summary toolbar */
 .wareChecklist {
   padding: var(--space-3) 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1) var(--space-3);
+}
+
+@media (max-width: 767px) {
+  .wareChecklist {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Full-width elements span both columns */
+.wareChecklistLabel,
+.wareToolbar,
+.wareFilterWrap {
+  grid-column: 1 / -1;
 }
 
 .wareChecklistLabel {
@@ -1500,6 +1513,66 @@
   margin-bottom: var(--space-1);
 }
 
+/* Toolbar: summary counter + bulk toggle buttons */
+.wareToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-1) 0;
+  margin-bottom: var(--space-1);
+}
+
+.wareSummary {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.wareBulkBtns {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.wareBulkBtn {
+  font-size: var(--text-2xs);
+  padding: 2px var(--space-2);
+  background: var(--bg-hover);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.wareBulkBtn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+/* Filter input */
+.wareFilterWrap {
+  margin-bottom: var(--space-1);
+}
+
+.wareFilterInput {
+  width: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.wareFilterInput::placeholder {
+  color: var(--text-muted);
+}
+
+.wareFilterInput:focus {
+  border-color: var(--accent);
+}
+
+/* Ware item */
 .wareItem {
   display: flex;
   align-items: center;
@@ -1508,11 +1581,21 @@
   color: var(--text-primary);
   cursor: pointer;
   padding: var(--space-1) 0;
+  transition: opacity 0.15s;
 }
 
 .wareItem:has(input:disabled) {
   cursor: default;
   opacity: 0.7;
+}
+
+/* Enabled wares: bright. Disabled wares: dimmed. */
+.wareItem:has(input:not(:checked)) .wareName {
+  color: var(--text-muted);
+}
+
+.wareItem:has(input:checked) .wareName {
+  color: var(--text-primary);
 }
 
 .wareName {
@@ -1521,6 +1604,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Empty filter result */
+.wareEmpty {
+  grid-column: 1 / -1;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  padding: var(--space-2) 0;
+  text-align: center;
 }
 
 /* =========================================================================
