@@ -285,9 +285,9 @@ export async function handleCreateCompany(ctx: ClientHandlerContext, companyName
   ctx.availableCompanies.push(newCompany);
 
   if (ctx.getMapNavigationUI()) {
-    ClientBridge.setCompany(resp.companyName, resp.companyId);
-    ctx.currentCompanyName = resp.companyName;
-    useProfileStore.getState().reset();
+    // Full company switch so the server re-authenticates with the new
+    // company's context (worldContextId, interfaceServerId, selectCompany)
+    profileSwitchCompany(ctx, resp.companyId, resp.companyName, newCompany.ownerRole);
     return;
   }
 
