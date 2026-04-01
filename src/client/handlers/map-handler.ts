@@ -182,5 +182,15 @@ export function refreshMapData(ctx: ClientHandlerContext): void {
   renderer.invalidateArea(x - 64, y - 64, x + 64, y + 64);
   renderer.triggerZoneCheck();
 
+  // Re-fetch overlay data if an overlay is active
+  const activeSurface = ctx.isCityZonesEnabled ? SurfaceType.ZONES : ctx.activeOverlayType;
+  if (activeSurface !== null) {
+    const loadedKeys = renderer.getLoadedZoneKeys();
+    for (const key of loadedKeys) {
+      const [zx, zy] = key.split(',').map(Number);
+      fetchSurfaceForArea(ctx, activeSurface, zx, zy, zx + 64, zy + 64);
+    }
+  }
+
   ctx.showNotification('Map refreshed', 'info');
 }

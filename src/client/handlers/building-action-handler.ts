@@ -81,6 +81,8 @@ async function requestBuildingDetailsImpl(
 
 export async function refreshBuildingDetails(ctx: ClientHandlerContext, x: number, y: number): Promise<void> {
   const vc = ctx.currentFocusedVisualClass || '0';
+  // Reset lazy tab states so they re-fetch on next view
+  useBuildingStore.getState().resetTabLoadingStates();
   const details = await requestBuildingDetails(ctx, x, y, vc);
   if (details) {
     ClientBridge.updateBuildingDetails(details);
