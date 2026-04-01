@@ -16,6 +16,7 @@ import {
   formatPercentage,
   formatNumber,
   getTemplateForVisualClass,
+  PRODUCTS_GROUP,
 } from '@/shared/building-details';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
 import { useBuildingStore } from '../../store/building-store';
@@ -47,6 +48,7 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
   const isOwner = useBuildingStore((s) => s.isOwner);
   const currentTab = useBuildingStore((s) => s.currentTab);
   const isPublicOfficeRole = useGameStore((s) => s.isPublicOfficeRole);
+  const client = useClient();
 
   // Get property definitions from template system.
   // Template cache is populated by the store's setDetails action (via registerInspectorTabs)
@@ -61,6 +63,20 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
   // President can edit civic building properties (Capitol Budget, Town taxes, etc.)
   const isCivic = isCivicBuilding(visualClass);
   const canEdit = isTownTab ? checkIsMayor(properties) : (isOwner || (isCivic && isPublicOfficeRole));
+
+  // Product price change handler — resolves PricePc → RDOSetOutputPrice via PRODUCTS_GROUP.rdoCommands.
+  // Accepts extra params (fluidId) to identify the specific output gate.
+  const handleProductPropertyChange = useCallback(
+    (propertyName: string, value: number, params?: Record<string, string>) => {
+      const resolved = resolveRdoCommand(propertyName, PRODUCTS_GROUP.rdoCommands);
+      client.onSetBuildingProperty(
+        buildingX, buildingY,
+        resolved.command, String(value),
+        { ...resolved.params, ...params },
+      );
+    },
+    [buildingX, buildingY, client],
+  );
 
   // For warehouses, filter supplies/products to only show selected wares (GateMap enabled).
   // Archaeology: WHGeneralSheet.pas — only selected wares (clbNames checked) are operational.
@@ -97,6 +113,7 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
           canEdit={canEdit}
           buildingX={buildingX}
           buildingY={buildingY}
+          onPropertyChange={handleProductPropertyChange}
         />
       </div>
     );

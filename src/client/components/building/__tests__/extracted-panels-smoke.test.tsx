@@ -209,7 +209,7 @@ describe('ProductsPanel', () => {
 
   it('renders empty state when no products', () => {
     const { container } = renderWithProviders(
-      <ProductsPanel products={[]} canEdit={false} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[]} canEdit={false} buildingX={100} buildingY={200} />,
     );
     expect(container.textContent).toContain('No product outputs');
   });
@@ -217,41 +217,40 @@ describe('ProductsPanel', () => {
   it('renders product card with name and buyer count', () => {
     const product = makeProduct({ name: 'Clothing', connectionCount: 3 });
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={false} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={false} buildingX={100} buildingY={200} />,
     );
     expect(container.textContent).toContain('Clothing');
-    expect(container.textContent).toContain('3 buyers');
+    expect(container.textContent).toContain('3>');
   });
 
-  it('shows singular "buyer" for single connection', () => {
+  it('shows buyer count for single connection', () => {
     const product = makeProduct({ connectionCount: 1 });
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={false} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={false} buildingX={100} buildingY={200} />,
     );
-    expect(container.textContent).toContain('1 buyer');
-    expect(container.textContent).not.toContain('1 buyers');
+    expect(container.textContent).toContain('1>');
   });
 
-  it('expands card to show details on click', () => {
+  it('expands card to show connections on click', () => {
     const product = makeProduct();
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
     );
 
-    // Click header to expand
+    // Click header to expand — reveals connections table, not stat rows
     const header = container.querySelector('button') as HTMLButtonElement;
     fireEvent.click(header);
 
-    expect(container.textContent).toContain('Last Produced');
-    expect(container.textContent).toContain('Quality');
-    expect(container.textContent).toContain('Sell Price');
-    expect(container.textContent).toContain('Market Price');
+    // Quality is shown as inline badge in header (Q:XX%)
+    expect(container.textContent).toMatch(/Q:\d+%/);
+    // Connection table is visible
+    expect(container.querySelector('table')).toBeTruthy();
   });
 
   it('shows connection table when expanded', () => {
     const product = makeProduct();
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
     );
 
     fireEvent.click(container.querySelector('button') as HTMLButtonElement);
@@ -264,7 +263,7 @@ describe('ProductsPanel', () => {
   it('shows "No buyers connected" when expanded with no connections', () => {
     const product = makeProduct({ connections: [], connectionCount: 0 });
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
     );
 
     fireEvent.click(container.querySelector('button') as HTMLButtonElement);
@@ -274,7 +273,7 @@ describe('ProductsPanel', () => {
   it('shows Hire and Remove buttons when canEdit', () => {
     const product = makeProduct();
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
     );
 
     fireEvent.click(container.querySelector('button') as HTMLButtonElement);
@@ -285,7 +284,7 @@ describe('ProductsPanel', () => {
   it('does not show action buttons when canEdit is false', () => {
     const product = makeProduct();
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={false} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={false} buildingX={100} buildingY={200} />,
     );
 
     fireEvent.click(container.querySelector('button') as HTMLButtonElement);
@@ -299,7 +298,7 @@ describe('ProductsPanel', () => {
     const product = makeProduct({ name: 'Chemicals', metaFluid: 'fluid_chem' });
 
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
       { clientCallbacks: callbacks },
     );
 
@@ -317,7 +316,7 @@ describe('ProductsPanel', () => {
     const product = makeProduct({ connections: [conn], metaFluid: 'fluid_chem' });
 
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
       { clientCallbacks: callbacks },
     );
 
@@ -341,7 +340,7 @@ describe('ProductsPanel', () => {
       makeProduct({ name: 'Clothing', metaFluid: 'fluid_cloth' }),
     ];
     const { container } = renderWithProviders(
-      <ProductsPanel products={products} canEdit={false} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={products} canEdit={false} buildingX={100} buildingY={200} />,
     );
     expect(container.textContent).toContain('Chemicals');
     expect(container.textContent).toContain('Clothing');
@@ -350,7 +349,7 @@ describe('ProductsPanel', () => {
   it('falls back to metaFluid when name is empty', () => {
     const product = makeProduct({ name: '', metaFluid: 'fluid_xyz' });
     const { container } = renderWithProviders(
-      <ProductsPanel products={[product]} canEdit={false} buildingX={100} buildingY={200} />,
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={false} buildingX={100} buildingY={200} />,
     );
     expect(container.textContent).toContain('fluid_xyz');
   });

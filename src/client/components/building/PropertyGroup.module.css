@@ -1522,3 +1522,200 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* =========================================================================
+   COMPACT PRODUCT CARDS (two-line tiles with inline price slider)
+   ========================================================================= */
+
+.productList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: var(--space-1);
+}
+
+.productCard {
+  border: 1px solid var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+/* Line 1: product header */
+.productHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--surface-divider);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  transition: background 0.15s;
+}
+
+.productHeader:hover {
+  background: var(--bg-tertiary);
+}
+
+.productName {
+  flex: 1;
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.productBuyerCount {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.productChevron {
+  font-size: 8px;
+  color: var(--text-disabled);
+  flex-shrink: 0;
+}
+
+/* Inline badge (quality, price) */
+.inlineBadge {
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.badgeGood {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success);
+}
+
+.badgeWarn {
+  background: rgba(234, 179, 8, 0.12);
+  color: var(--accent-gold);
+}
+
+.badgeBad {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+}
+
+/* Line 2: price slider row (always visible for owners) */
+.productPriceRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 4px;
+  background: var(--surface-divider);
+}
+
+.productDollarPrice {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.productPriceReadonly {
+  padding: 2px 8px 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  background: var(--surface-divider);
+}
+
+/* Expanded body: connections + actions */
+.productBody {
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--surface-border);
+}
+
+.productTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 2px 0 0;
+}
+
+.productTable th {
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  text-align: left;
+  line-height: var(--leading-dense);
+  padding: 1px var(--space-1);
+  border-bottom: 1px solid var(--bg-tertiary);
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.productTableRow {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.productTableRow:hover {
+  background: var(--surface-border);
+}
+
+.productTableRowSelected {
+  background: rgba(212, 168, 67, 0.12);
+}
+
+.productTableRow td {
+  padding: 1px var(--space-1);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-dense);
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* Merged facility + owner column */
+.productFacilityCell {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.productFacilityName {
+  color: var(--text-primary);
+}
+
+.productOwnerDot {
+  color: var(--text-disabled);
+  font-size: 10px;
+}
+
+/* Product action buttons (compact) */
+.productActions {
+  display: flex;
+  gap: var(--space-2);
+  padding: 2px 0 0;
+  justify-content: flex-end;
+}
+
+.productActions .hireBtn,
+.productActions .fireBtn {
+  height: 20px;
+  padding: 1px 8px;
+  font-size: 10px;
+}
