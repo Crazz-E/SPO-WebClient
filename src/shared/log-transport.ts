@@ -33,15 +33,17 @@ export class FileTransport {
 
     if (!fs || !path) return;
 
-    // Ensure log directory exists
-    const dir = path.dirname(this.filePath);
-    fs.mkdirSync(dir, { recursive: true });
-
-    // Get current file size if it already exists
     try {
+      // Ensure log directory exists
+      const dir = path.dirname(this.filePath);
+      fs.mkdirSync(dir, { recursive: true });
+
+      // Get current file size if it already exists
       const stat = fs.statSync(this.filePath);
       this.currentSize = stat.size;
     } catch {
+      // Directory creation or stat failed (permissions, etc.) — write() will
+      // silently skip; console transport still works.
       this.currentSize = 0;
     }
   }
@@ -52,13 +54,18 @@ export class FileTransport {
     const data = line + '\n';
     const dataSize = Buffer.byteLength(data, 'utf8');
 
-    // Rotate if needed before writing
-    if (this.currentSize + dataSize > this.maxFileSize && this.currentSize > 0) {
-      this.rotate();
-    }
+    try {
+      // Rotate if needed before writing
+      if (this.currentSize + dataSize > this.maxFileSize && this.currentSize > 0) {
+        this.rotate();
+      }
 
-    fs.appendFileSync(this.filePath, data, 'utf8');
-    this.currentSize += dataSize;
+      fs.appendFileSync(this.filePath, data, 'utf8');
+      this.currentSize += dataSize;
+    } catch {
+      // Fail silently — a logging failure must never crash the server.
+      // The error will still appear on stderr via the console transport.
+    }
   }
 
   private rotate(): void {
