@@ -35,6 +35,15 @@ export function handleMapClick(ctx: ClientHandlerContext, x: number, y: number, 
     return;
   }
 
+  // When inspector is already open, single-click switches buildings in-place
+  const inspectorOpen = useUiStore.getState().rightPanel === 'building';
+  if (inspectorOpen) {
+    const focused = useBuildingStore.getState().focusedBuilding;
+    if (focused && focused.x === x && focused.y === y) return; // already inspecting this one
+    switchInspectedBuilding(ctx, x, y, visualClass);
+    return;
+  }
+
   // Two-click flow: first click → overlay, second click → open inspector
   const overlayBuilding = useBuildingStore.getState().focusedBuilding;
   const isOverlay = useBuildingStore.getState().isOverlayMode;
@@ -43,6 +52,12 @@ export function handleMapClick(ctx: ClientHandlerContext, x: number, y: number, 
   } else {
     showBuildingOverlay(ctx, x, y, visualClass);
   }
+}
+
+/** Switch to a different building while the inspector panel stays open. */
+async function switchInspectedBuilding(ctx: ClientHandlerContext, x: number, y: number, visualClass?: string): Promise<void> {
+  await showBuildingOverlay(ctx, x, y, visualClass);
+  await openInspectorForFocused(ctx, x, y, visualClass);
 }
 
 export async function showBuildingOverlay(ctx: ClientHandlerContext, x: number, y: number, visualClass?: string): Promise<void> {

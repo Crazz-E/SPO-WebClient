@@ -110,6 +110,7 @@ export function GameScreen() {
         onClose={closeRightPanel}
         title={rightPanel ? RIGHT_PANEL_TITLES[rightPanel] ?? rightPanel : ''}
         hideHeader={rightPanel === 'building'}
+        noScrim={rightPanel === 'building'}
       >
         <ErrorBoundary>
           <RightPanelContent type={rightPanel} />

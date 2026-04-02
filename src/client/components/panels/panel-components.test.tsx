@@ -27,6 +27,28 @@ describe('RightPanel', () => {
     // usePanel sets visible=true when open=true, DOM should be mounted
     expect(container.querySelector('[role="complementary"]')).toBeTruthy();
   });
+
+  it('renders scrim by default when open', () => {
+    const { container } = renderWithProviders(
+      <RightPanel open={true} onClose={() => {}} title="Mail">
+        <p>Mail content</p>
+      </RightPanel>,
+    );
+    // Scrim is a div sibling rendered before the aside panel
+    const aside = container.querySelector('[role="complementary"]');
+    expect(aside?.previousElementSibling).toBeTruthy();
+  });
+
+  it('does not render scrim when noScrim is true', () => {
+    const { container } = renderWithProviders(
+      <RightPanel open={true} onClose={() => {}} title="Building" noScrim>
+        <p>Inspector content</p>
+      </RightPanel>,
+    );
+    // With noScrim, the aside should be the first (and only) top-level element
+    const aside = container.querySelector('[role="complementary"]');
+    expect(aside?.previousElementSibling).toBeNull();
+  });
 });
 
 describe('LeftPanel', () => {

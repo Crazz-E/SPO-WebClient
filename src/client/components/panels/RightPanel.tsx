@@ -16,22 +16,26 @@ interface RightPanelProps {
   icon?: ReactNode;
   /** Hide the built-in header (title + close button). Used when the child provides its own controls. */
   hideHeader?: boolean;
+  /** Skip the scrim overlay so the map stays interactive (e.g. building inspector). */
+  noScrim?: boolean;
   children: ReactNode;
 }
 
-export function RightPanel({ open, onClose, title, icon, hideHeader, children }: RightPanelProps) {
+export function RightPanel({ open, onClose, title, icon, hideHeader, noScrim, children }: RightPanelProps) {
   const { visible, animating } = usePanel(open);
 
   if (!visible) return null;
 
   return (
     <>
-      {/* Scrim — click to close */}
-      <div
-        className={`${styles.scrim} ${animating ? styles.scrimVisible : ''}`}
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      {/* Scrim — click to close (skipped when noScrim so map stays interactive) */}
+      {!noScrim && (
+        <div
+          className={`${styles.scrim} ${animating ? styles.scrimVisible : ''}`}
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
       <aside
         className={`${styles.panel} ${animating ? styles.open : styles.closed}`}
         role="complementary"

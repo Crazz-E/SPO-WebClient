@@ -708,6 +708,12 @@ export class StarpeaceClient implements ClientHandlerContext {
       });
 
       this.mapNavigationUI.setOnEmptyMapClick(() => {
+        // When building inspector is open, only clear the gold highlight — keep panel open
+        if (useUiStore.getState().rightPanel === 'building') {
+          const r = this.mapNavigationUI.getRenderer();
+          if (r) r.clearSelectedBuilding();
+          return;
+        }
         buildingFocusHandler.unfocusBuilding(this);
       });
 
