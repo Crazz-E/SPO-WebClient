@@ -5,6 +5,7 @@
 import type { BuildingFocusInfo } from '@/shared/types';
 import { ProgressBar, MiniBar } from '../common';
 import { parseSalesLines, salesVariant } from './StatusOverlay';
+import { RichDetailsView } from './RichDetails';
 import styles from './QuickStats.module.css';
 
 interface QuickStatsProps {
@@ -324,24 +325,11 @@ export function QuickStats({ focus }: QuickStatsProps) {
         })()
       )}
 
-      {focus.detailsText && (() => {
-        const entries = parseDetailsText(focus.detailsText);
-        if (entries.length > 0) {
-          return (
-            <div className={styles.detailGrid}>
-              {entries.map((entry, i) => (
-                <div key={i} className={styles.detailRow}>
-                  <span className={styles.detailLabel}>{entry.label}</span>
-                  <span className={styles.detailValue}>{entry.value}</span>
-                </div>
-              ))}
-            </div>
-          );
-        }
-        return <div className={styles.detail}>{focus.detailsText}</div>;
-      })()}
+      {focus.detailsText && (
+        <RichDetailsView detailsText={focus.detailsText} hintsText={focus.hintsText} />
+      )}
 
-      {focus.hintsText && (
+      {!focus.detailsText && focus.hintsText && (
         <div className={styles.hint}>{focus.hintsText}</div>
       )}
     </div>
