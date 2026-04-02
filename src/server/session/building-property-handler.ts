@@ -7,7 +7,6 @@
 
 import type { SessionContext } from './session-context';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
-import { RdoVerb, RdoAction } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 
 // =========================================================================
@@ -121,12 +120,14 @@ async function setBuildingPropertyImpl(
       'RDOAcceptCloning', // TBlock.RDOAcceptCloning — boolean, Kernel.pas:1304
     ]);
 
-    // Send SetProperty command via construction service
-    // The sel on CurrBlock is persistent (no closure needed)
+    // Send SetProperty command via construction service — ALL fire-and-forget.
+    // No RID is assigned: the Delphi parser sees "C sel ..." and executes silently
+    // (no queryId = no response sent back). This is correct for rapid-fire property
+    // changes — adding RIDs causes 12+ responses to flood back and ECONNRESET.
+    let setCmd: string;
 
-    // RDO functions (olevariant return) use "^" and MUST go through sendRdoRequest()
-    // to get a proper RID. Fire-and-forget "^" without RID produces "C sel ..." which
-    // the Delphi server cannot parse (expects "C <queryId> sel ..."), poisoning the session.
+    // RDO functions (olevariant return) use "^" separator.
+    // RDO procedures (void) use "*" separator.
     const RDO_FUNCTIONS: ReadonlySet<string> = new Set([
       'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
       'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
@@ -142,54 +143,35 @@ async function setBuildingPropertyImpl(
       'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
     ]);
 
-    if (RDO_FUNCTIONS.has(propertyName)) {
-      // "^" — function returning olevariant → fire-and-forget WITH RID.
-      // Must have RID so wire format is "C <rid> sel ..." (Delphi expects queryId for "^").
-      // But must NOT await response — rapid-fire price changes would queue up behind
-      // the serialization lock + 10s timeout, causing timeout cascades and ECONNRESET.
-      const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
-      ctx.sendRdoFireAndForget('construction', {
-        verb: RdoVerb.SEL,
-        targetId: target,
-        action: RdoAction.CALL,
-        member: propertyName,
-        separator: '"^"',
-        args: rdoArgs.map(a => a.format()),
-      });
-      ctx.log.debug(`[BuildingDetails] Sent fire-and-forget with RID: ${propertyName} on ${target}`);
-    } else if (propertyName === 'property' && additionalParams?.propertyName) {
-      // Direct property set: use SET verb — fire-and-forget
+    if (propertyName === 'property' && additionalParams?.propertyName) {
+      // Direct property set: use SET verb
       const actualPropName = additionalParams.propertyName;
-      const setCmd = RdoCommand.sel(currBlock)
+      setCmd = RdoCommand.sel(currBlock)
         .set(actualPropName)
         .args(...rdoArgs)
         .build();
-      const socket = ctx.getSocket('construction');
-      if (!socket) throw new Error('Construction socket unavailable');
-      socket.write(setCmd);
-      ctx.log.debug(`[BuildingDetails] Sent fire-and-forget: ${setCmd}`);
     } else if (RDO_SET_PROPERTIES.has(propertyName)) {
-      // Published property: use SET verb (not CALL) — fire-and-forget
+      // Published property: use SET verb (not CALL)
       // e.g., RDOAcceptCloning is a boolean property on TBlock — Kernel.pas:1304
-      const setCmd = RdoCommand.sel(currBlock)
+      setCmd = RdoCommand.sel(currBlock)
         .set(propertyName)
         .args(...rdoArgs)
         .build();
-      const socket = ctx.getSocket('construction');
-      if (!socket) throw new Error('Construction socket unavailable');
-      socket.write(setCmd);
-      ctx.log.debug(`[BuildingDetails] Sent fire-and-forget: ${setCmd}`);
     } else {
-      // "*" — void procedure → fire-and-forget (no RID)
+      // RDO method call — fire-and-forget, no RID.
       const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
-      const setCmd = RdoCommand.sel(target).call(propertyName)
-        .push()
-        .args(...rdoArgs)
-        .build();
-      const socket = ctx.getSocket('construction');
-      if (!socket) throw new Error('Construction socket unavailable');
-      socket.write(setCmd);
-      ctx.log.debug(`[BuildingDetails] Sent fire-and-forget: ${setCmd}`);
+      const builder = RdoCommand.sel(target).call(propertyName);
+      if (RDO_FUNCTIONS.has(propertyName)) {
+        builder.method(); // "^" — function returning olevariant
+      } else {
+        builder.push();   // "*" — void procedure
+      }
+      setCmd = builder.args(...rdoArgs).build();
+    }
+    const socket = ctx.getSocket('construction');
+    if (!socket) throw new Error('Construction socket unavailable');
+    socket.write(setCmd);
+    ctx.log.debug(`[BuildingDetails] Sent: ${setCmd}`);
     }
 
     // Wait for server to process the command

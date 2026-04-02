@@ -13,9 +13,6 @@ export interface SessionContext {
   // ── RDO Transport ──────────────────────────────────────────────────────
   sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>): Promise<RdoPacket>;
 
-  // ── Fire-and-forget with RID (for "^" commands that don't need response) ─
-  sendRdoFireAndForget(socketName: string, packetData: Partial<RdoPacket>): void;
-
   // ── Socket access (for fire-and-forget push commands) ──────────────────
   getSocket(name: string): import('net').Socket | undefined;
 
