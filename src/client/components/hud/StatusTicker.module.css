@@ -1,5 +1,5 @@
-/* StatusTicker — Floating status bar showing building details/hints text.
- * Centered horizontally near the top of the screen.
+/* StatusTicker — Floating HUD bar with structured building details.
+ * Centered horizontally near top of screen.
  * z-index 350: between overlay (300) and panel (500). */
 
 .ticker {
@@ -11,7 +11,7 @@
   pointer-events: none;
   max-width: 720px;
   min-width: 200px;
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-3);
 
   background: var(--surface-primary);
   border: 1px solid var(--accent-gold-subtle);
@@ -34,18 +34,198 @@
   }
 }
 
-/* Parsed detail grid — two-column layout with aligned labels and values */
-.detailGrid {
+/* ---- Color classes for metric values ---- */
+.colorSuccess { color: var(--success); }
+.colorWarning { color: var(--warning); }
+.colorError   { color: var(--error); }
+.colorGold    { color: var(--accent-gold-light); }
+.colorDefault { color: var(--text-primary); }
+
+/* ---- Upgrade level (standalone row, left-aligned) ---- */
+.upgradeRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+.upgradeLabel {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.upgradeValue {
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+}
+
+/* ---- Section with header divider ---- */
+.section {
+  margin-top: var(--space-1);
+}
+
+.sectionHeader {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-bottom: 2px;
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--surface-divider);
+}
+
+/* ---- Product / storage item card ---- */
+.productCard {
+  margin-bottom: var(--space-1);
+}
+
+.productCard:last-child {
+  margin-bottom: 0;
+}
+
+.productName {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
+  line-height: var(--leading-tight);
+}
+
+/* ---- Chip row (volume | quality | efficiency) ---- */
+.chipRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-size: var(--text-2xs);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  padding: 1px var(--space-1);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  line-height: var(--leading-normal);
+}
+
+/* ---- Inline metrics row (Items Sold, Efficiency, etc.) ---- */
+.metricRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-1);
+}
+
+.metricInline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.metricLabel {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+
+.metricValue {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Customer rows (store) ---- */
+.customerRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 1px 0;
+}
+
+.customerLabel {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+
+.customerValue {
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- QOL metric pills (residential) ---- */
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.pill {
+  font-size: var(--text-2xs);
+  font-weight: var(--font-medium);
+  padding: 1px var(--space-2);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  line-height: var(--leading-normal);
+}
+
+/* ---- Town hall class rows ---- */
+.classRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 1px 0;
+}
+
+.classLabel {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  min-width: 72px;
+}
+
+.classValue {
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.classBadge {
+  font-size: var(--text-2xs);
+  font-weight: var(--font-medium);
+}
+
+/* ---- HQ status ---- */
+.hqStatus {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+  margin-bottom: var(--space-1);
+}
+
+/* ---- Generic fallback grid ---- */
+.genericGrid {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0 var(--space-3);
 }
 
-.detailRow {
+.genericRow {
   display: contents;
 }
 
-.detailLabel {
+.genericLabel {
   font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
@@ -53,7 +233,7 @@
   line-height: var(--leading-normal);
 }
 
-.detailValue {
+.genericValue {
   font-size: var(--text-xs);
   color: var(--success);
   font-weight: var(--font-semibold);
@@ -64,7 +244,7 @@
   line-height: var(--leading-normal);
 }
 
-/* Fallback raw text (when parsing returns empty) */
+/* ---- Fallback raw text ---- */
 .detailsLine {
   font-size: var(--text-sm);
   color: var(--success);
@@ -74,7 +254,7 @@
   text-overflow: ellipsis;
 }
 
-/* Hints line — warning color, with top separator */
+/* ---- Hints line ---- */
 .hintsLine {
   font-size: var(--text-xs);
   color: var(--warning);
@@ -87,17 +267,33 @@
   text-overflow: ellipsis;
 }
 
+/* ---- Mobile responsive ---- */
 @media (max-width: 767px) {
   .ticker {
     max-width: 90vw;
     top: 48px;
-    padding: var(--space-1) var(--space-3);
+    padding: var(--space-1) var(--space-2);
   }
 
-  .detailLabel,
-  .detailValue,
+  .upgradeLabel,
+  .sectionHeader,
+  .productName,
+  .chip,
+  .metricLabel,
+  .metricValue,
+  .customerLabel,
+  .customerValue,
+  .pill,
+  .classLabel,
+  .classValue,
+  .genericLabel,
+  .genericValue,
   .detailsLine,
   .hintsLine {
+    font-size: var(--text-2xs);
+  }
+
+  .upgradeValue {
     font-size: var(--text-2xs);
   }
 }
