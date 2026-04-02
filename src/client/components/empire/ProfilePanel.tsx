@@ -18,14 +18,9 @@ import { useClient } from '../../context';
 import type { AutoConnectionActionType, CurriculumActionType } from '@/shared/types';
 import styles from './ProfilePanel.module.css';
 
-/** Format a numeric string or number as $X,XXX (with thousands separators). */
-export function formatMoney(value: string | number): string {
-  const num = typeof value === 'string' ? parseFloat(value.replace(/,/g, '')) : value;
-  if (isNaN(num)) return '$0';
-  const sign = num < 0 ? '-' : '';
-  const abs = Math.abs(num);
-  return `${sign}$${abs.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-}
+import { formatMoney } from '../../format-utils';
+// Re-export for backwards compatibility (used by ProfilePanel.test.ts)
+export { formatMoney };
 
 const TABS: Array<{ id: ProfileTab; icon: typeof GraduationCap; label: string }> = [
   { id: 'curriculum', icon: GraduationCap, label: 'CV' },

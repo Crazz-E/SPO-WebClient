@@ -6,26 +6,10 @@
  * Tap to open favorites/empire panel.
  */
 
+import { formatMoney, formatIncome, incomeSign } from '../../format-utils';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
 import styles from './MobileInfoBar.module.css';
-
-/** Determine sign of income string for color coding. */
-function incomeSign(income: string): 'positive' | 'negative' | 'neutral' {
-  const cleaned = income.replace(/[^0-9.\-]/g, '');
-  const num = parseFloat(cleaned);
-  if (Number.isNaN(num) || num === 0) return 'neutral';
-  return num > 0 ? 'positive' : 'negative';
-}
-
-/** Format income with sign prefix. */
-function formatIncome(income: string): string {
-  const sign = incomeSign(income);
-  const cleaned = income.replace(/[^0-9.,]/g, '');
-  if (sign === 'positive') return `+$${cleaned}/h`;
-  if (sign === 'negative') return `-$${cleaned}/h`;
-  return '$0/h';
-}
 
 /** Format date compactly: "Aug 27, 92" */
 function formatDate(date: Date | null): string {
@@ -61,7 +45,7 @@ export function MobileInfoBar() {
       {/* Financial */}
       {tycoonStats && (
         <>
-          <span className={styles.cash}>${tycoonStats.cash}</span>
+          <span className={styles.cash}>{formatMoney(tycoonStats.cash)}</span>
           <span className={incomeClass}>{formatIncome(tycoonStats.incomePerHour)}</span>
         </>
       )}

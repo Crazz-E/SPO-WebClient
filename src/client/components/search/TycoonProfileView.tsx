@@ -4,6 +4,7 @@
  */
 
 import { User, DollarSign, Trophy, Star, Award } from 'lucide-react';
+import { formatMoney } from '../../format-utils';
 import { useSearchStore } from '../../store/search-store';
 import { GlassCard } from '../common';
 import styles from './SearchPanel.module.css';
@@ -15,10 +16,6 @@ export function TycoonProfileView() {
     return <div className={styles.emptyState}>No profile data available.</div>;
   }
 
-  const formatCurrency = (value: number): string => {
-    const prefix = value < 0 ? '-$' : '$';
-    return `${prefix}${Math.abs(value).toLocaleString()}`;
-  };
 
   return (
     <div className={styles.listContainer}>
@@ -45,12 +42,12 @@ export function TycoonProfileView() {
           <span className={styles.profileStatLabel}>
             <DollarSign size={12} /> Fortune
           </span>
-          <span className={styles.profileStatValue}>{formatCurrency(profile.fortune)}</span>
+          <span className={styles.profileStatValue}>{formatMoney(profile.fortune)}</span>
 
           <span className={styles.profileStatLabel}>
             <DollarSign size={12} /> This Year
           </span>
-          <span className={styles.profileStatValue}>{formatCurrency(profile.thisYearProfit)}</span>
+          <span className={styles.profileStatValue}>{formatMoney(profile.thisYearProfit)}</span>
 
           <span className={styles.profileStatLabel}>
             <Trophy size={12} /> NTA Ranking

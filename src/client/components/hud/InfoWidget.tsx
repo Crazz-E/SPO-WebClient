@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { formatMoney, formatIncome, incomeSign } from '../../format-utils';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
 import { NobilityBadge } from '../chat/NobilityBadge';
@@ -37,22 +38,6 @@ function formatTimeAgo(timestamp: number | null): string {
   return `${minutes}m ago`;
 }
 
-/** Determine sign of income string for color coding. */
-function incomeSign(income: string): 'positive' | 'negative' | 'neutral' {
-  const cleaned = income.replace(/[^0-9.\-]/g, '');
-  const num = parseFloat(cleaned);
-  if (Number.isNaN(num) || num === 0) return 'neutral';
-  return num > 0 ? 'positive' : 'negative';
-}
-
-/** Format income with sign prefix and dollar sign. */
-function formatIncome(income: string): string {
-  const sign = incomeSign(income);
-  const cleaned = income.replace(/[^0-9.,]/g, '');
-  if (sign === 'positive') return `+$${cleaned}/h`;
-  if (sign === 'negative') return `-$${cleaned}/h`;
-  return `$0/h`;
-}
 
 export function InfoWidget() {
   const username = useGameStore((s) => s.username);
@@ -109,8 +94,7 @@ export function InfoWidget() {
       {tycoonStats && (
         <div className={styles.financial}>
           <div className={styles.cashRow}>
-            <span className={styles.cashSymbol}>$</span>
-            <span className={styles.cash}>{tycoonStats.cash}</span>
+            <span className={styles.cash}>{formatMoney(tycoonStats.cash)}</span>
           </div>
           <div className={styles.incomeRow}>
             <span className={incomeClass}>
