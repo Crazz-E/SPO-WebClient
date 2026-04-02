@@ -172,7 +172,6 @@ async function setBuildingPropertyImpl(
     if (!socket) throw new Error('Construction socket unavailable');
     socket.write(setCmd);
     ctx.log.debug(`[BuildingDetails] Sent: ${setCmd}`);
-    }
 
     // Wait for server to process the command
     await new Promise(resolve => setTimeout(resolve, 200));
