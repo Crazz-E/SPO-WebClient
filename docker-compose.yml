@@ -15,6 +15,7 @@ services:
     volumes:
       - spo-cache:/app/cache                     # Game assets from update server (persists across restarts)
       - spo-webclient-cache:/app/webclient-cache  # Downloaded images (dynamic cache)
+      - ./logs:/app/logs                          # NDJSON structured logs (persists on host)
     depends_on:
       spo-cache-sync:
         condition: service_started  # Don't block gateway startup on sync completion
