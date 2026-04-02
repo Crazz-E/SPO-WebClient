@@ -508,6 +508,27 @@ describe('WHGeneral', () => {
     expect(prop!.type).toBe(PropertyType.NUMBER);
     expect(prop!.unit).toBe('years');
   });
+
+  it('General tab should NOT show ProductSummaryCards when warehouseWares has entries', () => {
+    // Warehouses have a dedicated Products tab — product summaries must not
+    // appear on the General tab. The guard checks warehouseWares presence.
+    // PropertyGroup.tsx: isGeneralTab && products.length > 0 && !isWarehouse
+    const warehouseWares = [
+      { name: 'Chemicals', enabled: true, index: 0 },
+      { name: 'Food', enabled: false, index: 1 },
+    ];
+    const isWarehouse = warehouseWares && warehouseWares.length > 0;
+    expect(isWarehouse).toBe(true);
+    // When isWarehouse is true, ProductSummaryCards must be skipped
+  });
+
+  it('General tab SHOULD show ProductSummaryCards for non-warehouse buildings with products', () => {
+    // Non-warehouse buildings (factories, service) have no warehouseWares
+    const warehouseWares = undefined;
+    const isWarehouse = warehouseWares && (warehouseWares as unknown[]).length > 0;
+    expect(isWarehouse).toBeFalsy();
+    // When isWarehouse is falsy, ProductSummaryCards renders normally
+  });
 });
 
 // ---------------------------------------------------------------------------

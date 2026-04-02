@@ -53,21 +53,26 @@ async function setBuildingPropertyImpl(
       throw new Error('Construction service not initialized - worldId is null');
     }
 
-    // Get the building's CurrBlock ID via map service
+    // Get the building's CurrBlock and ObjectId via map service.
+    // For most buildings ObjectId === CurrBlock, but warehouses differ:
+    // output/input gate commands (RDOSetOutputPrice, etc.) must target ObjectId.
+    // Ref: voyager-handler-reference.md:1198, building_details_rdo.txt:9-10
     await ctx.connectMapService();
     const tempObjectId = await ctx.cacherCreateObject();
     let currBlock: string;
+    let objectId: string;
 
     try {
       await ctx.cacherSetObject(tempObjectId, x, y);
-      const values = await ctx.cacherGetPropertyList(tempObjectId, ['CurrBlock']);
+      const values = await ctx.cacherGetPropertyList(tempObjectId, ['CurrBlock', 'ObjectId']);
       currBlock = values[0];
+      objectId = values[1] || currBlock; // fallback for buildings where ObjectId is absent
 
       if (!currBlock) {
         throw new Error(`No CurrBlock found for building at (${x}, ${y})`);
       }
 
-      ctx.log.debug(`[BuildingDetails] Found CurrBlock: ${currBlock} for building at (${x}, ${y})`);
+      ctx.log.debug(`[BuildingDetails] Found CurrBlock: ${currBlock}, ObjectId: ${objectId} for building at (${x}, ${y})`);
     } finally {
       await ctx.cacherCloseObject(tempObjectId);
     }
@@ -140,7 +145,16 @@ async function setBuildingPropertyImpl(
         'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
         'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
       ]);
-      const builder = RdoCommand.sel(currBlock).call(propertyName);
+      // Output/input gate commands bind to ObjectId, not CurrBlock.
+      // For warehouses these differ; for other buildings they are equal.
+      // Ref: voyager-handler-reference.md:1198 — RDOSetOutputPrice BindTo: objectId (direct)
+      const RDO_OBJECTID_COMMANDS: ReadonlySet<string> = new Set([
+        'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
+        'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
+        'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
+      ]);
+      const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
+      const builder = RdoCommand.sel(target).call(propertyName);
       if (RDO_FUNCTIONS.has(propertyName)) {
         builder.method(); // "^" — function returning olevariant
       } else {

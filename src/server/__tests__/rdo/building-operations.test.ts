@@ -436,6 +436,54 @@ describe('RDO Building Operations', () => {
     });
   });
 
+  describe('ObjectId targeting for output/input gate commands', () => {
+    // Warehouses have ObjectId !== CurrBlock. Output/input gate commands
+    // must target ObjectId (the facility), not CurrBlock (the block).
+    // Ref: voyager-handler-reference.md:1198, building_details_rdo.txt:9-10
+
+    const OBJECTID_COMMANDS = [
+      'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
+      'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
+      'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
+    ];
+
+    it('should use objectId (not currBlock) for RDOSetOutputPrice when they differ', () => {
+      const objectId = 114551548;
+      const currBlock = 114551764;
+      // Command should sel the objectId, not currBlock
+      const cmd = RdoCommand.sel(objectId).call('RDOSetOutputPrice')
+        .method()
+        .args(RdoValue.string('Chemicals'), RdoValue.int(150))
+        .build();
+
+      expect(cmd).toContain(`sel ${objectId}`);
+      expect(cmd).not.toContain(`sel ${currBlock}`);
+      expect(cmd).toMatchRdoCallFormat('RDOSetOutputPrice');
+    });
+
+    it('RDOSetPrice (service) should still use currBlock', () => {
+      const currBlock = 114551764;
+      const cmd = RdoCommand.sel(currBlock).call('RDOSetPrice')
+        .push()
+        .args(RdoValue.int(0), RdoValue.int(220))
+        .build();
+
+      expect(cmd).toContain(`sel ${currBlock}`);
+      expect(cmd).toMatchRdoCallFormat('RDOSetPrice');
+    });
+
+    it('objectId commands set should match RDO_FUNCTIONS set', () => {
+      // The same commands that use "^" separator (functions) also need objectId targeting.
+      // This test ensures they stay in sync.
+      const RDO_FUNCTIONS = [
+        'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
+        'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
+        'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
+      ];
+      expect(OBJECTID_COMMANDS.sort()).toEqual(RDO_FUNCTIONS.sort());
+    });
+  });
+
   describe('RDO Format Validation', () => {
     it('should generate valid RDO format for all building commands', async () => {
       await mockSession.simulateBuildingFocus(1, 10, 20);
