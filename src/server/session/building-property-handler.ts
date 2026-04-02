@@ -143,9 +143,12 @@ async function setBuildingPropertyImpl(
     ]);
 
     if (RDO_FUNCTIONS.has(propertyName)) {
-      // "^" — function returning olevariant → sendRdoRequest (with RID)
+      // "^" — function returning olevariant → fire-and-forget WITH RID.
+      // Must have RID so wire format is "C <rid> sel ..." (Delphi expects queryId for "^").
+      // But must NOT await response — rapid-fire price changes would queue up behind
+      // the serialization lock + 10s timeout, causing timeout cascades and ECONNRESET.
       const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
-      await ctx.sendRdoRequest('construction', {
+      ctx.sendRdoFireAndForget('construction', {
         verb: RdoVerb.SEL,
         targetId: target,
         action: RdoAction.CALL,
@@ -153,7 +156,7 @@ async function setBuildingPropertyImpl(
         separator: '"^"',
         args: rdoArgs.map(a => a.format()),
       });
-      ctx.log.debug(`[BuildingDetails] Sent via sendRdoRequest: ${propertyName} on ${target}`);
+      ctx.log.debug(`[BuildingDetails] Sent fire-and-forget with RID: ${propertyName} on ${target}`);
     } else if (propertyName === 'property' && additionalParams?.propertyName) {
       // Direct property set: use SET verb — fire-and-forget
       const actualPropName = additionalParams.propertyName;

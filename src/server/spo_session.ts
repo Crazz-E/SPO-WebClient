@@ -1488,6 +1488,24 @@ public sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>): Promi
   });
 }
 
+/**
+ * Fire-and-forget with RID: assigns a query ID so "^" commands produce valid
+ * wire format ("C <rid> sel ...") but does NOT wait for a response or register
+ * a pending request. Use for rapid-fire "^" property changes where the caller
+ * does not need the return value.
+ */
+public sendRdoFireAndForget(socketName: string, packetData: Partial<RdoPacket>): void {
+  const socket = this.sockets.get(socketName);
+  if (!socket) {
+    this.log.warn(`[Session] sendRdoFireAndForget: socket ${socketName} not active`);
+    return;
+  }
+  const rid = this.requestIdCounter++;
+  const packet = { ...packetData, rid, type: 'REQUEST' } as RdoPacket;
+  const rawString = RdoProtocol.format(packet);
+  socket.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
+}
+
 private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>): Promise<RdoPacket> {
   return new Promise(async (resolve, reject) => {
     const socket = this.sockets.get(socketName);
