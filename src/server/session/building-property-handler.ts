@@ -129,7 +129,7 @@ async function setBuildingPropertyImpl(
     // RDO functions (olevariant return) use "^" separator.
     // RDO procedures (void) use "*" separator.
     const RDO_FUNCTIONS: ReadonlySet<string> = new Set([
-      'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
+      'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
       'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
       'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
     ]);
