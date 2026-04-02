@@ -121,9 +121,8 @@ function initSpoDebug(): SpoDebugWire {
     maxHistory: 200,
     getState: null,
   };
-  if (import.meta.env.DEV) {
-    (window as unknown as Record<string, unknown>).__spoDebug = debug;
-  }
+  // Always expose debug wire tracker (needed for "Send Debug Report" in production)
+  (window as unknown as Record<string, unknown>).__spoDebug = debug;
   return debug;
 }
 

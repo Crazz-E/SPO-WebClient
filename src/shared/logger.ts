@@ -1,11 +1,12 @@
 /**
- * Système de logging structuré pour SPO v2
+ * Structured logging system for SPO v2
  *
- * Permet de filtrer par niveau et d'ajouter du contexte à chaque log.
- * Simple mais extensible (possibilité d'ajouter des transports later).
+ * Supports structured fields (player, correlationId), NDJSON output mode,
+ * and file transport with rotation. Backward-compatible with existing callers.
  */
 
 import { config } from './config';
+import { FileTransport } from './log-transport';
 
 export enum LogLevel {
   DEBUG = 0,
@@ -30,9 +31,6 @@ const LOG_LEVEL_COLORS: Record<LogLevel, string> = {
 
 const RESET_COLOR = '\x1b[0m';
 
-/**
- * Parse le niveau de log depuis la config
- */
 function parseLogLevel(level: string): LogLevel {
   switch (level.toLowerCase()) {
     case 'debug': return LogLevel.DEBUG;
@@ -45,11 +43,39 @@ function parseLogLevel(level: string): LogLevel {
 
 const currentLogLevel = parseLogLevel(config.logging.level);
 
-/**
- * Logger avec contexte
- */
+// Module-level file transport singleton (server-only, created once)
+let fileTransport: FileTransport | null = null;
+if (config.logging.filePath && typeof window === 'undefined') {
+  fileTransport = new FileTransport({
+    filePath: config.logging.filePath,
+    maxFileSize: config.logging.maxFileSize,
+    maxFiles: config.logging.maxFiles,
+  });
+}
+
+/** Structured fields attached to every log line from this logger instance. */
+export type LogFields = Record<string, string>;
+
 export class Logger {
-  constructor(private context: string) {}
+  private fields: LogFields;
+
+  constructor(private context: string, fields?: LogFields) {
+    this.fields = fields ? { ...fields } : {};
+  }
+
+  /** Create a child logger that inherits this logger's fields plus extras. */
+  child(extraFields: LogFields): Logger {
+    return new Logger(this.context, { ...this.fields, ...extraFields });
+  }
+
+  /** Set or clear a mutable field (e.g. correlationId that changes per-request). */
+  setField(key: string, value: string | null): void {
+    if (value === null) {
+      delete this.fields[key];
+    } else {
+      this.fields[key] = value;
+    }
+  }
 
   debug(message: string, meta?: unknown) {
     this.log(LogLevel.DEBUG, message, meta);
@@ -68,48 +94,82 @@ export class Logger {
   }
 
   private log(level: LogLevel, message: string, meta?: unknown) {
-    // Filter by configured level
     if (level < currentLogLevel) {
       return;
     }
 
     const timestamp = new Date().toISOString();
     const levelName = LOG_LEVEL_NAMES[level];
-    const contextStr = this.context ? `[${this.context}]` : '';
 
-    let logMessage: string;
+    // --- NDJSON line (always built for file transport, and for console in JSON mode) ---
+    const jsonEntry: Record<string, unknown> = {
+      ts: timestamp,
+      level: levelName,
+      ctx: this.context,
+      msg: message,
+      ...this.fields,
+    };
 
-    if (config.logging.colorize) {
-      const color = LOG_LEVEL_COLORS[level];
-      logMessage = `${color}${timestamp} ${levelName.padEnd(5)}${RESET_COLOR} ${contextStr} ${message}`;
-    } else {
-      logMessage = `${timestamp} ${levelName.padEnd(5)} ${contextStr} ${message}`;
-    }
-
-    // Add metadata if present
     if (meta !== undefined) {
-      logMessage += ` ${meta instanceof Error ? (meta.stack ?? meta.message) : JSON.stringify(meta)}`;
+      jsonEntry.meta = meta instanceof Error
+        ? { error: meta.message, stack: meta.stack }
+        : meta;
     }
 
-    // Output to console (possibility to add other transports)
+    // Write to file transport (always NDJSON regardless of console mode)
+    if (fileTransport) {
+      fileTransport.write(JSON.stringify(jsonEntry));
+    }
+
+    // --- Console output ---
+    if (config.logging.jsonMode) {
+      // JSON mode: emit NDJSON to console too
+      const jsonLine = JSON.stringify(jsonEntry);
+      this.consoleWrite(level, jsonLine);
+    } else {
+      // Human-readable mode (existing behavior)
+      const contextStr = this.context ? `[${this.context}]` : '';
+      const fieldsStr = Object.keys(this.fields).length > 0
+        ? ` {${Object.entries(this.fields).map(([k, v]) => `${k}=${v}`).join(', ')}}`
+        : '';
+
+      let logMessage: string;
+      if (config.logging.colorize) {
+        const color = LOG_LEVEL_COLORS[level];
+        logMessage = `${color}${timestamp} ${levelName.padEnd(5)}${RESET_COLOR} ${contextStr}${fieldsStr} ${message}`;
+      } else {
+        logMessage = `${timestamp} ${levelName.padEnd(5)} ${contextStr}${fieldsStr} ${message}`;
+      }
+
+      if (meta !== undefined) {
+        logMessage += ` ${meta instanceof Error ? (meta.stack ?? meta.message) : JSON.stringify(meta)}`;
+      }
+
+      this.consoleWrite(level, logMessage);
+    }
+  }
+
+  private consoleWrite(level: LogLevel, message: string): void {
     switch (level) {
       case LogLevel.DEBUG:
       case LogLevel.INFO:
-        console.log(logMessage);
+        console.log(message);
         break;
       case LogLevel.WARN:
-        console.warn(logMessage);
+        console.warn(message);
         break;
       case LogLevel.ERROR:
-        console.error(logMessage);
+        console.error(message);
         break;
     }
   }
 }
 
-/**
- * Helper pour créer un logger avec contexte
- */
+/** Access the module-level file transport (for the debug-log endpoint). */
+export function getFileTransport(): FileTransport | null {
+  return fileTransport;
+}
+
 export function createLogger(context: string): Logger {
   return new Logger(context);
 }

@@ -89,8 +89,10 @@ export interface SessionContext {
 
   // ── Logging ────────────────────────────────────────────────────────────
   readonly log: {
-    debug(...args: unknown[]): void;
-    warn(...args: unknown[]): void;
-    error(...args: unknown[]): void;
+    debug(message: string, meta?: unknown): void;
+    info(message: string, meta?: unknown): void;
+    warn(message: string, meta?: unknown): void;
+    error(message: string, meta?: unknown): void;
+    setField(key: string, value: string | null): void;
   };
 }

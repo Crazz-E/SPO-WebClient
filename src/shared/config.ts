@@ -57,8 +57,16 @@ export const config = {
    */
   logging: {
     // Niveaux: 'debug' | 'info' | 'warn' | 'error'
-    level: getEnv('LOG_LEVEL') || 'info',
+    level: getEnv('LOG_LEVEL') || 'debug',
     colorize: getEnv('NODE_ENV') !== 'production',
+    /** NDJSON structured output (LOG_JSON=true) */
+    jsonMode: getEnv('LOG_JSON') === 'true',
+    /** File path for NDJSON log output (e.g. 'logs/gateway.ndjson') */
+    filePath: getEnv('LOG_FILE') || '',
+    /** Max log file size in bytes before rotation (default 10MB) */
+    maxFileSize: Number(getEnv('LOG_MAX_SIZE')) || 10 * 1024 * 1024,
+    /** Max number of rotated log files to keep (default 5) */
+    maxFiles: Number(getEnv('LOG_MAX_FILES')) || 5,
   },
 };
 

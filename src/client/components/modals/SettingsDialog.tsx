@@ -4,11 +4,12 @@
  * Toggle switches for visual/audio settings + keyboard shortcuts reference.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { X } from 'lucide-react';
 import { useGameStore, type GameSettings, type MinimapSize } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
+import { showToast } from '../common/Toast';
 import styles from './SettingsDialog.module.css';
 
 export function SettingsDialog() {
@@ -18,6 +19,37 @@ export function SettingsDialog() {
   const updateSettings = useGameStore((s) => s.updateSettings);
 
   const client = useClient();
+  const username = useGameStore((s) => s.username);
+  const [debugSending, setDebugSending] = useState(false);
+
+  const handleSendDebugReport = useCallback(async () => {
+    const spoDebug = (window as unknown as Record<string, unknown>).__spoDebug as
+      { history?: Array<{ dir: string; type: string; ts: number; reqId?: string }> } | undefined;
+
+    if (!spoDebug?.history?.length) {
+      showToast('No debug data available', 'warning');
+      return;
+    }
+
+    setDebugSending(true);
+    try {
+      const resp = await fetch('/api/debug-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: username || 'unknown', history: spoDebug.history }),
+      });
+      const result = await resp.json() as { ok?: boolean; entries?: number; error?: string };
+      if (result.ok) {
+        showToast(`Debug report sent (${result.entries} entries)`, 'success');
+      } else {
+        showToast(result.error || 'Failed to send debug report', 'error');
+      }
+    } catch {
+      showToast('Failed to send debug report', 'error');
+    } finally {
+      setDebugSending(false);
+    }
+  }, [username]);
 
   // Update store + notify client.ts to apply to renderer/sound/localStorage
   const handleSettingChange = useCallback(
@@ -111,6 +143,18 @@ export function SettingsDialog() {
               <ShortcutRow keys="Esc" action="Close Panel/Modal" />
               <ShortcutRow keys="D" action="Debug Overlay" />
             </div>
+          </section>
+
+          {/* Debug */}
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Debug</h3>
+            <button
+              className={styles.debugBtn}
+              onClick={handleSendDebugReport}
+              disabled={debugSending}
+            >
+              {debugSending ? 'Sending...' : 'Send Debug Report'}
+            </button>
           </section>
 
           {/* Logout */}

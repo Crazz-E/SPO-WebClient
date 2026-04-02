@@ -271,6 +271,33 @@
   color: var(--text-muted);
 }
 
+/* Debug report */
+.debugBtn {
+  width: 100%;
+  padding: var(--space-3);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    color var(--duration-fast) var(--ease-default);
+}
+
+.debugBtn:hover {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+.debugBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Logout */
 .logoutBtn {
   width: 100%;

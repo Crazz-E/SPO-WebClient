@@ -15,6 +15,7 @@ public/assets/
 # Logs
 *.log
 npm-debug.log*
+logs/
 
 # IDE
 .vscode/

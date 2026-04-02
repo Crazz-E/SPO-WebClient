@@ -106,7 +106,7 @@ import * as loginHandler from './session/login-handler';
 export { parseFavoritesResponse, deriveResidenceClass } from './session/session-utils';
 
 export class StarpeaceSession extends EventEmitter {
-  public readonly log = createLogger('Session');
+  public log = createLogger('Session');
   private sockets: Map<string, net.Socket> = new Map();
   private framers: Map<string, RdoFramer> = new Map();
   private phase: SessionPhase = SessionPhase.DISCONNECTED;
@@ -303,7 +303,12 @@ export class StarpeaceSession extends EventEmitter {
   public setPhase(value: SessionPhase): void { this.phase = value; }
   public setWorldContextId(value: string | null): void { this.worldContextId = value; }
   public setInterfaceServerId(value: string | null): void { this.interfaceServerId = value; }
-  public setTycoonId(value: string | null): void { this.tycoonId = value; }
+  public setTycoonId(value: string | null): void {
+    this.tycoonId = value;
+    if (value) {
+      this.log = this.log.child({ tycoonId: value });
+    }
+  }
   public setRdoCnntId(value: string | null): void { this.rdoCnntId = value; }
   public setCacherId(value: string | null): void { this.cacherId = value; }
   public setWorldId(value: string | null): void { this.worldId = value; }
@@ -316,10 +321,16 @@ export class StarpeaceSession extends EventEmitter {
   public setWorldYSize(value: number | null): void { this.worldYSize = value; }
   public setWorldSeason(value: number | null): void { this.worldSeason = value; }
   public setCurrentWorldInfo(value: WorldInfo | null): void { this.currentWorldInfo = value; }
-  public setCachedUsername(value: string | null): void { this.cachedUsername = value; }
+  public setCachedUsername(value: string | null): void {
+    this.cachedUsername = value;
+    if (value) {
+      this.log = this.log.child({ player: value });
+    }
+  }
   public setCachedPassword(value: string | null): void { this._cachedPassword = value; }
   public setCachedZonePath(value: string): void { this.cachedZonePath = value; }
   public setActiveUsername(value: string | null): void { this.activeUsername = value; }
+  public setCorrelationId(corrId: string | null): void { this.log.setField('corrId', corrId); }
   public setCurrentCompany(value: CompanyInfo | null): void { this.currentCompany = value; }
   public setLastPlayerX(value: number): void { this.lastPlayerX = value; }
   public setLastPlayerY(value: number): void { this.lastPlayerY = value; }
@@ -1518,6 +1529,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
 
     // Send the request
     const rawString = RdoProtocol.format(packet);
+    this.log.debug(`RDO>> ${socketName}`, { command: packetData.member, verb: packetData.verb, rid, raw: rawString });
     socket.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
   });
 }
@@ -1543,6 +1555,7 @@ private handleIncomingMessage(socketName: string, raw: string) {
 
 	private processSingleCommand(socketName: string, raw: string) {
 	  const packet = RdoProtocol.parse(raw);
+	  this.log.debug(`RDO<< ${socketName}`, { type: packet.type, rid: packet.rid, raw });
 
 	  // Check if this is a RefreshArea push (map visual update — buildings/roads changed)
 	  if (this.isRefreshAreaPush(packet)) {

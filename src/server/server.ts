@@ -5,7 +5,7 @@ import * as path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { StarpeaceSession } from './spo_session';
 import { config } from '../shared/config';
-import { createLogger } from '../shared/logger';
+import { createLogger, getFileTransport } from '../shared/logger';
 import { UPDATE_SERVER } from '../shared/constants';
 import { fileToProxyUrl, PROXY_IMAGE_ENDPOINT } from '../shared/proxy-utils';
 import * as ErrorCodes from '../shared/error-codes';
@@ -779,6 +779,78 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Debug log endpoint: POST /api/debug-log — client submits wire history for server-side logging
+  if (safePath === '/api/debug-log' && req.method === 'POST') {
+    const transport = getFileTransport();
+    if (!transport) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'File logging not enabled (set LOG_FILE env var)' }));
+      return;
+    }
+
+    // Rate limit: 1 report per IP per 30 seconds
+    const clientIp = getClientIp(req);
+    if (!checkRateLimit(clientIp, 'debug-log', 2)) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Too many debug reports. Try again in 30 seconds.' }));
+      return;
+    }
+
+    // Read body (max 512KB)
+    const chunks: Buffer[] = [];
+    let bodySize = 0;
+    const MAX_DEBUG_BODY = 512 * 1024;
+
+    req.on('data', (chunk: Buffer) => {
+      bodySize += chunk.length;
+      if (bodySize <= MAX_DEBUG_BODY) {
+        chunks.push(chunk);
+      }
+    });
+
+    req.on('end', () => {
+      if (bodySize > MAX_DEBUG_BODY) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Payload too large' }));
+        return;
+      }
+
+      try {
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+          player?: string;
+          history?: Array<{ dir: string; type: string; ts: number; reqId?: string }>;
+        };
+
+        if (!body.player || !Array.isArray(body.history)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing player or history fields' }));
+          return;
+        }
+
+        // Write each entry as NDJSON with ClientWire context
+        const entries = body.history.slice(0, 200); // Cap at 200 entries
+        for (const entry of entries) {
+          transport.write(JSON.stringify({
+            ts: new Date(entry.ts).toISOString(),
+            level: 'DEBUG',
+            ctx: 'ClientWire',
+            msg: `${entry.dir} ${entry.type}`,
+            player: body.player,
+            meta: { reqId: entry.reqId },
+          }));
+        }
+
+        logger.info(`Debug report received from ${body.player}: ${entries.length} entries`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, entries: entries.length }));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+      }
+    });
+    return;
+  }
+
   // Image proxy endpoint: /proxy-image?url=<encoded_url>
   if (safePath.startsWith(`${PROXY_IMAGE_ENDPOINT}?`)) {
     const urlParams = new URLSearchParams(safePath.split('?')[1]);
@@ -1001,7 +1073,7 @@ const GM_USERNAMES = new Set((process.env.SPO_GM_USERS || '').split(',').map(s =
 
 wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
   const clientIp = getClientIp(req);
-  logger.info('New Client Connected');
+  logger.info('Client connected', { ip: clientIp });
 
   // Create a dedicated Starpeace Session for this connection
   const spSession = new StarpeaceSession();
@@ -1049,7 +1121,13 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
         }
       }
 
+      // Correlation ID: trace this WS request through all RDO calls
+      const corrId = `ws-${Date.now()}-${msg.wsRequestId || 'noid'}`;
+      spSession.setCorrelationId(corrId);
+      spSession.log.info(`WS>> ${msg.type}`, { wsRequestId: msg.wsRequestId });
+
       await handleClientMessage(ws, spSession, searchMenuService, msg, clientIp);
+      spSession.setCorrelationId(null);
 
       // Initialize SearchMenuService after successful login response
       const isCompanySelection = msg.type === WsMessageType.REQ_SELECT_COMPANY || msg.type === WsMessageType.REQ_SWITCH_COMPANY;
@@ -1094,7 +1172,8 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
         }, 500);
       }
     } catch (err: unknown) {
-      logger.error(`Message Error: ${toErrorMessage(err)}`);
+      spSession.log.error('WS<< PARSE_ERROR', { error: toErrorMessage(err) });
+      spSession.setCorrelationId(null);
       const errorResp: WsRespError = {
         type: WsMessageType.RESP_ERROR,
         errorMessage: 'Invalid Message Format',
@@ -1105,7 +1184,7 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
   });
 
   ws.on('close', async () => {
-    logger.info('Client Disconnected');
+    spSession.log.info('Client disconnected', { player: connectedClients.get(ws) ?? 'unknown', ip: clientIp });
     connectedClients.delete(ws);
 
     // Decrement per-IP connection count
@@ -1178,9 +1257,9 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
       { ws, session, searchMenuService, facilityDimensionsCache, inventionIndex, connectedClients, gmUsernames: GM_USERNAMES },
       msg,
     );
+    session.log.info(`WS<< ${msg.type} OK`, { wsRequestId: msg.wsRequestId });
   } catch (err: unknown) {
-    // Log full details server-side, send generic message to client
-    logger.error(`Request Failed: ${toErrorMessage(err)}`);
+    session.log.error(`WS<< ${msg.type} FAIL`, { wsRequestId: msg.wsRequestId, error: toErrorMessage(err) });
     const errorResp: WsRespError = {
       type: WsMessageType.RESP_ERROR,
       wsRequestId: msg.wsRequestId,
