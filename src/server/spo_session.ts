@@ -483,8 +483,6 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 	  this.currentFocusedCoords = { x, y };
 	  
 	  this.log.debug(`[Session] Focused on building ${buildingInfo.buildingId}: ${buildingInfo.buildingName}`);
-	  // --- DEBUG: Collect detailsText/hintsText formats (temporary) ---
-	  console.log(`[DETAILS-DEBUG] "${buildingInfo.buildingName}" detailsText="${buildingInfo.detailsText}" hintsText="${buildingInfo.hintsText}"`);
 
 	  return buildingInfo;
 	}
