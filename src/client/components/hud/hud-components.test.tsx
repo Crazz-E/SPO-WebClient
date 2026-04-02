@@ -1,16 +1,14 @@
 /**
- * Smoke tests for HUD components (LeftRail, RightRail, InfoWidget, StatusTicker, OverlayMenu).
+ * Smoke tests for HUD components (LeftRail, RightRail, InfoWidget, OverlayMenu).
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { screen } from '@testing-library/react';
 import { renderWithProviders, resetStores } from '../../__tests__/setup/render-helpers';
 import { useGameStore } from '../../store/game-store';
-import { useBuildingStore } from '../../store/building-store';
 import { LeftRail } from './LeftRail';
 import { RightRail } from './RightRail';
 import { InfoWidget } from './InfoWidget';
-import { StatusTicker } from './StatusTicker';
 import { OverlayMenu } from './OverlayMenu';
 
 describe('LeftRail', () => {
@@ -222,38 +220,6 @@ describe('InfoWidget', () => {
     });
     renderWithProviders(<InfoWidget />);
     expect(screen.getByText('-$200/h')).toBeTruthy();
-  });
-});
-
-describe('StatusTicker', () => {
-  beforeEach(resetStores);
-
-  it('renders nothing when no building focused', () => {
-    const { container } = renderWithProviders(<StatusTicker />);
-    expect(container.innerHTML).toBe('');
-  });
-
-  it('renders nothing when not in overlay mode', () => {
-    useBuildingStore.getState().setFocus({
-      buildingId: 'bld-1', buildingName: 'Factory', ownerName: 'Owner',
-      salesInfo: '', revenue: '', detailsText: 'Details here', hintsText: 'Hint here',
-      x: 10, y: 20, xsize: 2, ysize: 2, visualClass: '100',
-    });
-    useBuildingStore.setState({ isOverlayMode: false });
-    const { container } = renderWithProviders(<StatusTicker />);
-    expect(container.innerHTML).toBe('');
-  });
-
-  it('renders details and hints when in overlay mode', () => {
-    useBuildingStore.getState().setFocus({
-      buildingId: 'bld-1', buildingName: 'Factory', ownerName: 'Owner',
-      salesInfo: '', revenue: '', detailsText: 'Producing goods', hintsText: 'Running well',
-      x: 10, y: 20, xsize: 2, ysize: 2, visualClass: '100',
-    });
-    useBuildingStore.setState({ isOverlayMode: true });
-    renderWithProviders(<StatusTicker />);
-    expect(screen.getByText('Producing goods')).toBeTruthy();
-    expect(screen.getByText('Running well')).toBeTruthy();
   });
 });
 

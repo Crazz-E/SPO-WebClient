@@ -15,7 +15,7 @@
 
 import { lazy, Suspense } from 'react';
 import { useUiStore } from '../store';
-import { InfoWidget, LeftRail, RightRail, StatusTicker, VersionBadge } from '../components/hud';
+import { InfoWidget, LeftRail, RightRail, VersionBadge } from '../components/hud';
 import { RightPanel, LeftPanel } from '../components/panels';
 import { ChatStrip } from '../components/chat';
 import { BuildingInspector, StatusOverlay } from '../components/building';
@@ -91,9 +91,6 @@ export function GameScreen() {
       {/* StatusOverlay — floating building preview (z-250, between map and panels) */}
       <StatusOverlay />
 
-
-      {/* StatusTicker — floating details/hints bar (z-350, centered top) */}
-      <StatusTicker />
 
       {/* InfoWidget — top-right stats card */}
       <InfoWidget />
