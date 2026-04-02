@@ -29,8 +29,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends p7zip-full && \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root user inside container
-RUN groupadd -r spo && useradd -r -g spo -m spo
+# Create non-root user inside container (fixed UID/GID for bind-mount permissions)
+RUN groupadd -r -g 1001 spo && useradd -r -u 1001 -g spo -m spo
 
 WORKDIR /app
 
@@ -43,7 +43,7 @@ COPY --from=builder /app/dist/ ./dist/
 COPY --from=builder /app/public/ ./public/
 
 # Create runtime directories (mounted as volumes in production)
-RUN mkdir -p /app/cache /app/webclient-cache && \
+RUN mkdir -p /app/cache /app/webclient-cache /app/logs && \
     chown -R spo:spo /app
 
 # Switch to non-root user
