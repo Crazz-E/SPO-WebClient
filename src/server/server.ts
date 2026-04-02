@@ -1077,6 +1077,7 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
 
   // Create a dedicated Starpeace Session for this connection
   const spSession = new StarpeaceSession();
+  spSession.log.info('SESSION_START', { ip: clientIp });
 
   // Search Menu Service (will be initialized after login)
   let searchMenuService: SearchMenuService | null = null;
@@ -1184,7 +1185,13 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
   });
 
   ws.on('close', async () => {
-    spSession.log.info('Client disconnected', { player: connectedClients.get(ws) ?? 'unknown', ip: clientIp });
+    const durationMs = Date.now() - spSession.startedAt;
+    spSession.log.info('SESSION_END', {
+      ip: clientIp,
+      player: connectedClients.get(ws) ?? 'unknown',
+      durationMs: String(durationMs),
+      phase: String(spSession.getPhase()),
+    });
     connectedClients.delete(ws);
 
     // Decrement per-IP connection count

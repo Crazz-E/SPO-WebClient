@@ -1,28 +1,27 @@
 # Logging System
 
-Structured logging with player tracking, NDJSON output, and file rotation.
+Structured logging with session tracking, error context, NDJSON output, and file rotation.
 
 ## Architecture
 
 ```
                   Logger (src/shared/logger.ts)
                   ├── Console output (human-readable or NDJSON)
-                  └── FileTransport (src/shared/log-transport.ts)
-                      └── logs/gateway.ndjson (size-based rotation)
+                  ├── FileTransport → logs/gateway.ndjson (all levels)
+                  └── FileTransport → logs/errors.ndjson  (ERROR only, with recentContext)
 ```
 
-Each server module creates its own logger via `createLogger(context)`. Sessions create child loggers that inherit player identity fields, so every log line is automatically tagged with who triggered it.
+Each server module creates its own logger via `createLogger(context)`. Each WebSocket connection gets a unique session ID (`sid`) that propagates to every log line via `.child()` inheritance. Session loggers also have a ring buffer that captures recent entries and attaches them as context when an error occurs.
 
 ## Quick Start
 
 ### Enable file logging
 
-Set these environment variables (in `.env` or `docker-compose.yml`):
-
 ```bash
-LOG_FILE=logs/gateway.ndjson   # Enable file output
-LOG_JSON=true                  # NDJSON format on console too
-LOG_LEVEL=info                 # debug | info | warn | error
+LOG_FILE=logs/gateway.ndjson        # All logs
+LOG_ERROR_FILE=logs/errors.ndjson   # Errors only (with context)
+LOG_JSON=true                       # NDJSON on console too
+LOG_LEVEL=info                      # debug | info | warn | error
 ```
 
 ### Docker deployment
@@ -44,17 +43,20 @@ sudo chown 1001:1001 /opt/spo-webclient/logs
 ### Query logs
 
 ```bash
+# All errors (small file, each includes recent context)
+cat logs/errors.ndjson | jq .
+
+# All logs for a specific session
+cat logs/gateway.ndjson | jq 'select(.sid == "s-m1abc2d-x7k2")'
+
 # All logs for a player
 cat logs/gateway.ndjson | jq 'select(.player == "SPO_test3")'
 
-# Errors only
-cat logs/gateway.ndjson | jq 'select(.level == "ERROR")'
-
-# Player errors
-cat logs/gateway.ndjson | jq 'select(.player == "SPO_test3" and .level == "ERROR")'
+# Session boundaries (start/end with duration)
+cat logs/gateway.ndjson | jq 'select(.msg == "SESSION_START" or .msg == "SESSION_END")'
 
 # Track a request chain by correlation ID
-cat logs/gateway.ndjson | jq 'select(.corrId == "ws-42")'
+cat logs/gateway.ndjson | jq 'select(.corrId == "ws-1743608105000-req47")'
 
 # Timeline for a player (compact)
 cat logs/gateway.ndjson | jq -c 'select(.player == "SPO_test3") | {ts, level, ctx, msg}'
@@ -71,45 +73,107 @@ Requires [jq](https://jqlang.github.io/jq/).
 
 ## Configuration Reference
 
-| Env Variable    | Default               | Description                                      |
-|-----------------|-----------------------|--------------------------------------------------|
-| `LOG_LEVEL`     | `debug`               | Minimum level: `debug`, `info`, `warn`, `error`  |
-| `LOG_JSON`      | `false`               | NDJSON output on console (file is always NDJSON)  |
-| `LOG_FILE`      | *(empty = disabled)*  | File path for NDJSON output                      |
-| `LOG_MAX_SIZE`  | `10485760` (10 MB)    | Max file size before rotation                    |
-| `LOG_MAX_FILES` | `5`                   | Number of rotated files to keep                  |
+| Env Variable           | Default               | Description                                            |
+|------------------------|-----------------------|--------------------------------------------------------|
+| `LOG_LEVEL`            | `debug`               | Minimum level: `debug`, `info`, `warn`, `error`        |
+| `LOG_JSON`             | `false`               | NDJSON output on console (file is always NDJSON)        |
+| `LOG_FILE`             | *(empty = disabled)*  | File path for all NDJSON output                         |
+| `LOG_ERROR_FILE`       | *(empty = disabled)*  | Separate file for ERROR entries (with recent context)   |
+| `LOG_MAX_SIZE`         | `10485760` (10 MB)    | Max file size before rotation                           |
+| `LOG_MAX_FILES`        | `5`                   | Number of rotated files to keep                         |
+| `LOG_RING_BUFFER_SIZE` | `20`                  | Recent entries kept per session for error context        |
 
-**Rotation:** When `gateway.ndjson` exceeds `LOG_MAX_SIZE`, it is renamed to `.1`, previous `.1` becomes `.2`, etc. Files beyond `LOG_MAX_FILES` are deleted. Total disk usage is bounded to `LOG_MAX_SIZE * (LOG_MAX_FILES + 1)`.
+**Rotation:** When a log file exceeds `LOG_MAX_SIZE`, it is renamed to `.1`, previous `.1` becomes `.2`, etc. Files beyond `LOG_MAX_FILES` are deleted. Both `LOG_FILE` and `LOG_ERROR_FILE` rotate independently.
 
 **Production warning:** `LOG_LEVEL=debug` may log session IDs. Use `info` in production.
 
+## Log Files
+
+| File | Content | Typical size |
+|------|---------|--------------|
+| `logs/gateway.ndjson` | All log entries (DEBUG through ERROR) | Large — all session activity |
+| `logs/errors.ndjson` | ERROR entries only, each with `recentContext` | Small — fast to scan |
+
 ## NDJSON Line Format
 
-Each log line is a single JSON object:
+### Standard log entry
 
 ```json
 {
   "ts": "2026-04-02T20:37:50.123Z",
   "level": "INFO",
   "ctx": "Session",
-  "msg": "Player logged in",
+  "msg": "WS>> REQ_PLACE_BUILDING",
+  "sid": "s-m1abc2d-x7k2",
   "player": "SPO_test3",
   "tycoonId": "T42",
-  "corrId": "ws-123",
-  "meta": { "world": "Shamba" }
+  "corrId": "ws-1743608105000-req47"
 }
 ```
 
-| Field      | Always present | Description                                          |
-|------------|----------------|------------------------------------------------------|
-| `ts`       | yes            | ISO 8601 timestamp                                   |
-| `level`    | yes            | `DEBUG`, `INFO`, `WARN`, `ERROR`                     |
-| `ctx`      | yes            | Logger context (e.g. `Gateway`, `Session`, `ClientWire`) |
-| `msg`      | yes            | Human-readable message                               |
-| `player`   | after login    | Player username (inherited via child logger)          |
-| `tycoonId` | after login    | Tycoon ID (inherited via child logger)                |
-| `corrId`   | per-request    | Correlation ID for request/response pairing           |
-| `meta`     | optional       | Extra data (errors include `error` + `stack`)         |
+### Error entry (in `errors.ndjson`)
+
+```json
+{
+  "ts": "2026-04-02T20:37:52.456Z",
+  "level": "ERROR",
+  "ctx": "Session",
+  "msg": "[Construction] Failed to place building",
+  "sid": "s-m1abc2d-x7k2",
+  "player": "SPO_test3",
+  "tycoonId": "T42",
+  "corrId": "ws-1743608105000-req47",
+  "meta": { "error": "Socket timeout", "stack": "..." },
+  "recentContext": [
+    { "ts": "...", "level": "INFO", "msg": "WS>> REQ_PLACE_BUILDING", "sid": "s-m1abc2d-x7k2", "player": "SPO_test3" },
+    { "ts": "...", "level": "DEBUG", "msg": "Sending CreateObj to map socket", "sid": "s-m1abc2d-x7k2" },
+    { "ts": "...", "level": "DEBUG", "msg": "Response timeout after 10000ms", "sid": "s-m1abc2d-x7k2" }
+  ]
+}
+```
+
+### Session lifecycle markers
+
+```json
+{"ts": "...", "level": "INFO", "ctx": "Session", "msg": "SESSION_START", "sid": "s-m1abc2d-x7k2", "meta": {"ip": "1.2.3.4"}}
+{"ts": "...", "level": "INFO", "ctx": "Session", "msg": "SESSION_END", "sid": "s-m1abc2d-x7k2", "player": "SPO_test3", "meta": {"ip": "1.2.3.4", "durationMs": "45230", "phase": "5"}}
+```
+
+### Field reference
+
+| Field            | Always present | Description                                          |
+|------------------|----------------|------------------------------------------------------|
+| `ts`             | yes            | ISO 8601 timestamp                                   |
+| `level`          | yes            | `DEBUG`, `INFO`, `WARN`, `ERROR`                     |
+| `ctx`            | yes            | Logger context (`Gateway`, `Session`, `ClientWire`)   |
+| `msg`            | yes            | Human-readable message                               |
+| `sid`            | session logs   | Unique session ID per WebSocket connection             |
+| `player`         | after login    | Player username (inherited via child logger)          |
+| `tycoonId`       | after login    | Tycoon ID (inherited via child logger)                |
+| `corrId`         | per-request    | Correlation ID for request/response pairing           |
+| `meta`           | optional       | Extra data (errors include `error` + `stack`)         |
+| `recentContext`  | errors only    | Ring buffer drain — last N entries before this error   |
+
+## AI Triage Workflow
+
+When diagnosing an issue from a log dump:
+
+```bash
+# 1. Start with errors.ndjson — small, each error has full context inline
+cat logs/errors.ndjson | jq .
+
+# 2. Each error has recentContext[] — no cross-referencing needed
+
+# 3. To get the full session timeline for a specific error's session:
+SID="s-m1abc2d-x7k2"
+cat logs/gateway.ndjson | jq "select(.sid == \"$SID\")"
+
+# 4. Find session boundaries:
+cat logs/gateway.ndjson | jq "select(.sid == \"$SID\" and (.msg == \"SESSION_START\" or .msg == \"SESSION_END\"))"
+
+# 5. All active sessions in a time window:
+cat logs/gateway.ndjson | jq 'select(.msg == "SESSION_START") | {ts, sid, meta}'
+```
 
 ## Usage in Code
 
@@ -125,35 +189,52 @@ logger.debug('Processing item', { itemId: 42 });
 logger.error('Failed to connect', error);  // Error stack included in meta
 ```
 
-### Child loggers (inherit fields)
+### Session loggers (automatic sid + ring buffer)
 
-Child loggers carry all parent fields plus new ones. Use them to tag all logs from a session with the player identity:
+`StarpeaceSession` creates a logger with session ID and ring buffer automatically:
 
 ```typescript
-// Base logger
-const log = createLogger('Session');
+// In spo_session.ts — done for you:
+public readonly sid = generateSessionId();
+public log = createLogger('Session').child({ sid: this.sid }).withRingBuffer(20);
 
-// After player logs in — all subsequent logs include player field
-const playerLog = log.child({ player: 'SPO_test3' });
-playerLog.info('Logged in');
-// → {"ctx":"Session", "msg":"Logged in", "player":"SPO_test3", ...}
+// After player logs in — all subsequent logs include player + sid
+this.log = this.log.child({ player: username });
 
 // After tycoon loaded — adds tycoonId too
-const tycoonLog = playerLog.child({ tycoonId: 'T42' });
-tycoonLog.info('Company selected');
-// → {"ctx":"Session", "msg":"Company selected", "player":"SPO_test3", "tycoonId":"T42", ...}
+this.log = this.log.child({ tycoonId: id });
 ```
 
-This is how `StarpeaceSession` works — see `setCachedUsername()` and `setTycoonId()` in `src/server/spo_session.ts`.
+All child loggers share the same ring buffer, so the error context includes logs from both parent and child loggers.
+
+### Child loggers (inherit fields)
+
+```typescript
+const parent = createLogger('Session').child({ sid: 's-abc-1234' });
+const child = parent.child({ player: 'Alice' });
+child.info('logged in');
+// → {"ctx":"Session", "msg":"logged in", "sid":"s-abc-1234", "player":"Alice", ...}
+```
 
 ### Mutable fields (per-request context)
-
-For fields that change on every request (like correlation IDs), use `setField()`:
 
 ```typescript
 logger.setField('corrId', requestId);
 logger.info('Handling request');        // includes corrId
 logger.setField('corrId', null);        // clear after request
+```
+
+### Ring buffer for error context
+
+```typescript
+// Enable on any logger (usually only session loggers)
+const log = createLogger('Session').withRingBuffer(20);
+
+log.info('step 1');    // buffered
+log.debug('step 2');   // buffered
+log.error('crashed');  // recentContext: [{step 1}, {step 2}] attached to this entry
+log.info('step 3');    // buffer was drained, starts fresh
+log.error('again');    // recentContext: [{step 3}]
 ```
 
 ## Client-Side Debug Reports
@@ -201,10 +282,11 @@ cat logs/gateway.ndjson | jq 'select(.ctx == "ClientWire" and .player == "SPO_te
 
 | File | Purpose |
 |------|---------|
-| `src/shared/logger.ts` | Logger class, NDJSON formatting, console output |
+| `src/shared/logger.ts` | Logger class, ring buffer, session ID, NDJSON formatting |
 | `src/shared/log-transport.ts` | FileTransport with size-based rotation |
 | `src/shared/config.ts` | `config.logging.*` — env var parsing |
-| `src/server/spo_session.ts` | Session child loggers with player/tycoon fields |
-| `src/server/server.ts` | `POST /api/debug-log` endpoint |
+| `src/server/spo_session.ts` | Session with sid, startedAt, child loggers |
+| `src/server/server.ts` | SESSION_START/END markers, `POST /api/debug-log` |
 | `scripts/player-log.sh` | CLI helper to filter logs by player |
-| `logs/gateway.ndjson` | Default log file path (git-ignored) |
+| `logs/gateway.ndjson` | All log entries (git-ignored) |
+| `logs/errors.ndjson` | Error entries with context (git-ignored) |

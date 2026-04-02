@@ -67,7 +67,7 @@ import {
   rdoArgs
 } from '../shared/rdo-types';
 import { config } from '../shared/config';
-import { createLogger } from '../shared/logger';
+import { createLogger, generateSessionId } from '../shared/logger';
 import { toProxyUrl, isProxyUrl } from '../shared/proxy-utils';
 import { toErrorMessage } from '../shared/error-utils';
 import {
@@ -106,7 +106,9 @@ import * as loginHandler from './session/login-handler';
 export { parseFavoritesResponse, deriveResidenceClass } from './session/session-utils';
 
 export class StarpeaceSession extends EventEmitter {
-  public log = createLogger('Session');
+  public readonly sid = generateSessionId();
+  public readonly startedAt = Date.now();
+  public log = createLogger('Session').child({ sid: this.sid }).withRingBuffer(config.logging.ringBufferSize);
   private sockets: Map<string, net.Socket> = new Map();
   private framers: Map<string, RdoFramer> = new Map();
   private phase: SessionPhase = SessionPhase.DISCONNECTED;

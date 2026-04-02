@@ -67,6 +67,10 @@ export const config = {
     maxFileSize: Number(getEnv('LOG_MAX_SIZE')) || 10 * 1024 * 1024,
     /** Max number of rotated log files to keep (default 5) */
     maxFiles: Number(getEnv('LOG_MAX_FILES')) || 5,
+    /** Separate file for ERROR-level entries (e.g. 'logs/errors.ndjson') */
+    errorFilePath: getEnv('LOG_ERROR_FILE') || '',
+    /** Ring buffer size for error context (recent entries attached to errors) */
+    ringBufferSize: Number(getEnv('LOG_RING_BUFFER_SIZE')) || 20,
   },
 };
 

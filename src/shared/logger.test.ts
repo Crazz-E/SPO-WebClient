@@ -21,7 +21,7 @@ jest.mock('./log-transport', () => ({
   FileTransport: jest.fn(),
 }));
 
-import { Logger, createLogger } from './logger';
+import { Logger, LogRingBuffer, createLogger, generateSessionId } from './logger';
 
 describe('Logger', () => {
   let consoleSpy: jest.SpyInstance;
@@ -190,5 +190,135 @@ describe('Logger JSON mode', () => {
     const parsed = JSON.parse(errorSpy.mock.calls[0][0] as string);
     expect(parsed.meta.error).toBe('test error');
     expect(parsed.meta.stack).toBeDefined();
+  });
+});
+
+describe('generateSessionId', () => {
+  it('returns a string matching s-<base36>-<4chars> format', () => {
+    const sid = generateSessionId();
+    expect(sid).toMatch(/^s-[a-z0-9]+-[a-z0-9]{4}$/);
+  });
+
+  it('generates unique IDs', () => {
+    const ids = new Set(Array.from({ length: 100 }, () => generateSessionId()));
+    expect(ids.size).toBe(100);
+  });
+});
+
+describe('LogRingBuffer', () => {
+  it('stores entries up to maxSize', () => {
+    const buf = new LogRingBuffer(3);
+    buf.push({ msg: 'a' });
+    buf.push({ msg: 'b' });
+    buf.push({ msg: 'c' });
+    expect(buf.size).toBe(3);
+  });
+
+  it('evicts oldest entry when full', () => {
+    const buf = new LogRingBuffer(2);
+    buf.push({ msg: 'a' });
+    buf.push({ msg: 'b' });
+    buf.push({ msg: 'c' });
+    const entries = buf.drain();
+    expect(entries).toEqual([{ msg: 'b' }, { msg: 'c' }]);
+  });
+
+  it('drain() returns entries and clears buffer', () => {
+    const buf = new LogRingBuffer(5);
+    buf.push({ msg: 'x' });
+    buf.push({ msg: 'y' });
+    expect(buf.drain()).toHaveLength(2);
+    expect(buf.drain()).toHaveLength(0);
+  });
+});
+
+describe('Logger ring buffer', () => {
+  let consoleSpy: jest.SpyInstance;
+  let errorSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    errorSpy = jest.spyOn(console, 'error').mockImplementation();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('attaches recentContext on error when ring buffer is enabled (JSON mode)', () => {
+    const { config } = require('./config');
+    config.logging.jsonMode = true;
+
+    const log = createLogger('Session').withRingBuffer(10);
+    log.info('step 1');
+    log.info('step 2');
+    log.debug('step 3');
+    log.error('something broke');
+
+    const errorOutput = errorSpy.mock.calls[0][0] as string;
+    const parsed = JSON.parse(errorOutput);
+    expect(parsed.recentContext).toBeDefined();
+    expect(parsed.recentContext).toHaveLength(3);
+    expect(parsed.recentContext[0].msg).toBe('step 1');
+    expect(parsed.recentContext[2].msg).toBe('step 3');
+
+    config.logging.jsonMode = false;
+  });
+
+  it('drains buffer on error so next error gets fresh context', () => {
+    const { config } = require('./config');
+    config.logging.jsonMode = true;
+
+    const log = createLogger('Session').withRingBuffer(10);
+    log.info('before first error');
+    log.error('error 1');
+
+    log.info('after first error');
+    log.error('error 2');
+
+    const error1 = JSON.parse(errorSpy.mock.calls[0][0] as string);
+    const error2 = JSON.parse(errorSpy.mock.calls[1][0] as string);
+
+    expect(error1.recentContext).toHaveLength(1);
+    expect(error1.recentContext[0].msg).toBe('before first error');
+
+    expect(error2.recentContext).toHaveLength(1);
+    expect(error2.recentContext[0].msg).toBe('after first error');
+
+    config.logging.jsonMode = false;
+  });
+
+  it('child loggers share the same ring buffer', () => {
+    const { config } = require('./config');
+    config.logging.jsonMode = true;
+
+    const parent = createLogger('Session').withRingBuffer(10);
+    const child = parent.child({ player: 'Alice' });
+
+    parent.info('parent log');
+    child.info('child log');
+    child.error('child error');
+
+    const errorOutput = errorSpy.mock.calls[0][0] as string;
+    const parsed = JSON.parse(errorOutput);
+    expect(parsed.recentContext).toHaveLength(2);
+    expect(parsed.recentContext[0].msg).toBe('parent log');
+    expect(parsed.recentContext[1].msg).toBe('child log');
+
+    config.logging.jsonMode = false;
+  });
+
+  it('does not attach recentContext when no ring buffer', () => {
+    const { config } = require('./config');
+    config.logging.jsonMode = true;
+
+    const log = createLogger('Gateway'); // no withRingBuffer
+    log.info('some info');
+    log.error('gateway error');
+
+    const parsed = JSON.parse(errorSpy.mock.calls[0][0] as string);
+    expect(parsed.recentContext).toBeUndefined();
+
+    config.logging.jsonMode = false;
   });
 });

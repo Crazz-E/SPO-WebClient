@@ -2,7 +2,8 @@
  * Structured logging system for SPO v2
  *
  * Supports structured fields (player, correlationId), NDJSON output mode,
- * and file transport with rotation. Backward-compatible with existing callers.
+ * file transport with rotation, per-session ring buffer for error context,
+ * and a separate error-only log file for fast AI triage.
  */
 
 import { config } from './config';
@@ -43,7 +44,8 @@ function parseLogLevel(level: string): LogLevel {
 
 const currentLogLevel = parseLogLevel(config.logging.level);
 
-// Module-level file transport singleton (server-only, created once)
+// ── File Transports (server-only singletons) ──────────────────────────
+
 let fileTransport: FileTransport | null = null;
 if (config.logging.filePath && typeof window === 'undefined') {
   fileTransport = new FileTransport({
@@ -53,19 +55,76 @@ if (config.logging.filePath && typeof window === 'undefined') {
   });
 }
 
+let errorFileTransport: FileTransport | null = null;
+if (config.logging.errorFilePath && typeof window === 'undefined') {
+  errorFileTransport = new FileTransport({
+    filePath: config.logging.errorFilePath,
+    maxFileSize: config.logging.maxFileSize,
+    maxFiles: config.logging.maxFiles,
+  });
+}
+
+// ── Ring Buffer ────────────────────────────────────────────────────────
+
+/** Circular buffer that keeps the last N log entries for error context. */
+export class LogRingBuffer {
+  private entries: Record<string, unknown>[] = [];
+  constructor(private maxSize: number) {}
+
+  push(entry: Record<string, unknown>): void {
+    if (this.entries.length >= this.maxSize) {
+      this.entries.shift();
+    }
+    this.entries.push(entry);
+  }
+
+  /** Return all buffered entries and clear the buffer. */
+  drain(): Record<string, unknown>[] {
+    const result = [...this.entries];
+    this.entries = [];
+    return result;
+  }
+
+  get size(): number {
+    return this.entries.length;
+  }
+}
+
+// ── Session ID Generator ───────────────────────────────────────────────
+
+/** Generate a short, unique, sortable session ID (e.g. `s-m1abc2d-x7k2`). */
+export function generateSessionId(): string {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).substring(2, 6);
+  return `s-${ts}-${rand}`;
+}
+
+// ── Logger ─────────────────────────────────────────────────────────────
+
 /** Structured fields attached to every log line from this logger instance. */
 export type LogFields = Record<string, string>;
 
 export class Logger {
   private fields: LogFields;
+  private ringBuffer: LogRingBuffer | null = null;
 
   constructor(private context: string, fields?: LogFields) {
     this.fields = fields ? { ...fields } : {};
   }
 
-  /** Create a child logger that inherits this logger's fields plus extras. */
+  /** Create a child logger that inherits this logger's fields plus extras.
+   *  The ring buffer reference is shared (not copied) so all child loggers
+   *  contribute to the same context window. */
   child(extraFields: LogFields): Logger {
-    return new Logger(this.context, { ...this.fields, ...extraFields });
+    const c = new Logger(this.context, { ...this.fields, ...extraFields });
+    c.ringBuffer = this.ringBuffer;
+    return c;
+  }
+
+  /** Enable a ring buffer on this logger. Returns `this` for chaining. */
+  withRingBuffer(size: number): Logger {
+    this.ringBuffer = new LogRingBuffer(size);
+    return this;
   }
 
   /** Set or clear a mutable field (e.g. correlationId that changes per-request). */
@@ -116,9 +175,28 @@ export class Logger {
         : meta;
     }
 
-    // Write to file transport (always NDJSON regardless of console mode)
+    // --- Ring buffer: capture context for errors ---
+    if (this.ringBuffer) {
+      if (level < LogLevel.ERROR) {
+        // Buffer non-error entries as context
+        this.ringBuffer.push({ ...jsonEntry });
+      } else {
+        // On error: drain recent context and attach to this entry
+        const context = this.ringBuffer.drain();
+        if (context.length > 0) {
+          jsonEntry.recentContext = context;
+        }
+      }
+    }
+
+    // Write to main file transport (always NDJSON regardless of console mode)
     if (fileTransport) {
       fileTransport.write(JSON.stringify(jsonEntry));
+    }
+
+    // Write to error-only file transport
+    if (errorFileTransport && level >= LogLevel.ERROR) {
+      errorFileTransport.write(JSON.stringify(jsonEntry));
     }
 
     // --- Console output ---
