@@ -3,6 +3,16 @@
  *
  * Every exported function takes `ctx: SessionContext` as first argument.
  * Private helpers are module-private functions.
+ *
+ * WARN (2026-04-02 audit): Several void procedures (AddHeaders, AddLine,
+ * CloseMessage, DeleteMessage) use sendRdoRequest() with separator '*'.
+ * Per RDO rules, sendRdoRequest() adds a QueryId, and '*' (void push) +
+ * QueryId risks crashing the Delphi server (see building-property-handler.ts
+ * fix for the construction socket equivalent). No issue observed on the mail
+ * server as of this date — the mail RDO handler may tolerate QueryId on void
+ * calls, or the await-based sequencing may mask the problem. If mail
+ * operations start crashing the server, convert these to socket.write() with
+ * .push() (no RID) and use small delays for sequencing instead of await.
  */
 
 import type { SessionContext } from './session-context';
@@ -114,7 +124,7 @@ export async function composeMail(
       action: RdoAction.CALL,
       member: 'AddHeaders',
       args: [RdoValue.string(headers).toString()],
-      separator: '*'  // void procedure (Delphi: procedure AddHeaders)
+      separator: '*'  // void procedure — see file-level WARN about QueryId risk
     });
   }
 
@@ -126,7 +136,7 @@ export async function composeMail(
       action: RdoAction.CALL,
       member: 'AddLine',
       args: [RdoValue.string(line).toString()],
-      separator: '*'  // void procedure (Delphi: procedure AddLine)
+      separator: '*'  // void procedure — see file-level WARN about QueryId risk
     });
   }
 
@@ -151,7 +161,7 @@ export async function composeMail(
       action: RdoAction.CALL,
       member: 'CloseMessage',
       args: [RdoValue.int(parseInt(msgId, 10)).toString()],
-      separator: '*'  // void procedure (Delphi: procedure CloseMessage)
+      separator: '*'  // void procedure — see file-level WARN about QueryId risk
     });
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after post:', e);
@@ -212,7 +222,7 @@ export async function saveDraft(
       action: RdoAction.CALL,
       member: 'AddHeaders',
       args: [RdoValue.string(headers).toString()],
-      separator: '*'  // void procedure (Delphi: procedure AddHeaders)
+      separator: '*'  // void procedure — see file-level WARN about QueryId risk
     });
   }
 
@@ -224,7 +234,7 @@ export async function saveDraft(
       action: RdoAction.CALL,
       member: 'AddLine',
       args: [RdoValue.string(line).toString()],
-      separator: '*'  // void procedure (Delphi: procedure AddLine)
+      separator: '*'  // void procedure — see file-level WARN about QueryId risk
     });
   }
 
@@ -249,7 +259,7 @@ export async function saveDraft(
       action: RdoAction.CALL,
       member: 'CloseMessage',
       args: [RdoValue.int(parseInt(msgId, 10)).toString()],
-      separator: '*'  // void procedure (Delphi: procedure CloseMessage)
+      separator: '*'  // void procedure — see file-level WARN about QueryId risk
     });
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after save:', e);
@@ -354,7 +364,7 @@ export async function readMailMessage(
         action: RdoAction.CALL,
         member: 'CloseMessage',
         args: [RdoValue.int(parseInt(msgId, 10)).toString()],
-        separator: '*'  // void procedure (Delphi: procedure CloseMessage)
+        separator: '*'  // void procedure — see file-level WARN about QueryId risk
       });
     } catch (e: unknown) {
       ctx.log.warn('[Mail] Failed to close message:', e);
@@ -388,7 +398,7 @@ export async function deleteMailMessage(
       RdoValue.string(folder).toString(),
       RdoValue.string(messageId).toString()
     ],
-    separator: '*'  // void procedure (Delphi: procedure DeleteMessage)
+    separator: '*'  // void procedure — see file-level WARN about QueryId risk
   });
   ctx.log.debug(`[Mail] Deleted message ${messageId} from ${folder}`);
 }

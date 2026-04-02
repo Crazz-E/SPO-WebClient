@@ -7,6 +7,7 @@
 
 import type { SessionContext } from './session-context';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
+import { RdoVerb, RdoAction } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 
 // =========================================================================
@@ -122,50 +123,71 @@ async function setBuildingPropertyImpl(
 
     // Send SetProperty command via construction service
     // The sel on CurrBlock is persistent (no closure needed)
-    let setCmd: string;
-    if (propertyName === 'property' && additionalParams?.propertyName) {
-      // Direct property set: use SET verb
+
+    // RDO functions (olevariant return) use "^" and MUST go through sendRdoRequest()
+    // to get a proper RID. Fire-and-forget "^" without RID produces "C sel ..." which
+    // the Delphi server cannot parse (expects "C <queryId> sel ..."), poisoning the session.
+    const RDO_FUNCTIONS: ReadonlySet<string> = new Set([
+      'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
+      'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
+      'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
+    ]);
+
+    // Output/input gate commands bind to ObjectId, not CurrBlock.
+    // For warehouses these differ; for other buildings they are equal.
+    // Ref: voyager-handler-reference.md:1198 — RDOSetOutputPrice BindTo: objectId (direct)
+    const RDO_OBJECTID_COMMANDS: ReadonlySet<string> = new Set([
+      'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
+      'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
+      'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
+    ]);
+
+    if (RDO_FUNCTIONS.has(propertyName)) {
+      // "^" — function returning olevariant → sendRdoRequest (with RID)
+      const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
+      await ctx.sendRdoRequest('construction', {
+        verb: RdoVerb.SEL,
+        targetId: target,
+        action: RdoAction.CALL,
+        member: propertyName,
+        separator: '"^"',
+        args: rdoArgs.map(a => a.format()),
+      });
+      ctx.log.debug(`[BuildingDetails] Sent via sendRdoRequest: ${propertyName} on ${target}`);
+    } else if (propertyName === 'property' && additionalParams?.propertyName) {
+      // Direct property set: use SET verb — fire-and-forget
       const actualPropName = additionalParams.propertyName;
-      setCmd = RdoCommand.sel(currBlock)
+      const setCmd = RdoCommand.sel(currBlock)
         .set(actualPropName)
         .args(...rdoArgs)
         .build();
+      const socket = ctx.getSocket('construction');
+      if (!socket) throw new Error('Construction socket unavailable');
+      socket.write(setCmd);
+      ctx.log.debug(`[BuildingDetails] Sent fire-and-forget: ${setCmd}`);
     } else if (RDO_SET_PROPERTIES.has(propertyName)) {
-      // Published property: use SET verb (not CALL)
+      // Published property: use SET verb (not CALL) — fire-and-forget
       // e.g., RDOAcceptCloning is a boolean property on TBlock — Kernel.pas:1304
-      setCmd = RdoCommand.sel(currBlock)
+      const setCmd = RdoCommand.sel(currBlock)
         .set(propertyName)
         .args(...rdoArgs)
         .build();
+      const socket = ctx.getSocket('construction');
+      if (!socket) throw new Error('Construction socket unavailable');
+      socket.write(setCmd);
+      ctx.log.debug(`[BuildingDetails] Sent fire-and-forget: ${setCmd}`);
     } else {
-      // RDO method call: use CALL verb, fire-and-forget (no RID).
-      // Functions (olevariant return) use "^" separator; procedures (void) use "*".
-      const RDO_FUNCTIONS: ReadonlySet<string> = new Set([
-        'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
-        'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
-        'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
-      ]);
-      // Output/input gate commands bind to ObjectId, not CurrBlock.
-      // For warehouses these differ; for other buildings they are equal.
-      // Ref: voyager-handler-reference.md:1198 — RDOSetOutputPrice BindTo: objectId (direct)
-      const RDO_OBJECTID_COMMANDS: ReadonlySet<string> = new Set([
-        'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
-        'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
-        'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
-      ]);
+      // "*" — void procedure → fire-and-forget (no RID)
       const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
-      const builder = RdoCommand.sel(target).call(propertyName);
-      if (RDO_FUNCTIONS.has(propertyName)) {
-        builder.method(); // "^" — function returning olevariant
-      } else {
-        builder.push();   // "*" — void procedure
-      }
-      setCmd = builder.args(...rdoArgs).build();
+      const setCmd = RdoCommand.sel(target).call(propertyName)
+        .push()
+        .args(...rdoArgs)
+        .build();
+      const socket = ctx.getSocket('construction');
+      if (!socket) throw new Error('Construction socket unavailable');
+      socket.write(setCmd);
+      ctx.log.debug(`[BuildingDetails] Sent fire-and-forget: ${setCmd}`);
     }
-    const socket = ctx.getSocket('construction');
-    if (!socket) throw new Error('Construction socket unavailable');
-    socket.write(setCmd);
-    ctx.log.debug(`[BuildingDetails] Sent: ${setCmd}`);
 
     // Wait for server to process the command
     await new Promise(resolve => setTimeout(resolve, 200));

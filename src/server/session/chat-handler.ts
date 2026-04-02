@@ -114,6 +114,9 @@ export async function getChatChannelInfo(ctx: SessionContext, channelName: strin
     action: RdoAction.CALL,
     member: 'GetChannelInfo',
     args: [channelName],
+    // WARN: unquoted '^' — should be '"^"' per protocol convention.
+    // No issue observed as of 2026-04-02 (RdoProtocol.format() auto-quotes),
+    // but inconsistent with the rest of the codebase. Fix if chat breaks.
     separator: '^'
   });
 
@@ -132,6 +135,9 @@ export async function joinChatChannel(ctx: SessionContext, channelName: string):
     action: RdoAction.CALL,
     member: 'JoinChannel',
     args: [channelName, ''],
+    // WARN: unquoted '^' — should be '"^"' per protocol convention.
+    // No issue observed as of 2026-04-02 (RdoProtocol.format() auto-quotes),
+    // but inconsistent with the rest of the codebase. Fix if chat breaks.
     separator: '^'
   });
 
@@ -150,6 +156,10 @@ export async function sendChatMessage(ctx: SessionContext, message: string): Pro
 
   ctx.log.debug(`[Chat] Sending message: ${message}`);
 
+  // WARN: sendRdoRequest() + separator '*' adds a QueryId to a void push.
+  // Per RDO rules this risks crashing the Delphi server (see building-property-handler.ts fix).
+  // No issue observed as of 2026-04-02 — the mail server may tolerate QueryId on void calls.
+  // If chat sends start crashing the server, switch to socket.write() with .push() (no RID).
   await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL,
     targetId: ctx.worldContextId,
