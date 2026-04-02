@@ -51,8 +51,8 @@ USER spo
 
 EXPOSE 8080
 
-# Health check: startup can take 30-90s while downloading game assets
-HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+# Health check: with external cache-sync, gateway starts in seconds; inline mode may take longer
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD node -e "const http=require('http');const r=http.get('http://localhost:8080/api/startup-status',{timeout:4000},s=>{process.exit(s.statusCode===200?0:1)});r.on('error',()=>process.exit(1))"
 
 CMD ["node", "--disable-warning=DEP0040", "dist/server/server.js"]

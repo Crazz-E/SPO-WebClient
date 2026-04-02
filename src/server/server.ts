@@ -14,6 +14,7 @@ import { SearchMenuService } from './search-menu-service';
 import { UpdateService } from './update-service';
 import { MapDataService } from './map-data-service';
 import { serviceRegistry, setupGracefulShutdown } from './service-registry';
+import { CacheWatcher } from './cache-watcher';
 import {
   WsMessageType,
   SessionPhase,
@@ -65,6 +66,12 @@ const PHASE_ALLOWED_MESSAGES: Record<SessionPhase, ReadonlySet<string> | null> =
   [SessionPhase.WORLD_CONNECTED]: null,
 };
 
+/** Cache sync mode: 'inline' = UpdateService runs in-process (dev/Electron), 'external' = separate container */
+const CACHE_SYNC_MODE = process.env.CACHE_SYNC_MODE || 'inline';
+if (CACHE_SYNC_MODE !== 'inline' && CACHE_SYNC_MODE !== 'external') {
+  throw new Error(`Invalid CACHE_SYNC_MODE="${CACHE_SYNC_MODE}". Must be "inline" or "external".`);
+}
+
 let PUBLIC_DIR = getPublicDir();
 let CACHE_DIR = getCacheDir();
 
@@ -115,19 +122,22 @@ if (!fs.existsSync(WEBCLIENT_CACHE_DIR)) {
 // Moving this to module level would cause services to capture stale paths.
 
 function registerServices(): void {
-  serviceRegistry.register('update', new UpdateService(), {
-    progressWeight: 50,
-    progressMessage: 'Downloading game assets...',
-  });
+  if (CACHE_SYNC_MODE === 'inline') {
+    // Dev/Electron: UpdateService runs in-process (existing behavior)
+    serviceRegistry.register('update', new UpdateService(), {
+      progressWeight: 50,
+      progressMessage: 'Downloading game assets...',
+    });
+  }
 
   serviceRegistry.register('facilities', new FacilityDimensionsCache(), {
-    dependsOn: ['update'],
+    dependsOn: CACHE_SYNC_MODE === 'inline' ? ['update'] : [],
     progressWeight: 10,
     progressMessage: 'Loading building catalog...',
   });
 
   serviceRegistry.register('mapData', new MapDataService(), {
-    dependsOn: ['update'],
+    dependsOn: CACHE_SYNC_MODE === 'inline' ? ['update'] : [],
     progressWeight: 5,
     progressMessage: 'Indexing map data...',
   });
@@ -144,7 +154,8 @@ const imageFileIndex = new Map<string, string>();
  * Called once at startup and after downloading new files.
  */
 async function buildImageFileIndex(): Promise<void> {
-  imageFileIndex.clear();
+  // Build into a temporary map, then swap atomically to avoid serving 404s during rebuild
+  const newIndex = new Map<string, string>();
   const CACHE_ROOT = getCacheDir();
 
   // Index files in update server cache subdirectories
@@ -155,7 +166,7 @@ async function buildImageFileIndex(): Promise<void> {
         const dirPath = path.join(CACHE_ROOT, entry.name);
         const files = await fsp.readdir(dirPath);
         for (const file of files) {
-          imageFileIndex.set(file.toLowerCase(), path.join(dirPath, file));
+          newIndex.set(file.toLowerCase(), path.join(dirPath, file));
         }
       }
     }
@@ -168,12 +179,18 @@ async function buildImageFileIndex(): Promise<void> {
     const files = await fsp.readdir(WEBCLIENT_CACHE_DIR);
     for (const file of files) {
       const key = file.toLowerCase();
-      if (!imageFileIndex.has(key)) {
-        imageFileIndex.set(key, path.join(WEBCLIENT_CACHE_DIR, file));
+      if (!newIndex.has(key)) {
+        newIndex.set(key, path.join(WEBCLIENT_CACHE_DIR, file));
       }
     }
   } catch {
     // webclient-cache doesn't exist yet
+  }
+
+  // Atomic swap: clear and repopulate in one synchronous block
+  imageFileIndex.clear();
+  for (const [k, v] of newIndex) {
+    imageFileIndex.set(k, v);
   }
 
   logger.info(`Image file index built: ${imageFileIndex.size} files`);
@@ -212,6 +229,41 @@ async function buildIniCache(): Promise<void> {
   }
 
   logger.info(`INI cache built: road=${iniCache.roadBlockClasses?.files.length ?? 0}, concrete=${iniCache.concreteBlockClasses?.files.length ?? 0}, car=${iniCache.carClasses?.files.length ?? 0}`);
+}
+
+/**
+ * Reload all in-memory caches from disk. Called by CacheWatcher when the
+ * cache-sync container writes a new sentinel file after completing a sync.
+ * Guarded by a mutex to prevent interleaved rebuilds from rapid sentinel changes.
+ */
+let reloadInProgress = false;
+async function reloadCaches(): Promise<void> {
+  if (reloadInProgress) {
+    logger.info('Cache reload already in progress, skipping');
+    return;
+  }
+  reloadInProgress = true;
+  try {
+  await Promise.all([buildImageFileIndex(), buildIniCache(), loadInventionIndex()]);
+
+  // Reload FacilityDimensionsCache if it wasn't initialized (first deploy case)
+  const facilities = facilityDimensionsCache();
+  if (!facilities.isHealthy()) {
+    try {
+      await facilities.reload();
+      logger.info(`Facility cache reloaded: ${facilities.getStats().total} facilities`);
+    } catch (err: unknown) {
+      logger.warn(`Facility cache reload failed: ${toErrorMessage(err)}`);
+    }
+  }
+
+  // Invalidate MapDataService extraction cache so next request re-checks disk
+  mapDataService().invalidateCache();
+
+  logger.info(`Caches reloaded: images=${imageFileIndex.size}, road=${iniCache['roadBlockClasses']?.files.length ?? 0}, concrete=${iniCache['concreteBlockClasses']?.files.length ?? 0}`);
+  } finally {
+    reloadInProgress = false;
+  }
 }
 
 // =============================================================================
@@ -1265,17 +1317,33 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
   logger.info('Initializing services...');
   await serviceRegistry.initialize();
 
-  // Rebuild caches now that UpdateService has downloaded files
-  await buildIniCache();
-  await buildImageFileIndex();
-  logger.info(`Caches rebuilt after service init: road=${iniCache['roadBlockClasses']?.files.length ?? 0}, concrete=${iniCache['concreteBlockClasses']?.files.length ?? 0}, car=${iniCache['carClasses']?.files.length ?? 0}, images=${imageFileIndex.size}`);
+  if (CACHE_SYNC_MODE === 'inline') {
+    // Rebuild caches now that UpdateService has downloaded files
+    await buildIniCache();
+    await buildImageFileIndex();
+    logger.info(`Caches rebuilt after service init: road=${iniCache['roadBlockClasses']?.files.length ?? 0}, concrete=${iniCache['concreteBlockClasses']?.files.length ?? 0}, car=${iniCache['carClasses']?.files.length ?? 0}, images=${imageFileIndex.size}`);
 
-  // Log service-specific statistics
-  const updateStats = serviceRegistry.get<UpdateService>('update').getStats();
-  logger.info(`Update service: ${updateStats.downloaded} downloaded, ${updateStats.extracted} CAB extracted, ${updateStats.skipped} skipped, ${updateStats.failed} failed`);
+    // Log service-specific statistics
+    const updateStats = serviceRegistry.get<UpdateService>('update').getStats();
+    logger.info(`Update service: ${updateStats.downloaded} downloaded, ${updateStats.extracted} CAB extracted, ${updateStats.skipped} skipped, ${updateStats.failed} failed`);
+  } else {
+    // External mode: watch for sentinel file from cache-sync container
+    const sentinelPath = path.join(CACHE_DIR, '.cache-sync-status.json');
+    const cacheWatcher = new CacheWatcher(sentinelPath);
+    cacheWatcher.on('cache-updated', async () => {
+      logger.info('Cache updated by sync service, reloading indexes...');
+      await reloadCaches();
+    });
+    cacheWatcher.start();
+    logger.info(`Cache watcher started (mode=external, sentinel=${sentinelPath})`);
+  }
 
   const facilityStats = facilityDimensionsCache().getStats();
-  logger.info(`Facility cache: ${facilityStats.total} facilities loaded`);
+  if (facilityStats.total > 0) {
+    logger.info(`Facility cache: ${facilityStats.total} facilities loaded`);
+  } else {
+    logger.warn('Facility cache: 0 facilities (cache sync pending)');
+  }
 
   logger.info(`Server ready at http://${HOST}:${PORT}`);
 

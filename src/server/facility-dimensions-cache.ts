@@ -42,8 +42,10 @@ export class FacilityDimensionsCache implements Service {
       logger.info('[FacilityDimensionsCache] Initialization complete');
       this.logCacheStats();
     } catch (error: unknown) {
-      logger.error('[FacilityDimensionsCache] Initialization failed:', error);
-      throw error;
+      // In external cache-sync mode, CLASSES.BIN may not exist yet on first deploy.
+      // The gateway starts in degraded mode and reloads once the cache service populates files.
+      logger.warn('[FacilityDimensionsCache] Initialization deferred (cache not ready yet):', error);
+      this.initialized = false;
     }
   }
 
@@ -162,6 +164,19 @@ export class FacilityDimensionsCache implements Service {
    */
   getStats(): { total: number; clusters?: Record<string, number>; categories?: Record<string, number> } {
     return this.buildingService.getStats();
+  }
+
+  /**
+   * Reload the cache from disk (called by CacheWatcher when cache-sync updates files).
+   * Re-instantiates BuildingDataService so it re-reads CLASSES.BIN.
+   */
+  async reload(): Promise<void> {
+    logger.info('[FacilityDimensionsCache] Reloading from disk...');
+    this.buildingService = new BuildingDataService();
+    await this.buildingService.initialize();
+    this.initialized = true;
+    logger.info('[FacilityDimensionsCache] Reload complete');
+    this.logCacheStats();
   }
 
   /**

@@ -126,12 +126,20 @@ export class MapDataService implements Service {
   }
 
   /**
+   * Invalidate in-memory caches so the next request re-checks disk.
+   * Called by CacheWatcher when cache-sync updates files.
+   */
+  invalidateCache(): void {
+    this.extracted.clear();
+    this.nameCache.clear();
+  }
+
+  /**
    * Graceful shutdown: clear in-memory state.
    */
   async shutdown(): Promise<void> {
     console.log('[MapDataService] Shutting down...');
-    this.extracted.clear();
-    this.nameCache.clear();
+    this.invalidateCache();
     console.log('[MapDataService] Shutdown complete');
   }
 

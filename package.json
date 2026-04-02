@@ -10,6 +10,7 @@
     "build:electron-bundle": "esbuild dist/server/server.js --bundle --platform=node --target=node18 --format=cjs --outfile=dist/server-bundle.js --external:electron --external:7zip-min --external:7zip-bin",
     "build": "npm run build:server && npm run build:client && npm run build:terrain-test",
     "start": "node --disable-warning=DEP0040 dist/server/server.js",
+    "start:cache-sync": "node --disable-warning=DEP0040 dist/server/cache-sync-service.js",
     "dev": "npm run build && npm start",
     "dev:react": "vite",
     "test": "jest",

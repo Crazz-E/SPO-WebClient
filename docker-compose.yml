@@ -10,9 +10,14 @@ services:
       - "127.0.0.1:8080:8080" # Localhost only — nginx fronts all external traffic
     env_file:
       - .env
+    environment:
+      - CACHE_SYNC_MODE=external
     volumes:
       - spo-cache:/app/cache                     # Game assets from update server (persists across restarts)
       - spo-webclient-cache:/app/webclient-cache  # Downloaded images (dynamic cache)
+    depends_on:
+      spo-cache-sync:
+        condition: service_started  # Don't block gateway startup on sync completion
     logging:
       driver: json-file
       options:
@@ -25,6 +30,30 @@ services:
           cpus: "1.0"
         reservations:
           memory: 128M
+
+  spo-cache-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile.cache-sync
+      network: host
+    container_name: spo-cache-sync
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - CACHE_SYNC_INTERVAL_MS=3600000  # Re-sync every hour
+    volumes:
+      - spo-cache:/app/cache
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
 
 volumes:
   spo-cache:
