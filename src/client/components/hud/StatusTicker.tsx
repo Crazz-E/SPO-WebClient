@@ -8,6 +8,7 @@
  */
 
 import { useBuildingStore } from '../../store/building-store';
+import { parseDetailsText } from '../building/QuickStats';
 import styles from './StatusTicker.module.css';
 
 export function StatusTicker() {
@@ -21,12 +22,27 @@ export function StatusTicker() {
   if (!isOverlay) return null;
   if (!detailsText && !hintsText) return null;
 
+  const entries = detailsText ? parseDetailsText(detailsText) : [];
+  const hasEntries = entries.length > 0;
+  const showHint = hintsText && hintsText !== 'No hints for this facility.';
+
   return (
     <div className={styles.ticker} data-testid="status-ticker">
-      {detailsText && (
-        <div className={styles.detailsLine}>{detailsText}</div>
+      {hasEntries ? (
+        <div className={styles.detailGrid}>
+          {entries.map((entry, i) => (
+            <div key={i} className={styles.detailRow}>
+              <span className={styles.detailLabel}>{entry.label}</span>
+              <span className={styles.detailValue}>{entry.value}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        detailsText && (
+          <div className={styles.detailsLine}>{detailsText}</div>
+        )
       )}
-      {hintsText && (
+      {showHint && (
         <div className={styles.hintsLine}>{hintsText}</div>
       )}
     </div>
