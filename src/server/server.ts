@@ -5,7 +5,7 @@ import * as path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { StarpeaceSession } from './spo_session';
 import { config } from '../shared/config';
-import { createLogger, getFileTransport } from '../shared/logger';
+import { createLogger, getFileTransport, getErrorFileTransport } from '../shared/logger';
 import { UPDATE_SERVER } from '../shared/constants';
 import { fileToProxyUrl, PROXY_IMAGE_ENDPOINT } from '../shared/proxy-utils';
 import * as ErrorCodes from '../shared/error-codes';
@@ -781,10 +781,10 @@ const server = http.createServer(async (req, res) => {
 
   // Debug log endpoint: POST /api/debug-log — client submits wire history for server-side logging
   if (safePath === '/api/debug-log' && req.method === 'POST') {
-    const transport = getFileTransport();
+    const transport = getErrorFileTransport() ?? getFileTransport();
     if (!transport) {
       res.writeHead(503, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'File logging not enabled (set LOG_FILE env var)' }));
+      res.end(JSON.stringify({ error: 'File logging not enabled (set LOG_ERROR_FILE or LOG_FILE env var)' }));
       return;
     }
 

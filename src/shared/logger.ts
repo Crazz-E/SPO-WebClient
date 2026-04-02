@@ -248,6 +248,11 @@ export function getFileTransport(): FileTransport | null {
   return fileTransport;
 }
 
+/** Access the error-only file transport (for client debug reports). */
+export function getErrorFileTransport(): FileTransport | null {
+  return errorFileTransport;
+}
+
 export function createLogger(context: string): Logger {
   return new Logger(context);
 }
