@@ -66,6 +66,11 @@ const PHASE_ALLOWED_MESSAGES: Record<SessionPhase, ReadonlySet<string> | null> =
   [SessionPhase.WORLD_CONNECTED]: null,
 };
 
+/** Message types suppressed from WS>> / WS<< info logs (too noisy, not useful for debugging). */
+const QUIET_WS_TYPES: ReadonlySet<string> = new Set([
+  WsMessageType.REQ_MAP_LOAD,
+]);
+
 /** Cache sync mode: 'inline' = UpdateService runs in-process (dev/Electron), 'external' = separate container */
 const CACHE_SYNC_MODE = process.env.CACHE_SYNC_MODE || 'inline';
 if (CACHE_SYNC_MODE !== 'inline' && CACHE_SYNC_MODE !== 'external') {
@@ -1125,7 +1130,8 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
       // Correlation ID: trace this WS request through all RDO calls
       const corrId = `ws-${Date.now()}-${msg.wsRequestId || 'noid'}`;
       spSession.setCorrelationId(corrId);
-      spSession.log.info(`WS>> ${msg.type}`, { wsRequestId: msg.wsRequestId });
+      const isQuietMsg = QUIET_WS_TYPES.has(msg.type);
+      if (!isQuietMsg) spSession.log.info(`WS>> ${msg.type}`, { wsRequestId: msg.wsRequestId });
 
       await handleClientMessage(ws, spSession, searchMenuService, msg, clientIp);
       spSession.setCorrelationId(null);
@@ -1264,7 +1270,7 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
       { ws, session, searchMenuService, facilityDimensionsCache, inventionIndex, connectedClients, gmUsernames: GM_USERNAMES },
       msg,
     );
-    session.log.info(`WS<< ${msg.type} OK`, { wsRequestId: msg.wsRequestId });
+    if (!QUIET_WS_TYPES.has(msg.type)) session.log.info(`WS<< ${msg.type} OK`, { wsRequestId: msg.wsRequestId });
   } catch (err: unknown) {
     session.log.error(`WS<< ${msg.type} FAIL`, { wsRequestId: msg.wsRequestId, error: toErrorMessage(err) });
     const errorResp: WsRespError = {
