@@ -1475,7 +1475,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 /**
  * NEW: Send RDO request with buffering when server is busy
  */
-public sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>): Promise<RdoPacket> {
+public sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs = 10000): Promise<RdoPacket> {
   return new Promise((resolve, reject) => {
     // If server is busy, buffer the request
     if (this.isServerBusy) {
@@ -1493,13 +1493,13 @@ public sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>): Promi
     }
 
     // Server not busy, execute immediately
-    this.executeRdoRequest(socketName, packetData)
+    this.executeRdoRequest(socketName, packetData, timeoutMs)
       .then(resolve)
       .catch(reject);
   });
 }
 
-private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>): Promise<RdoPacket> {
+private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs = 10000): Promise<RdoPacket> {
   return new Promise(async (resolve, reject) => {
     const socket = this.sockets.get(socketName);
     if (!socket) {
@@ -1515,7 +1515,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
         this.pendingRequests.delete(rid);
         reject(new Error(`Request timeout: ${packetData.member || 'unknown'}`));
       }
-    }, 10000); // 10 second timeout
+    }, timeoutMs);
 
     // Store both callbacks in an object
     this.pendingRequests.set(rid, {
@@ -1986,6 +1986,10 @@ private handlePush(socketName: string, packet: RdoPacket) {
     warehouseWares?: import('../shared/types').WarehouseWareData[];
   }> {
     return buildingDetailsHandler.getBuildingTabData(this, x, y, tabId, visualClass);
+  }
+
+  public async refreshBuildingProperties(x: number, y: number, visualClass: string): Promise<BuildingDetailsResponse> {
+    return buildingDetailsHandler.refreshBuildingProperties(this, x, y, visualClass);
   }
 
   public releaseInspector(): void {

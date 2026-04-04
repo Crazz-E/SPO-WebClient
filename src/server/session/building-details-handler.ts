@@ -206,11 +206,10 @@ export async function getBuildingBasicDetails(
   y: number,
   visualClass: string
 ): Promise<BuildingDetailsResponse> {
-  // Release any previous inspector for a different building
-  const prev = activeInspectors.get(ctx);
-  if (prev && (prev.x !== x || prev.y !== y)) {
-    releaseInspector(ctx);
-  }
+  // ALWAYS release the previous inspector — even for the same building.
+  // A new temp object will be created below, so the old one must be closed
+  // to prevent Delphi-side resource leaks.
+  releaseInspector(ctx);
 
   ctx.log.debug(`[BuildingDetails] Basic details for (${x},${y}), vc=${visualClass}`);
 
@@ -340,15 +339,32 @@ export async function getBuildingTabData(
 
     if (tabId === 'supplies' && inspector.hasSupplies) {
       const supplyPaths = await getSupplyPaths(ctx, tempObjectId);
-      const supplies: BuildingSupplyData[] = [];
-      for (const { path, name } of supplyPaths) {
+      const workerCount = computeWorkerCount(supplyPaths.length);
+      const semaphore = new Semaphore(MAX_GLOBAL_CONCURRENT_RDO);
+      let supplies: BuildingSupplyData[];
+
+      if (workerCount <= 1) {
+        // Single worker: use the inspector's own temp object (no pool overhead)
+        supplies = [];
+        for (const { path, name } of supplyPaths) {
+          try {
+            const detail = await fetchSupplyDetails(ctx, tempObjectId, path, name);
+            if (detail) supplies.push(detail);
+          } catch (e: unknown) {
+            ctx.log.warn(`[BuildingDetails] Error fetching supply ${path}:`, toErrorMessage(e));
+          }
+        }
+      } else {
+        // Multiple workers: create fresh temp objects for parallel fetching
+        ctx.log.debug(`[BuildingDetails] Using ${workerCount} workers for ${supplyPaths.length} supply paths`);
+        const workers = await createWorkerPool(ctx, x, y, workerCount);
         try {
-          const detail = await fetchSupplyDetails(ctx, tempObjectId, path, name);
-          if (detail) supplies.push(detail);
-        } catch (e: unknown) {
-          ctx.log.warn(`[BuildingDetails] Error fetching supply ${path}:`, e);
+          supplies = await fetchPathsWithPool(ctx, workers, supplyPaths, semaphore, fetchSupplyDetailsPooled);
+        } finally {
+          closeWorkerPool(ctx, workers);
         }
       }
+
       // For warehouses, also return warehouseWares so the client can filter
       // supplies by GateMap (only show enabled wares).
       if (inspector.isWarehouse) {
@@ -360,15 +376,32 @@ export async function getBuildingTabData(
 
     if (tabId === 'products' && inspector.hasProducts) {
       const productPaths = await getProductPaths(ctx, tempObjectId);
-      const products: BuildingProductData[] = [];
-      for (const { path, name } of productPaths) {
+      const workerCount = computeWorkerCount(productPaths.length);
+      const semaphore = new Semaphore(MAX_GLOBAL_CONCURRENT_RDO);
+      let products: BuildingProductData[];
+
+      if (workerCount <= 1) {
+        // Single worker: use the inspector's own temp object (no pool overhead)
+        products = [];
+        for (const { path, name } of productPaths) {
+          try {
+            const detail = await fetchProductDetails(ctx, tempObjectId, path, name);
+            if (detail) products.push(detail);
+          } catch (e: unknown) {
+            ctx.log.warn(`[BuildingDetails] Error fetching product ${path}:`, toErrorMessage(e));
+          }
+        }
+      } else {
+        // Multiple workers: create fresh temp objects for parallel fetching
+        ctx.log.debug(`[BuildingDetails] Using ${workerCount} workers for ${productPaths.length} product paths`);
+        const workers = await createWorkerPool(ctx, x, y, workerCount);
         try {
-          const detail = await fetchProductDetails(ctx, tempObjectId, path, name);
-          if (detail) products.push(detail);
-        } catch (e: unknown) {
-          ctx.log.warn(`[BuildingDetails] Error fetching product ${path}:`, e);
+          products = await fetchPathsWithPool(ctx, workers, productPaths, semaphore, fetchProductDetailsPooled);
+        } finally {
+          closeWorkerPool(ctx, workers);
         }
       }
+
       // For warehouses, also return warehouseWares so the client can filter
       // products by GateMap (only show enabled wares).
       if (inspector.isWarehouse) {
@@ -392,6 +425,92 @@ export async function getBuildingTabData(
     return {};
   } finally {
     release();
+  }
+}
+
+/**
+ * Lightweight refresh: re-read building-level properties on the SAME
+ * Delphi temp object. Does NOT create a new temp object, does NOT call
+ * cacherSetObject or cacherCreateObject. Matches the Delphi client's
+ * TObjectInspectorContainer.Refresh behavior.
+ *
+ * Falls back to getBuildingBasicDetails() if no ActiveInspector exists
+ * (e.g., first load or after session reconnect).
+ */
+export async function refreshBuildingProperties(
+  ctx: SessionContext,
+  x: number,
+  y: number,
+  visualClass: string,
+): Promise<BuildingDetailsResponse> {
+  const inspector = getActiveInspector(ctx, x, y);
+
+  if (!inspector) {
+    ctx.log.debug(`[BuildingDetails] No active inspector for (${x},${y}), falling back to full fetch`);
+    return getBuildingBasicDetails(ctx, x, y, visualClass);
+  }
+
+  ctx.log.debug(`[BuildingDetails] Refreshing properties on existing inspector obj=${inspector.tempObjectId} at (${x},${y})`);
+
+  const template = getTemplateForVisualClass(visualClass);
+  const { tempObjectId } = inspector;
+
+  try {
+    // Re-read properties on the SAME temp object (no SetObject needed — the
+    // Delphi TCachedObjectWrap already points at this building).
+    const { allValues, groups, moneyGraph } = await fetchPropertiesAndGroups(ctx, tempObjectId, template);
+
+    // Enrich votes tab
+    await enrichVotesTab(ctx, groups, allValues);
+
+    // Update GateMap in the inspector (may have changed via RDOSelectWare)
+    inspector.gateMap = allValues.get('GateMap') || inspector.gateMap;
+
+    // Re-read building name/owner (lightweight IS-level call, no temp object)
+    let buildingName = '';
+    let ownerName = '';
+    let buildingId = '';
+    try {
+      const focusInfo = await ctx.focusBuilding(x, y);
+      buildingName = focusInfo.buildingName;
+      ownerName = focusInfo.ownerName;
+      buildingId = focusInfo.buildingId;
+    } catch {
+      // Use values from allValues as fallback
+    }
+
+    const response: BuildingDetailsResponse = {
+      buildingId: buildingId || allValues.get('ObjectId') || allValues.get('CurrBlock') || '',
+      x,
+      y,
+      visualClass,
+      templateName: template.name,
+      buildingName,
+      ownerName,
+      securityId: allValues.get('SecurityId') || '',
+      tabs: template.groups.map(g => ({
+        id: g.id,
+        name: g.name,
+        icon: g.icon || '',
+        order: g.order,
+        special: g.special,
+        handlerName: g.handlerName || '',
+      })),
+      groups,
+      // Lazy fields: NOT fetched — client carry-forward preserves them
+      supplies: undefined,
+      products: undefined,
+      compInputs: undefined,
+      warehouseWares: undefined,
+      moneyGraph,
+      timestamp: Date.now(),
+    };
+
+    return response;
+  } catch (e: unknown) {
+    ctx.log.warn(`[BuildingDetails] Refresh failed on existing object, falling back to full create:`, toErrorMessage(e));
+    releaseInspector(ctx);
+    return getBuildingBasicDetails(ctx, x, y, visualClass);
   }
 }
 
@@ -888,6 +1007,129 @@ async function batchedParallel<T>(
   return results;
 }
 
+// =========================================================================
+// COUNTING SEMAPHORE — limits total concurrent RDO requests across workers
+// =========================================================================
+
+/** @internal Exported for testing only. */
+export class Semaphore {
+  private permits: number;
+  private waiting: Array<() => void> = [];
+
+  constructor(permits: number) {
+    this.permits = permits;
+  }
+
+  async acquire(): Promise<void> {
+    if (this.permits > 0) {
+      this.permits--;
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this.waiting.push(resolve);
+    });
+  }
+
+  release(): void {
+    const next = this.waiting.shift();
+    if (next) {
+      next();
+    } else {
+      this.permits++;
+    }
+  }
+}
+
+// =========================================================================
+// WORKER POOL — parallel supply/product fetching with fresh temp objects
+// =========================================================================
+
+/** Max concurrent RDO requests globally across all workers on the map socket. */
+const MAX_GLOBAL_CONCURRENT_RDO = 4;
+
+interface WorkerObject {
+  tempObjectId: string;
+}
+
+/**
+ * Determine optimal worker count based on slot count.
+ * More workers = more parallelism, but each uses a Delphi temp object.
+ */
+/** @internal Exported for testing only. */
+export function computeWorkerCount(slotCount: number): number {
+  if (slotCount <= 3) return 1;
+  if (slotCount <= 10) return 2;
+  return 3; // max — respect Delphi buffer limits
+}
+
+/**
+ * Create fresh temp objects pointing at the same building.
+ * Each worker gets its own independent Delphi TCachedObjectWrap.
+ * Degrades gracefully if CreateObject fails for additional workers.
+ */
+async function createWorkerPool(
+  ctx: SessionContext,
+  x: number,
+  y: number,
+  desiredCount: number,
+): Promise<WorkerObject[]> {
+  const workers: WorkerObject[] = [];
+
+  for (let i = 0; i < desiredCount; i++) {
+    try {
+      const tempObjectId = await ctx.cacherCreateObject();
+      await ctx.cacherSetObject(tempObjectId, x, y);
+      workers.push({ tempObjectId });
+    } catch (e: unknown) {
+      ctx.log.warn(`[BuildingDetails] Worker ${i} creation failed, continuing with ${workers.length} workers:`, toErrorMessage(e));
+      break; // Degrade gracefully — use however many were created
+    }
+  }
+
+  if (workers.length === 0) {
+    throw new Error('Failed to create any worker temp objects');
+  }
+  return workers;
+}
+
+/** Close all worker temp objects (fire-and-forget). */
+function closeWorkerPool(ctx: SessionContext, workers: WorkerObject[]): void {
+  for (const w of workers) {
+    ctx.cacherCloseObject(w.tempObjectId);
+  }
+}
+
+/**
+ * Distribute supply/product paths across worker pool with shared semaphore.
+ * Each worker runs SetPath + GetPropertyList on its own temp object.
+ * The semaphore caps total concurrent RDO requests to avoid Delphi buffer overflow.
+ */
+async function fetchPathsWithPool<T>(
+  ctx: SessionContext,
+  workers: WorkerObject[],
+  paths: Array<{ path: string; name: string }>,
+  semaphore: Semaphore,
+  fetchFn: (ctx: SessionContext, tempObjectId: string, path: string, name: string, semaphore: Semaphore) => Promise<T | null>,
+): Promise<T[]> {
+  const results: (T | null)[] = new Array(paths.length).fill(null);
+  let nextIndex = 0;
+
+  async function workerLoop(workerObj: WorkerObject): Promise<void> {
+    while (nextIndex < paths.length) {
+      const i = nextIndex++;
+      const { path, name } = paths[i];
+      try {
+        results[i] = await fetchFn(ctx, workerObj.tempObjectId, path, name, semaphore);
+      } catch (e: unknown) {
+        ctx.log.warn(`[BuildingDetails] Error fetching path ${path}:`, toErrorMessage(e));
+      }
+    }
+  }
+
+  await Promise.all(workers.map((w) => workerLoop(w)));
+  return results.filter((r): r is T => r !== null);
+}
+
 /**
  * Fetch details for a single supply path.
  * Reuses the caller's tempObjectId via SetPath (no CreateObject/CloseObject).
@@ -1152,6 +1394,47 @@ async function fetchProductDetails(
     connectionCount,
     connections,
   };
+}
+
+// =========================================================================
+// POOLED WRAPPERS — gate RDO calls through shared semaphore
+// =========================================================================
+
+/**
+ * Semaphore-gated supply fetch for worker pool.
+ * Acquires the semaphore before SetPath + GetPropertyList, releases after.
+ * Connection details within the slot still use batchedParallel(3) but are
+ * gated by the same semaphore to respect Delphi MAX_BUFFER_SIZE.
+ */
+async function fetchSupplyDetailsPooled(
+  ctx: SessionContext,
+  tempObjectId: string,
+  path: string,
+  name: string,
+  semaphore: Semaphore,
+): Promise<BuildingSupplyData | null> {
+  await semaphore.acquire();
+  try {
+    return await fetchSupplyDetails(ctx, tempObjectId, path, name);
+  } finally {
+    semaphore.release();
+  }
+}
+
+/** Semaphore-gated product fetch for worker pool. */
+async function fetchProductDetailsPooled(
+  ctx: SessionContext,
+  tempObjectId: string,
+  path: string,
+  name: string,
+  semaphore: Semaphore,
+): Promise<BuildingProductData | null> {
+  await semaphore.acquire();
+  try {
+    return await fetchProductDetails(ctx, tempObjectId, path, name);
+  } finally {
+    semaphore.release();
+  }
 }
 
 /**

@@ -169,6 +169,8 @@ export type {
   WsRespBuildingDetails,
   WsReqBuildingTabData,
   WsRespBuildingTabData,
+  WsReqBuildingRefreshProperties,
+  WsRespBuildingRefreshProperties,
   WsReqBuildingSetProperty,
   WsRespBuildingSetProperty,
   WsReqBuildingUpgrade,

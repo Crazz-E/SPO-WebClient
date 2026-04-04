@@ -125,6 +125,8 @@ export enum WsMessageType {
   RESP_BUILDING_DETAILS = 'RESP_BUILDING_DETAILS',
   REQ_BUILDING_TAB_DATA = 'REQ_BUILDING_TAB_DATA',
   RESP_BUILDING_TAB_DATA = 'RESP_BUILDING_TAB_DATA',
+  REQ_BUILDING_REFRESH_PROPERTIES = 'REQ_BUILDING_REFRESH_PROPERTIES',
+  RESP_BUILDING_REFRESH_PROPERTIES = 'RESP_BUILDING_REFRESH_PROPERTIES',
   REQ_BUILDING_SET_PROPERTY = 'REQ_BUILDING_SET_PROPERTY',
   RESP_BUILDING_SET_PROPERTY = 'RESP_BUILDING_SET_PROPERTY',
 
@@ -653,6 +655,19 @@ export interface WsRespBuildingTabData extends WsMessage {
   products?: BuildingProductData[];
   compInputs?: CompInputData[];
   warehouseWares?: WarehouseWareData[];
+}
+
+/** Lightweight property refresh — reuses existing Delphi temp object. */
+export interface WsReqBuildingRefreshProperties extends WsMessage {
+  type: WsMessageType.REQ_BUILDING_REFRESH_PROPERTIES;
+  x: number;
+  y: number;
+  visualClass: string;
+}
+
+export interface WsRespBuildingRefreshProperties extends WsMessage {
+  type: WsMessageType.RESP_BUILDING_REFRESH_PROPERTIES;
+  details: BuildingDetailsResponse;
 }
 
 export interface WsReqBuildingSetProperty extends WsMessage {

@@ -13,6 +13,8 @@ import {
   WsRespBuildingDetails,
   WsReqBuildingTabData,
   WsRespBuildingTabData,
+  WsReqBuildingRefreshProperties,
+  WsRespBuildingRefreshProperties,
   WsReqBuildingSetProperty,
   WsRespBuildingSetProperty,
   WsReqBuildingUpgrade,
@@ -90,6 +92,39 @@ export async function refreshBuildingDetails(ctx: ClientHandlerContext, x: numbe
   }
 }
 
+// ── Lightweight Property Refresh ────────────────────────────────────────────
+
+/**
+ * Lightweight refresh: re-reads building properties on the existing Delphi
+ * temp object. Used by EVENT_BUILDING_REFRESH (~5s interval) to avoid
+ * creating a new temp object and leaking the old one.
+ * Falls back to full requestBuildingDetails on the server if no inspector exists.
+ */
+export async function requestBuildingRefreshProperties(
+  ctx: ClientHandlerContext,
+  x: number,
+  y: number,
+  visualClass: string,
+): Promise<BuildingDetailsResponse | null> {
+  ClientBridge.log('Building', `Refreshing properties at (${x}, ${y})`);
+
+  try {
+    const req: WsReqBuildingRefreshProperties = {
+      type: WsMessageType.REQ_BUILDING_REFRESH_PROPERTIES,
+      x,
+      y,
+      visualClass,
+    };
+
+    const response = await ctx.sendRequest(req, 30000) as WsRespBuildingRefreshProperties;
+    ClientBridge.log('Building', `Refreshed properties: ${response.details.templateName}`);
+    return response.details;
+  } catch (err: unknown) {
+    ClientBridge.log('Error', `Failed to refresh properties: ${toErrorMessage(err)}`);
+    return null;
+  }
+}
+
 // ── Tab Data (Lazy Loading) ─────────────────────────────────────────────────
 
 /** Special tab IDs that require lazy loading. */
@@ -128,7 +163,7 @@ export async function requestTabData(
     };
 
     const response = await ctx.sendRequest(req, 30000) as WsRespBuildingTabData;
-    store.mergeTabData(tabId, response);
+    store.mergeTabData(tabId, response, x, y);
     ClientBridge.log('Building', `Tab data received: ${tabId}`);
   } catch (err: unknown) {
     ClientBridge.log('Error', `Failed to get tab data ${tabId}: ${toErrorMessage(err)}`);

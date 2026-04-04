@@ -15,6 +15,8 @@ import {
   type WsRespBuildingDetails,
   type WsReqBuildingTabData,
   type WsRespBuildingTabData,
+  type WsReqBuildingRefreshProperties,
+  type WsRespBuildingRefreshProperties,
   type WsReqBuildingSetProperty,
   type WsRespBuildingSetProperty,
   type WsReqCloneFacility,
@@ -176,6 +178,21 @@ export async function handleBuildingTabData(ctx: WsHandlerContext, msg: WsMessag
       y: req.y,
       tabId: req.tabId,
       ...tabData,
+    };
+    sendResponse(ctx.ws, response);
+  });
+}
+
+export async function handleBuildingRefreshProperties(ctx: WsHandlerContext, msg: WsMessage): Promise<void> {
+  const req = msg as WsReqBuildingRefreshProperties;
+
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_FacilityNotFound, async () => {
+    const details = await ctx.session.refreshBuildingProperties(req.x, req.y, req.visualClass);
+
+    const response: WsRespBuildingRefreshProperties = {
+      type: WsMessageType.RESP_BUILDING_REFRESH_PROPERTIES,
+      wsRequestId: msg.wsRequestId,
+      details,
     };
     sendResponse(ctx.ws, response);
   });

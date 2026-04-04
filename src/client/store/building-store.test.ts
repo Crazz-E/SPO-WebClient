@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { useBuildingStore } from './building-store';
-import type { BuildingFocusInfo, ResearchCategoryData, ResearchInventionDetails } from '@/shared/types';
+import type { BuildingFocusInfo, BuildingDetailsResponse, ResearchCategoryData, ResearchInventionDetails } from '@/shared/types';
 
 const mockFocusInfo: BuildingFocusInfo = {
   buildingId: '12345',
@@ -58,6 +58,20 @@ function resetStore() {
     confirmedUpdates: new Map(),
   });
 }
+
+const makeBuildingDetails = (x: number, y: number): BuildingDetailsResponse => ({
+  buildingId: `bld-${x}-${y}`,
+  x,
+  y,
+  visualClass: '1234',
+  templateName: 'DrugStore',
+  buildingName: 'Drug Store',
+  ownerName: 'TestCorp',
+  securityId: 'sec-1',
+  tabs: [],
+  groups: {},
+  timestamp: Date.now(),
+});
 
 describe('Building Store — Overlay state', () => {
   beforeEach(resetStore);
@@ -290,11 +304,18 @@ describe('Building Store — Ownership for under-construction buildings', () => 
 describe('Building Store — Research state', () => {
   beforeEach(resetStore);
 
+  /** Sets up details + initializes research state (required precondition for B4 guards). */
+  function setupResearchContext() {
+    useBuildingStore.getState().setDetails(makeBuildingDetails(100, 200));
+    useBuildingStore.getState().setResearchCategoryTabs(['GENERAL']);
+  }
+
   it('should start with research as null', () => {
     expect(useBuildingStore.getState().research).toBeNull();
   });
 
   it('setResearchInventory should create research state with inventory in category map', () => {
+    setupResearchContext();
     useBuildingStore.getState().setResearchInventory(mockInventory);
 
     const research = useBuildingStore.getState().research;
@@ -306,6 +327,7 @@ describe('Building Store — Research state', () => {
   });
 
   it('setResearchSelectedInvention should set selectedInventionId and clear details', () => {
+    setupResearchContext();
     useBuildingStore.getState().setResearchInventory(mockInventory);
     useBuildingStore.getState().setResearchDetails(mockDetails);
     useBuildingStore.getState().setResearchSelectedInvention('AI.Level1');
@@ -316,6 +338,7 @@ describe('Building Store — Research state', () => {
   });
 
   it('setResearchDetails should set details', () => {
+    setupResearchContext();
     useBuildingStore.getState().setResearchInventory(mockInventory);
     useBuildingStore.getState().setResearchDetails(mockDetails);
 
@@ -325,6 +348,7 @@ describe('Building Store — Research state', () => {
   });
 
   it('setResearchActiveCategoryIndex should change tab and clear selection', () => {
+    setupResearchContext();
     useBuildingStore.getState().setResearchInventory(mockInventory);
     useBuildingStore.getState().setResearchSelectedInvention('GreenTech.Level1');
     useBuildingStore.getState().setResearchActiveCategoryIndex(2);
@@ -345,6 +369,7 @@ describe('Building Store — Research state', () => {
   });
 
   it('clearResearch should reset research to null', () => {
+    setupResearchContext();
     useBuildingStore.getState().setResearchInventory(mockInventory);
     expect(useBuildingStore.getState().research).not.toBeNull();
 
@@ -353,6 +378,7 @@ describe('Building Store — Research state', () => {
   });
 
   it('clearFocus should also clear research', () => {
+    setupResearchContext();
     useBuildingStore.getState().setResearchInventory(mockInventory);
     expect(useBuildingStore.getState().research).not.toBeNull();
 
@@ -362,6 +388,7 @@ describe('Building Store — Research state', () => {
   });
 
   it('setResearchInventory preserves existing research fields', () => {
+    setupResearchContext();
     useBuildingStore.getState().setResearchActiveCategoryIndex(1);
     useBuildingStore.getState().setResearchSelectedInvention('AI.Level1');
     useBuildingStore.getState().setResearchInventory(mockInventory);
@@ -381,6 +408,7 @@ describe('Building Store — Research state', () => {
   });
 
   it('setResearchInventory caches multiple categories independently', () => {
+    setupResearchContext();
     const cat1: ResearchCategoryData = {
       categoryIndex: 1,
       available: [{ inventionId: 'Commerce.L1', name: 'Commerce 1', enabled: true }],
@@ -506,5 +534,238 @@ describe('Building Store — Optimistic SET feedback', () => {
     const pending = useBuildingStore.getState().pendingUpdates;
     expect(pending.size).toBe(1);
     expect(pending.get('key')?.value).toBe('200');
+  });
+});
+
+// =============================================================================
+// Context Loss Prevention (B1–B5)
+// =============================================================================
+
+describe('Building Store — Context Loss Prevention', () => {
+  beforeEach(resetStore);
+
+  // B1: mergeTabData coordinate guard
+  it('mergeTabData rejects data when coordinates do not match current building', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().setTabLoading('supplies');
+
+    // Attempt to merge supply data for a DIFFERENT building (x=999, y=999)
+    useBuildingStore.getState().mergeTabData('supplies', { supplies: [] }, 999, 999);
+
+    // Should NOT have merged — supplies should remain undefined
+    expect(useBuildingStore.getState().details!.supplies).toBeUndefined();
+    // Tab state should still be 'loading' (not 'loaded')
+    expect(useBuildingStore.getState().tabLoadingStates['supplies']).toBe('loading');
+  });
+
+  it('mergeTabData accepts data when coordinates match current building', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().setTabLoading('supplies');
+
+    const supplyData = [{ path: 'test', name: 'Books' }];
+    useBuildingStore.getState().mergeTabData(
+      'supplies', { supplies: supplyData as never }, 100, 200,
+    );
+
+    expect(useBuildingStore.getState().details!.supplies).toBe(supplyData);
+    expect(useBuildingStore.getState().tabLoadingStates['supplies']).toBe('loaded');
+  });
+
+  it('mergeTabData is a no-op when details is null', () => {
+    // No building loaded
+    useBuildingStore.getState().mergeTabData('supplies', { supplies: [] }, 100, 200);
+    expect(useBuildingStore.getState().details).toBeNull();
+  });
+
+  // B3: connectionPicker cleared by clearDetails and clearFocus
+  it('clearDetails resets connectionPicker to null', () => {
+    useBuildingStore.getState().setConnectionPicker({
+      fluidName: 'Oil', fluidId: 'oil-1', direction: 'input', buildingX: 100, buildingY: 200,
+    });
+    expect(useBuildingStore.getState().connectionPicker).not.toBeNull();
+
+    useBuildingStore.getState().clearDetails();
+    expect(useBuildingStore.getState().connectionPicker).toBeNull();
+  });
+
+  it('clearFocus resets connectionPicker to null', () => {
+    useBuildingStore.getState().setConnectionPicker({
+      fluidName: 'Oil', fluidId: 'oil-1', direction: 'input', buildingX: 100, buildingY: 200,
+    });
+    expect(useBuildingStore.getState().connectionPicker).not.toBeNull();
+
+    useBuildingStore.getState().clearFocus();
+    expect(useBuildingStore.getState().connectionPicker).toBeNull();
+  });
+
+  // B4: Research guards — reject when details or research is null
+  it('setResearchInventory is a no-op when details is null', () => {
+    // No building loaded — research response should be silently dropped
+    useBuildingStore.getState().setResearchInventory(mockInventory);
+    expect(useBuildingStore.getState().research).toBeNull();
+  });
+
+  it('setResearchInventory is a no-op when research is null (not yet initialized)', () => {
+    // Building loaded but research not yet initialized via setResearchCategoryTabs
+    useBuildingStore.getState().setDetails(makeBuildingDetails(100, 200));
+    expect(useBuildingStore.getState().research).toBeNull();
+
+    useBuildingStore.getState().setResearchInventory(mockInventory);
+    expect(useBuildingStore.getState().research).toBeNull();
+  });
+
+  it('setResearchDetails is a no-op when details is null', () => {
+    useBuildingStore.getState().setResearchDetails(mockDetails);
+    expect(useBuildingStore.getState().research).toBeNull();
+  });
+
+  it('setResearchDetails is a no-op when research is null', () => {
+    useBuildingStore.getState().setDetails(makeBuildingDetails(100, 200));
+    useBuildingStore.getState().setResearchDetails(mockDetails);
+    expect(useBuildingStore.getState().research).toBeNull();
+  });
+
+  // B5: setDetails clears optimistic maps when switching buildings
+  it('setDetails clears optimistic maps when switching to a different building', () => {
+    const detailsA = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(detailsA);
+    useBuildingStore.getState().setPending('RDOSetPrice', '250');
+    useBuildingStore.getState().failPending('salary', '500', 'timeout');
+    expect(useBuildingStore.getState().pendingUpdates.size).toBe(1);
+    expect(useBuildingStore.getState().failedUpdates.size).toBe(1);
+
+    // Switch to building B
+    const detailsB = makeBuildingDetails(300, 400);
+    useBuildingStore.getState().setDetails(detailsB);
+
+    expect(useBuildingStore.getState().pendingUpdates.size).toBe(0);
+    expect(useBuildingStore.getState().failedUpdates.size).toBe(0);
+    expect(useBuildingStore.getState().confirmedUpdates.size).toBe(0);
+  });
+
+  it('setDetails preserves optimistic maps when refreshing the same building', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().setPending('RDOSetPrice', '250');
+
+    // Refresh same building (same x,y)
+    const refreshed = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(refreshed);
+
+    expect(useBuildingStore.getState().pendingUpdates.size).toBe(1);
+  });
+});
+
+describe('Building Store — Lazy tab data preservation', () => {
+  beforeEach(resetStore);
+
+  const mockProducts = [{ metaFluid: 'oil', name: 'Oil', quality: '80', pricePc: '100', avgPrice: '50', marketPrice: '60', lastFluid: '', connectionCount: 0, connections: [] }];
+  const mockSupplies = [{ metaFluid: 'steel', name: 'Steel', connectionCount: 0, connections: [] }];
+  const mockWarehouseWares = [{ name: 'Oil', enabled: true, index: 0 }];
+
+  it('setDetails carries forward lazy fields when refreshing the same building', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+
+    // Simulate mergeTabData loading products + warehouseWares
+    useBuildingStore.getState().mergeTabData(
+      'products', { products: mockProducts as never, warehouseWares: mockWarehouseWares as never }, 100, 200,
+    );
+    expect(useBuildingStore.getState().details!.products).toBe(mockProducts);
+    expect(useBuildingStore.getState().details!.warehouseWares).toBe(mockWarehouseWares);
+
+    // Simulate EVENT_BUILDING_REFRESH: basic details with undefined lazy fields
+    const refreshed = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(refreshed);
+
+    // Lazy fields should be preserved (not wiped to undefined)
+    expect(useBuildingStore.getState().details!.products).toBe(mockProducts);
+    expect(useBuildingStore.getState().details!.warehouseWares).toBe(mockWarehouseWares);
+  });
+
+  it('setDetails does NOT carry forward lazy fields when switching buildings', () => {
+    const detailsA = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(detailsA);
+    useBuildingStore.getState().mergeTabData(
+      'products', { products: mockProducts as never }, 100, 200,
+    );
+
+    // Switch to a different building
+    const detailsB = makeBuildingDetails(300, 400);
+    useBuildingStore.getState().setDetails(detailsB);
+
+    expect(useBuildingStore.getState().details!.products).toBeUndefined();
+  });
+
+  it('setDetails uses new lazy data when explicitly provided (not carry-forward)', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().mergeTabData(
+      'supplies', { supplies: mockSupplies as never }, 100, 200,
+    );
+
+    // Refresh with explicitly provided supplies (e.g., legacy full-fetch path)
+    const newSupplies = [{ metaFluid: 'iron', name: 'Iron', connectionCount: 1, connections: [] }];
+    const refreshed = { ...makeBuildingDetails(100, 200), supplies: newSupplies as never };
+    useBuildingStore.getState().setDetails(refreshed);
+
+    // Should use the NEW data, not the old carry-forward
+    expect(useBuildingStore.getState().details!.supplies).toBe(newSupplies);
+  });
+
+  it('resetTabLoadingStates wipes lazy fields from details', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().mergeTabData(
+      'products', { products: mockProducts as never, warehouseWares: mockWarehouseWares as never }, 100, 200,
+    );
+    useBuildingStore.getState().mergeTabData(
+      'supplies', { supplies: mockSupplies as never }, 100, 200,
+    );
+
+    expect(useBuildingStore.getState().details!.products).toBe(mockProducts);
+    expect(useBuildingStore.getState().details!.supplies).toBe(mockSupplies);
+    expect(useBuildingStore.getState().details!.warehouseWares).toBe(mockWarehouseWares);
+    expect(useBuildingStore.getState().tabLoadingStates['products']).toBe('loaded');
+    expect(useBuildingStore.getState().tabLoadingStates['supplies']).toBe('loaded');
+
+    // Explicit refresh: resetTabLoadingStates should wipe everything
+    useBuildingStore.getState().resetTabLoadingStates();
+
+    expect(useBuildingStore.getState().tabLoadingStates).toEqual({});
+    expect(useBuildingStore.getState().details!.products).toBeUndefined();
+    expect(useBuildingStore.getState().details!.supplies).toBeUndefined();
+    expect(useBuildingStore.getState().details!.warehouseWares).toBeUndefined();
+    expect(useBuildingStore.getState().details!.compInputs).toBeUndefined();
+    // Non-lazy fields should be preserved
+    expect(useBuildingStore.getState().details!.buildingName).toBe('Drug Store');
+    expect(useBuildingStore.getState().details!.x).toBe(100);
+  });
+
+  it('resetTabLoadingStates is safe when details is null', () => {
+    // No building loaded
+    expect(useBuildingStore.getState().details).toBeNull();
+    useBuildingStore.getState().resetTabLoadingStates();
+    expect(useBuildingStore.getState().details).toBeNull();
+    expect(useBuildingStore.getState().tabLoadingStates).toEqual({});
+  });
+
+  it('setDetails carry-forward + resetTabLoadingStates prevents stale data on next refresh', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().mergeTabData(
+      'products', { products: mockProducts as never }, 100, 200,
+    );
+
+    // Explicit refresh: wipe lazy data
+    useBuildingStore.getState().resetTabLoadingStates();
+    expect(useBuildingStore.getState().details!.products).toBeUndefined();
+
+    // Next basic details refresh should NOT carry forward the wiped data
+    const refreshed = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(refreshed);
+    expect(useBuildingStore.getState().details!.products).toBeUndefined();
   });
 });

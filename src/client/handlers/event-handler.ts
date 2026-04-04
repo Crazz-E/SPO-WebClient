@@ -29,6 +29,7 @@ import {
   WsRespResearchDetails,
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
+import { requestBuildingRefreshProperties } from './building-action-handler';
 import { ClientBridge } from '../bridge/client-bridge';
 import { useGameStore, delphiTDateTimeToJsDate } from '../store/game-store';
 import { useUiStore } from '../store/ui-store';
@@ -129,7 +130,14 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
 
         ctx.currentFocusedBuilding = refreshEvt.building;
         ClientBridge.setFocusedBuilding(refreshEvt.building);
-        ctx.requestBuildingDetails(
+
+        // Lightweight refresh: re-read properties on existing Delphi temp object.
+        // Avoids creating a new temp object every ~5s (which leaked the old one
+        // and destabilized in-flight tab data requests).
+        // For structural changes (kind 1/2), the full path is used via the
+        // renderer invalidation above; properties still refresh the same way.
+        requestBuildingRefreshProperties(
+          ctx,
           ctx.currentFocusedBuilding.x,
           ctx.currentFocusedBuilding.y,
           ctx.currentFocusedVisualClass || '0'
