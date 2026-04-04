@@ -948,7 +948,9 @@
     server: {
       port: Number(getEnv("PORT")) || 8080,
       host: getEnv("HOST") || "0.0.0.0",
-      singleUserMode: getEnv("SINGLE_USER_MODE") === "true"
+      singleUserMode: getEnv("SINGLE_USER_MODE") === "true",
+      /** Force all players into a specific world (format: "zoneId/worldName", e.g. "beta/Shamba"). Temporary test-phase override. */
+      forceWorld: typeof window !== "undefined" && window.__SPO_FORCE_WORLD__ !== void 0 ? window.__SPO_FORCE_WORLD__ : getEnv("SPO_FORCE_WORLD") ?? void 0
     },
     /**
      * Configuration du protocole RDO
@@ -973,8 +975,20 @@
      */
     logging: {
       // Niveaux: 'debug' | 'info' | 'warn' | 'error'
-      level: getEnv("LOG_LEVEL") || "info",
-      colorize: getEnv("NODE_ENV") !== "production"
+      level: getEnv("LOG_LEVEL") || "debug",
+      colorize: getEnv("NODE_ENV") !== "production",
+      /** NDJSON structured output (LOG_JSON=true) */
+      jsonMode: getEnv("LOG_JSON") === "true",
+      /** File path for NDJSON log output (e.g. 'logs/gateway.ndjson') */
+      filePath: getEnv("LOG_FILE") || "",
+      /** Max log file size in bytes before rotation (default 10MB) */
+      maxFileSize: Number(getEnv("LOG_MAX_SIZE")) || 10 * 1024 * 1024,
+      /** Max number of rotated log files to keep (default 5) */
+      maxFiles: Number(getEnv("LOG_MAX_FILES")) || 5,
+      /** Separate file for ERROR-level entries (e.g. 'logs/errors.ndjson') */
+      errorFilePath: getEnv("LOG_ERROR_FILE") || "",
+      /** Ring buffer size for error context (recent entries attached to errors) */
+      ringBufferSize: Number(getEnv("LOG_RING_BUFFER_SIZE")) || 20
     }
   };
 

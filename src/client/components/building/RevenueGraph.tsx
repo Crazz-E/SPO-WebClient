@@ -5,7 +5,7 @@
  * for smooth curves that don't overshoot data points.
  */
 
-import { useRef, useState, useEffect } from 'react';
+import { memo, useRef, useState, useEffect } from 'react';
 import { formatCurrency } from '@/shared/building-details/property-definitions';
 import styles from './RevenueGraph.module.css';
 
@@ -104,7 +104,7 @@ export function computeYTicks(min: number, max: number, count: number): number[]
   return ticks;
 }
 
-export function RevenueGraph({ data, height = 160 }: RevenueGraphProps) {
+export const RevenueGraph = memo(function RevenueGraph({ data, height = 160 }: RevenueGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [pathLength, setPathLength] = useState(0);
@@ -320,4 +320,4 @@ export function RevenueGraph({ data, height = 160 }: RevenueGraphProps) {
       </div>
     </div>
   );
-}
+});

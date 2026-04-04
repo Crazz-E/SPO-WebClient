@@ -6,7 +6,7 @@
  * hire/modify/fire actions, and overpayment popover.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { memo, useState, useCallback, useRef } from 'react';
 import type { BuildingSupplyData, BuildingConnectionData } from '@/shared/types';
 import { formatCurrency, formatNumber } from '@/shared/building-details';
 import { useClient } from '../../context';
@@ -103,7 +103,7 @@ function OverpaymentPopover({
   );
 }
 
-function SupplyCard({
+const SupplyCard = memo(function SupplyCard({
   supply,
   canEdit,
   buildingX,
@@ -324,4 +324,4 @@ function SupplyCard({
       )}
     </div>
   );
-}
+});

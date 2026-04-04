@@ -5,7 +5,7 @@
  * Expanding reveals connections table + hire/remove actions.
  */
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import type { BuildingProductData } from '@/shared/types';
 import { formatCurrency } from '@/shared/building-details';
 import { useClient } from '../../context';
@@ -54,7 +54,7 @@ function getQualityVariant(quality: number): string {
   return styles.badgeBad;
 }
 
-function ProductCard({
+const ProductCard = memo(function ProductCard({
   product,
   canEdit,
   buildingX,
@@ -204,4 +204,4 @@ function ProductCard({
       )}
     </div>
   );
-}
+});
