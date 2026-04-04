@@ -100,7 +100,7 @@ describe('InfoWidget', () => {
     renderWithProviders(<InfoWidget />);
     expect(screen.getByText('#5')).toBeTruthy();
     expect(screen.getByText('TestPlayer')).toBeTruthy();
-    expect(screen.getByText('1,234,567')).toBeTruthy();
+    expect(screen.getByText('$1,234,567')).toBeTruthy();
     expect(screen.getByText('12/50')).toBeTruthy();
   });
 

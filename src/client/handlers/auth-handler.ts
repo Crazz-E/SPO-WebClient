@@ -287,7 +287,7 @@ export async function handleCreateCompany(ctx: ClientHandlerContext, companyName
   if (ctx.getMapNavigationUI()) {
     // Full company switch so the server re-authenticates with the new
     // company's context (worldContextId, interfaceServerId, selectCompany)
-    await profileSwitchCompany(ctx, resp.companyId, resp.companyName, newCompany.ownerRole);
+    await profileSwitchCompany(ctx, resp.companyId, resp.companyName, newCompany.ownerRole ?? '');
     return;
   }
 
