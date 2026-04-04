@@ -845,7 +845,10 @@ export async function connectFacilities(
 ): Promise<void> {
   if (selectedCoords.length === 0) return;
 
-  const connectionList = selectedCoords.map(c => `${c.x},${c.y}`).join(',');
+  // Delphi ParseGateList splits on commas but never adds the token AFTER the last
+  // comma — a trailing comma is mandatory so the final Y coordinate is captured.
+  // Voyager ref: SupplySheetForm.pas:898-900 — always appends trailing ','
+  const connectionList = selectedCoords.map(c => `${c.x},${c.y},`).join('');
   const rdoCommand = direction === 'input' ? 'RDOConnectInput' : 'RDOConnectOutput';
 
   try {

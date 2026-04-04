@@ -320,10 +320,10 @@ describe('Supply RDO command wiring', () => {
     expect(params.additionalParams.fluidId).toBe('Chemicals');
   });
 
-  it('should format RDODisconnectInput with coordinate pair', () => {
+  it('should format RDODisconnectInput with coordinate pair (trailing comma for Delphi ParseGateList)', () => {
     const x = 100;
     const y = 200;
-    const connectionList = `${x},${y}`;
+    const connectionList = `${x},${y},`;
 
     const params = {
       command: 'RDODisconnectInput',
@@ -332,7 +332,7 @@ describe('Supply RDO command wiring', () => {
     };
 
     expect(params.command).toBe('RDODisconnectInput');
-    expect(params.additionalParams.connectionList).toBe('100,200');
+    expect(params.additionalParams.connectionList).toBe('100,200,');
   });
 });
 
@@ -443,10 +443,10 @@ describe('ProductCard Fire button', () => {
     expect(canEditTrue).toBe(true);
   });
 
-  it('should format RDODisconnectOutput with coordinate pair', () => {
+  it('should format RDODisconnectOutput with coordinate pair (trailing comma for Delphi ParseGateList)', () => {
     const product = createProduct();
     const conn = product.connections[0];
-    const connectionList = `${conn.x},${conn.y}`;
+    const connectionList = `${conn.x},${conn.y},`;
 
     const params = {
       command: 'RDODisconnectOutput',
@@ -456,7 +456,7 @@ describe('ProductCard Fire button', () => {
 
     expect(params.command).toBe('RDODisconnectOutput');
     expect(params.additionalParams.fluidId).toBe('Clothing');
-    expect(params.additionalParams.connectionList).toBe('500,600');
+    expect(params.additionalParams.connectionList).toBe('500,600,');
   });
 });
 

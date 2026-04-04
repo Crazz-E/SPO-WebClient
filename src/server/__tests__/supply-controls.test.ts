@@ -263,17 +263,17 @@ describe('Supply RDO command mapping', () => {
 // =============================================================================
 
 describe('RDODisconnectInput command format', () => {
-  it('should format single coordinate pair for disconnect', () => {
+  it('should format single coordinate pair for disconnect (trailing comma required by Delphi ParseGateList)', () => {
     const x = 100;
     const y = 200;
-    const connectionList = `${x},${y}`;
-    expect(connectionList).toBe('100,200');
+    const connectionList = `${x},${y},`;
+    expect(connectionList).toBe('100,200,');
   });
 
   it('should include fluidId in additionalParams', () => {
-    const params = { fluidId: 'Chemicals', connectionList: '100,200' };
+    const params = { fluidId: 'Chemicals', connectionList: '100,200,' };
     expect(params.fluidId).toBe('Chemicals');
-    expect(params.connectionList).toBe('100,200');
+    expect(params.connectionList).toBe('100,200,');
   });
 
   function disconnectCommand(direction: 'input' | 'output'): string {

@@ -313,7 +313,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       onDisconnectConnection: (buildingX, buildingY, fluidId, direction, x, y) => {
         const rdoCommand = direction === 'input' ? 'RDODisconnectInput' : 'RDODisconnectOutput';
         buildingActionHandler.setBuildingProperty(this, buildingX, buildingY, rdoCommand, '0', {
-          fluidId, connectionList: `${x},${y}`,
+          fluidId, connectionList: `${x},${y},`,  // trailing comma required by Delphi ParseGateList
         }).then(success => {
           if (success) {
             this.showNotification('Supplier disconnected', 'success');
