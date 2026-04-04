@@ -1,0 +1,98 @@
+{
+  "_ConnectionPickerModal.module-CXXfF8PY.js": {
+    "file": "assets/ConnectionPickerModal.module-CXXfF8PY.js",
+    "name": "ConnectionPickerModal.module",
+    "css": [
+      "assets/app.BpRSgckk.css"
+    ]
+  },
+  "_app.BpRSgckk.css": {
+    "file": "assets/app.BpRSgckk.css",
+    "src": "_app.BpRSgckk.css"
+  },
+  "src/client/components/modals/BuildingInspectorModal.tsx": {
+    "file": "assets/BuildingInspectorModal-BfTus6sL.js",
+    "name": "BuildingInspectorModal",
+    "src": "src/client/components/modals/BuildingInspectorModal.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/client/main.tsx"
+    ],
+    "css": [
+      "assets/app.CpGxUVU1.css"
+    ]
+  },
+  "src/client/components/modals/ChangelogModal.tsx": {
+    "file": "assets/ChangelogModal-CGyhJ2JI.js",
+    "name": "ChangelogModal",
+    "src": "src/client/components/modals/ChangelogModal.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/client/main.tsx"
+    ],
+    "css": [
+      "assets/app.CAG5TRdf.css"
+    ]
+  },
+  "src/client/components/modals/CompanyCreationModal.tsx": {
+    "file": "assets/CompanyCreationModal-C__X1QzB.js",
+    "name": "CompanyCreationModal",
+    "src": "src/client/components/modals/CompanyCreationModal.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/client/main.tsx"
+    ],
+    "css": [
+      "assets/app.E6QT_bfN.css"
+    ]
+  },
+  "src/client/components/modals/ConnectionPickerModal.tsx": {
+    "file": "assets/ConnectionPickerModal-Cz28WAyY.js",
+    "name": "ConnectionPickerModal",
+    "src": "src/client/components/modals/ConnectionPickerModal.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/client/main.tsx",
+      "_ConnectionPickerModal.module-CXXfF8PY.js"
+    ]
+  },
+  "src/client/components/modals/SettingsDialog.tsx": {
+    "file": "assets/SettingsDialog-hpHhPfHR.js",
+    "name": "SettingsDialog",
+    "src": "src/client/components/modals/SettingsDialog.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/client/main.tsx"
+    ],
+    "css": [
+      "assets/app.CP6zvl9m.css"
+    ]
+  },
+  "src/client/components/modals/SupplierSearchModal.tsx": {
+    "file": "assets/SupplierSearchModal-U80018BC.js",
+    "name": "SupplierSearchModal",
+    "src": "src/client/components/modals/SupplierSearchModal.tsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "src/client/main.tsx",
+      "_ConnectionPickerModal.module-CXXfF8PY.js"
+    ]
+  },
+  "src/client/main.tsx": {
+    "file": "assets/app.mgMW89Xe.js",
+    "name": "main",
+    "src": "src/client/main.tsx",
+    "isEntry": true,
+    "dynamicImports": [
+      "src/client/components/modals/BuildingInspectorModal.tsx",
+      "src/client/components/modals/ChangelogModal.tsx",
+      "src/client/components/modals/ConnectionPickerModal.tsx",
+      "src/client/components/modals/SettingsDialog.tsx",
+      "src/client/components/modals/SupplierSearchModal.tsx",
+      "src/client/components/modals/CompanyCreationModal.tsx"
+    ],
+    "css": [
+      "assets/app.DnijnYD8.css"
+    ]
+  }
+}
