@@ -68,13 +68,14 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   // For non-civic buildings, use server-sent tabs directly
   const standardTabs = details?.tabs ?? [];
 
-  // Derive campaign state (needed for Elections tab)
+  // Derive campaign state (needed for Elections tab) — memoized to avoid
+  // recomputing buildValueMap on every unrelated details change.
   const politicsCampaigns = usePoliticsStore((s) => s.data?.campaigns);
   const isCandidateFromPolitics = (politicsCampaigns ?? []).some(
     (c) => c.candidateName.toLowerCase() === (username ?? '').toLowerCase()
   );
-  const votesGroup = details?.groups['votes'] ?? [];
-  const valueMap = buildValueMap(votesGroup);
+  const votesGroup = details?.groups['votes'];
+  const valueMap = useMemo(() => buildValueMap(votesGroup ?? []), [votesGroup]);
   const candidateCount = getNum(valueMap, 'CampaignCount');
   const isCandidateFromVotes = Array.from({ length: candidateCount }, (_, i) =>
     valueMap.get(`Candidate${i}`) ?? ''
@@ -117,20 +118,10 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     const doRefresh = () => {
       if (!isConnected) return;
       client.onRefreshBuilding(x, y);
-
-      const activeTab = details.tabs.find((t) => t.id === currentTab);
-      const lazyId = activeTab?.special && isLazyTab(activeTab.special)
-        ? activeTab.special
-        : activeTab && isLazyTab(activeTab.id) ? activeTab.id : null;
-      if (lazyId) {
-        setTimeout(() => {
-          if (useGameStore.getState().status !== 'connected') return;
-          useBuildingStore.setState((s) => ({
-            tabLoadingStates: { ...s.tabLoadingStates, [lazyId]: 'idle' },
-          }));
-          client.onRequestTabData(x, y, lazyId, vc);
-        }, 2000);
-      }
+      // Tab re-fetch is handled by the useEffect at line ~162 which reacts
+      // to resetTabLoadingStates() inside refreshBuildingDetails().
+      // The previous 2-second setTimeout here caused race conditions by
+      // overwriting in-flight 'loading' states with 'idle'.
     };
 
     const startTimer = () => {
@@ -206,9 +197,11 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     ? (standardTabs.find((t) => t.id === currentTab)?.id ?? standardTabs[0]?.id ?? '')
     : '';
 
-  const standardProperties = activeStandardGroupId
-    ? (details.groups[activeStandardGroupId] ?? []).filter((p) => p.name !== 'Name')
-    : [];
+  const activeGroupData = activeStandardGroupId ? details.groups[activeStandardGroupId] : undefined;
+  const standardProperties = useMemo(
+    () => activeGroupData ? activeGroupData.filter((p) => p.name !== 'Name') : [],
+    [activeGroupData],
+  );
 
   return (
     <div className={styles.inspector}>
@@ -339,7 +332,15 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
             : activeTabDef && isLazyTab(activeTabDef.id) ? activeTabDef.id : null;
           const tabState = lazyId ? tabLoadingStates[lazyId] : undefined;
 
-          if (lazyId && tabState === 'loading') {
+          if (lazyId && tabState === 'error') {
+            return (
+              <div className={styles.loadingState}>
+                <span>Failed to load tab data. Click refresh to retry.</span>
+              </div>
+            );
+          }
+
+          if (lazyId && tabState !== 'loaded') {
             return (
               <div className={styles.loadingState}>
                 <Skeleton width="100%" height="24px" />

@@ -152,7 +152,7 @@ export async function handleBuildingDetails(ctx: WsHandlerContext, msg: WsMessag
   const req = msg as WsReqBuildingDetails;
 
   await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_FacilityNotFound, async () => {
-    const details = await ctx.session.getBuildingDetails(req.x, req.y, req.visualClass);
+    const details = await ctx.session.getBuildingBasicDetails(req.x, req.y, req.visualClass);
 
     const response: WsRespBuildingDetails = {
       type: WsMessageType.RESP_BUILDING_DETAILS,
