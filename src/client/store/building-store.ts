@@ -107,7 +107,7 @@ interface BuildingState {
 
   // Lazy tab loading actions
   setTabLoading: (tabId: string) => void;
-  mergeTabData: (tabId: string, data: Partial<BuildingDetailsResponse>) => void;
+  mergeTabData: (tabId: string, data: Partial<BuildingDetailsResponse>, forX: number, forY: number) => void;
   resetTabLoadingStates: () => void;
 
   // Optimistic SET actions
@@ -183,13 +183,32 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       if (details.compInputs) preloaded['compInputs'] = 'loaded';
       if (details.warehouseWares) preloaded['whGeneral'] = 'loaded';
 
+      // Carry forward lazy tab data when refreshing the same building.
+      // EVENT_BUILDING_REFRESH sends basic details (products/supplies/warehouseWares
+      // undefined). Without this merge, the UI shows empty tabs because
+      // tabLoadingStates still says 'loaded' but the data is gone.
+      const mergedDetails = isSameBuilding ? {
+        ...details,
+        supplies: details.supplies ?? state.details?.supplies,
+        products: details.products ?? state.details?.products,
+        compInputs: details.compInputs ?? state.details?.compInputs,
+        warehouseWares: details.warehouseWares ?? state.details?.warehouseWares,
+      } : details;
+
       return {
-        details,
+        details: mergedDetails,
         isLoading: false,
         isOwner: ownerName !== '' && state.ownedCompanyNames.has(ownerName),
         tabLoadingStates: isSameBuilding
           ? { ...state.tabLoadingStates, ...preloaded }
           : preloaded,
+        // Clear optimistic feedback when switching to a different building
+        // to prevent phantom SaveIndicator from cross-building leaks
+        ...(isSameBuilding ? {} : {
+          pendingUpdates: new Map(),
+          failedUpdates: new Map(),
+          confirmedUpdates: new Map(),
+        }),
       };
     });
   },
@@ -233,6 +252,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       pendingUpdates: new Map(),
       failedUpdates: new Map(),
       confirmedUpdates: new Map(),
+      connectionPicker: null,
     }),
 
   clearDetails: () =>
@@ -246,6 +266,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       pendingUpdates: new Map(),
       failedUpdates: new Map(),
       confirmedUpdates: new Map(),
+      connectionPicker: null,
     }),
 
   clearOverlay: () => set({ isOverlayMode: false }),
@@ -256,9 +277,11 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       tabLoadingStates: { ...state.tabLoadingStates, [tabId]: 'loading' as TabLoadState },
     })),
 
-  mergeTabData: (tabId, data) =>
+  mergeTabData: (tabId, data, forX, forY) =>
     set((state) => {
       if (!state.details) return state;
+      // Reject stale data from a previously inspected building
+      if (state.details.x !== forX || state.details.y !== forY) return state;
       return {
         details: {
           ...state.details,
@@ -271,7 +294,18 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       };
     }),
 
-  resetTabLoadingStates: () => set({ tabLoadingStates: {} }),
+  resetTabLoadingStates: () => set((state) => ({
+    tabLoadingStates: {},
+    // Wipe lazy tab data so stale values aren't carried forward by setDetails
+    // after an explicit refresh. The lazy useEffect will re-fetch from scratch.
+    details: state.details ? {
+      ...state.details,
+      supplies: undefined,
+      products: undefined,
+      compInputs: undefined,
+      warehouseWares: undefined,
+    } : null,
+  })),
 
   // Optimistic SET actions
   setPending: (key, value) =>
@@ -351,7 +385,9 @@ export const useBuildingStore = create<BuildingState>((set) => ({
 
   setResearchInventory: (data) =>
     set((state) => {
-      const prev = state.research ?? INITIAL_RESEARCH;
+      // Reject stale data if building was cleared or research not yet initialized
+      if (!state.details || !state.research) return state;
+      const prev = state.research;
       const nextMap = new Map(prev.inventoryByCategory);
       nextMap.set(data.categoryIndex, data);
       const nextLoaded = new Set(prev.loadedCategories);
@@ -376,13 +412,17 @@ export const useBuildingStore = create<BuildingState>((set) => ({
     })),
 
   setResearchDetails: (details) =>
-    set((state) => ({
-      research: {
-        ...(state.research ?? INITIAL_RESEARCH),
-        selectedDetails: details,
-        isLoadingDetails: false,
-      },
-    })),
+    set((state) => {
+      // Reject stale data if building was cleared or research not yet initialized
+      if (!state.details || !state.research) return state;
+      return {
+        research: {
+          ...state.research,
+          selectedDetails: details,
+          isLoadingDetails: false,
+        },
+      };
+    }),
 
   setResearchActiveCategoryIndex: (index) =>
     set((state) => ({
