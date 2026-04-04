@@ -1096,7 +1096,16 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
   });
 
   // -- Handle Requests: Browser -> Gateway --
-  ws.on('message', async (data: string) => {
+  // Two-lane queue: stateless messages (camera updates) execute immediately,
+  // everything else is serialized through an RDO queue to prevent concurrent
+  // Delphi temp-object access (see: building switch race condition).
+  const FAST_LANE: ReadonlySet<string> = new Set([
+    WsMessageType.REQ_UPDATE_CAMERA,
+  ]);
+  let rdoQueue: Promise<void> = Promise.resolve();
+
+  /** Process a single WS message. Must be serialized for RDO-touching messages. */
+  async function processMessage(data: string): Promise<void> {
     try {
       const msg: WsMessage = JSON.parse(data.toString());
 
@@ -1187,6 +1196,27 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
         code: ErrorCodes.ERROR_InvalidParameter
       };
       ws.send(JSON.stringify(errorResp));
+    }
+  }
+
+  ws.on('message', (data: string) => {
+    // Peek at message type to decide lane (lightweight JSON key extraction)
+    let msgType: string | undefined;
+    try {
+      const typeMatch = data.toString().match(/"type"\s*:\s*"([^"]+)"/);
+      msgType = typeMatch?.[1];
+    } catch { /* fall through to RDO lane */ }
+
+    if (msgType && FAST_LANE.has(msgType)) {
+      // Fast lane: execute immediately, no serialization needed
+      processMessage(data).catch((err: unknown) => {
+        spSession.log.error('Fast-lane message error', { error: toErrorMessage(err) });
+      });
+    } else {
+      // RDO lane: serialize to prevent concurrent Delphi temp-object access
+      rdoQueue = rdoQueue.then(() => processMessage(data)).catch((err: unknown) => {
+        spSession.log.error('RDO queue message error', { error: toErrorMessage(err) });
+      });
     }
   });
 

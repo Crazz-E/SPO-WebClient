@@ -136,12 +136,15 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
         // and destabilized in-flight tab data requests).
         // For structural changes (kind 1/2), the full path is used via the
         // renderer invalidation above; properties still refresh the same way.
+        const refreshGen = ctx.nextGeneration('buildingRefresh');
         requestBuildingRefreshProperties(
           ctx,
           ctx.currentFocusedBuilding.x,
           ctx.currentFocusedBuilding.y,
           ctx.currentFocusedVisualClass || '0'
         ).then(refreshedDetails => {
+          // Discard stale refresh if the user switched buildings while in-flight
+          if (!ctx.isCurrentGeneration('buildingRefresh', refreshGen)) return;
           if (refreshedDetails) {
             ClientBridge.updateBuildingDetails(refreshedDetails);
           }

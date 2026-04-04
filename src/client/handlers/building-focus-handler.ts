@@ -68,6 +68,9 @@ export async function showBuildingOverlay(ctx: ClientHandlerContext, x: number, 
   try {
     // Unfocus previous building on the server
     if (ctx.currentFocusedBuilding) {
+      // Invalidate any in-flight refresh for the old building so its stale
+      // response doesn't overwrite the store after the new building loads.
+      ctx.nextGeneration('buildingRefresh');
       const unfocusReq: WsReqBuildingUnfocus = { type: WsMessageType.REQ_BUILDING_UNFOCUS };
       ctx.rawSend(unfocusReq);
       ctx.currentFocusedBuilding = null;
@@ -175,6 +178,7 @@ export async function focusBuilding(ctx: ClientHandlerContext, x: number, y: num
 
   try {
     if (ctx.currentFocusedBuilding) {
+      ctx.nextGeneration('buildingRefresh');
       const unfocusReq: WsReqBuildingUnfocus = { type: WsMessageType.REQ_BUILDING_UNFOCUS };
       ctx.rawSend(unfocusReq);
       ctx.currentFocusedBuilding = null;
@@ -234,6 +238,7 @@ export async function unfocusBuilding(ctx: ClientHandlerContext): Promise<void> 
   ctx.speculativeBuildingResolved.clear();
 
   try {
+    ctx.nextGeneration('buildingRefresh');
     const req: WsReqBuildingUnfocus = {
       type: WsMessageType.REQ_BUILDING_UNFOCUS
     };

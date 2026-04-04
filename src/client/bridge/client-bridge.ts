@@ -454,6 +454,19 @@ export const ClientBridge = {
 
   /** Update building details in-place (smart refresh). */
   updateBuildingDetails(details: BuildingDetailsResponse): void {
+    // Reject stale data if the user already switched to a different building
+    const current = useBuildingStore.getState().details;
+    if (current && (current.x !== details.x || current.y !== details.y)) return;
+
+    // Reject corrupted responses where Delphi returned empty properties
+    // (race condition: temp object closed while refresh was in-flight).
+    // Keep existing good data rather than overwriting with empty groups.
+    const hasAnyGroupData = Object.values(details.groups).some(props => props.length > 0);
+    if (!hasAnyGroupData && current?.groups) {
+      ClientBridge.log('Building', 'Rejected refresh with empty property groups (corrupted response)');
+      return;
+    }
+
     useBuildingStore.getState().setDetails(details);
   },
 
