@@ -252,6 +252,18 @@ export async function getBuildingBasicDetails(
     const hasCompInputs = template.groups.some(g => g.special === 'compInputs');
     const isWarehouse = template.groups.some(g => g.id === 'whGeneral');
 
+    // Eagerly fetch warehouse ware names — lightweight (~2 RDO calls) and needed
+    // immediately by the General tab's WARE_CHECKLIST. Without this, the entire
+    // General tab was blocked behind a lazy skeleton for ~8 seconds.
+    let warehouseWares: WarehouseWareData[] | undefined;
+    if (isWarehouse) {
+      try {
+        warehouseWares = await getWarehouseWareNames(ctx, tempObjectId, allValues.get('GateMap') || '');
+      } catch (e: unknown) {
+        ctx.log.warn('[BuildingDetails] Failed to fetch warehouse wares eagerly:', toErrorMessage(e));
+      }
+    }
+
     // Store as active inspector (keep temp object alive)
     const inspector: ActiveInspector = {
       tempObjectId,
@@ -285,11 +297,12 @@ export async function getBuildingBasicDetails(
         handlerName: g.handlerName || '',
       })),
       groups,
-      // Lazy: supplies/products/compInputs/warehouseWares not fetched yet
+      // Lazy: supplies/products/compInputs not fetched yet (heavy RDO iteration)
       supplies: undefined,
       products: undefined,
       compInputs: undefined,
-      warehouseWares: undefined,
+      // warehouseWares fetched eagerly above (lightweight, needed by General tab)
+      warehouseWares,
       moneyGraph,
       timestamp: Date.now(),
     };
@@ -416,10 +429,8 @@ export async function getBuildingTabData(
       return { compInputs };
     }
 
-    if (tabId === 'whGeneral' && inspector.isWarehouse) {
-      const warehouseWares = await getWarehouseWareNames(ctx, tempObjectId, gateMap);
-      return { warehouseWares };
-    }
+    // whGeneral warehouseWares is now fetched eagerly in getBuildingBasicDetails.
+    // No lazy handler needed — fall through to empty return.
 
     // Tab doesn't need lazy data (already in basic response)
     return {};

@@ -128,7 +128,7 @@ export async function requestBuildingRefreshProperties(
 // ── Tab Data (Lazy Loading) ─────────────────────────────────────────────────
 
 /** Special tab IDs that require lazy loading. */
-const LAZY_TAB_IDS = new Set(['supplies', 'products', 'compInputs', 'whGeneral']);
+const LAZY_TAB_IDS = new Set(['supplies', 'products', 'compInputs']);
 
 export function isLazyTab(tabId: string): boolean {
   return LAZY_TAB_IDS.has(tabId);
