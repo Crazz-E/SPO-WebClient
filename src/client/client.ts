@@ -317,8 +317,9 @@ export class StarpeaceClient implements ClientHandlerContext {
         }).then(success => {
           if (success) {
             this.showNotification('Supplier disconnected', 'success');
+            // Lightweight refresh — building already focused, skip SwitchFocusEx
             const visualClass = this.currentFocusedVisualClass || '0';
-            buildingActionHandler.requestBuildingDetails(this, buildingX, buildingY, visualClass).then(details => {
+            buildingActionHandler.requestBuildingRefreshProperties(this, buildingX, buildingY, visualClass).then(details => {
               if (details) ClientBridge.updateBuildingDetails(details);
             });
           }

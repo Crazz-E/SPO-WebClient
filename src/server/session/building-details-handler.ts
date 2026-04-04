@@ -477,17 +477,24 @@ export async function refreshBuildingProperties(
     // Update GateMap in the inspector (may have changed via RDOSelectWare)
     inspector.gateMap = allValues.get('GateMap') || inspector.gateMap;
 
-    // Re-read building name/owner (lightweight IS-level call, no temp object)
+    // Re-read building name/owner — skip SwitchFocusEx when already focused
+    // (avoids timeout when server is busy with trade route recalculation)
     let buildingName = '';
     let ownerName = '';
     let buildingId = '';
-    try {
-      const focusInfo = await ctx.focusBuilding(x, y);
-      buildingName = focusInfo.buildingName;
-      ownerName = focusInfo.ownerName;
-      buildingId = focusInfo.buildingId;
-    } catch {
-      // Use values from allValues as fallback
+    const alreadyFocused =
+      ctx.currentFocusedCoords?.x === x && ctx.currentFocusedCoords?.y === y;
+    if (alreadyFocused && ctx.currentFocusedBuildingId) {
+      buildingId = ctx.currentFocusedBuildingId;
+    } else {
+      try {
+        const focusInfo = await ctx.focusBuilding(x, y);
+        buildingName = focusInfo.buildingName;
+        ownerName = focusInfo.ownerName;
+        buildingId = focusInfo.buildingId;
+      } catch {
+        // Use values from allValues as fallback
+      }
     }
 
     const response: BuildingDetailsResponse = {

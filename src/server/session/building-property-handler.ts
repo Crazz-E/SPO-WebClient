@@ -7,6 +7,7 @@
 
 import type { SessionContext } from './session-context';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
+import { RdoVerb, RdoAction } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 
 // =========================================================================
@@ -120,12 +121,6 @@ async function setBuildingPropertyImpl(
       'RDOAcceptCloning', // TBlock.RDOAcceptCloning — boolean, Kernel.pas:1304
     ]);
 
-    // Send SetProperty command via construction service — ALL fire-and-forget.
-    // No RID is assigned: the Delphi parser sees "C sel ..." and executes silently
-    // (no queryId = no response sent back). This is correct for rapid-fire property
-    // changes — adding RIDs causes 12+ responses to flood back and ECONNRESET.
-    let setCmd: string;
-
     // RDO functions (olevariant return) use "^" separator.
     // RDO procedures (void) use "*" separator.
     const RDO_FUNCTIONS: ReadonlySet<string> = new Set([
@@ -143,22 +138,45 @@ async function setBuildingPropertyImpl(
       'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
     ]);
 
+    // Connection commands: synchronous (matches Delphi WaitForAnswer:=true).
+    // Delphi recalculates trade routes on connect — can take 5-30s.
+    // Disconnect commands remain fire-and-forget (Delphi: WaitForAnswer:=false).
+    const SYNCHRONOUS_RDO_COMMANDS: ReadonlySet<string> = new Set([
+      'RDOConnectOutput', 'RDOConnectInput', 'RDOConnectToTycoon',
+    ]);
+
+    // --- Helper: send fire-and-forget command via construction socket ---
+    const fireAndForget = (cmd: string): void => {
+      const socket = ctx.getSocket('construction');
+      if (!socket) throw new Error('Construction socket unavailable');
+      socket.write(cmd);
+      ctx.log.debug(`[BuildingDetails] Sent: ${cmd}`);
+    };
+
     if (propertyName === 'property' && additionalParams?.propertyName) {
       // Direct property set: use SET verb
       const actualPropName = additionalParams.propertyName;
-      setCmd = RdoCommand.sel(currBlock)
-        .set(actualPropName)
-        .args(...rdoArgs)
-        .build();
+      fireAndForget(RdoCommand.sel(currBlock).set(actualPropName).args(...rdoArgs).build());
+      await new Promise(resolve => setTimeout(resolve, 200));
     } else if (RDO_SET_PROPERTIES.has(propertyName)) {
       // Published property: use SET verb (not CALL)
-      // e.g., RDOAcceptCloning is a boolean property on TBlock — Kernel.pas:1304
-      setCmd = RdoCommand.sel(currBlock)
-        .set(propertyName)
-        .args(...rdoArgs)
-        .build();
+      fireAndForget(RdoCommand.sel(currBlock).set(propertyName).args(...rdoArgs).build());
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } else if (SYNCHRONOUS_RDO_COMMANDS.has(propertyName)) {
+      // Synchronous — wait for server response (matches Delphi WaitForAnswer:=true)
+      const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
+      const formattedArgs = rdoArgs.map(arg => arg.format());
+      await ctx.sendRdoRequest('construction', {
+        verb: RdoVerb.SEL,
+        targetId: target,
+        action: RdoAction.CALL,
+        member: propertyName,
+        separator: '"^"',
+        args: formattedArgs,
+      }, 45000);
+      ctx.log.debug(`[BuildingDetails] Synchronous ${propertyName} completed`);
     } else {
-      // RDO method call — fire-and-forget, no RID.
+      // Fire-and-forget RDO method call — no RID, no response expected.
       const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
       const builder = RdoCommand.sel(target).call(propertyName);
       if (RDO_FUNCTIONS.has(propertyName)) {
@@ -166,15 +184,9 @@ async function setBuildingPropertyImpl(
       } else {
         builder.push();   // "*" — void procedure
       }
-      setCmd = builder.args(...rdoArgs).build();
+      fireAndForget(builder.args(...rdoArgs).build());
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
-    const socket = ctx.getSocket('construction');
-    if (!socket) throw new Error('Construction socket unavailable');
-    socket.write(setCmd);
-    ctx.log.debug(`[BuildingDetails] Sent: ${setCmd}`);
-
-    // Wait for server to process the command
-    await new Promise(resolve => setTimeout(resolve, 200));
 
     // Read back the new value via map service to confirm the change
     const verifyObjectId = await ctx.cacherCreateObject();

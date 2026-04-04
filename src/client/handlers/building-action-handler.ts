@@ -365,7 +365,10 @@ async function tradeConnect(ctx: ClientHandlerContext, buildingDetails: Building
     await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDOConnectToTycoon', '0', { kind });
     const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
     ctx.showNotification(`Connected all your ${kindLabel} to this building`, 'success');
-    refreshBuildingDetails(ctx, buildingDetails.x, buildingDetails.y);
+    // Lightweight refresh — building already focused, skip SwitchFocusEx
+    const vc = ctx.currentFocusedVisualClass || '0';
+    const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
+    if (details) ClientBridge.updateBuildingDetails(details);
   } catch (err: unknown) {
     ctx.showNotification(`Connection failed: ${toErrorMessage(err)}`, 'error');
   }
@@ -376,7 +379,10 @@ async function tradeDisconnect(ctx: ClientHandlerContext, buildingDetails: Build
     await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDODisconnectFromTycoon', '0', { kind });
     const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
     ctx.showNotification(`Disconnected all your ${kindLabel} from this building`, 'success');
-    refreshBuildingDetails(ctx, buildingDetails.x, buildingDetails.y);
+    // Lightweight refresh — building already focused, skip SwitchFocusEx
+    const vc = ctx.currentFocusedVisualClass || '0';
+    const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
+    if (details) ClientBridge.updateBuildingDetails(details);
   } catch (err: unknown) {
     ctx.showNotification(`Disconnection failed: ${toErrorMessage(err)}`, 'error');
   }
@@ -862,8 +868,10 @@ export async function connectFacilities(
       'success'
     );
 
+    // Lightweight refresh — building is already focused, skip SwitchFocusEx.
+    // EVENT_BUILDING_REFRESH (~5s) will refresh lazy tabs naturally.
     const visualClass = ctx.currentFocusedVisualClass || '0';
-    const refreshedDetails = await requestBuildingDetails(ctx, buildingX, buildingY, visualClass);
+    const refreshedDetails = await requestBuildingRefreshProperties(ctx, buildingX, buildingY, visualClass);
     if (refreshedDetails) {
       ClientBridge.updateBuildingDetails(refreshedDetails);
     }
