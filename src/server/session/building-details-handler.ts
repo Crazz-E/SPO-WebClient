@@ -464,11 +464,19 @@ export async function refreshBuildingProperties(
   ctx.log.debug(`[BuildingDetails] Refreshing properties on existing inspector obj=${inspector.tempObjectId} at (${x},${y})`);
 
   const template = getTemplateForVisualClass(visualClass);
-  const { tempObjectId } = inspector;
+  const { tempObjectId, mutex } = inspector;
+
+  // Acquire the inspector's mutex to prevent concurrent SetPath calls from
+  // getBuildingTabData() corrupting the temp object's path context.
+  const release = await mutex.acquire();
 
   try {
-    // Re-read properties on the SAME temp object (no SetObject needed — the
-    // Delphi TCachedObjectWrap already points at this building).
+    // Reset the temp object back to building root. A previous tab data request
+    // (supplies/products) may have called SetPath, leaving the object pointed
+    // at a supply gate sub-path. Without this reset, GetPropertyList reads
+    // from the wrong context and returns empty/wrong building properties.
+    await ctx.cacherSetObject(tempObjectId, x, y);
+
     const { allValues, groups, moneyGraph } = await fetchPropertiesAndGroups(ctx, tempObjectId, template);
 
     // Enrich votes tab
@@ -529,6 +537,8 @@ export async function refreshBuildingProperties(
     ctx.log.warn(`[BuildingDetails] Refresh failed on existing object, falling back to full create:`, toErrorMessage(e));
     releaseInspector(ctx);
     return getBuildingBasicDetails(ctx, x, y, visualClass);
+  } finally {
+    release();
   }
 }
 

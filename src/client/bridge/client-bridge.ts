@@ -467,6 +467,19 @@ export const ClientBridge = {
       return;
     }
 
+    // Reject partial corruption: if >90% of properties vanished, the refresh
+    // likely read from a wrong SetPath context (supply gate instead of building root).
+    // Legitimate changes (workers leaving, routes disconnecting) cause gradual drops,
+    // not catastrophic loss.
+    if (current?.groups) {
+      const oldCount = Object.values(current.groups).reduce((sum, props) => sum + props.length, 0);
+      const newCount = Object.values(details.groups).reduce((sum, props) => sum + props.length, 0);
+      if (oldCount > 10 && newCount < oldCount * 0.1) {
+        ClientBridge.log('Building', `Rejected refresh: property count dropped from ${oldCount} to ${newCount} (possible corruption)`);
+        return;
+      }
+    }
+
     useBuildingStore.getState().setDetails(details);
   },
 
