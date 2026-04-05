@@ -85,6 +85,18 @@ export class UpdateService implements Service {
       return;
     }
 
+    // Dev shortcut: skip remote sync when cache already has content
+    if (process.env.CACHE_SKIP_SYNC === 'true') {
+      const hasContent = fs.existsSync(this.CACHE_ROOT)
+        && fs.readdirSync(this.CACHE_ROOT).length > 0;
+      if (hasContent) {
+        logger.info('[UpdateService] CACHE_SKIP_SYNC=true and cache exists — skipping remote sync');
+        this.initialized = true;
+        return;
+      }
+      logger.info('[UpdateService] CACHE_SKIP_SYNC=true but cache is empty — syncing anyway');
+    }
+
     // Verify 7zip-min is available for CAB extraction (should always be true since it's bundled)
     const cabAvailable = await isCabExtractorAvailable();
     if (!cabAvailable) {
