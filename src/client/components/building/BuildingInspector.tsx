@@ -379,13 +379,14 @@ function CivicTabContent({
   isCandidate: boolean;
   holdsOffice: boolean;
 }) {
+  const groups = details.groups ?? {};
   const generalGroupId = getGeneralGroupId(details.tabs);
-  const generalProps = generalGroupId ? (details.groups[generalGroupId] ?? []) : [];
-  const votesProps = details.groups['votes'] ?? [];
-  const townsProps = details.groups['capitolTowns'] ?? [];
-  const ministriesProps = details.groups['ministeries'] ?? [];
-  const jobsProps = details.groups['townJobs'] ?? [];
-  const resProps = details.groups['townRes'] ?? [];
+  const generalProps = generalGroupId ? (groups[generalGroupId] ?? []) : [];
+  const votesProps = groups['votes'] ?? [];
+  const townsProps = groups['capitolTowns'] ?? [];
+  const ministriesProps = groups['ministeries'] ?? [];
+  const jobsProps = groups['townJobs'] ?? [];
+  const resProps = groups['townRes'] ?? [];
 
   switch (activeTab) {
     case 'overview':

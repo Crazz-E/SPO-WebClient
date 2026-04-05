@@ -12,6 +12,7 @@ import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
 import { toErrorMessage } from '../../shared/error-utils';
+import { serialiseConstruction } from './construction-lock';
 
 // =========================================================================
 // PRIVATE HELPERS
@@ -76,6 +77,16 @@ export async function manageConstruction(
   y: number,
   action: 'START' | 'STOP' | 'DOWN',
   count: number = 1
+): Promise<{ status: string, error?: string }> {
+  return serialiseConstruction(ctx, () => manageConstructionImpl(ctx, x, y, action, count));
+}
+
+async function manageConstructionImpl(
+  ctx: SessionContext,
+  x: number,
+  y: number,
+  action: 'START' | 'STOP' | 'DOWN',
+  count: number
 ): Promise<{ status: string, error?: string }> {
   ctx.log.debug(`[Construction] Request: ${action} at (${x}, ${y}) count=${count}`);
   try {
@@ -239,6 +250,15 @@ export async function renameFacility(
   y: number,
   newName: string
 ): Promise<{ success: boolean, message?: string }> {
+  return serialiseConstruction(ctx, () => renameFacilityImpl(ctx, x, y, newName));
+}
+
+async function renameFacilityImpl(
+  ctx: SessionContext,
+  x: number,
+  y: number,
+  newName: string
+): Promise<{ success: boolean, message?: string }> {
   try {
     // Use currently focused building ID if coordinates match
     let buildingId = ctx.currentFocusedBuildingId;
@@ -290,6 +310,14 @@ export async function renameFacility(
  * Note: sel uses worldId (from idof World), NOT building's CurrBlock ID
  */
 export async function deleteFacility(
+  ctx: SessionContext,
+  x: number,
+  y: number
+): Promise<{ success: boolean, message?: string }> {
+  return serialiseConstruction(ctx, () => deleteFacilityImpl(ctx, x, y));
+}
+
+async function deleteFacilityImpl(
   ctx: SessionContext,
   x: number,
   y: number

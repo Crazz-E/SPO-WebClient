@@ -15,6 +15,7 @@ import { BuildingInspector } from '../building';
 import { ChatStrip } from '../chat';
 import { SearchPanel } from '../search';
 import { TransportPanel } from '../transport';
+import { ErrorBoundary } from '../common';
 import { useChatStore } from '../../store/chat-store';
 import { BottomNav } from './BottomNav';
 import { BottomSheet } from './BottomSheet';
@@ -123,7 +124,9 @@ export function MobileShell() {
         onClose={handleSheetClose}
         title={sheetTitle}
       >
-        <SheetContent />
+        <ErrorBoundary>
+          <SheetContent />
+        </ErrorBoundary>
       </BottomSheet>
 
       {/* Bottom navigation — replaced by PlacementHUD during building placement */}

@@ -9,18 +9,7 @@ import type { SessionContext } from './session-context';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
-
-// =========================================================================
-// Serialisation — prevent concurrent cacher operations on the same session
-// =========================================================================
-const sessionLocks = new WeakMap<SessionContext, Promise<unknown>>();
-
-function serialise(ctx: SessionContext, fn: () => Promise<{ success: boolean; newValue: string }>): Promise<{ success: boolean; newValue: string }> {
-  const prev = sessionLocks.get(ctx) ?? Promise.resolve();
-  const next = prev.then(fn, fn); // run fn after previous settles (success or failure)
-  sessionLocks.set(ctx, next);
-  return next;
-}
+import { serialiseConstruction } from './construction-lock';
 
 // =========================================================================
 // PUBLIC — setBuildingProperty
@@ -34,7 +23,7 @@ export function setBuildingProperty(
   value: string,
   additionalParams?: Record<string, string>
 ): Promise<{ success: boolean; newValue: string }> {
-  return serialise(ctx, () => setBuildingPropertyImpl(ctx, x, y, propertyName, value, additionalParams));
+  return serialiseConstruction(ctx, () => setBuildingPropertyImpl(ctx, x, y, propertyName, value, additionalParams));
 }
 
 async function setBuildingPropertyImpl(

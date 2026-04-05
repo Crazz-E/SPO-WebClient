@@ -1506,6 +1506,16 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
       return reject(new Error(`Socket ${socketName} not active`));
     }
 
+    // GUARD: Void push ("*") + QueryId = Delphi server crash.
+    // sendRdoRequest always adds a rid, so void push must never go through here.
+    // Void push commands must use socket.write() directly (no rid, no response).
+    if (packetData.separator?.includes('*')) {
+      return reject(new Error(
+        `FATAL: Void push separator "*" used with sendRdoRequest() — this WILL crash the Delphi server. ` +
+        `Command: ${packetData.member || 'unknown'}. Use socket.write() for fire-and-forget commands.`
+      ));
+    }
+
     const rid = this.requestIdCounter++;
     const packet = { ...packetData, rid, type: 'REQUEST' } as RdoPacket;
 
@@ -1735,6 +1745,11 @@ private handlePush(socketName: string, packet: RdoPacket) {
    */
   public async cleanupWorldSession(): Promise<void> {
     this.log.debug('[Session] Cleaning up world session for server switch...');
+
+    // 0. Release active inspector temp object BEFORE closing sockets
+    // (CloseObject needs the map socket to send the fire-and-forget command)
+    // Mirrors Delphi ReleaseCacheObject() in TObjectInspectorContainer destructor.
+    this.releaseInspector();
 
     // 1. Send RDOEndSession to gracefully close the game server session
     await this.endSession();
