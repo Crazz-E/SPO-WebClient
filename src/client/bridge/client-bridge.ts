@@ -6,7 +6,7 @@
  * ClientContext) to trigger client.ts actions.
  */
 
-import { useGameStore, type GameSettings, type ServerStartupState, type MapLoadingState } from '../store/game-store';
+import { useGameStore, type GameSettings, type ServerStartupState, type MapLoadingState, type DisconnectReason } from '../store/game-store';
 import { useBuildingStore } from '../store/building-store';
 import { useChatStore, type ChatUser } from '../store/chat-store';
 import { useMailStore } from '../store/mail-store';
@@ -312,7 +312,10 @@ export const ClientBridge = {
     useGameStore.getState().setStatus('connected');
   },
 
-  setDisconnected(): void {
+  setDisconnected(reason?: DisconnectReason): void {
+    if (reason) {
+      useGameStore.getState().setDisconnectReason(reason);
+    }
     useGameStore.getState().setStatus('disconnected');
   },
 

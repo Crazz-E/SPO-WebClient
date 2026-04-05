@@ -72,3 +72,39 @@
 .retryBtn:active {
   background: var(--color-primary-dark, #2563eb);
 }
+
+/* ---- Error state (after reconnect failure) ---- */
+
+.errorIcon {
+  width: 40px;
+  height: 40px;
+  color: var(--error, #ef4444);
+}
+
+.errorMessage {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.homeBtn {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  background: var(--error, #ef4444);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: background 150ms;
+}
+
+.homeBtn:hover {
+  background: #dc2626;
+}
+
+.homeBtn:active {
+  background: #b91c1c;
+}

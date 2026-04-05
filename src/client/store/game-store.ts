@@ -38,6 +38,8 @@ export type MinimapSize = 'small' | 'medium' | 'large';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'reconnecting' | 'connected';
 
+export type DisconnectReason = 'connection_lost' | 'session_expired' | null;
+
 export type ServiceStatus = 'pending' | 'running' | 'complete' | 'failed';
 
 export interface ServerStartupState {
@@ -77,6 +79,7 @@ const DEFAULT_SETTINGS: GameSettings = {
 interface GameState {
   // Connection
   status: ConnectionStatus;
+  disconnectReason: DisconnectReason;
   username: string;
   worldName: string;
   companyName: string;
@@ -144,6 +147,7 @@ interface GameState {
 
   // Actions
   setStatus: (status: ConnectionStatus) => void;
+  setDisconnectReason: (reason: DisconnectReason) => void;
   setReconnectAttempt: (attempt: number) => void;
   setCredentials: (username: string) => void;
   setWorld: (worldName: string) => void;
@@ -182,6 +186,7 @@ interface GameState {
 export const useGameStore = create<GameState>((set) => ({
   // Initial state
   status: 'disconnected',
+  disconnectReason: null,
   username: '',
   worldName: '',
   companyName: '',
@@ -217,7 +222,8 @@ export const useGameStore = create<GameState>((set) => ({
   serverStartup: { ready: false, progress: 0, message: 'Connecting...', services: [] },
   mapLoading: { active: false, progress: 0, message: '' },
   // Actions
-  setStatus: (status) => set({ status }),
+  setStatus: (status) => set({ status, ...(status === 'connected' ? { disconnectReason: null } : {}) }),
+  setDisconnectReason: (reason) => set({ disconnectReason: reason }),
   setReconnectAttempt: (attempt) => set({ reconnectAttempt: attempt }),
   setCredentials: (username) => set({ username }),
   setWorld: (worldName) => set({ worldName }),
@@ -292,6 +298,7 @@ export const useGameStore = create<GameState>((set) => ({
   reset: () =>
     set({
       status: 'disconnected',
+      disconnectReason: null,
       username: '',
       worldName: '',
       companyName: '',

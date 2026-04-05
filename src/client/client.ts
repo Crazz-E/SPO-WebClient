@@ -921,7 +921,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       ClientBridge.log('System', 'Max reconnect attempts reached — returning to login.');
       this.reconnectAttempt = 0;
       useGameStore.getState().setReconnectAttempt(0);
-      ClientBridge.setDisconnected();
+      ClientBridge.setDisconnected('connection_lost');
       return;
     }
 
@@ -946,7 +946,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       ClientBridge.log('System', 'Missing session data — returning to login.');
       this.reconnectAttempt = 0;
       useGameStore.getState().setReconnectAttempt(0);
-      ClientBridge.setDisconnected();
+      ClientBridge.setDisconnected('session_expired');
       return;
     }
 
