@@ -174,7 +174,7 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
     }
 
     case WsMessageType.EVENT_RDO_PUSH: {
-      const pushData = (msg as Record<string, unknown>).rawPacket || msg;
+      const pushData = (msg as unknown as Record<string, unknown>).rawPacket || msg;
       ClientBridge.log('Push', `Received: ${JSON.stringify(pushData).substring(0, 100)}...`);
       break;
     }
@@ -350,8 +350,8 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
         maxBuildings: profile.facMax,
       };
       ClientBridge.updateTycoonStats({
-        username: ctx.storedUsername,
         ...baseStats,
+        username: ctx.storedUsername,
         prestige: profile.prestige,
         levelName: profile.levelName,
         levelTier: profile.levelTier,

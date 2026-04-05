@@ -33,7 +33,7 @@ import { toErrorMessage } from '../../shared/error-utils';
 // ASYNC MUTEX — serializes SetPath calls on a shared Delphi temp object
 // =========================================================================
 
-class AsyncMutex {
+export class AsyncMutex {
   private queue: Array<() => void> = [];
   private locked = false;
 
@@ -100,6 +100,16 @@ export function getActiveInspector(ctx: SessionContext, x: number, y: number): A
     return inspector;
   }
   return undefined;
+}
+
+/**
+ * Test-only: insert an ActiveInspector into the WeakMap so tests can
+ * exercise releaseInspector / getActiveInspector without going through
+ * the full RDO pipeline.
+ * @internal Exported for unit tests only — do not use in production code.
+ */
+export function setActiveInspectorForTest(ctx: SessionContext, inspector: ActiveInspector): void {
+  activeInspectors.set(ctx, inspector);
 }
 
 /**

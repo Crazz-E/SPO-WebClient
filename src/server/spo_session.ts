@@ -100,6 +100,7 @@ import * as researchHandler from './session/research-handler';
 import type { SessionContext } from './session/session-context';
 import { dispatchPush } from './session/push-dispatcher';
 import * as loginHandler from './session/login-handler';
+import { assertNotVoidPush, canBufferRequest } from './session/rdo-request-guards';
 
 
 // Pure utility functions moved to session/session-utils.ts — re-export for backward compat
@@ -1479,7 +1480,7 @@ public sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeou
   return new Promise((resolve, reject) => {
     // If server is busy, buffer the request
     if (this.isServerBusy) {
-      if (this.requestBuffer.length >= this.MAX_BUFFER_SIZE) {
+      if (!canBufferRequest(this.requestBuffer.length, this.MAX_BUFFER_SIZE)) {
         // Buffer is full, drop the request
         this.log.warn('[Buffer] Buffer full, dropping request:', packetData.member);
         reject(new Error('Request buffer full - server busy'));
@@ -1509,11 +1510,10 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
     // GUARD: Void push ("*") + QueryId = Delphi server crash.
     // sendRdoRequest always adds a rid, so void push must never go through here.
     // Void push commands must use socket.write() directly (no rid, no response).
-    if (packetData.separator?.includes('*')) {
-      return reject(new Error(
-        `FATAL: Void push separator "*" used with sendRdoRequest() — this WILL crash the Delphi server. ` +
-        `Command: ${packetData.member || 'unknown'}. Use socket.write() for fire-and-forget commands.`
-      ));
+    try {
+      assertNotVoidPush(packetData);
+    } catch (err: unknown) {
+      return reject(err);
     }
 
     const rid = this.requestIdCounter++;

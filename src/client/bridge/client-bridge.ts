@@ -362,6 +362,7 @@ export const ClientBridge = {
     prestige?: number;
     levelName?: string;
     levelTier?: number;
+    nobPoints?: number;
     area?: number;
     failureLevel?: number;
   }): void {
