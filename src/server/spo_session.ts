@@ -106,6 +106,14 @@ import { assertNotVoidPush, canBufferRequest } from './session/rdo-request-guard
 // Pure utility functions moved to session/session-utils.ts — re-export for backward compat
 export { parseFavoritesResponse, deriveResidenceClass } from './session/session-utils';
 
+/** Redact password arguments from sensitive RDO commands before logging. */
+const SENSITIVE_MEMBERS = new Set(['RDOLogonUser', 'Logon', 'AccountStatus', 'RDOLogonClient']);
+function redactRdoRaw(member: string | undefined, raw: string): string {
+  if (!member || !SENSITIVE_MEMBERS.has(member)) return raw;
+  // Replace the last "%<password>" arg: ","%xxx"" → ","%[REDACTED]""
+  return raw.replace(/,"%[^"]*"(?=\s*$)/, ',"%[REDACTED]"');
+}
+
 export class StarpeaceSession extends EventEmitter {
   public readonly sid = generateSessionId();
   public readonly startedAt = Date.now();
@@ -113,6 +121,7 @@ export class StarpeaceSession extends EventEmitter {
   private sockets: Map<string, net.Socket> = new Map();
   private framers: Map<string, RdoFramer> = new Map();
   private phase: SessionPhase = SessionPhase.DISCONNECTED;
+  private isClosing = false;
   private requestIdCounter: number = 1000;
 
   /**
@@ -237,6 +246,7 @@ export class StarpeaceSession extends EventEmitter {
   private isServerBusy: boolean = false;
   private serverBusyCheckInterval: NodeJS.Timeout | null = null;
   private readonly SERVER_BUSY_CHECK_INTERVAL_MS = 10000; // Check every 10 seconds
+  private isPolling = false;
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private readonly KEEP_ALIVE_INTERVAL_MS = 60000; // Matches Delphi CacheConnectionTimeOut
 
@@ -1326,18 +1336,20 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 }
 
 /**
-   * NEW: Start ServerBusy polling (every 2 seconds)
+   * Start ServerBusy polling (every 10 seconds)
    * When server is busy, pause all requests except ServerBusy checks
    */
   public startServerBusyPolling(): void {
     if (this.serverBusyCheckInterval) return; // Already running
 
-    this.log.debug('[ServerBusy] Starting 2-second polling...');
+    this.log.debug(`[ServerBusy] Starting ${this.SERVER_BUSY_CHECK_INTERVAL_MS / 1000}-second polling...`);
 
     this.serverBusyCheckInterval = setInterval(async () => {
-      if (!this.worldContextId || this.phase === SessionPhase.WORLD_CONNECTING) {
-        return; // Skip during login
+      if (!this.worldContextId || this.phase === SessionPhase.WORLD_CONNECTING || this.isClosing) {
+        return; // Skip during login or teardown
       }
+      if (this.isPolling) return; // Previous poll still in-flight
+      this.isPolling = true;
 
       try {
         const rid = this.requestIdCounter++;
@@ -1380,6 +1392,8 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         }
       } catch (e: unknown) {
         this.log.warn('[ServerBusy] Poll failed:', (e as Error).message);
+      } finally {
+        this.isPolling = false;
       }
     }, this.SERVER_BUSY_CHECK_INTERVAL_MS);
   }
@@ -1478,6 +1492,10 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
  */
 public sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs = 10000): Promise<RdoPacket> {
   return new Promise((resolve, reject) => {
+    if (this.isClosing) {
+      return reject(new Error('Session is closing'));
+    }
+
     // If server is busy, buffer the request
     if (this.isServerBusy) {
       if (!canBufferRequest(this.requestBuffer.length, this.MAX_BUFFER_SIZE)) {
@@ -1541,7 +1559,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
 
     // Send the request
     const rawString = RdoProtocol.format(packet);
-    this.log.debug(`RDO>> ${socketName}`, { command: packetData.member, verb: packetData.verb, rid, raw: rawString });
+    this.log.debug(`RDO>> ${socketName}`, { command: packetData.member, verb: packetData.verb, rid, raw: redactRdoRaw(packetData.member, rawString) });
     socket.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
   });
 }
@@ -1619,7 +1637,9 @@ private handleIncomingMessage(socketName: string, raw: string) {
 	  // Handle responses
 	  if (packet.type === 'RESPONSE') {
 		if (packet.rid && this.pendingRequests.has(packet.rid)) {
-		  // CORRECTED: Get the callbacks object and call resolve
+		  if (packet.errorCode && packet.errorCode > 0) {
+			this.log.warn(`[RDO] Error response RID ${packet.rid}: ${packet.errorName} (code ${packet.errorCode})`);
+		  }
 		  const callbacks = this.pendingRequests.get(packet.rid)!;
 		  this.pendingRequests.delete(packet.rid);
 		  callbacks.resolve(packet);
@@ -1776,6 +1796,10 @@ private handlePush(socketName: string, packet: RdoPacket) {
       pending.reject(new Error('Session cleaned up for server switch'));
     }
     this.pendingRequests.clear();
+    const switchError = new Error('Session cleaned up for server switch');
+    for (const buffered of this.requestBuffer) {
+      buffered.reject(switchError);
+    }
     this.requestBuffer = [];
     this.pendingMapRequests.clear();
 
@@ -1895,6 +1919,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
    * Should be called when the WebSocket client disconnects
    */
   public destroy(): void {
+    this.isClosing = true;
     this.log.debug('[Session] Destroying session and cleaning up resources...');
 
     // Release active inspector temp object BEFORE closing sockets
@@ -1915,6 +1940,15 @@ private handlePush(socketName: string, packet: RdoPacket) {
       } catch (err: unknown) {
         this.log.error(`[Session] Error closing socket ${name}:`, err);
       }
+    }
+
+    // Reject all pending RDO requests before clearing (mirrors cleanupWorldSession pattern)
+    const destroyError = new Error('Session destroyed');
+    for (const [, pending] of this.pendingRequests.entries()) {
+      pending.reject(destroyError);
+    }
+    for (const buffered of this.requestBuffer) {
+      buffered.reject(destroyError);
     }
 
     // Clear all maps and buffers
