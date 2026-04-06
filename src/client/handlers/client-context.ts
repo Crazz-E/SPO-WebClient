@@ -100,6 +100,7 @@ export interface ClientHandlerContext {
 
   // ── In-flight Dedup ──────────────────────────────────────────────────────
   inFlightBuildingDetails: Map<string, Promise<BuildingDetailsResponse | null>>;
+  inFlightSetProperty: Map<string, Promise<boolean>>;
 
   // ── Cross-handler Methods ────────────────────────────────────────────────
   requestBuildingDetails(x: number, y: number, visualClass: string): Promise<BuildingDetailsResponse | null>;

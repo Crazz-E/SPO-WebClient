@@ -1117,6 +1117,26 @@
   transition: background 0.2s, border-color 0.2s;
 }
 
+.tradeConnectBtn:disabled {
+  cursor: wait;
+  pointer-events: none;
+  animation: tradeConnectPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tradeConnectPulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.75; }
+}
+
+.tradeConnectSpinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .tradeConnectBtnLink {
   background: var(--bg-tertiary);
   border-color: var(--surface-border);

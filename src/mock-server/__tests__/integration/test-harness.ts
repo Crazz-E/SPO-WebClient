@@ -193,6 +193,7 @@ function createMockContext(ws: MockWebSocketClient): ClientHandlerContext {
 
     // ── In-flight Dedup ──
     inFlightBuildingDetails: new Map(),
+    inFlightSetProperty: new Map(),
 
     // ── Cross-handler Methods (stubs) ──
     requestBuildingDetails: jest.fn().mockResolvedValue(null),

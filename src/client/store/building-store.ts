@@ -119,6 +119,11 @@ interface BuildingState {
   clearFailed: (key: string) => void;
   clearConfirmed: (key: string) => void;
 
+  // In-flight action tracking (disables buttons while processing)
+  inFlightActions: Set<string>;
+  addInFlightAction: (actionId: string) => void;
+  removeInFlightAction: (actionId: string) => void;
+
   // Research actions
   setResearchCategoryTabs: (tabs: string[]) => void;
   setResearchInventory: (data: ResearchCategoryData) => void;
@@ -158,6 +163,9 @@ export const useBuildingStore = create<BuildingState>((set) => ({
   pendingUpdates: new Map(),
   failedUpdates: new Map(),
   confirmedUpdates: new Map(),
+
+  // In-flight action tracking
+  inFlightActions: new Set<string>(),
 
   setFocus: (info) => set({ focusedBuilding: info }),
 
@@ -270,6 +278,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       failedUpdates: new Map(),
       confirmedUpdates: new Map(),
       connectionPicker: null,
+      inFlightActions: new Set<string>(),
     }),
 
   clearDetails: () =>
@@ -285,9 +294,24 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       failedUpdates: new Map(),
       confirmedUpdates: new Map(),
       connectionPicker: null,
+      inFlightActions: new Set<string>(),
     }),
 
   clearOverlay: () => set({ isOverlayMode: false }),
+
+  addInFlightAction: (actionId) =>
+    set((state) => {
+      const next = new Set(state.inFlightActions);
+      next.add(actionId);
+      return { inFlightActions: next };
+    }),
+
+  removeInFlightAction: (actionId) =>
+    set((state) => {
+      const next = new Set(state.inFlightActions);
+      next.delete(actionId);
+      return { inFlightActions: next };
+    }),
 
   // Lazy tab loading actions
   setTabLoading: (tabId) =>

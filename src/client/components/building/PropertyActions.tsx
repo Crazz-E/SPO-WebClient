@@ -172,35 +172,54 @@ const TRADE_KINDS = [
 ] as const;
 
 export function TradeConnectButtons({ onAction }: { onAction: (id: string) => void }) {
+  const inFlightActions = useBuildingStore((s) => s.inFlightActions);
   return (
     <div className={styles.tradeConnectGrid}>
-      {TRADE_KINDS.map(({ kind, label }) => (
-        <div key={kind} className={styles.tradeConnectRow}>
-          <button
-            className={`${styles.tradeConnectBtn} ${styles.tradeConnectBtnLink}`}
-            onClick={() => onAction(`tradeConnect:${kind}`)}
-            title={`Connect all your ${label.toLowerCase()} to this building`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-            </svg>
-            {label}
-          </button>
-          <button
-            className={`${styles.tradeConnectBtn} ${styles.tradeConnectBtnUnlink}`}
-            onClick={() => onAction(`tradeDisconnect:${kind}`)}
-            title={`Disconnect all your ${label.toLowerCase()} from this building`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-              <line x1="2" y1="2" x2="22" y2="22" />
-            </svg>
-            {label}
-          </button>
-        </div>
-      ))}
+      {TRADE_KINDS.map(({ kind, label }) => {
+        const connectBusy = inFlightActions.has(`tradeConnect:${kind}`);
+        const disconnectBusy = inFlightActions.has(`tradeDisconnect:${kind}`);
+        return (
+          <div key={kind} className={styles.tradeConnectRow}>
+            <button
+              className={`${styles.tradeConnectBtn} ${styles.tradeConnectBtnLink}`}
+              onClick={() => onAction(`tradeConnect:${kind}`)}
+              disabled={connectBusy || disconnectBusy}
+              title={connectBusy ? 'Connecting...' : `Connect all your ${label.toLowerCase()} to this building`}
+            >
+              {connectBusy ? (
+                <svg className={styles.tradeConnectSpinner} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+              )}
+              {connectBusy ? 'Connecting...' : label}
+            </button>
+            <button
+              className={`${styles.tradeConnectBtn} ${styles.tradeConnectBtnUnlink}`}
+              onClick={() => onAction(`tradeDisconnect:${kind}`)}
+              disabled={connectBusy || disconnectBusy}
+              title={disconnectBusy ? 'Disconnecting...' : `Disconnect all your ${label.toLowerCase()} from this building`}
+            >
+              {disconnectBusy ? (
+                <svg className={styles.tradeConnectSpinner} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  <line x1="2" y1="2" x2="22" y2="22" />
+                </svg>
+              )}
+              {disconnectBusy ? 'Disconnecting...' : label}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

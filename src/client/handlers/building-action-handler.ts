@@ -30,6 +30,7 @@ import {
   BuildingDetailsResponse,
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
+import { showToast, dismissToast } from '../components/common/Toast';
 import { ClientBridge } from '../bridge/client-bridge';
 import { useBuildingStore } from '../store/building-store';
 import { useGameStore } from '../store/game-store';
@@ -184,7 +185,27 @@ export async function requestTabData(
 
 // ── Set Property ────────────────────────────────────────────────────────────
 
-export async function setBuildingProperty(
+export function setBuildingProperty(
+  ctx: ClientHandlerContext,
+  x: number,
+  y: number,
+  propertyName: string,
+  value: string,
+  additionalParams?: Record<string, string>
+): Promise<boolean> {
+  const dedupKey = `${x},${y}:${propertyName}:${JSON.stringify(additionalParams ?? {})}`;
+  const existing = ctx.inFlightSetProperty.get(dedupKey);
+  if (existing) {
+    ClientBridge.log('Building', `Dedup: reusing in-flight setBuildingProperty for ${dedupKey}`);
+    return existing;
+  }
+  const promise = setBuildingPropertyImpl(ctx, x, y, propertyName, value, additionalParams);
+  ctx.inFlightSetProperty.set(dedupKey, promise);
+  promise.finally(() => ctx.inFlightSetProperty.delete(dedupKey));
+  return promise;
+}
+
+async function setBuildingPropertyImpl(
   ctx: ClientHandlerContext,
   x: number,
   y: number,
@@ -210,7 +231,7 @@ export async function setBuildingProperty(
       additionalParams
     };
 
-    const response = await ctx.sendRequest(req) as WsRespBuildingSetProperty;
+    const response = await ctx.sendRequest(req, 50000) as WsRespBuildingSetProperty;
 
     if (response.success) {
       ClientBridge.confirmPendingUpdate(pendingKey);
@@ -368,30 +389,44 @@ export function handleBuildingAction(ctx: ClientHandlerContext, actionId: string
 // ── Trade Connect / Disconnect ──────────────────────────────────────────────
 
 async function tradeConnect(ctx: ClientHandlerContext, buildingDetails: BuildingDetailsResponse, kind: string): Promise<void> {
+  const actionId = `tradeConnect:${kind}`;
+  const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
+  useBuildingStore.getState().addInFlightAction(actionId);
+  const pendingToastId = showToast(`Connecting all your ${kindLabel}...`, 'info');
   try {
     await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDOConnectToTycoon', '0', { kind });
-    const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
+    dismissToast(pendingToastId);
     ctx.showNotification(`Connected all your ${kindLabel} to this building`, 'success');
     // Lightweight refresh — building already focused, skip SwitchFocusEx
     const vc = ctx.currentFocusedVisualClass || '0';
     const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
     if (details) ClientBridge.updateBuildingDetails(details);
   } catch (err: unknown) {
+    dismissToast(pendingToastId);
     ctx.showNotification(`Connection failed: ${toErrorMessage(err)}`, 'error');
+  } finally {
+    useBuildingStore.getState().removeInFlightAction(actionId);
   }
 }
 
 async function tradeDisconnect(ctx: ClientHandlerContext, buildingDetails: BuildingDetailsResponse, kind: string): Promise<void> {
+  const actionId = `tradeDisconnect:${kind}`;
+  const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
+  useBuildingStore.getState().addInFlightAction(actionId);
+  const pendingToastId = showToast(`Disconnecting all your ${kindLabel}...`, 'info');
   try {
     await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDODisconnectFromTycoon', '0', { kind });
-    const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
+    dismissToast(pendingToastId);
     ctx.showNotification(`Disconnected all your ${kindLabel} from this building`, 'success');
     // Lightweight refresh — building already focused, skip SwitchFocusEx
     const vc = ctx.currentFocusedVisualClass || '0';
     const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
     if (details) ClientBridge.updateBuildingDetails(details);
   } catch (err: unknown) {
+    dismissToast(pendingToastId);
     ctx.showNotification(`Disconnection failed: ${toErrorMessage(err)}`, 'error');
+  } finally {
+    useBuildingStore.getState().removeInFlightAction(actionId);
   }
 }
 

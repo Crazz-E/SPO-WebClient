@@ -30,8 +30,8 @@ function notifyListeners() {
   }
 }
 
-/** Show a toast notification */
-export function showToast(message: string, variant: ToastVariant = 'info', icon?: ReactNode) {
+/** Show a toast notification. Returns the toast ID for later dismissal. */
+export function showToast(message: string, variant: ToastVariant = 'info', icon?: ReactNode): string {
   const toast: ToastMessage = {
     id: String(++nextId),
     message,
@@ -46,6 +46,8 @@ export function showToast(message: string, variant: ToastVariant = 'info', icon?
     currentToasts = currentToasts.filter((t) => t.id !== toast.id);
     notifyListeners();
   }, AUTO_DISMISS_MS);
+
+  return toast.id;
 }
 
 /** Compute visible toasts and hidden count (exported for testing) */

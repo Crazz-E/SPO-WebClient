@@ -215,6 +215,7 @@ export class StarpeaceClient implements ClientHandlerContext {
 
   // In-flight dedup
   public inFlightBuildingDetails = new Map<string, Promise<BuildingDetailsResponse | null>>();
+  public inFlightSetProperty = new Map<string, Promise<boolean>>();
 
   // Audio
   public soundManager: SoundManager;
