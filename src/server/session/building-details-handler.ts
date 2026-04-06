@@ -361,7 +361,11 @@ export async function getBuildingTabData(
     ctx.log.debug(`[BuildingDetails] Tab data for (${x},${y}), tab=${tabId}`);
 
     if (tabId === 'supplies' && inspector.hasSupplies) {
-      const supplyPaths = await getSupplyPaths(ctx, tempObjectId);
+      let supplyPaths = await getSupplyPaths(ctx, tempObjectId);
+      // Warehouses: skip disabled gates (GateMap bit = '0') to avoid unnecessary RDO calls
+      if (inspector.isWarehouse && gateMap) {
+        supplyPaths = supplyPaths.filter((_, i) => i < gateMap.length && gateMap[i] === '1');
+      }
       const workerCount = computeWorkerCount(supplyPaths.length);
       const semaphore = new Semaphore(MAX_GLOBAL_CONCURRENT_RDO);
       let supplies: BuildingSupplyData[];
@@ -398,7 +402,11 @@ export async function getBuildingTabData(
     }
 
     if (tabId === 'products' && inspector.hasProducts) {
-      const productPaths = await getProductPaths(ctx, tempObjectId);
+      let productPaths = await getProductPaths(ctx, tempObjectId);
+      // Warehouses: skip disabled gates (GateMap bit = '0') to avoid unnecessary RDO calls
+      if (inspector.isWarehouse && gateMap) {
+        productPaths = productPaths.filter((_, i) => i < gateMap.length && gateMap[i] === '1');
+      }
       const workerCount = computeWorkerCount(productPaths.length);
       const semaphore = new Semaphore(MAX_GLOBAL_CONCURRENT_RDO);
       let products: BuildingProductData[];

@@ -78,16 +78,10 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
     [buildingX, buildingY, client],
   );
 
-  // For warehouses, filter supplies/products to only show selected wares (GateMap enabled).
-  // Archaeology: WHGeneralSheet.pas — only selected wares (clbNames checked) are operational.
-  const warehouseWares = details?.warehouseWares;
-
   // Special: supplies tab — render structured supply UI from details.supplies
+  // Warehouse filtering is done server-side (GateMap) — only enabled wares are fetched.
   if (activeGroup?.special === 'supplies') {
-    let supplies = details?.supplies ?? [];
-    if (warehouseWares && warehouseWares.length > 0) {
-      supplies = supplies.filter((_, i) => warehouseWares[i]?.enabled !== false);
-    }
+    const supplies = details?.supplies ?? [];
     return (
       <div className={styles.group}>
         <SuppliesPanel
@@ -101,11 +95,9 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
   }
 
   // Special: products tab — render structured product UI from details.products
+  // Warehouse filtering is done server-side (GateMap) — only enabled wares are fetched.
   if (activeGroup?.special === 'products') {
-    let products = details?.products ?? [];
-    if (warehouseWares && warehouseWares.length > 0) {
-      products = products.filter((_, i) => warehouseWares[i]?.enabled !== false);
-    }
+    const products = details?.products ?? [];
     return (
       <div className={styles.group}>
         <ProductsPanel

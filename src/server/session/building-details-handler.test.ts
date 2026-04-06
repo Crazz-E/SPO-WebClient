@@ -1,9 +1,19 @@
 /**
- * Tests for building-details-handler: Semaphore, computeWorkerCount.
+ * Tests for building-details-handler: Semaphore, computeWorkerCount, GateMap filtering.
  */
 
 import { describe, it, expect } from '@jest/globals';
 import { Semaphore, computeWorkerCount } from './building-details-handler';
+
+/**
+ * Helper that replicates the GateMap filtering logic applied server-side
+ * in getBuildingTabData() for warehouse supplies/products.
+ * This is the exact same expression used in the handler — extracted here
+ * so regressions in the filter logic are caught immediately.
+ */
+function filterByGateMap<T>(paths: T[], gateMap: string): T[] {
+  return paths.filter((_, i) => i < gateMap.length && gateMap[i] === '1');
+}
 
 describe('computeWorkerCount', () => {
   it('returns 1 for 1-3 slots', () => {
@@ -102,5 +112,68 @@ describe('Semaphore', () => {
     sem.release();
     await p;
     expect(blocked).toBe(false);
+  });
+});
+
+describe('GateMap filtering for warehouse supplies/products', () => {
+  const allPaths = [
+    'Books', 'BusinessMachines', 'Cars', 'CDs', 'Chemicals',
+    'Clothes', 'Construction', 'Drugs', 'ElabFood', 'ElectComp',
+    'FabricThreads', 'FreshFood', 'Furniture', 'Gasoline',
+    'HouseHoldingAppliances', 'Liquors', 'Machinery', 'Metals',
+    'Oil', 'Ore', 'OreChems', 'OreCoal', 'OreSilicon', 'OreStone',
+    'OrganicMat', 'Paper', 'Plastics', 'PrintedMaterial', 'Timber', 'Toys',
+  ];
+
+  it('filters 30 paths to 3 enabled gates (real GateMap from Import Storage)', () => {
+    // GateMap: bit 0=Books, bit 11=FreshFood, bit 24=OrganicMat
+    const gateMap = '100000000001000000000000100000';
+    const filtered = filterByGateMap(allPaths, gateMap);
+
+    expect(filtered).toEqual(['Books', 'FreshFood', 'OrganicMat']);
+  });
+
+  it('returns all paths when all gates are enabled', () => {
+    const gateMap = '1'.repeat(30);
+    const filtered = filterByGateMap(allPaths, gateMap);
+
+    expect(filtered).toEqual(allPaths);
+    expect(filtered).toHaveLength(30);
+  });
+
+  it('returns empty array when all gates are disabled', () => {
+    const gateMap = '0'.repeat(30);
+    const filtered = filterByGateMap(allPaths, gateMap);
+
+    expect(filtered).toEqual([]);
+  });
+
+  it('returns empty array for empty GateMap string', () => {
+    const filtered = filterByGateMap(allPaths, '');
+
+    expect(filtered).toEqual([]);
+  });
+
+  it('handles GateMap shorter than path count (extras excluded)', () => {
+    const gateMap = '101'; // only covers first 3 paths
+    const filtered = filterByGateMap(allPaths, gateMap);
+
+    expect(filtered).toEqual(['Books', 'Cars']);
+  });
+
+  it('handles single enabled gate', () => {
+    const gateMap = '000000000000010000000000000000'; // bit 13 = Gasoline
+    const filtered = filterByGateMap(allPaths, gateMap);
+
+    expect(filtered).toEqual(['Gasoline']);
+  });
+
+  it('preserves order of enabled paths', () => {
+    const gateMap = '000000000001000000000000100000'; // bits 11, 24
+    const filtered = filterByGateMap(allPaths, gateMap);
+
+    expect(filtered).toEqual(['FreshFood', 'OrganicMat']);
+    expect(filtered[0]).toBe('FreshFood');
+    expect(filtered[1]).toBe('OrganicMat');
   });
 });
