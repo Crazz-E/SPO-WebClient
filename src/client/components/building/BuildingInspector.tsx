@@ -84,6 +84,20 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
 
   const detailsError = useBuildingStore((s) => s.detailsError);
 
+  // Compute active tab + filtered properties BEFORE early returns so that
+  // the useMemo hook is always called — React requires identical hook count
+  // across every render of the same component instance.
+  const activeStandardGroupId = (!isCivic)
+    ? (standardTabs.find((t) => t.id === currentTab)?.id ?? standardTabs[0]?.id ?? '')
+    : '';
+  const activeGroupData = (details && activeStandardGroupId)
+    ? details.groups[activeStandardGroupId]
+    : undefined;
+  const standardProperties = useMemo(
+    () => activeGroupData ? activeGroupData.filter((p) => p.name !== 'Name') : [],
+    [activeGroupData],
+  );
+
   const handleRefresh = useCallback(() => {
     if (details) client.onRefreshBuilding(details.x, details.y);
   }, [details?.x, details?.y, client]);
@@ -229,16 +243,6 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   const activeCivicTab = (isCivic && civicTabs.some((t) => t.id === currentTab))
     ? currentTab as CivicTabId
     : civicTabs[0]?.id as CivicTabId | undefined;
-
-  const activeStandardGroupId = (!isCivic)
-    ? (standardTabs.find((t) => t.id === currentTab)?.id ?? standardTabs[0]?.id ?? '')
-    : '';
-
-  const activeGroupData = activeStandardGroupId ? details.groups[activeStandardGroupId] : undefined;
-  const standardProperties = useMemo(
-    () => activeGroupData ? activeGroupData.filter((p) => p.name !== 'Name') : [],
-    [activeGroupData],
-  );
 
   return (
     <div className={styles.inspector}>
