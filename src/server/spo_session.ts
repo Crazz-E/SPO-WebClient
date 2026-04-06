@@ -1,6 +1,7 @@
 import * as net from 'net';
 import { EventEmitter } from 'events';
 import fetch from 'node-fetch';
+import { TimeoutCategory, TIMEOUT_CONFIG } from '../shared/timeout-categories';
 import {
   RdoPacket,
   RdoVerb,
@@ -114,6 +115,25 @@ function redactRdoRaw(member: string | undefined, raw: string): string {
   return raw.replace(/,"%[^"]*"(?=\s*$)/, ',"%[REDACTED]"');
 }
 
+/** Tracks an in-flight RDO request with state machine for late response detection. */
+interface PendingRdoRequest {
+  resolve: (msg: RdoPacket) => void;
+  reject: (err: unknown) => void;
+  state: 'pending' | 'timed-out';
+  sentAt: number;
+  member: string;
+  timeoutHandle: ReturnType<typeof setTimeout>;
+}
+
+/** RDO request lifecycle metrics (exposed via getQueueStatus). */
+interface RdoMetrics {
+  totalSent: number;
+  totalResolved: number;
+  totalTimedOut: number;
+  totalLateResponses: number;
+  totalOrphaned: number;
+}
+
 export class StarpeaceSession extends EventEmitter {
   public readonly sid = generateSessionId();
   public readonly startedAt = Date.now();
@@ -156,11 +176,9 @@ export class StarpeaceSession extends EventEmitter {
     this.capitolCoords = coords;
   }
 
-  // Pending requests map
-  private pendingRequests = new Map<number, {
-    resolve: (msg: RdoPacket) => void;
-    reject: (err: unknown) => void;
-  }>();
+  // Pending requests map — entries transition from 'pending' to 'timed-out'
+  // to catch late responses instead of logging "Unmatched response RID"
+  private pendingRequests = new Map<number, PendingRdoRequest>();
   private availableWorlds: Map<string, WorldInfo> = new Map();
 
   // Event synchronization
@@ -237,10 +255,25 @@ export class StarpeaceSession extends EventEmitter {
   public currentFocusedBuildingName: string | null = null;
   public currentFocusedOwnerName: string | null = null;
   
+  // RDO request lifecycle metrics
+  private rdoMetrics: RdoMetrics = {
+    totalSent: 0,
+    totalResolved: 0,
+    totalTimedOut: 0,
+    totalLateResponses: 0,
+    totalOrphaned: 0,
+  };
+
+  // GC sweep for timed-out entries that never received a late response
+  private gcSweepInterval: NodeJS.Timeout | null = null;
+  private readonly GC_SWEEP_INTERVAL_MS = 60_000;
+  private readonly LATE_RESPONSE_GRACE_MS = 90_000;
+
   // NEW: Request buffering with ServerBusy pause/resume
   private requestBuffer: Array<{
     socketName: string;
     packetData: Partial<RdoPacket>;
+    effectiveTimeout: number;
     resolve: (packet: RdoPacket) => void;
     reject: (err: unknown) => void;
   }> = [];
@@ -1378,14 +1411,23 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         socket.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
 
         const response = await new Promise<RdoPacket>((resolve, reject) => {
-          this.pendingRequests.set(rid, { resolve, reject });
-
-          setTimeout(() => {
-            if (this.pendingRequests.has(rid)) {
+          const timeoutHandle = setTimeout(() => {
+            const entry = this.pendingRequests.get(rid);
+            if (entry && entry.state === 'pending') {
+              // ServerBusy polls are short-lived — delete immediately, no grace period
               this.pendingRequests.delete(rid);
               reject(new Error('ServerBusy check timeout'));
             }
           }, 1000);
+
+          this.pendingRequests.set(rid, {
+            resolve,
+            reject,
+            state: 'pending',
+            sentAt: Date.now(),
+            member: 'ServerBusy',
+            timeoutHandle,
+          });
         });
 
         const busyValue = parsePropertyResponseHelper(response.payload!, 'ServerBusy');
@@ -1468,15 +1510,16 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
   }
 
   /**
-   * NEW: Process buffered requests when server becomes available
+   * Process buffered requests when server becomes available.
+   * Preserves the timeout category from when the request was originally buffered.
    */
   private async processBufferedRequests(): Promise<void> {
-    while (this.requestBuffer.length > 0 && !this.isServerBusy) {
+    while (this.requestBuffer.length > 0 && !this.isServerBusy && !this.isClosing) {
       const request = this.requestBuffer.shift();
       if (!request) break;
 
-      // Execute the buffered request
-      this.executeRdoRequest(request.socketName, request.packetData)
+      // Execute with the timeout preserved from the original sendRdoRequest call
+      this.executeRdoRequest(request.socketName, request.packetData, request.effectiveTimeout)
         .then(request.resolve)
         .catch(request.reject);
 
@@ -1485,20 +1528,71 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
     }
   }
 
-	public getQueueStatus(): { buffered: number; maxBuffer: number; serverBusy: boolean; pendingMaps: number; activeMapRequests: number } {
-		return {
-			buffered: this.requestBuffer.length,
-			maxBuffer: this.MAX_BUFFER_SIZE,
-			serverBusy: this.isServerBusy,
-			pendingMaps: this.pendingMapRequests.size,
-			activeMapRequests: this.activeMapRequests
-		};
-	}
+  // ── GC Sweep for timed-out entries ──────────────────────────────────────
+
+  /**
+   * Start periodic GC sweep that removes timed-out entries older than the grace period.
+   * Called when the first world socket connects.
+   */
+  public startGcSweep(): void {
+    if (this.gcSweepInterval) return;
+    this.gcSweepInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [rid, entry] of this.pendingRequests.entries()) {
+        if (entry.state === 'timed-out' && (now - entry.sentAt) > this.LATE_RESPONSE_GRACE_MS) {
+          this.pendingRequests.delete(rid);
+          this.rdoMetrics.totalOrphaned++;
+        }
+      }
+    }, this.GC_SWEEP_INTERVAL_MS);
+  }
+
+  private stopGcSweep(): void {
+    if (this.gcSweepInterval) {
+      clearInterval(this.gcSweepInterval);
+      this.gcSweepInterval = null;
+    }
+  }
+
+  // ── Queue Status & Metrics ──────────────────────────────────────────────
+
+  public getQueueStatus(): {
+    buffered: number;
+    maxBuffer: number;
+    serverBusy: boolean;
+    pendingMaps: number;
+    activeMapRequests: number;
+    pendingRdoRequests: number;
+    timedOutAwaitingLate: number;
+    rdoMetrics: RdoMetrics;
+  } {
+    let timedOutCount = 0;
+    for (const entry of this.pendingRequests.values()) {
+      if (entry.state === 'timed-out') timedOutCount++;
+    }
+    return {
+      buffered: this.requestBuffer.length,
+      maxBuffer: this.MAX_BUFFER_SIZE,
+      serverBusy: this.isServerBusy,
+      pendingMaps: this.pendingMapRequests.size,
+      activeMapRequests: this.activeMapRequests,
+      pendingRdoRequests: this.pendingRequests.size,
+      timedOutAwaitingLate: timedOutCount,
+      rdoMetrics: { ...this.rdoMetrics },
+    };
+  }
 
 /**
- * NEW: Send RDO request with buffering when server is busy
+ * Send RDO request with buffering when server is busy.
+ * Supports TimeoutCategory for aligned timeout management across layers.
  */
-public sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs = 10000): Promise<RdoPacket> {
+public sendRdoRequest(
+  socketName: string,
+  packetData: Partial<RdoPacket>,
+  timeoutMs?: number,
+  category: TimeoutCategory = TimeoutCategory.NORMAL
+): Promise<RdoPacket> {
+  const effectiveTimeout = timeoutMs ?? TIMEOUT_CONFIG[category].rdoMs;
   return new Promise((resolve, reject) => {
     if (this.isClosing) {
       return reject(new Error('Session is closing'));
@@ -1513,21 +1607,21 @@ public sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeou
         return;
       }
 
-      // Add to buffer
-      this.requestBuffer.push({ socketName, packetData, resolve, reject });
+      // Add to buffer (preserve effective timeout for when request is eventually executed)
+      this.requestBuffer.push({ socketName, packetData, effectiveTimeout, resolve, reject });
       this.log.debug(`[Buffer] Request buffered (${this.requestBuffer.length}/${this.MAX_BUFFER_SIZE}):`, packetData.member);
       return;
     }
 
     // Server not busy, execute immediately
-    this.executeRdoRequest(socketName, packetData, timeoutMs)
+    this.executeRdoRequest(socketName, packetData, effectiveTimeout)
       .then(resolve)
       .catch(reject);
   });
 }
 
-private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs = 10000): Promise<RdoPacket> {
-  return new Promise(async (resolve, reject) => {
+private executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs: number): Promise<RdoPacket> {
+  return new Promise((resolve, reject) => {
     const socket = this.sockets.get(socketName);
     if (!socket) {
       return reject(new Error(`Socket ${socketName} not active`));
@@ -1544,30 +1638,35 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
 
     const rid = this.requestIdCounter++;
     const packet = { ...packetData, rid, type: 'REQUEST' } as RdoPacket;
+    const member = packetData.member || 'unknown';
 
-    // Set up response handler with timeout
-    const timeout = setTimeout(() => {
-      if (this.pendingRequests.has(rid)) {
-        this.pendingRequests.delete(rid);
-        reject(new Error(`Request timeout: ${packetData.member || 'unknown'}`));
+    // Set up timeout — transitions entry to 'timed-out' instead of deleting.
+    // The entry stays in the map so late responses can be detected.
+    const timeoutHandle = setTimeout(() => {
+      const entry = this.pendingRequests.get(rid);
+      if (entry && entry.state === 'pending') {
+        entry.state = 'timed-out';
+        this.rdoMetrics.totalTimedOut++;
+        this.log.warn(`[RDO] TIMEOUT RID ${rid} ${socketName}/${member} after ${timeoutMs}ms (pending=${this.pendingRequests.size}, timedOut=${this.rdoMetrics.totalTimedOut})`);
+        reject(new Error(`Request timeout: ${member}`));
       }
     }, timeoutMs);
 
-    // Store both callbacks in an object
+    // Store entry with state tracking
     this.pendingRequests.set(rid, {
-      resolve: (response: RdoPacket) => {
-        clearTimeout(timeout);
-        resolve(response);
-      },
-      reject: (err: unknown) => {
-        clearTimeout(timeout);
-        reject(err);
-      }
+      resolve,
+      reject,
+      state: 'pending',
+      sentAt: Date.now(),
+      member,
+      timeoutHandle,
     });
+
+    this.rdoMetrics.totalSent++;
 
     // Send the request
     const rawString = RdoProtocol.format(packet);
-    this.log.debug(`RDO>> ${socketName}`, { command: packetData.member, verb: packetData.verb, rid, raw: redactRdoRaw(packetData.member, rawString) });
+    this.log.debug(`RDO>> ${socketName}`, { command: member, verb: packetData.verb, rid, timeoutMs, separator: packetData.separator, raw: redactRdoRaw(packetData.member, rawString) });
     socket.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
   });
 }
@@ -1642,17 +1741,30 @@ private handleIncomingMessage(socketName: string, raw: string) {
 		return;
 	  }
 
-	  // Handle responses
+	  // Handle responses — state machine for late response detection
 	  if (packet.type === 'RESPONSE') {
-		if (packet.rid && this.pendingRequests.has(packet.rid)) {
-		  if (packet.errorCode && packet.errorCode > 0) {
-			this.log.warn(`[RDO] Error response RID ${packet.rid}: ${packet.errorName} (code ${packet.errorCode})`);
+		const entry = packet.rid != null ? this.pendingRequests.get(packet.rid) : undefined;
+		if (entry) {
+		  this.pendingRequests.delete(packet.rid!);
+		  clearTimeout(entry.timeoutHandle);
+
+		  if (entry.state === 'pending') {
+			// Normal path — resolve the promise
+			if (packet.errorCode && packet.errorCode > 0) {
+			  this.log.warn(`[RDO] Error response RID ${packet.rid}: ${packet.errorName} (code ${packet.errorCode})`);
+			}
+			this.rdoMetrics.totalResolved++;
+			entry.resolve(packet);
+		  } else {
+			// Late response — request already timed out, promise already rejected
+			const elapsed = Date.now() - entry.sentAt;
+			this.log.warn(`[RDO] LATE RESPONSE for ${entry.member} (RID ${packet.rid}) on ${socketName} after ${elapsed}ms. Payload: ${(raw || '').slice(0, 200)}`);
+			this.rdoMetrics.totalLateResponses++;
 		  }
-		  const callbacks = this.pendingRequests.get(packet.rid)!;
-		  this.pendingRequests.delete(packet.rid);
-		  callbacks.resolve(packet);
-		} else {
-		  this.log.warn(`[Session] Unmatched response RID ${packet.rid}: ${raw}`);
+		} else if (packet.rid != null) {
+		  // Truly orphaned — past grace period or unknown RID
+		  this.log.warn(`[RDO] Orphaned response RID ${packet.rid} on ${socketName} (no pending entry — GC'd or never tracked). Payload: ${(raw || '').slice(0, 200)}`);
+		  this.rdoMetrics.totalOrphaned++;
 		}
 	  } else {
 		// Push command
@@ -1785,6 +1897,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
     // 2. Stop background services
     this.stopServerBusyPolling();
     this.stopCacherKeepAlive();
+    this.stopGcSweep();
 
     // 3. Close all persistent sockets (keep directory data intact)
     for (const [name, socket] of this.sockets.entries()) {
@@ -1800,8 +1913,11 @@ private handlePush(socketName: string, packet: RdoPacket) {
     this.framers.clear();
 
     // 4. Clear pending requests and buffers
-    for (const [, pending] of this.pendingRequests.entries()) {
-      pending.reject(new Error('Session cleaned up for server switch'));
+    for (const [, entry] of this.pendingRequests.entries()) {
+      clearTimeout(entry.timeoutHandle);
+      if (entry.state === 'pending') {
+        entry.reject(new Error('Session cleaned up for server switch'));
+      }
     }
     this.pendingRequests.clear();
     const switchError = new Error('Session cleaned up for server switch');
@@ -1952,10 +2068,16 @@ private handlePush(socketName: string, packet: RdoPacket) {
       }
     }
 
+    // Stop GC sweep
+    this.stopGcSweep();
+
     // Reject all pending RDO requests before clearing (mirrors cleanupWorldSession pattern)
     const destroyError = new Error('Session destroyed');
-    for (const [, pending] of this.pendingRequests.entries()) {
-      pending.reject(destroyError);
+    for (const [, entry] of this.pendingRequests.entries()) {
+      clearTimeout(entry.timeoutHandle);
+      if (entry.state === 'pending') {
+        entry.reject(destroyError);
+      }
     }
     for (const buffered of this.requestBuffer) {
       buffered.reject(destroyError);

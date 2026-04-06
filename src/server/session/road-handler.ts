@@ -7,6 +7,7 @@
 
 import type { SessionContext } from './session-context';
 import { RdoVerb, RdoAction } from '../../shared/types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { toErrorMessage } from '../../shared/error-utils';
 
 /** Cost per road tile in game currency units. */
@@ -194,7 +195,7 @@ export async function buildRoad(
         member: 'CreateCircuitSeg',
         separator: '"^"',
         args
-      });
+      }, undefined, TimeoutCategory.SLOW);
 
       // Parse response
       const resultMatch = /res="#(-?\d+)"/.exec(result.payload || '');
@@ -341,7 +342,7 @@ export async function demolishRoad(
         `#${x}`,
         `#${y}`
       ]
-    });
+    }, undefined, TimeoutCategory.SLOW);
 
     const resultMatch = /res="#(-?\d+)"/.exec(result.payload || '');
     const resultCode = resultMatch ? parseInt(resultMatch[1], 10) : -1;
@@ -416,7 +417,7 @@ export async function wipeCircuit(
         `#${nx2}`,
         `#${ny2}`
       ]
-    });
+    }, undefined, TimeoutCategory.SLOW);
 
     const resultMatch = /res="#(-?\d+)"/.exec(result.payload || '');
     const resultCode = resultMatch ? parseInt(resultMatch[1], 10) : -1;

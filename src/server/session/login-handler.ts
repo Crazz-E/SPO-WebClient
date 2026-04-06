@@ -100,6 +100,7 @@ export interface LoginContext {
 
   // ── Lifecycle hooks ──
   startServerBusyPolling(): void;
+  startGcSweep(): void;
   stopCacherKeepAlive(): void;
 
   // ── Socket management (for switchCompany cleanup) ──
@@ -542,8 +543,9 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   // NOW the session is fully ready for game
   ctx.setPhase(SessionPhase.WORLD_CONNECTED);
 
-  // Start ServerBusy polling now that we're fully connected
+  // Start ServerBusy polling and GC sweep now that we're fully connected
   ctx.startServerBusyPolling();
+  ctx.startGcSweep();
 
   ctx.log.info(`Company ${companyId} selected - Ready for game!`);
 }

@@ -8,6 +8,7 @@
 
 import type { SessionContext } from './session-context';
 import type { PoliticalRoleInfo } from '../../shared/types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
@@ -115,7 +116,7 @@ async function manageConstructionImpl(
       targetId: currBlock,
       action: RdoAction.GET,
       member: 'RDOAcceptCloning'
-    });
+    }, undefined, TimeoutCategory.SLOW);
     const cloningValue = parsePropertyResponseHelper(initialCloning.payload || '', 'RDOAcceptCloning');
     const cloningInt = parseInt(cloningValue, 10);
     ctx.log.debug(`[Construction] RDOAcceptCloning initial value: ${cloningInt}`);
@@ -137,7 +138,7 @@ async function manageConstructionImpl(
       action: RdoAction.SET,
       member: 'RDOAcceptCloning',
       args: ['-1']
-    });
+    }, undefined, TimeoutCategory.SLOW);
 
     // Step 4: Execute construction action (no request ID - push command)
     const socket = ctx.getSocket('construction');
@@ -185,7 +186,7 @@ async function manageConstructionImpl(
       targetId: currBlock,
       action: RdoAction.GET,
       member: 'RDOAcceptCloning'
-    });
+    }, undefined, TimeoutCategory.SLOW);
     const finalValue = parsePropertyResponseHelper(finalCloning.payload || '', 'RDOAcceptCloning');
     ctx.log.debug(`[Construction] RDOAcceptCloning final value: ${finalValue}`);
 
@@ -294,7 +295,7 @@ async function renameFacilityImpl(
       action: RdoAction.SET,
       member: 'Name',
       args: [RdoValue.string(newName).format()]
-    });
+    }, undefined, TimeoutCategory.SLOW);
 
     ctx.log.debug(`[Session] Building renamed successfully`);
     return { success: true, message: 'Building renamed successfully' };
@@ -346,7 +347,7 @@ async function deleteFacilityImpl(
       member: 'RDODelFacility',
       separator: '"^"',  // Variant return type
       args: [RdoValue.int(x).format(), RdoValue.int(y).format()]
-    });
+    }, undefined, TimeoutCategory.SLOW);
 
     ctx.log.debug(`[Session] Building deleted successfully, result: ${result}`);
 

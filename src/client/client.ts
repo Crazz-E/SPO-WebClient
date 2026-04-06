@@ -452,7 +452,7 @@ export class StarpeaceClient implements ClientHandlerContext {
 
   // ── ClientHandlerContext implementation ─────────────────────────────────────
 
-  public sendRequest<T extends WsMessage>(msg: T, timeoutMs = 15000): Promise<WsMessage> {
+  public sendRequest<T extends WsMessage>(msg: T, timeoutMs = 90000): Promise<WsMessage> {
     return new Promise((resolve, reject) => {
       if (!this.ws || !this.isConnected) return reject(new Error('WebSocket not connected'));
 

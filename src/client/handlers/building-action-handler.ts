@@ -74,7 +74,7 @@ async function requestBuildingDetailsImpl(
       visualClass
     };
 
-    const response = await ctx.sendRequest(req, 90000) as WsRespBuildingDetails;
+    const response = await ctx.sendRequest(req) as WsRespBuildingDetails;
     ClientBridge.log('Building', `Got details: ${response.details.templateName}`);
     return response.details;
   } catch (err: unknown) {
@@ -124,7 +124,7 @@ export async function requestBuildingRefreshProperties(
       visualClass,
     };
 
-    const response = await ctx.sendRequest(req, 30000) as WsRespBuildingRefreshProperties;
+    const response = await ctx.sendRequest(req) as WsRespBuildingRefreshProperties;
     ClientBridge.log('Building', `Refreshed properties: ${response.details.templateName}`);
     return response.details;
   } catch (err: unknown) {
@@ -170,7 +170,7 @@ export async function requestTabData(
       visualClass,
     };
 
-    const response = await ctx.sendRequest(req, 30000) as WsRespBuildingTabData;
+    const response = await ctx.sendRequest(req) as WsRespBuildingTabData;
     store.mergeTabData(tabId, response, x, y);
     ClientBridge.log('Building', `Tab data received: ${tabId}`);
   } catch (err: unknown) {
@@ -231,7 +231,7 @@ async function setBuildingPropertyImpl(
       additionalParams
     };
 
-    const response = await ctx.sendRequest(req, 50000) as WsRespBuildingSetProperty;
+    const response = await ctx.sendRequest(req) as WsRespBuildingSetProperty;
 
     if (response.success) {
       ClientBridge.confirmPendingUpdate(pendingKey);

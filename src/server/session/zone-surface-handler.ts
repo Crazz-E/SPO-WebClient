@@ -9,6 +9,7 @@ import type { SessionContext } from './session-context';
 import type { SurfaceData, SurfaceType } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue } from '../../shared/rdo-types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 
 // =========================================================================
 // PUBLIC — defineZone
@@ -51,7 +52,7 @@ export async function defineZone(
       RdoValue.int(nx2).format(),
       RdoValue.int(ny2).format(),
     ]
-  });
+  }, undefined, TimeoutCategory.SLOW);
 
   const result = packet.payload || '';
   ctx.log.debug(`[Zone] DefineZone response: ${result}`);

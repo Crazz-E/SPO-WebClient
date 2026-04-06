@@ -8,6 +8,7 @@
 import type { SessionContext } from './session-context';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { RdoVerb, RdoAction } from '../../shared/types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { toErrorMessage } from '../../shared/error-utils';
 import { serialiseConstruction } from './construction-lock';
 
@@ -162,7 +163,7 @@ async function setBuildingPropertyImpl(
         member: propertyName,
         separator: '"^"',
         args: formattedArgs,
-      }, 45000);
+      }, undefined, TimeoutCategory.SLOW);
       ctx.log.debug(`[BuildingDetails] Synchronous ${propertyName} completed`);
     } else {
       // Fire-and-forget RDO method call — no RID, no response expected.
