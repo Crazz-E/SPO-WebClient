@@ -60,6 +60,7 @@ interface BuildingState {
   details: BuildingDetailsResponse | null;
   currentTab: string;
   isLoading: boolean;
+  detailsError: string | null;
 
   // Lazy tab loading states (keyed by tab special id: 'supplies', 'products', etc.)
   tabLoadingStates: Record<string, TabLoadState>;
@@ -95,6 +96,7 @@ interface BuildingState {
   setDetails: (details: BuildingDetailsResponse) => void;
   setCurrentTab: (tab: string) => void;
   setLoading: (loading: boolean) => void;
+  setDetailsError: (error: string | null) => void;
   setCurrentCompanyName: (name: string) => void;
   setOwnedCompanyNames: (names: Set<string>) => void;
   clearFocus: () => void;
@@ -144,6 +146,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
   details: null,
   currentTab: 'overview',
   isLoading: false,
+  detailsError: null,
   currentCompanyName: '',
   ownedCompanyNames: new Set<string>(),
   isOwner: false,
@@ -161,6 +164,12 @@ export const useBuildingStore = create<BuildingState>((set) => ({
   setOverlayMode: (mode) => set({ isOverlayMode: mode }),
 
   setDetails: (details) => {
+    // Guard against malformed responses that would crash the render tree.
+    // Missing tabs/groups indicate a corrupted or incomplete server response.
+    if (!details.tabs || !details.groups) {
+      set({ detailsError: 'Received malformed building data', isLoading: false });
+      return;
+    }
     // Lazily populate the client-side template cache from the server-sent tab config.
     // The server sends handlerName for each tab; HANDLER_TO_GROUP maps those to property
     // group definitions (with TABLE, SLIDER, etc. types) that the renderer needs.
@@ -198,6 +207,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       return {
         details: mergedDetails,
         isLoading: false,
+        detailsError: null,
         isOwner: ownerName !== '' && state.ownedCompanyNames.has(ownerName),
         tabLoadingStates: isSameBuilding
           ? { ...state.tabLoadingStates, ...preloaded }
@@ -215,7 +225,9 @@ export const useBuildingStore = create<BuildingState>((set) => ({
 
   setCurrentTab: (tab) => set({ currentTab: tab }),
 
-  setLoading: (loading) => set({ isLoading: loading }),
+  setLoading: (loading) => set({ isLoading: loading, ...(loading ? { detailsError: null } : {}) }),
+
+  setDetailsError: (error) => set({ detailsError: error, isLoading: false }),
 
   setCurrentCompanyName: (name) =>
     set((state) => {
@@ -246,6 +258,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       details: null,
       currentTab: 'overview',
       isLoading: false,
+      detailsError: null,
       isOwner: false,
       research: null,
       tabLoadingStates: {},
@@ -260,6 +273,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       details: null,
       currentTab: 'overview',
       isLoading: true,
+      detailsError: null,
       isOwner: false,
       research: null,
       tabLoadingStates: {},

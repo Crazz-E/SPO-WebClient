@@ -179,6 +179,32 @@
   padding: var(--space-4);
 }
 
+/* Error state */
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.retryBtn {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.retryBtn:hover {
+  background: var(--surface-hover);
+}
+
 /* Empty state */
 .empty {
   display: flex;

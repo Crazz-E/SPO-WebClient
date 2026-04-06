@@ -162,7 +162,23 @@ export async function openInspectorForFocused(ctx: ClientHandlerContext, x: numb
       if (focusInfo) bld.setFocus(focusInfo);
       bld.setOverlayMode(false);
       ClientBridge.log('Building', `Inspector skeleton (details pending) for ${focusInfo?.buildingName}`);
-      setTimeout(() => ctx.refreshBuildingDetails(x, y), 2000);
+
+      // Retry after 5s with guards to prevent stale retries (consensus: gen counter + coord check).
+      // Delphi server's CacherCreateObject can take 5-10s over internet; 2s was too aggressive.
+      const retryGen = gen;
+      setTimeout(async () => {
+        if (!ctx.isCurrentGeneration('buildingDetails', retryGen)) return;
+        if (ctx.currentFocusedBuilding?.x !== x || ctx.currentFocusedBuilding?.y !== y) return;
+
+        const retryDetails = await ctx.requestBuildingDetails(x, y, vc);
+        if (retryDetails) {
+          ClientBridge.showBuildingPanel(retryDetails, ctx.currentCompanyName, ctx.currentFocusedBuilding ?? undefined);
+        } else {
+          useBuildingStore.getState().setDetailsError(
+            'Failed to load building details. Please try again.'
+          );
+        }
+      }, 5000);
     }
   } catch (err: unknown) {
     ClientBridge.log('Error', `Failed to open inspector: ${toErrorMessage(err)}`);
@@ -221,7 +237,22 @@ export async function focusBuilding(ctx: ClientHandlerContext, x: number, y: num
       bld.setFocus(response.building);
       bld.setOverlayMode(false);
       ClientBridge.log('Building', `Focused skeleton (details pending): ${response.building.buildingName}`);
-      setTimeout(() => ctx.refreshBuildingDetails(x, y), 2000);
+
+      const retryGen = gen;
+      const vc = visualClass || '0';
+      setTimeout(async () => {
+        if (!ctx.isCurrentGeneration('buildingDetails', retryGen)) return;
+        if (ctx.currentFocusedBuilding?.x !== x || ctx.currentFocusedBuilding?.y !== y) return;
+
+        const retryDetails = await ctx.requestBuildingDetails(x, y, vc);
+        if (retryDetails) {
+          ClientBridge.showBuildingPanel(retryDetails, ctx.currentCompanyName, ctx.currentFocusedBuilding ?? undefined);
+        } else {
+          useBuildingStore.getState().setDetailsError(
+            'Failed to load building details. Please try again.'
+          );
+        }
+      }, 5000);
     }
   } catch (err: unknown) {
     ClientBridge.log('Error', `Failed to focus building: ${toErrorMessage(err)}`);

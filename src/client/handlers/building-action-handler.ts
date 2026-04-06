@@ -89,6 +89,13 @@ export async function refreshBuildingDetails(ctx: ClientHandlerContext, x: numbe
   const details = await requestBuildingDetails(ctx, x, y, vc);
   if (details) {
     ClientBridge.updateBuildingDetails(details);
+  } else {
+    // If we're in a loading/error state with no details, surface the error
+    // so the user sees a retry button instead of an eternal skeleton.
+    const state = useBuildingStore.getState();
+    if (state.isLoading && !state.details) {
+      state.setDetailsError('Failed to load building details. Please try again.');
+    }
   }
 }
 

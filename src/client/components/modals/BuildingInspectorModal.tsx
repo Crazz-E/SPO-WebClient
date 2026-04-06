@@ -58,6 +58,7 @@ export function BuildingInspectorModal() {
   const modal = useUiStore((s) => s.modal);
   const closeModal = useUiStore((s) => s.closeModal);
   const details = useBuildingStore((s) => s.details);
+  const focusedBuilding = useBuildingStore((s) => s.focusedBuilding);
   const politicsData = usePoliticsStore((s) => s.data);
   const client = useClient();
 
@@ -78,7 +79,7 @@ export function BuildingInspectorModal() {
       <div className={styles.modal} role="dialog" aria-label={details?.buildingName ?? 'Building Inspector'}>
         <div className={styles.header}>
           <div>
-            <h2 className={styles.title}>{details?.buildingName ?? 'City Government'}</h2>
+            <h2 className={styles.title}>{details?.buildingName ?? focusedBuilding?.buildingName ?? 'City Government'}</h2>
             {details && (
               <div className={styles.subtitle}>
                 <span className={styles.roleLabel}>{getCivicSubtitle(details, politicsData)}</span>

@@ -82,9 +82,19 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   ).some((name) => name.toLowerCase() === (username ?? '').toLowerCase());
   const isCandidate = isCandidateFromPolitics || isCandidateFromVotes;
 
+  const detailsError = useBuildingStore((s) => s.detailsError);
+
   const handleRefresh = useCallback(() => {
     if (details) client.onRefreshBuilding(details.x, details.y);
   }, [details?.x, details?.y, client]);
+
+  const handleRetryFromError = useCallback(() => {
+    if (focusedBuilding) {
+      useBuildingStore.getState().setDetailsError(null);
+      useBuildingStore.getState().setLoading(true);
+      client.onRefreshBuilding(focusedBuilding.x, focusedBuilding.y);
+    }
+  }, [focusedBuilding?.x, focusedBuilding?.y, client]);
 
   const handleClose = useCallback(() => {
     closeRightPanel();
@@ -163,15 +173,42 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     }
   }, [currentTab, details?.x, details?.y, details?.visualClass, details?.tabs, isCivic, isConnected, tabLoadingStates, client]);
 
-  // Loading state
-  if (isLoading || (!details && focusedBuilding)) {
+  // Loading state — show building name from focusedBuilding to prevent blink
+  if (isLoading || (!details && !detailsError && focusedBuilding)) {
     return (
       <div className={styles.inspector}>
+        {!hideHeader && focusedBuilding && (
+          <div className={`${styles.header} ${styles.stagger0}`}>
+            <div className={styles.nameRow}>
+              <h3 className={styles.buildingName}>{focusedBuilding.buildingName}</h3>
+            </div>
+            {focusedBuilding.ownerName && (
+              <span className={styles.ownerName}>{focusedBuilding.ownerName}</span>
+            )}
+          </div>
+        )}
         <div className={styles.loadingState}>
-          <Skeleton width="60%" height="20px" />
-          <Skeleton width="40%" height="14px" />
           <Skeleton width="100%" height="60px" />
           <Skeleton width="100%" height="200px" />
+        </div>
+      </div>
+    );
+  }
+
+  // Error state — details failed to load after retry
+  if (detailsError && focusedBuilding) {
+    return (
+      <div className={styles.inspector}>
+        {!hideHeader && (
+          <div className={`${styles.header} ${styles.stagger0}`}>
+            <div className={styles.nameRow}>
+              <h3 className={styles.buildingName}>{focusedBuilding.buildingName}</h3>
+            </div>
+          </div>
+        )}
+        <div className={styles.errorState}>
+          <p>{detailsError}</p>
+          <button className={styles.retryBtn} onClick={handleRetryFromError}>Retry</button>
         </div>
       </div>
     );
