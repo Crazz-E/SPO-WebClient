@@ -512,6 +512,8 @@ export async function refreshBuildingProperties(
       ctx.currentFocusedCoords?.x === x && ctx.currentFocusedCoords?.y === y;
     if (alreadyFocused && ctx.currentFocusedBuildingId) {
       buildingId = ctx.currentFocusedBuildingId;
+      buildingName = ctx.currentFocusedBuildingName ?? '';
+      ownerName = ctx.currentFocusedOwnerName ?? '';
     } else {
       try {
         const focusInfo = await ctx.focusBuilding(x, y);

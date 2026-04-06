@@ -198,6 +198,10 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       // tabLoadingStates still says 'loaded' but the data is gone.
       const mergedDetails = isSameBuilding ? {
         ...details,
+        // Carry forward name/owner when refresh returns empty strings
+        // (refreshBuildingProperties skips SwitchFocusEx when already focused)
+        buildingName: details.buildingName || state.details?.buildingName || '',
+        ownerName: details.ownerName || state.details?.ownerName || '',
         supplies: details.supplies ?? state.details?.supplies,
         products: details.products ?? state.details?.products,
         compInputs: details.compInputs ?? state.details?.compInputs,

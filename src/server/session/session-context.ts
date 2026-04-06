@@ -81,6 +81,8 @@ export interface SessionContext {
   // ── Building Focus State ───────────────────────────────────────────────
   readonly currentFocusedBuildingId: string | null;
   readonly currentFocusedCoords: { x: number; y: number } | null;
+  readonly currentFocusedBuildingName: string | null;
+  readonly currentFocusedOwnerName: string | null;
   clearBuildingFocus(): void;
 
   // ── Event Emission + Helpers ───────────────────────────────────────────

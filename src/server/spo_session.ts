@@ -234,6 +234,8 @@ export class StarpeaceSession extends EventEmitter {
     // Building focus tracking
   public currentFocusedBuildingId: string | null = null;
   public currentFocusedCoords: { x: number, y: number } | null = null;
+  public currentFocusedBuildingName: string | null = null;
+  public currentFocusedOwnerName: string | null = null;
   
   // NEW: Request buffering with ServerBusy pause/resume
   private requestBuffer: Array<{
@@ -294,6 +296,8 @@ export class StarpeaceSession extends EventEmitter {
   public clearBuildingFocus(): void {
     this.currentFocusedBuildingId = null;
     this.currentFocusedCoords = null;
+    this.currentFocusedBuildingName = null;
+    this.currentFocusedOwnerName = null;
   }
 
   // -- PushContext implementation -------------------------------------------
@@ -502,9 +506,11 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 
 	  const buildingInfo = parseBuildingFocusResponseHelper(responseData, x, y);
 	  
-	  // Store ID without any prefix
+	  // Store focus state so refreshBuildingProperties can reuse name/owner
 	  this.currentFocusedBuildingId = buildingInfo.buildingId;
 	  this.currentFocusedCoords = { x, y };
+	  this.currentFocusedBuildingName = buildingInfo.buildingName;
+	  this.currentFocusedOwnerName = buildingInfo.ownerName;
 	  
 	  this.log.debug(`[Session] Focused on building ${buildingInfo.buildingId}: ${buildingInfo.buildingName}`);
 
@@ -542,6 +548,8 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 	  // Reset tracking
 	  this.currentFocusedBuildingId = null;
 	  this.currentFocusedCoords = null;
+	  this.currentFocusedBuildingName = null;
+	  this.currentFocusedOwnerName = null;
 	}
 
   /**
@@ -1832,6 +1840,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
     this.availableCompanies = [];
     this.currentFocusedBuildingId = null;
     this.currentFocusedCoords = null;
+    this.currentFocusedBuildingName = null;
+    this.currentFocusedOwnerName = null;
     this.isServerBusy = false;
     this.activeMapRequests = 0;
     this.knownObjects.clear();
@@ -1975,6 +1985,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
     this.interfaceEventsId = null;
     this.currentFocusedBuildingId = null;
     this.currentFocusedCoords = null;
+    this.currentFocusedBuildingName = null;
+    this.currentFocusedOwnerName = null;
     this.isServerBusy = false;
     this.activeMapRequests = 0;
 
