@@ -44,6 +44,7 @@ import {
 } from './template-groups';
 import {
   collectTemplatePropertyNamesStructured,
+  collectTemplatePropertyNamesForGroups,
   registerInspectorTabs,
   getTemplateForVisualClass,
   clearInspectorTabsCache,
@@ -819,5 +820,126 @@ describe('UPGRADE_GROUP clone settings', () => {
 
   it('no CloneFacility in rdoCommands (now uses dedicated handler)', () => {
     expect(UPGRADE_GROUP.rdoCommands!['CloneFacility']).toBeUndefined();
+  });
+});
+
+describe('collectTemplatePropertyNamesForGroups (R1 tab-scoped refresh)', () => {
+  beforeEach(() => {
+    clearInspectorTabsCache();
+  });
+
+  function registerFactory() {
+    registerInspectorTabs('testFactory', [
+      { tabName: 'General', tabHandler: 'IndGeneral' },
+      { tabName: 'Supplies', tabHandler: 'Supplies' },
+      { tabName: 'Products', tabHandler: 'Products' },
+      { tabName: 'Workforce', tabHandler: 'Workforce' },
+      { tabName: 'Management', tabHandler: 'facManagement' },
+    ]);
+    return getTemplateForVisualClass('testFactory');
+  }
+
+  it('should return only the requested group + first group (overview)', () => {
+    const template = registerFactory();
+    const workforceGroupId = template.groups.find(g => g.handlerName === 'Workforce')!.id;
+    const firstGroupId = template.groups[0].id;
+
+    const scoped = collectTemplatePropertyNamesForGroups(template, [workforceGroupId]);
+
+    // Should contain workforce properties
+    expect(scoped.regularProperties).toContain('Workers0');
+    expect(scoped.regularProperties).toContain('WorkersMax2');
+
+    // Should contain first group (overview) properties
+    const full = collectTemplatePropertyNamesStructured(template);
+    const firstGroupProps = collectTemplatePropertyNamesForGroups(template, [firstGroupId]);
+    for (const prop of firstGroupProps.regularProperties) {
+      expect(scoped.regularProperties).toContain(prop);
+    }
+
+    // Should NOT contain properties exclusive to other groups (e.g., Management)
+    const managementGroupId = template.groups.find(g => g.handlerName === 'facManagement')!.id;
+    const managementOnly = collectTemplatePropertyNamesForGroups(template, [managementGroupId]);
+    // Find properties unique to management (not in overview or workforce)
+    const overviewAndWorkforceProps = new Set(scoped.regularProperties);
+    const managementExclusive = managementOnly.regularProperties.filter(
+      p => !overviewAndWorkforceProps.has(p) && !firstGroupProps.regularProperties.includes(p)
+    );
+    for (const prop of managementExclusive) {
+      expect(scoped.regularProperties).not.toContain(prop);
+    }
+
+    // Should be a subset of the full collection
+    expect(scoped.regularProperties.length).toBeLessThan(full.regularProperties.length);
+  });
+
+  it('should always include the first group even if not in groupIds', () => {
+    const template = registerFactory();
+    const workforceGroupId = template.groups.find(g => g.handlerName === 'Workforce')!.id;
+    const firstGroupId = template.groups[0].id;
+
+    // Request only workforce — first group should still be included
+    expect(workforceGroupId).not.toBe(firstGroupId);
+    const scoped = collectTemplatePropertyNamesForGroups(template, [workforceGroupId]);
+
+    // First group (IndGeneral) has properties like 'Trouble', 'Cost', 'ROI'
+    const firstOnly = collectTemplatePropertyNamesForGroups(template, [firstGroupId]);
+    for (const prop of firstOnly.regularProperties) {
+      expect(scoped.regularProperties).toContain(prop);
+    }
+  });
+
+  it('should not duplicate properties when groupIds includes the first group', () => {
+    const template = registerFactory();
+    const firstGroupId = template.groups[0].id;
+
+    const scoped = collectTemplatePropertyNamesForGroups(template, [firstGroupId]);
+
+    // No duplicates (the function uses Sets internally)
+    const unique = new Set(scoped.regularProperties);
+    expect(unique.size).toBe(scoped.regularProperties.length);
+
+    const uniqueCounts = new Set(scoped.countProperties);
+    expect(uniqueCounts.size).toBe(scoped.countProperties.length);
+  });
+
+  it('should return same structure as collectTemplatePropertyNamesStructured', () => {
+    const template = registerFactory();
+    const allGroupIds = template.groups.map(g => g.id);
+
+    // Requesting ALL groups should produce the same result as the full collection
+    const scoped = collectTemplatePropertyNamesForGroups(template, allGroupIds);
+    const full = collectTemplatePropertyNamesStructured(template);
+
+    expect(new Set(scoped.regularProperties)).toEqual(new Set(full.regularProperties));
+    expect(new Set(scoped.countProperties)).toEqual(new Set(full.countProperties));
+    expect(scoped.indexedByCount.size).toBe(full.indexedByCount.size);
+  });
+
+  it('should handle non-existent group IDs gracefully', () => {
+    const template = registerFactory();
+
+    // Non-existent group — should still return first group properties
+    const scoped = collectTemplatePropertyNamesForGroups(template, ['nonExistentGroup']);
+    const firstOnly = collectTemplatePropertyNamesForGroups(template, [template.groups[0].id]);
+
+    expect(new Set(scoped.regularProperties)).toEqual(new Set(firstOnly.regularProperties));
+  });
+
+  it('should preserve count properties and indexedByCount for the scoped group', () => {
+    registerInspectorTabs('testCapitolScoped', [
+      { tabName: 'General', tabHandler: 'capitolGeneral' },
+      { tabName: 'Towns', tabHandler: 'CapitolTowns' },
+      { tabName: 'Services', tabHandler: 'townServices' },
+      { tabName: 'Votes', tabHandler: 'Votes' },
+    ]);
+    const template = getTemplateForVisualClass('testCapitolScoped');
+    const townsGroupId = template.groups.find(g => g.handlerName === 'CapitolTowns')!.id;
+
+    const scoped = collectTemplatePropertyNamesForGroups(template, [townsGroupId]);
+
+    // CapitolTowns has TownCount as a count property
+    expect(scoped.countProperties).toContain('TownCount');
+    expect(scoped.indexedByCount.has('TownCount')).toBe(true);
   });
 });

@@ -476,6 +476,11 @@ export const ClientBridge = {
         ...current,
         ...details,
         groups: mergedGroups,
+        // Preserve header fields — partial response may carry empty strings
+        // when ctx.currentFocusedBuildingName is transiently empty or focusBuilding throws.
+        buildingName: details.buildingName || current.buildingName,
+        ownerName: details.ownerName || current.ownerName,
+        buildingId: details.buildingId || current.buildingId,
         // Preserve lazy fields from previous full load
         supplies: details.supplies ?? current.supplies,
         products: details.products ?? current.products,
