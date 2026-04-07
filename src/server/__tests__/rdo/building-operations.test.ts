@@ -411,10 +411,10 @@ describe('RDO Building Operations', () => {
     const RDO_FUNCTIONS = [
       'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
       'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
-      'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
     ];
     const RDO_PROCEDURES = [
       'RDOAutoProduce', 'RDOAutoRelease', 'RDOSetTradeLevel', 'RDOSetRole', 'RDOSetLoanPerc',
+      'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
     ];
 
     it.each(RDO_FUNCTIONS)('%s should use "^" separator (function returning olevariant)', (method) => {
@@ -472,15 +472,17 @@ describe('RDO Building Operations', () => {
       expect(cmd).toMatchRdoCallFormat('RDOSetPrice');
     });
 
-    it('objectId commands set should match RDO_FUNCTIONS set', () => {
-      // The same commands that use "^" separator (functions) also need objectId targeting.
-      // This test ensures they stay in sync.
+    it('objectId commands set should match RDO_FUNCTIONS + tycoon procedures', () => {
+      // objectId targeting applies to both functions (^) AND tycoon procedures (*).
+      // Tycoon connect/disconnect are void procedures but still bind to objectId.
       const RDO_FUNCTIONS = [
         'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
         'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
+      ];
+      const TYCOON_PROCEDURES = [
         'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
       ];
-      expect(OBJECTID_COMMANDS.sort()).toEqual(RDO_FUNCTIONS.sort());
+      expect(OBJECTID_COMMANDS.sort()).toEqual([...RDO_FUNCTIONS, ...TYCOON_PROCEDURES].sort());
     });
   });
 

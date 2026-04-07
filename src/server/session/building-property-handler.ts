@@ -116,7 +116,8 @@ async function setBuildingPropertyImpl(
     const RDO_FUNCTIONS: ReadonlySet<string> = new Set([
       'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
       'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
-      'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
+      // RDOConnectToTycoon/RDODisconnectFromTycoon: procedures (void), use "*" not "^"
+      // Ref: Kernel.pas:1087 — procedure RDOConnectToTycoon(TycoonId, FacTypes: integer; SetAsDefault: wordbool)
     ]);
 
     // Output/input gate commands bind to ObjectId, not CurrBlock.
@@ -131,8 +132,9 @@ async function setBuildingPropertyImpl(
     // Connection commands: synchronous (matches Delphi WaitForAnswer:=true).
     // Delphi recalculates trade routes on connect — can take 5-30s.
     // Disconnect commands remain fire-and-forget (Delphi: WaitForAnswer:=false).
+    // RDOConnectToTycoon: fire-and-forget (Delphi WHGeneralSheet.pas:386 — no WaitForAnswer)
     const SYNCHRONOUS_RDO_COMMANDS: ReadonlySet<string> = new Set([
-      'RDOConnectOutput', 'RDOConnectInput', 'RDOConnectToTycoon',
+      'RDOConnectOutput', 'RDOConnectInput',
     ]);
 
     // --- Helper: send fire-and-forget command via construction socket ---

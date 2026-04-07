@@ -478,11 +478,10 @@ export class MockRdoSession {
    * Voyager: IndustryGeneralSheet.pas line 345
    */
   async simulateConnectToTycoon(buildingId: number, tycoonId: number, kind: number): Promise<string> {
-    const rid = this.getNextRequestId();
     const cmd = RdoCommand
       .sel(buildingId)
-      .withRequestId(rid)
       .call('RDOConnectToTycoon')
+      .push()
       .args(RdoValue.int(tycoonId), RdoValue.int(kind), RdoValue.int(-1))
       .build();
 
@@ -495,11 +494,10 @@ export class MockRdoSession {
    * Voyager: IndustryGeneralSheet.pas line 357
    */
   async simulateDisconnectFromTycoon(buildingId: number, tycoonId: number, kind: number): Promise<string> {
-    const rid = this.getNextRequestId();
     const cmd = RdoCommand
       .sel(buildingId)
-      .withRequestId(rid)
       .call('RDODisconnectFromTycoon')
+      .push()
       .args(RdoValue.int(tycoonId), RdoValue.int(kind), RdoValue.int(-1))
       .build();
 

@@ -463,10 +463,10 @@ describe('Stopped property (Close/Open — all General handlers)', () => {
 // ---------------------------------------------------------------------------
 
 describe('RDOConnectToTycoon (Connect button)', () => {
-  it('function call "^" separator, 3 args: tycoonId (int), kind (int), flag (wordbool -1)', () => {
+  it('void push "*" separator, 3 args: tycoonId (int), kind (int), flag (wordbool -1)', () => {
     const TYCOON_ID = 999001;
     const KIND = 1;
-    const cmd = callFn(
+    const cmd = callVoid(
       MOCK_CURR_BLOCK,
       'RDOConnectToTycoon',
       RdoValue.int(TYCOON_ID),
@@ -474,15 +474,16 @@ describe('RDOConnectToTycoon (Connect button)', () => {
       RdoValue.int(-1),
     );
     expect(cmd).toContain('call RDOConnectToTycoon');
-    expect(cmd).toContain('"^"');
+    expect(cmd).toContain('"*"');
+    expect(cmd).not.toContain('"^"');
     expect(cmd).toContain(`"#${TYCOON_ID}"`);
     expect(cmd).toContain(`"#${KIND}"`);
     expect(cmd).toContain('"#-1"');
   });
 
-  it('RDODisconnectFromTycoon: same signature as Connect', () => {
+  it('RDODisconnectFromTycoon: same signature as Connect (void push)', () => {
     const TYCOON_ID = 999001;
-    const cmd = callFn(
+    const cmd = callVoid(
       MOCK_CURR_BLOCK,
       'RDODisconnectFromTycoon',
       RdoValue.int(TYCOON_ID),
@@ -490,7 +491,8 @@ describe('RDOConnectToTycoon (Connect button)', () => {
       RdoValue.int(-1),
     );
     expect(cmd).toContain('call RDODisconnectFromTycoon');
-    expect(cmd).toContain('"^"');
+    expect(cmd).toContain('"*"');
+    expect(cmd).not.toContain('"^"');
   });
 });
 
