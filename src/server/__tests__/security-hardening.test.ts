@@ -228,6 +228,7 @@ const PHASE_ALLOWED_MESSAGES: Record<SessionPhase, Set<WsMessageType> | null> = 
     WsMessageType.REQ_SELECT_COMPANY,
   ]),
   [SessionPhase.WORLD_CONNECTED]: null, // all messages allowed
+  [SessionPhase.RECONNECTING]: null, // during reconnect, allow all (requests buffered/retried)
 };
 
 /**

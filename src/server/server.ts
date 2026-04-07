@@ -64,6 +64,7 @@ const PHASE_ALLOWED_MESSAGES: Record<SessionPhase, ReadonlySet<string> | null> =
     WsMessageType.REQ_CLUSTER_FACILITIES,
   ]),
   [SessionPhase.WORLD_CONNECTED]: null,
+  [SessionPhase.RECONNECTING]: null, // During reconnect, allow all (requests will be buffered/retried)
 };
 
 /** Message types suppressed from WS>> / WS<< info logs (too noisy, not useful for debugging). */
@@ -1092,6 +1093,18 @@ wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
   spSession.on('ws_event', (payload: WsMessage) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(payload));
+    }
+  });
+
+  // -- World socket reconnection notifications --
+  spSession.on('worldReconnected', () => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: WsMessageType.EVENT_WORLD_RECONNECTED }));
+    }
+  });
+  spSession.on('worldDisconnected', () => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: WsMessageType.EVENT_WORLD_DISCONNECTED }));
     }
   });
 

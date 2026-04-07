@@ -53,6 +53,8 @@ export interface LoginContext {
   readonly currentWorldInfo: WorldInfo | null;
   readonly cachedUsername: string | null;
   readonly cachedPassword: string | null;
+  readonly rdoCnntId: string | null;
+  readonly currentCompany: CompanyInfo | null;
 
   // ── Phase management ──
   getPhase(): SessionPhase;
@@ -911,4 +913,116 @@ function parseSearchKeyResults(ctx: LoginContext, payload: string): string[] {
   }
 
   return names;
+}
+
+// ── World Socket Reconnection ────────────────────────────────────────────────
+
+/**
+ * Light reconnection: new TCP socket + IDOF + session validation.
+ * Mirrors Delphi InterfaceServer.RenewWorldProxy() pattern.
+ * Falls back to full re-login if session expired server-side.
+ */
+export async function reconnectWorldSocket(ctx: LoginContext): Promise<void> {
+  const world = ctx.currentWorldInfo;
+  if (!world) throw new Error('No world info for reconnection');
+
+  ctx.log.info(`[Reconnect] Connecting to ${world.ip}:${world.port}...`);
+
+  // 1. Create new TCP socket
+  await ctx.createSocket('world', world.ip, world.port);
+
+  // 2. Re-resolve InterfaceServer IDOF (may have changed after server restart)
+  const idPacket = await ctx.sendRdoRequest('world', {
+    verb: RdoVerb.IDOF,
+    targetId: 'InterfaceServer',
+  });
+  const newId = parseIdOfResponseHelper(idPacket.payload);
+  ctx.setInterfaceServerId(newId);
+  ctx.log.debug(`[Reconnect] InterfaceServer ID: ${newId}`);
+
+  // 3. Verify session still valid by reading a property
+  try {
+    const tycoonPacket = await ctx.sendRdoRequest('world', {
+      verb: RdoVerb.SEL,
+      targetId: ctx.worldContextId!,
+      action: RdoAction.GET,
+      member: 'TycoonId',
+    });
+    const tid = parsePropertyResponseHelper(tycoonPacket.payload!, 'TycoonId');
+    ctx.log.info(`[Reconnect] Light reconnection OK (tycoon=${tid})`);
+  } catch {
+    ctx.log.warn('[Reconnect] Session expired, performing full re-login...');
+    await fullWorldRelogin(ctx);
+  }
+}
+
+/**
+ * Full re-login: Logon + RegisterEvents + re-select company.
+ * Used when server-side session has expired during disconnect.
+ */
+async function fullWorldRelogin(ctx: LoginContext): Promise<void> {
+  const username = ctx.cachedUsername;
+  const password = ctx.cachedPassword;
+  if (!username || !password) throw new Error('No cached credentials for re-login');
+
+  const interfaceServerId = ctx.interfaceServerId;
+  if (!interfaceServerId) throw new Error('No interfaceServerId for re-login');
+
+  // Logon
+  const logonPacket = await ctx.sendRdoRequest('world', {
+    verb: RdoVerb.SEL,
+    targetId: interfaceServerId,
+    action: RdoAction.CALL,
+    member: 'Logon',
+    args: [username, password],
+  });
+
+  let contextId = cleanPayloadHelper(logonPacket.payload!);
+  if (contextId.includes('res')) {
+    contextId = parsePropertyResponseHelper(logonPacket.payload!, 'res');
+  }
+  if (!contextId || contextId === '0') throw new Error('Re-login failed');
+
+  ctx.setWorldContextId(contextId);
+
+  // Re-read essential properties
+  const tycoonPacket = await ctx.sendRdoRequest('world', {
+    verb: RdoVerb.SEL, targetId: contextId,
+    action: RdoAction.GET, member: 'TycoonId',
+  });
+  ctx.setTycoonId(parsePropertyResponseHelper(tycoonPacket.payload!, 'TycoonId'));
+
+  const cnntPacket = await ctx.sendRdoRequest('world', {
+    verb: RdoVerb.SEL, targetId: contextId,
+    action: RdoAction.GET, member: 'RDOCnntId',
+  });
+  ctx.setRdoCnntId(parsePropertyResponseHelper(cnntPacket.payload!, 'RDOCnntId'));
+
+  // RegisterEvents + SetLanguage
+  const rdoCnntId = ctx.rdoCnntId;
+  if (rdoCnntId) {
+    ctx.sendRdoRequest('world', {
+      verb: RdoVerb.SEL, targetId: contextId,
+      action: RdoAction.CALL, member: 'RegisterEventsById',
+      args: [rdoCnntId],
+    }).catch(() => {
+      ctx.log.debug('[Reconnect] RegisterEventsById completed (or timed out, normal)');
+    });
+  }
+
+  const socket = ctx.getSocket('world');
+  if (socket) {
+    const setLangCmd = RdoCommand.sel(contextId)
+      .call('SetLanguage').push()
+      .args(RdoValue.string('0')).build();
+    socket.write(setLangCmd);
+  }
+
+  // Re-select company if one was active
+  const company = ctx.currentCompany;
+  if (company) {
+    await selectCompany(ctx, company.id);
+  }
+
+  ctx.log.info(`[Reconnect] Full re-login complete (contextId=${contextId})`);
 }

@@ -231,6 +231,18 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
       break;
     }
 
+    case WsMessageType.EVENT_WORLD_RECONNECTED: {
+      ClientBridge.log('Session', 'World socket reconnected');
+      ctx.showNotification('Connection restored', 'success');
+      break;
+    }
+
+    case WsMessageType.EVENT_WORLD_DISCONNECTED: {
+      ClientBridge.log('Session', 'World socket disconnected — reconnection failed');
+      ctx.showNotification('Connection lost — please refresh', 'error');
+      break;
+    }
+
     case WsMessageType.EVENT_CACHE_REFRESH: {
       ClientBridge.log('Cache', 'Server invalidated cache — re-fetching building details');
       if (ctx.currentFocusedBuilding) {

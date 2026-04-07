@@ -107,6 +107,10 @@ export enum WsMessageType {
   EVENT_SHOW_NOTIFICATION = 'EVENT_SHOW_NOTIFICATION',
   EVENT_CACHE_REFRESH = 'EVENT_CACHE_REFRESH',
 
+  // World socket reconnection events
+  EVENT_WORLD_RECONNECTED = 'EVENT_WORLD_RECONNECTED',
+  EVENT_WORLD_DISCONNECTED = 'EVENT_WORLD_DISCONNECTED',
+
   // Building Construction
   REQ_GET_BUILDING_CATEGORIES = 'REQ_GET_BUILDING_CATEGORIES',
   REQ_GET_BUILDING_FACILITIES = 'REQ_GET_BUILDING_FACILITIES',
@@ -552,6 +556,14 @@ export interface WsEventShowNotification extends WsMessage {
 
 export interface WsEventCacheRefresh extends WsMessage {
   type: WsMessageType.EVENT_CACHE_REFRESH;
+}
+
+export interface WsEventWorldReconnected extends WsMessage {
+  type: WsMessageType.EVENT_WORLD_RECONNECTED;
+}
+
+export interface WsEventWorldDisconnected extends WsMessage {
+  type: WsMessageType.EVENT_WORLD_DISCONNECTED;
 }
 
 // =============================================================================

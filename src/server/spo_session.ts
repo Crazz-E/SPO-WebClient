@@ -132,6 +132,10 @@ interface RdoMetrics {
   totalTimedOut: number;
   totalLateResponses: number;
   totalOrphaned: number;
+  totalReconnectAttempts: number;
+  totalReconnectSuccesses: number;
+  totalReconnectFailures: number;
+  lastReconnectAt: number | null;
 }
 
 export class StarpeaceSession extends EventEmitter {
@@ -192,7 +196,8 @@ export class StarpeaceSession extends EventEmitter {
   public worldContextId: string | null = null;
   public tycoonId: string | null = null;
   public currentWorldInfo: WorldInfo | null = null;
-  private rdoCnntId: string | null = null;
+  private _rdoCnntId: string | null = null;
+  public get rdoCnntId(): string | null { return this._rdoCnntId; }
   public cacherId: string | null = null;
   /** Deduplication map for in-flight getBuildingDetails requests by "x,y" key */
   private inFlightBuildingDetails = new Map<string, Promise<BuildingDetailsResponse>>();
@@ -262,6 +267,10 @@ export class StarpeaceSession extends EventEmitter {
     totalTimedOut: 0,
     totalLateResponses: 0,
     totalOrphaned: 0,
+    totalReconnectAttempts: 0,
+    totalReconnectSuccesses: 0,
+    totalReconnectFailures: 0,
+    lastReconnectAt: null,
   };
 
   // GC sweep for timed-out entries that never received a late response
@@ -292,7 +301,12 @@ export class StarpeaceSession extends EventEmitter {
   // --- REQUEST DEDUPLICATION ---
     private pendingMapRequests: Map<string, Promise<MapData>> = new Map();
 
-
+  // --- WORLD SOCKET AUTO-RECONNECT (mirrors Delphi RenewWorldProxy) ---
+  private worldReconnectLastAttempt = 0;
+  private worldReconnecting: Promise<void> | null = null;
+  private worldReconnectAttempts = 0;
+  private static readonly RECONNECT_MAX_RETRIES = 3;
+  private static readonly RECONNECT_BASE_BACKOFF_MS = 5000; // Delphi: 5s throttle
 
   constructor() {
     super();
@@ -359,7 +373,7 @@ export class StarpeaceSession extends EventEmitter {
       this.log = this.log.child({ tycoonId: value });
     }
   }
-  public setRdoCnntId(value: string | null): void { this.rdoCnntId = value; }
+  public setRdoCnntId(value: string | null): void { this._rdoCnntId = value; }
   public setCacherId(value: string | null): void { this.cacherId = value; }
   public setWorldId(value: string | null): void { this.worldId = value; }
   public setDaPort(value: number | null): void { this.daPort = value; }
@@ -1351,10 +1365,13 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
   return new Promise((resolve, reject) => {
     const socket = new net.Socket();
     const framer = new RdoFramer();
-    this.sockets.set(name, socket);
-    this.framers.set(name, framer);
+    // Socket stored ONLY after connect succeeds (prevents writes to unconnected socket)
+    let connected = false;
 
     socket.connect(port, host, () => {
+      connected = true;
+      this.sockets.set(name, socket);
+      this.framers.set(name, framer);
       this.log.debug(`[Session] Connected to ${name} (${host}:${port})`);
       resolve(socket);
     });
@@ -1366,15 +1383,132 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 
     socket.on('error', (err) => {
       this.log.error(`[Session] Socket error on ${name}:`, err);
+      // If not yet connected, reject the creation promise
+      if (!connected) reject(err);
     });
 
     socket.on('close', () => {
       this.log.debug(`[Session] Socket closed: ${name}`);
+      // Remove listeners to prevent stale message processing from delayed packets
+      socket.removeAllListeners();
       this.sockets.delete(name);
       this.framers.delete(name);
+
+      // Auto-reconnect world socket (Delphi RenewWorldProxy pattern)
+      if (name === 'world' && this.phase === SessionPhase.WORLD_CONNECTED && !this.isClosing) {
+        this.log.warn('[Session] World socket lost, attempting auto-reconnect...');
+        this.attemptWorldReconnect().catch(err => {
+          this.log.error('[Session] World auto-reconnect failed:', toErrorMessage(err));
+        });
+      }
     });
   });
 }
+
+/**
+   * Attempt world socket reconnection with backoff and dedup.
+   * Mirrors Delphi InterfaceServer.RenewWorldProxy() pattern:
+   * - Exponential backoff (5s, 10s, 20s) to prevent reconnection storms
+   * - Promise dedup so concurrent callers share one attempt
+   * - Max 3 retries before giving up and notifying the client
+   */
+  public async attemptWorldReconnect(): Promise<void> {
+    // Guard: only reconnect from WORLD_CONNECTED or RECONNECTING (dedup)
+    if (this.phase !== SessionPhase.WORLD_CONNECTED && this.phase !== SessionPhase.RECONNECTING) return;
+    if (this.isClosing) return;
+
+    // Dedup: share pending reconnection promise
+    if (this.worldReconnecting) return this.worldReconnecting;
+
+    // Max retries: give up after 3 attempts → notify client
+    if (this.worldReconnectAttempts >= StarpeaceSession.RECONNECT_MAX_RETRIES) {
+      this.log.error('[Reconnect] Max retries exhausted, giving up');
+      this.emit('worldDisconnected');
+      return;
+    }
+
+    // Exponential backoff: 5s, 10s, 20s (Delphi throttle × 2^n)
+    const backoffMs = StarpeaceSession.RECONNECT_BASE_BACKOFF_MS * Math.pow(2, this.worldReconnectAttempts);
+    const elapsed = Date.now() - this.worldReconnectLastAttempt;
+    if (this.worldReconnectLastAttempt > 0 && elapsed < backoffMs) {
+      throw new Error(`World reconnect throttled (${elapsed}ms < ${backoffMs}ms)`);
+    }
+
+    this.worldReconnecting = (async () => {
+      this.worldReconnectLastAttempt = Date.now();
+      this.worldReconnectAttempts++;
+      this.rdoMetrics.totalReconnectAttempts++;
+
+      // 1. Set phase → RECONNECTING (prevents new requests from executing)
+      this.phase = SessionPhase.RECONNECTING;
+
+      // 2. Stop ServerBusy polling (avoid queries on half-ready socket)
+      this.stopServerBusyPolling();
+
+      // 3. Drain all pending requests (prevent ghost RID collisions — CRITICAL)
+      for (const [rid, entry] of this.pendingRequests.entries()) {
+        if (entry.state === 'pending') {
+          clearTimeout(entry.timeoutHandle);
+          entry.reject(new Error('World socket reconnecting'));
+        }
+        this.pendingRequests.delete(rid);
+      }
+
+      // 4. Reject buffered requests targeting 'world'
+      this.requestBuffer = this.requestBuffer.filter(buf => {
+        if (buf.socketName === 'world') {
+          buf.reject(new Error('World socket reconnecting'));
+          return false;
+        }
+        return true;
+      });
+
+      try {
+        await loginHandler.reconnectWorldSocket(this);
+
+        // 5. Clear stale caches (interfaceServerId may have changed)
+        this.knownObjects.clear();
+        this.aspActionCache.clear();
+
+        // 6. Restart ServerBusy polling
+        this.startServerBusyPolling();
+
+        // 7. Reset phase + counters
+        this.phase = SessionPhase.WORLD_CONNECTED;
+        this.worldReconnectAttempts = 0;
+        this.rdoMetrics.totalReconnectSuccesses++;
+        this.rdoMetrics.lastReconnectAt = Date.now();
+
+        // 8. Notify client
+        this.emit('worldReconnected');
+        this.log.info('[Reconnect] World socket reconnected successfully');
+
+        // 9. Flush buffered requests (orderly, not burst)
+        this.processBufferedRequests().catch(err => {
+          this.log.error('[Reconnect] Error flushing buffered requests:', err);
+        });
+
+      } catch (err: unknown) {
+        this.log.error('[Reconnect] Failed:', toErrorMessage(err));
+        this.rdoMetrics.totalReconnectFailures++;
+
+        // Clean up partially created socket
+        const partialSocket = this.sockets.get('world');
+        if (partialSocket) {
+          partialSocket.removeAllListeners();
+          partialSocket.destroy();
+          this.sockets.delete('world');
+          this.framers.delete('world');
+        }
+
+        throw err;
+      } finally {
+        this.worldReconnecting = null;
+      }
+    })();
+
+    return this.worldReconnecting;
+  }
 
 /**
    * Start ServerBusy polling (every 10 seconds)
@@ -1386,8 +1520,8 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
     this.log.debug(`[ServerBusy] Starting ${this.SERVER_BUSY_CHECK_INTERVAL_MS / 1000}-second polling...`);
 
     this.serverBusyCheckInterval = setInterval(async () => {
-      if (!this.worldContextId || this.phase === SessionPhase.WORLD_CONNECTING || this.isClosing) {
-        return; // Skip during login or teardown
+      if (!this.worldContextId || this.phase === SessionPhase.WORLD_CONNECTING || this.phase === SessionPhase.RECONNECTING || this.isClosing) {
+        return; // Skip during login, reconnection, or teardown
       }
       if (this.isPolling) return; // Previous poll still in-flight
       this.isPolling = true;
@@ -1620,22 +1754,28 @@ public sendRdoRequest(
   });
 }
 
-private executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs: number): Promise<RdoPacket> {
+private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs: number): Promise<RdoPacket> {
+  let socket = this.sockets.get(socketName);
+
+  // Auto-reconnect world socket on-demand (mirrors Delphi RenewWorldProxy)
+  if (!socket && socketName === 'world'
+      && (this.phase === SessionPhase.WORLD_CONNECTED || this.phase === SessionPhase.RECONNECTING)
+      && !this.isClosing) {
+    this.log.warn('[Session] World socket not active, attempting reconnect before request...');
+    await this.attemptWorldReconnect();
+    socket = this.sockets.get(socketName);
+  }
+
+  if (!socket) {
+    throw new Error(`Socket ${socketName} not active`);
+  }
+
+  // GUARD: Void push ("*") + QueryId = Delphi server crash.
+  // sendRdoRequest always adds a rid, so void push must never go through here.
+  // Void push commands must use socket.write() directly (no rid, no response).
+  assertNotVoidPush(packetData);
+
   return new Promise((resolve, reject) => {
-    const socket = this.sockets.get(socketName);
-    if (!socket) {
-      return reject(new Error(`Socket ${socketName} not active`));
-    }
-
-    // GUARD: Void push ("*") + QueryId = Delphi server crash.
-    // sendRdoRequest always adds a rid, so void push must never go through here.
-    // Void push commands must use socket.write() directly (no rid, no response).
-    try {
-      assertNotVoidPush(packetData);
-    } catch (err: unknown) {
-      return reject(err);
-    }
-
     const rid = this.requestIdCounter++;
     const packet = { ...packetData, rid, type: 'REQUEST' } as RdoPacket;
     const member = packetData.member || 'unknown';
@@ -1667,7 +1807,7 @@ private executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, ti
     // Send the request
     const rawString = RdoProtocol.format(packet);
     this.log.debug(`RDO>> ${socketName}`, { command: member, verb: packetData.verb, rid, timeoutMs, separator: packetData.separator, raw: redactRdoRaw(packetData.member, rawString) });
-    socket.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
+    socket!.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
   });
 }
 
@@ -1886,6 +2026,11 @@ private handlePush(socketName: string, packet: RdoPacket) {
   public async cleanupWorldSession(): Promise<void> {
     this.log.debug('[Session] Cleaning up world session for server switch...');
 
+    // GUARD: Prevent reconnect from racing with cleanup (CRITICAL — security audit #2)
+    this.phase = SessionPhase.WORLD_CONNECTING;
+    this.worldReconnecting = null;
+    this.worldReconnectAttempts = 0;
+
     // 0. Release active inspector temp object BEFORE closing sockets
     // (CloseObject needs the map socket to send the fire-and-forget command)
     // Mirrors Delphi ReleaseCacheObject() in TObjectInspectorContainer destructor.
@@ -1931,7 +2076,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
     this.worldContextId = null;
     this.tycoonId = null;
     this.currentWorldInfo = null;
-    this.rdoCnntId = null;
+    this._rdoCnntId = null;
     this.cacherId = null;
     this.worldId = null;
     this.daPort = null;
@@ -2046,6 +2191,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
    */
   public destroy(): void {
     this.isClosing = true;
+    this.worldReconnecting = null; // Cancel any in-progress reconnect
     this.log.debug('[Session] Destroying session and cleaning up resources...');
 
     // Release active inspector temp object BEFORE closing sockets
@@ -2099,7 +2245,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
     this.worldContextId = null;
     this.tycoonId = null;
     this.currentWorldInfo = null;
-    this.rdoCnntId = null;
+    this._rdoCnntId = null;
     this.cacherId = null;
     this.worldId = null;
     this.daPort = null;
