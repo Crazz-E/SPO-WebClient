@@ -17,8 +17,6 @@ import type {
   CompaniesData,
   CompanyListItem,
 } from '../../shared/types';
-import { RdoVerb, RdoAction } from '../../shared/types';
-import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
 import { extractAllActionUrls } from '../asp-url-extractor';
 import { toErrorMessage } from '../../shared/error-utils';
 import { config } from '../../shared/config';
@@ -29,23 +27,9 @@ import fetch from 'node-fetch';
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function fetchTycoonProfile(ctx: SessionContext): Promise<TycoonProfileFull> {
-  // Get name via IS proxy (TClientView.GetUserName is published)
-  let name = ctx.activeUsername || ctx.cachedUsername || '';
-  if (ctx.interfaceServerId) {
-    try {
-      const namePacket = await ctx.sendRdoRequest('world', {
-        verb: RdoVerb.SEL,
-        targetId: String(ctx.interfaceServerId),
-        action: RdoAction.CALL,
-        member: 'GetUserName',
-        args: [],
-      });
-      const parsed = parsePropertyResponseHelper(namePacket.payload!, 'res');
-      if (parsed && !parsed.startsWith('error')) name = parsed;
-    } catch (e: unknown) {
-      ctx.log.warn('[Profile] GetUserName failed, using cached username:', e);
-    }
-  }
+  // GetUserName RDO call removed — the Delphi server does not publish this method
+  // (errUnexistentMethod code 5). Use cached username instead.
+  const name = ctx.activeUsername || ctx.cachedUsername || '';
 
   const profile: TycoonProfileFull = {
     name,

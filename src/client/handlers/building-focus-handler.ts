@@ -18,6 +18,7 @@ import { useUiStore } from '../store/ui-store';
 import { getFacilityDimensionsCache } from '../facility-dimensions-cache';
 import { isCivicBuilding } from '../../shared/building-details/civic-buildings';
 import type { ClientHandlerContext } from './client-context';
+import { isLazyTab, requestTabData } from './building-action-handler';
 
 export function handleMapClick(ctx: ClientHandlerContext, x: number, y: number, visualClass?: string): void {
   if (ctx.currentBuildingToPlace) {
@@ -156,6 +157,9 @@ export async function openInspectorForFocused(ctx: ClientHandlerContext, x: numb
     if (details) {
       ClientBridge.showBuildingPanel(details, ctx.currentCompanyName, focusInfo ?? undefined);
       ClientBridge.log('Building', `Inspector opened: ${focusInfo?.buildingName}`);
+
+      // Proactive lazy-tab prefetch — eliminates supplies delay
+      prefetchFirstLazyTab(ctx, details.tabs, x, y, vc);
     } else {
       const bld = useBuildingStore.getState();
       bld.setCurrentCompanyName(ctx.currentCompanyName);
@@ -173,6 +177,7 @@ export async function openInspectorForFocused(ctx: ClientHandlerContext, x: numb
         const retryDetails = await ctx.requestBuildingDetails(x, y, vc);
         if (retryDetails) {
           ClientBridge.showBuildingPanel(retryDetails, ctx.currentCompanyName, ctx.currentFocusedBuilding ?? undefined);
+          prefetchFirstLazyTab(ctx, retryDetails.tabs, x, y, vc);
         } else {
           useBuildingStore.getState().setDetailsError(
             'Failed to load building details. Please try again.'
@@ -231,6 +236,7 @@ export async function focusBuilding(ctx: ClientHandlerContext, x: number, y: num
     if (details) {
       ClientBridge.showBuildingPanel(details, ctx.currentCompanyName, response.building);
       ClientBridge.log('Building', `Focused: ${response.building.buildingName}`);
+      prefetchFirstLazyTab(ctx, details.tabs, x, y, visualClass || '0');
     } else {
       const bld = useBuildingStore.getState();
       bld.setCurrentCompanyName(ctx.currentCompanyName);
@@ -247,6 +253,7 @@ export async function focusBuilding(ctx: ClientHandlerContext, x: number, y: num
         const retryDetails = await ctx.requestBuildingDetails(x, y, vc);
         if (retryDetails) {
           ClientBridge.showBuildingPanel(retryDetails, ctx.currentCompanyName, ctx.currentFocusedBuilding ?? undefined);
+          prefetchFirstLazyTab(ctx, retryDetails.tabs, x, y, vc);
         } else {
           useBuildingStore.getState().setDetailsError(
             'Failed to load building details. Please try again.'
@@ -258,6 +265,23 @@ export async function focusBuilding(ctx: ClientHandlerContext, x: number, y: num
     ClientBridge.log('Error', `Failed to focus building: ${toErrorMessage(err)}`);
   } finally {
     ctx.isFocusingBuilding = false;
+  }
+}
+
+/** Fire-and-forget prefetch for the first lazy tab so data is ready before the user switches. */
+function prefetchFirstLazyTab(
+  ctx: ClientHandlerContext,
+  tabs: ReadonlyArray<{ id: string; special?: string }> | undefined,
+  x: number,
+  y: number,
+  vc: string,
+): void {
+  if (!tabs?.length) return;
+  const first = tabs[0];
+  const lazyId = first.special && isLazyTab(first.special) ? first.special
+    : isLazyTab(first.id) ? first.id : null;
+  if (lazyId) {
+    requestTabData(ctx, x, y, lazyId, vc).catch(() => { /* swallow — user can still switch manually */ });
   }
 }
 

@@ -52,7 +52,8 @@ export class UpdateService implements Service {
    * Files to exclude from synchronization (local customizations)
    */
   private readonly EXCLUDED_FILES = [
-    '.cab-metadata.json'                 // CAB extraction tracking metadata
+    '.cab-metadata.json',                // CAB extraction tracking metadata
+    '.cache-sync-status.json',           // Cache-sync completion sentinel
   ];
 
   /**

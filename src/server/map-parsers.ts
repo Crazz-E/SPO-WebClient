@@ -28,12 +28,7 @@ export function parseBuildings(rawLines: string[]): MapBuilding[] {
   // Building data is purely numeric (visualClass, tycoonId, options, x, y).
   let startIndex = 0;
   while (startIndex < rawLines.length && !/^-?\d+$/.test(rawLines[startIndex].trim())) {
-    console.log(`[MapParser] Skipping context line[${startIndex}]: "${rawLines[startIndex].substring(0, 80)}"`);
     startIndex++;
-  }
-
-  if (startIndex > 0) {
-    console.log(`[MapParser] Skipped ${startIndex} context/header line(s), building data starts at index ${startIndex}`);
   }
 
   // Buildings come in groups of 5 lines
@@ -56,13 +51,6 @@ export function parseBuildings(rawLines: string[]): MapBuilding[] {
         continue;
       }
       visualClass = match[0];
-
-      // Debug log for first 5 buildings
-      if (buildings.length < 5) {
-        console.log(
-          `[MapParser] Building ${buildings.length + 1}: raw="${rawVisualClass}" -> cleaned="${visualClass}"`,
-        );
-      }
 
       const tycoonId = parseInt(rawLines[i + 1], 10);
       const options = parseInt(rawLines[i + 2], 10);
@@ -125,12 +113,7 @@ export function parseSegments(rawLines: string[]): MapSegment[] {
   // Skip non-numeric context/header lines (same as parseBuildings)
   let startIndex = 0;
   while (startIndex < rawLines.length && !/^-?\d+$/.test(rawLines[startIndex].trim())) {
-    console.log(`[MapParser:Segments] Skipping context line[${startIndex}]: "${rawLines[startIndex].substring(0, 80)}"`);
     startIndex++;
-  }
-
-  if (startIndex > 0) {
-    console.log(`[MapParser:Segments] Skipped ${startIndex} context/header line(s)`);
   }
 
   // Segments come in groups of 10 numbers
