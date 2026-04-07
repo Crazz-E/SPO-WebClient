@@ -136,6 +136,7 @@ interface RdoMetrics {
   totalReconnectSuccesses: number;
   totalReconnectFailures: number;
   lastReconnectAt: number | null;
+  totalServerBusyPollFailures: number;
 }
 
 export class StarpeaceSession extends EventEmitter {
@@ -271,6 +272,7 @@ export class StarpeaceSession extends EventEmitter {
     totalReconnectSuccesses: 0,
     totalReconnectFailures: 0,
     lastReconnectAt: null,
+    totalServerBusyPollFailures: 0,
   };
 
   // GC sweep for timed-out entries that never received a late response
@@ -291,6 +293,8 @@ export class StarpeaceSession extends EventEmitter {
   private serverBusyCheckInterval: NodeJS.Timeout | null = null;
   private readonly SERVER_BUSY_CHECK_INTERVAL_MS = 10000; // Check every 10 seconds
   private isPolling = false;
+  private consecutivePollFailures = 0;
+  private static readonly MAX_CONSECUTIVE_POLL_FAILURES = 5;
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private readonly KEEP_ALIVE_INTERVAL_MS = 60000; // Matches Delphi CacheConnectionTimeOut
 
@@ -1564,6 +1568,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
           });
         });
 
+        this.consecutivePollFailures = 0;
         const busyValue = parsePropertyResponseHelper(response.payload!, 'ServerBusy');
         const wasBusy = this.isServerBusy;
         this.isServerBusy = busyValue == '1';
@@ -1575,7 +1580,23 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
           this.log.debug('[ServerBusy] Server now busy - pausing new requests');
         }
       } catch (e: unknown) {
-        this.log.warn('[ServerBusy] Poll failed:', (e as Error).message);
+        this.consecutivePollFailures++;
+        this.rdoMetrics.totalServerBusyPollFailures++;
+        this.log.warn(
+          `[ServerBusy] Poll failed (${this.consecutivePollFailures}/${StarpeaceSession.MAX_CONSECUTIVE_POLL_FAILURES}):`,
+          toErrorMessage(e)
+        );
+
+        if (this.consecutivePollFailures >= StarpeaceSession.MAX_CONSECUTIVE_POLL_FAILURES) {
+          this.log.error(
+            `[ServerBusy] ${this.consecutivePollFailures} consecutive poll failures — server appears unresponsive, triggering reconnect`
+          );
+          this.consecutivePollFailures = 0;
+          this.stopServerBusyPolling();
+          this.attemptWorldReconnect().catch((reconnectErr: unknown) => {
+            this.log.error('[ServerBusy] Reconnect triggered by poll failures failed:', toErrorMessage(reconnectErr));
+          });
+        }
       } finally {
         this.isPolling = false;
       }
@@ -1590,6 +1611,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       clearInterval(this.serverBusyCheckInterval);
       this.serverBusyCheckInterval = null;
     }
+    this.consecutivePollFailures = 0;
   }
 
   /**
@@ -1698,6 +1720,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
     activeMapRequests: number;
     pendingRdoRequests: number;
     timedOutAwaitingLate: number;
+    consecutivePollFailures: number;
     rdoMetrics: RdoMetrics;
   } {
     let timedOutCount = 0;
@@ -1712,6 +1735,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       activeMapRequests: this.activeMapRequests,
       pendingRdoRequests: this.pendingRequests.size,
       timedOutAwaitingLate: timedOutCount,
+      consecutivePollFailures: this.consecutivePollFailures,
       rdoMetrics: { ...this.rdoMetrics },
     };
   }
