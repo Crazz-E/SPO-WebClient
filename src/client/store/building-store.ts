@@ -195,10 +195,10 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       // Auto-mark lazy tabs as 'loaded' if the legacy path already fetched their data.
       // This prevents the lazy useEffect from re-fetching data that's already present.
       const preloaded: Record<string, TabLoadState> = {};
-      if (details.supplies) preloaded['supplies'] = 'loaded';
-      if (details.products) preloaded['products'] = 'loaded';
-      if (details.compInputs) preloaded['compInputs'] = 'loaded';
-      if (details.warehouseWares) preloaded['whGeneral'] = 'loaded';
+      if (details.supplies?.length) preloaded['supplies'] = 'loaded';
+      if (details.products?.length) preloaded['products'] = 'loaded';
+      if (details.compInputs?.length) preloaded['compInputs'] = 'loaded';
+      if (details.warehouseWares?.length) preloaded['whGeneral'] = 'loaded';
 
       // Carry forward lazy tab data when refreshing the same building.
       // EVENT_BUILDING_REFRESH sends basic details (products/supplies/warehouseWares

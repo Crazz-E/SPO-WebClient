@@ -360,6 +360,12 @@ export async function getBuildingTabData(
   const release = await mutex.acquire();
 
   try {
+    // Reset the temp object back to building root. A previous tab data request
+    // (products/supplies) may have called SetPath, leaving the object pointed
+    // at a gate sub-path. Without this reset, GetInputNames/GetOutputNames
+    // reads from the wrong context and returns empty results.
+    await ctx.cacherSetObject(tempObjectId, x, y);
+
     ctx.log.debug(`[BuildingDetails] Tab data for (${x},${y}), tab=${tabId}`);
 
     if (tabId === 'supplies' && inspector.hasSupplies) {

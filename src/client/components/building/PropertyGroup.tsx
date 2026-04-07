@@ -510,7 +510,7 @@ function DefinedProperties({
   // Product summary on General tab for industrial buildings (not warehouses — they have a dedicated Products tab)
   // Only show if we're on a General tab and products data exists
   const isGeneralTab = currentTab?.endsWith('General') || currentTab === 'generic';
-  const isWarehouse = details?.warehouseWares && details.warehouseWares.length > 0;
+  const isWarehouse = details?.tabs?.some(tab => tab.id === 'whGeneral') ?? false;
   const products = details?.products ?? [];
   if (isGeneralTab && products.length > 0 && !isWarehouse) {
     elements.push(
