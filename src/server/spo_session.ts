@@ -2171,8 +2171,8 @@ private handlePush(socketName: string, packet: RdoPacket) {
     return buildingDetailsHandler.getBuildingTabData(this, x, y, tabId, visualClass);
   }
 
-  public async refreshBuildingProperties(x: number, y: number, visualClass: string): Promise<BuildingDetailsResponse> {
-    return buildingDetailsHandler.refreshBuildingProperties(this, x, y, visualClass);
+  public async refreshBuildingProperties(x: number, y: number, visualClass: string, activeTabId?: string): Promise<BuildingDetailsResponse> {
+    return buildingDetailsHandler.refreshBuildingProperties(this, x, y, visualClass, activeTabId);
   }
 
   public releaseInspector(): void {

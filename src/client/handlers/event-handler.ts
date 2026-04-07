@@ -38,6 +38,14 @@ import { useProfileStore } from '../store/profile-store';
 import { getFacilityDimensionsCache } from '../facility-dimensions-cache';
 import type { ClientHandlerContext } from './client-context';
 
+// ── Refresh Throttle (R2 + R3) ────────────────────────────────────────────────
+// The Delphi server pushes EVENT_BUILDING_REFRESH every ~5s. The legacy client
+// only refreshes the active tab (1 RDO call per event). Our refresh re-fetches
+// more data, so we throttle to reduce server load.
+const REFRESH_INTERVAL_OWNED_MS = 8_000;      // owned buildings: 8s min interval
+const REFRESH_INTERVAL_NON_OWNED_MS = 20_000;  // non-owned: 20s min interval
+let lastBuildingRefreshTime = 0;
+
 /**
  * Dispatch incoming server events and push messages.
  * Returns true if the message was handled, false otherwise.
@@ -131,17 +139,31 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
         ctx.currentFocusedBuilding = refreshEvt.building;
         ClientBridge.setFocusedBuilding(refreshEvt.building);
 
+        // R2+R3: Throttle refresh to reduce RDO call volume.
+        // The legacy Delphi client refreshes only the active tab (~1 RDO/event).
+        // We refresh more data per event, so we compensate with longer intervals.
+        // Structural changes (kind 1/2) always refresh immediately.
+        const now = Date.now();
+        const isOwned = useBuildingStore.getState().isOwner;
+        const minInterval = isOwned ? REFRESH_INTERVAL_OWNED_MS : REFRESH_INTERVAL_NON_OWNED_MS;
+        const isStructuralChange = kind === 1 || kind === 2;
+
+        if (!isStructuralChange && (now - lastBuildingRefreshTime) < minInterval) {
+          break;
+        }
+        lastBuildingRefreshTime = now;
+
         // Lightweight refresh: re-read properties on existing Delphi temp object.
         // Avoids creating a new temp object every ~5s (which leaked the old one
         // and destabilized in-flight tab data requests).
-        // For structural changes (kind 1/2), the full path is used via the
-        // renderer invalidation above; properties still refresh the same way.
+        const activeTabId = useBuildingStore.getState().currentTab;
         const refreshGen = ctx.nextGeneration('buildingRefresh');
         requestBuildingRefreshProperties(
           ctx,
           ctx.currentFocusedBuilding.x,
           ctx.currentFocusedBuilding.y,
-          ctx.currentFocusedVisualClass || '0'
+          ctx.currentFocusedVisualClass || '0',
+          activeTabId,
         ).then(refreshedDetails => {
           // Discard stale refresh if the user switched buildings while in-flight
           if (!ctx.isCurrentGeneration('buildingRefresh', refreshGen)) return;

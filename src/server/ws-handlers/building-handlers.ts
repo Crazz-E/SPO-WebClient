@@ -187,7 +187,7 @@ export async function handleBuildingRefreshProperties(ctx: WsHandlerContext, msg
   const req = msg as WsReqBuildingRefreshProperties;
 
   await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_FacilityNotFound, async () => {
-    const details = await ctx.session.refreshBuildingProperties(req.x, req.y, req.visualClass);
+    const details = await ctx.session.refreshBuildingProperties(req.x, req.y, req.visualClass, req.activeTabId);
 
     const response: WsRespBuildingRefreshProperties = {
       type: WsMessageType.RESP_BUILDING_REFRESH_PROPERTIES,

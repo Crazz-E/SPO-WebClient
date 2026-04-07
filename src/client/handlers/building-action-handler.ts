@@ -113,8 +113,9 @@ export async function requestBuildingRefreshProperties(
   x: number,
   y: number,
   visualClass: string,
+  activeTabId?: string,
 ): Promise<BuildingDetailsResponse | null> {
-  ClientBridge.log('Building', `Refreshing properties at (${x}, ${y})`);
+  ClientBridge.log('Building', `Refreshing properties at (${x}, ${y})${activeTabId ? ` [tab=${activeTabId}]` : ''}`);
 
   try {
     const req: WsReqBuildingRefreshProperties = {
@@ -122,6 +123,7 @@ export async function requestBuildingRefreshProperties(
       x,
       y,
       visualClass,
+      activeTabId,
     };
 
     const response = await ctx.sendRequest(req) as WsRespBuildingRefreshProperties;

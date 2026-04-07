@@ -462,6 +462,30 @@ export const ClientBridge = {
     const current = useBuildingStore.getState().details;
     if (current && (current.x !== details.x || current.y !== details.y)) return;
 
+    // R1: Tab-scoped refresh — merge only the refreshed groups into existing details,
+    // keeping other groups intact. This avoids the corruption checks triggering
+    // on intentionally partial responses.
+    if (details.refreshedGroups && current?.groups) {
+      const mergedGroups = { ...current.groups };
+      for (const groupId of details.refreshedGroups) {
+        if (details.groups[groupId]) {
+          mergedGroups[groupId] = details.groups[groupId];
+        }
+      }
+      const merged: BuildingDetailsResponse = {
+        ...current,
+        ...details,
+        groups: mergedGroups,
+        // Preserve lazy fields from previous full load
+        supplies: details.supplies ?? current.supplies,
+        products: details.products ?? current.products,
+        compInputs: details.compInputs ?? current.compInputs,
+        warehouseWares: details.warehouseWares ?? current.warehouseWares,
+      };
+      useBuildingStore.getState().setDetails(merged);
+      return;
+    }
+
     // Reject corrupted responses where Delphi returned empty properties
     // (race condition: temp object closed while refresh was in-flight).
     // Keep existing good data rather than overwriting with empty groups.

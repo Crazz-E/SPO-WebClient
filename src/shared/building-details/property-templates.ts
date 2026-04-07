@@ -185,6 +185,37 @@ export function collectTemplatePropertyNamesStructured(template: BuildingTemplat
 }
 
 /**
+ * Collect property names for specific group IDs only (R1: tab-scoped refresh).
+ * Always includes the first group ("overview") to keep header data fresh.
+ */
+export function collectTemplatePropertyNamesForGroups(
+  template: BuildingTemplate,
+  groupIds: string[],
+): CollectedPropertyNames {
+  const regularProperties: Set<string> = new Set();
+  const countProperties: Set<string> = new Set();
+  const indexedByCount: Map<string, IndexedPropertyInfo[]> = new Map();
+
+  const targetIds = new Set(groupIds);
+  // Always include the first group (overview/general) for header data
+  if (template.groups.length > 0) {
+    targetIds.add(template.groups[0].id);
+  }
+
+  for (const group of template.groups) {
+    if (targetIds.has(group.id)) {
+      collectGroupPropertyNamesStructured(group, regularProperties, countProperties, indexedByCount);
+    }
+  }
+
+  return {
+    regularProperties: Array.from(regularProperties),
+    countProperties: Array.from(countProperties),
+    indexedByCount,
+  };
+}
+
+/**
  * Helper to collect property names from a group with structured output
  */
 function collectGroupPropertyNamesStructured(

@@ -24,7 +24,9 @@ import { RdoVerb, RdoAction } from '../../shared/types';
 import {
   getTemplateForVisualClass,
   collectTemplatePropertyNamesStructured,
+  collectTemplatePropertyNamesForGroups,
 } from '../../shared/building-details';
+import type { CollectedPropertyNames } from '../../shared/building-details';
 import { cleanPayload as cleanPayloadHelper, parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
 import { RdoValue } from '../../shared/rdo-types';
 import { toErrorMessage } from '../../shared/error-utils';
@@ -471,6 +473,7 @@ export async function refreshBuildingProperties(
   x: number,
   y: number,
   visualClass: string,
+  activeTabId?: string,
 ): Promise<BuildingDetailsResponse> {
   const inspector = getActiveInspector(ctx, x, y);
 
@@ -479,7 +482,7 @@ export async function refreshBuildingProperties(
     return getBuildingBasicDetails(ctx, x, y, visualClass);
   }
 
-  ctx.log.debug(`[BuildingDetails] Refreshing properties on existing inspector obj=${inspector.tempObjectId} at (${x},${y})`);
+  ctx.log.debug(`[BuildingDetails] Refreshing properties on existing inspector obj=${inspector.tempObjectId} at (${x},${y})${activeTabId ? ` [tab=${activeTabId}]` : ''}`);
 
   const template = getTemplateForVisualClass(visualClass);
   const { tempObjectId, mutex } = inspector;
@@ -495,7 +498,19 @@ export async function refreshBuildingProperties(
     // from the wrong context and returns empty/wrong building properties.
     await ctx.cacherSetObject(tempObjectId, x, y);
 
-    const { allValues, groups, moneyGraph } = await fetchPropertiesAndGroups(ctx, tempObjectId, template);
+    // R1: Tab-scoped refresh — only fetch properties for the active tab + overview.
+    // Lazy tabs (supplies, products, compInputs) are excluded: they use SetPath-based
+    // fetching which is handled separately by getBuildingTabData().
+    const LAZY_SPECIALS = new Set(['supplies', 'products', 'compInputs']);
+    const isLazyTab = activeTabId && template.groups.some(
+      g => g.id === activeTabId && g.special && LAZY_SPECIALS.has(g.special)
+    );
+    const useTabScoped = activeTabId && !isLazyTab && template.groups.length > 2;
+    const collected = useTabScoped
+      ? collectTemplatePropertyNamesForGroups(template, [activeTabId])
+      : undefined;
+
+    const { allValues, groups, moneyGraph } = await fetchPropertiesAndGroups(ctx, tempObjectId, template, collected);
 
     // Enrich votes tab
     await enrichVotesTab(ctx, groups, allValues);
@@ -550,6 +565,8 @@ export async function refreshBuildingProperties(
       warehouseWares: undefined,
       moneyGraph,
       timestamp: Date.now(),
+      // R1: Signal which groups were refreshed so the client can merge
+      refreshedGroups: useTabScoped ? Object.keys(groups) : undefined,
     };
 
     return response;
@@ -692,12 +709,13 @@ async function fetchPropertiesAndGroups(
   ctx: SessionContext,
   tempObjectId: string,
   template: ReturnType<typeof getTemplateForVisualClass>,
+  preCollected?: CollectedPropertyNames,
 ): Promise<{
   allValues: Map<string, string>;
   groups: { [groupId: string]: BuildingPropertyValue[] };
   moneyGraph: number[] | undefined;
 }> {
-  const collected = collectTemplatePropertyNamesStructured(template);
+  const collected = preCollected ?? collectTemplatePropertyNamesStructured(template);
   const allValues = new Map<string, string>();
   const BATCH_SIZE = 50;
 

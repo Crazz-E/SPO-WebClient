@@ -663,6 +663,8 @@ export interface WsReqBuildingRefreshProperties extends WsMessage {
   x: number;
   y: number;
   visualClass: string;
+  /** Active tab ID — when provided, server only refreshes this tab + overview (R1 optimisation). */
+  activeTabId?: string;
 }
 
 export interface WsRespBuildingRefreshProperties extends WsMessage {

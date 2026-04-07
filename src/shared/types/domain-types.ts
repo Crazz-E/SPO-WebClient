@@ -582,6 +582,9 @@ export interface BuildingDetailsResponse {
   moneyGraph?: number[];
   /** Timestamp */
   timestamp: number;
+  /** When set, only these group IDs were refreshed (R1 tab-scoped refresh).
+   *  Client should merge these groups into existing details, keeping other groups intact. */
+  refreshedGroups?: string[];
 }
 
 // =============================================================================
