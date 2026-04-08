@@ -111,6 +111,9 @@ export enum WsMessageType {
   EVENT_WORLD_RECONNECTED = 'EVENT_WORLD_RECONNECTED',
   EVENT_WORLD_DISCONNECTED = 'EVENT_WORLD_DISCONNECTED',
 
+  // Server maintenance (mirrors Delphi fMaintDue + fMSDownCount pattern)
+  EVENT_MAINTENANCE = 'EVENT_MAINTENANCE',
+
   // Building Construction
   REQ_GET_BUILDING_CATEGORIES = 'REQ_GET_BUILDING_CATEGORIES',
   REQ_GET_BUILDING_FACILITIES = 'REQ_GET_BUILDING_FACILITIES',
@@ -564,6 +567,15 @@ export interface WsEventWorldReconnected extends WsMessage {
 
 export interface WsEventWorldDisconnected extends WsMessage {
   type: WsMessageType.EVENT_WORLD_DISCONNECTED;
+}
+
+/** Server maintenance event — mirrors Delphi fMaintDue / fServerError broadcast */
+export interface WsEventMaintenance extends WsMessage {
+  type: WsMessageType.EVENT_MAINTENANCE;
+  /** true = maintenance starting, false = maintenance ended */
+  active: boolean;
+  /** Human-readable message (e.g., "Server restarting in 5 minutes") */
+  message: string;
 }
 
 // =============================================================================

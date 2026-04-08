@@ -103,6 +103,7 @@ import { dispatchPush } from './session/push-dispatcher';
 import * as loginHandler from './session/login-handler';
 import { assertNotVoidPush, canBufferRequest } from './session/rdo-request-guards';
 import { classifyRdoError, ErrorRecovery } from './session/rdo-error-classifier';
+import { RdoConnectionPool, PooledConnection } from './session/rdo-connection-pool';
 
 
 // Pure utility functions moved to session/session-utils.ts — re-export for backward compat
@@ -146,6 +147,9 @@ export class StarpeaceSession extends EventEmitter {
   public log = createLogger('Session').child({ sid: this.sid }).withRingBuffer(config.logging.ringBufferSize);
   private sockets: Map<string, net.Socket> = new Map();
   private framers: Map<string, RdoFramer> = new Map();
+  /** Per-user DA connection pool (mirrors Delphi TRDOConnectionPool, MaxDAPoolCnx=8) */
+  private worldPool: RdoConnectionPool | null = null;
+  private static readonly WORLD_POOL_SIZE = 6;
   private phase: SessionPhase = SessionPhase.DISCONNECTED;
   private isClosing = false;
   private requestIdCounter: number = 1000;
@@ -298,6 +302,11 @@ export class StarpeaceSession extends EventEmitter {
   private static readonly MAX_CONSECUTIVE_POLL_FAILURES = 5;
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private readonly KEEP_ALIVE_INTERVAL_MS = 60000; // Matches Delphi CacheConnectionTimeOut
+
+  // --- MAINTENANCE MODE (mirrors Delphi fMaintDue + fMSDownCount + MaxDownCountAllowed) ---
+  private maintenanceMode = false;
+  private modelServerDownCount = 0;
+  private static readonly MAX_DOWN_COUNT_ALLOWED = 3; // Delphi: MaxDownCountAllowed = 3
 
   // --- CONSECUTIVE RDO FAILURE COUNTER (mirrors Delphi fNetErrors + NetErrorsTimesOut) ---
   // Tracks consecutive RDO request failures (timeout or error) across all request types.
@@ -1419,9 +1428,60 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
           this.log.error('[Session] World auto-reconnect failed:', toErrorMessage(err));
         });
       }
+
+      // Auto-reconnect cacher/map socket (mirrors Delphi OnDSDisconnect pattern)
+      if (name === 'map' && this.phase === SessionPhase.WORLD_CONNECTED && !this.isClosing) {
+        this.log.warn('[Session] Map/cacher socket lost — will reconnect on next map request');
+        this.stopCacherKeepAlive();
+      }
     });
   });
 }
+
+/**
+   * Initialize the world connection pool after primary world socket is connected.
+   * The primary socket (from createSocket('world', ...)) is the seed;
+   * additional connections are created on-demand by the pool.
+   */
+  public initWorldPool(host: string, port: number): void {
+    // Close existing pool if any (e.g., after reconnect)
+    if (this.worldPool) {
+      this.worldPool.close();
+    }
+
+    this.worldPool = new RdoConnectionPool(
+      {
+        host,
+        port,
+        maxSize: StarpeaceSession.WORLD_POOL_SIZE,
+      },
+      {
+        onData: (conn, chunk) => {
+          const messages = conn.framer.ingest(chunk);
+          messages.forEach(msg => this.processSingleCommand('world', msg));
+        },
+        onClose: (conn) => {
+          this.log.debug('[Pool] World pool connection closed');
+          // If ALL pool connections are gone and primary socket too, trigger reconnect
+          if (this.worldPool && this.worldPool.size === 0
+              && this.phase === SessionPhase.WORLD_CONNECTED && !this.isClosing) {
+            this.log.warn('[Pool] All world pool connections lost, triggering reconnect');
+            this.attemptWorldReconnect().catch(err => {
+              this.log.error('[Pool] World reconnect failed:', toErrorMessage(err));
+            });
+          }
+        },
+      },
+      this.log,
+    );
+
+    this.log.info(`[Pool] World connection pool initialized (max ${StarpeaceSession.WORLD_POOL_SIZE} connections)`);
+  }
+
+  /** Get the world connection pool (null if not yet initialized). */
+  public getWorldPool(): RdoConnectionPool | null {
+    return this.worldPool;
+  }
 
 /**
    * Attempt world socket reconnection with backoff and dedup.
@@ -1467,6 +1527,12 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 
       // 2. Stop ServerBusy polling (avoid queries on half-ready socket)
       this.stopServerBusyPolling();
+
+      // 2b. Drain world connection pool (destroy all pooled sockets)
+      if (this.worldPool) {
+        this.worldPool.drainAll();
+        this.worldPool = null;
+      }
 
       // 3. Drain all pending requests (prevent ghost RID collisions — CRITICAL)
       for (const [rid, entry] of this.pendingRequests.entries()) {
@@ -1741,6 +1807,9 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
     timedOutAwaitingLate: number;
     consecutivePollFailures: number;
     rdoMetrics: RdoMetrics;
+    maintenanceMode: boolean;
+    worldPoolSize: number;
+    worldPoolMax: number;
   } {
     let timedOutCount = 0;
     for (const entry of this.pendingRequests.values()) {
@@ -1756,7 +1825,40 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       timedOutAwaitingLate: timedOutCount,
       consecutivePollFailures: this.consecutivePollFailures,
       rdoMetrics: { ...this.rdoMetrics },
+      maintenanceMode: this.maintenanceMode,
+      worldPoolSize: this.worldPool?.size ?? 0,
+      worldPoolMax: StarpeaceSession.WORLD_POOL_SIZE,
     };
+  }
+
+  /**
+   * Check for maintenance mode based on consecutive model server down errors.
+   * Mirrors Delphi fMSDownCount + MaxDownCountAllowed pattern.
+   * Called when ERROR_ModelServerIsDown (code 20) is detected in a response.
+   */
+  private checkMaintenanceMode(errorCode: number): void {
+    if (errorCode === 20) { // ERROR_ModelServerIsDown
+      this.modelServerDownCount++;
+      if (this.modelServerDownCount >= StarpeaceSession.MAX_DOWN_COUNT_ALLOWED && !this.maintenanceMode) {
+        this.maintenanceMode = true;
+        this.log.error(`[Maintenance] Model Server down ${this.modelServerDownCount} times — entering maintenance mode`);
+        this.emit('ws_event', {
+          type: WsMessageType.EVENT_MAINTENANCE,
+          active: true,
+          message: 'Game server appears to be in maintenance. Reconnection will continue automatically.',
+        });
+      }
+    } else if (this.maintenanceMode && errorCode === 0) {
+      // Server responded successfully — maintenance ended
+      this.maintenanceMode = false;
+      this.modelServerDownCount = 0;
+      this.log.info('[Maintenance] Server recovered — exiting maintenance mode');
+      this.emit('ws_event', {
+        type: WsMessageType.EVENT_MAINTENANCE,
+        active: false,
+        message: 'Server is back online.',
+      });
+    }
   }
 
 /**
@@ -1833,7 +1935,22 @@ private async executeWithRetry(
 }
 
 private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs: number): Promise<RdoPacket> {
-  let socket = this.sockets.get(socketName);
+  // For world requests: use connection pool if available (parallel RDO via multiple sockets)
+  let poolConn: PooledConnection | undefined;
+  let socket: net.Socket | undefined;
+
+  if (socketName === 'world' && this.worldPool) {
+    try {
+      poolConn = await this.worldPool.getConnection();
+      socket = poolConn.socket;
+      this.worldPool.acquireSlot(poolConn);
+    } catch {
+      // Pool unavailable — fall back to primary socket
+      socket = this.sockets.get(socketName);
+    }
+  } else {
+    socket = this.sockets.get(socketName);
+  }
 
   // Auto-reconnect world socket on-demand (mirrors Delphi RenewWorldProxy)
   if (!socket && socketName === 'world'
@@ -1841,7 +1958,18 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
       && !this.isClosing) {
     this.log.warn('[Session] World socket not active, attempting reconnect before request...');
     await this.attemptWorldReconnect();
-    socket = this.sockets.get(socketName);
+    // After reconnect, try pool again or fall back to socket
+    if (this.worldPool) {
+      try {
+        poolConn = await this.worldPool.getConnection();
+        socket = poolConn.socket;
+        this.worldPool.acquireSlot(poolConn);
+      } catch {
+        socket = this.sockets.get(socketName);
+      }
+    } else {
+      socket = this.sockets.get(socketName);
+    }
   }
 
   if (!socket) {
@@ -1853,7 +1981,22 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
   // Void push commands must use socket.write() directly (no rid, no response).
   assertNotVoidPush(packetData);
 
+  // Capture pool connection for slot release on completion
+  const capturedPoolConn = poolConn;
+  const pool = this.worldPool;
+
   return new Promise((resolve, reject) => {
+    // Wrap resolve/reject to release pool slot
+    const wrappedResolve = (packet: RdoPacket) => {
+      if (capturedPoolConn && pool) pool.releaseSlot(capturedPoolConn, false);
+      resolve(packet);
+    };
+    const wrappedReject = (err: unknown) => {
+      // Don't release on timeout — handled separately below
+      resolve; // no-op, reject path handled in timeout
+      reject(err);
+    };
+
     const rid = this.requestIdCounter++ % 65536;
     const packet = { ...packetData, rid, type: 'REQUEST' } as RdoPacket;
     const member = packetData.member || 'unknown';
@@ -1866,6 +2009,8 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
         entry.state = 'timed-out';
         this.rdoMetrics.totalTimedOut++;
         this.consecutiveRdoFailures++;
+        // Release pool slot with timeout flag
+        if (capturedPoolConn && pool) pool.releaseSlot(capturedPoolConn, true);
         this.log.warn(`[RDO] TIMEOUT RID ${rid} ${socketName}/${member} after ${timeoutMs}ms (pending=${this.pendingRequests.size}, timedOut=${this.rdoMetrics.totalTimedOut}, consecutiveFails=${this.consecutiveRdoFailures})`);
         reject(new Error(`Request timeout: ${member}`));
 
@@ -1881,10 +2026,10 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
       }
     }, timeoutMs);
 
-    // Store entry with state tracking
+    // Store entry with state tracking — use wrappedResolve for pool slot release
     this.pendingRequests.set(rid, {
-      resolve,
-      reject,
+      resolve: wrappedResolve,
+      reject: wrappedReject,
       state: 'pending',
       sentAt: Date.now(),
       member,
@@ -1981,6 +2126,8 @@ private handleIncomingMessage(socketName: string, raw: string) {
 			// Normal path — resolve the promise
 			if (packet.errorCode && packet.errorCode > 0) {
 			  this.log.warn(`[RDO] Error response RID ${packet.rid}: ${packet.errorName} (code ${packet.errorCode})`);
+			  // Maintenance mode detection (mirrors Delphi fMSDownCount)
+			  this.checkMaintenanceMode(packet.errorCode);
 			  // Consecutive failure tracking (mirrors Delphi fNetErrors)
 			  this.consecutiveRdoFailures++;
 			  if (this.consecutiveRdoFailures >= StarpeaceSession.MAX_CONSECUTIVE_RDO_FAILURES
@@ -1994,6 +2141,8 @@ private handleIncomingMessage(socketName: string, raw: string) {
 			} else {
 			  // Success — reset counter (mirrors Delphi ReportCnxValid)
 			  this.consecutiveRdoFailures = 0;
+			  // Check if maintenance mode should be cleared
+			  if (this.maintenanceMode) this.checkMaintenanceMode(0);
 			}
 			this.rdoMetrics.totalResolved++;
 			entry.resolve(packet);
@@ -2305,6 +2454,12 @@ private handlePush(socketName: string, packet: RdoPacket) {
 
     // Stop cacher KeepAlive timer
     this.stopCacherKeepAlive();
+
+    // Close world connection pool
+    if (this.worldPool) {
+      this.worldPool.close();
+      this.worldPool = null;
+    }
 
     // Close all TCP sockets
     for (const [name, socket] of this.sockets.entries()) {

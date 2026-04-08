@@ -41,6 +41,8 @@ export interface LoginContext {
   getSocket(name: string): net.Socket | undefined;
   createSocket(name: string, host: string, port: number): Promise<net.Socket>;
   deleteSocket(name: string): void;
+  /** Initialize per-user world connection pool after primary socket is connected */
+  initWorldPool(host: string, port: number): void;
 
   // ── Event Emission ──
   emit(event: string, ...args: unknown[]): boolean;
@@ -308,6 +310,9 @@ export async function loginWorld(
 
   // Connect to World Server
   await ctx.createSocket('world', world.ip, world.port);
+
+  // Initialize per-user DA connection pool (mirrors Delphi TRDOConnectionPool)
+  ctx.initWorldPool(world.ip, world.port);
 
   // Generate Virtual Client ID for InterfaceEvents BEFORE any requests
   const virtualEventId = (Math.floor(Math.random() * 6000000) + 38000000).toString();
@@ -930,6 +935,9 @@ export async function reconnectWorldSocket(ctx: LoginContext): Promise<void> {
 
   // 1. Create new TCP socket
   await ctx.createSocket('world', world.ip, world.port);
+
+  // 1b. Re-initialize world connection pool
+  ctx.initWorldPool(world.ip, world.port);
 
   // 2. Re-resolve InterfaceServer IDOF (may have changed after server restart)
   const idPacket = await ctx.sendRdoRequest('world', {
