@@ -14,7 +14,9 @@ import { sendResponse, withErrorHandler } from './ws-utils';
 
 export const handleMapLoad: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
   const req = msg as WsReqMapLoad;
+  console.log(`[MAP_DEBUG] handleMapLoad called: (${req.x}, ${req.y}) ${req.width}x${req.height}`);
   const mapData = await ctx.session.loadMapArea(req.x, req.y, req.width, req.height);
+  console.log(`[MAP_DEBUG] loadMapArea returned: ${mapData.buildings.length} buildings, ${mapData.segments.length} segments`);
 
   const response: WsRespMapData = {
     type: WsMessageType.RESP_MAP_DATA,
