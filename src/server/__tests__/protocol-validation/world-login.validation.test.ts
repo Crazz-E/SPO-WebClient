@@ -81,15 +81,9 @@ function createWorldLoginRdoScenario(): RdoScenario {
         matchKeys: { verb: 'sel', action: 'call', member: 'Logon' },
       },
       {
-        id: 'wl-rdo-bindto',
-        request: `C 3 idof "${CONTEXT_ID}"`,
-        response: `A3 objid="${CONTEXT_ID}"`,
-        matchKeys: { verb: 'idof', targetId: CONTEXT_ID },
-      },
-      {
         id: 'wl-rdo-regevt',
-        request: `C 7 sel ${CONTEXT_ID} call RegisterEventsById "^" "#${RDO_CNNT_ID}"`,
-        response: `A7 res="#1"`,
+        request: `C 3 sel ${CONTEXT_ID} call RegisterEventsById "^" "#${RDO_CNNT_ID}"`,
+        response: `A3 res="#1"`,
         matchKeys: { verb: 'sel', action: 'call', member: 'RegisterEventsById' },
       },
     ],

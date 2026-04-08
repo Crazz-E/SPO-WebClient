@@ -69,7 +69,7 @@ const PHASE_ALLOWED_MESSAGES: Record<SessionPhase, ReadonlySet<string> | null> =
 
 /** Message types suppressed from WS>> / WS<< info logs (too noisy, not useful for debugging). */
 const QUIET_WS_TYPES: ReadonlySet<string> = new Set([
-  // WsMessageType.REQ_MAP_LOAD,  // TEMP: un-silenced for debugging missing buildings
+  WsMessageType.REQ_MAP_LOAD,
 ]);
 
 /** Cache sync mode: 'inline' = UpdateService runs in-process (dev/Electron), 'external' = separate container */
