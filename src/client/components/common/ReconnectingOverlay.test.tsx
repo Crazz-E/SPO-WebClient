@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup/render-helpers';
 import { useGameStore } from '../../store/game-store';
+import { MAX_RECONNECT_ATTEMPTS } from '../../handlers/reconnect-utils';
 import { ReconnectingOverlay } from './ReconnectingOverlay';
 
 beforeEach(() => {
@@ -34,22 +35,23 @@ describe('ReconnectingOverlay', () => {
     expect(screen.getByText('Connection lost')).toBeTruthy();
   });
 
-  it('shows attempt counter "attempt 1 of 5"', () => {
+  it('shows attempt counter with correct max', () => {
     useGameStore.setState({ status: 'reconnecting', reconnectAttempt: 1 });
     renderWithProviders(<ReconnectingOverlay />);
-    expect(screen.getByText(/attempt 1 of 5/i)).toBeTruthy();
+    expect(screen.getByText(new RegExp(`attempt 1 of ${MAX_RECONNECT_ATTEMPTS}`, 'i'))).toBeTruthy();
   });
 
-  it('shows attempt counter "attempt 3 of 5"', () => {
+  it('shows attempt counter at mid-range', () => {
     useGameStore.setState({ status: 'reconnecting', reconnectAttempt: 3 });
     renderWithProviders(<ReconnectingOverlay />);
-    expect(screen.getByText(/attempt 3 of 5/i)).toBeTruthy();
+    expect(screen.getByText(new RegExp(`attempt 3 of ${MAX_RECONNECT_ATTEMPTS}`, 'i'))).toBeTruthy();
   });
 
-  it('shows attempt counter "attempt 5 of 5"', () => {
-    useGameStore.setState({ status: 'reconnecting', reconnectAttempt: 5 });
+  it('shows slow poll message for attempts past fast phase', () => {
+    useGameStore.setState({ status: 'reconnecting', reconnectAttempt: 7 });
     renderWithProviders(<ReconnectingOverlay />);
-    expect(screen.getByText(/attempt 5 of 5/i)).toBeTruthy();
+    expect(screen.getByText(/slow poll/i)).toBeTruthy();
+    expect(screen.getByText(new RegExp(`attempt 7 of ${MAX_RECONNECT_ATTEMPTS}`, 'i'))).toBeTruthy();
   });
 
   it('has aria-live="polite" for accessibility', () => {
