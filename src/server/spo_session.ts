@@ -2323,6 +2323,12 @@ private handlePush(socketName: string, packet: RdoPacket) {
     this.sockets.clear();
     this.framers.clear();
 
+    // 3b. Close world connection pool (mirrors destroy() pattern)
+    if (this.worldPool) {
+      this.worldPool.close();
+      this.worldPool = null;
+    }
+
     // 4. Clear pending requests and buffers
     for (const [, entry] of this.pendingRequests.entries()) {
       clearTimeout(entry.timeoutHandle);

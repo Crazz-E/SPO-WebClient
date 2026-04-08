@@ -82,7 +82,7 @@ function createWorldLoginRdoScenario(): RdoScenario {
       },
       {
         id: 'wl-rdo-regevt',
-        request: `C 3 sel ${CONTEXT_ID} call RegisterEventsById "^" "%${RDO_CNNT_ID}"`,
+        request: `C 3 sel ${CONTEXT_ID} call RegisterEventsById "^" "#${RDO_CNNT_ID}"`,
         response: `A3 res="#1"`,
         matchKeys: { verb: 'sel', action: 'call', member: 'RegisterEventsById' },
       },
@@ -360,8 +360,8 @@ describe('Protocol Validation: loginWorld()', () => {
       const regCmd = worldCmds.find(cmd => cmd.includes('RegisterEventsById'));
       expect(regCmd).toBeDefined();
       expect(regCmd).toContain(`sel ${CONTEXT_ID} call RegisterEventsById`);
-      // Should include the RDOCnntId as argument (OLEString — CALL args use string typing)
-      expect(regCmd).toContain(`%${RDO_CNNT_ID}`);
+      // Should include the RDOCnntId as argument (Integer type)
+      expect(regCmd).toContain(`#${RDO_CNNT_ID}`);
     });
 
     it('should send RegisterEventsById after RDOCnntId is retrieved', async () => {

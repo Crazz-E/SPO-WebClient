@@ -74,7 +74,14 @@ export const handleLoginWorld: WsHandler = async (ctx: WsHandlerContext, msg: Ws
     return;
   }
 
-  const result = await ctx.session.loginWorld(req.username, req.password, worldInfo);
+  let result;
+  try {
+    result = await ctx.session.loginWorld(req.username, req.password, worldInfo);
+  } catch (err: unknown) {
+    // Reset session phase so the client can retry REQ_LOGIN_WORLD
+    try { await ctx.session.cleanupWorldSession(); } catch { /* best-effort */ }
+    throw err;
+  }
   const response: WsRespLoginSuccess = {
     type: WsMessageType.RESP_LOGIN_SUCCESS,
     wsRequestId: msg.wsRequestId,

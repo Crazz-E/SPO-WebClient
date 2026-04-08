@@ -399,7 +399,7 @@ export async function loginWorld(
     targetId: contextId,
     action: RdoAction.CALL,
     member: 'RegisterEventsById',
-    args: [rdoCnntId],
+    args: [RdoValue.int(parseInt(rdoCnntId, 10)).format()],
   }).catch(() => {
     ctx.log.debug(`[Session] RegisterEventsById completed (or timed out, which is normal)`);
   });
