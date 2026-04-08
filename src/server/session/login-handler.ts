@@ -363,6 +363,14 @@ export async function loginWorld(
   ctx.setWorldContextId(contextId);
   ctx.log.debug(`[Session] Authenticated. Context RDO: ${contextId}`);
 
+  // 4b. BindTo(contextId) — mirrors Delphi fISProxy.BindTo(fClientViewId) [ServerCnxHandler.pas:2776]
+  // This idof call registers our connection with the context object on the server side.
+  // Without it, RegisterEventsById's GetClientConnectionById() may fail to find us.
+  await ctx.sendRdoRequest('world', {
+    verb: RdoVerb.IDOF,
+    targetId: contextId,
+  });
+
   // 5. Retrieve User Properties — sequential (legacy client sends one at a time)
   const mailPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: contextId,
