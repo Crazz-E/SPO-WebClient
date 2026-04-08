@@ -269,11 +269,13 @@ describe('FindSuppliers RDO request construction', () => {
     expect(formatted).toContain('"^"');
     expect(formatted).toContain('"%Drugs"');
     expect(formatted).toContain('"%Shamba"');
-    expect(formatted).toContain('"#20"');
-    expect(formatted).toContain('"#459"');
-    expect(formatted).toContain('"#389"');
-    expect(formatted).toContain('"#1"');
-    expect(formatted).toContain('"#54"');
+    // CALL args: raw numeric strings are now typed as OLEString (not integer).
+    // Delphi OLE variant system auto-converts "%20" → integer where needed.
+    expect(formatted).toContain('"%20"');
+    expect(formatted).toContain('"%459"');
+    expect(formatted).toContain('"%389"');
+    expect(formatted).toContain('"%1"');
+    expect(formatted).toContain('"%54"');
   });
 
   it('formats empty string filters as bare type prefix', () => {

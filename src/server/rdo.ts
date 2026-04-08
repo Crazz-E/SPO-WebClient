@@ -340,7 +340,9 @@ export class RdoProtocol {
 
         // Format arguments with proper quoting
         if (packet.args && packet.args.length > 0) {
-          const formattedArgs = packet.args.map(arg => this.formatTypedToken(arg));
+          // CALL args: disable numeric auto-typing — callers must use RdoValue.int() explicitly.
+          // Prevents numeric strings (usernames, passwords) from being mistyped as integers.
+          const formattedArgs = packet.args.map(arg => this.formatTypedToken(arg, false));
           parts.push(formattedArgs.join(RDO_CONSTANTS.TOKEN_SEPARATOR));
         }
       }
@@ -356,7 +358,7 @@ export class RdoProtocol {
    * Format typed token with proper quoting per RDO spec
    * Uses RdoValue/RdoParser for consistent type handling
    */
-  private static formatTypedToken(val: string): string {
+  private static formatTypedToken(val: string, autoTypeNumeric = true): string {
     // If already fully formatted with quotes and type prefix, return as-is
     if (val.startsWith('"') && val.endsWith('"')) {
       const extracted = RdoParser.extract(val);
@@ -377,12 +379,13 @@ export class RdoProtocol {
       return `"${cleaned}"`;
     }
 
-    // Determine type and format using RdoValue
-    if (/^-?\d+$/.test(cleaned)) {
+    // Auto-type numeric values only for SET operations (property assignments).
+    // CALL args default to OLEString — numeric usernames/passwords must remain
+    // as "%12345" not "#12345" (Delphi Logon expects OLEString parameters).
+    if (autoTypeNumeric && /^-?\d+$/.test(cleaned)) {
       return RdoValue.int(parseInt(cleaned, 10)).format();
     }
 
-    // Otherwise -> String
     return RdoValue.string(cleaned).format();
   }
 

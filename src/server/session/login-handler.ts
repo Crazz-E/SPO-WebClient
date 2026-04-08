@@ -957,7 +957,54 @@ export async function reconnectWorldSocket(ctx: LoginContext): Promise<void> {
       member: 'TycoonId',
     });
     const tid = parsePropertyResponseHelper(tycoonPacket.payload!, 'TycoonId');
-    ctx.log.info(`[Reconnect] Light reconnection OK (tycoon=${tid})`);
+    ctx.log.info(`[Reconnect] Session still valid (tycoon=${tid})`);
+
+    // 4. Re-register InterfaceEvents virtual object
+    //    (cleared by knownObjects.clear() in attemptWorldReconnect before this call)
+    const virtualEventId = (Math.floor(Math.random() * 6000000) + 38000000).toString();
+    ctx.setKnownObject('InterfaceEvents', virtualEventId);
+    ctx.log.debug(`[Reconnect] Re-registered InterfaceEvents virtual ID: ${virtualEventId}`);
+
+    // 5. Re-register for push events on the NEW socket
+    //    Delphi binds events to a specific connection handle — new socket needs new registration.
+    //    Mirrors initial login path (login-handler.ts:397-405) and fullWorldRelogin (line 1012-1018).
+    const rdoCnntId = ctx.rdoCnntId;
+    if (rdoCnntId) {
+      ctx.sendRdoRequest('world', {
+        verb: RdoVerb.SEL,
+        targetId: ctx.worldContextId!,
+        action: RdoAction.CALL,
+        member: 'RegisterEventsById',
+        args: [rdoCnntId],
+      }).catch(() => {
+        ctx.log.debug('[Reconnect] RegisterEventsById completed (or timed out, normal)');
+      });
+    }
+
+    // 6. Re-enable events (mirrors selectCompany EnableEvents call at line 472-479)
+    //    Value -1 activates event delivery on the Delphi IS side.
+    await ctx.sendRdoRequest('world', {
+      verb: RdoVerb.SEL,
+      targetId: ctx.worldContextId!,
+      action: RdoAction.SET,
+      member: 'EnableEvents',
+      args: ['-1'],
+    });
+    ctx.log.debug('[Reconnect] EnableEvents re-activated');
+
+    // 7. Re-subscribe to tycoon updates (mirrors selectCompany PickEvent at line 482-490)
+    if (ctx.tycoonId) {
+      await ctx.sendRdoRequest('world', {
+        verb: RdoVerb.SEL,
+        targetId: ctx.worldContextId!,
+        action: RdoAction.CALL,
+        member: 'PickEvent',
+        args: [ctx.tycoonId],
+      });
+      ctx.log.debug('[Reconnect] PickEvent re-sent for tycoon updates');
+    }
+
+    ctx.log.info(`[Reconnect] Light reconnection complete with event re-registration`);
   } catch {
     ctx.log.warn('[Reconnect] Session expired, performing full re-login...');
     await fullWorldRelogin(ctx);

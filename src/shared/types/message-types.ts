@@ -78,6 +78,11 @@ export enum WsMessageType {
   EVENT_RDO_PUSH = 'EVENT_RDO_PUSH',
   EVENT_END_OF_PERIOD = 'EVENT_END_OF_PERIOD',
   EVENT_REFRESH_DATE = 'EVENT_REFRESH_DATE',
+  EVENT_TYCOON_RETIRED = 'EVENT_TYCOON_RETIRED',
+  EVENT_MODEL_STATUS_CHANGED = 'EVENT_MODEL_STATUS_CHANGED',
+  EVENT_REFRESH_SEASON = 'EVENT_REFRESH_SEASON',
+  EVENT_MOVE_TO = 'EVENT_MOVE_TO',
+  EVENT_CHANNEL_LIST_CHANGE = 'EVENT_CHANNEL_LIST_CHANGE',
 
   // Chat functionality
   REQ_CHAT_GET_USERS = 'REQ_CHAT_GET_USERS',
@@ -434,6 +439,43 @@ export interface WsEventRdoPush extends WsMessage {
 
 export interface WsEventEndOfPeriod extends WsMessage {
   type: WsMessageType.EVENT_END_OF_PERIOD;
+  /** 0=normal, 1=warning, 2=alert (bankruptcy imminent). Mirrors Delphi FailureLevel. */
+  failureLevel: number;
+}
+
+/** Tycoon retired/bankrupt — game over for this player. Mirrors Delphi TycoonRetired push. */
+export interface WsEventTycoonRetired extends WsMessage {
+  type: WsMessageType.EVENT_TYCOON_RETIRED;
+  failureLevel: number;
+}
+
+/** Server model status changed (busy/available/error). Mirrors Delphi ModelStatusChanged push. */
+export interface WsEventModelStatusChanged extends WsMessage {
+  type: WsMessageType.EVENT_MODEL_STATUS_CHANGED;
+  /** 0=busy (mstBusy), 1=not busy (mstNotBusy), 2=error (mstError) */
+  status: number;
+}
+
+/** Season changed — affects terrain textures. Mirrors Delphi RefreshSeason push. */
+export interface WsEventRefreshSeason extends WsMessage {
+  type: WsMessageType.EVENT_REFRESH_SEASON;
+  season: number;
+}
+
+/** Server requests camera pan to coordinates. Mirrors Delphi MoveTo push. */
+export interface WsEventMoveTo extends WsMessage {
+  type: WsMessageType.EVENT_MOVE_TO;
+  x: number;
+  y: number;
+}
+
+/** Chat channel created/destroyed. Mirrors Delphi NotifyChannelListChange push. */
+export interface WsEventChannelListChange extends WsMessage {
+  type: WsMessageType.EVENT_CHANNEL_LIST_CHANGE;
+  name: string;
+  password: string;
+  /** 0=inclusion (channel created), 1=exclusion (channel removed) */
+  change: number;
 }
 
 export interface WsEventRefreshDate extends WsMessage {

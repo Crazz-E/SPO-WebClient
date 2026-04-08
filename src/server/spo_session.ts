@@ -389,6 +389,21 @@ export class StarpeaceSession extends EventEmitter {
   public getLastMaxBuildings(): number { return this.lastMaxBuildings; }
   public setLastMaxBuildings(value: number): void { this.lastMaxBuildings = value; }
 
+  /**
+   * Set ServerBusy state from a ModelStatusChanged push (instant, no polling delay).
+   * Mirrors Delphi fServerBusy flag update from OnSentinel/ModelStatusChanged event.
+   */
+  public setServerBusyFromPush(busy: boolean): void {
+    const wasBusy = this.isServerBusy;
+    this.isServerBusy = busy;
+    if (wasBusy && !busy) {
+      this.log.debug('[ServerBusy] Server now available (from push) — resuming requests');
+      this.processBufferedRequests();
+    } else if (!wasBusy && busy) {
+      this.log.debug('[ServerBusy] Server now busy (from push) — pausing new requests');
+    }
+  }
+
   // -- LoginContext implementation ------------------------------------------
   public getPhase(): SessionPhase { return this.phase; }
   public setPhase(value: SessionPhase): void { this.phase = value; }

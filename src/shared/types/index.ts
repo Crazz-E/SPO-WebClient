@@ -131,6 +131,11 @@ export type {
   WsEventRdoPush,
   WsEventEndOfPeriod,
   WsEventRefreshDate,
+  WsEventTycoonRetired,
+  WsEventModelStatusChanged,
+  WsEventRefreshSeason,
+  WsEventMoveTo,
+  WsEventChannelListChange,
   // Chat messages
   WsReqChatGetUsers,
   WsReqChatGetChannels,

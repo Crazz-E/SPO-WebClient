@@ -523,7 +523,10 @@ describe('RdoProtocol.format()', () => {
       expect(result).toContain('"!3.14"');
     });
 
-    it('should add type prefix to untyped integers', () => {
+    it('should treat untyped numeric CALL args as OLEString (not integer)', () => {
+      // CALL args must NOT auto-type numeric strings as integers.
+      // Delphi methods expect OLEString parameters (e.g., Logon username "12345" → "%12345").
+      // To pass an integer, callers must use RdoValue.int() explicitly.
       const result = RdoProtocol.format({
         raw: '',
         type: 'PUSH',
@@ -533,7 +536,20 @@ describe('RdoProtocol.format()', () => {
         member: 'Test',
         args: ['42']
       });
-      expect(result).toContain('"#42"');
+      expect(result).toContain('"%42"');
+    });
+
+    it('should auto-type integers for SET operations', () => {
+      const result = RdoProtocol.format({
+        raw: '',
+        type: 'REQUEST',
+        verb: RdoVerb.SEL,
+        targetId: '789',
+        action: RdoAction.SET,
+        member: 'Value',
+        args: ['100'],
+      });
+      expect(result).toContain('"#100"');
     });
 
     it('should add type prefix to untyped strings', () => {

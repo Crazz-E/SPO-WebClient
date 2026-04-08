@@ -20,6 +20,11 @@ import {
   type WsEventChatUserListChange,
   type WsEventShowNotification,
   type WsEventCacheRefresh,
+  type WsEventTycoonRetired,
+  type WsEventModelStatusChanged,
+  type WsEventRefreshSeason,
+  type WsEventMoveTo,
+  type WsEventChannelListChange,
 } from '../../shared/types';
 import { RdoParser } from '../../shared/rdo-types';
 
@@ -66,6 +71,12 @@ export interface PushContext {
   setLastBuildingCount(value: number): void;
   getLastMaxBuildings(): number;
   setLastMaxBuildings(value: number): void;
+
+  // ── ServerBusy from push (ModelStatusChanged) ──
+  setServerBusyFromPush(busy: boolean): void;
+
+  // ── Season ──
+  setWorldSeason(value: number | null): void;
 }
 
 // ── Dispatcher ──────────────────────────────────────────────────────────────
@@ -265,9 +276,12 @@ export function dispatchPush(ctx: PushContext, _socketName: string, packet: RdoP
 
   // 6. EndOfPeriod — server signals a financial period has ended
   if (packet.member === 'EndOfPeriod') {
-    ctx.log.debug('[Push] EndOfPeriod received');
+    const failureLevel = packet.args?.[0] ? RdoParser.asInt(packet.args[0]) : 0;
+    ctx.setFailureLevel(failureLevel);
+    ctx.log.debug(`[Push] EndOfPeriod received (failureLevel=${failureLevel})`);
     const endOfPeriodEvent: WsEventEndOfPeriod = {
       type: WsMessageType.EVENT_END_OF_PERIOD,
+      failureLevel,
     };
     ctx.emit('ws_event', endOfPeriodEvent);
     return;
@@ -314,7 +328,77 @@ export function dispatchPush(ctx: PushContext, _socketName: string, packet: RdoP
     return;
   }
 
-  // 10. Generic push fallback (for unhandled events)
+  // 10. TycoonRetired — player bankrupt / removed from game (Delphi TycoonRetired push)
+  if (packet.member === 'TycoonRetired') {
+    const failureLevel = packet.args?.[0] ? RdoParser.asInt(packet.args[0]) : 0;
+    ctx.log.warn(`[Push] TycoonRetired! failureLevel=${failureLevel}`);
+    const retiredEvent: WsEventTycoonRetired = {
+      type: WsMessageType.EVENT_TYCOON_RETIRED,
+      failureLevel,
+    };
+    ctx.emit('ws_event', retiredEvent);
+    return;
+  }
+
+  // 11. ModelStatusChanged — instant ServerBusy notification (Delphi ModelStatusChanged push)
+  //     mstBusy=0, mstNotBusy=1, mstError=2
+  if (packet.member === 'ModelStatusChanged') {
+    const status = packet.args?.[0] ? RdoParser.asInt(packet.args[0]) : 1;
+    const busy = status === 0; // mstBusy = 0
+    ctx.log.debug(`[Push] ModelStatusChanged: status=${status} (busy=${busy})`);
+    ctx.setServerBusyFromPush(busy);
+    const statusEvent: WsEventModelStatusChanged = {
+      type: WsMessageType.EVENT_MODEL_STATUS_CHANGED,
+      status,
+    };
+    ctx.emit('ws_event', statusEvent);
+    return;
+  }
+
+  // 12. RefreshSeason — season changed, affects terrain textures (Delphi RefreshSeason push)
+  if (packet.member === 'RefreshSeason' && packet.args && packet.args.length >= 1) {
+    const season = RdoParser.asInt(packet.args[0]);
+    ctx.setWorldSeason(season);
+    ctx.log.debug(`[Push] RefreshSeason: ${season}`);
+    const seasonEvent: WsEventRefreshSeason = {
+      type: WsMessageType.EVENT_REFRESH_SEASON,
+      season,
+    };
+    ctx.emit('ws_event', seasonEvent);
+    return;
+  }
+
+  // 13. MoveTo — server requests camera pan (Delphi MoveTo push)
+  if (packet.member === 'MoveTo' && packet.args && packet.args.length >= 2) {
+    const x = RdoParser.asInt(packet.args[0]);
+    const y = RdoParser.asInt(packet.args[1]);
+    ctx.log.debug(`[Push] MoveTo: (${x}, ${y})`);
+    const moveEvent: WsEventMoveTo = {
+      type: WsMessageType.EVENT_MOVE_TO,
+      x,
+      y,
+    };
+    ctx.emit('ws_event', moveEvent);
+    return;
+  }
+
+  // 14. NotifyChannelListChange — chat channel created/destroyed (Delphi NotifyChannelListChange push)
+  if (packet.member === 'NotifyChannelListChange' && packet.args && packet.args.length >= 3) {
+    const name = RdoParser.getValue(packet.args[0]);
+    const password = RdoParser.getValue(packet.args[1]);
+    const change = RdoParser.asInt(packet.args[2]);
+    ctx.log.debug(`[Push] NotifyChannelListChange: name="${name}" change=${change}`);
+    const channelEvent: WsEventChannelListChange = {
+      type: WsMessageType.EVENT_CHANNEL_LIST_CHANGE,
+      name,
+      password,
+      change,
+    };
+    ctx.emit('ws_event', channelEvent);
+    return;
+  }
+
+  // 15. Generic push fallback (for unhandled events)
   const event: WsEventRdoPush = {
     type: WsMessageType.EVENT_RDO_PUSH,
     rawPacket: packet.raw,
