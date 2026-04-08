@@ -45,7 +45,7 @@ import * as roadHandler from './handlers/road-handler';
 import * as zoneHandler from './handlers/zone-handler';
 import * as buildMenuHandler from './handlers/build-menu-handler';
 import * as mapHandler from './handlers/map-handler';
-import { getReconnectDelay, isMaxAttempts, MAX_RECONNECT_ATTEMPTS } from './handlers/reconnect-utils';
+import { getReconnectDelay, isMaxAttempts, isSlowPhase, MAX_RECONNECT_ATTEMPTS } from './handlers/reconnect-utils';
 
 // Wire-level debug tracker exposed on window.__spoDebug (permanent instrumentation)
 interface SpoDebugWire {
@@ -929,7 +929,8 @@ export class StarpeaceClient implements ClientHandlerContext {
     const delayMs = getReconnectDelay(this.reconnectAttempt);
     this.reconnectAttempt++;
     useGameStore.getState().setReconnectAttempt(this.reconnectAttempt);
-    ClientBridge.log('System', `Reconnect attempt ${this.reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS} in ${delayMs / 1000}s…`);
+    const phase = isSlowPhase(this.reconnectAttempt - 1) ? ' (slow poll)' : '';
+    ClientBridge.log('System', `Reconnect attempt ${this.reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS}${phase} in ${delayMs / 1000}s…`);
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;

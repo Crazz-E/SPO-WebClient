@@ -102,6 +102,7 @@ import type { SessionContext } from './session/session-context';
 import { dispatchPush } from './session/push-dispatcher';
 import * as loginHandler from './session/login-handler';
 import { assertNotVoidPush, canBufferRequest } from './session/rdo-request-guards';
+import { classifyRdoError, ErrorRecovery } from './session/rdo-error-classifier';
 
 
 // Pure utility functions moved to session/session-utils.ts — re-export for backward compat
@@ -288,7 +289,7 @@ export class StarpeaceSession extends EventEmitter {
     resolve: (packet: RdoPacket) => void;
     reject: (err: unknown) => void;
   }> = [];
-  private readonly MAX_BUFFER_SIZE = 5; // Maximum 5 buffered requests
+  private readonly MAX_BUFFER_SIZE = 20; // Delphi queues far more; 5 was too aggressive
   private isServerBusy: boolean = false;
   private serverBusyCheckInterval: NodeJS.Timeout | null = null;
   private readonly SERVER_BUSY_CHECK_INTERVAL_MS = 10000; // Check every 10 seconds
@@ -297,6 +298,13 @@ export class StarpeaceSession extends EventEmitter {
   private static readonly MAX_CONSECUTIVE_POLL_FAILURES = 5;
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private readonly KEEP_ALIVE_INTERVAL_MS = 60000; // Matches Delphi CacheConnectionTimeOut
+
+  // --- CONSECUTIVE RDO FAILURE COUNTER (mirrors Delphi fNetErrors + NetErrorsTimesOut) ---
+  // Tracks consecutive RDO request failures (timeout or error) across all request types.
+  // When threshold exceeded, triggers reconnect — unlike consecutivePollFailures which
+  // only counts ServerBusy poll failures.
+  private consecutiveRdoFailures = 0;
+  private static readonly MAX_CONSECUTIVE_RDO_FAILURES = 3; // Delphi: NetErrorsTimesOut = 2
 
   // Map-specific throttling
   private activeMapRequests: number = 0;
@@ -309,8 +317,14 @@ export class StarpeaceSession extends EventEmitter {
   private worldReconnectLastAttempt = 0;
   private worldReconnecting: Promise<void> | null = null;
   private worldReconnectAttempts = 0;
-  private static readonly RECONNECT_MAX_RETRIES = 3;
+  /** Fast phase: exponential backoff (5s, 10s, 20s) */
+  private static readonly RECONNECT_FAST_RETRIES = 3;
   private static readonly RECONNECT_BASE_BACKOFF_MS = 5000; // Delphi: 5s throttle
+  /** Slow phase: fixed 15s interval, mirrors Delphi TReconnectThread's persistence */
+  private static readonly RECONNECT_SLOW_INTERVAL_MS = 15_000;
+  private static readonly RECONNECT_SLOW_RETRIES = 20; // 15s × 20 = 5 min
+  private static readonly RECONNECT_MAX_RETRIES =
+    StarpeaceSession.RECONNECT_FAST_RETRIES + StarpeaceSession.RECONNECT_SLOW_RETRIES;
 
   constructor() {
     super();
@@ -1431,8 +1445,13 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       return;
     }
 
-    // Exponential backoff: 5s, 10s, 20s (Delphi throttle × 2^n)
-    const backoffMs = StarpeaceSession.RECONNECT_BASE_BACKOFF_MS * Math.pow(2, this.worldReconnectAttempts);
+    // Two-phase backoff (mirrors Delphi TReconnectThread persistence):
+    //   Fast phase: exponential 5s, 10s, 20s
+    //   Slow phase: fixed 15s interval for extended recovery
+    const inSlowPhase = this.worldReconnectAttempts >= StarpeaceSession.RECONNECT_FAST_RETRIES;
+    const backoffMs = inSlowPhase
+      ? StarpeaceSession.RECONNECT_SLOW_INTERVAL_MS
+      : StarpeaceSession.RECONNECT_BASE_BACKOFF_MS * Math.pow(2, this.worldReconnectAttempts);
     const elapsed = Date.now() - this.worldReconnectLastAttempt;
     if (this.worldReconnectLastAttempt > 0 && elapsed < backoffMs) {
       throw new Error(`World reconnect throttled (${elapsed}ms < ${backoffMs}ms)`);
@@ -1531,7 +1550,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       this.isPolling = true;
 
       try {
-        const rid = this.requestIdCounter++;
+        const rid = this.requestIdCounter++ % 65536;
         const packet: RdoPacket = {
           raw: '',
           verb: RdoVerb.SEL,
@@ -1771,11 +1790,46 @@ public sendRdoRequest(
       return;
     }
 
-    // Server not busy, execute immediately
-    this.executeRdoRequest(socketName, packetData, effectiveTimeout)
+    // Server not busy, execute with auto-retry for recoverable errors
+    this.executeWithRetry(socketName, packetData, effectiveTimeout)
       .then(resolve)
       .catch(reject);
   });
+}
+
+/**
+ * Execute an RDO request with auto-retry for RECOVERABLE errors.
+ * Mirrors Delphi pattern: proxy calls wrapped in try-except → RenewWorldProxy on failure.
+ */
+private async executeWithRetry(
+  socketName: string,
+  packetData: Partial<RdoPacket>,
+  timeoutMs: number,
+  attempt = 0,
+): Promise<RdoPacket> {
+  const result = await this.executeRdoRequest(socketName, packetData, timeoutMs);
+
+  // Check if the response carries an RDO error code
+  if (result.errorCode && result.errorCode > 0) {
+    const classified = classifyRdoError(result.errorCode);
+
+    if (classified.recovery === ErrorRecovery.RECOVERABLE && attempt < classified.maxRetries) {
+      const delay = classified.retryBaseDelayMs * Math.pow(2, attempt);
+      this.log.warn(
+        `[RDO] Recoverable error ${result.errorCode} on ${packetData.member} — retry ${attempt + 1}/${classified.maxRetries} in ${delay}ms`
+      );
+
+      // If connection degraded, attempt reconnect before retry
+      if (classified.connectionDegraded && socketName === 'world') {
+        await this.attemptWorldReconnect().catch(() => {/* swallow — retry will fail naturally if socket gone */});
+      }
+
+      await new Promise(r => setTimeout(r, delay));
+      return this.executeWithRetry(socketName, packetData, timeoutMs, attempt + 1);
+    }
+  }
+
+  return result;
 }
 
 private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs: number): Promise<RdoPacket> {
@@ -1800,7 +1854,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
   assertNotVoidPush(packetData);
 
   return new Promise((resolve, reject) => {
-    const rid = this.requestIdCounter++;
+    const rid = this.requestIdCounter++ % 65536;
     const packet = { ...packetData, rid, type: 'REQUEST' } as RdoPacket;
     const member = packetData.member || 'unknown';
 
@@ -1811,8 +1865,19 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
       if (entry && entry.state === 'pending') {
         entry.state = 'timed-out';
         this.rdoMetrics.totalTimedOut++;
-        this.log.warn(`[RDO] TIMEOUT RID ${rid} ${socketName}/${member} after ${timeoutMs}ms (pending=${this.pendingRequests.size}, timedOut=${this.rdoMetrics.totalTimedOut})`);
+        this.consecutiveRdoFailures++;
+        this.log.warn(`[RDO] TIMEOUT RID ${rid} ${socketName}/${member} after ${timeoutMs}ms (pending=${this.pendingRequests.size}, timedOut=${this.rdoMetrics.totalTimedOut}, consecutiveFails=${this.consecutiveRdoFailures})`);
         reject(new Error(`Request timeout: ${member}`));
+
+        // Check consecutive failure threshold (mirrors Delphi fNetErrors → ConnectionDropped)
+        if (this.consecutiveRdoFailures >= StarpeaceSession.MAX_CONSECUTIVE_RDO_FAILURES
+            && socketName === 'world' && !this.isClosing) {
+          this.log.error(`[RDO] ${this.consecutiveRdoFailures} consecutive RDO failures (timeout) — triggering reconnect`);
+          this.consecutiveRdoFailures = 0;
+          this.attemptWorldReconnect().catch((e: unknown) => {
+            this.log.error('[RDO] Reconnect from consecutive timeouts failed:', toErrorMessage(e));
+          });
+        }
       }
     }, timeoutMs);
 
@@ -1916,6 +1981,19 @@ private handleIncomingMessage(socketName: string, raw: string) {
 			// Normal path — resolve the promise
 			if (packet.errorCode && packet.errorCode > 0) {
 			  this.log.warn(`[RDO] Error response RID ${packet.rid}: ${packet.errorName} (code ${packet.errorCode})`);
+			  // Consecutive failure tracking (mirrors Delphi fNetErrors)
+			  this.consecutiveRdoFailures++;
+			  if (this.consecutiveRdoFailures >= StarpeaceSession.MAX_CONSECUTIVE_RDO_FAILURES
+			      && socketName === 'world' && !this.isClosing) {
+			    this.log.error(`[RDO] ${this.consecutiveRdoFailures} consecutive RDO failures — triggering reconnect`);
+			    this.consecutiveRdoFailures = 0;
+			    this.attemptWorldReconnect().catch((e: unknown) => {
+			      this.log.error('[RDO] Reconnect from consecutive failures failed:', toErrorMessage(e));
+			    });
+			  }
+			} else {
+			  // Success — reset counter (mirrors Delphi ReportCnxValid)
+			  this.consecutiveRdoFailures = 0;
 			}
 			this.rdoMetrics.totalResolved++;
 			entry.resolve(packet);

@@ -12,10 +12,14 @@ export enum TimeoutCategory {
   NORMAL = 'NORMAL',
   /** Heavy mutations: build, clone, upgrade, set property */
   SLOW = 'SLOW',
+  /** Very heavy ops: company creation, end-of-period, large facility purchases.
+   *  Matches Delphi ISProxyTimeOut = 180s for operations that can stall during simulation ticks. */
+  VERY_SLOW = 'VERY_SLOW',
 }
 
 export const TIMEOUT_CONFIG: Record<TimeoutCategory, { rdoMs: number; wsMs: number }> = {
-  [TimeoutCategory.FAST]:   { rdoMs: 15_000, wsMs: 20_000 },
-  [TimeoutCategory.NORMAL]: { rdoMs: 30_000, wsMs: 40_000 },
-  [TimeoutCategory.SLOW]:   { rdoMs: 60_000, wsMs: 75_000 },
+  [TimeoutCategory.FAST]:      { rdoMs: 15_000, wsMs: 20_000 },
+  [TimeoutCategory.NORMAL]:    { rdoMs: 30_000, wsMs: 40_000 },
+  [TimeoutCategory.SLOW]:      { rdoMs: 60_000, wsMs: 75_000 },
+  [TimeoutCategory.VERY_SLOW]: { rdoMs: 120_000, wsMs: 150_000 },
 };

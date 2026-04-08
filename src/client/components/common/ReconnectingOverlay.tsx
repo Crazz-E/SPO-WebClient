@@ -8,6 +8,7 @@
 
 import { useGameStore } from '../../store/game-store';
 import { useClient } from '../../context';
+import { isSlowPhase, MAX_RECONNECT_ATTEMPTS } from '../../handlers/reconnect-utils';
 import styles from './ReconnectingOverlay.module.css';
 import spinnerStyles from '../startup/LoadingSpinner.module.css';
 
@@ -68,7 +69,9 @@ export function ReconnectingOverlay() {
         </div>
         <p className={styles.title}>Connection lost</p>
         <p className={styles.attempt}>
-          Reconnecting… attempt {attempt} of 5
+          {isSlowPhase(attempt - 1)
+            ? `Reconnecting… slow poll (attempt ${attempt} of ${MAX_RECONNECT_ATTEMPTS})`
+            : `Reconnecting… attempt ${attempt} of ${MAX_RECONNECT_ATTEMPTS}`}
         </p>
         <button
           className={styles.retryBtn}

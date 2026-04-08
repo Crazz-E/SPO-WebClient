@@ -1,11 +1,30 @@
 import {
   MAX_RECONNECT_ATTEMPTS,
-  RECONNECT_DELAYS_MS,
+  FAST_PHASE_DELAYS_MS,
+  SLOW_PHASE_INTERVAL_MS,
+  SLOW_PHASE_MAX_ATTEMPTS,
   getReconnectDelay,
   isMaxAttempts,
+  isSlowPhase,
 } from './reconnect-utils';
 
 describe('reconnect-utils', () => {
+  describe('two-phase constants', () => {
+    it('MAX_RECONNECT_ATTEMPTS = fast + slow phases', () => {
+      expect(MAX_RECONNECT_ATTEMPTS).toBe(FAST_PHASE_DELAYS_MS.length + SLOW_PHASE_MAX_ATTEMPTS);
+    });
+
+    it('fast phase delays are strictly increasing', () => {
+      for (let i = 1; i < FAST_PHASE_DELAYS_MS.length; i++) {
+        expect(FAST_PHASE_DELAYS_MS[i]).toBeGreaterThan(FAST_PHASE_DELAYS_MS[i - 1]);
+      }
+    });
+
+    it('slow phase interval is 30s', () => {
+      expect(SLOW_PHASE_INTERVAL_MS).toBe(30_000);
+    });
+  });
+
   describe('getReconnectDelay', () => {
     it.each([
       [0, 2000],
@@ -13,17 +32,20 @@ describe('reconnect-utils', () => {
       [2, 8000],
       [3, 16000],
       [4, 30000],
-    ])('attempt %i returns %ims', (attempt, expected) => {
+    ])('fast phase: attempt %i returns %ims', (attempt, expected) => {
       expect(getReconnectDelay(attempt)).toBe(expected);
     });
 
-    it('clamps to last delay for attempts beyond array length', () => {
-      expect(getReconnectDelay(5)).toBe(30000);
-      expect(getReconnectDelay(99)).toBe(30000);
+    it('slow phase: returns fixed 30s interval', () => {
+      // Attempt indices >= FAST_PHASE_DELAYS_MS.length enter slow phase
+      const slowStart = FAST_PHASE_DELAYS_MS.length;
+      expect(getReconnectDelay(slowStart)).toBe(SLOW_PHASE_INTERVAL_MS);
+      expect(getReconnectDelay(slowStart + 5)).toBe(SLOW_PHASE_INTERVAL_MS);
+      expect(getReconnectDelay(99)).toBe(SLOW_PHASE_INTERVAL_MS);
     });
 
-    it('matches RECONNECT_DELAYS_MS entries directly', () => {
-      RECONNECT_DELAYS_MS.forEach((delay, i) => {
+    it('matches FAST_PHASE_DELAYS_MS entries directly', () => {
+      FAST_PHASE_DELAYS_MS.forEach((delay, i) => {
         expect(getReconnectDelay(i)).toBe(delay);
       });
     });
@@ -45,19 +67,17 @@ describe('reconnect-utils', () => {
     });
   });
 
-  describe('constants', () => {
-    it('MAX_RECONNECT_ATTEMPTS is 5', () => {
-      expect(MAX_RECONNECT_ATTEMPTS).toBe(5);
-    });
-
-    it('RECONNECT_DELAYS_MS has exactly MAX_RECONNECT_ATTEMPTS entries', () => {
-      expect(RECONNECT_DELAYS_MS.length).toBe(MAX_RECONNECT_ATTEMPTS);
-    });
-
-    it('delays are strictly increasing', () => {
-      for (let i = 1; i < RECONNECT_DELAYS_MS.length; i++) {
-        expect(RECONNECT_DELAYS_MS[i]).toBeGreaterThan(RECONNECT_DELAYS_MS[i - 1]);
+  describe('isSlowPhase', () => {
+    it('returns false during fast phase', () => {
+      for (let i = 0; i < FAST_PHASE_DELAYS_MS.length; i++) {
+        expect(isSlowPhase(i)).toBe(false);
       }
+    });
+
+    it('returns true at and beyond fast phase boundary', () => {
+      expect(isSlowPhase(FAST_PHASE_DELAYS_MS.length)).toBe(true);
+      expect(isSlowPhase(FAST_PHASE_DELAYS_MS.length + 1)).toBe(true);
+      expect(isSlowPhase(99)).toBe(true);
     });
   });
 });

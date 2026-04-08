@@ -45,6 +45,13 @@ case "$FILE_PATH" in
     ;;
 esac
 
+# RDO network resilience (reconnect, timeouts, error handling, ServerBusy)
+case "$FILE_PATH" in
+  *spo_session*|*reconnect-utils*|*timeout-categories*|*error-codes*|*rdo-request-guards*|*login-handler*|*rdo.ts|*rdo-connection-pool*)
+    REMINDERS="${REMINDERS}SKILL CONTEXT: rdo-network-resilience — RDO reconnect, timeout alignment, error classification, connection pooling. See .claude/skills/rdo-network-resilience/SKILL.md.\n"
+    ;;
+esac
+
 # Server files (non-RDO)
 case "$FILE_PATH" in
   *src/server/*)
