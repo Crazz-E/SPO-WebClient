@@ -1117,6 +1117,10 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
         });
 
         // Parse
+        // TEMP DEBUG: Log raw RDO responses for ObjectsInArea/SegmentsInArea
+        console.log(`[MAP_RDO_DEBUG] ObjectsInArea raw: errorCode=${objectsPacket.errorCode}, payload="${(objectsPacket.payload ?? '').substring(0, 200)}"`);
+        console.log(`[MAP_RDO_DEBUG] SegmentsInArea raw: errorCode=${segmentsPacket.errorCode}, payload="${(segmentsPacket.payload ?? '').substring(0, 200)}"`);
+
         const buildingsRaw = splitMultilinePayloadHelper(objectsPacket.payload!);
         const buildings = parseBuildingsHelper(buildingsRaw);
 
