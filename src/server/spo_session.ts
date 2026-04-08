@@ -1954,7 +1954,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
   let poolConn: PooledConnection | undefined;
   let socket: net.Socket | undefined;
 
-  if (socketName === 'world' && this.worldPool) {
+  if (socketName === 'world' && this.worldPool && this.worldPool.size > 0) {
     try {
       poolConn = await this.worldPool.getConnection();
       socket = poolConn.socket;
@@ -1974,7 +1974,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
     this.log.warn('[Session] World socket not active, attempting reconnect before request...');
     await this.attemptWorldReconnect();
     // After reconnect, try pool again or fall back to socket
-    if (this.worldPool) {
+    if (this.worldPool && this.worldPool.size > 0) {
       try {
         poolConn = await this.worldPool.getConnection();
         socket = poolConn.socket;
