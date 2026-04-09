@@ -66,6 +66,85 @@ case "$FILE_PATH" in
     ;;
 esac
 
+# --- Documentation triggers (knowledge bases) ---
+
+# RDO protocol docs
+case "$FILE_PATH" in
+  *rdo*|*spo_session*)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/rdo-protocol-architecture.md (wire framing, dispatch, login) + doc/rdo_typing_system.md (RdoValue/RdoCommand API).\n"
+    ;;
+esac
+
+# Renderer / Canvas / texture docs
+case "$FILE_PATH" in
+  *renderer*|*terrain*|*texture*|*chunk*)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/texture-rendering-architecture.md (full asset pipeline).\n"
+    ;;
+esac
+
+# Concrete rendering
+case "$FILE_PATH" in
+  *concrete*)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/concrete_rendering.md (concrete tile system, coordinate format).\n"
+    ;;
+esac
+
+# Road rendering
+case "$FILE_PATH" in
+  *road*)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/road_rendering_reference.md (road block classes, BMP palette).\n"
+    ;;
+esac
+
+# Building / facility / inspector docs
+case "$FILE_PATH" in
+  *building*|*facility*|*inspector*|*property*)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/building_details_protocol.md + doc/facility-tabs-reference.md.\n"
+    ;;
+esac
+
+# Voyager / handler docs
+case "$FILE_PATH" in
+  *voyager*|*handler-reference*)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/voyager-inspector-architecture.md + doc/voyager-handler-reference.md.\n"
+    ;;
+esac
+
+# Server architecture
+case "$FILE_PATH" in
+  *src/server/server.ts|*src/server/*-service.ts)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/architecture-overview.md (services, API endpoints) + doc/logging-system.md.\n"
+    ;;
+esac
+
+# Supply system
+case "$FILE_PATH" in
+  *supply*)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/supply-system.md (supply chain RDO protocol).\n"
+    ;;
+esac
+
+# Research system
+case "$FILE_PATH" in
+  *research*|*invention*)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/research-system-reference.md (research tree mechanics).\n"
+    ;;
+esac
+
+# E2E / mock server docs
+case "$FILE_PATH" in
+  *mock-server*|*scenario*|*capture*)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/mock-server-guide.md + doc/Mock_Server_scenarios_captures.md.\n"
+    ;;
+esac
+
+# Core entry points -> architecture overview
+case "$FILE_PATH" in
+  *src/client/client.ts|*src/client/main.tsx|*src/client/App.tsx)
+    REMINDERS="${REMINDERS}DOC CONTEXT: Read doc/architecture-overview.md (project structure, services, API endpoints).\n"
+    ;;
+esac
+
 if [ -n "$REMINDERS" ]; then
   echo -e "$REMINDERS"
 fi

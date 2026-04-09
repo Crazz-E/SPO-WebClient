@@ -20,6 +20,8 @@ Browser Client ──WebSocket──▶ Node.js Gateway ──RDO TCP──▶ D
                               (ServerBusy polling)        (proxy management)
 ```
 
+**WebSocket type direction:** Client->Server = `WsReq*` types, Server->Client = `WsResp*` types. Never mix directions.
+
 **Two reconnect layers:**
 1. **L1 — Client→Gateway (WebSocket)**: `src/client/handlers/reconnect-utils.ts` + `client.ts`
 2. **L3 — Gateway→Delphi (RDO TCP)**: `src/server/spo_session.ts` (world socket auto-reconnect)

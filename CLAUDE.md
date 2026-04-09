@@ -9,37 +9,22 @@
 - Skip tests — all code changes require tests covering >= 93% of new/modified lines (global floor enforced by `jest.config.js` thresholds)
 - Modify these files without discussion: `src/shared/rdo-types.ts`, `src/server/rdo.ts`, `src/__fixtures__/*`, `jest.config.js` (thresholds can only go UP)
 - Load screenshots directly in the main context during debug/E2E sessions — use sub-agent delegation (see below)
-- Add UI elements without wiring their actions — every button, toggle, or control must be fully functional, not just visible (see below)
+- Add UI elements without wiring their actions — every button, toggle, or control must be fully functional, not just visible. Full checklist: see `/code-guardian` skill §E.
 - Use `"^"` (VariantId) in fire-and-forget commands without a RID — `"^"` is forbidden in fire-and-forget except when paired with a request ID (RID). Fire-and-forget MUST use `"*"` (VoidId). Without a RID, the Delphi server has no destination for the response and crashes. Ref: RDOQueryServer.pas:419-424, live capture confirmation.
-
-**UI change = full-stack verification (MANDATORY):**
-When any UI component is added or modified, verify **both** the visual layer and the backing logic:
-1. **Visual**: The element renders correctly and is interactive (hover, focus, disabled states)
-2. **Action**: Clicking/interacting triggers the intended effect — store update, RDO command, navigation, etc.
-3. **Wiring**: Trace the handler chain end-to-end: `onClick` → store action / bridge call → server request → expected side effect
-4. If the backing logic (store method, RDO call, WebSocket message) does not exist yet, **implement it** — do not leave dead buttons or placeholder handlers like `() => {}` or `console.log('TODO')`
 
 **RDO conformity (MANDATORY for any RDO work):** Before writing or modifying ANY RDO-related code, you MUST:
 1. Read [doc/rdo-protocol-architecture.md](doc/rdo-protocol-architecture.md) — wire framing, dispatch internals, login sequence, push filtering rules
 2. Verify against SPO-Original Delphi source using `delphi-archaeologist` skill before implementing
 This applies to new RDO calls, modified RDO calls, push handlers, and any code touching `sendRdoRequest()` or `RdoCommand`.
 
-**Screenshot analysis (mandatory for debug/E2E sessions):**
-Never read screenshot images in the main conversation context — each costs ~3-5MB and saturates the 20MB limit. Instead:
-1. Enable debug overlay first: `browser_press_key("d")` + toggle keys (`3`=concrete, `4`=water grid, `5`=roads)
-2. Save to `screenshots/` directory (git-ignored): `browser_take_screenshot(filename: "screenshots/descriptive-name.png")`
-3. Delegate to sub-agent: `Task(subagent_type: "general-purpose", prompt: "Read screenshots/<name>.png. Debug overlay active: [describe toggles]. Check: 1. <criterion>... Reply PASS/FAIL per criterion.")` — color legend: Green=building, Blue=junction, Orange=road.
-4. Only the text verdict returns (~100 bytes vs ~3-5MB per image)
+**`sendRdoRequest()` + `"*"` separator = SERVER CRASH** — `sendRdoRequest()` adds a QueryId; void push (`"*"`) with QueryId crashes the Delphi server. Void push → `socket.write(RdoCommand.build())`. Synchronous → `sendRdoRequest()` with `"^"`.
 
-**Critical patterns & gotchas:**
-- **`sendRdoRequest()` + `"*"` separator = SERVER CRASH** — `sendRdoRequest()` adds a QueryId; void push (`"*"`) with QueryId crashes the Delphi server. Void push → `socket.write(RdoCommand.build())`. Synchronous → `sendRdoRequest()` with `"^"`.
-- Test environment is `node` (no jsdom) — mock DOM elements as plain objects
-- `ClientFacilityDimensionsCache` is singleton — must `clear()` then `initialize()` in tests
-- TerrainLoader i/j swap: `getTextureId(j, i)` — provider uses (i,j), loader expects (x,y)
-- Concrete tiles stored as `"${x},${y}"` (col,row) not `"${i},${j}"` (row,col)
-- ROAD_TYPE constants are `as const` — use explicit `number` type annotation for local vars
-- `worldContextId` = world operations (map focus, queries); `interfaceServerId` = building operations
-- WebSocket: Client->Server = `WsReq*` types, Server->Client = `WsResp*` types
+**Agent delegation strategy (when to use sub-agents vs direct tools vs skills):**
+- **Skills (default for advisory/auditing):** Skills auto-load into the main conversation via hooks — use them for domain guidance, code review checklists, and protocol verification. They keep context unified with zero spawning overhead.
+- **Explore agents (parallel codebase research):** Launch up to 3 Explore agents in parallel when the scope is uncertain, multiple areas are involved, or research would bloat the main context. Each agent gets a focused search question.
+- **General-purpose agents (screenshot analysis, heavy research):** Delegate screenshot reads (mandatory — see screenshot protocol in `/e2e-test` skill) and deep investigations that produce large intermediate output.
+- **Direct tools (targeted lookups):** Use Grep/Glob/Read directly for single-file reads, known symbol searches, or any lookup where the target is already known. Do NOT spawn an agent for a one-liner.
+- **Never delegate understanding:** Do not write agent prompts like "based on your findings, fix the bug." Synthesize agent results yourself, then act.
 
 **Transparency**
 Always inform the user the list of skills used to respond to each request when you post the summary of all changes or end report or plan.
@@ -84,47 +69,23 @@ npm run test:watch   # Watch mode
 npm run test:coverage # Coverage report
 ```
 
-## Architecture
+## Documentation (load on demand)
 
-```
-src/
-├── client/
-│   ├── client.ts              # StarpeaceClient — game session + canvas UI
-│   ├── main.tsx               # Vite entry, mounts React app
-│   ├── App.tsx                # Root router (LoginScreen vs GameScreen)
-│   ├── bridge/                # ClientBridge (pushes state to Zustand stores)
-│   ├── context/               # ClientContext + useClient() hook
-│   ├── store/                 # Zustand stores (11 total)
-│   ├── hooks/                 # Custom hooks (usePanel, useResponsive, etc.)
-│   ├── styles/                # Design tokens, reset, typography, animations
-│   ├── layouts/               # LoginScreen, GameScreen
-│   ├── components/            # React UI (60+ components, CSS Modules)
-│   │   ├── common/            # Badge, Toast, GlassCard, Skeleton, etc.
-│   │   ├── hud/               # TopBar, LeftRail, RightRail
-│   │   ├── panels/            # RightPanel, LeftPanel (slide-in)
-│   │   ├── building/          # BuildingInspector, QuickStats, PropertyGroup
-│   │   ├── empire/            # EmpireOverview, FacilityList, FinancialSummary
-│   │   ├── mail/              # MailPanel
-│   │   ├── chat/              # ChatStrip
-│   │   ├── search/            # SearchPanel
-│   │   ├── politics/          # Capitol tabs (Towns, Ministries, Jobs, Votes)
-│   │   ├── transport/         # TransportPanel
-│   │   ├── modals/            # BuildMenu, Settings, CompanyCreation
-│   │   ├── mobile/            # MobileShell, BottomNav, BottomSheet
-│   │   └── command-palette/   # CommandPalette (Cmd+K)
-│   ├── renderer/              # Canvas 2D isometric engine
-│   └── ui/                    # Canvas UI (minimap + map navigation)
-├── server/
-│   ├── server.ts              # HTTP/WebSocket server + API endpoints
-│   ├── spo_session.ts         # RDO session manager
-│   ├── rdo.ts                 # RDO protocol parser
-│   └── *-service.ts           # Background services (ServiceRegistry)
-└── shared/
-    ├── rdo-types.ts           # RDO type system (CRITICAL)
-    ├── error-utils.ts         # toErrorMessage(err: unknown)
-    ├── types/                 # Type definitions
-    └── building-details/      # Property templates
-```
+Docs auto-load via hook when editing matching files. For planning/discussion, read manually:
+
+| Context | Documents |
+|---------|-----------|
+| RDO protocol | [rdo-protocol-architecture.md](doc/rdo-protocol-architecture.md), [rdo_typing_system.md](doc/rdo_typing_system.md) |
+| Renderer / textures | [texture-rendering-architecture.md](doc/texture-rendering-architecture.md) |
+| Concrete tiles | [concrete_rendering.md](doc/concrete_rendering.md) |
+| Roads | [road_rendering_reference.md](doc/road_rendering_reference.md) |
+| Buildings / facilities | [building_details_protocol.md](doc/building_details_protocol.md), [facility-tabs-reference.md](doc/facility-tabs-reference.md) |
+| Voyager / inspector | [voyager-inspector-architecture.md](doc/voyager-inspector-architecture.md), [voyager-handler-reference.md](doc/voyager-handler-reference.md) |
+| Server / deployment | [architecture-overview.md](doc/architecture-overview.md), [logging-system.md](doc/logging-system.md), [deployment-security.md](doc/deployment-security.md) |
+| Supply / research | [supply-system.md](doc/supply-system.md), [research-system-reference.md](doc/research-system-reference.md) |
+| E2E / mock server | [E2E-TESTING.md](doc/E2E-TESTING.md), [mock-server-guide.md](doc/mock-server-guide.md) |
+| Architecture | [architecture-overview.md](doc/architecture-overview.md) |
+| Troubleshooting | [troubleshooting.md](doc/troubleshooting.md) |
 
 ## Skills
 
@@ -141,39 +102,6 @@ Skills auto-load contextually via `PreToolUse` hook in `.claude/settings.json`.
 | `e2e-test` | E2E testing with Playwright MCP (user-invoked only) |
 
 **Community skills** (30+ installed, auto-load via hooks): React, Zustand, state mgmt, testing, server, security, renderer, a11y, design, TypeScript, refactoring, debugging, protocol, git workflow. See [manifest.json](.claude/skills/manifest.json).
-
-## SkillsMP
-
-Search SkillsMP API before creating custom skills. Prefer skills with 1,000+ stars.
-- Installer: [.claude/skillsmp-installer.js](.claude/skillsmp-installer.js) | Ad-hoc: [.claude/install-new-skills.js](.claude/install-new-skills.js)
-- Installed: [.claude/skills/](.claude/skills/) (30+ skills) | Metadata: [manifest.json](.claude/skills/manifest.json)
-
-## RDO Protocol
-
-**Always use type-safe classes.** Full API docs: [doc/rdo_typing_system.md](doc/rdo_typing_system.md)
-
-```typescript
-import { RdoValue, RdoCommand } from '@/shared/rdo-types';
-
-// Build commands with the builder pattern
-const cmd = RdoCommand.sel(objectId)
-  .call('RDOSetPrice').push()
-  .args(RdoValue.int(priceId), RdoValue.float(value))
-  .build();
-
-// Parse responses
-const { prefix, value } = RdoParser.extract(token);
-```
-
-| Prefix | Type | Example |
-|--------|------|---------|
-| `#` | Integer | `#42` |
-| `%` | String (OLE) | `%Hello` |
-| `!` | Float | `!3.14` |
-| `@` | Double | `@3.14159` |
-| `$` | Short string | `$ID` |
-| `^` | Variant | `^value` |
-| `*` | Void | `*` |
 
 ## Code Style
 
@@ -192,46 +120,13 @@ npm test -- --testNamePattern="X"  # Specific suite
 
 **Custom matchers:** `toContainRdoCommand()`, `toMatchRdoCallFormat()`, `toMatchRdoSetFormat()`, `toHaveRdoTypePrefix()`
 
-## API Endpoints
-
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/map-data/:mapName` | Map terrain/building/road data |
-| `GET /api/road-block-classes` | Road block class definitions |
-| `GET /api/concrete-block-classes` | Concrete block class definitions |
-| `GET /api/car-classes` | Car class definitions |
-| `GET /api/terrain-info/:terrainType` | Terrain type metadata (seasons) |
-| `GET /cache/:category/:filename` | Object texture (BuildingImages served locally) |
-| `GET /proxy-image?url=<url>` | Image proxy for remote assets |
-
-## E2E Testing
-
-Full procedure, credentials, and selectors: **[doc/E2E-TESTING.md](doc/E2E-TESTING.md)**
+## E2E Credentials
 
 Credentials: `SPO_test3` / `test3` / BETA zone / Shamba world / President of Shamba company
 **These credentials are LOCKED — never change without explicit developer approval.**
+Full procedure and selectors: see `/e2e-test` skill and [doc/E2E-TESTING.md](doc/E2E-TESTING.md).
 
 ## Git Conventions
 
 **Branch:** `feature/`, `fix/`, `refactor/`, `doc/` + description
 **Commit:** `type: short summary` — types: `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`
-
-## Services (ServiceRegistry)
-
-Service files live flat in `src/server/` (no subdirectory).
-
-| Service | Purpose | Dependencies |
-|---------|---------|--------------|
-| `update` | Sync game assets | none |
-| `facilities` | Building dimensions | update |
-| `mapData` | Map data caching | update |
-
-## Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Build fails | `npm install`, Node.js >= 18 |
-| Tests fail | `npm run test:verbose` |
-| RDO errors | Verify type prefixes (#, %, !, etc.) |
-| WebSocket disconnect | Check game server status |
-| Port 8080 in use | `Get-Process -Id (Get-NetTCPConnection -LocalPort 8080).OwningProcess \| Stop-Process` |

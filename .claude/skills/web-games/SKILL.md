@@ -147,3 +147,15 @@ What type of game?
 ---
 
 > **Remember:** Browser is the most accessible platform. Respect its constraints.
+
+---
+
+## 8. SPO Isometric Renderer Gotchas
+
+Project-specific traps for the Starpeace Online Canvas 2D isometric engine:
+
+| Trap | Detail |
+|------|--------|
+| TerrainLoader i/j swap | `getTextureId(j, i)` — provider uses (i,j), loader expects (x,y). Swapping causes wrong tiles. |
+| Concrete tile coordinates | Stored as `"${x},${y}"` (col,row) NOT `"${i},${j}"` (row,col). Wrong order = misplaced concrete. |
+| ROAD_TYPE `as const` | Constants are `as const` — use explicit `number` type annotation for local vars to avoid type narrowing issues. |

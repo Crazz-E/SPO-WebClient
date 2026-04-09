@@ -23,6 +23,8 @@ These mistakes crash the Delphi game server and affect ALL connected clients.
 
 **Rule:** Never use `Promise.all()` for concurrent RDO commands on the same socket. The Delphi server is single-threaded per connection.
 
+**Rule:** `worldContextId` = world operations (map focus, queries); `interfaceServerId` = building operations. Mixing them up sends commands to the wrong server object.
+
 **After any RDO change:** `npm test -- spo_session` and `npm test -- rdo`
 
 ## B. Zustand Selector Stability (INFINITE RE-RENDER RISK)
@@ -52,6 +54,8 @@ Silent truncation is worse than a parse error — the UI shows wrong data with n
 **Key file:** `spo_session.ts` (80 commits, highest regex density in codebase).
 
 **Rule:** When writing or modifying regex patterns, always test with real server data. Add assertions on result length/format to catch silent truncation.
+
+**Rule:** `ClientFacilityDimensionsCache` is singleton — must `clear()` then `initialize()` in tests. Failing to reset causes cross-test contamination.
 
 ## D. Property Resolution Chains (SILENT FAILURE RISK)
 
