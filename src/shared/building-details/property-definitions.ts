@@ -55,7 +55,7 @@ export enum PropertyType {
    * Quick trade connect/disconnect buttons (3 rows: stores, factories, warehouses).
    * Visible to ALL players (not owner-gated). Uses RDOConnectToTycoon/RDODisconnectFromTycoon.
    * Server auto-injects the visiting player's tycoonId.
-   * Kind values: 1=stores, 2=factories, 4=warehouses.
+   * Kind values: 1=warehouses (ftpWarehouses=$01), 2=factories (ftpFactories=$02), 4=stores (ftpStores=$04).
    */
   TRADE_CONNECT_BUTTONS = 'TRADE_CONNECT_BUTTONS',
   /**

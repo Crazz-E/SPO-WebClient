@@ -166,9 +166,9 @@ export function RepairControl({
 // =============================================================================
 
 const TRADE_KINDS = [
-  { kind: '1', label: 'Stores' },
-  { kind: '2', label: 'Factories' },
-  { kind: '4', label: 'Warehouses' },
+  { kind: '4', label: 'Stores' },       // ftpStores = $04
+  { kind: '2', label: 'Factories' },     // ftpFactories = $02
+  { kind: '1', label: 'Warehouses' },    // ftpWarehouses = $01
 ] as const;
 
 export function TradeConnectButtons({ onAction }: { onAction: (id: string) => void }) {

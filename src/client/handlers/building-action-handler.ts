@@ -392,17 +392,21 @@ export function handleBuildingAction(ctx: ClientHandlerContext, actionId: string
 
 async function tradeConnect(ctx: ClientHandlerContext, buildingDetails: BuildingDetailsResponse, kind: string): Promise<void> {
   const actionId = `tradeConnect:${kind}`;
-  const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
+  const kindLabel = kind === '4' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
   useBuildingStore.getState().addInFlightAction(actionId);
   const pendingToastId = showToast(`Connecting all your ${kindLabel}...`, 'info');
   try {
-    await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDOConnectToTycoon', '0', { kind });
+    const success = await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDOConnectToTycoon', '0', { kind });
     dismissToast(pendingToastId);
-    ctx.showNotification(`Connected all your ${kindLabel} to this building`, 'success');
-    // Lightweight refresh — building already focused, skip SwitchFocusEx
-    const vc = ctx.currentFocusedVisualClass || '0';
-    const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
-    if (details) ClientBridge.updateBuildingDetails(details);
+    if (success) {
+      ctx.showNotification(`Connected all your ${kindLabel} to this building`, 'success');
+      // Lightweight refresh — building already focused, skip SwitchFocusEx
+      const vc = ctx.currentFocusedVisualClass || '0';
+      const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
+      if (details) ClientBridge.updateBuildingDetails(details);
+    } else {
+      ctx.showNotification(`Failed to connect ${kindLabel}`, 'error');
+    }
   } catch (err: unknown) {
     dismissToast(pendingToastId);
     ctx.showNotification(`Connection failed: ${toErrorMessage(err)}`, 'error');
@@ -413,17 +417,21 @@ async function tradeConnect(ctx: ClientHandlerContext, buildingDetails: Building
 
 async function tradeDisconnect(ctx: ClientHandlerContext, buildingDetails: BuildingDetailsResponse, kind: string): Promise<void> {
   const actionId = `tradeDisconnect:${kind}`;
-  const kindLabel = kind === '1' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
+  const kindLabel = kind === '4' ? 'stores' : kind === '2' ? 'factories' : 'warehouses';
   useBuildingStore.getState().addInFlightAction(actionId);
   const pendingToastId = showToast(`Disconnecting all your ${kindLabel}...`, 'info');
   try {
-    await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDODisconnectFromTycoon', '0', { kind });
+    const success = await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDODisconnectFromTycoon', '0', { kind });
     dismissToast(pendingToastId);
-    ctx.showNotification(`Disconnected all your ${kindLabel} from this building`, 'success');
-    // Lightweight refresh — building already focused, skip SwitchFocusEx
-    const vc = ctx.currentFocusedVisualClass || '0';
-    const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
-    if (details) ClientBridge.updateBuildingDetails(details);
+    if (success) {
+      ctx.showNotification(`Disconnected all your ${kindLabel} from this building`, 'success');
+      // Lightweight refresh — building already focused, skip SwitchFocusEx
+      const vc = ctx.currentFocusedVisualClass || '0';
+      const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
+      if (details) ClientBridge.updateBuildingDetails(details);
+    } else {
+      ctx.showNotification(`Failed to disconnect ${kindLabel}`, 'error');
+    }
   } catch (err: unknown) {
     dismissToast(pendingToastId);
     ctx.showNotification(`Disconnection failed: ${toErrorMessage(err)}`, 'error');
