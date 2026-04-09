@@ -403,34 +403,23 @@ describe('RDO Building Operations', () => {
     });
   });
 
-  describe('Separator conformity (function "^" vs procedure "*")', () => {
-    // Functions returning olevariant must use "^" separator.
-    // Procedures (void) must use "*" separator.
-    // Verified against SPO-Original Delphi source declarations.
+  describe('Separator conformity: fire-and-forget "*" vs synchronous "^"', () => {
+    // Fire-and-forget commands (no RID) MUST use "*" (VoidId).
+    // "^" (VariantId) is forbidden without a RID — crashes Delphi server.
+    // Ref: RDOQueryServer.pas:419-454, live capture confirmation.
 
-    const RDO_FUNCTIONS = [
+    const FIRE_AND_FORGET_COMMANDS = [
       'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
-      'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
-    ];
-    const RDO_PROCEDURES = [
+      'RDODisconnectInput', 'RDODisconnectOutput',
       'RDOAutoProduce', 'RDOAutoRelease', 'RDOSetTradeLevel', 'RDOSetRole', 'RDOSetLoanPerc',
       'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
     ];
 
-    it.each(RDO_FUNCTIONS)('%s should use "^" separator (function returning olevariant)', (method) => {
-      const builder = RdoCommand.sel(100).call(method);
-      // Production code uses .method() for functions
-      builder.method();
-      const cmd = builder.args(RdoValue.int(1)).build();
-      expect(cmd).toContain('"^"');
-      expect(cmd).not.toContain('"*"');
-    });
+    // Synchronous commands use sendRdoRequest with RID + "^" — not tested here
+    // (tested via integration tests). These are: RDOConnectInput, RDOConnectOutput.
 
-    it.each(RDO_PROCEDURES)('%s should use "*" separator (void procedure)', (method) => {
-      const builder = RdoCommand.sel(100).call(method);
-      // Production code uses .push() for procedures
-      builder.push();
-      const cmd = builder.args(RdoValue.int(1)).build();
+    it.each(FIRE_AND_FORGET_COMMANDS)('%s fire-and-forget should use "*" separator', (method) => {
+      const cmd = RdoCommand.sel(100).call(method).push().args(RdoValue.int(1)).build();
       expect(cmd).toContain('"*"');
       expect(cmd).not.toContain('"^"');
     });
@@ -452,7 +441,7 @@ describe('RDO Building Operations', () => {
       const currBlock = 114551764;
       // Command should sel the objectId, not currBlock
       const cmd = RdoCommand.sel(objectId).call('RDOSetOutputPrice')
-        .method()
+        .push()
         .args(RdoValue.string('Chemicals'), RdoValue.int(150))
         .build();
 
@@ -472,17 +461,16 @@ describe('RDO Building Operations', () => {
       expect(cmd).toMatchRdoCallFormat('RDOSetPrice');
     });
 
-    it('objectId commands set should match RDO_FUNCTIONS + tycoon procedures', () => {
-      // objectId targeting applies to both functions (^) AND tycoon procedures (*).
-      // Tycoon connect/disconnect are void procedures but still bind to objectId.
-      const RDO_FUNCTIONS = [
+    it('objectId commands set should match all gate + tycoon commands', () => {
+      // objectId targeting applies to all output/input gate commands AND tycoon connect/disconnect.
+      const GATE_COMMANDS = [
         'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
         'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
       ];
-      const TYCOON_PROCEDURES = [
+      const TYCOON_COMMANDS = [
         'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
       ];
-      expect(OBJECTID_COMMANDS.sort()).toEqual([...RDO_FUNCTIONS, ...TYCOON_PROCEDURES].sort());
+      expect(OBJECTID_COMMANDS.sort()).toEqual([...GATE_COMMANDS, ...TYCOON_COMMANDS].sort());
     });
   });
 

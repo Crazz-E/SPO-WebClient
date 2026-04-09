@@ -10,6 +10,7 @@
 - Modify these files without discussion: `src/shared/rdo-types.ts`, `src/server/rdo.ts`, `src/__fixtures__/*`, `jest.config.js` (thresholds can only go UP)
 - Load screenshots directly in the main context during debug/E2E sessions — use sub-agent delegation (see below)
 - Add UI elements without wiring their actions — every button, toggle, or control must be fully functional, not just visible (see below)
+- Use `"^"` (VariantId) in fire-and-forget commands without a RID — `"^"` is forbidden in fire-and-forget except when paired with a request ID (RID). Fire-and-forget MUST use `"*"` (VoidId). Without a RID, the Delphi server has no destination for the response and crashes. Ref: RDOQueryServer.pas:419-424, live capture confirmation.
 
 **UI change = full-stack verification (MANDATORY):**
 When any UI component is added or modified, verify **both** the visual layer and the backing logic:

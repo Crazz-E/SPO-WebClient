@@ -128,6 +128,21 @@ await sendRdoRequest('world', { separator: '*', ... });
 socket.write(RdoCommand.build() + ';');
 ```
 
+### 2b. Fire-and-Forget Separator Rule
+Fire-and-forget commands (no RID) MUST use `"*"` (VoidId), NEVER `"^"` (VariantId).
+`"^"` without a RID crashes the Delphi server — it tries to route a response to a non-existent query.
+The `"^"` separator is only valid in the synchronous path (`sendRdoRequest` with RID).
+Both `"*"` and `"^"` parse parameters identically (RDOQueryServer.pas:419-454) — the separator
+only controls whether the server captures the return value, NOT argument parsing.
+```typescript
+// WRONG — "^" without RID crashes Delphi server
+fireAndForget(RdoCommand.sel(id).call('Method').method().args(...).build());
+
+// RIGHT — fire-and-forget always uses "*"
+fireAndForget(RdoCommand.sel(id).call('Method').push().args(...).build());
+```
+Live capture proof: `C sel 381792472 call RDODisconnectInput "*" "%Plastics","%706,436,";`
+
 ### 3. Ghost RID Prevention
 Before reconnecting, ALWAYS drain all pending requests. After reconnect, Delphi reuses query IDs. Leftover pending entries would match wrong responses.
 

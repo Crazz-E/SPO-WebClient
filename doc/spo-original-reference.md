@@ -10,9 +10,14 @@
 | Delphi declaration | RDO verb | Separator | Response |
 |--------------------|----------|-----------|----------|
 | `published property Foo : type read Get write Set` | `get` / `set` | *(none)* | `res=<prefix><value>` |
-| `published function Foo(params) : olevariant` | `call` | `^` between args | `res=<prefix><value>` |
-| `published procedure Foo(params)` | `call` | `^` between args | `res=*` (void) |
-| `published procedure Foo` (no params) | `call` | `*` | `res=*` (void) |
+| Synchronous call (with RID, expects response) | `call` | `^` (VariantId) | `res=<prefix><value>` or `res=*` |
+| Fire-and-forget (no RID, no response expected) | `call` | `*` (VoidId) | *(no response)* |
+
+**Separator rule:** The `^` vs `*` separator does NOT distinguish function/procedure or parameterized/parameterless.
+Both separators parse parameters identically (RDOQueryServer.pas:425-454). The separator controls
+whether the server captures the return value (`^`) or discards it (`*`). Using `^` without a RID
+crashes the Delphi server — it tries to route a response to a non-existent query.
+Live capture confirms: `RDODisconnectInput "*" "%Plastics","%706,436,"` (params after `*`).
 
 **TRAP:** `get` on a `function` works (falls through to `CallMethod` at line 115 of RDOObjectServer.pas) but is **semantically wrong** and may behave differently under edge cases.
 

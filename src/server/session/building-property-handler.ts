@@ -111,14 +111,12 @@ async function setBuildingPropertyImpl(
       'RDOAcceptCloning', // TBlock.RDOAcceptCloning — boolean, Kernel.pas:1304
     ]);
 
-    // RDO functions (olevariant return) use "^" separator.
-    // RDO procedures (void) use "*" separator.
-    const RDO_FUNCTIONS: ReadonlySet<string> = new Set([
-      'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
-      'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',
-      // RDOConnectToTycoon/RDODisconnectFromTycoon: procedures (void), use "*" not "^"
-      // Ref: Kernel.pas:1087 — procedure RDOConnectToTycoon(TycoonId, FacTypes: integer; SetAsDefault: wordbool)
-    ]);
+    // Fire-and-forget commands always use "*" (VoidId) separator — matching Delphi
+    // Send() with timeout=0. The "^" (VariantId) separator is forbidden without a RID:
+    // it tells the server to route a response, but with no RID the server crashes.
+    // "^" is only valid in the synchronous path (sendRdoRequest with RID).
+    // Ref: RDOQueryServer.pas:419-454 — server parses params identically for both separators.
+    // Ref: Live capture: RDODisconnectInput "*" "%Plastics","%706,436,"
 
     // Output/input gate commands bind to ObjectId, not CurrBlock.
     // For warehouses these differ; for other buildings they are equal.
@@ -169,14 +167,9 @@ async function setBuildingPropertyImpl(
       ctx.log.debug(`[BuildingDetails] Synchronous ${propertyName} completed`);
     } else {
       // Fire-and-forget RDO method call — no RID, no response expected.
+      // Always use "*" (VoidId) — "^" without RID crashes the Delphi server.
       const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
-      const builder = RdoCommand.sel(target).call(propertyName);
-      if (RDO_FUNCTIONS.has(propertyName)) {
-        builder.method(); // "^" — function returning olevariant
-      } else {
-        builder.push();   // "*" — void procedure
-      }
-      fireAndForget(builder.args(...rdoArgs).build());
+      fireAndForget(RdoCommand.sel(target).call(propertyName).push().args(...rdoArgs).build());
       await new Promise(resolve => setTimeout(resolve, 200));
     }
 
