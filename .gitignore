@@ -47,6 +47,9 @@ coverage/
 # E2E session screenshots
 screenshots/
 
+# Playwright MCP session logs
+.playwright-mcp/
+
 # Electron build artifacts
 electron/release/
 electron/node_modules/
