@@ -4,11 +4,13 @@
  * Every exported function takes `ctx: SessionContext` as first argument.
  * Private helpers are module-private functions.
  *
- * Void procedures (AddHeaders, AddLine, CloseMessage, DeleteMessage) are
- * fire-and-forget: socket.write() with "*" (VoidId), no RID.
+ * Void procedures (AddHeaders, DeleteMessage) are fire-and-forget:
+ * socket.write() with "*" (VoidId), no RID.
+ * AddLine and CloseMessage are synchronous (Delphi sets WaitForAnswer:=true)
+ * — use sendRdoRequest() with separator '"^"'.
  * NEVER use sendRdoRequest() with separator '*' — it adds a QueryId,
  * and "*" + QueryId crashes the Delphi server.
- * Ref: RDOQueryServer.pas:419-424, live capture confirmation.
+ * Ref: RDOQueryServer.pas:419-424, MsgComposerHandler.pas:324-326.
  */
 
 import type { SessionContext } from './session-context';
@@ -127,10 +129,16 @@ export async function composeMail(
     await new Promise(r => setTimeout(r, 50));
   }
 
-  // 2b. Add body lines
+  // 2b. Add body lines (synchronous — Delphi sets WaitForAnswer:=true before AddLine loop)
   for (const line of bodyLines) {
-    mailFireAndForget(ctx, msgId, 'AddLine', RdoValue.string(line));
-    await new Promise(r => setTimeout(r, 50));
+    await ctx.sendRdoRequest('mail', {
+      verb: RdoVerb.SEL,
+      targetId: msgId,
+      action: RdoAction.CALL,
+      member: 'AddLine',
+      separator: '"^"',
+      args: [RdoValue.string(line).format()]
+    });
   }
 
   // 3. Post (send) the message
@@ -147,8 +155,16 @@ export async function composeMail(
   ctx.log.debug(`[Mail] Post result: ${resultStr} (success=${success})`);
 
   // 4. Close message to release server memory (MsgComposerHandler.pas:331)
+  // Synchronous — Delphi WaitForAnswer still true from AddLine setting.
   try {
-    mailFireAndForget(ctx, ctx.mailServerId!, 'CloseMessage', RdoValue.int(parseInt(msgId, 10)));
+    await ctx.sendRdoRequest('mail', {
+      verb: RdoVerb.SEL,
+      targetId: ctx.mailServerId,
+      action: RdoAction.CALL,
+      member: 'CloseMessage',
+      separator: '"^"',
+      args: [RdoValue.int(parseInt(msgId, 10)).format()]
+    });
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after post:', e);
   }
@@ -206,10 +222,16 @@ export async function saveDraft(
     await new Promise(r => setTimeout(r, 50));
   }
 
-  // 3. Add body lines
+  // 3. Add body lines (synchronous — Delphi sets WaitForAnswer:=true before AddLine loop)
   for (const line of bodyLines) {
-    mailFireAndForget(ctx, msgId, 'AddLine', RdoValue.string(line));
-    await new Promise(r => setTimeout(r, 50));
+    await ctx.sendRdoRequest('mail', {
+      verb: RdoVerb.SEL,
+      targetId: msgId,
+      action: RdoAction.CALL,
+      member: 'AddLine',
+      separator: '"^"',
+      args: [RdoValue.string(line).format()]
+    });
   }
 
   // 4. Save to Draft folder (not Post/send)
@@ -226,8 +248,16 @@ export async function saveDraft(
   ctx.log.debug(`[Mail] Save draft result: ${resultStr} (success=${success})`);
 
   // 5. Close message to release server memory
+  // Synchronous — Delphi WaitForAnswer still true from AddLine setting.
   try {
-    mailFireAndForget(ctx, ctx.mailServerId!, 'CloseMessage', RdoValue.int(parseInt(msgId, 10)));
+    await ctx.sendRdoRequest('mail', {
+      verb: RdoVerb.SEL,
+      targetId: ctx.mailServerId,
+      action: RdoAction.CALL,
+      member: 'CloseMessage',
+      separator: '"^"',
+      args: [RdoValue.int(parseInt(msgId, 10)).format()]
+    });
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after save:', e);
   }
@@ -324,8 +354,16 @@ export async function readMailMessage(
     };
   } finally {
     // 5. Always close message to release server memory
+    // Synchronous — Delphi WaitForAnswer still true from AddLine setting.
     try {
-      mailFireAndForget(ctx, ctx.mailServerId!, 'CloseMessage', RdoValue.int(parseInt(msgId, 10)));
+      await ctx.sendRdoRequest('mail', {
+        verb: RdoVerb.SEL,
+        targetId: ctx.mailServerId,
+        action: RdoAction.CALL,
+        member: 'CloseMessage',
+        separator: '"^"',
+        args: [RdoValue.int(parseInt(msgId, 10)).format()]
+      });
     } catch (e: unknown) {
       ctx.log.warn('[Mail] Failed to close message:', e);
     }

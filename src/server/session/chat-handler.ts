@@ -156,17 +156,15 @@ export async function sendChatMessage(ctx: SessionContext, message: string): Pro
 
   ctx.log.debug(`[Chat] Sending message: ${message}`);
 
-  // Fire-and-forget: use "*" via socket.write() — never sendRdoRequest() with "*".
-  // Ref: RDOQueryServer.pas:419-424, Delphi client live capture.
-  const socket = ctx.getSocket('world');
-  if (!socket) throw new Error('World socket unavailable');
-  const cmd = RdoCommand.sel(ctx.worldContextId!)
-    .call('SayThis')
-    .push()
-    .args(RdoValue.string(''), RdoValue.string(message))
-    .build();
-  socket.write(cmd);
-  ctx.log.debug(`[Chat] Sent: ${cmd}`);
+  // Synchronous: Delphi IClientView.SayThis has an out ErrorCode param → SendReceive with RID.
+  await ctx.sendRdoRequest('world', {
+    verb: RdoVerb.SEL,
+    targetId: ctx.worldContextId,
+    action: RdoAction.CALL,
+    member: 'SayThis',
+    separator: '"^"',
+    args: [RdoValue.string('').format(), RdoValue.string(message).format()]
+  });
 }
 
 export async function setChatTypingStatus(ctx: SessionContext, isTyping: boolean): Promise<void> {
