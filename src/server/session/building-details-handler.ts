@@ -988,12 +988,12 @@ async function getSupplyPaths(
   const result: Array<{ path: string; name: string }> = [];
 
   for (const entry of entries) {
-    const colonIdx = entry.indexOf(':');
-    if (colonIdx === -1) continue;
+    const sepIdx = entry.indexOf('::');
+    if (sepIdx === -1) continue;
 
-    const path = entry.substring(0, colonIdx);
-    // Skip 2 chars after colon, then read name until null
-    let name = entry.substring(colonIdx + 3);
+    const path = entry.substring(0, sepIdx);
+    // Skip '::' separator (2 chars), trim any residual \n
+    let name = entry.substring(sepIdx + 2).replace(/^\n/, '');
     const nullIdx = name.indexOf('\0');
     if (nullIdx !== -1) {
       name = name.substring(0, nullIdx);
@@ -1374,12 +1374,12 @@ async function getProductPaths(
   const result: Array<{ path: string; name: string }> = [];
 
   for (const entry of entries) {
-    const colonIdx = entry.indexOf(':');
-    if (colonIdx === -1) continue;
+    const sepIdx = entry.indexOf('::');
+    if (sepIdx === -1) continue;
 
-    const path = entry.substring(0, colonIdx);
-    // Skip 2 chars after colon (:: separator), then read name until null
-    let name = entry.substring(colonIdx + 3);
+    const path = entry.substring(0, sepIdx);
+    // Skip '::' separator (2 chars), trim any residual \n
+    let name = entry.substring(sepIdx + 2).replace(/^\n/, '');
     const nullIdx = name.indexOf('\0');
     if (nullIdx !== -1) {
       name = name.substring(0, nullIdx);
