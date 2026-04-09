@@ -974,7 +974,7 @@ async function getSupplyPaths(
     targetId: tempObjectId,
     action: RdoAction.CALL,
     member: 'GetInputNames',
-    args: ['0', '0'], // index=0, language=0 (English)
+    args: [RdoValue.int(0).format(), '0'], // useless: integer, lang: widestring
   });
 
   const inputNamesRaw = cleanPayloadHelper(inputNamesPacket.payload || '');
@@ -1360,7 +1360,7 @@ async function getProductPaths(
     targetId: tempObjectId,
     action: RdoAction.CALL,
     member: 'GetOutputNames',
-    args: ['0', '0'], // index=0, language=0 (English)
+    args: [RdoValue.int(0).format(), '0'], // useless: integer, lang: widestring
   });
 
   const outputNamesRaw = cleanPayloadHelper(outputNamesPacket.payload || '');
@@ -1525,7 +1525,7 @@ async function fetchSubObjectProperties(
       targetId: tempObjectId,
       action: RdoAction.CALL,
       member: 'GetSubObjectProps',
-      args: [subIndex.toString(), query],
+      args: [RdoValue.int(subIndex).format(), query], // index: integer, names: WideString
     });
 
     const raw = cleanPayloadHelper(packet.payload || '');

@@ -1087,17 +1087,23 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       try {
         this.log.debug(`[Session] Loading map area at ${targetX}, ${targetY} (size ${w}x${h}) [${this.activeMapRequests}/${this.MAX_CONCURRENT_MAP_REQUESTS}]`);
 
-        // --- FIXED: ObjectsInArea with correct separator (consistant avec SwitchFocusEx) ---
+        // ObjectsInArea(x, y, dx, dy: integer) — InterfaceServer.pas
+        // Args MUST use RdoValue.int() — autoTypeNumeric is disabled for CALL args
         const objectsPacket = await this.sendRdoRequest('world', {
             verb: RdoVerb.SEL,
             targetId: worldCtxId,
             action: RdoAction.CALL,
             member: 'ObjectsInArea',
-            separator: '"^"',  // FIX: Use '"^"' for consistency with other requests
-            args: [targetX.toString(), targetY.toString(), w.toString(), h.toString()]
+            separator: '"^"',
+            args: [
+                RdoValue.int(targetX).format(),
+                RdoValue.int(targetY).format(),
+                RdoValue.int(w).format(),
+                RdoValue.int(h).format(),
+            ]
         });
 
-        // --- FIXED: SegmentsInArea with correct format ---
+        // SegmentsInArea(CircuitId, x1, y1, x2, y2: integer) — InterfaceServer.pas
         const modeOrLayer = 1;
         const x1 = targetX;
         const y1 = targetY;
@@ -1110,9 +1116,11 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
             action: RdoAction.CALL,
             member: 'SegmentsInArea',
             args: [
-                modeOrLayer.toString(),
-                x1.toString(), y1.toString(),
-                x2.toString(), y2.toString()
+                RdoValue.int(modeOrLayer).format(),
+                RdoValue.int(x1).format(),
+                RdoValue.int(y1).format(),
+                RdoValue.int(x2).format(),
+                RdoValue.int(y2).format(),
             ]
         });
 
@@ -1272,7 +1280,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       targetId: tempObjectId,
       action: RdoAction.CALL,
       member: 'SetObject',
-      args: [x.toString(), y.toString()]
+      args: [RdoValue.int(x).format(), RdoValue.int(y).format()]
     });
     // Brief delay for server to populate cache (reduced from 100ms)
     await new Promise(resolve => setTimeout(resolve, 30));
