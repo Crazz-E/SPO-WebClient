@@ -62,3 +62,4 @@ electron/node_modules/
 .claude/skillsmp-installer.js
 .claude/install-cdn-skills.js
 .claude/install-new-skills.js
+.claude/scheduled_tasks.lock
