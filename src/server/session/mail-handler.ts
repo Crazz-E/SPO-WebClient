@@ -4,26 +4,31 @@
  * Every exported function takes `ctx: SessionContext` as first argument.
  * Private helpers are module-private functions.
  *
- * WARN (2026-04-02 audit): Several void procedures (AddHeaders, AddLine,
- * CloseMessage, DeleteMessage) use sendRdoRequest() with separator '*'.
- * Per RDO rules, sendRdoRequest() adds a QueryId, and '*' (void push) +
- * QueryId risks crashing the Delphi server (see building-property-handler.ts
- * fix for the construction socket equivalent). No issue observed on the mail
- * server as of this date — the mail RDO handler may tolerate QueryId on void
- * calls, or the await-based sequencing may mask the problem. If mail
- * operations start crashing the server, convert these to socket.write() with
- * .push() (no RID) and use small delays for sequencing instead of await.
+ * Void procedures (AddHeaders, AddLine, CloseMessage, DeleteMessage) are
+ * fire-and-forget: socket.write() with "*" (VoidId), no RID.
+ * NEVER use sendRdoRequest() with separator '*' — it adds a QueryId,
+ * and "*" + QueryId crashes the Delphi server.
+ * Ref: RDOQueryServer.pas:419-424, live capture confirmation.
  */
 
 import type { SessionContext } from './session-context';
 import type { MailMessageHeader, MailMessageFull, MailAttachment } from '../../shared/types';
 import type { MailFolder } from '../../shared/types/domain-types';
 import { RdoVerb, RdoAction } from '../../shared/types';
-import { RdoValue } from '../../shared/rdo-types';
+import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
 import { parseMessageListHtml } from '../mail-list-parser';
 import { toErrorMessage } from '../../shared/error-utils';
 import fetch from 'node-fetch';
+
+// ── Fire-and-forget helper for void mail procedures ──────────────────────
+function mailFireAndForget(ctx: SessionContext, targetId: string, method: string, ...args: RdoValue[]): void {
+  const socket = ctx.getSocket('mail');
+  if (!socket) throw new Error('Mail socket unavailable');
+  const cmd = RdoCommand.sel(targetId).call(method).push().args(...args).build();
+  socket.write(cmd);
+  ctx.log.debug(`[Mail] Sent: ${cmd}`);
+}
 
 // ── Private Helpers ────────────────────────────────────────────────────────
 
@@ -118,26 +123,14 @@ export async function composeMail(
 
   // 2a. Add original headers for reply/forward threading
   if (headers) {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: msgId,
-      action: RdoAction.CALL,
-      member: 'AddHeaders',
-      args: [RdoValue.string(headers).toString()],
-      separator: '*'  // void procedure — see file-level WARN about QueryId risk
-    });
+    mailFireAndForget(ctx, msgId, 'AddHeaders', RdoValue.string(headers));
+    await new Promise(r => setTimeout(r, 50));
   }
 
   // 2b. Add body lines
   for (const line of bodyLines) {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: msgId,
-      action: RdoAction.CALL,
-      member: 'AddLine',
-      args: [RdoValue.string(line).toString()],
-      separator: '*'  // void procedure — see file-level WARN about QueryId risk
-    });
+    mailFireAndForget(ctx, msgId, 'AddLine', RdoValue.string(line));
+    await new Promise(r => setTimeout(r, 50));
   }
 
   // 3. Post (send) the message
@@ -155,14 +148,7 @@ export async function composeMail(
 
   // 4. Close message to release server memory (MsgComposerHandler.pas:331)
   try {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.mailServerId,
-      action: RdoAction.CALL,
-      member: 'CloseMessage',
-      args: [RdoValue.int(parseInt(msgId, 10)).toString()],
-      separator: '*'  // void procedure — see file-level WARN about QueryId risk
-    });
+    mailFireAndForget(ctx, ctx.mailServerId!, 'CloseMessage', RdoValue.int(parseInt(msgId, 10)));
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after post:', e);
   }
@@ -216,26 +202,14 @@ export async function saveDraft(
 
   // 2. Add original headers for reply/forward threading
   if (headers) {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: msgId,
-      action: RdoAction.CALL,
-      member: 'AddHeaders',
-      args: [RdoValue.string(headers).toString()],
-      separator: '*'  // void procedure — see file-level WARN about QueryId risk
-    });
+    mailFireAndForget(ctx, msgId, 'AddHeaders', RdoValue.string(headers));
+    await new Promise(r => setTimeout(r, 50));
   }
 
   // 3. Add body lines
   for (const line of bodyLines) {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: msgId,
-      action: RdoAction.CALL,
-      member: 'AddLine',
-      args: [RdoValue.string(line).toString()],
-      separator: '*'  // void procedure — see file-level WARN about QueryId risk
-    });
+    mailFireAndForget(ctx, msgId, 'AddLine', RdoValue.string(line));
+    await new Promise(r => setTimeout(r, 50));
   }
 
   // 4. Save to Draft folder (not Post/send)
@@ -253,14 +227,7 @@ export async function saveDraft(
 
   // 5. Close message to release server memory
   try {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.mailServerId,
-      action: RdoAction.CALL,
-      member: 'CloseMessage',
-      args: [RdoValue.int(parseInt(msgId, 10)).toString()],
-      separator: '*'  // void procedure — see file-level WARN about QueryId risk
-    });
+    mailFireAndForget(ctx, ctx.mailServerId!, 'CloseMessage', RdoValue.int(parseInt(msgId, 10)));
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after save:', e);
   }
@@ -358,14 +325,7 @@ export async function readMailMessage(
   } finally {
     // 5. Always close message to release server memory
     try {
-      await ctx.sendRdoRequest('mail', {
-        verb: RdoVerb.SEL,
-        targetId: ctx.mailServerId,
-        action: RdoAction.CALL,
-        member: 'CloseMessage',
-        args: [RdoValue.int(parseInt(msgId, 10)).toString()],
-        separator: '*'  // void procedure — see file-level WARN about QueryId risk
-      });
+      mailFireAndForget(ctx, ctx.mailServerId!, 'CloseMessage', RdoValue.int(parseInt(msgId, 10)));
     } catch (e: unknown) {
       ctx.log.warn('[Mail] Failed to close message:', e);
     }
@@ -387,19 +347,9 @@ export async function deleteMailMessage(
 
   const worldName = ctx.currentWorldInfo?.name || '';
 
-  await ctx.sendRdoRequest('mail', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.mailServerId,
-    action: RdoAction.CALL,
-    member: 'DeleteMessage',
-    args: [
-      RdoValue.string(worldName).toString(),
-      RdoValue.string(ctx.mailAccount).toString(),
-      RdoValue.string(folder).toString(),
-      RdoValue.string(messageId).toString()
-    ],
-    separator: '*'  // void procedure — see file-level WARN about QueryId risk
-  });
+  mailFireAndForget(ctx, ctx.mailServerId!, 'DeleteMessage',
+    RdoValue.string(worldName), RdoValue.string(ctx.mailAccount),
+    RdoValue.string(folder), RdoValue.string(messageId));
   ctx.log.debug(`[Mail] Deleted message ${messageId} from ${folder}`);
 }
 

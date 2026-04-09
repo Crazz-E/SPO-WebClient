@@ -555,17 +555,19 @@ describe('Name property (editable — IndGeneral, SrvGeneral, ResGeneral)', () =
 // ---------------------------------------------------------------------------
 
 describe('Products', () => {
-  it('RDOSetOutputPrice: call format with "^" separator (function, not void push)', () => {
-    // Wire: C sel <block> call RDOSetOutputPrice "^" "%fluidId","#price"
-    const cmd = callFn(MOCK_CURR_BLOCK, 'RDOSetOutputPrice', RdoValue.string('Chemicals'), RdoValue.int(150));
+  it('RDOSetOutputPrice: fire-and-forget with "*" separator, 2 args: fluidId (string) + price (integer)', () => {
+    // Wire: C sel <block> call RDOSetOutputPrice "*" "%fluidId","#price"
+    // Fire-and-forget: always "*" — "^" without RID crashes Delphi server.
+    const cmd = callVoid(MOCK_CURR_BLOCK, 'RDOSetOutputPrice', RdoValue.string('Chemicals'), RdoValue.int(150));
     expect(cmd).toContain('call RDOSetOutputPrice');
-    expect(cmd).toContain('"^"');
+    expect(cmd).toContain('"*"');
+    expect(cmd).not.toContain('"^"');
     expect(cmd).toContain('"%Chemicals"');
     expect(cmd).toContain('"#150"');
   });
 
   it('RDOSetOutputPrice: fluidId uses % prefix (widestring), price uses # prefix (integer)', () => {
-    const cmd = callFn(MOCK_CURR_BLOCK, 'RDOSetOutputPrice', RdoValue.string('Food'), RdoValue.int(0));
+    const cmd = callVoid(MOCK_CURR_BLOCK, 'RDOSetOutputPrice', RdoValue.string('Food'), RdoValue.int(0));
     expect(cmd).toContain('"%Food"');
     expect(cmd).toContain('"#0"');
     expect(cmd).not.toContain('"#Food"'); // fluidId must NOT be integer prefix

@@ -156,18 +156,17 @@ export async function sendChatMessage(ctx: SessionContext, message: string): Pro
 
   ctx.log.debug(`[Chat] Sending message: ${message}`);
 
-  // WARN: sendRdoRequest() + separator '*' adds a QueryId to a void push.
-  // Per RDO rules this risks crashing the Delphi server (see building-property-handler.ts fix).
-  // No issue observed as of 2026-04-02 — the mail server may tolerate QueryId on void calls.
-  // If chat sends start crashing the server, switch to socket.write() with .push() (no RID).
-  await ctx.sendRdoRequest('world', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.worldContextId,
-    action: RdoAction.CALL,
-    member: 'SayThis',
-    args: ['', message],
-    separator: '*'
-  });
+  // Fire-and-forget: use "*" via socket.write() — never sendRdoRequest() with "*".
+  // Ref: RDOQueryServer.pas:419-424, Delphi client live capture.
+  const socket = ctx.getSocket('world');
+  if (!socket) throw new Error('World socket unavailable');
+  const cmd = RdoCommand.sel(ctx.worldContextId!)
+    .call('SayThis')
+    .push()
+    .args(RdoValue.string(''), RdoValue.string(message))
+    .build();
+  socket.write(cmd);
+  ctx.log.debug(`[Chat] Sent: ${cmd}`);
 }
 
 export async function setChatTypingStatus(ctx: SessionContext, isTyping: boolean): Promise<void> {
