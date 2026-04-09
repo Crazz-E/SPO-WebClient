@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+electron/node_modules/
+
+# Build outputs
+dist/
+public/assets/
+public/.vite/
+
+# Runtime caches (large, auto-generated)
+cache/
+webclient-cache/
+
+# Test artifacts
+coverage/
+screenshots/
+.playwright-mcp/
+
+# Electron build artifacts
+electron/release/
+
+# Environment & secrets
+.env
+.env.local
+.env.*
+
+# Source maps (large, auto-generated)
+*.map
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude local settings (user-specific)
+.claude/settings.local.json
