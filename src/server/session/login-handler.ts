@@ -980,7 +980,7 @@ export async function reconnectWorldSocket(ctx: LoginContext): Promise<void> {
         targetId: ctx.worldContextId!,
         action: RdoAction.CALL,
         member: 'RegisterEventsById',
-        args: [rdoCnntId],
+        args: [RdoValue.int(parseInt(rdoCnntId, 10)).format()],
       }).catch(() => {
         ctx.log.debug('[Reconnect] RegisterEventsById completed (or timed out, normal)');
       });
@@ -1064,7 +1064,7 @@ async function fullWorldRelogin(ctx: LoginContext): Promise<void> {
     ctx.sendRdoRequest('world', {
       verb: RdoVerb.SEL, targetId: contextId,
       action: RdoAction.CALL, member: 'RegisterEventsById',
-      args: [rdoCnntId],
+      args: [RdoValue.int(parseInt(rdoCnntId, 10)).format()],
     }).catch(() => {
       ctx.log.debug('[Reconnect] RegisterEventsById completed (or timed out, normal)');
     });

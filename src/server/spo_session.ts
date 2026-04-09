@@ -1774,8 +1774,8 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       const request = this.requestBuffer.shift();
       if (!request) break;
 
-      // Execute with the timeout preserved from the original sendRdoRequest call
-      this.executeRdoRequest(request.socketName, request.packetData, request.effectiveTimeout)
+      // Execute with retry for GET operations (mutations skip retry via guard in executeWithRetry)
+      this.executeWithRetry(request.socketName, request.packetData, request.effectiveTimeout)
         .then(request.resolve)
         .catch(request.reject);
 
@@ -1848,8 +1848,13 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 
   /**
    * Check for maintenance mode based on consecutive model server down errors.
-   * Mirrors Delphi fMSDownCount + MaxDownCountAllowed pattern.
    * Called when ERROR_ModelServerIsDown (code 20) is detected in a response.
+   *
+   * DIVERGENCE FROM DELPHI: Delphi's fMSDownCount increments on Cnx.Connect()
+   * success (tracking recovery attempts), and the check `fMSDownCount > MaxDownCountAllowed`
+   * is COMMENTED OUT in the current Delphi source. Our approach increments on errorCode=20
+   * in responses, which is more defensive — we detect maintenance from error responses
+   * rather than connection attempts. Threshold (3) matches Delphi's MaxDownCountAllowed.
    */
   private checkMaintenanceMode(errorCode: number): void {
     if (errorCode === 20) { // ERROR_ModelServerIsDown
@@ -1926,7 +1931,13 @@ private async executeWithRetry(
 ): Promise<RdoPacket> {
   const result = await this.executeRdoRequest(socketName, packetData, timeoutMs);
 
-  // Check if the response carries an RDO error code
+  // DELPHI PARITY: Never retry mutations (CALL/SET). Delphi pattern:
+  // try→except→RenewWorldProxy→return ERROR_Unknown (InterfaceServer.pas:1359).
+  // No server-side idempotency — retrying risks double execution (e.g., build twice).
+  const isMutation = packetData.action === RdoAction.CALL || packetData.action === RdoAction.SET;
+  if (isMutation) return result;
+
+  // Check if the response carries an RDO error code (GET/read operations only)
   if (result.errorCode && result.errorCode > 0) {
     const classified = classifyRdoError(result.errorCode);
 
@@ -2143,16 +2154,10 @@ private handleIncomingMessage(socketName: string, raw: string) {
 			  this.log.warn(`[RDO] Error response RID ${packet.rid}: ${packet.errorName} (code ${packet.errorCode})`);
 			  // Maintenance mode detection (mirrors Delphi fMSDownCount)
 			  this.checkMaintenanceMode(packet.errorCode);
-			  // Consecutive failure tracking (mirrors Delphi fNetErrors)
-			  this.consecutiveRdoFailures++;
-			  if (this.consecutiveRdoFailures >= StarpeaceSession.MAX_CONSECUTIVE_RDO_FAILURES
-			      && socketName === 'world' && !this.isClosing) {
-			    this.log.error(`[RDO] ${this.consecutiveRdoFailures} consecutive RDO failures — triggering reconnect`);
-			    this.consecutiveRdoFailures = 0;
-			    this.attemptWorldReconnect().catch((e: unknown) => {
-			      this.log.error('[RDO] Reconnect from consecutive failures failed:', toErrorMessage(e));
-			    });
-			  }
+			  // DELPHI PARITY: Error responses prove the connection is ALIVE — do NOT
+			  // increment consecutiveRdoFailures. Only timeouts (in the timeout handler)
+			  // indicate a dead connection. Delphi uses RenewWorldProxy in exception
+			  // handlers (connection lost), not on error response codes.
 			} else {
 			  // Success — reset counter (mirrors Delphi ReportCnxValid)
 			  this.consecutiveRdoFailures = 0;

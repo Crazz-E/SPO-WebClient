@@ -67,12 +67,12 @@ Browser Client ──WebSocket──▶ Node.js Gateway ──RDO TCP──▶ D
 | Delphi Pattern | WebClient Equivalent | Notes |
 |----------------|---------------------|-------|
 | `SendReceive()` + WaitForMultipleObjects | `executeRdoRequest()` + Promise | Delphi: synchronous wait; WebClient: async |
-| `GenerateQueryId()` (mod 65536) | `this.requestIdCounter++` (unbounded) | **BUG**: Must add `% 65536` |
+| `GenerateQueryId()` (mod 65536) | `this.requestIdCounter++ % 65536` | ✅ Matches Delphi exactly (WinSockRDOConnection.pas:143) |
 | `FindQuery()` by ID | `this.pendingRequests.get(rid)` | Same concept |
 | `errQueryTimedOut` on timeout | Timeout state → 'timed-out' | WebClient has late response detection (better) |
 | `errQueryQueueOverflow` | "Request buffer full - server busy" | Different trigger but same concept |
-| 60s default proxy timeout | TimeoutCategory FAST/NORMAL/SLOW | WebClient has categorized timeouts (better) |
-| 180s IS proxy timeout (heavy ops) | **MAX 60s** | **GAP**: Need VERY_SLOW category |
+| 60s default proxy timeout | TimeoutCategory FAST/NORMAL/SLOW/VERY_SLOW | WebClient has categorized timeouts (better) |
+| **No auto-retry on mutations** | `executeWithRetry()` — GET only | ⚠ Delphi: try→except→RenewWorldProxy→return ERROR. NEVER retries CALL/SET. See InterfaceServer.pas NewFacility:1359 |
 
 ### Error Handling
 
@@ -80,27 +80,27 @@ Browser Client ──WebSocket──▶ Node.js Gateway ──RDO TCP──▶ D
 |----------------|---------------------|-------|
 | `ErrorCodes.pas` (18 codes) | `error-codes.ts` (40+ codes) | WebClient has MORE codes |
 | `CreateErrorMessage()` | `getErrorMessage()` | Equivalent |
-| Error classification (RECOVERABLE/FATAL/USER) | **NOT IMPLEMENTED** | All errors treated same |
-| `fNetErrors` counter → reconnect trigger | `consecutivePollFailures` (ServerBusy only) | **GAP**: No general failure counter |
-| `RenewWorldProxy()` on proxy call failure | Individual try/catch per handler | **GAP**: No systematic "retry with new proxy" |
-| Return default values on proxy failure | Error propagation to client | **GAP**: No graceful degradation |
+| Error classification in exception handlers | `rdo-error-classifier.ts` (RECOVERABLE/FATAL/USER) | ✅ Implemented |
+| `fNetErrors` — fMSDownCount check **COMMENTED OUT** in Delphi | `consecutiveRdoFailures` (timeouts only) | Delphi uses RenewWorldProxy in exception handler + 5s throttle instead |
+| `RenewWorldProxy()` on proxy call failure | `executeWithRetry()` for GET only + `attemptWorldReconnect()` | ⚠ Delphi NEVER retries mutations — try→except→RenewProxy→return ERROR (InterfaceServer.pas:1359) |
+| Return default values on proxy failure | Error propagation to client | Different strategy — WebClient is more transparent |
 
 ### ServerBusy
 
 | Delphi Pattern | WebClient Equivalent | Notes |
 |----------------|---------------------|-------|
 | `fServerBusy` flag | `isServerBusy` boolean | Equivalent |
-| IS-level request queueing (large) | `MAX_BUFFER_SIZE = 5` | **GAP**: Buffer too small |
+| Server-side unlimited queue (`fQueryQueue: TList`) | `MAX_BUFFER_SIZE = 20` (client-side) | Different layer: Delphi queues server-side, WebClient buffers client-side. 20 is conservative vs Delphi's unlimited |
+| `ModelStatusChanged` push → set fServerBusy | `setServerBusyFromPush()` | ✅ Implemented — instant state change from push |
 | Proxy calls fail → RenewWorldProxy | Buffer full → reject request | Different recovery strategy |
 
 ### Connection Pooling
 
 | Delphi Pattern | WebClient Equivalent | Notes |
 |----------------|---------------------|-------|
-| `TRDOConnectionPool` (8 connections) | Single socket per service | **GAP**: No pooling |
-| `GetConnection()` (min refcount) | N/A | No load balancing |
-| `CheckDAConnections()` periodic validation | N/A | No pool health check |
-| `DropConnection()` on degraded | N/A | No connection replacement |
+| `TRDOConnectionPool` (8 connections) | `RdoConnectionPool` (6 connections) | ✅ Implemented but **DEFERRED** — pool creates raw TCP sockets, Delphi pre-authenticates. Pool `initialize()` not called → dead code. Fallback to primary socket works fine |
+| `GetConnection()` (min refcount) | `getConnection()` (min activeRequests) | Same load-balancing strategy |
+| `CheckDAConnections()` periodic validation | Health check interval (60s) | ✅ Implemented in pool class |
 
 ### Keep-Alive / Health
 
@@ -108,8 +108,7 @@ Browser Client ──WebSocket──▶ Node.js Gateway ──RDO TCP──▶ D
 |----------------|---------------------|-------|
 | `TRefreshThread` (60s sentinel) | `startCacherKeepAlive()` (60s) | WebClient: cacher only |
 | `CheckState()` on all clients | N/A (disabled in Delphi too) | Neither implements this |
-| `StoreInfoInDS()` | N/A | WebClient doesn't store in DS |
-| `fMaintDue` maintenance mode | **NOT IMPLEMENTED** | No maintenance signaling |
+| `fMaintDue` maintenance mode | `checkMaintenanceMode()` + `EVENT_MAINTENANCE` | ✅ Implemented — detects errorCode 20 (ModelServerIsDown). Note: Delphi's fMSDownCount check is COMMENTED OUT in current source; our approach is more defensive |
 
 ## Rules for Modifying This Subsystem
 
@@ -141,11 +140,13 @@ When `isServerBusy === true`, new requests go to `requestBuffer`. When busy clea
 ### 6. Connection Pool Per User
 Each connected user (StarpeaceSession) should have their own pool of DA connections. Pool size mirrors Delphi: up to 6 connections per user. Connections are load-balanced by minimum active request count. Dead connections are replaced on periodic health check.
 
-### 7. Error Classification
-RDO errors should be classified before propagation:
-- **RECOVERABLE** (auto-retry): `errQueryTimedOut(8)`, `errServerBusy(17)`, `errSendError(10)`, `errReceiveError(11)`
-- **FATAL** (no retry, user notification): `errRequestDenied`, `ERROR_ModelServerIsDown(20)`
+### 7. Error Classification & Retry Policy
+RDO errors classified via `rdo-error-classifier.ts`:
+- **RECOVERABLE** (auto-retry for GET only): `errQueryTimedOut(8)`, `errServerBusy(17)`, `errSendError(10)`, `errReceiveError(11)`
+- **FATAL** (no retry, user notification): `errIllegalObject(2)`, `errRequestDenied`, `ERROR_ModelServerIsDown(20)`
 - **USER_ERROR** (no retry, user-facing message): `errInvalidName`, `errInvalidPassword`, `ERROR_AccessDenied(15)`
+
+⚠ **CRITICAL — Delphi-verified rule:** NEVER auto-retry CALL/SET mutations. Delphi pattern: `try→except→RenewWorldProxy→return ERROR_Unknown` (InterfaceServer.pas NewFacility:1359, DeleteFacility, etc.). No server-side idempotency protection exists. Retrying a timed-out mutation risks double execution (e.g., building placed twice).
 
 ### 8. Reconnect Strategy
 - **Fast phase**: Exponential backoff (5s, 10s, 20s) — 3 attempts
