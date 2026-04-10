@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 
-export type DeviceTier = 'mobile' | 'tablet' | 'desktop';
+type DeviceTier = 'mobile' | 'tablet' | 'desktop';
 
 const BREAKPOINTS = {
   tablet: 768,

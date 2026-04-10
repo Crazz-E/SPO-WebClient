@@ -16,7 +16,7 @@ export interface PlacementTileZone {
   zoneValue: number | undefined;
 }
 
-export interface PlacementValidationResult {
+interface PlacementValidationResult {
   hasCollision: boolean;
   hasReservedZone: boolean;
   hasZoneMismatch: boolean;

@@ -78,21 +78,3 @@ export function isProxyUrl(url: string): boolean {
   return url.startsWith(PROXY_IMAGE_ENDPOINT);
 }
 
-/**
- * Extract the original URL from a proxy URL
- *
- * @param proxyUrl - Proxy URL
- * @returns Original URL or null if not a valid proxy URL
- */
-export function fromProxyUrl(proxyUrl: string): string | null {
-  if (!isProxyUrl(proxyUrl)) {
-    return null;
-  }
-
-  try {
-    const urlParams = new URLSearchParams(proxyUrl.split('?')[1]);
-    return urlParams.get('url');
-  } catch {
-    return null;
-  }
-}

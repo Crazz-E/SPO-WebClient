@@ -24,7 +24,7 @@ export const KeyAction = {
 
 export type KeyActionId = typeof KeyAction[keyof typeof KeyAction];
 
-export interface KeyBindingDef {
+interface KeyBindingDef {
   action: KeyActionId;
   defaultKey: string;
   label: string;

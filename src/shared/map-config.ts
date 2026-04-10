@@ -52,15 +52,6 @@ export interface TileBounds {
   maxJ: number;
 }
 
-export enum RenderLayer {
-  TERRAIN = 'terrain',
-  EFFECTS = 'effects',
-  ROADS = 'roads',
-  BUILDINGS = 'buildings',
-  OVERLAYS = 'overlays',
-  UI = 'ui'
-}
-
 export interface ZoomConfig {
   level: number;      // 0-3
   tileWidth: number;  // 2 * u

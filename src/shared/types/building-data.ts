@@ -118,26 +118,6 @@ export interface BuildingData {
   }>;
 }
 
-/**
- * Complete building database
- * Maps runtime VisualClass to building data
- */
-export interface BuildingDatabase {
-  /** Version of the data format */
-  version: string;
-
-  /** Last update timestamp */
-  lastUpdated: string;
-
-  /** Map of visualClass -> BuildingData */
-  buildings: Record<string, BuildingData>;
-
-  /** Reverse lookup: baseVisualClass -> complete visualClass */
-  baseToComplete: Record<string, string>;
-
-  /** Reverse lookup: emptyVisualClass -> complete visualClass (for residential) */
-  emptyToComplete: Record<string, string>;
-}
 
 /**
  * Construction texture size mapping based on building size

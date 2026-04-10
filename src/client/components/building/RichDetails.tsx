@@ -13,23 +13,23 @@ import styles from './RichDetails.module.css';
 /*  Rich detail types                                                  */
 /* ------------------------------------------------------------------ */
 
-export type TickerCategory = 'farm' | 'storage' | 'store' | 'residential' | 'public' | 'townhall' | 'hq' | 'generic';
+type TickerCategory = 'farm' | 'storage' | 'store' | 'residential' | 'public' | 'townhall' | 'hq' | 'generic';
 export type MetricColor = 'success' | 'warning' | 'error' | 'gold' | 'default';
 
-export interface ProductionItem {
+interface ProductionItem {
   name: string;
   volume: string;
   quality?: string;
   efficiency?: string;
 }
 
-export interface StorageItem {
+interface StorageItem {
   name: string;
   amount: string;
   quality?: string;
 }
 
-export interface MetricEntry {
+interface MetricEntry {
   label: string;
   value: string;
   color?: MetricColor;

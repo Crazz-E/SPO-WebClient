@@ -52,21 +52,6 @@ export const ERROR_SerialMaxed = 113;
 export const ERROR_InvalidSerial = 114;
 export const ERROR_SubscriberIdNotFound = 115;
 
-// Account status codes (server protocol values - for future implementation)
-export const ACCOUNT_Valid = 0;
-export const ACCOUNT_UnknownError = 1;
-export const ACCOUNT_Unexisting = 2;
-export const ACCOUNT_InvalidName = 3;
-export const ACCOUNT_InvalidPassword = 4;
-export const ACCOUNT_Forbiden = 5;
-
-// Supported circuits identifiers (server protocol values - for future implementation)
-export const cirRoads = 1;
-export const cirRailRoads = 2;
-
-// Actor pools (server protocol values - for future implementation)
-export const poolIdTrains = 1;
-export const poolTrainsInterval = 1000;
 
 /**
  * Get human-readable error message for error code

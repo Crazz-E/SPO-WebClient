@@ -9,8 +9,6 @@ import {
   splitMultilinePayload,
   parsePropertyResponse,
   parseIdOfResponse,
-  stripTypePrefix,
-  hasTypePrefix,
 } from './rdo-helpers';
 
 describe('cleanPayload', () => {
@@ -153,40 +151,6 @@ describe('parseIdOfResponse', () => {
   });
 });
 
-describe('stripTypePrefix', () => {
-  it('should strip all 7 prefixes', () => {
-    expect(stripTypePrefix('#42')).toBe('42');
-    expect(stripTypePrefix('%str')).toBe('str');
-    expect(stripTypePrefix('@3.14')).toBe('3.14');
-    expect(stripTypePrefix('$id')).toBe('id');
-    expect(stripTypePrefix('^var')).toBe('var');
-    expect(stripTypePrefix('!3.14')).toBe('3.14');
-    expect(stripTypePrefix('*')).toBe('');
-  });
-
-  it('should not strip non-prefix characters', () => {
-    expect(stripTypePrefix('hello')).toBe('hello');
-    expect(stripTypePrefix('42')).toBe('42');
-  });
-});
-
-describe('hasTypePrefix', () => {
-  it('should detect all 7 prefixes', () => {
-    expect(hasTypePrefix('#42')).toBe(true);
-    expect(hasTypePrefix('%str')).toBe(true);
-    expect(hasTypePrefix('@3.14')).toBe(true);
-    expect(hasTypePrefix('$id')).toBe(true);
-    expect(hasTypePrefix('^var')).toBe(true);
-    expect(hasTypePrefix('!3.14')).toBe(true);
-    expect(hasTypePrefix('*')).toBe(true);
-  });
-
-  it('should return false for non-prefixed values', () => {
-    expect(hasTypePrefix('hello')).toBe(false);
-    expect(hasTypePrefix('42')).toBe(false);
-    expect(hasTypePrefix('')).toBe(false);
-  });
-});
 
 describe('GetPropertyList empty-value pipeline', () => {
   // Regression: empty values (consecutive tabs) must survive cleanPayload + split

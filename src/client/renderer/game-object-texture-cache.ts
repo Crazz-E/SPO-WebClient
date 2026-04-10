@@ -72,7 +72,7 @@ export interface ObjectAtlasRect {
   sh: number;
 }
 
-export type TextureCategory = 'RoadBlockImages' | 'BuildingImages' | 'CarImages' | 'ConcreteImages';
+type TextureCategory = 'RoadBlockImages' | 'BuildingImages' | 'CarImages' | 'ConcreteImages';
 
 /**
  * Road texture type based on segment orientation and connections

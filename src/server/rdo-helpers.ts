@@ -131,25 +131,3 @@ export function parseIdOfResponse(payload: string | undefined): string {
   const cleaned = cleanPayload(payload);
   return cleaned.replace(/[#%@$"]/g, '').trim();
 }
-
-/**
- * Remove RDO type prefixes from a value
- * @param value Value potentially containing type prefix
- * @returns Value without type prefix
- */
-export function stripTypePrefix(value: string): string {
-  if (value.length > 0 && ['#', '%', '@', '$', '^', '!', '*'].includes(value[0])) {
-    return value.substring(1);
-  }
-  return value;
-}
-
-/**
- * Check if a string has an RDO type prefix
- * @param value Value to check
- * @returns True if value starts with a type prefix
- */
-export function hasTypePrefix(value: string): boolean {
-  if (value.length === 0) return false;
-  return ['#', '%', '@', '$', '^', '!', '*'].includes(value[0]);
-}

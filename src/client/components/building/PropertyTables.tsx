@@ -100,7 +100,7 @@ export function WorkforceTable({
   );
 }
 
-export function SalaryCell({
+function SalaryCell({
   index,
   price,
   salary,
@@ -222,7 +222,7 @@ export function DataTable({
   );
 }
 
-export function TableCellValue({
+function TableCellValue({
   col,
   value,
   rdoName,
@@ -421,7 +421,7 @@ export function ProductSummaryCards({
 // PRODUCT SALE CARD (individual card)
 // =============================================================================
 
-export function ProductSaleCard({
+function ProductSaleCard({
   name,
   supply,
   demand,

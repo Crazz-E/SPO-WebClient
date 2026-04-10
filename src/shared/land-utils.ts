@@ -15,13 +15,13 @@
 // =============================================================================
 
 /** Bit mask for LandClass (bits 7-6) */
-export const LND_CLASS_MASK = 0xC0;  // 11000000
+const LND_CLASS_MASK = 0xC0;  // 11000000
 
 /** Bit mask for LandType (bits 5-2) */
-export const LND_TYPE_MASK = 0x3C;   // 00111100
+const LND_TYPE_MASK = 0x3C;   // 00111100
 
 /** Bit mask for LandVar (bits 1-0) */
-export const LND_VAR_MASK = 0x03;    // 00000011
+const LND_VAR_MASK = 0x03;    // 00000011
 
 /** Bit shift for LandClass */
 export const LND_CLASS_SHIFT = 6;
@@ -199,7 +199,7 @@ export function canBuildOn(landId: number): boolean {
  * @param landId Raw landId byte (0-255)
  * @returns Edge direction or null if not an edge tile
  */
-export function getEdgeDirection(landId: number): 'N' | 'E' | 'S' | 'W' | null {
+function getEdgeDirection(landId: number): 'N' | 'E' | 'S' | 'W' | null {
   const type = landTypeOf(landId);
   switch (type) {
     case LandType.N: return 'N';
@@ -210,25 +210,6 @@ export function getEdgeDirection(landId: number): 'N' | 'E' | 'S' | 'W' | null {
   }
 }
 
-/**
- * Check if landId is a cardinal edge (N, E, S, or W)
- * @param landId Raw landId byte (0-255)
- * @returns true if cardinal edge
- */
-export function isCardinalEdge(landId: number): boolean {
-  const type = landTypeOf(landId);
-  return type >= LandType.N && type <= LandType.W;
-}
-
-/**
- * Check if landId is an outer corner (NEo, SEo, SWo, NWo)
- * @param landId Raw landId byte (0-255)
- * @returns true if outer corner
- */
-export function isOuterCorner(landId: number): boolean {
-  const type = landTypeOf(landId);
-  return type >= LandType.NEo && type <= LandType.NWo;
-}
 
 /**
  * Check if landId is an inner corner (NEi, SEi, SWi, NWi)
