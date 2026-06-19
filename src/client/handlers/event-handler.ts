@@ -136,6 +136,13 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
         refreshEvt.building.ysize = refreshDims?.ysize ?? 1;
         refreshEvt.building.visualClass = refreshVc;
 
+        // Preserve previously-parsed Town Hall demographics when a refresh
+        // arrives without them (e.g. a status-only push lacking the ExtraInfo
+        // arg) — avoids blanking the population panel on partial refreshes.
+        if (!refreshEvt.building.demographics && ctx.currentFocusedBuilding.demographics) {
+          refreshEvt.building.demographics = ctx.currentFocusedBuilding.demographics;
+        }
+
         ctx.currentFocusedBuilding = refreshEvt.building;
         ClientBridge.setFocusedBuilding(refreshEvt.building);
 

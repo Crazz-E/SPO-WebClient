@@ -179,6 +179,51 @@ export interface BuildingFocusInfo {
   xsize: number;       // Footprint width in tiles (enriched client-side)
   ysize: number;       // Footprint height in tiles (enriched client-side)
   visualClass: string; // Building type ID (enriched client-side)
+  /**
+   * Town Hall population/demographics, parsed from the RefreshObject ExtraInfo.
+   * Present only for Town Hall facilities (the status text carries a class
+   * breakdown). Undefined for every other building type.
+   */
+  demographics?: TownHallDemographics;
+}
+
+// =============================================================================
+// TOWN HALL DEMOGRAPHICS
+// =============================================================================
+// Parsed from the RefreshObject/SwitchFocusEx ExtraInfo status text of a Town
+// Hall. The Delphi server (TTownHall.GetStatusText) emits three ":-:" sections:
+//   sttMain      -> "<total> inhabitants"
+//   sttSecondary -> per-class "<count> <Class> class (<n>% unemp)" comma-joined
+//   sttHint      -> per-class GetMoveReport (immigration/emigration + reasons)
+
+/** Per-class population + unemployment line (sttSecondary). */
+export interface TownHallClassStat {
+  className: string;        // 'High' | 'Middle' | 'Low'
+  population: number;       // e.g. 253
+  populationLabel: string;  // e.g. "253" (as printed, with thousands separators)
+  unemploymentPct: number;  // 0..100
+}
+
+/** A single "<pct>% due to <reason>" clause of a movement report. */
+export interface TownHallMovementReason {
+  pct: number;    // e.g. 54
+  reason: string; // e.g. "lack of products and services"
+}
+
+/** Per-class citizen movement report (sttHint). */
+export interface TownHallMovement {
+  className: string;                  // 'High' | 'Middle' | 'Low'
+  direction: 'none' | 'in' | 'out';   // 'none' => "No <Class> class movements."
+  count: number;                      // citizens moved (0 when direction === 'none')
+  reasons: TownHallMovementReason[];  // empty when direction === 'none'
+}
+
+/** Structured Town Hall demographics, attached to BuildingFocusInfo. */
+export interface TownHallDemographics {
+  totalInhabitants: number;        // e.g. 18372
+  totalInhabitantsLabel: string;   // e.g. "18,372" (as printed)
+  classes: TownHallClassStat[];
+  movements: TownHallMovement[];
 }
 
 // =============================================================================

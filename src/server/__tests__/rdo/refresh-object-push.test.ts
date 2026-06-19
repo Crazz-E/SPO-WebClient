@@ -436,3 +436,68 @@ describe('CAPTURED_REFRESH_OBJECT ground truth', () => {
     expect(CAPTURED_REFRESH_OBJECT.hintsText).toContain('Hint');
   });
 });
+
+// ==========================================================================
+// Town Hall RefreshObject — population/demographics end-to-end (wire -> struct)
+// ==========================================================================
+
+/**
+ * Build a Town Hall RefreshObject packet. The ExtraInfo header is blank-line
+ * separated (short name / town name / inhabitants), followed by the three ":-:"
+ * status sections (class breakdown, movements) as emitted by the Delphi server.
+ */
+function makeTownHallRefreshObjectPacket(): RdoPacket {
+  const inhabitants = '18,372 inhabitants';
+  const classes =
+    '253 High class (0% unemp), 905 Middle class (41% unemp), 17,214 Low class (86% unemp).';
+  const movements =
+    'No High class movements. 3 citizens of Middle class moved out last day.2% due to salaries and work conditions, 19% due to residential conditions, 15% due to low coverage of public services, 8% due to unemployment, 54% due to lack of products and services.No Low class movements.';
+  const extraInfo = `Town Hall\n\nHelartia\n\n${inhabitants}:-:${classes}:-:${movements}:-:`;
+
+  return {
+    raw: `C sel 44586544 call RefreshObject "*" "#224289740","#0","%${extraInfo}";`,
+    type: 'PUSH',
+    member: 'RefreshObject',
+    separator: '"*"',
+    args: ['#224289740', '#0', `%${extraInfo}`],
+  };
+}
+
+describe('parseRefreshObjectPush — Town Hall demographics', () => {
+  const FOCUSED_COORDS = { x: 933, y: 1000 };
+
+  it('parses the Town Hall header (name + town)', () => {
+    const result = parseRefreshObjectPush(makeTownHallRefreshObjectPacket(), FOCUSED_COORDS);
+    expect(result).not.toBeNull();
+    expect(result!.buildingId).toBe('224289740');
+    expect(result!.buildingInfo).not.toBeNull();
+    expect(result!.buildingInfo!.buildingName).toBe('Town Hall');
+    expect(result!.buildingInfo!.ownerName).toBe('Helartia');
+  });
+
+  it('populates structured demographics on the parsed buildingInfo', () => {
+    const result = parseRefreshObjectPush(makeTownHallRefreshObjectPacket(), FOCUSED_COORDS);
+    const demographics = result!.buildingInfo!.demographics;
+    expect(demographics).toBeDefined();
+    expect(demographics!.totalInhabitants).toBe(18372);
+    expect(demographics!.totalInhabitantsLabel).toBe('18,372');
+    expect(demographics!.classes).toHaveLength(3);
+    expect(demographics!.classes[2]).toEqual({
+      className: 'Low',
+      population: 17214,
+      populationLabel: '17,214',
+      unemploymentPct: 86,
+    });
+    expect(demographics!.movements).toHaveLength(3);
+    const middle = demographics!.movements[1];
+    expect(middle.direction).toBe('out');
+    expect(middle.count).toBe(3);
+    expect(middle.reasons).toHaveLength(5);
+  });
+
+  it('leaves demographics undefined for a non-Town-Hall building', () => {
+    const result = parseRefreshObjectPush(makeRefreshObjectPacket(CAPTURED_REFRESH_OBJECT), FOCUSED_COORDS);
+    expect(result!.buildingInfo).not.toBeNull();
+    expect(result!.buildingInfo!.demographics).toBeUndefined();
+  });
+});
