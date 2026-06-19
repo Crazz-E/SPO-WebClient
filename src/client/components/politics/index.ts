@@ -7,6 +7,7 @@ export { RatingsTab } from './RatingsTab';
 export { OverviewSection } from './OverviewSection';
 export { AdministrationSection } from './AdministrationSection';
 export { DemographicsSection } from './DemographicsSection';
+export { PopulationSection } from './PopulationSection';
 export { ElectionsSection } from './ElectionsSection';
 export { buildCivicTabs, getGeneralGroupId, isCapitolBuilding } from './CivicTabConfig';
 export type { CivicTabId } from './CivicTabConfig';

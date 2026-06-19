@@ -16,7 +16,7 @@ import { useUiStore } from '../../store';
 import { useClient } from '../../context';
 import { isLazyTab } from '../../handlers/building-action-handler';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
-import type { BuildingDetailsTab, BuildingPropertyValue } from '@/shared/types';
+import type { BuildingDetailsTab, BuildingPropertyValue, TownHallDemographics } from '@/shared/types';
 import { IconButton, Skeleton, TabBar } from '../common';
 import { QuickStats } from './QuickStats';
 import { InspectorTabs } from './InspectorTabs';
@@ -364,6 +364,7 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
             buildingY={details.y}
             isCandidate={isCandidate}
             holdsOffice={holdsOffice}
+            demographics={focusedBuilding?.demographics ?? null}
           />
         ) : (() => {
           // Check if active tab needs lazy data that's still loading
@@ -412,6 +413,7 @@ function CivicTabContent({
   buildingY,
   isCandidate,
   holdsOffice,
+  demographics,
 }: {
   activeTab: CivicTabId;
   details: NonNullable<ReturnType<typeof useBuildingStore.getState>['details']>;
@@ -419,6 +421,7 @@ function CivicTabContent({
   buildingY: number;
   isCandidate: boolean;
   holdsOffice: boolean;
+  demographics: TownHallDemographics | null;
 }) {
   const groups = details.groups ?? {};
   const generalGroupId = getGeneralGroupId(details.tabs);
@@ -457,6 +460,7 @@ function CivicTabContent({
           buildingX={buildingX}
           buildingY={buildingY}
           serverTabs={details.tabs}
+          demographics={demographics}
         />
       );
     case 'elections':

@@ -5,6 +5,7 @@
 
 import type { MapBuilding, MapSegment, BuildingFocusInfo } from '../shared/types';
 import { cleanPayload, extractRevenue } from './rdo-helpers';
+import { parseTownHallDemographics } from '../shared/building-details/town-hall-demographics';
 
 /**
  * Parse raw building data from ObjectsInArea response
@@ -263,6 +264,11 @@ export function parseBuildingFocusResponse(
       ? sections[2].trim().replace(/:$/, '') // Remove trailing ':'
       : '';
 
+  // Town Hall facilities embed a population/demographics summary in the status
+  // sections. parseTownHallDemographics returns null for every other building.
+  const demographics =
+    parseTownHallDemographics({ salesInfo, detailsText, hintsText }) ?? undefined;
+
   return {
     buildingId: buildingId.replace(/[%#@]/g, ''), // Remove '%', '#', '@' prefixes
     buildingName,
@@ -276,5 +282,6 @@ export function parseBuildingFocusResponse(
     xsize: 1,        // Enriched client-side from FacilityDimensionsCache
     ysize: 1,        // Enriched client-side from FacilityDimensionsCache
     visualClass: '0', // Enriched client-side from renderer hit data
+    demographics,
   };
 }
