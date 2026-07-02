@@ -17,6 +17,8 @@
  */
 
 export enum TimeoutCategory {
+  /** Directory Server sessions: auth, world lists, people search (legacy DSProxy.TimeOut = 20s, LogonHandlerViewer.pas:341) */
+  DIRECTORY = 'DIRECTORY',
   /** Quick reads: IDOF, status, property gets (legacy proxy DefTimeOut = 60s) */
   FAST = 'FAST',
   /** Standard in-play ops: building focus, map, chat, mail */
@@ -30,7 +32,11 @@ export enum TimeoutCategory {
 /** Legacy in-play proxy deadline (ISProxyTimeOut, ServerCnxHandler.pas:329). */
 export const IS_PROXY_TIMEOUT_MS = 180_000;
 
+/** Legacy Directory session deadline (DSProxy.TimeOut := 20000, LogonHandlerViewer.pas:341). */
+export const DIRECTORY_TIMEOUT_MS = 20_000;
+
 export const TIMEOUT_CONFIG: Record<TimeoutCategory, { rdoMs: number; wsMs: number }> = {
+  [TimeoutCategory.DIRECTORY]: { rdoMs: DIRECTORY_TIMEOUT_MS, wsMs: 30_000 },
   [TimeoutCategory.FAST]:      { rdoMs: 60_000,              wsMs: 70_000 },
   [TimeoutCategory.NORMAL]:    { rdoMs: IS_PROXY_TIMEOUT_MS, wsMs: 190_000 },
   [TimeoutCategory.SLOW]:      { rdoMs: IS_PROXY_TIMEOUT_MS, wsMs: 190_000 },

@@ -3,10 +3,14 @@ import {
   FAST_PHASE_DELAYS_MS,
   SLOW_PHASE_INTERVAL_MS,
   SLOW_PHASE_MAX_ATTEMPTS,
+  applyJitter,
   getReconnectDelay,
   isMaxAttempts,
   isSlowPhase,
 } from './reconnect-utils';
+
+/** random() = 0.5 → jitter factor exactly 1.0 → base delay unchanged. */
+const midRandom = () => 0.5;
 
 describe('reconnect-utils', () => {
   describe('two-phase constants', () => {
@@ -32,22 +36,48 @@ describe('reconnect-utils', () => {
       [2, 8000],
       [3, 16000],
       [4, 30000],
-    ])('fast phase: attempt %i returns %ims', (attempt, expected) => {
-      expect(getReconnectDelay(attempt)).toBe(expected);
+    ])('fast phase: attempt %i returns %ims base delay (jitter factor 1.0)', (attempt, expected) => {
+      expect(getReconnectDelay(attempt, midRandom)).toBe(expected);
     });
 
-    it('slow phase: returns fixed 30s interval', () => {
+    it('slow phase: returns fixed 30s base interval (jitter factor 1.0)', () => {
       // Attempt indices >= FAST_PHASE_DELAYS_MS.length enter slow phase
       const slowStart = FAST_PHASE_DELAYS_MS.length;
-      expect(getReconnectDelay(slowStart)).toBe(SLOW_PHASE_INTERVAL_MS);
-      expect(getReconnectDelay(slowStart + 5)).toBe(SLOW_PHASE_INTERVAL_MS);
-      expect(getReconnectDelay(99)).toBe(SLOW_PHASE_INTERVAL_MS);
+      expect(getReconnectDelay(slowStart, midRandom)).toBe(SLOW_PHASE_INTERVAL_MS);
+      expect(getReconnectDelay(slowStart + 5, midRandom)).toBe(SLOW_PHASE_INTERVAL_MS);
+      expect(getReconnectDelay(99, midRandom)).toBe(SLOW_PHASE_INTERVAL_MS);
     });
 
-    it('matches FAST_PHASE_DELAYS_MS entries directly', () => {
+    it('matches FAST_PHASE_DELAYS_MS entries directly (jitter factor 1.0)', () => {
       FAST_PHASE_DELAYS_MS.forEach((delay, i) => {
-        expect(getReconnectDelay(i)).toBe(delay);
+        expect(getReconnectDelay(i, midRandom)).toBe(delay);
       });
+    });
+  });
+
+  describe('jitter (audit V5 — desynchronize the thundering herd)', () => {
+    it('applyJitter spans exactly ±25% of the base delay', () => {
+      expect(applyJitter(10_000, () => 0)).toBe(7_500);   // floor
+      expect(applyJitter(10_000, () => 0.5)).toBe(10_000); // midpoint
+      expect(applyJitter(10_000, () => 1)).toBe(12_500);  // ceiling (random() < 1 in practice)
+    });
+
+    it('every real delay stays within the ±25% band', () => {
+      for (let attempt = 0; attempt < MAX_RECONNECT_ATTEMPTS; attempt++) {
+        const base = attempt < FAST_PHASE_DELAYS_MS.length
+          ? FAST_PHASE_DELAYS_MS[attempt]
+          : SLOW_PHASE_INTERVAL_MS;
+        for (let i = 0; i < 20; i++) {
+          const delay = getReconnectDelay(attempt);
+          expect(delay).toBeGreaterThanOrEqual(base * 0.75);
+          expect(delay).toBeLessThanOrEqual(base * 1.25);
+        }
+      }
+    });
+
+    it('delays are actually spread (not constant) across draws', () => {
+      const draws = new Set(Array.from({ length: 50 }, () => getReconnectDelay(0)));
+      expect(draws.size).toBeGreaterThan(1);
     });
   });
 

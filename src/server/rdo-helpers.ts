@@ -93,6 +93,17 @@ export function extractRevenue(line: string): string {
  * @param propName Property name to extract
  * @returns Extracted property value (with type prefix removed)
  */
+/**
+ * Interpret an ordinal value (type prefix already stripped) as a boolean.
+ * Wire truth (doc/rdo-protocol-architecture.md §2.2): Delphi wordbool true is
+ * "#-1", but ANY non-zero ordinal must parse as true (the Delphi decoder does
+ * VarCast to integer — "#1" from a server-side ordinal is legitimate).
+ * Empty string = unparsable → false.
+ */
+export function isTrueOrdinal(value: string): boolean {
+  return value !== '' && value !== '0';
+}
+
 export function parsePropertyResponse(payload: string, propName: string): string {
   // Try to extract value using Property="value" format
   // Handles doubled quotes inside: Property="%Hello ""World"""

@@ -76,6 +76,7 @@ import {
   splitMultilinePayload as splitMultilinePayloadHelper,
   parsePropertyResponse as parsePropertyResponseHelper,
   parseIdOfResponse as parseIdOfResponseHelper,
+  isTrueOrdinal,
   writeRdoFrame,
 } from './rdo-helpers';
 import { parseMessageListHtml } from './mail-list-parser';
@@ -708,8 +709,8 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
   }
 
   /**
-   * NEW: Check if a push command is a RefreshObject update
-   * Called from handleIncomingMessage when detecting push commands
+   * Check if a push command is a RefreshObject update.
+   * Called from processSingleCommand when detecting push commands.
    */
   public isRefreshObjectPush(packet: RdoPacket): boolean {
     return packet.type === 'PUSH' &&
@@ -1464,7 +1465,15 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 
     socket.on('data', (chunk) => {
       const messages = framer.ingest(chunk);
-      messages.forEach(msg => this.processSingleCommand(name, msg));
+      for (const msg of messages) {
+        // A throw from one frame's handler must not kill the remaining frames,
+        // the socket, or (via uncaughtException → shutdown) the whole gateway.
+        try {
+          this.processSingleCommand(name, msg);
+        } catch (err: unknown) {
+          this.log.error(`[Session] Error processing RDO frame on ${name}: ${toErrorMessage(err)}. Frame: ${msg.slice(0, 200)}`);
+        }
+      }
     });
 
     socket.on('error', (err) => {
@@ -1519,7 +1528,13 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       {
         onData: (conn, chunk) => {
           const messages = conn.framer.ingest(chunk);
-          messages.forEach(msg => this.processSingleCommand('world', msg));
+          for (const msg of messages) {
+            try {
+              this.processSingleCommand('world', msg);
+            } catch (err: unknown) {
+              this.log.error(`[Pool] Error processing RDO frame: ${toErrorMessage(err)}. Frame: ${msg.slice(0, 200)}`);
+            }
+          }
         },
         onClose: (conn) => {
           this.log.debug('[Pool] World pool connection closed');
@@ -1546,10 +1561,12 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 
 /**
    * Attempt world socket reconnection with backoff and dedup.
-   * Mirrors Delphi InterfaceServer.RenewWorldProxy() pattern:
-   * - Exponential backoff (5s, 10s, 20s) to prevent reconnection storms
+   * Triggered EXCLUSIVELY by the socket 'close' event (legacy parity: Delphi's
+   * ReportCnxFailure is a no-op — never reconnect on query timeouts/errors).
+   * - Two bounded phases: 3 fast attempts (5/10/20 s) + 20 slow (15 s) = 23 total
+   *   over ~5.5 min, then give up (gentler than Delphi's infinite 100 ms loop)
+   * - ±25% jitter on every delay to desynchronize clients after a shared outage
    * - Promise dedup so concurrent callers share one attempt
-   * - Max 3 retries before giving up and notifying the client
    */
   public async attemptWorldReconnect(): Promise<void> {
     // Guard: only reconnect from WORLD_CONNECTED or RECONNECTING (dedup)
@@ -1559,7 +1576,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
     // Dedup: share pending reconnection promise
     if (this.worldReconnecting) return this.worldReconnecting;
 
-    // Max retries: give up after 3 attempts → notify client
+    // Max retries: give up after 23 bounded attempts (3 fast + 20 slow) → notify client
     if (this.worldReconnectAttempts >= StarpeaceSession.RECONNECT_MAX_RETRIES) {
       this.log.error('[Reconnect] Max retries exhausted, giving up');
       this.emit('worldDisconnected');
@@ -1570,9 +1587,12 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
     //   Fast phase: exponential 5s, 10s, 20s
     //   Slow phase: fixed 15s interval for extended recovery
     const inSlowPhase = this.worldReconnectAttempts >= StarpeaceSession.RECONNECT_FAST_RETRIES;
-    const backoffMs = inSlowPhase
+    const baseBackoffMs = inSlowPhase
       ? StarpeaceSession.RECONNECT_SLOW_INTERVAL_MS
       : StarpeaceSession.RECONNECT_BASE_BACKOFF_MS * Math.pow(2, this.worldReconnectAttempts);
+    // ±25% jitter (audit V5): fixed delays synchronize every client into a
+    // thundering herd against the IS fServerLock after a shared server outage.
+    const backoffMs = Math.round(baseBackoffMs * (0.75 + Math.random() * 0.5));
     const elapsed = Date.now() - this.worldReconnectLastAttempt;
     if (this.worldReconnectLastAttempt > 0 && elapsed < backoffMs) {
       throw new Error(`World reconnect throttled (${elapsed}ms < ${backoffMs}ms)`);
@@ -1721,7 +1741,9 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         this.consecutivePollFailures = 0;
         const busyValue = parsePropertyResponseHelper(response.payload!, 'ServerBusy');
         const wasBusy = this.isServerBusy;
-        this.isServerBusy = busyValue == '1';
+        // Wordbool true arrives as "#-1" on the wire (doc §2.2): any non-zero
+        // ordinal means busy (audit V1 — "== '1'" misread the canonical "#-1").
+        this.isServerBusy = isTrueOrdinal(busyValue);
 
         if (wasBusy && !this.isServerBusy) {
           this.log.debug('[ServerBusy] Server now available - resuming requests');
@@ -2004,10 +2026,10 @@ private async executeWithRetry(
         `[RDO] Recoverable error ${result.errorCode} on ${packetData.member} — retry ${attempt + 1}/${classified.maxRetries} in ${delay}ms`
       );
 
-      // If connection degraded, attempt reconnect before retry
-      if (classified.connectionDegraded && socketName === 'world') {
-        await this.attemptWorldReconnect().catch(() => {/* swallow — retry will fail naturally if socket gone */});
-      }
+      // LEGACY PARITY (audit V4): never reconnect from a query-level error.
+      // Delphi's ReportCnxFailure is a no-op (ServerCnxHandler.pas:3394-3405);
+      // reconnection is driven EXCLUSIVELY by the socket 'close' event. If the
+      // transport is really dead, 'close' fires and handles it.
 
       await new Promise(r => setTimeout(r, delay));
       return this.executeWithRetry(socketName, packetData, timeoutMs, attempt + 1);
@@ -2125,25 +2147,6 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
   });
 }
 
-private handleIncomingMessage(socketName: string, raw: string) {
-  // CRITICAL FIX: Handle multiple commands in single message
-  // Split by ';' but keep the delimiter for proper parsing
-  const commands = raw.split(';').filter(cmd => cmd.trim().length > 0);
-  
-  // If multiple commands detected, process each separately
-  if (commands.length > 1) {
-    this.log.debug(`[Session] Multiple commands detected in message: ${commands.length}`);
-    commands.forEach(cmdRaw => {
-      const fullCmd = cmdRaw.trim() + ';';
-      this.processSingleCommand(socketName, fullCmd);
-    });
-    return;
-  }
-  
-  // Single command - process normally
-  this.processSingleCommand(socketName, raw);
-}
-
 	private processSingleCommand(socketName: string, raw: string) {
 	  const packet = RdoProtocol.parse(raw);
 	  this.log.debug(`RDO<< ${socketName}`, { type: packet.type, rid: packet.rid, raw });
@@ -2230,6 +2233,13 @@ private handleIncomingMessage(socketName: string, raw: string) {
 		  // Truly orphaned — past grace period or unknown RID
 		  this.log.warn(`[RDO] Orphaned response RID ${packet.rid} on ${socketName} (no pending entry — GC'd or never tracked). Payload: ${(raw || '').slice(0, 200)}`);
 		  this.rdoMetrics.totalOrphaned++;
+		} else if (packet.errorCode === 17) {
+		  // Malformed busy rejection "A"+"error 17" with no RID and no terminator
+		  // (WinSockRDOConnectionsServer.pas:812) — the server refused the query
+		  // because it is busy. Flip the busy flag; the ModelStatusChanged push or
+		  // the ServerBusy poll will clear it when the server recovers.
+		  this.log.warn(`[RDO] Server busy rejection (malformed 'Aerror 17') on ${socketName}`);
+		  this.setServerBusyFromPush(true);
 		}
 	  } else {
 		// Push command
@@ -2251,6 +2261,16 @@ private handleIncomingMessage(socketName: string, raw: string) {
         }
       } else {
         this.log.warn(`[Session] Server requested unknown object: ${packet.targetId}`);
+      }
+    } else if (packet.action === RdoAction.CALL && packet.member === 'AnswerStatus' && packet.rid !== undefined) {
+      // Server liveness heartbeat on the reverse channel. Legacy client answers
+      // NOERROR (TISEvents.AnswerStatus, Voyager/URLHandlers/ServerCnxHandler.pas:666-669).
+      // Left unanswered, the server's query would sit until its 60 s timeout.
+      const response = `${RDO_CONSTANTS.CMD_PREFIX_ANSWER}${packet.rid} res="#0"${RDO_CONSTANTS.PACKET_DELIMITER}`;
+      const socket = this.sockets.get(socketName);
+      if (socket) {
+        writeRdoFrame(socket, response);
+        this.log.debug(`[Session] Answered AnswerStatus heartbeat: ${response}`);
       }
     }
   }

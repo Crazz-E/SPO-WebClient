@@ -144,10 +144,38 @@ export const handleEmpireFacilities: WsHandler = async (ctx: WsHandlerContext, m
   sendResponse(ctx.ws, response);
 };
 
+// ── REQ_RDO_DIRECT rate limiting (audit V3) ─────────────────────────────────
+// This handler lets the browser emit arbitrary RDO frames. Without a throttle,
+// a buggy or malicious client can flood the shared legacy Delphi server at
+// WebSocket speed. Token bucket: burst of 10, refill 5 tokens/second.
+
+const RDO_DIRECT_BURST = 10;
+const RDO_DIRECT_TOKENS_PER_SEC = 5;
+const rdoDirectBuckets = new WeakMap<object, { tokens: number; lastRefill: number }>();
+
+/** @internal Exported for testing. Returns false when the session is over its budget. */
+export function takeRdoDirectToken(session: object, now: number = Date.now()): boolean {
+  let bucket = rdoDirectBuckets.get(session);
+  if (!bucket) {
+    bucket = { tokens: RDO_DIRECT_BURST, lastRefill: now };
+    rdoDirectBuckets.set(session, bucket);
+  }
+  const elapsedSec = Math.max(0, now - bucket.lastRefill) / 1000;
+  bucket.tokens = Math.min(RDO_DIRECT_BURST, bucket.tokens + elapsedSec * RDO_DIRECT_TOKENS_PER_SEC);
+  bucket.lastRefill = now;
+  if (bucket.tokens < 1) return false;
+  bucket.tokens -= 1;
+  return true;
+}
+
 export const handleRdoDirect: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
   await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_AccessDenied, async () => {
     if (ctx.session.getPhase() !== SessionPhase.WORLD_CONNECTED) {
       throw new Error('RDO direct requires an active world connection');
+    }
+
+    if (!takeRdoDirectToken(ctx.session)) {
+      throw new Error(`RDO direct rate limit exceeded (${RDO_DIRECT_TOKENS_PER_SEC}/s, burst ${RDO_DIRECT_BURST})`);
     }
 
     const req = msg as WsReqRdoDirect;

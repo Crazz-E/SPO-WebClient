@@ -702,3 +702,59 @@ describe('RdoProtocol.format()', () => {
     });
   });
 });
+
+describe('Malformed busy rejection "Aerror <n>" (WinSockRDOConnectionsServer.pas:812)', () => {
+  // An overloaded server emits "A"+"error 17" with NO QueryId and NO ";" terminator.
+  // Tier-4 conformity: the framer must isolate it so it never corrupts the next frame,
+  // and the parser must surface errorCode 17 with no RID.
+
+  describe('RdoFramer recovery', () => {
+    it('separates "Aerror 17" glued to the next legitimate response', () => {
+      const framer = new RdoFramer();
+      const messages = framer.ingest('Aerror 17A55 ServerBusy="#0";');
+      expect(messages).toEqual(['Aerror 17', 'A55 ServerBusy="#0"']);
+    });
+
+    it('separates "Aerror 17" glued to a following push', () => {
+      const framer = new RdoFramer();
+      const messages = framer.ingest('Aerror 17C sel 40133496 call RefreshTycoon "*" "%1","%2","#2","#33","#70";');
+      expect(messages).toEqual(['Aerror 17', 'C sel 40133496 call RefreshTycoon "*" "%1","%2","#2","#33","#70"']);
+    });
+
+    it('holds a lone "Aerror 17" until the next byte proves the code is complete', () => {
+      const framer = new RdoFramer();
+      // No trailing byte yet — the error code could still be growing (chunk split)
+      expect(framer.ingest('Aerror 1')).toEqual([]);
+      // Next chunk completes the code AND starts the next frame
+      expect(framer.ingest('7A56 res="#0";')).toEqual(['Aerror 17', 'A56 res="#0"']);
+    });
+
+    it('does NOT trigger on legitimate suffixed error responses', () => {
+      const framer = new RdoFramer();
+      const messages = framer.ingest('A17 error 5 getting ServerBusy;');
+      expect(messages).toEqual(['A17 error 5 getting ServerBusy']);
+    });
+
+    it('does NOT trigger on "Aerror" text inside a quoted payload', () => {
+      const framer = new RdoFramer();
+      const messages = framer.ingest('A12 res="%Aerror 17 is just text";');
+      expect(messages).toEqual(['A12 res="%Aerror 17 is just text"']);
+    });
+  });
+
+  describe('RdoProtocol.parse classification', () => {
+    it('parses "Aerror 17" as a RESPONSE with errorCode 17 and no RID', () => {
+      const packet = RdoProtocol.parse('Aerror 17');
+      expect(packet.type).toBe('RESPONSE');
+      expect(packet.rid).toBeUndefined();
+      expect(packet.errorCode).toBe(17);
+      expect(packet.errorName).toBe('errServerBusy');
+    });
+
+    it('still parses regular error responses with RID normally', () => {
+      const packet = RdoProtocol.parse('A42 error 17');
+      expect(packet.rid).toBe(42);
+      expect(packet.errorCode).toBe(17);
+    });
+  });
+});

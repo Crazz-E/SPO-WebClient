@@ -11,6 +11,7 @@ import fetch from 'node-fetch';
 import type { RdoPacket, WorldInfo, CompanyInfo } from '../../shared/types';
 import { RdoVerb, RdoAction, SessionPhase, DIRECTORY_QUERY } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { config } from '../../shared/config';
 import { AuthError } from '../../shared/auth-error';
 import { toErrorMessage } from '../../shared/error-utils';
@@ -38,7 +39,7 @@ export interface LoginContext {
   };
 
   // ── RDO Transport ──
-  sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>): Promise<RdoPacket>;
+  sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs?: number, category?: TimeoutCategory): Promise<RdoPacket>;
   getSocket(name: string): net.Socket | undefined;
   createSocket(name: string, host: string, port: number): Promise<net.Socket>;
   deleteSocket(name: string): void;
@@ -166,29 +167,37 @@ export async function connectDirectory(
 }
 
 /**
+ * Directory Server ops run at the legacy 20 s deadline
+ * (DSProxy.TimeOut := 20000, LogonHandlerViewer.pas:341).
+ */
+function sendDirectoryRequest(ctx: LoginContext, socketName: string, packetData: Partial<RdoPacket>): Promise<RdoPacket> {
+  return ctx.sendRdoRequest(socketName, packetData, undefined, TimeoutCategory.DIRECTORY);
+}
+
+/**
  * Helper Phase 1: Auth -> EndSession
  */
 async function performDirectoryAuth(ctx: LoginContext, username: string, pass: string): Promise<void> {
   const socket = await ctx.createSocket('directory_auth', config.rdo.directoryHost, config.rdo.ports.directory);
   try {
     // 1. Resolve & Open Session
-    const idPacket = await ctx.sendRdoRequest('directory_auth', { verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
+    const idPacket = await sendDirectoryRequest(ctx, 'directory_auth',{ verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
     const directoryServerId = parseIdOfResponseHelper(idPacket.payload);
     // RDOOpenSession is a published METHOD (DirectoryServer.pas:143), but the legacy
     // client reads it as a zero-arg COM property-get (RDOObjectProxy.pas:388-399 routes
     // PROPERTYGET+0args → MarshalPropertyGet; LogonHandlerViewer.pas:308) — byte-exact
     // wire is `get RDOOpenSession`, served by the Delphi get→CallMethod fallthrough.
-    const sessionPacket = await ctx.sendRdoRequest('directory_auth', {
+    const sessionPacket = await sendDirectoryRequest(ctx, 'directory_auth',{
       verb: RdoVerb.SEL, targetId: directoryServerId, action: RdoAction.GET, member: 'RDOOpenSession',
     });
     const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');
 
     // 2. Map & Logon
-    await ctx.sendRdoRequest('directory_auth', {
+    await sendDirectoryRequest(ctx, 'directory_auth',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOMapSegaUser',
       args: [username],
     });
-    const logonPacket = await ctx.sendRdoRequest('directory_auth', {
+    const logonPacket = await sendDirectoryRequest(ctx, 'directory_auth',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOLogonUser',
       args: [username, pass],
     });
@@ -212,16 +221,16 @@ async function performDirectoryQuery(ctx: LoginContext, zonePath?: string): Prom
   const socket = await ctx.createSocket('directory_query', config.rdo.directoryHost, config.rdo.ports.directory);
   try {
     // 1. Resolve & Open NEW Session
-    const idPacket = await ctx.sendRdoRequest('directory_query', { verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
+    const idPacket = await sendDirectoryRequest(ctx, 'directory_query',{ verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
     const directoryServerId = parseIdOfResponseHelper(idPacket.payload);
-    const sessionPacket = await ctx.sendRdoRequest('directory_query', {
+    const sessionPacket = await sendDirectoryRequest(ctx, 'directory_query',{
       verb: RdoVerb.SEL, targetId: directoryServerId, action: RdoAction.GET, member: 'RDOOpenSession',
     });
     const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');
 
     // 2. Query Worlds
     const worldPath = zonePath || 'Root/Areas/Asia/Worlds';
-    const queryPacket = await ctx.sendRdoRequest('directory_query', {
+    const queryPacket = await sendDirectoryRequest(ctx, 'directory_query',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOQueryKey',
       args: [worldPath, DIRECTORY_QUERY.QUERY_BLOCK],
     });
@@ -251,13 +260,13 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
   const socket = await ctx.createSocket('directory_search', config.rdo.directoryHost, config.rdo.ports.directory);
   try {
     // 1. Resolve DirectoryServer object
-    const idPacket = await ctx.sendRdoRequest('directory_search', {
+    const idPacket = await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.IDOF, targetId: 'DirectoryServer',
     });
     const directoryServerId = parseIdOfResponseHelper(idPacket.payload);
 
     // 2. Open Session
-    const sessionPacket = await ctx.sendRdoRequest('directory_search', {
+    const sessionPacket = await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.SEL, targetId: directoryServerId, action: RdoAction.GET, member: 'RDOOpenSession',
     });
     const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');
@@ -265,13 +274,13 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
     // 3. Navigate to the world's directory root
     const worldName = currentWorldInfo?.name || '';
     const worldPath = `${cachedZonePath}/${worldName}`;
-    await ctx.sendRdoRequest('directory_search', {
+    await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOSetCurrentKey',
       args: [worldPath],
     });
 
     // 4. Search for matching keys under the world
-    const searchPacket = await ctx.sendRdoRequest('directory_search', {
+    const searchPacket = await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOSearchKey',
       args: [`*${searchStr}*`, ''],
     });
