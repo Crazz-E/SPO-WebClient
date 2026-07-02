@@ -17,7 +17,7 @@ import type {
 } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
-import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
+import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 import { splitMultilinePayload as splitMultilinePayloadHelper } from '../rdo-helpers';
 import { parseFavoritesResponse } from './session-utils';
 import { toErrorMessage } from '../../shared/error-utils';
@@ -325,7 +325,7 @@ export async function politicsVote(
       .build();
 
     ctx.log.debug(`[Politics] Voting: ${voterName} → ${candidateName}`);
-    socket.write(cmd);
+    writeRdoFrame(socket, cmd);
     await new Promise(resolve => setTimeout(resolve, 200));
 
     return { success: true, message: `Voted for ${candidateName}` };
@@ -423,16 +423,18 @@ export async function searchConnections(
       targetId: ctx.cacherId,
       action: RdoAction.CALL,
       member: method,
+      // Delphi: FindSuppliers/FindClients(Output, World, Town, Name: widestring;
+      //         Count, X, Y, SortMode, Role: integer) — CacheServerReportForm.pas:108-109
       args: [
-        fluidId,                              // Fluid name (e.g., "Drugs")
-        worldName,                            // World (e.g., "Shamba")
-        filters?.town || '',                  // Town filter (empty = all)
-        filters?.company || '',               // Company filter (empty = all)
-        String(filters?.maxResults || 20),    // Count
-        String(buildingX),                    // XPos
-        String(buildingY),                    // YPos
-        '1',                                  // SortMode (1=quality)
-        String(filters?.roles || 31),         // Roles bitmask (31 = all 5 roles)
+        fluidId,                                            // Output (widestring)
+        worldName,                                          // World (widestring)
+        filters?.town || '',                                // Town filter (empty = all)
+        filters?.company || '',                             // Name/company filter (empty = all)
+        RdoValue.int(filters?.maxResults || 20).format(),   // Count
+        RdoValue.int(buildingX).format(),                   // X
+        RdoValue.int(buildingY).format(),                   // Y
+        RdoValue.int(1).format(),                           // SortMode (1=quality)
+        RdoValue.int(filters?.roles || 31).format(),        // Role bitmask (31 = all 5 roles)
       ],
     });
 

@@ -76,6 +76,7 @@ import {
   splitMultilinePayload as splitMultilinePayloadHelper,
   parsePropertyResponse as parsePropertyResponseHelper,
   parseIdOfResponse as parseIdOfResponseHelper,
+  writeRdoFrame,
 } from './rdo-helpers';
 import { parseMessageListHtml } from './mail-list-parser';
 import type { AspActionUrl } from './asp-url-extractor';
@@ -627,7 +628,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 		  .push()
 		  .args(RdoValue.int(parseInt(this.currentFocusedBuildingId)))
 		  .build();
-		socket.write(unfocusCmd);
+		writeRdoFrame(socket, unfocusCmd);
 		this.log.debug('[Session] Sent UnfocusObject push command');
 	  }
 
@@ -908,7 +909,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
           RdoValue.string(this.cachedPassword!)
         )
         .build();
-      socket.write(logonCmd);
+      writeRdoFrame(socket, logonCmd);
       this.log.debug(`[Construction] Sent RDOLogonClient as "${loginUser}"`);
       // Small delay to let server process logon
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -1187,7 +1188,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       .push()  // "*" separator, no RID — fire-and-forget (Delphi: procedure, not function)
       .args(RdoValue.int(x), RdoValue.int(y), RdoValue.int(dx), RdoValue.int(dy))
       .build();
-    socket.write(cmd);
+    writeRdoFrame(socket, cmd);
   }
 
   /**
@@ -1218,7 +1219,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
         RdoValue.int(parseInt(this.tycoonId, 10))
       )
       .build();
-    socket.write(cmd);
+    writeRdoFrame(socket, cmd);
     this.log.debug(`[CloneFacility] Sent: ${cmd}`);
   }
 
@@ -1353,7 +1354,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
         .push() // "*" separator — void procedure
         .args(RdoValue.int(parseInt(tempObjectId, 10)))
         .build();
-      socket.write(cmd);
+      writeRdoFrame(socket, cmd);
     } catch (e: unknown) {
       this.log.warn('[cacherCloseObject] Failed:', toErrorMessage(e));
     }
@@ -1654,7 +1655,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         if (!socket) return;
 
         const rawString = RdoProtocol.format(packet);
-        socket.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
+        writeRdoFrame(socket, rawString + RDO_CONSTANTS.PACKET_DELIMITER);
 
         const response = await new Promise<RdoPacket>((resolve, reject) => {
           const timeoutHandle = setTimeout(() => {
@@ -1730,7 +1731,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
    * Delphi reference: ObjectInspectorHandleViewer.pas:1172-1180
    *   fCacheObj.KeepAlive — CacheConnectionTimeOut = 60000ms
    *
-   * CRITICAL: Uses socket.write() directly (void push with "*" separator).
+   * CRITICAL: Uses writeRdoFrame() directly (void push with "*" separator).
    * Must NOT use sendRdoRequest() — that adds a QueryId, and combining
    * QueryId + "*" separator crashes the Delphi server.
    */
@@ -1754,7 +1755,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
           .call('KeepAlive')
           .push()
           .build();
-        socket.write(cmd);
+        writeRdoFrame(socket, cmd);
         this.log.debug('[KeepAlive] Sent to cacher');
       } catch (e: unknown) {
         this.log.warn('[KeepAlive] Failed:', toErrorMessage(e));
@@ -2012,7 +2013,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
 
   // GUARD: Void push ("*") + QueryId = Delphi server crash.
   // sendRdoRequest always adds a rid, so void push must never go through here.
-  // Void push commands must use socket.write() directly (no rid, no response).
+  // Void push commands must use writeRdoFrame() directly (no rid, no response).
   assertNotVoidPush(packetData);
 
   // Capture pool connection for slot release on completion
@@ -2075,7 +2076,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
     // Send the request
     const rawString = RdoProtocol.format(packet);
     this.log.debug(`RDO>> ${socketName}`, { command: member, verb: packetData.verb, rid, timeoutMs, separator: packetData.separator, raw: redactRdoRaw(packetData.member, rawString) });
-    socket!.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
+    writeRdoFrame(socket!, rawString + RDO_CONSTANTS.PACKET_DELIMITER);
   });
 }
 
@@ -2200,7 +2201,7 @@ private handleIncomingMessage(socketName: string, raw: string) {
         const response = `${RDO_CONSTANTS.CMD_PREFIX_ANSWER}${packet.rid} objid="${objectId}"${RDO_CONSTANTS.PACKET_DELIMITER}`;
         const socket = this.sockets.get(socketName);
         if (socket) {
-          socket.write(response);
+          writeRdoFrame(socket, response);
           this.log.debug(`[Session] Auto-replied to server: ${response}`);
         }
       } else {
@@ -2273,13 +2274,13 @@ private handlePush(socketName: string, packet: RdoPacket) {
         .call('SetTycoonCookie').push()
         .args(RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastX.0'), RdoValue.string(String(this.lastPlayerX)))
         .build();
-      socket.write(cmdX);
+      writeRdoFrame(socket, cmdX);
 
       const cmdY = RdoCommand.sel(this.worldContextId)
         .call('SetTycoonCookie').push()
         .args(RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastY.0'), RdoValue.string(String(this.lastPlayerY)))
         .build();
-      socket.write(cmdY);
+      writeRdoFrame(socket, cmdY);
 
       this.log.debug('[Session] Player position saved');
     } catch (e: unknown) {
@@ -2427,7 +2428,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
     const socket = this.sockets.get('world');
     if (socket && !socket.destroyed) {
       try {
-        socket.write(endSessionCmd);
+        writeRdoFrame(socket, endSessionCmd);
         this.log.debug('[Session] Sent RDOEndSession to world socket');
 
         // Schedule socket closure 2 seconds after RDOEndSession

@@ -3,6 +3,25 @@
  * Extracted from spo_session.ts to reduce complexity
  */
 
+import type { Socket } from 'net';
+
+/**
+ * Write an RDO frame to a TCP socket using Latin-1 (ANSI) encoding.
+ *
+ * The Delphi servers exchange AnsiString (single-byte) text on the wire
+ * (RDOUtils.pas WideStrToStr/StrToWideStr, Socket.SendText/ReceiveText).
+ * Node's socket.write(string) defaults to UTF-8, which encodes every
+ * character >= 0x80 (accented chat/mail/company text) as two bytes and
+ * corrupts it server-side. The read path already decodes Latin-1
+ * (RdoFramer.ingest) — this helper makes writes symmetric.
+ *
+ * ALL RDO frames MUST go through this helper; never call socket.write()
+ * with a raw string on an RDO socket.
+ */
+export function writeRdoFrame(socket: Socket, frame: string): boolean {
+  return socket.write(Buffer.from(frame, 'latin1'));
+}
+
 /**
  * Clean RDO payload by removing quotes, prefixes, and formatting
  * @param payload Raw payload string from RDO response

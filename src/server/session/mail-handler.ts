@@ -5,7 +5,7 @@
  * Private helpers are module-private functions.
  *
  * Void procedures (AddHeaders, DeleteMessage) are fire-and-forget:
- * socket.write() with "*" (VoidId), no RID.
+ * writeRdoFrame() with "*" (VoidId), no RID.
  * AddLine and CloseMessage are synchronous (Delphi sets WaitForAnswer:=true)
  * — use sendRdoRequest() with separator '"^"'.
  * NEVER use sendRdoRequest() with separator '*' — it adds a QueryId,
@@ -18,7 +18,7 @@ import type { MailMessageHeader, MailMessageFull, MailAttachment } from '../../s
 import type { MailFolder } from '../../shared/types/domain-types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
-import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
+import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 import { parseMessageListHtml } from '../mail-list-parser';
 import { toErrorMessage } from '../../shared/error-utils';
 import fetch from 'node-fetch';
@@ -28,7 +28,7 @@ function mailFireAndForget(ctx: SessionContext, targetId: string, method: string
   const socket = ctx.getSocket('mail');
   if (!socket) throw new Error('Mail socket unavailable');
   const cmd = RdoCommand.sel(targetId).call(method).push().args(...args).build();
-  socket.write(cmd);
+  writeRdoFrame(socket, cmd);
   ctx.log.debug(`[Mail] Sent: ${cmd}`);
 }
 

@@ -11,7 +11,7 @@ import type { PoliticalRoleInfo } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
-import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
+import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 import { toErrorMessage } from '../../shared/error-utils';
 import { serialiseConstruction } from './construction-lock';
 
@@ -174,7 +174,7 @@ async function manageConstructionImpl(
         return { status: 'ERROR', error: `Unknown action: ${action}` };
     }
 
-    socket.write(actionCmd);
+    writeRdoFrame(socket, actionCmd);
     ctx.log.debug(`[Construction] Command sent: ${actionCmd.substring(0, 50)}...`);
 
     // Step 5: Wait for server to process

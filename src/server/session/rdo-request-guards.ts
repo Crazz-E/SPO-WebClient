@@ -8,7 +8,7 @@ export function assertNotVoidPush(packetData: { separator?: string; member?: str
   if (packetData.separator?.includes('*')) {
     throw new Error(
       `FATAL: Void push separator "*" used with sendRdoRequest() — this WILL crash the Delphi server. ` +
-      `Command: ${packetData.member || 'unknown'}. Use socket.write() for fire-and-forget commands.`
+      `Command: ${packetData.member || 'unknown'}. Use writeRdoFrame() for fire-and-forget commands.`
     );
   }
 }

@@ -18,6 +18,7 @@ import {
   parsePropertyResponse as parsePropertyResponseHelper,
   parseIdOfResponse as parseIdOfResponseHelper,
   cleanPayload as cleanPayloadHelper,
+  writeRdoFrame,
 } from '../rdo-helpers';
 
 // ── Login Context ───────────────────────────────────────────────────────────
@@ -173,6 +174,10 @@ async function performDirectoryAuth(ctx: LoginContext, username: string, pass: s
     // 1. Resolve & Open Session
     const idPacket = await ctx.sendRdoRequest('directory_auth', { verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
     const directoryServerId = parseIdOfResponseHelper(idPacket.payload);
+    // RDOOpenSession is a published METHOD (DirectoryServer.pas:143), but the legacy
+    // client reads it as a zero-arg COM property-get (RDOObjectProxy.pas:388-399 routes
+    // PROPERTYGET+0args → MarshalPropertyGet; LogonHandlerViewer.pas:308) — byte-exact
+    // wire is `get RDOOpenSession`, served by the Delphi get→CallMethod fallthrough.
     const sessionPacket = await ctx.sendRdoRequest('directory_auth', {
       verb: RdoVerb.SEL, targetId: directoryServerId, action: RdoAction.GET, member: 'RDOOpenSession',
     });
@@ -192,7 +197,7 @@ async function performDirectoryAuth(ctx: LoginContext, username: string, pass: s
     if (authCode !== 0) throw new AuthError(authCode);
 
     // 3. End Session & Close (fire-and-forget — void push, no RID)
-    socket.write(RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
+    writeRdoFrame(socket, RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
     ctx.log.debug('[Session] Directory Authentication Success');
   } finally {
     socket.end();
@@ -229,7 +234,7 @@ async function performDirectoryQuery(ctx: LoginContext, zonePath?: string): Prom
     ctx.setAvailableWorlds(worldMap);
 
     // 3. End Session & Close (fire-and-forget — void push, no RID)
-    socket.write(RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
+    writeRdoFrame(socket, RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
     return worlds;
   } finally {
     socket.end();
@@ -276,7 +281,7 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
     const names = parseSearchKeyResults(ctx, resValue);
 
     // 6. End Session (fire-and-forget — void push, no RID)
-    socket.write(RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
+    writeRdoFrame(socket, RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
 
     return names;
   } catch (err: unknown) {
@@ -427,7 +432,7 @@ export async function loginWorld(
       .push()
       .args(RdoValue.string('0'))
       .build();
-    socket.write(setLangCmd);
+    writeRdoFrame(socket, setLangCmd);
     ctx.log.debug(`[Session] Sent SetLanguage push command`);
   }
 
@@ -485,20 +490,22 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   ctx.log.debug(`[Session] EnableEvents activated`);
 
   // 2. First PickEvent - Subscribe to Tycoon updates
+  // Delphi: TClientView.PickEvent(TycoonId: integer) — must be "#" int, not "%" string
   await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL,
     targetId: worldContextId,
     action: RdoAction.CALL,
     member: 'PickEvent',
-    args: [ctx.tycoonId!],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format()],
   });
   ctx.log.debug(`[Session] PickEvent #1 sent`);
 
   // 3. Get Tycoon Cookies — sequential (legacy client sends one at a time)
+  // Delphi: GetTycoonCookie(TycoonId: integer; CookieId: widestring)
   const lastYPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: worldContextId,
     action: RdoAction.CALL, member: 'GetTycoonCookie',
-    args: [ctx.tycoonId!, 'LastY.0'],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), 'LastY.0'],
   });
   const lastY = parsePropertyResponseHelper(lastYPacket.payload!, 'res');
   ctx.setLastPlayerY(parseInt(lastY, 10) || 0);
@@ -507,7 +514,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   const lastXPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: worldContextId,
     action: RdoAction.CALL, member: 'GetTycoonCookie',
-    args: [ctx.tycoonId!, 'LastX.0'],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), 'LastX.0'],
   });
   const lastX = parsePropertyResponseHelper(lastXPacket.payload!, 'res');
   ctx.setLastPlayerX(parseInt(lastX, 10) || 0);
@@ -516,7 +523,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   const allCookiesPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: worldContextId,
     action: RdoAction.CALL, member: 'GetTycoonCookie',
-    args: [ctx.tycoonId!, ''],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), ''],
   });
   const allCookies = parsePropertyResponseHelper(allCookiesPacket.payload!, 'res');
   ctx.log.debug(`[Session] All Cookies:\n${allCookies}`);
@@ -528,7 +535,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
       .call('ClientAware')
       .push()
       .build();
-    socket.write(clientAwareCmd);
+    writeRdoFrame(socket, clientAwareCmd);
     ctx.log.debug(`[Session] Sent ClientAware #1`);
   }
 
@@ -538,7 +545,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
     targetId: worldContextId,
     action: RdoAction.CALL,
     member: 'PickEvent',
-    args: [ctx.tycoonId!],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format()],
   });
   ctx.log.debug(`[Session] PickEvent #2 sent`);
 
@@ -548,7 +555,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
       .call('ClientAware')
       .push()
       .build();
-    socket.write(clientAwareCmd2);
+    writeRdoFrame(socket, clientAwareCmd2);
     ctx.log.debug(`[Session] Sent ClientAware #2`);
   }
 
@@ -1004,7 +1011,7 @@ export async function reconnectWorldSocket(ctx: LoginContext): Promise<void> {
         targetId: ctx.worldContextId!,
         action: RdoAction.CALL,
         member: 'PickEvent',
-        args: [ctx.tycoonId],
+        args: [RdoValue.int(parseInt(ctx.tycoonId, 10)).format()],
       });
       ctx.log.debug('[Reconnect] PickEvent re-sent for tycoon updates');
     }
@@ -1075,7 +1082,7 @@ async function fullWorldRelogin(ctx: LoginContext): Promise<void> {
     const setLangCmd = RdoCommand.sel(contextId)
       .call('SetLanguage').push()
       .args(RdoValue.string('0')).build();
-    socket.write(setLangCmd);
+    writeRdoFrame(socket, setLangCmd);
   }
 
   // Re-select company if one was active

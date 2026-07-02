@@ -211,6 +211,41 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.errorCode).toBe(5);
       expect(packet.errorName).toBe('errUnexistentMethod');
     });
+
+    // Delphi GetCommand/SetCommand append the member name to property errors
+    // (RDOQueryServer.pas:274) — these MUST be detected as errors too.
+    it('should detect "error <n> getting <Prop>" (Delphi GetCommand format)', () => {
+      const packet = RdoProtocol.parse('A101 error 3 getting WorldName');
+      expect(packet.errorCode).toBe(3);
+      expect(packet.errorName).toBe('errUnexistentProperty (getting WorldName)');
+    });
+
+    it('should detect "error <n> setting <Prop>" (Delphi SetCommand format)', () => {
+      const packet = RdoProtocol.parse('A102 error 4 setting EnableEvents');
+      expect(packet.errorCode).toBe(4);
+      expect(packet.errorName).toBe('errIllegalPropValue (setting EnableEvents)');
+    });
+
+    it('should be case-insensitive on the getting/setting suffix', () => {
+      const packet = RdoProtocol.parse('A103 ERROR 5 GETTING Foo');
+      expect(packet.errorCode).toBe(5);
+      expect(packet.errorName).toBe('errUnexistentMethod (getting Foo)');
+    });
+
+    it('should NOT match "error <n>" embedded mid-payload', () => {
+      const packet = RdoProtocol.parse('A104 res="%error 5 getting Foo"');
+      expect(packet.errorCode).toBeUndefined();
+    });
+
+    it('should NOT match an error with trailing extra words beyond the member', () => {
+      const packet = RdoProtocol.parse('A105 error 3 getting Foo Bar');
+      expect(packet.errorCode).toBeUndefined();
+    });
+
+    it('should tolerate trailing whitespace after the member name', () => {
+      const packet = RdoProtocol.parse('A106 error 3 getting Foo  ');
+      expect(packet.errorCode).toBe(3);
+    });
   });
 
   describe('IDOF verb parsing', () => {

@@ -103,12 +103,19 @@ export class RdoProtocol {
 		  payload,
 		};
 
-		// Check for RDO error response: "error <code>" (ErrorCodes.pas:0-17)
-		const errorMatch = payload.match(/^error\s+(\d+)$/i);
+		// Check for RDO error response (ErrorCodes.pas:0-17). Delphi emits three forms:
+		//   "error <code>"                       (CallCommand/IdOfCommand)
+		//   "error <code> getting <PropName>"    (GetCommand — RDOQueryServer.pas:274)
+		//   "error <code> setting <PropName>"    (SetCommand)
+		// Anchored full-match so quoted payloads containing the word "error" never match.
+		const errorMatch = payload.match(/^error\s+(\d+)(?:\s+(getting|setting)\s+(\S+))?\s*$/i);
 		if (errorMatch) {
 		  const code = parseInt(errorMatch[1], 10);
 		  packet.errorCode = code;
-		  packet.errorName = RDO_ERROR_CODES[code] ?? `unknownError(${code})`;
+		  const baseName = RDO_ERROR_CODES[code] ?? `unknownError(${code})`;
+		  packet.errorName = errorMatch[2]
+		    ? `${baseName} (${errorMatch[2].toLowerCase()} ${errorMatch[3]})`
+		    : baseName;
 		}
 
 		return packet;

@@ -3,13 +3,72 @@
  * Tests for cleanPayload, parsePropertyResponse, and related utilities
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
+import type { Socket } from 'net';
 import {
   cleanPayload,
   splitMultilinePayload,
   parsePropertyResponse,
   parseIdOfResponse,
+  writeRdoFrame,
 } from './rdo-helpers';
+
+describe('writeRdoFrame', () => {
+  /** Capture what writeRdoFrame hands to socket.write. */
+  function mockSocket(): { socket: Socket; written: Buffer[] } {
+    const written: Buffer[] = [];
+    const socket = {
+      write: jest.fn((data: Buffer) => {
+        written.push(data);
+        return true;
+      }),
+    } as unknown as Socket;
+    return { socket, written };
+  }
+
+  it('writes a Buffer, never a raw string', () => {
+    const { socket, written } = mockSocket();
+    writeRdoFrame(socket, 'C sel 42 get Name;');
+    expect(written).toHaveLength(1);
+    expect(Buffer.isBuffer(written[0])).toBe(true);
+  });
+
+  it('encodes ASCII identically to UTF-8 (no behavior change for plain frames)', () => {
+    const { socket, written } = mockSocket();
+    const frame = 'C 17 sel 42 call RDOSetPrice "^" "#5","@3.14";';
+    writeRdoFrame(socket, frame);
+    expect(written[0].equals(Buffer.from(frame, 'utf8'))).toBe(true);
+  });
+
+  it('encodes accented characters as single Latin-1 bytes (Delphi ANSI wire)', () => {
+    const { socket, written } = mockSocket();
+    writeRdoFrame(socket, 'é');
+    // Latin-1: 'é' = 0xE9 (one byte). UTF-8 would be 0xC3 0xA9 (two bytes).
+    expect(written[0].length).toBe(1);
+    expect(written[0][0]).toBe(0xe9);
+  });
+
+  it('encodes a full accented chat frame in Latin-1', () => {
+    const { socket, written } = mockSocket();
+    const frame = 'C sel 42 call SayThis "*" "%","%Bonjour à l\'été";';
+    writeRdoFrame(socket, frame);
+    const bytes = written[0];
+    expect(bytes.length).toBe(frame.length); // 1 byte per char — no UTF-8 expansion
+    expect(bytes[frame.indexOf('à')]).toBe(0xe0);
+    expect(bytes[frame.indexOf('é')]).toBe(0xe9);
+  });
+
+  it('returns the socket.write() backpressure result', () => {
+    const written: Buffer[] = [];
+    const socket = {
+      write: jest.fn((data: Buffer) => {
+        written.push(data);
+        return false;
+      }),
+    } as unknown as Socket;
+    expect(writeRdoFrame(socket, 'C sel 1 get X;')).toBe(false);
+  });
+});
 
 describe('cleanPayload', () => {
   it('should clean res="..." format', () => {
