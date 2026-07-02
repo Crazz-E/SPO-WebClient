@@ -138,9 +138,19 @@ Leçon consignée : pour ce protocole, la référence de conformité est **ce qu
 
 ---
 
-## Annexe — Statut d'implémentation
+## Annexe — Statut d'implémentation (final)
 
-- Tier 1 (F1, F2, F4) : **implémenté**, suites vertes (rdo, protocol-validation ×15, session).
-- Tier 2 (F5, F6, F10) : _en cours_.
-- Tier 3 (F7, F8, F9) : _en attente_.
-- Ce rapport est mis à jour en fin de chantier avec les statuts finaux.
+| Tier | Branche | Contenu | Validation |
+|---|---|---|---|
+| 1 | `fix/rdo-conformity-tier1` | F1 latin1 (23 sites → `writeRdoFrame`), F2 typage int (PickEvent/GetTycoonCookie/FindSuppliers+FindClients), F4 regex erreur (rdo.ts, pré-approuvé) ; A6 vérifié puis reverté (get = octets legacy) | 176 suites / 3916 tests + build ✔ |
+| 2 | `fix/rdo-conformity-tier2` | F5 Logoff conforme (ClientNotAware + `get Logoff` 5 s, idempotent, close propre, plus de RDOEndSession), F6 KeepAlive → objet temp inspecteur, F10 LogServerOn→CheckNewMail, commentaire mail corrigé | 178 suites / 3927 tests + build ✔ |
+| 3 | `fix/rdo-conformity-tier3` | F7 timeouts legacy (FAST 60 s, en-jeu 180 s, WS client 200 s), F8 plus de reconnexion sur timeouts, F9 poll ServerBusy legacy (50 s / 180 s / stop à 4 échecs sans reconnect) | 178 suites / 3926 tests + build ✔ |
+
+Nouveaux tests : `encoding.validation`, `logoff.validation`, `keepalive.validation`, `no-raw-rdo-writes` (balayage anti-régression), + réécritures `company-session`, `server-busy-reconnect`, `timeout-state-machine`, matcher `toMatchRdoFormat` étendu au GET, scénario mock mail +LogServerOn.
+
+**Gates E2E restants (à lancer par le développeur — /e2e-test, credentials verrouillés) :**
+1. Tier 1 : login complet, pushs reçus, accents chat/mail round-trip.
+2. Tier 2 : logout propre (plus d'error 5), idle 5 min + inspecteur.
+3. Tier 3 : soak — timeout pendant tick de simulation sans relogin ; kill serveur → reconnexion sur close uniquement. Tier réversible en cas de dégradation.
+
+Les branches ne sont PAS fusionnées dans `main` — fusion à valider après les gates E2E.
