@@ -9,17 +9,19 @@ disable-model-invocation: false
 
 Auto-loaded when modifying any source file in `src/`. Prevents the 5 real crash categories identified from git history analysis (265 commits, 30+ bug fixes).
 
-## A. RDO Protocol Traps (SERVER CRASH RISK)
+## A. RDO Protocol Traps (WIRE CONFORMITY / SERVER RISK)
 
-These mistakes crash the Delphi game server and affect ALL connected clients.
+These mistakes either genuinely endanger the shared Delphi server or violate project RDO conventions.
 
 | Trap | Wrong | Right |
 |------|-------|-------|
-| Void push with QueryId | `sendRdoRequest(RdoCommand.build("*"))` | `socket.write(RdoCommand.build("*"))` |
+| Void push with QueryId | `sendRdoRequest(RdoCommand.build("*"))` | `writeRdoFrame(socket, RdoCommand.build("*"))` |
+| `"^"` without a RID | fire-and-forget with `"^"` separator | Fire-and-forget always uses `"*"`; wanting a result implies `sendRdoRequest()` + RID (**real crash risk**) |
+| Raw socket writes | `socket.write(str)` — UTF-8 corrupts bytes ≥ 0x80 | `writeRdoFrame()` (Latin-1), enforced by `no-raw-rdo-writes.test.ts` |
 | Concurrent RDO commands | `Promise.all([sendRdo(...), sendRdo(...)])` | Sequential `await sendRdo(...)` then `await sendRdo(...)` |
 | Wrong separator | `"*"` for synchronous request | `"^"` for synchronous, `"*"` for void push only |
 
-**Rule:** `sendRdoRequest()` adds a QueryId automatically. Void push (`"*"`) with QueryId crashes the server's FIVE layer. Always use `socket.write(RdoCommand.build())` for fire-and-forget.
+**Rule:** `sendRdoRequest()` adds a QueryId automatically. Combining it with `"*"` is forbidden by **project convention** (`assertNotVoidPush` — one form per intent). It is wire-legal (the server just acks `A<id> ;`, capture-proven), so this guard protects consistency, not the server. The REAL crash risk is `"^"` WITHOUT a RID. Full matrix: `doc/rdo-protocol-architecture.md` §8.5.
 
 **Rule:** Never use `Promise.all()` for concurrent RDO commands on the same socket. The Delphi server is single-threaded per connection.
 

@@ -22,7 +22,7 @@
 ```markdown
 # [Service Name] — Architecture Reference
 
-> **Source path:** `C:\Users\RobinALEMAN\Documents\SPO\SPO-Original\[Directory]`
+> **Source path:** `../SPO-Original/[Directory]`
 > **Generated:** [DATE] by delphi-archaeologist skill
 > **Evidence confidence:** [HIGH/MEDIUM/LOW]
 

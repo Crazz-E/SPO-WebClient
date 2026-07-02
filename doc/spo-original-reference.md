@@ -3,7 +3,7 @@
 > **Source path:** See `delphi-archaeologist` skill for current codebase path
 >
 > Pre-indexed reference for RDO conformity checking. Consult this before implementing any RDO request.
-> The 8-step conformity checklist is in the `rdo-protocol` skill (auto-loads for RDO work).
+> Conformity workflow: [rdo-protocol-architecture.md](rdo-protocol-architecture.md) (§0 evidence hierarchy) + [rdo-session-lifecycle.md](rdo-session-lifecycle.md); the archaeology checklist is in the `delphi-archaeologist` skill (`resources/rdo-archaeology-checklist.md`).
 
 ## RDO Dispatch Rules (from RDOObjectServer.pas)
 
@@ -309,7 +309,7 @@ Live capture confirms: `RDODisconnectInput "*" "%Plastics","%706,436,"` (params 
 | `RegisterEvents` | function | `call` | `(%ClientAddress, #ClientPort)` | olevariant | 218 | Legacy |
 | `RegisterEventsById` | function | `call` | `(#ClientId)` | olevariant | 219 | **Fires InitClient push BEFORE returning** |
 | `SetClientData` | procedure | `call` | `(%data)` | void | 220 | |
-| `Logoff` | function | `call` | `()` | olevariant | 221 | |
+| `Logoff` | function | `get` | `()` | olevariant | 221 | Zero-arg function read in expression → wire `get Logoff` (COM PROPERTYGET, 5 s deadline). Server impl is a stub returning NOERROR (real teardown = DoLogoff on disconnect). Sequence: ClientNotAware (F&F) → `get Logoff` → close socket |
 
 ### Chat & social
 

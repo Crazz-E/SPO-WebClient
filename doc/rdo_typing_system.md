@@ -390,9 +390,17 @@ const { prefix, value } = RdoParser.extract(token);
 
 ## 8. Best Practices
 
-0. **NEVER use `sendRdoRequest()` with `"*"` separator** — it adds a QueryId which
-   crashes the Delphi server on void procedures. Void push → `socket.write(RdoCommand.build())`.
-   Synchronous call → `sendRdoRequest()` with `"^"` separator.
+0. **One form per intent (project convention, enforced by `assertNotVoidPush`)** —
+   Void push → `writeRdoFrame(socket, RdoCommand...build())` (no QueryId, `"*"`).
+   Synchronous call → `sendRdoRequest()` with `"^"` separator (QueryId).
+   Do NOT combine `sendRdoRequest()` with `"*"`. Note: this is a **convention**, not a crash
+   fact — the wire is tolerant (`"*"` + QueryId is acked `A<id> ;`, proven by live captures);
+   what DOES risk crashing the server is `"^"` **without** a QueryId. Full matrix:
+   [rdo-protocol-architecture.md §8.5](rdo-protocol-architecture.md#85-queryid--separator-matrix).
+
+0b. **Booleans: emit `#-1`/`#0`, parse any non-zero as true** — `RdoValue.int(-1)` for true.
+   Never "normalize" to `#1` on emission; never require `#-1` when parsing.
+   See [rdo-protocol-architecture.md §2.2](rdo-protocol-architecture.md#22-boolean-encoding).
 
 1. **Always use RdoValue for new code**
    ```typescript
@@ -461,7 +469,9 @@ const { prefix, value } = RdoParser.extract(token);
 
 ## 10. References
 
-- RDO Protocol Specification: [doc/building_details_rdo.txt](building_details_rdo.txt)
+- Wire protocol reference: [rdo-protocol-architecture.md](rdo-protocol-architecture.md) (framing, verbs, response shapes, §8.5 QueryId×separator matrix)
+- Session management: [rdo-session-lifecycle.md](rdo-session-lifecycle.md) (login, logoff, timeouts, KeepAlive, reconnection)
+- Raw captures: [Mock_Server_scenarios_captures.md](Mock_Server_scenarios_captures.md), [building_details_rdo.txt](building_details_rdo.txt)
 - Type Definitions: [src/shared/types.ts](../src/shared/types.ts)
 - Implementation: [src/shared/rdo-types.ts](../src/shared/rdo-types.ts)
 - Parser Integration: [src/server/rdo.ts](../src/server/rdo.ts)
@@ -469,5 +479,5 @@ const { prefix, value } = RdoParser.extract(token);
 
 ---
 
-**Last Updated:** January 2026
-**Version:** 1.0.0
+**Last Updated:** 2026-07-02 (RDO conformity audit alignment)
+**Version:** 1.1.0

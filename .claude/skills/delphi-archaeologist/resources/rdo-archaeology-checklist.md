@@ -118,24 +118,25 @@ fEvents.ObjectChanged(...)        → Facility state changed
 Using gathered evidence, construct the `RdoCommand`:
 
 ```typescript
-// Function with params and return value:
+// Call with args, return value wanted → "^" + RID (synchronous via sendRdoRequest):
 // published function RDOSetPrice(PriceId: integer; Value: double): OleVariant
 const cmd = RdoCommand.sel(objectId)
-  .call('RDOSetPrice').push()
+  .call('RDOSetPrice').method()          // .method() = "^" separator
   .args(RdoValue.int(priceId), RdoValue.double(value))
   .build();
 
-// Procedure (void, no return):
-// published procedure RDOEndSession
+// Fire-and-forget void → "*" without RID (via writeRdoFrame, NOT sendRdoRequest):
+// e.g. ClientAware, SetViewedArea
 const cmd = RdoCommand.sel(objectId)
-  .call('RDOEndSession').pushVoid()
+  .call('ClientAware').push()            // .push() = "*" separator
   .build();
 
-// Property get:
-// published property RDOCurrentKey: widestring read fKey
+// Zero-arg member read in expression position → GET, even for Delphi *functions*
+// (COM PROPERTYGET routing — e.g. RDOOpenSession, Logoff, ServerBusy):
 const cmd = RdoCommand.sel(objectId)
-  .get('RDOCurrentKey')
+  .get('RDOOpenSession')
   .build();
+// Response echoes the member name: A<id> RDOOpenSession="#<sessionId>"
 
 // Property set:
 // published property RDOCurrentKey: widestring read fKey write fKey
@@ -143,6 +144,8 @@ const cmd = RdoCommand.sel(objectId)
   .set('RDOCurrentKey', RdoValue.str(newKey))
   .build();
 ```
+
+**Verb choice is capture-first:** mirror the bytes the legacy Voyager client emitted (live captures win over server property/function classification). See `doc/rdo-protocol-architecture.md` §0 and §8.1.
 
 ## Step 8: Update the Reference Index
 
@@ -181,11 +184,11 @@ If the object does not exist yet in the reference, create a new section using th
 
 | Pitfall | How to Detect | Fix |
 |---------|--------------|-----|
-| Wrong verb (`get` instead of `call`) | Method is `function` but coded as `get` | Use `call` for functions, `get`/`set` only for properties |
+| Wrong verb (classification-based instead of capture-based) | Verb chosen from the server's property/function classification | Mirror the legacy client's bytes: 0-arg value reads → `get` even for Delphi functions (`RDOOpenSession`, `Logoff`); calls with args → `call`. Captures win. |
 | Wrong param order | Compare WebClient code vs Delphi declaration | Always match Delphi declaration order exactly |
 | Missing param | Delphi has N params, TypeScript sends N-1 | Count all params in declaration including optional ones |
 | Boolean as 1 instead of -1 | `wordbool` true = -1 in Delphi OLE | Use `RdoValue.int(-1)` for true, `RdoValue.int(0)` for false |
 | `string` vs `widestring` | Short string `$` vs OLE string `%` | Check Delphi type: `string` → `$`, `widestring` → `%` |
-| Wrong separator for void | Using `^` for procedures | `^` = returns value, `*` = void |
+| Wrong separator for void | Using `^` for procedures | `^` = caller wants the result (requires a RID), `*` = discard result. Both parse args identically; `^` without RID is forbidden |
 | Stale reference | Method was moved/renamed between RDO variants | Check which Rdo variant (Rdo/, Rdo.IS/, Rdo.BIN/) the server uses |
 | Assuming method exists on wrong object | e.g., calling TClientView method on TInterfaceServer | Verify the `sel` object ID resolves to the correct class |

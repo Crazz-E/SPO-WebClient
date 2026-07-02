@@ -1,6 +1,6 @@
 # SPO-Original Service Map
 
-> **Root:** `C:\Users\RobinALEMAN\Documents\SPO\SPO-Original`
+> **Root:** `../SPO-Original` (sibling folder of SPO-WebClient)
 > **Generated:** 2026-02-24 from verified directory survey
 > **Total:** 67 directories, ~1751 .pas, ~256 .dpr, ~380 .dfm (recursive)
 

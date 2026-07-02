@@ -1,11 +1,12 @@
 # src/server/ — Gateway Server
 
-## RDO Socket Rule (crash-critical)
+## RDO Socket Rule
 
 - **Synchronous call** (expects response): `sendRdoRequest(socketName, packet, timeout?, category?)` -- adds a QueryId, uses `"^"` (VariantId) separator. Returns `Promise<RdoPacket>`.
 - **Fire-and-forget** (void push): `writeRdoFrame(socket, RdoCommand.build())` -- uses `"*"` (VoidId) separator. No QueryId.
 - **ALL RDO socket writes go through `writeRdoFrame()`** (`rdo-helpers.ts`) -- it encodes Latin-1 (ANSI) to match the Delphi wire. Never call `socket.write(string)` on an RDO socket: Node defaults to UTF-8 and corrupts accented characters.
-- **NEVER** combine `sendRdoRequest()` with `"*"` separator -- the QueryId + VoidId combination crashes the Delphi server.
+- **NEVER** combine `sendRdoRequest()` with `"*"` separator -- project convention enforced by `assertNotVoidPush` (one form per intent). Wire-legal but forbidden here: the server would just ack `A<id> ;` (capture-proven). The actual crash risk is `"^"` WITHOUT a QueryId. Full matrix: `doc/rdo-protocol-architecture.md` §8.5.
+- Session/timer work (login, logoff, reconnect, KeepAlive, ServerBusy): read `doc/rdo-session-lifecycle.md` first.
 
 ## Session Lifecycle
 

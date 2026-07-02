@@ -120,14 +120,14 @@ L3 (RDO) timeout MUST be shorter than L1 (WebSocket) timeout. The RDO layer must
 TimeoutCategory.X.rdoMs < TimeoutCategory.X.wsMs  (always)
 ```
 
-### 2. Void Push Crash Guard
-NEVER use `sendRdoRequest()` for void push (`"*"` separator). It adds a QueryId which crashes Delphi.
+### 2. Void Push Convention Guard
+NEVER use `sendRdoRequest()` for void push (`"*"` separator) — **project convention**, enforced by `assertNotVoidPush`. This is NOT a crash fact: void + QueryId is wire-legal and the server acks it with `A<id> ;` (capture-proven: `RDOEndSession` → `A4 ;`, `AddLine` → `A2174 ;`; RDOQueryServer.pas:174-178). The project standardizes on one form per intent. Matrix: `doc/rdo-protocol-architecture.md` §8.5.
 ```typescript
-// WRONG — will crash Delphi server
+// WRONG — violates project convention (assertNotVoidPush throws)
 await sendRdoRequest('world', { separator: '*', ... });
 
-// RIGHT — fire-and-forget via socket.write()
-socket.write(RdoCommand.build() + ';');
+// RIGHT — fire-and-forget via writeRdoFrame() (Latin-1, no QueryId)
+writeRdoFrame(socket, RdoCommand.build());
 ```
 
 ### 2b. Fire-and-Forget Separator Rule
@@ -165,10 +165,12 @@ RDO errors classified via `rdo-error-classifier.ts`:
 
 ⚠ **CRITICAL — Delphi-verified rule:** NEVER auto-retry CALL/SET mutations. Delphi pattern: `try→except→RenewWorldProxy→return ERROR_Unknown` (InterfaceServer.pas NewFacility:1359, DeleteFacility, etc.). No server-side idempotency protection exists. Retrying a timed-out mutation risks double execution (e.g., building placed twice).
 
-### 8. Reconnect Strategy
-- **Fast phase**: Exponential backoff (5s, 10s, 20s) — 3 attempts
-- **Slow phase**: Fixed 15s interval — continues for 5+ minutes
-- **Never give up** until user explicitly navigates away or session expires
+### 8. Reconnect Strategy (Tier-3 conformity)
+- **Trigger: world socket `close` event ONLY**, and only if `!loggedOff`. NEVER reconnect on a query timeout or a ServerBusy poll failure — legacy `ReportCnxFailure` is a no-op (ServerCnxHandler.pas:3394-3405); reconnect-on-timeout causes login storms serialized on the IS `fServerLock`.
+- **Backoff**: two bounded phases — 3 fast attempts (5/10/20 s exponential) then 20 slow attempts (15 s fixed) = `RECONNECT_MAX_RETRIES = 23` over ~5.5 min, then give up and surface the error to the user (`spo_session.ts:335-341`).
+- **Deliberate divergence**: legacy Delphi retries forever in a 100 ms loop; the WebClient caps retries to protect the shared server. ⚠️ `world-reconnect.test.ts` currently asserts `3` against a mock reimplementation, not the real constant (audit P6 — rewrite to drive the real `StarpeaceSession`).
+- **ServerBusy poll**: ~50 s cadence (`SERVER_BUSY_CHECK_INTERVAL_MS = 50_000`), stop after 4 consecutive failures (`MAX_CONSECUTIVE_POLL_FAILURES`) WITHOUT reconnecting — mirrors LEDsTimer `mod 50` + `fExceptCount < 4` (ToolbarHandlerViewer.pas:160-162, ServerCnxHandler.pas:3596-3611).
+- Before reconnecting, drain all pending RIDs (rule 3); after re-Logon, all old object ids are stale.
 
 ## Testing
 
@@ -185,7 +187,7 @@ npm test -- rdo-request-guards  # Guards (void push, buffer check)
 
 ## Delphi Source Reference
 
-Key files in `C:\Users\RobinALEMAN\Documents\SPO\SPO-Original`:
+Key files in `../SPO-Original` (sibling folder of SPO-WebClient):
 - `Rdo/Client/WinSockRDOConnection.pas` — Socket connection, query send/receive, error handlers
 - `Rdo/Client/RDOConnectionPool.pas` — Connection pooling with load balancing
 - `Rdo/Client/RDOObjectProxy.pas` — Proxy timeout, error-to-HRESULT mapping

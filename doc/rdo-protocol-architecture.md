@@ -1,8 +1,8 @@
 # RDO Protocol Architecture — Server & Client Perspectives
 
-> **Source path:** `C:\Users\RobinALEMAN\Documents\SPO\SPO-Original\Rdo\`
-> **Generated:** 2026-02-24 by delphi-archaeologist skill
-> **Evidence confidence:** HIGH — all claims cite Delphi source line numbers
+> **Source path:** `../SPO-Original/Rdo/` (sibling folder of SPO-WebClient)
+> **Generated:** 2026-02-24 by delphi-archaeologist skill — **revised 2026-07-02 against live wire captures** (RDO conformity audit, `report/rdo-conformity-report.md`)
+> **Evidence confidence:** HIGH — claims cite live capture lines and/or Delphi source lines. Where a capture and a source-reading disagreed, the capture won (see §0).
 > **Variants:** 3 parallel implementations (`Rdo/`, `Rdo.IS/`, `Rdo.BIN/`) share identical structure; this doc references the base `Rdo/` variant.
 
 ## Overview
@@ -10,9 +10,23 @@
 RDO (Remote Data Objects) is SPO's custom text-based RPC protocol. It exposes Delphi `published` members (properties, functions, procedures) over TCP sockets, using Delphi's RTTI (Run-Time Type Information) for dynamic dispatch. The protocol is **bidirectional** — both sides of a TCP connection can send queries and receive responses.
 
 **Related docs:**
+- [RDO Session Lifecycle](rdo-session-lifecycle.md) — login sequences, logoff, timeouts, KeepAlive, ServerBusy, reconnection (**mandatory companion** for any session/connection work)
 - [RDO Typing System (TypeScript API)](rdo_typing_system.md) — WebClient's type-safe builder classes
 - [SPO-Original Reference Index](spo-original-reference.md) — Per-object RDO member tables
 - [Building Details Protocol](building_details_protocol.md) — Building property queries
+- [Live wire captures](Mock_Server_scenarios_captures.md) and [building_details_rdo.txt](building_details_rdo.txt) — raw evidence (primary reference)
+
+---
+
+## 0. Evidence Hierarchy (READ FIRST)
+
+The conformity target is **the exact bytes the original Voyager client put on the wire**, recorded live against the production server (`User-Agent: FIVEVoyager`, server 158.69.153.134, Feb 2026).
+
+1. **Live captures are the primary reference** — [Mock_Server_scenarios_captures.md](Mock_Server_scenarios_captures.md) (14 scenarios: auth, world list, login, map, build, mail…) and [building_details_rdo.txt](building_details_rdo.txt) (cacher/inspector). They show byte sequences that demonstrably worked in production. Citations of the form `[capture :N]` in this doc mean line `N` of the scenarios file.
+2. **Legacy client source is the secondary reference** — `Voyager/` + `Rdo/Client/` explain *why* the captured bytes look the way they do (COM late-binding marshaling, `RDOObjectProxy.pas`).
+3. **Server RTTI classification (property vs function) is NOT the reference for verb choice.** The client's COM dispatch decides the verb; the server tolerates it via the GET fallthrough (§8.1). Example: `RDOOpenSession` is a Delphi *function* but goes out as `get` [capture :10].
+4. **Absence from a capture is NOT negative evidence.** Captures contain QueryId gaps where frames were elided — e.g. IDs 17–33 are missing, which is exactly the 17-frame world-login sequence (§5.2). Presence proves; absence proves nothing.
+5. **On conflict, captures win.** First explain from server source *why* the captured form works, then align docs and code with the capture — never the other way around.
 
 ---
 
@@ -20,12 +34,13 @@ RDO (Remote Data Objects) is SPO's custom text-based RPC protocol. It exposes De
 
 ### 1.1 Wire Framing
 
-Messages are **semicolon-terminated text strings** over raw TCP. There are no length prefixes, no binary headers — just ANSI/Latin-1 text delimited by `;`.
+Messages are **semicolon-terminated text strings** over raw TCP. There are no length prefixes, no binary headers — just **single-byte ANSI/Latin-1** text delimited by `;`. Never UTF-8: any byte ≥ 0x80 must be Latin-1. (WebClient: every RDO socket write goes through `writeRdoFrame()` in `src/server/rdo-helpers.ts`, enforced by `no-raw-rdo-writes.test.ts`.)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Frame = <MessageType> <SP> [<QueryId> <SP>] <Body> ";"  │
-└─────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│ Query  = "C" [<SP> <QueryId>] <SP> <Body> ";"                  │
+│ Answer = "A" <QueryId> <SP> <Body> ";"    ← NO space after "A" │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 | Field | Format | Required | Description |
@@ -38,31 +53,38 @@ Messages are **semicolon-terminated text strings** over raw TCP. There are no le
 **Evidence:** `RDOProtocol.pas:47-48` — `CallID = 'C'`, `AnswerID = 'A'`; `RDOProtocol.pas:25` — `QueryTerm = ';'`
 
 **Key behaviors:**
-- Semicolons inside `"..."` literal delimiters are **not** treated as terminators [RDOUtils.pas:`KeyWordPos`, line 13]
+- **`C`/`A` spacing is asymmetric.** Queries have a space after `C` (`C 17 sel …;`); answers glue the QueryId to `A` (`A17 res=…;`). [capture :8-17; client `WinSockRDOConnection.pas:630`; server `WinSockRDOConnectionsServer.pas:368` — `AnswerId + QueryResult`]
+- Semicolons inside `"..."` literal delimiters are **not** treated as terminators [RDOUtils.pas `KeyWordPos`:109-121 skips `;` inside quotes]
 - TCP stream reassembly: incoming data is appended to a buffer; `GetQueryText()` extracts complete `;`-terminated messages [RDOUtils.pas:469-482]
+- **Frames coalesce.** One TCP segment can carry a response glued directly to a server push (or several pushes chained), with nothing but `;` between them: `A50 ServerBusy="#0";C sel 40133496 call RefreshTycoon "*" …` [capture :1014, :1032, :2021, :2107]. The framer MUST split on `;` outside quotes and dispatch each frame independently by its first character (`A` → response, `C` → push). A naive `split(';')` corrupts payloads containing `;` inside strings.
 - Fire-and-forget calls (via `Send()`) omit the QueryId entirely: `C <body>;` [WinSockRDOConnection.pas:692-703]
 - Synchronous calls (via `SendReceive()`) include the QueryId: `C <queryId> <body>;` [WinSockRDOConnection.pas:600-690]
+- **QueryId is a 16-bit wrap-around counter**: `(id + 1) mod 65536` [WinSockRDOConnection.pas:140-144]. In the legacy client the counter is *process-global* (module var `LastQueryId`), which is why the captured mail socket starts at `C 2172` instead of 0 [capture :3538]. Per-socket counters are equally valid — the server only echoes the id back.
 
 ### 1.2 Message Examples
 
 ```
 Client → Server (synchronous get):
-  C 17 sel 42 get Population;
-
-Server → Client (response):
-  A 17 Population="#1500000";
+  C 40 sel 8161308 get ServerBusy;
+Server → Client (response — the member name is echoed, NOT "res="):
+  A40 ServerBusy="#0";                                  [capture :993-994]
 
 Client → Server (method call with return):
-  C 23 sel 42 call RDOSetPrice "^" "#5","@3.14";
-
+  C 3 sel 142217260 call RDOLogonUser "^" "%Crazz","%…";
 Server → Client (response):
-  A 23 res="#1";
+  A3 res="#0";                                          [capture :14-15]
 
-Client → Server (fire-and-forget, no QueryId):
-  C sel 42 set Name="%Hello World";
+Client → Server (synchronous VOID call — legal, acked with empty body):
+  C 4 sel 142217260 call RDOEndSession "*" ;
+Server → Client (empty ack):
+  A4 ;                                                  [capture :16-17]
+
+Client → Server (fire-and-forget, no QueryId — server stays silent):
+  C sel 8161308 call ClientAware "*" ;                  [capture :1017]
 
 Server → Client (push, no QueryId):
-  C sel 100 call RefreshArea "^" "#10","#20","#5","#5";
+  C sel 40133496 call RefreshTycoon "*" "%4666201923","%10359","#2","#33","#70";
+                                                        [capture :1014]
 ```
 
 ### 1.3 Query Grammar
@@ -94,15 +116,35 @@ sel 42 get Name, get Population, call RDOGetStatus "^";
 ### 1.4 Response Grammar
 
 ```
-Response  := <Success> | <Error>
-Success   := { <PropResult> | <CallResult> | <IdResult> }
-PropResult := <PropName> "=" <Literal>
+Response   := "A" <QueryId> <SP> <Body> ";"
+Body       := { <PropResult> } | <CallResult> | <IdResult> | <Error> | <Empty>
+PropResult := <PropName> "=" <Literal>            ← GET echoes the member name
 CallResult := "res" "=" <Literal> { <SP> "bref" <N> "=" <Literal> }
-IdResult  := "objid" "=" <Literal>
-Error     := "error" <SP> <ErrorCode>
+IdResult   := "objid" "=" <Literal>
+Empty      := ""                                  ← void call / set ack: "A<id> ;"
+Error      := "error" <SP> <ErrorCode> [ " getting " <PropName> | " setting " <PropName> ]
 ```
 
-**Evidence:** `RDOProtocol.pas:15-18` — `ResultVarName='res'`, `ByRefParName='bref'`, `ObjIdVarName='objid'`, `ErrorKeyWord='error'`
+Response shape depends on the **request verb**, not on success alone:
+
+| Request | Response shape | Live example |
+|---|---|---|
+| `get <Prop>` | `A<id> <Prop>="<typed>"` | `A1 RDOOpenSession="#142217260"` [capture :11] |
+| `call … "^"` | `A<id> res="<typed>"` | `A3 res="#0"` [capture :15] |
+| `call … "*"` with QueryId | `A<id> ;` (empty ack) | `A4 ;` [capture :17] |
+| `set <Prop>="…"` with QueryId | `A<id> ;` (empty ack) | `A34 ;` [capture :979] |
+| `idof "<Name>"` | `A<id> objid="<int>"` | `A0 objid="39751288"` [capture :9] |
+| GET failure | `A<id> error <n> getting <Prop>` | `RDOQueryServer.pas` GetCommand:278 |
+| SET failure | `A<id> error <n> setting <Prop>` | `RDOQueryServer.pas` SetCommand:344 |
+| CALL failure | `A<id> error <n>` | `RDOQueryServer.pas` CallCommand:504 |
+
+**Parser rules (WebClient MUST):**
+- Never assume `res=` — a GET answer uses the **member name** as the variable name.
+- Treat `A<id> ;` (empty body) as a **successful ack**, not an error or a malformed frame.
+- The error matcher must accept the ` getting <Prop>` / ` setting <Prop>` suffixes, not only bare `error <n>`.
+- Quirk to tolerate: an overloaded server can emit a malformed busy reply — `A` immediately followed by `error 17`, with no QueryId and no terminator [WinSockRDOConnectionsServer.pas:812].
+
+**Evidence:** `RDOQueryServer.pas:174-178` — reply assembly is `QueryId + ' ' + Result + ';'` and a void result is the empty string, hence `A<id> ;`. `RDOProtocol.pas:15-18` — `ResultVarName='res'`, `ByRefParName='bref'`, `ObjIdVarName='objid'`, `ErrorKeyWord='error'`.
 
 ---
 
@@ -126,14 +168,15 @@ Every value in the protocol is prefixed with a single character identifying its 
 
 ### 2.2 Boolean Encoding
 
-Delphi `wordbool` and `boolean` values are marshaled as ordinals:
+Booleans travel as **ordinals under the `#` prefix** — `varBoolean` shares the ordinal marshaling branch [RDOUtils.pas:360-393].
 
-| Value | Wire Encoding | Notes |
-|-------|---------------|-------|
-| `true` | `#-1` | Delphi OLE convention: `true = -1` (all bits set) |
-| `false` | `#0` | Standard zero |
+| Direction | true | false | Evidence |
+|-----------|------|-------|----------|
+| Client → server (emission) | `#-1` | `#0` | `set EnableEvents="#-1"` [capture :978]; `building_details_rdo.txt:2,17` |
+| Server → client (returns) | `#-1` (typical) | `#0` | mail `Save` → `A2176 res="#-1"` [capture :3547]; `A67 ServerBusy="#0"` [capture :2076] |
 
-**TRAP:** Using `#1` for `true` will NOT work correctly in Delphi — it must be `#-1`.
+- **Emission rule (MUST):** always emit `#-1` for true / `#0` for false — byte-identical to the reference client (COM OLE convention: `true = -1`, all bits set). Never "normalize" a captured `#-1` to `#1`.
+- **Parsing rule (MUST):** treat **any non-zero ordinal as true**. The Delphi decoder casts the ordinal back with `VarCast(…, varInteger)` [RDOUtils.pas:333-336], so a server-side ordinal `#1` is possible and must parse as true.
 
 ### 2.3 String Escaping
 
@@ -158,7 +201,7 @@ Response: res="#1" bref1="%output_value";
                    ↑ by-ref result filled by the method
 ```
 
-Memory is allocated for each `^` param (`GetMem` for a variant pointer) and freed after the result is read back [RDOQueryServer.pas:441-468].
+Memory is allocated for each `^` param (`GetMem` for a variant pointer) and freed after the result is read back [RDOQueryServer.pas:441-498 — `GetMem` :441/:461, `FreeMem` :497].
 
 ---
 
@@ -470,7 +513,7 @@ end;
 3. First char = `A` → response: find matching query by ID in `fSentQueries`, copy result, signal event
 4. First char = `C` → incoming call (push): enqueue for worker thread processing
 
-**No automatic reconnection.** On disconnect, the caller must explicitly re-call `Connect()`. [WinSockRDOConnection.pas:570-574]
+**No automatic reconnection at the transport layer.** On disconnect, the caller must explicitly re-call `Connect()` [WinSockRDOConnection.pas:570-574]. Voyager's application layer reconnects **only on a real socket close** — never on a query timeout (see [rdo-session-lifecycle.md](rdo-session-lifecycle.md) §Reconnection).
 
 ### 4.5 Connection Pool (RDOConnectionPool.pas)
 
@@ -499,77 +542,46 @@ There are two mechanisms for resolving object IDs:
 
 **Special built-in:** `get RDOCnntId` returns the server-side connection ID for the current socket — this is handled directly in `TRDOQueryServer.GetCommand` without touching the object server [RDOQueryServer.pas:269].
 
-### 5.2 Complete Login Sequence
+### 5.2 Complete Login Sequence (world / Interface Server)
 
-```
-┌─────────────┐        ┌──────────────────┐        ┌──────────────┐
-│   Client     │        │ Interface Server  │        │ Model Server │
-│  (Voyager)   │        │    (IS)           │        │    (MS)      │
-└──────┬───────┘        └────────┬─────────┘        └──────┬───────┘
-       │                         │                          │
-  1. Connect TCP ──────────────►│                          │
-       │                         │                          │
-  2. idof "InterfaceServer" ───►│                          │
-       │◄── objid=<ISId> ───────│                          │
-       │                         │                          │
-  3. sel <ISId> get WorldName ─►│                          │
-       │◄── WorldName="%Shamba" │                          │
-       │                         │                          │
-  4. sel <ISId> call            │                          │
-     AccountStatus "^"          │                          │
-     "%user","%pass" ─────────►│                          │
-       │◄── res="#0" ───────────│ (0 = ACCOUNT_Valid)      │
-       │                         │                          │
-  5. sel <ISId> call            │                          │
-     Logon "^" "%user","%pass" ►│                          │
-       │                         │── RDOGetTycoon ────────►│
-       │                         │◄── tycoon proxy ────────│
-       │◄── res="#<CVId>" ──────│ (CVId = TClientView ptr) │
-       │                         │                          │
-  6. sel <CVId> get TycoonId ──►│                          │
-       │◄── TycoonId="#123" ────│                          │
-       │                         │                          │
-  7. sel <CVId> get RDOCnntId ─►│                          │
-       │◄── RDOCnntId="#7" ─────│ (connection ID)          │
-       │                         │                          │
-  8. Register local              │                          │
-     'InterfaceEvents' handler   │                          │
-     (TRDOServer on same socket) │                          │
-       │                         │                          │
-  9. sel <CVId> call             │                          │
-     RegisterEventsById "^"      │                          │
-     "#7" ─────────────────────►│                          │
-       │                         │  Creates push proxy      │
-       │                         │  bound to client's       │
-       │◄── PUSH: InitClient ───│  'InterfaceEvents' hook  │
-       │◄── PUSH: NewMail ──────│                          │
-       │◄── res="#0" ───────────│                          │
-       │                         │                          │
- 10. sel <CVId> call             │                          │
-     SetViewedArea "*"           │                          │
-     "#x","#y","#dx","#dy" ────►│  (fire-and-forget, void) │
-       │                         │                          │
-       │ ── game loop ──────────│                          │
-       │                         │                          │
-```
+Exact ordered RDO calls, from `TServerCnxHandler.Logon` (`Voyager/URLHandlers/ServerCnxHandler.pas:2669-2878`). The live capture corroborates this indirectly: **QueryIds 17–33 are elided** between the last directory frame (`C 16`, capture :151) and the first in-game frame (`C 34`, capture :978) — exactly these 17 frames.
+
+| # | Wire frame (client → IS) | Delphi site | Notes |
+|---|--------------------------|-------------|-------|
+| 1 | `idof "InterfaceServer"` | :2745 | Resolve IS root object |
+| 2–11 | `sel <ISId> get WorldName` / `DSArea` / `WorldURL` / `DAAddr` / `DALockPort` / `MailAddr` / `MailPort` / `WorldXSize` / `WorldYSize` / `WorldSeason` | :2747-2761 | Ten property GETs; each answer uses the member-name form (`A<id> WorldName="%…"`) |
+| — | *(local)* proxy timeout raised 60 s → 180 s (`ISProxyTimeOut`) | :2762 | Before the heavy calls |
+| 12 | `sel <ISId> call AccountStatus "^" "%user","%pass"` | :2763 | `res="#0"` = account valid |
+| 13 | `sel <ISId> call Logon "^" "%user","%pass"` | :2771 | Returns the `TClientView` object id; proxy rebinds to it (:2776) |
+| — | *(local)* client starts its own RDO **server** on the SAME socket and registers hook `'InterfaceEvents'` | :2780, 2968-2977 | MUST happen before RegisterEventsById, else pushes have no target |
+| 14–16 | `sel <CVId> get MailAccount` / `TycoonId` / `RDOCnntId` | :2784-2788 | `RDOCnntId` is the magic connection-id property, intercepted by the parser itself [RDOQueryServer.pas:269-274] |
+| 17 | `sel <CVId> call RegisterEventsById "^" "#<ConnId>"` | :2789 | Server wires the reverse push proxy and fires `InitClient` (+ `NewMail`) **before** answering |
+| 18 | `sel <CVId> call SetLanguage …` | :2792 | After successful registration |
+
+Immediately after login, the captured client sends: `set EnableEvents="#-1"` (acked `A34 ;`), `PickEvent`/`GetTycoonCookie` reads, and fire-and-forget `ClientAware "*"` [capture :978-1019].
 
 **Evidence:**
 - `Logon()`: `InterfaceServer.pas:3179-3294` — creates `TClientView`, returns `integer(ClientView)`
-- `RegisterEventsById()`: `InterfaceServer.pas:1891` — creates push proxy, sends `InitClient`
-- Login sequence: reconstructed from Voyager's `ServerCnxHandler.pas` URL handler flow
+- `RegisterEventsById()`: `InterfaceServer.pas:1891-1942` — creates push proxy, fires `InitClient` synchronously before returning
+- Timeouts, logoff, reconnection, per-socket sessions: [rdo-session-lifecycle.md](rdo-session-lifecycle.md)
 
 ### 5.3 Directory Server Session
 
-The Directory Server uses a separate session pattern — `RDOOpenSession` returns a `TDirectorySession` object ID:
+**One session per query batch** — the captured client opens and closes a fresh session for every directory operation [capture :8-17, :21-60, :64-151]:
 
 ```
-Client → DS: idof "DirectoryServer"        → objid=<DSId>
-Client → DS: sel <DSId> call RDOOpenSession → res=#<SessionId>
-Client → DS: sel <SessionId> call RDOLogonUser "%user","%pass" → res=#0
-Client → DS: sel <SessionId> call RDOEndSession
+C 0 idof "DirectoryServer";                               A0 objid="39751288";
+C 1 sel 39751288 get RDOOpenSession;                      A1 RDOOpenSession="#142217260";
+C 2 sel 142217260 call RDOMapSegaUser "^" "%Crazz";       A2 res="%";
+C 3 sel 142217260 call RDOLogonUser "^" "%Crazz","%…";    A3 res="#0";
+C 4 sel 142217260 call RDOEndSession "*" ;                A4 ;
 ```
 
-**Evidence:** `DServer/DirectoryServer.pas:143` (`RDOOpenSession`), `:1452` (creates `TDirectorySession`), `:92` (`RDOLogonUser`), `:31` (`RDOEndSession`)
+- **`RDOOpenSession` goes out as `get`, not `call`.** It is a Delphi *function*, but a 0-arg member read in expression position is marshaled as COM PROPERTYGET [RDOObjectProxy.pas:396-406]; the server executes it via the GET fallthrough and the answer echoes the member name (`RDOOpenSession="#…"`). Do NOT "fix" this to `call` — the capture is the reference.
+- `RDOEndSession` is a **void call sent WITH a QueryId** and acked `A<id> ;` — the legacy client waits for this ack.
+- World lists come from `call RDOQueryKey "^" "%<key>","%<newline-separated props>"` on the session object [capture :25-58].
+
+**Evidence:** capture :8-17. Two source copies exist: `DServer/DirectoryServer.pas` — decls `RDOOpenSession` :143 (impl :1452), `TDirectorySession.RDOEndSession` :31 (impl :288), `RDOLogonUser` :92 — and the sibling `Directory Server/DirectoryServer.pas` (same members; impls `RDOOpenSession` :844, `RDOEndSession` :180-196). Client side: `LogonHandlerViewer.pas:300-377` (BindTo → `RDOOpenSession` → rebind → `RDOQueryKey` → `RDOEndSession`).
 
 ---
 
@@ -676,7 +688,14 @@ These are the published methods the IS calls on the client's `'InterfaceEvents'`
 
 **Evidence:** `ErrorCodes.pas:6-23`
 
-**Wire format:** Errors are returned as `error <code>` (e.g., `error 5`). The `CreateErrorMessage` function produces this string [ErrorCodes.pas:32-38].
+**Wire format:** three shapes, all of which the parser MUST accept:
+- `error <code>` — CALL failures and generic errors [`ErrorCodes.pas:32-38` `CreateErrorMessage`; `RDOQueryServer.pas` CallCommand:504]
+- `error <code> getting <PropName>` — GET failures [`RDOQueryServer.pas` GetCommand:278]
+- `error <code> setting <PropName>` — SET failures [`RDOQueryServer.pas` SetCommand:344]
+
+An anchored regex like `^error\s+(\d+)$` silently misclassifies the suffixed forms as success — this was a real WebClient bug (conformity fix F4).
+
+**Quirk:** when busy, the server can emit a malformed reply `A` + `error 17` with **no QueryId and no `;`** [WinSockRDOConnectionsServer.pas:812]. Parsers must not crash on it.
 
 ### 7.2 Server-Side Error Handling
 
@@ -694,18 +713,23 @@ These are the published methods the IS calls on the client's `'InterfaceEvents'`
 
 ## 8. Behavioral Edge Cases & Gotchas
 
-### 8.1 GET Fallthrough (Critical)
+### 8.1 GET Fallthrough & Verb Choice (Critical)
 
-`GetProperty` falls through to `CallMethod` when no published property is found. This means:
+`GetProperty` falls through to `CallMethod` when no published property is found [RDOObjectServer.pas:112-116]:
 
 ```
-get SomeFunction     ← works (calls the function via fallthrough)
+get SomeFunction     ← works (executes the function via fallthrough)
 call SomeFunction    ← also works (direct method call)
 ```
 
-Both produce the same result, but `get` on a function is **semantically wrong**. The WebClient should always use `call` for published functions and `get`/`set` only for published properties.
+The legacy client **relies** on this: COM late binding routes any **0-argument member read in expression position** as PROPERTYGET → wire `get`, even when the member is a Delphi `function` [RDOObjectProxy.pas:396-406].
 
-**Evidence:** `RDOObjectServer.pas:112-116`
+**Normative rule (capture-first) — mirror the reference client's bytes, NOT the server's property/function classification:**
+- 0-arg member read for its value → **`get`** — e.g. `get RDOOpenSession` [capture :10], `get Logoff` (world logoff), `get ServerBusy` [capture :993]
+- member invoked with arguments → **`call`**
+- assignment → **`set`**
+
+`get` on a function is not a mistake to avoid — it is what the reference client emits. What IS a conformity bug is inventing `call` frames the reference client never produced (this doc's earlier revision had it backwards; fixed 2026-07-02).
 
 ### 8.2 SET Has No Fallthrough
 
@@ -713,9 +737,9 @@ Unlike `get`, `set` on a non-existent property returns `errUnexistentProperty`. 
 
 **Evidence:** `RDOObjectServer.pas:176`
 
-### 8.3 Boolean True = -1
+### 8.3 Boolean True = -1 (emission) / non-zero (parsing)
 
-Delphi `wordbool` true = -1 (all bits set, 0xFFFF), NOT 1. Sending `#1` may cause unexpected behavior.
+Delphi `wordbool` true = -1 (all bits set), so the reference client **emits** `#-1`/`#0` — see §2.2 for the full rule set. Emit `#-1` exactly; when **parsing**, accept any non-zero ordinal as true (server-side ordinals can legitimately surface as `#1`).
 
 ### 8.4 Doubles and Singles Always on Stack
 
@@ -723,25 +747,23 @@ The x86 assembly dispatch pushes floating-point parameters onto the stack even w
 
 **Evidence:** `RDOObjectServer.pas:257-265`
 
-### 8.5 Fire-and-Forget Has No Query ID — NEVER MIX `"*"` WITH QueryId
+### 8.5 QueryId × Separator Matrix
 
-`Send()` omits the query ID: `C <body>;`. The server processes it but sends no response. The client cannot detect errors from fire-and-forget calls.
+Two independent axes: **QueryId present or absent** (decides whether the server replies at all) and **`"^"` vs `"*"`** (decides whether the reply carries `res=`). Both separators parse parameters identically [RDOQueryServer.pas:419-424]; the separator only controls return-value capture.
 
-**CRITICAL SERVER-CRASHING BUG:** Sending a `"*"` (void push) command WITH a QueryId
-(`C <QueryId> sel ... call Method "*" args;`) crashes the Delphi server's FIVE layer.
-The server records the QueryId for response routing, calls the void procedure, then
-attempts to serialize the Unassigned variant result into `A<QueryId> res=...;` — this
-corrupts server state and causes ALL subsequent queries from ALL clients to be rejected
-as "Malformed query" (errMalformedQuery).
+- **No QueryId (`Send()`):** the server processes the query but sends **nothing back** — reply assembly discards the result when the echoed QueryId is empty [RDOQueryServer.pas:174-178]. The client cannot detect errors from fire-and-forget calls.
+- **QueryId present (`SendReceive()`):** the server **always** replies — for a void `"*"` call or a `set`, the reply is the empty ack `A<id> ;`.
 
-**WebClient rule:** `sendRdoRequest()` auto-adds a QueryId, so it MUST use `"^"` separator.
-Void push commands MUST use direct `socket.write(RdoCommand.build())` which omits the QueryId.
+**Capture-proven:** the legacy client routinely sends void `"*"` calls WITH a QueryId and receives `A<id> ;` — `RDOEndSession` → `A4 ;` [capture :16-17], `AddLine` → `A2174 ;` [:3542-3543], `CloseMessage` → `A2177 ;` [:3548-3549], and `set EnableEvents="#-1"` → `A34 ;` [:978-979]. Mechanism: the client's `Invoke` uses `SendReceive` whenever `WaitForAnswer=true`, even for void members [RDOObjectProxy.pas:441-443].
 
-| Method | QueryId | Separator | Safe |
-|--------|---------|-----------|------|
-| `socket.write(RdoCommand.build())` | absent | `"*"` | YES — fire-and-forget |
-| `sendRdoRequest()` | present | `"^"` | YES — synchronous with response |
-| `sendRdoRequest()` | present | `"*"` | **NO — CRASHES SERVER** |
+> **Retired claim (2026-07-02):** earlier revisions of this document asserted that `"*"` + QueryId "crashes the Delphi server's FIVE layer" and corrupts all subsequent queries. The live captures disprove this, and `RDOQueryServer.pas:174-178` shows why (void result → empty body → `A<id> ;`). The claim is retired; do not reintroduce it.
+
+| Form | Wire-legal? | Server behavior | WebClient policy |
+|------|-------------|-----------------|------------------|
+| QueryId + `"^"` | YES | `A<id> res="…"` | `sendRdoRequest()` — canonical synchronous form |
+| QueryId + `"*"` (or `set`) | YES | empty ack `A<id> ;` | **Forbidden by project convention** (`assertNotVoidPush` guard): the WebClient standardizes on one form per intent. Not a crash risk — if a void ack is ever needed, `A<id> ;` is the expected reply, and `set` via `sendRdoRequest()` legitimately receives it. |
+| no QueryId + `"*"` | YES | silence | `writeRdoFrame(socket, cmd)` — canonical fire-and-forget; matches legacy `Send()` usage (`ClientAware`, `SetViewedArea`, `MsgCompositionChanged` [capture :1017, :1032]) |
+| no QueryId + `"^"` | **NO** | reply is built then has no destination; reported to crash the server (live incident) | **MUST NOT.** The legacy client cannot produce this form — wanting a result implies `SendReceive` + QueryId. No capture contains it. |
 
 ### 8.6 Channel Codec Never Implemented
 
@@ -789,14 +811,17 @@ All three share identical file structure (`Client/`, `Server/`, `Common/`) and t
 │  FRAMING                                                     │
 │  C <queryId> <body>;          Client → Server (synchronous)  │
 │  C <body>;                    Client → Server (fire-forget)  │
-│  A <queryId> <result>;        Server → Client (response)     │
+│  A<queryId> <result>;         Server → Client (NO space!)    │
+│  A<queryId> ;                 Ack of void call / set          │
 │  C <body>;                    Server → Client (push)         │
+│  Frames may coalesce: split on ";" outside quotes            │
 │                                                              │
 │  RESPONSE VARIABLES                                          │
-│  res=<value>                  Method return value             │
+│  <Prop>=<value>               GET result (member name echo)  │
+│  res=<value>                  call "^" return value           │
 │  objid=<value>                Object ID from idof            │
 │  bref1=<value>                By-reference param 1 result    │
-│  error <code>                 Error (codes 0-17)             │
+│  error <code> [getting|setting <Prop>]  Error (codes 0-17)   │
 │                                                              │
 │  SEPARATORS                                                  │
 │  =     name-value separator                                  │
