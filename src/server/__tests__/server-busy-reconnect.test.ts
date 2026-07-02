@@ -1,17 +1,22 @@
 /**
- * ServerBusy Consecutive Poll Failure → Auto-Reconnect Tests
+ * ServerBusy Poll Failure Handling — LEGACY-CONFORMANT (no reconnect).
  *
- * Validates the poll-failure detection logic added to startServerBusyPolling():
+ * Ground truth (Voyager client):
+ * - The ServerBusy read is a blocking property GET under ISProxyTimeOut=180s,
+ *   polled ~every 50s (ToolbarHandlerViewer.pas:131-162 — LEDsTimer 1s gated mod 50).
+ * - After 4 consecutive exceptions the client simply STOPS polling
+ *   (fExceptCount gate, ServerCnxHandler.pas:3596-3611). It NEVER reconnects
+ *   from poll failures — reconnection happens only on a real socket disconnect.
+ * - Busy state also updates instantly via the ModelStatusChanged push.
+ *
+ * Validates the poll-failure logic in startServerBusyPolling():
  * - Consecutive failure counter increments on each poll timeout
  * - Counter resets on successful poll
- * - After MAX_CONSECUTIVE_POLL_FAILURES (5), triggers stopServerBusyPolling + attemptWorldReconnect
+ * - After MAX_CONSECUTIVE_POLL_FAILURES (4): stopServerBusyPolling, NO reconnect
  * - rdoMetrics.totalServerBusyPollFailures tracks cumulative failures
- * - getQueueStatus() exposes consecutivePollFailures
- *
- * Mirrors Delphi's except → RenewWorldProxy pattern, batched over 5 consecutive failures.
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 
 // ── Minimal harness mirroring ServerBusy poll logic from spo_session.ts ──
 
@@ -24,9 +29,9 @@ function toErrorMessage(err: unknown): string {
   return String(err);
 }
 
-class ServerBusyReconnectMachine {
+class ServerBusyPollMachine {
   consecutivePollFailures = 0;
-  static readonly MAX_CONSECUTIVE_POLL_FAILURES = 5;
+  static readonly MAX_CONSECUTIVE_POLL_FAILURES = 4; // legacy fExceptCount gate
 
   rdoMetrics: RdoMetrics = {
     totalServerBusyPollFailures: 0,
@@ -37,8 +42,6 @@ class ServerBusyReconnectMachine {
   // Spies
   stopServerBusyPollingCalled = 0;
   attemptWorldReconnectCalled = 0;
-  attemptWorldReconnectResult: 'resolve' | 'reject' = 'resolve';
-  reconnectErrors: string[] = [];
   warnLogs: string[] = [];
   errorLogs: string[] = [];
 
@@ -52,13 +55,11 @@ class ServerBusyReconnectMachine {
 
   async attemptWorldReconnect(): Promise<void> {
     this.attemptWorldReconnectCalled++;
-    if (this.attemptWorldReconnectResult === 'reject') {
-      throw new Error('Reconnect failed');
-    }
   }
 
   /**
-   * Simulates a poll failure — replicates the catch block logic.
+   * Simulates a poll failure — replicates the catch block logic
+   * (spo_session.ts startServerBusyPolling).
    */
   async simulatePollFailure(): Promise<void> {
     try {
@@ -67,27 +68,20 @@ class ServerBusyReconnectMachine {
       this.consecutivePollFailures++;
       this.rdoMetrics.totalServerBusyPollFailures++;
       this.warnLogs.push(
-        `[ServerBusy] Poll failed (${this.consecutivePollFailures}/${ServerBusyReconnectMachine.MAX_CONSECUTIVE_POLL_FAILURES}): ${toErrorMessage(e)}`
+        `[ServerBusy] Poll failed (${this.consecutivePollFailures}/${ServerBusyPollMachine.MAX_CONSECUTIVE_POLL_FAILURES}): ${toErrorMessage(e)}`
       );
 
-      if (this.consecutivePollFailures >= ServerBusyReconnectMachine.MAX_CONSECUTIVE_POLL_FAILURES) {
+      if (this.consecutivePollFailures >= ServerBusyPollMachine.MAX_CONSECUTIVE_POLL_FAILURES) {
+        // LEGACY PARITY: stop polling — never reconnect from poll failures.
         this.errorLogs.push(
-          `[ServerBusy] ${this.consecutivePollFailures} consecutive poll failures — server appears unresponsive, triggering reconnect`
+          `[ServerBusy] ${this.consecutivePollFailures} consecutive poll failures — stopping ServerBusy polling (push channel remains active)`
         );
-        this.consecutivePollFailures = 0;
         this.stopServerBusyPolling();
-        try {
-          await this.attemptWorldReconnect();
-        } catch (reconnectErr: unknown) {
-          this.reconnectErrors.push(toErrorMessage(reconnectErr));
-        }
       }
     }
   }
 
-  /**
-   * Simulates a successful poll — replicates the success path.
-   */
+  /** Simulates a successful poll — replicates the success path. */
   simulatePollSuccess(): void {
     this.consecutivePollFailures = 0;
   }
@@ -102,11 +96,11 @@ class ServerBusyReconnectMachine {
 
 // ── Tests ──────────────────────────────────────────────────────────────────
 
-describe('ServerBusy consecutive poll failure → auto-reconnect', () => {
-  let machine: ServerBusyReconnectMachine;
+describe('ServerBusy consecutive poll failures → stop polling (NO reconnect)', () => {
+  let machine: ServerBusyPollMachine;
 
   beforeEach(() => {
-    machine = new ServerBusyReconnectMachine();
+    machine = new ServerBusyPollMachine();
   });
 
   it('increments consecutivePollFailures on each failure', async () => {
@@ -126,55 +120,27 @@ describe('ServerBusy consecutive poll failure → auto-reconnect', () => {
     expect(machine.consecutivePollFailures).toBe(0);
   });
 
-  it('triggers reconnect at exactly MAX_CONSECUTIVE_POLL_FAILURES (5)', async () => {
-    for (let i = 0; i < 5; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.attemptWorldReconnectCalled).toBe(1);
-    expect(machine.stopServerBusyPollingCalled).toBe(1);
-  });
-
-  it('does NOT trigger reconnect at 4 consecutive failures', async () => {
+  it('stops polling at exactly MAX_CONSECUTIVE_POLL_FAILURES (4, legacy fExceptCount)', async () => {
     for (let i = 0; i < 4; i++) {
       await machine.simulatePollFailure();
     }
+    expect(machine.stopServerBusyPollingCalled).toBe(1);
+    expect(machine.serverBusyCheckInterval).toBeNull();
+  });
+
+  it('NEVER triggers a reconnect from poll failures (legacy parity)', async () => {
+    for (let i = 0; i < 10; i++) {
+      await machine.simulatePollFailure();
+    }
     expect(machine.attemptWorldReconnectCalled).toBe(0);
+  });
+
+  it('does NOT stop polling at 3 consecutive failures', async () => {
+    for (let i = 0; i < 3; i++) {
+      await machine.simulatePollFailure();
+    }
     expect(machine.stopServerBusyPollingCalled).toBe(0);
-    expect(machine.consecutivePollFailures).toBe(4);
-  });
-
-  it('resets counter to 0 before calling reconnect', async () => {
-    const origReconnect = machine.attemptWorldReconnect.bind(machine);
-    let counterDuringReconnect = -1;
-    machine.attemptWorldReconnect = async () => {
-      counterDuringReconnect = machine.consecutivePollFailures;
-      return origReconnect();
-    };
-
-    for (let i = 0; i < 5; i++) {
-      await machine.simulatePollFailure();
-    }
-    // Counter is reset before stopServerBusyPolling (which also resets), so it's 0
-    expect(counterDuringReconnect).toBe(0);
-  });
-
-  it('calls stopServerBusyPolling before attemptWorldReconnect', async () => {
-    const callOrder: string[] = [];
-    const origStop = machine.stopServerBusyPolling.bind(machine);
-    const origReconnect = machine.attemptWorldReconnect.bind(machine);
-    machine.stopServerBusyPolling = () => {
-      callOrder.push('stop');
-      origStop();
-    };
-    machine.attemptWorldReconnect = async () => {
-      callOrder.push('reconnect');
-      return origReconnect();
-    };
-
-    for (let i = 0; i < 5; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(callOrder).toEqual(['stop', 'reconnect']);
+    expect(machine.consecutivePollFailures).toBe(3);
   });
 
   it('tracks cumulative failures in rdoMetrics.totalServerBusyPollFailures', async () => {
@@ -188,7 +154,7 @@ describe('ServerBusy consecutive poll failure → auto-reconnect', () => {
     expect(machine.rdoMetrics.totalServerBusyPollFailures).toBe(3);
   });
 
-  it('interleaved success resets counter: 3 fail, 1 success, 3 fail = no reconnect', async () => {
+  it('interleaved success resets counter: 3 fail, 1 success, 3 fail = polling still active', async () => {
     for (let i = 0; i < 3; i++) {
       await machine.simulatePollFailure();
     }
@@ -196,26 +162,25 @@ describe('ServerBusy consecutive poll failure → auto-reconnect', () => {
     for (let i = 0; i < 3; i++) {
       await machine.simulatePollFailure();
     }
-    expect(machine.attemptWorldReconnectCalled).toBe(0);
+    expect(machine.stopServerBusyPollingCalled).toBe(0);
     expect(machine.rdoMetrics.totalServerBusyPollFailures).toBe(6);
   });
 
-  it('multiple threshold hits: 5 fail → reconnect → 5 fail → reconnect (cumulative = 10)', async () => {
-    // First burst
-    for (let i = 0; i < 5; i++) {
+  it('polling can restart after a stop (e.g. after a successful reconnect)', async () => {
+    for (let i = 0; i < 4; i++) {
       await machine.simulatePollFailure();
     }
-    expect(machine.attemptWorldReconnectCalled).toBe(1);
+    expect(machine.stopServerBusyPollingCalled).toBe(1);
 
-    // Simulate polling restart after reconnect success
+    // Simulate polling restart (startServerBusyPolling after reconnect)
     machine.serverBusyCheckInterval = {} as ReturnType<typeof setInterval>;
 
-    // Second burst
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       await machine.simulatePollFailure();
     }
-    expect(machine.attemptWorldReconnectCalled).toBe(2);
-    expect(machine.rdoMetrics.totalServerBusyPollFailures).toBe(10);
+    expect(machine.stopServerBusyPollingCalled).toBe(2);
+    expect(machine.rdoMetrics.totalServerBusyPollFailures).toBe(8);
+    expect(machine.attemptWorldReconnectCalled).toBe(0);
   });
 
   it('exposes consecutivePollFailures via getQueueStatus()', async () => {
@@ -234,19 +199,19 @@ describe('ServerBusy consecutive poll failure → auto-reconnect', () => {
     expect(machine.consecutivePollFailures).toBe(0);
   });
 
-  it('catches reconnect errors without crashing', async () => {
-    machine.attemptWorldReconnectResult = 'reject';
-    for (let i = 0; i < 5; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.attemptWorldReconnectCalled).toBe(1);
-    expect(machine.reconnectErrors).toEqual(['Reconnect failed']);
-  });
-
   it('logs progress with failure count ratio', async () => {
     await machine.simulatePollFailure();
-    expect(machine.warnLogs[0]).toContain('(1/5)');
+    expect(machine.warnLogs[0]).toContain('(1/4)');
     await machine.simulatePollFailure();
-    expect(machine.warnLogs[1]).toContain('(2/5)');
+    expect(machine.warnLogs[1]).toContain('(2/4)');
+  });
+
+  it('stop log mentions the push channel, not a reconnect', async () => {
+    for (let i = 0; i < 4; i++) {
+      await machine.simulatePollFailure();
+    }
+    expect(machine.errorLogs[0]).toContain('stopping ServerBusy polling');
+    expect(machine.errorLogs[0]).toContain('push channel remains active');
+    expect(machine.errorLogs[0]).not.toContain('reconnect');
   });
 });

@@ -36,7 +36,7 @@ Handler type signature defined in `ws-handlers/types.ts`. Utility helpers in `ws
 
 ## Timeout Categories
 
-Every `sendRdoRequest()` call should specify a `TimeoutCategory` (FAST / NORMAL / SLOW / VERY_SLOW). Categories are defined in `shared/timeout-categories.ts`. Default is NORMAL (30s RDO / 40s WS).
+Every `sendRdoRequest()` call should specify a `TimeoutCategory` (FAST / NORMAL / SLOW / VERY_SLOW). Categories are defined in `shared/timeout-categories.ts`. FAST = 60s (legacy proxy DefTimeOut); NORMAL/SLOW/VERY_SLOW share the legacy in-play deadline `IS_PROXY_TIMEOUT_MS` = 180s (Delphi ISProxyTimeOut). Default is NORMAL.
 
 ## Protected Files
 

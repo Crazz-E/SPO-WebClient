@@ -1,7 +1,7 @@
 import * as net from 'net';
 import { EventEmitter } from 'events';
 import fetch from 'node-fetch';
-import { TimeoutCategory, TIMEOUT_CONFIG } from '../shared/timeout-categories';
+import { TimeoutCategory, TIMEOUT_CONFIG, IS_PROXY_TIMEOUT_MS } from '../shared/timeout-categories';
 import {
   RdoPacket,
   RdoVerb,
@@ -299,10 +299,12 @@ export class StarpeaceSession extends EventEmitter {
   private readonly MAX_BUFFER_SIZE = 20; // Delphi queues far more; 5 was too aggressive
   private isServerBusy: boolean = false;
   private serverBusyCheckInterval: NodeJS.Timeout | null = null;
-  private readonly SERVER_BUSY_CHECK_INTERVAL_MS = 10000; // Check every 10 seconds
+  /** Legacy cadence: LEDsTimer (1s) gated `mod 50` → ServerBusy read every ~50s (ToolbarHandlerViewer.pas:160-162). */
+  private readonly SERVER_BUSY_CHECK_INTERVAL_MS = 50_000;
   private isPolling = false;
   private consecutivePollFailures = 0;
-  private static readonly MAX_CONSECUTIVE_POLL_FAILURES = 5;
+  /** Legacy: fExceptCount < 4 gate — polling STOPS after 4 consecutive exceptions, no reconnect (ServerCnxHandler.pas:3596-3611). */
+  private static readonly MAX_CONSECUTIVE_POLL_FAILURES = 4;
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private readonly KEEP_ALIVE_INTERVAL_MS = 60000; // Matches Delphi CacheConnectionTimeOut
 
@@ -311,12 +313,12 @@ export class StarpeaceSession extends EventEmitter {
   private modelServerDownCount = 0;
   private static readonly MAX_DOWN_COUNT_ALLOWED = 3; // Delphi: MaxDownCountAllowed = 3
 
-  // --- CONSECUTIVE RDO FAILURE COUNTER (mirrors Delphi fNetErrors + NetErrorsTimesOut) ---
-  // Tracks consecutive RDO request failures (timeout or error) across all request types.
-  // When threshold exceeded, triggers reconnect — unlike consecutivePollFailures which
-  // only counts ServerBusy poll failures.
+  // --- CONSECUTIVE RDO FAILURE COUNTER (telemetry only) ---
+  // Tracks consecutive RDO request timeouts. LEGACY PARITY: this never triggers
+  // a reconnect — the Voyager client's ReportCnxFailure is a no-op
+  // (ServerCnxHandler.pas:3394-3405); reconnection happens ONLY on a real
+  // socket disconnect. Exposed via logs/metrics for diagnostics.
   private consecutiveRdoFailures = 0;
-  private static readonly MAX_CONSECUTIVE_RDO_FAILURES = 3; // Delphi: NetErrorsTimesOut = 2
 
   // Map-specific throttling
   private activeMapRequests: number = 0;
@@ -1659,8 +1661,10 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
   }
 
 /**
-   * Start ServerBusy polling (every 10 seconds)
-   * When server is busy, pause all requests except ServerBusy checks
+   * Start ServerBusy polling — legacy cadence (~50s, ToolbarHandlerViewer.pas:160-162)
+   * with the legacy 180s blocking-read deadline. When the server is busy, new
+   * requests are buffered. The ModelStatusChanged push (setServerBusyFromPush)
+   * remains the primary/instant busy signal; this poll is the fallback.
    */
   public startServerBusyPolling(): void {
     if (this.serverBusyCheckInterval) return; // Already running
@@ -1696,11 +1700,13 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
           const timeoutHandle = setTimeout(() => {
             const entry = this.pendingRequests.get(rid);
             if (entry && entry.state === 'pending') {
-              // ServerBusy polls are short-lived — delete immediately, no grace period
+              // Legacy deadline: the ServerBusy read is a blocking property GET
+              // under ISProxyTimeOut = 180s (ServerCnxHandler.pas:3596-3611) —
+              // a busy-but-alive server must not be counted as failed after 1s.
               this.pendingRequests.delete(rid);
               reject(new Error('ServerBusy check timeout'));
             }
-          }, 1000);
+          }, IS_PROXY_TIMEOUT_MS);
 
           this.pendingRequests.set(rid, {
             resolve,
@@ -1732,14 +1738,15 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         );
 
         if (this.consecutivePollFailures >= StarpeaceSession.MAX_CONSECUTIVE_POLL_FAILURES) {
+          // LEGACY PARITY: after 4 consecutive failures the Voyager client simply
+          // STOPS polling (fExceptCount gate, ServerCnxHandler.pas:3596-3611) —
+          // it never reconnects from here. Busy state still updates instantly via
+          // the ModelStatusChanged push (setServerBusyFromPush). Polling restarts
+          // on the next successful (re)connect (startServerBusyPolling).
           this.log.error(
-            `[ServerBusy] ${this.consecutivePollFailures} consecutive poll failures — server appears unresponsive, triggering reconnect`
+            `[ServerBusy] ${this.consecutivePollFailures} consecutive poll failures — stopping ServerBusy polling (push channel remains active)`
           );
-          this.consecutivePollFailures = 0;
           this.stopServerBusyPolling();
-          this.attemptWorldReconnect().catch((reconnectErr: unknown) => {
-            this.log.error('[ServerBusy] Reconnect triggered by poll failures failed:', toErrorMessage(reconnectErr));
-          });
         }
       } finally {
         this.isPolling = false;
@@ -2090,15 +2097,12 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
         this.log.warn(`[RDO] TIMEOUT RID ${rid} ${socketName}/${member} after ${timeoutMs}ms (pending=${this.pendingRequests.size}, timedOut=${this.rdoMetrics.totalTimedOut}, consecutiveFails=${this.consecutiveRdoFailures})`);
         reject(new Error(`Request timeout: ${member}`));
 
-        // Check consecutive failure threshold (mirrors Delphi fNetErrors → ConnectionDropped)
-        if (this.consecutiveRdoFailures >= StarpeaceSession.MAX_CONSECUTIVE_RDO_FAILURES
-            && socketName === 'world' && !this.isClosing) {
-          this.log.error(`[RDO] ${this.consecutiveRdoFailures} consecutive RDO failures (timeout) — triggering reconnect`);
-          this.consecutiveRdoFailures = 0;
-          this.attemptWorldReconnect().catch((e: unknown) => {
-            this.log.error('[RDO] Reconnect from consecutive timeouts failed:', toErrorMessage(e));
-          });
-        }
+        // LEGACY PARITY: request-latency timeouts NEVER trigger a reconnect.
+        // The Voyager client's ReportCnxFailure is a no-op (ServerCnxHandler.pas:3394-3405);
+        // it reconnects ONLY on a real socket disconnect (OnSocketDisconnect →
+        // ConnectionDropped). A slow-but-alive server producing timeouts on an
+        // open socket must not be treated as a dead connection — doing so caused
+        // synchronized relogin storms. consecutiveRdoFailures is kept as telemetry.
       }
     }, timeoutMs);
 

@@ -352,12 +352,14 @@ describe('Timeout State Machine', () => {
 });
 
 describe('TimeoutCategory integration', () => {
-  it('SLOW category timeout matches legacy Delphi 60s default', () => {
-    expect(TIMEOUT_CONFIG[TimeoutCategory.SLOW].rdoMs).toBe(60_000);
+  it('FAST category matches the legacy proxy DefTimeOut (60s)', () => {
+    expect(TIMEOUT_CONFIG[TimeoutCategory.FAST].rdoMs).toBe(60_000);
   });
 
-  it('NORMAL category provides 3x the old 10s default', () => {
-    expect(TIMEOUT_CONFIG[TimeoutCategory.NORMAL].rdoMs).toBe(30_000);
+  it('in-play categories match the legacy ISProxyTimeOut (180s, ServerCnxHandler.pas:329)', () => {
+    expect(TIMEOUT_CONFIG[TimeoutCategory.NORMAL].rdoMs).toBe(180_000);
+    expect(TIMEOUT_CONFIG[TimeoutCategory.SLOW].rdoMs).toBe(180_000);
+    expect(TIMEOUT_CONFIG[TimeoutCategory.VERY_SLOW].rdoMs).toBe(180_000);
   });
 
   it('wsMs always exceeds rdoMs (server fires first)', () => {

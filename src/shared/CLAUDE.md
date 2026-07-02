@@ -31,7 +31,7 @@ Barrel re-export via `types/index.ts` -> `types.ts` for backward compatibility. 
 
 ## Timeout Categories
 
-`timeout-categories.ts` defines 4 tiers: FAST (15s), NORMAL (30s), SLOW (60s), VERY_SLOW (120s). Every new `sendRdoRequest()` call must specify the appropriate category.
+`timeout-categories.ts` defines 4 tiers: FAST (60s, legacy proxy DefTimeOut) and NORMAL/SLOW/VERY_SLOW (all 180s = legacy `ISProxyTimeOut`, exported as `IS_PROXY_TIMEOUT_MS`). The tiers are kept for call-site semantics and WS-facing messaging. Every new `sendRdoRequest()` call must specify the appropriate category.
 
 ## Error Handling
 
