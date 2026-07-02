@@ -80,3 +80,28 @@ Latin-1 partout (`writeRdoFrame`, ingest `latin1`) · verbes capture-first (`get
 | **P2 — confiance & hygiène** | P5, P6, suppression code mort, durcissement garde-fous, alignement commentaire `:1552` | tests + divers | Tests/refactor |
 
 Après P0-P2 et re-audit : score attendu 100 % (avec P2/P3 soit corrigés, soit documentés comme divergences acceptées wire-legal). Gate final : E2E (`/e2e-test`) contre le serveur réel.
+
+---
+
+## Annexe — Statut d'implémentation (2026-07-02, branche `fix/rdo-conformity-tier4`)
+
+**TOUS les items P0/P1/P2 sont implémentés.** Arbitrages développeur : P2 (RDOEndSession sans RID) et P3 (cacher ×3) = **divergences acceptées**, consignées dans `doc/rdo-session-lifecycle.md` §9 + commentaires code aux sites concernés.
+
+| Item | Statut | Implémentation | Test |
+|---|---|---|---|
+| V1 poll busy `#-1` | ✅ corrigé | `isTrueOrdinal()` (`rdo-helpers.ts`), poll `spo_session.ts` | `tier4-conformity.validation` + `server-busy-reconnect` (session réelle) |
+| V2 push toxique | ✅ corrigé | try/catch par frame (2 data handlers) | `tier4-conformity.validation` |
+| V3 throttle REQ_RDO_DIRECT | ✅ corrigé | token bucket 10/burst, 5/s (`misc-handlers.ts`) | `misc-handlers.test` |
+| V4 reconnect-sur-erreur | ✅ corrigé | appel supprimé dans `executeWithRetry` | `tier4-conformity.validation` |
+| V5 jitter | ✅ corrigé | ±25 % passerelle (`spo_session.ts`) + client (`reconnect-utils.ts`) | `reconnect-utils.test`, `world-reconnect` |
+| P1 AnswerStatus | ✅ corrigé | `handleServerRequest` répond `A<rid> res="#0"` | `tier4-conformity.validation` |
+| P1 `Aerror 17` | ✅ corrigé | récupération `RdoFramer` + classification parseur + bascule busy (`rdo.ts` protégé — modif approuvée via plan) | `rdo.test`, `tier4-conformity.validation` |
+| P2 RDOEndSession sans RID | 📝 divergence acceptée D1 | commentaire aux 3 sites (`login-handler.ts`) | — |
+| P3 cacher ×3 | 📝 divergence acceptée D2 | commentaire `batchedParallel` | — |
+| P5 catégories timeout | ✅ corrigé | catégorie `DIRECTORY` 20 s (legacy `DSProxy.TimeOut`), appliquée aux 12 appels directory | `timeout-state-machine` (défaut 180 s) |
+| P6 tests-mocks | ✅ corrigé | `world-reconnect`, `server-busy-reconnect`, `timeout-state-machine` réécrits contre la **vraie** `StarpeaceSession` (constantes réelles : 3+20=23, stop@4, 180 s) | 22 tests |
+| Hygiène | ✅ | `handleIncomingMessage` mort supprimé, commentaires « Max 3 » corrigés, garde reformulée (convention), `no-raw-rdo-writes` durci (tout identifiant), en-tête keepalive corrigé (TTL 5 min) | `no-raw-rdo-writes` |
+
+Erratum documentaire appliqué (docs + skill) : politique réelle de reconnexion = 23 tentatives bornées (3 rapides + 20 lentes), jitterées — plus douce que la boucle infinie 100 ms du legacy.
+
+**Score post-correctifs : 35/35 règles = conformes ou divergences acceptées documentées → 100 %** (au sens du log de décision §9 : aucune violation, aucune divergence non tracée). Gate final restant : E2E (`/e2e-test`, invocation développeur) contre le serveur réel, comme pour les tiers 1-3.

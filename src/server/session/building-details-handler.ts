@@ -1067,6 +1067,12 @@ async function getWarehouseWareNames(
  * Run async tasks with bounded concurrency.
  * Delphi server has a global critical section + MAX_BUFFER_SIZE=5,
  * so we limit to 3 concurrent RDO requests to avoid buffer overflow.
+ *
+ * ACCEPTED DIVERGENCE (audit 2026-07-02, P3 — developer decision): the legacy
+ * client is strictly sequential per socket and gets its parallelism from a
+ * connection POOL; we pipeline up to 3 QueryId-correlated READS on the single
+ * cacher socket instead. Wire-legal, bounded, read-only; the cacher server
+ * runs a 16-thread pool. Documented in doc/rdo-session-lifecycle.md §9.
  */
 const MAX_CONCURRENT_CONNECTIONS = 3;
 

@@ -193,3 +193,18 @@ Legacy client timer: `ObjectInspectorHandleViewer.pas` `KeepAlive: TTimer` → `
 | Push routing | `src/server/session/push-dispatcher.ts` | — |
 
 **Retry rule (Delphi-verified):** NEVER auto-retry CALL/SET mutations — the legacy pattern is `try → except → RenewWorldProxy → return ERROR` with no idempotency protection (`InterfaceServer.pas` `NewFacility` :1359). Retry GETs only.
+
+---
+
+## 9. Accepted Divergences (decision log)
+
+Deliberate, documented departures from the reference client. Each is wire-legal and judged server-safe; do NOT "fix" them without a new decision. (Developer arbitration, 2026-07-02, tier-4 audit.)
+
+| # | Divergence | Legacy behavior | WebClient behavior | Why it is safe |
+|---|---|---|---|---|
+| D1 | `RDOEndSession` without RID | Sent WITH a QueryId, client waits for `A<id> ;` [capture :16-17] | Fire-and-forget (`writeRdoFrame`, no RID), then close | Server tears the directory session down either way; TCP delivers the frame before FIN; no reply needed since the socket closes. `login-handler.ts` |
+| D2 | Concurrent reads on the cacher socket | Strictly sequential per socket; parallelism via connection POOL (§4.5 arch doc) | Up to 3 QueryId-correlated READ requests pipelined on the single `map` socket | Bounded (cap 3 < Delphi `MAX_BUFFER_SIZE=5`), read-only, cacher server runs a 16-thread pool. `building-details-handler.ts` `batchedParallel` |
+| D3 | Bounded reconnection | Infinite 100 ms retry loop (`TReconnectThread`) | 3 fast (5/10/20 s) + 20 slow (15 s) = 23 jittered attempts, then give up | Strictly gentler on the IS `fServerLock` than the legacy client |
+| D4 | Login property reads | Reads `DSArea`; polls `PickEvent` continuously | Reads `DAPort` instead of `DSArea`; adds one `GetCompanyCount`; sends `PickEvent` only at login/company-select | Benign extra/omitted READS; strictly less polling load than legacy |
+
+---

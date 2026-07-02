@@ -2,11 +2,11 @@
  * Cacher KeepAlive conformity validation.
  *
  * Delphi ground truth: KeepAlive is published on TCachedObjectWrap (the
- * inspector temp object, CachedObjectWrap.pas:36); the TCacheServer root
- * ('WSObjectCacher' hook, CacheServerReportForm.pas:100-118,369) publishes
- * NO KeepAlive. The legacy client keep-alives the OPEN inspector object
- * (ObjectInspectorHandleViewer.pas:1172-1180); temp objects expire after
- * 1 minute (TCacheServer.CheckObject).
+ * inspector temp object, CachedObjectWrap.pas:33, impl :292-294); the cacher
+ * ROOT ('WSObjectCacher' hook = TWorldRegistyServer) publishes NO KeepAlive.
+ * The legacy client keep-alives the OPEN inspector object every ~60s
+ * (ObjectInspectorHandleViewer.pas:1172-1178); the server reaps temp objects
+ * idle > 5 minutes (fMaxTTL = EncodeTime(0,5,0,0), CacheServerReportForm.pas:244).
  *
  * Old behavior (non-conformant): sel <cacherId> call KeepAlive every 60s
  * → errUnexistentMethod noise. New behavior: target the active inspector
