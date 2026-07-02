@@ -1,370 +1,158 @@
 /**
- * Timeout State Machine Tests — validates the PendingRdoRequest lifecycle:
+ * RDO request timeout lifecycle — drives the REAL StarpeaceSession
+ * (rewritten in Tier 4: the previous version tested a parallel mock class — audit P6).
  *
- * 1. 'pending' → response arrives → resolved (normal path)
- * 2. 'pending' → timeout fires → 'timed-out' → late response → logged (not unmatched)
- * 3. 'pending' → timeout fires → 'timed-out' → GC sweep → orphaned
- * 4. Metrics track all transitions correctly
- *
- * These tests exercise the same logic as spo_session.ts but in isolation,
- * using the same data structures and state transitions.
+ * Policy under test:
+ * - A request with no response rejects at its deadline (category default = NORMAL
+ *   = IS_PROXY_TIMEOUT_MS = 180s, the legacy in-play blocking-read deadline)
+ * - A timeout NEVER triggers a reconnect (close-only policy, ReportCnxFailure no-op)
+ * - A late response after the timeout is logged/counted, never resolved
+ * - An orphaned response (unknown RID) is dropped and counted, never crashes
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { TimeoutCategory, TIMEOUT_CONFIG } from '../../../shared/timeout-categories';
 
-// ── Replicate the PendingRdoRequest interface from spo_session.ts ───────────
+jest.mock('net', () => ({
+  Socket: jest.fn(),
+}));
+jest.mock('node-fetch', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
 
-interface PendingRdoRequest {
-  resolve: (msg: unknown) => void;
-  reject: (err: unknown) => void;
-  state: 'pending' | 'timed-out';
-  sentAt: number;
-  member: string;
-  timeoutHandle: ReturnType<typeof setTimeout>;
-}
+import { createProtocolTestHarness, ProtocolTestHarness } from './../protocol-validation/protocol-test-harness';
+import { SessionPhase } from '../../../shared/types';
+import { IS_PROXY_TIMEOUT_MS } from '../../../shared/timeout-categories';
+import type { MockTcpSocket } from './../protocol-validation/mock-tcp-socket';
 
-interface RdoMetrics {
-  totalSent: number;
-  totalResolved: number;
-  totalTimedOut: number;
-  totalLateResponses: number;
-  totalOrphaned: number;
-}
+const WORLD_CONTEXT_ID = '8161308';
 
-// ── Minimal harness that mirrors spo_session.ts logic ───────────────────────
-
-class TimeoutStateMachine {
-  readonly pendingRequests = new Map<number, PendingRdoRequest>();
-  readonly metrics: RdoMetrics = {
-    totalSent: 0,
-    totalResolved: 0,
-    totalTimedOut: 0,
-    totalLateResponses: 0,
-    totalOrphaned: 0,
+interface SessionInternals {
+  pendingRequests: Map<number, { state: string }>;
+  rdoMetrics: {
+    totalSent: number;
+    totalResolved: number;
+    totalTimedOut: number;
+    totalLateResponses: number;
+    totalOrphaned: number;
   };
-  private ridCounter = 1000;
-
-  /** Mirrors executeRdoRequest — creates entry, sets timeout */
-  sendRequest(member: string, timeoutMs: number): { rid: number; promise: Promise<unknown> } {
-    const rid = this.ridCounter++;
-    let resolve!: (v: unknown) => void;
-    let reject!: (e: unknown) => void;
-    const promise = new Promise<unknown>((res, rej) => { resolve = res; reject = rej; });
-
-    const timeoutHandle = setTimeout(() => {
-      const entry = this.pendingRequests.get(rid);
-      if (entry && entry.state === 'pending') {
-        entry.state = 'timed-out';
-        this.metrics.totalTimedOut++;
-        reject(new Error(`Request timeout: ${member}`));
-      }
-    }, timeoutMs);
-
-    this.pendingRequests.set(rid, {
-      resolve, reject,
-      state: 'pending',
-      sentAt: Date.now(),
-      member,
-      timeoutHandle,
-    });
-    this.metrics.totalSent++;
-
-    return { rid, promise };
-  }
-
-  /** Mirrors processSingleCommand response handling */
-  receiveResponse(rid: number, payload: unknown): 'resolved' | 'late' | 'orphaned' {
-    const entry = this.pendingRequests.get(rid);
-    if (entry) {
-      this.pendingRequests.delete(rid);
-      clearTimeout(entry.timeoutHandle);
-      if (entry.state === 'pending') {
-        this.metrics.totalResolved++;
-        entry.resolve(payload);
-        return 'resolved';
-      } else {
-        this.metrics.totalLateResponses++;
-        return 'late';
-      }
-    } else {
-      this.metrics.totalOrphaned++;
-      return 'orphaned';
-    }
-  }
-
-  /** Mirrors GC sweep */
-  gcSweep(graceMs: number): number {
-    const now = Date.now();
-    let swept = 0;
-    for (const [rid, entry] of this.pendingRequests.entries()) {
-      if (entry.state === 'timed-out' && (now - entry.sentAt) > graceMs) {
-        this.pendingRequests.delete(rid);
-        this.metrics.totalOrphaned++;
-        swept++;
-      }
-    }
-    return swept;
-  }
-
-  destroy(): void {
-    for (const [, entry] of this.pendingRequests.entries()) {
-      clearTimeout(entry.timeoutHandle);
-    }
-    this.pendingRequests.clear();
-  }
+  sockets: Map<string, unknown>;
 }
 
-// ── Tests ───────────────────────────────────────────────────────────────────
+describe('RDO timeout lifecycle (real session)', () => {
+  let harness: ProtocolTestHarness;
+  let worldSocket: MockTcpSocket;
+  let reconnectSpy: ReturnType<typeof jest.spyOn>;
 
-describe('Timeout State Machine', () => {
-  let sm: TimeoutStateMachine;
-
-  beforeEach(() => {
-    jest.useFakeTimers();
-    sm = new TimeoutStateMachine();
+  beforeEach(async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    harness = createProtocolTestHarness({
+      socketConfigs: [{ rdoScenarios: [], disableStrictValidation: true }],
+    });
+    await harness.session.createSocket('world', '127.0.0.1', 8000);
+    worldSocket = harness.getSockets()[0];
+    harness.session.setWorldContextId(WORLD_CONTEXT_ID);
+    harness.session.setPhase(SessionPhase.WORLD_CONNECTED);
+    reconnectSpy = jest
+      .spyOn(harness.session, 'attemptWorldReconnect')
+      .mockResolvedValue(undefined) as ReturnType<typeof jest.spyOn>;
   });
 
   afterEach(() => {
-    sm.destroy();
+    harness.session.destroy();
+    harness.cleanup();
     jest.useRealTimers();
   });
 
-  describe('Normal path (response before timeout)', () => {
-    it('resolves promise and increments totalResolved', async () => {
-      const { rid, promise } = sm.sendRequest('TestCall', 10_000);
+  function internals(): SessionInternals {
+    return harness.session as unknown as SessionInternals;
+  }
 
-      expect(sm.pendingRequests.size).toBe(1);
-      expect(sm.pendingRequests.get(rid)!.state).toBe('pending');
+  function sendUnanswered(member: string, timeoutMs?: number): Promise<Error> {
+    const promise = harness.session.sendRdoRequest('world', {
+      verb: 'sel' as never,
+      targetId: WORLD_CONTEXT_ID,
+      action: 'get' as never,
+      member,
+    }, timeoutMs);
+    return promise.then(
+      () => { throw new Error('expected rejection'); },
+      (err: Error) => err,
+    );
+  }
 
-      const result = sm.receiveResponse(rid, { data: 'ok' });
+  it('rejects at the explicit deadline with "Request timeout"', async () => {
+    const captured = sendUnanswered('NeverAnswered', 5_000);
+    await jest.advanceTimersByTimeAsync(5_100);
 
-      expect(result).toBe('resolved');
-      expect(sm.pendingRequests.size).toBe(0);
-      expect(sm.metrics.totalSent).toBe(1);
-      expect(sm.metrics.totalResolved).toBe(1);
-      expect(sm.metrics.totalTimedOut).toBe(0);
-      await expect(promise).resolves.toEqual({ data: 'ok' });
-    });
+    const err = await captured;
+    expect(err.message).toBe('Request timeout: NeverAnswered');
+    expect(internals().rdoMetrics.totalTimedOut).toBe(1);
   });
 
-  describe('Timeout path (no response in time)', () => {
-    it('transitions to timed-out state without deleting entry', async () => {
-      const { rid, promise } = sm.sendRequest('SlowCall', 5_000);
-      // Suppress unhandled rejection
-      promise.catch(() => {});
+  it('default deadline is the legacy in-play 180s (NORMAL category)', async () => {
+    const captured = sendUnanswered('NeverAnswered'); // no explicit timeout
 
-      jest.advanceTimersByTime(5_000);
+    await jest.advanceTimersByTimeAsync(IS_PROXY_TIMEOUT_MS - 1_000);
+    expect(internals().rdoMetrics.totalTimedOut).toBe(0); // still pending at 179s
 
-      // Entry still in map, but state changed
-      expect(sm.pendingRequests.size).toBe(1);
-      expect(sm.pendingRequests.get(rid)!.state).toBe('timed-out');
-      expect(sm.metrics.totalTimedOut).toBe(1);
-    });
-
-    it('rejects promise with timeout error', async () => {
-      const { promise } = sm.sendRequest('SlowCall', 5_000);
-
-      jest.advanceTimersByTime(5_000);
-
-      await expect(promise).rejects.toThrow('Request timeout: SlowCall');
-    });
+    await jest.advanceTimersByTimeAsync(2_000);
+    const err = await captured;
+    expect(err.message).toContain('Request timeout');
+    expect(internals().rdoMetrics.totalTimedOut).toBe(1);
   });
 
-  describe('Late response path (response after timeout)', () => {
-    it('detects late response and increments totalLateResponses', async () => {
-      const { rid, promise } = sm.sendRequest('SlowCall', 5_000);
+  it('a timeout NEVER triggers a reconnect and does not close the socket', async () => {
+    const captured = sendUnanswered('NeverAnswered', 5_000);
+    await jest.advanceTimersByTimeAsync(5_100);
+    await captured;
 
-      // Timeout fires
-      jest.advanceTimersByTime(5_000);
-      await expect(promise).rejects.toThrow('Request timeout');
-
-      // Late response arrives
-      const result = sm.receiveResponse(rid, { data: 'late' });
-
-      expect(result).toBe('late');
-      expect(sm.pendingRequests.size).toBe(0);
-      expect(sm.metrics.totalLateResponses).toBe(1);
-      expect(sm.metrics.totalTimedOut).toBe(1);
-      // totalResolved should NOT increment for late responses
-      expect(sm.metrics.totalResolved).toBe(0);
-    });
+    expect(reconnectSpy).not.toHaveBeenCalled();
+    expect(internals().sockets.has('world')).toBe(true);
   });
 
-  describe('Orphaned response path (response after GC sweep)', () => {
-    it('returns orphaned when RID not in map', () => {
-      const result = sm.receiveResponse(9999, { data: 'unknown' });
+  it('a late response after the timeout is counted, never resolved', async () => {
+    const captured = sendUnanswered('NeverAnswered', 5_000);
 
-      expect(result).toBe('orphaned');
-      expect(sm.metrics.totalOrphaned).toBe(1);
-    });
+    // Find the RID actually sent on the wire
+    const sent = worldSocket.getCapturedCommands().find(c => c.includes('NeverAnswered'));
+    const rid = sent?.match(/^C (\d+) /)?.[1];
+    expect(rid).toBeDefined();
 
-    it('returns orphaned when GC sweep ran before late response arrived', () => {
-      const { rid, promise } = sm.sendRequest('SlowCall', 100);
-      promise.catch(() => {});
+    await jest.advanceTimersByTimeAsync(5_100);
+    await captured; // already rejected
 
-      // Timeout fires
-      jest.advanceTimersByTime(100);
-      expect(sm.pendingRequests.get(rid)!.state).toBe('timed-out');
+    // Server answers late
+    worldSocket.emit('data', Buffer.from(`A${rid} NeverAnswered="#42";`, 'latin1'));
 
-      // GC sweep past grace period removes the entry
-      jest.advanceTimersByTime(90_001);
-      sm.gcSweep(90_000);
-      expect(sm.pendingRequests.has(rid)).toBe(false);
-
-      // Late response arrives after GC — orphaned, not late
-      const result = sm.receiveResponse(rid, { data: 'late' });
-      expect(result).toBe('orphaned');
-      expect(sm.metrics.totalOrphaned).toBe(2); // 1 from GC sweep + 1 from orphaned response
-      expect(sm.metrics.totalLateResponses).toBe(0);
-    });
+    expect(internals().rdoMetrics.totalLateResponses).toBe(1);
+    expect(internals().rdoMetrics.totalResolved).toBe(0);
   });
 
-  describe('GC Sweep', () => {
-    it('removes timed-out entries older than grace period', () => {
-      const { rid, promise } = sm.sendRequest('OldCall', 100);
-      promise.catch(() => {});
+  it('an orphaned response (unknown RID) is dropped and counted, never crashes', () => {
+    expect(() => {
+      worldSocket.emit('data', Buffer.from('A64000 res="#1";', 'latin1'));
+    }).not.toThrow();
 
-      // Timeout fires at 100ms
-      jest.advanceTimersByTime(100);
-      expect(sm.pendingRequests.get(rid)!.state).toBe('timed-out');
-
-      // Advance past grace period (90s)
-      jest.advanceTimersByTime(90_001);
-
-      const swept = sm.gcSweep(90_000);
-      expect(swept).toBe(1);
-      expect(sm.pendingRequests.size).toBe(0);
-      expect(sm.metrics.totalOrphaned).toBe(1);
-    });
-
-    it('does NOT remove timed-out entries within grace period', () => {
-      const { promise } = sm.sendRequest('RecentCall', 100);
-      promise.catch(() => {});
-
-      jest.advanceTimersByTime(100);
-      // Only 100ms elapsed — well within 90s grace
-
-      const swept = sm.gcSweep(90_000);
-      expect(swept).toBe(0);
-      expect(sm.pendingRequests.size).toBe(1);
-    });
-
-    it('does NOT remove pending entries (only timed-out)', () => {
-      const { promise } = sm.sendRequest('ActiveCall', 60_000);
-      promise.catch(() => {});
-
-      // No timeout yet — entry still pending
-      jest.advanceTimersByTime(1_000);
-
-      const swept = sm.gcSweep(90_000);
-      expect(swept).toBe(0);
-      expect(sm.pendingRequests.size).toBe(1);
-    });
-
-    it('handles mixed pending and timed-out entries', () => {
-      const old = sm.sendRequest('OldCall', 100);
-      old.promise.catch(() => {});
-      const active = sm.sendRequest('ActiveCall', 120_000);
-      active.promise.catch(() => {});
-
-      // Only the first times out
-      jest.advanceTimersByTime(100);
-      expect(sm.pendingRequests.size).toBe(2);
-
-      // Advance past grace for the first
-      jest.advanceTimersByTime(90_001);
-
-      const swept = sm.gcSweep(90_000);
-      expect(swept).toBe(1);
-      expect(sm.pendingRequests.size).toBe(1); // ActiveCall still pending
-    });
+    expect(internals().rdoMetrics.totalOrphaned).toBe(1);
   });
 
-  describe('Multiple requests', () => {
-    it('tracks independent requests with independent timeouts', async () => {
-      const fast = sm.sendRequest('FastCall', 5_000);
-      const slow = sm.sendRequest('SlowCall', 30_000);
-      slow.promise.catch(() => {}); // suppress if slow also times out
+  it('a normal response before the deadline resolves and counts', async () => {
+    worldSocket.addFallbackResponse({ member: 'Answered', payload: 'Answered="#7"' });
 
-      // Fast times out
-      jest.advanceTimersByTime(5_000);
-      await expect(fast.promise).rejects.toThrow('Request timeout: FastCall');
+    const packet = await (async () => {
+      const p = harness.session.sendRdoRequest('world', {
+        verb: 'sel' as never,
+        targetId: WORLD_CONTEXT_ID,
+        action: 'get' as never,
+        member: 'Answered',
+      }, 5_000);
+      await new Promise(resolve => setImmediate(resolve));
+      return p;
+    })();
 
-      // Slow still pending
-      expect(sm.pendingRequests.get(slow.rid)!.state).toBe('pending');
-
-      // Slow resolves normally
-      sm.receiveResponse(slow.rid, { data: 'ok' });
-
-      expect(sm.metrics.totalTimedOut).toBe(1);
-      expect(sm.metrics.totalResolved).toBe(1);
-    });
-  });
-
-  describe('destroy() cleanup', () => {
-    it('clears all entries and prevents timeout callbacks from firing', () => {
-      const req1 = sm.sendRequest('Call1', 60_000);
-      const req2 = sm.sendRequest('Call2', 60_000);
-      req1.promise.catch(() => {});
-      req2.promise.catch(() => {});
-
-      expect(sm.pendingRequests.size).toBe(2);
-
-      sm.destroy();
-      expect(sm.pendingRequests.size).toBe(0);
-
-      // Advance past timeout — no unhandled rejection should occur
-      jest.advanceTimersByTime(120_000);
-      expect(sm.metrics.totalTimedOut).toBe(0);
-    });
-  });
-
-  describe('Promise settlement safety', () => {
-    it('resolve after timeout is a no-op (Promise spec guarantees single settlement)', async () => {
-      const { rid, promise } = sm.sendRequest('TestCall', 100);
-
-      // Timeout rejects
-      jest.advanceTimersByTime(100);
-      await expect(promise).rejects.toThrow('Request timeout: TestCall');
-
-      // Late response tries to resolve — entry still in map as timed-out
-      const result = sm.receiveResponse(rid, { data: 'too late' });
-      expect(result).toBe('late');
-
-      // Promise remains rejected (JS Promises settle once)
-      await expect(promise).rejects.toThrow('Request timeout: TestCall');
-    });
-
-    it('timeout after response is harmless (entry already removed)', async () => {
-      const { rid, promise } = sm.sendRequest('FastCall', 5_000);
-
-      // Response arrives before timeout
-      sm.receiveResponse(rid, { data: 'ok' });
-      await expect(promise).resolves.toEqual({ data: 'ok' });
-
-      // Timeout fires but entry is gone — no effect
-      jest.advanceTimersByTime(5_000);
-      expect(sm.metrics.totalTimedOut).toBe(0);
-      expect(sm.metrics.totalResolved).toBe(1);
-    });
-  });
-});
-
-describe('TimeoutCategory integration', () => {
-  it('FAST category matches the legacy proxy DefTimeOut (60s)', () => {
-    expect(TIMEOUT_CONFIG[TimeoutCategory.FAST].rdoMs).toBe(60_000);
-  });
-
-  it('in-play categories match the legacy ISProxyTimeOut (180s, ServerCnxHandler.pas:329)', () => {
-    expect(TIMEOUT_CONFIG[TimeoutCategory.NORMAL].rdoMs).toBe(180_000);
-    expect(TIMEOUT_CONFIG[TimeoutCategory.SLOW].rdoMs).toBe(180_000);
-    expect(TIMEOUT_CONFIG[TimeoutCategory.VERY_SLOW].rdoMs).toBe(180_000);
-  });
-
-  it('wsMs always exceeds rdoMs (server fires first)', () => {
-    for (const cat of [TimeoutCategory.FAST, TimeoutCategory.NORMAL, TimeoutCategory.SLOW]) {
-      expect(TIMEOUT_CONFIG[cat].wsMs).toBeGreaterThan(TIMEOUT_CONFIG[cat].rdoMs);
-    }
+    expect(packet.payload).toContain('Answered="#7"');
+    expect(internals().rdoMetrics.totalResolved).toBe(1);
+    expect(internals().rdoMetrics.totalTimedOut).toBe(0);
   });
 });

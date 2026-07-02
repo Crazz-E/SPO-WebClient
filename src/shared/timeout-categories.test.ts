@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import { TimeoutCategory, TIMEOUT_CONFIG, IS_PROXY_TIMEOUT_MS } from './timeout-categories';
 
 const ALL_CATEGORIES = [
+  TimeoutCategory.DIRECTORY,
   TimeoutCategory.FAST,
   TimeoutCategory.NORMAL,
   TimeoutCategory.SLOW,
@@ -9,12 +10,18 @@ const ALL_CATEGORIES = [
 ];
 
 describe('TimeoutCategories', () => {
-  it('defines four categories', () => {
-    expect(Object.keys(TimeoutCategory)).toHaveLength(4);
+  it('defines five categories', () => {
+    expect(Object.keys(TimeoutCategory)).toHaveLength(5);
+    expect(TimeoutCategory.DIRECTORY).toBe('DIRECTORY');
     expect(TimeoutCategory.FAST).toBe('FAST');
     expect(TimeoutCategory.NORMAL).toBe('NORMAL');
     expect(TimeoutCategory.SLOW).toBe('SLOW');
     expect(TimeoutCategory.VERY_SLOW).toBe('VERY_SLOW');
+  });
+
+  it('DIRECTORY matches the legacy DSProxy deadline (20s, LogonHandlerViewer.pas:341)', () => {
+    expect(TIMEOUT_CONFIG[TimeoutCategory.DIRECTORY].rdoMs).toBe(20_000);
+    expect(TIMEOUT_CONFIG[TimeoutCategory.DIRECTORY].wsMs).toBeGreaterThan(20_000);
   });
 
   it('has config for every category', () => {

@@ -1,217 +1,156 @@
 /**
- * ServerBusy Poll Failure Handling — LEGACY-CONFORMANT (no reconnect).
+ * ServerBusy poll failure handling — drives the REAL StarpeaceSession
+ * (rewritten in Tier 4: the previous version tested a parallel mock class,
+ * giving false confidence — audit P6).
  *
  * Ground truth (Voyager client):
- * - The ServerBusy read is a blocking property GET under ISProxyTimeOut=180s,
- *   polled ~every 50s (ToolbarHandlerViewer.pas:131-162 — LEDsTimer 1s gated mod 50).
+ * - ServerBusy is a blocking property GET polled ~every 50s
+ *   (ToolbarHandlerViewer.pas:131-162 — LEDsTimer 1s gated mod 50).
  * - After 4 consecutive exceptions the client simply STOPS polling
  *   (fExceptCount gate, ServerCnxHandler.pas:3596-3611). It NEVER reconnects
- *   from poll failures — reconnection happens only on a real socket disconnect.
- * - Busy state also updates instantly via the ModelStatusChanged push.
- *
- * Validates the poll-failure logic in startServerBusyPolling():
- * - Consecutive failure counter increments on each poll timeout
- * - Counter resets on successful poll
- * - After MAX_CONSECUTIVE_POLL_FAILURES (4): stopServerBusyPolling, NO reconnect
- * - rdoMetrics.totalServerBusyPollFailures tracks cumulative failures
+ *   from poll failures — reconnection happens only on a real socket close.
+ * - A successful poll resets the failure counter.
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 
-// ── Minimal harness mirroring ServerBusy poll logic from spo_session.ts ──
+jest.mock('net', () => ({
+  Socket: jest.fn(),
+}));
+jest.mock('node-fetch', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
 
-interface RdoMetrics {
-  totalServerBusyPollFailures: number;
+import { createProtocolTestHarness, ProtocolTestHarness } from './protocol-validation/protocol-test-harness';
+import { SessionPhase } from '../../shared/types';
+import type { MockTcpSocket } from './protocol-validation/mock-tcp-socket';
+
+const WORLD_CONTEXT_ID = '8161308';
+
+interface SessionInternals {
+  serverBusyCheckInterval: ReturnType<typeof setInterval> | null;
+  consecutivePollFailures: number;
+  isServerBusy: boolean;
+  rdoMetrics: { totalServerBusyPollFailures: number };
 }
 
-function toErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
-}
+describe('ServerBusy polling (real session) — stop@4, no reconnect', () => {
+  let harness: ProtocolTestHarness;
+  let worldSocket: MockTcpSocket;
+  let reconnectSpy: ReturnType<typeof jest.spyOn>;
 
-class ServerBusyPollMachine {
-  consecutivePollFailures = 0;
-  static readonly MAX_CONSECUTIVE_POLL_FAILURES = 4; // legacy fExceptCount gate
+  beforeEach(async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    harness = createProtocolTestHarness({
+      socketConfigs: [{ rdoScenarios: [], disableStrictValidation: true }],
+    });
+    await harness.session.createSocket('world', '127.0.0.1', 8000);
+    worldSocket = harness.getSockets()[0];
+    harness.session.setWorldContextId(WORLD_CONTEXT_ID);
+    harness.session.setPhase(SessionPhase.WORLD_CONNECTED);
+    reconnectSpy = jest
+      .spyOn(harness.session, 'attemptWorldReconnect')
+      .mockResolvedValue(undefined) as ReturnType<typeof jest.spyOn>;
+  });
 
-  rdoMetrics: RdoMetrics = {
-    totalServerBusyPollFailures: 0,
-  };
+  afterEach(() => {
+    harness.session.destroy();
+    harness.cleanup();
+    jest.useRealTimers();
+  });
 
-  serverBusyCheckInterval: ReturnType<typeof setInterval> | null = { } as ReturnType<typeof setInterval>;
-
-  // Spies
-  stopServerBusyPollingCalled = 0;
-  attemptWorldReconnectCalled = 0;
-  warnLogs: string[] = [];
-  errorLogs: string[] = [];
-
-  stopServerBusyPolling(): void {
-    if (this.serverBusyCheckInterval) {
-      this.serverBusyCheckInterval = null;
-    }
-    this.consecutivePollFailures = 0;
-    this.stopServerBusyPollingCalled++;
+  function internals(): SessionInternals {
+    return harness.session as unknown as SessionInternals;
   }
 
-  async attemptWorldReconnect(): Promise<void> {
-    this.attemptWorldReconnectCalled++;
+  /** Real production constant, read off the class under test (not a mock copy). */
+  function maxPollFailures(): number {
+    return (harness.session.constructor as unknown as { MAX_CONSECUTIVE_POLL_FAILURES: number })
+      .MAX_CONSECUTIVE_POLL_FAILURES;
   }
 
   /**
-   * Simulates a poll failure — replicates the catch block logic
-   * (spo_session.ts startServerBusyPolling).
+   * Advance fake time in 10s steps (with real setImmediate breaths so mock
+   * responses reach the session) until the condition holds. Robust against
+   * poll/timeout scheduling drift across the 50s interval and 180s deadline.
    */
-  async simulatePollFailure(): Promise<void> {
-    try {
-      throw new Error('ServerBusy check timeout');
-    } catch (e: unknown) {
-      this.consecutivePollFailures++;
-      this.rdoMetrics.totalServerBusyPollFailures++;
-      this.warnLogs.push(
-        `[ServerBusy] Poll failed (${this.consecutivePollFailures}/${ServerBusyPollMachine.MAX_CONSECUTIVE_POLL_FAILURES}): ${toErrorMessage(e)}`
-      );
-
-      if (this.consecutivePollFailures >= ServerBusyPollMachine.MAX_CONSECUTIVE_POLL_FAILURES) {
-        // LEGACY PARITY: stop polling — never reconnect from poll failures.
-        this.errorLogs.push(
-          `[ServerBusy] ${this.consecutivePollFailures} consecutive poll failures — stopping ServerBusy polling (push channel remains active)`
-        );
-        this.stopServerBusyPolling();
-      }
+  async function advanceUntil(cond: () => boolean, maxSteps = 300): Promise<void> {
+    for (let i = 0; i < maxSteps && !cond(); i++) {
+      await jest.advanceTimersByTimeAsync(10_000);
+      await new Promise(resolve => setImmediate(resolve));
     }
+    expect(cond()).toBe(true);
   }
 
-  /** Simulates a successful poll — replicates the success path. */
-  simulatePollSuccess(): void {
-    this.consecutivePollFailures = 0;
-  }
-
-  getQueueStatus(): { consecutivePollFailures: number; rdoMetrics: RdoMetrics } {
-    return {
-      consecutivePollFailures: this.consecutivePollFailures,
-      rdoMetrics: { ...this.rdoMetrics },
-    };
-  }
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────────
-
-describe('ServerBusy consecutive poll failures → stop polling (NO reconnect)', () => {
-  let machine: ServerBusyPollMachine;
-
-  beforeEach(() => {
-    machine = new ServerBusyPollMachine();
+  it('exposes the legacy fExceptCount gate: MAX_CONSECUTIVE_POLL_FAILURES = 4', () => {
+    expect(maxPollFailures()).toBe(4);
   });
 
-  it('increments consecutivePollFailures on each failure', async () => {
-    await machine.simulatePollFailure();
-    expect(machine.consecutivePollFailures).toBe(1);
-    await machine.simulatePollFailure();
-    expect(machine.consecutivePollFailures).toBe(2);
-    await machine.simulatePollFailure();
-    expect(machine.consecutivePollFailures).toBe(3);
+  it('real cadence: first GET ServerBusy goes out only after the 50s gate', async () => {
+    worldSocket.addFallbackResponse({ member: 'ServerBusy', payload: 'ServerBusy="#0"' });
+    harness.session.startServerBusyPolling();
+
+    await jest.advanceTimersByTimeAsync(49_000);
+    expect(worldSocket.getCommandsByMember('ServerBusy')).toHaveLength(0);
+
+    await jest.advanceTimersByTimeAsync(1_100);
+    expect(worldSocket.getCommandsByMember('ServerBusy')).toHaveLength(1);
+    // Wire form: GET with a RID; the answer echoes the member name
+    // (captured commands are stored with the trailing ";" stripped)
+    expect(worldSocket.getCommandsByMember('ServerBusy')[0]).toMatch(/^C \d+ sel 8161308 get ServerBusy$/);
   });
 
-  it('resets consecutivePollFailures on successful poll', async () => {
-    await machine.simulatePollFailure();
-    await machine.simulatePollFailure();
-    expect(machine.consecutivePollFailures).toBe(2);
-    machine.simulatePollSuccess();
-    expect(machine.consecutivePollFailures).toBe(0);
+  it('stops polling after MAX consecutive timeouts — and NEVER reconnects', async () => {
+    // No fallback for ServerBusy → every poll times out at the 180s deadline.
+    harness.session.startServerBusyPolling();
+
+    await advanceUntil(() => internals().serverBusyCheckInterval === null);
+
+    // Stopped at exactly the gate value, without ever reconnecting
+    expect(internals().rdoMetrics.totalServerBusyPollFailures).toBe(maxPollFailures());
+    expect(reconnectSpy).not.toHaveBeenCalled();
+
+    // And it STAYS stopped — no further ServerBusy frames
+    const sentBefore = worldSocket.getCommandsByMember('ServerBusy').length;
+    await jest.advanceTimersByTimeAsync(600_000);
+    expect(worldSocket.getCommandsByMember('ServerBusy')).toHaveLength(sentBefore);
   });
 
-  it('stops polling at exactly MAX_CONSECUTIVE_POLL_FAILURES (4, legacy fExceptCount)', async () => {
-    for (let i = 0; i < 4; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.stopServerBusyPollingCalled).toBe(1);
-    expect(machine.serverBusyCheckInterval).toBeNull();
+  it('a successful poll resets the consecutive-failure counter and polling continues', async () => {
+    harness.session.startServerBusyPolling();
+
+    // Let two consecutive failures accumulate (no fallback yet)
+    await advanceUntil(() => internals().consecutivePollFailures >= 2);
+    const failuresSoFar = internals().rdoMetrics.totalServerBusyPollFailures;
+    expect(failuresSoFar).toBeGreaterThanOrEqual(2);
+
+    // Now the server answers → the next completed poll resets the counter
+    worldSocket.addFallbackResponse({ member: 'ServerBusy', payload: 'ServerBusy="#0"' });
+    await advanceUntil(() => internals().consecutivePollFailures === 0);
+
+    expect(internals().serverBusyCheckInterval).not.toBeNull(); // still polling
+    expect(internals().isServerBusy).toBe(false);
+    // Cumulative metric never resets
+    expect(internals().rdoMetrics.totalServerBusyPollFailures).toBeGreaterThanOrEqual(failuresSoFar);
+    expect(reconnectSpy).not.toHaveBeenCalled();
   });
 
-  it('NEVER triggers a reconnect from poll failures (legacy parity)', async () => {
-    for (let i = 0; i < 10; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.attemptWorldReconnectCalled).toBe(0);
-  });
+  it('polling can restart after a stop (startServerBusyPolling after reconnect)', async () => {
+    harness.session.startServerBusyPolling();
+    await advanceUntil(() => internals().serverBusyCheckInterval === null);
 
-  it('does NOT stop polling at 3 consecutive failures', async () => {
-    for (let i = 0; i < 3; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.stopServerBusyPollingCalled).toBe(0);
-    expect(machine.consecutivePollFailures).toBe(3);
-  });
+    worldSocket.addFallbackResponse({ member: 'ServerBusy', payload: 'ServerBusy="#0"' });
+    const sentBefore = worldSocket.getCommandsByMember('ServerBusy').length;
+    harness.session.startServerBusyPolling();
 
-  it('tracks cumulative failures in rdoMetrics.totalServerBusyPollFailures', async () => {
-    for (let i = 0; i < 3; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.rdoMetrics.totalServerBusyPollFailures).toBe(3);
+    await advanceUntil(() =>
+      worldSocket.getCommandsByMember('ServerBusy').length > sentBefore
+      && internals().consecutivePollFailures === 0
+    );
 
-    machine.simulatePollSuccess();
-    // Cumulative metric does not reset on success
-    expect(machine.rdoMetrics.totalServerBusyPollFailures).toBe(3);
-  });
-
-  it('interleaved success resets counter: 3 fail, 1 success, 3 fail = polling still active', async () => {
-    for (let i = 0; i < 3; i++) {
-      await machine.simulatePollFailure();
-    }
-    machine.simulatePollSuccess();
-    for (let i = 0; i < 3; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.stopServerBusyPollingCalled).toBe(0);
-    expect(machine.rdoMetrics.totalServerBusyPollFailures).toBe(6);
-  });
-
-  it('polling can restart after a stop (e.g. after a successful reconnect)', async () => {
-    for (let i = 0; i < 4; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.stopServerBusyPollingCalled).toBe(1);
-
-    // Simulate polling restart (startServerBusyPolling after reconnect)
-    machine.serverBusyCheckInterval = {} as ReturnType<typeof setInterval>;
-
-    for (let i = 0; i < 4; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.stopServerBusyPollingCalled).toBe(2);
-    expect(machine.rdoMetrics.totalServerBusyPollFailures).toBe(8);
-    expect(machine.attemptWorldReconnectCalled).toBe(0);
-  });
-
-  it('exposes consecutivePollFailures via getQueueStatus()', async () => {
-    await machine.simulatePollFailure();
-    await machine.simulatePollFailure();
-    const status = machine.getQueueStatus();
-    expect(status.consecutivePollFailures).toBe(2);
-    expect(status.rdoMetrics.totalServerBusyPollFailures).toBe(2);
-  });
-
-  it('stopServerBusyPolling resets consecutivePollFailures', async () => {
-    await machine.simulatePollFailure();
-    await machine.simulatePollFailure();
-    expect(machine.consecutivePollFailures).toBe(2);
-    machine.stopServerBusyPolling();
-    expect(machine.consecutivePollFailures).toBe(0);
-  });
-
-  it('logs progress with failure count ratio', async () => {
-    await machine.simulatePollFailure();
-    expect(machine.warnLogs[0]).toContain('(1/4)');
-    await machine.simulatePollFailure();
-    expect(machine.warnLogs[1]).toContain('(2/4)');
-  });
-
-  it('stop log mentions the push channel, not a reconnect', async () => {
-    for (let i = 0; i < 4; i++) {
-      await machine.simulatePollFailure();
-    }
-    expect(machine.errorLogs[0]).toContain('stopping ServerBusy polling');
-    expect(machine.errorLogs[0]).toContain('push channel remains active');
-    expect(machine.errorLogs[0]).not.toContain('reconnect');
+    expect(internals().serverBusyCheckInterval).not.toBeNull();
+    expect(internals().isServerBusy).toBe(false);
+    expect(reconnectSpy).not.toHaveBeenCalled();
   });
 });

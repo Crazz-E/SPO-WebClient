@@ -10,12 +10,13 @@ import { assertNotVoidPush, canBufferRequest } from '../rdo-request-guards';
 
 describe('Request Guards', () => {
   describe('assertNotVoidPush', () => {
-    it('rejects void push "*" separator with FATAL error (crash guard)', () => {
-      // This guard prevents sending "*" separator through sendRdoRequest
-      // which adds a QueryId — the combination crashes the Delphi server
+    it('rejects void push "*" separator (project convention guard)', () => {
+      // PROJECT CONVENTION, not a crash fact: void+QueryId is wire-legal
+      // (the server acks "A<id> ;", capture-proven — doc/rdo-protocol-architecture.md §8.5).
+      // The guard enforces one wire form per intent.
       expect(() =>
         assertNotVoidPush({ member: 'RDOEndSession', separator: '*' })
-      ).toThrow('FATAL: Void push separator "*" used with sendRdoRequest()');
+      ).toThrow('Void push separator "*" must not be used with sendRdoRequest()');
     });
 
     it('includes the command name in the error message', () => {
@@ -33,7 +34,7 @@ describe('Request Guards', () => {
     it('rejects separator containing "*" among other characters', () => {
       expect(() =>
         assertNotVoidPush({ member: 'RDOTest', separator: 'x*y' })
-      ).toThrow('FATAL');
+      ).toThrow('must not be used with sendRdoRequest');
     });
 
     it('allows synchronous "^" separator (normal RDO call)', () => {

@@ -30,6 +30,13 @@ function collectSourceFiles(dir: string): string[] {
   return out;
 }
 
+/**
+ * Identifiers whose .write() is NOT an RDO socket (audited non-RDO surfaces):
+ * - res: HTTP/SSE responses in server.ts
+ * - transport: browser WebSocket transport in server.ts
+ */
+const NON_RDO_WRITERS = new Set(['res', 'transport']);
+
 describe('no raw socket.write() on RDO sockets', () => {
   it('every RDO write goes through writeRdoFrame()', () => {
     const offenders: string[] = [];
@@ -38,10 +45,14 @@ describe('no raw socket.write() on RDO sockets', () => {
       const content = fs.readFileSync(file, 'utf8');
       const lines = content.split('\n');
       lines.forEach((line, i) => {
-        // Match socket.write( / socket!.write( call sites; comments referencing
-        // the API by name (no opening paren with args context) are updated too.
-        if (/\bsocket!?\.write\(/.test(line)) {
-          offenders.push(`${path.relative(SERVER_SRC, file)}:${i + 1}: ${line.trim()}`);
+        // Hardened (audit): match ANY `<identifier>.write(` — not just a variable
+        // literally named `socket` — so aliased or pooled socket references
+        // (e.g. `poolConn.socket.write(`, `sock.write(`, `conn.write(`) are caught.
+        const matches = line.matchAll(/\b(\w+)!?\.write\(/g);
+        for (const m of matches) {
+          if (!NON_RDO_WRITERS.has(m[1])) {
+            offenders.push(`${path.relative(SERVER_SRC, file)}:${i + 1}: ${line.trim()}`);
+          }
         }
       });
     }
