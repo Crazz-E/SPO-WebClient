@@ -255,8 +255,18 @@ export function createMailScenario(
         matchKeys: { verb: 'sel', action: 'call', member: 'GetAttachmentCount' },
       },
       {
+        // LogServerOn registers the client with the mail server and returns the
+        // session ServerId (integer(TInterfaceServerData)) that CheckNewMail
+        // dereferences (MailServer.pas:100,543). Mirrors the IS handshake —
+        // sending "#0" made the live server AV and always answer -1.
+        id: 'mail-rdo-015',
+        request: `C 2188 sel ${vars.mailServerId} call LogServerOn "^" "%${vars.worldName}"`,
+        response: `A2188 res="#41230990"`,
+        matchKeys: { verb: 'sel', action: 'call', member: 'LogServerOn' },
+      },
+      {
         id: 'mail-rdo-013',
-        request: `C 2186 sel ${vars.mailServerId} call CheckNewMail "^" "#0","%${vars.mailAccount}"`,
+        request: `C 2186 sel ${vars.mailServerId} call CheckNewMail "^" "#41230990","%${vars.mailAccount}"`,
         response: `A2186 res="#3"`,
         matchKeys: { verb: 'sel', action: 'call', member: 'CheckNewMail' },
       },

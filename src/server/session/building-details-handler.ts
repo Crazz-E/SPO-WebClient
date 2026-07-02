@@ -94,6 +94,16 @@ export function releaseInspector(ctx: SessionContext): void {
 }
 
 /**
+ * Get the active inspector's Delphi temp object id (if an inspector is open).
+ * Used by the cacher KeepAlive timer — the legacy client keep-alives the
+ * TCachedObjectWrap temp object (ObjectInspectorHandleViewer.pas:1172-1180),
+ * NOT the TCacheServer root (which publishes no KeepAlive).
+ */
+export function getActiveInspectorTempObjectId(ctx: SessionContext): string | undefined {
+  return activeInspectors.get(ctx)?.tempObjectId;
+}
+
+/**
  * Get the active inspector for a session (if any, and if coordinates match).
  */
 export function getActiveInspector(ctx: SessionContext, x: number, y: number): ActiveInspector | undefined {

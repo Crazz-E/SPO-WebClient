@@ -512,14 +512,35 @@ describe('Protocol Validation: Mail System', () => {
     });
   });
 
-  describe('CheckNewMail CALL command', () => {
-    it('should match CheckNewMail scenario with dummy + account args', () => {
+  describe('LogServerOn + CheckNewMail CALL commands', () => {
+    // CheckNewMail(ServerId: integer; Account) dereferences ServerId as a
+    // TInterfaceServerData POINTER (MailServer.pas:543) — it must be the id
+    // returned by LogServerOn. "#0" AV'd server-side and always returned -1.
+    const mailIntServerId = '41230990';
+
+    it('should match LogServerOn scenario with the world name arg', () => {
+      const command = RdoProtocol.format({
+        raw: '', type: 'REQUEST', rid: 2188,
+        verb: RdoVerb.SEL, targetId: mailServerId,
+        action: RdoAction.CALL, member: 'LogServerOn',
+        separator: '"^"',
+        args: [`%${worldName}`],
+      });
+
+      const result = rdoMock.match(command);
+      validator.validate(RdoProtocol.parse(command), command);
+      expect(result).not.toBeNull();
+      expect(result!.exchange.id).toBe('mail-rdo-015');
+      expect(result!.response).toContain(`res="#${mailIntServerId}"`);
+    });
+
+    it('should match CheckNewMail scenario with LogServerOn id + account args', () => {
       const command = RdoProtocol.format({
         raw: '', type: 'REQUEST', rid: 2186,
         verb: RdoVerb.SEL, targetId: mailServerId,
         action: RdoAction.CALL, member: 'CheckNewMail',
         separator: '"^"',
-        args: ['#0', `%${mailAccount}`],
+        args: [`#${mailIntServerId}`, `%${mailAccount}`],
       });
 
       const result = rdoMock.match(command);
@@ -534,7 +555,7 @@ describe('Protocol Validation: Mail System', () => {
         verb: RdoVerb.SEL, targetId: mailServerId,
         action: RdoAction.CALL, member: 'CheckNewMail',
         separator: '"^"',
-        args: ['#0', `%${mailAccount}`],
+        args: [`#${mailIntServerId}`, `%${mailAccount}`],
       });
 
       expect(command).toContain('"^"');
@@ -578,7 +599,8 @@ describe('Protocol Validation: Mail System', () => {
         { member: 'GetHeaders', target: msgObjId, args: ['#0'] },
         { member: 'GetLines', target: msgObjId, args: ['#0'] },
         { member: 'GetAttachmentCount', target: msgObjId, args: ['#0'] },
-        { member: 'CheckNewMail', target: mailServerId, args: ['#0', '%acct'] },
+        { member: 'CheckNewMail', target: mailServerId, args: ['#41230990', '%acct'] },
+        { member: 'LogServerOn', target: mailServerId, args: ['%world'] },
       ];
 
       for (const { member, target, args } of funcCommands) {

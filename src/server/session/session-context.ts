@@ -64,6 +64,8 @@ export interface SessionContext {
   readonly daAddr: string | null;
   readonly daPort: number | null;
   readonly mailServerId: string | null;
+  /** Mail session id from LogServerOn — required by CheckNewMail (MailServer.pas:543). */
+  readonly mailIntServerId: string | null;
   readonly mailAccount: string | null;
   readonly worldXSize: number | null;
   readonly worldYSize: number | null;

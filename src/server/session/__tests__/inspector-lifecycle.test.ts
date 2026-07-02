@@ -11,6 +11,7 @@ import { describe, it, expect } from '@jest/globals';
 import {
   releaseInspector,
   getActiveInspector,
+  getActiveInspectorTempObjectId,
   setActiveInspectorForTest,
 } from '../building-details-handler';
 import type { ActiveInspector } from '../building-details-handler';
@@ -120,5 +121,27 @@ describe('Inspector Lifecycle', () => {
     releaseInspector(ctx);
     releaseInspector(ctx);
     expect(ctx.closedObjects).toHaveLength(0);
+  });
+
+  describe('getActiveInspectorTempObjectId (cacher KeepAlive target)', () => {
+    it('returns the temp object id when an inspector is open', () => {
+      const ctx = createMockCtx();
+      setActiveInspectorForTest(ctx, createFakeInspector({ tempObjectId: 'TMP_KA_7' }));
+
+      expect(getActiveInspectorTempObjectId(ctx)).toBe('TMP_KA_7');
+    });
+
+    it('returns undefined when no inspector is open (no KeepAlive traffic)', () => {
+      const ctx = createMockCtx();
+      expect(getActiveInspectorTempObjectId(ctx)).toBeUndefined();
+    });
+
+    it('returns undefined after the inspector is released', () => {
+      const ctx = createMockCtx();
+      setActiveInspectorForTest(ctx, createFakeInspector({ tempObjectId: 'TMP_KA_8' }));
+      releaseInspector(ctx);
+
+      expect(getActiveInspectorTempObjectId(ctx)).toBeUndefined();
+    });
   });
 });

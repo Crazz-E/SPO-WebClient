@@ -246,6 +246,8 @@ export class StarpeaceSession extends EventEmitter {
   private mailAddr: string | null = null;
   private mailPort: number | null = null;
   public mailServerId: string | null = null;
+  /** Mail session id returned by LogServerOn — required by CheckNewMail (MailServer.pas:543). */
+  public mailIntServerId: string | null = null;
   public worldXSize: number | null = null;
   public worldYSize: number | null = null;
   private worldSeason: number | null = null;  // 0=Winter, 1=Spring, 2=Summer, 3=Autumn
@@ -335,6 +337,12 @@ export class StarpeaceSession extends EventEmitter {
   private static readonly RECONNECT_SLOW_RETRIES = 20; // 15s × 20 = 5 min
   private static readonly RECONNECT_MAX_RETRIES =
     StarpeaceSession.RECONNECT_FAST_RETRIES + StarpeaceSession.RECONNECT_SLOW_RETRIES;
+
+  // --- GRACEFUL LOGOFF (mirrors Delphi ServerCnxHandler.Logoff) ---
+  /** Delphi LogoffTimeOut = 5000 (ServerCnxHandler.pas:330) */
+  private static readonly LOGOFF_TIMEOUT_MS = 5000;
+  /** Set once endSession() has logged off — makes it idempotent and disables auto-reconnect on the resulting socket close. */
+  private loggedOff = false;
 
   constructor() {
     super();
@@ -947,17 +955,42 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     });
     this.mailServerId = parseIdOfResponseHelper(idPacket.payload);
     this.log.debug(`[Mail] Mail Server Ready. ServerId: ${this.mailServerId}`);
+
+    // Register with the mail server to obtain a session ServerId — mirrors the
+    // Interface Server handshake (InterfaceServer.pas:4137-4156, LogServerOn).
+    // CheckNewMail dereferences this id as a TInterfaceServerData POINTER
+    // (MailServer.pas:543); the previous "#0" placeholder AV'd server-side and
+    // made the call always return -1.
+    try {
+      const worldName = this.currentWorldInfo?.name || '';
+      const logOnPacket = await this.sendRdoRequest('mail', {
+        verb: RdoVerb.SEL,
+        targetId: this.mailServerId!,
+        action: RdoAction.CALL,
+        member: 'LogServerOn',
+        args: [RdoValue.string(worldName).format()],
+      });
+      const serverId = parsePropertyResponseHelper(logOnPacket.payload!, 'res');
+      this.mailIntServerId = serverId && serverId !== '0' ? serverId : null;
+      this.log.debug(`[Mail] LogServerOn → mail session id ${this.mailIntServerId}`);
+    } catch (e: unknown) {
+      this.mailIntServerId = null;
+      this.log.warn('[Mail] LogServerOn failed — RDO unread count disabled:', toErrorMessage(e));
+    }
   }
 
   /**
    * Ensure the mail socket is connected, reconnecting if the server closed it.
-   * The Delphi MailServer has a 10-second idle timeout (MailConnectionTimeOut)
-   * which closes idle TCP connections. This method transparently reconnects.
+   * The mail socket is only re-created after a REAL socket loss (the Delphi
+   * MailServer has no idle connection timeout — MailConnectionTimeOut=10s is
+   * the client-side CONNECT timeout, InterfaceServer.pas:14; message objects
+   * expire after 15 min via fMsgTimeOut, MailServer.pas:367).
    */
   public async ensureMailConnection(): Promise<void> {
     if (!this.sockets.has('mail')) {
-      this.log.debug('[Mail] Socket was closed (server idle timeout), reconnecting...');
+      this.log.debug('[Mail] Socket was closed — reconnecting...');
       this.mailServerId = null;
+      this.mailIntServerId = null;
       await this.connectMailService();
     }
   }
@@ -1446,7 +1479,9 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       this.framers.delete(name);
 
       // Auto-reconnect world socket (Delphi RenewWorldProxy pattern)
-      if (name === 'world' && this.phase === SessionPhase.WORLD_CONNECTED && !this.isClosing) {
+      // Skipped after a graceful Logoff — the close is intentional (legacy parity:
+      // the Voyager client clears OnDisconnect before logging off, ServerCnxHandler.pas:2052)
+      if (name === 'world' && this.phase === SessionPhase.WORLD_CONNECTED && !this.isClosing && !this.loggedOff) {
         this.log.warn('[Session] World socket lost, attempting auto-reconnect...');
         this.attemptWorldReconnect().catch(err => {
           this.log.error('[Session] World auto-reconnect failed:', toErrorMessage(err));
@@ -1724,12 +1759,15 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
   }
 
   /**
-   * Start KeepAlive timer for the Map Service cacher proxy.
-   * Sends a void push every 60s to prevent the server from releasing
-   * the WSObjectCacher RDO reference due to inactivity.
+   * Start KeepAlive timer for the ACTIVE inspector temp object.
    *
-   * Delphi reference: ObjectInspectorHandleViewer.pas:1172-1180
-   *   fCacheObj.KeepAlive — CacheConnectionTimeOut = 60000ms
+   * Delphi ground truth: KeepAlive is published on TCachedObjectWrap (the temp
+   * object, CachedObjectWrap.pas:36) — the TCacheServer root the WebClient
+   * resolves as 'WSObjectCacher' publishes NO KeepAlive (CacheServerReportForm.pas:100-118),
+   * so targeting cacherId (the previous behavior) produced errUnexistentMethod
+   * noise every 60s. The legacy client keep-alives the open inspector object
+   * (fCacheObj.KeepAlive, ObjectInspectorHandleViewer.pas:1172-1180); temp
+   * objects expire after 1 minute without it (TCacheServer.CheckObject, fMaxTTL).
    *
    * CRITICAL: Uses writeRdoFrame() directly (void push with "*" separator).
    * Must NOT use sendRdoRequest() — that adds a QueryId, and combining
@@ -1742,7 +1780,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       return;
     }
 
-    this.log.debug(`[KeepAlive] Starting 60s timer for cacherId ${this.cacherId}`);
+    this.log.debug('[KeepAlive] Starting 60s timer (targets the active inspector temp object)');
     this.keepAliveInterval = setInterval(() => {
       const socket = this.sockets.get('map');
       if (!socket || !this.cacherId) {
@@ -1750,13 +1788,16 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         this.stopCacherKeepAlive();
         return;
       }
+      // No open inspector → no temp object to keep alive → no traffic (legacy parity)
+      const tempObjectId = buildingDetailsHandler.getActiveInspectorTempObjectId(this);
+      if (!tempObjectId) return;
       try {
-        const cmd = RdoCommand.sel(this.cacherId)
+        const cmd = RdoCommand.sel(tempObjectId)
           .call('KeepAlive')
           .push()
           .build();
         writeRdoFrame(socket, cmd);
-        this.log.debug('[KeepAlive] Sent to cacher');
+        this.log.debug(`[KeepAlive] Sent to inspector temp object ${tempObjectId}`);
       } catch (e: unknown) {
         this.log.warn('[KeepAlive] Failed:', toErrorMessage(e));
       }
@@ -2396,79 +2437,73 @@ private handlePush(socketName: string, packet: RdoPacket) {
     this.currentChannel = '';
 
     // 6. Reset phase to allow new loginWorld()
+    this.loggedOff = false; // re-arm graceful logoff for the next world session
     this.phase = SessionPhase.DIRECTORY_CONNECTED;
 
     this.log.debug('[Session] World session cleanup complete, ready for new loginWorld()');
   }
 
   /**
-   * Send RDOEndSession to gracefully close the game server session
-   * Should be called before destroy() when user logs out
-   * RDO Command: C <RID> sel <interfaceServerId> call RDOEndSession "*" ;
-   * Schedules socket closure 2 seconds after RDOEndSession is sent
+   * Gracefully log off the world session — mirrors the legacy Voyager client
+   * (ServerCnxHandler.pas:2043-2063):
+   *   1. ClientNotAware   — void procedure, fire-and-forget "*"
+   *   2. get Logoff       — zero-arg COM property-get, 5s deadline (LogoffTimeOut)
+   *   3. socket.end()     — server-side cleanup runs in TClientView.OnDisconnect
+   *
+   * The published TClientView.Logoff is a no-op returning NOERROR
+   * (InterfaceServer.pas:2019-2022). The InterfaceServer does NOT publish
+   * RDOEndSession (that is a TDirectorySession member) — the previous
+   * implementation sent it here and only produced errUnexistentMethod noise.
+   *
+   * Idempotent: REQ_LOGOUT handler and ws.on('close') may both call this.
    */
   public async endSession(): Promise<void> {
-    // Save camera position before ending session
-    await this.savePlayerPosition();
-
-    if (!this.interfaceServerId) {
-      this.log.debug('[Session] No active world session to end (no interfaceServerId)');
+    if (this.loggedOff) {
+      this.log.debug('[Session] endSession: already logged off');
       return;
     }
 
-    this.log.debug(`[Session] Ending session for interfaceServerId: ${this.interfaceServerId}`);
+    // Save camera position before ending session
+    await this.savePlayerPosition();
 
-    // Build RDOEndSession command (same target as Logon)
-    const endSessionCmd = RdoCommand.sel(this.interfaceServerId)
-      .call('RDOEndSession')
-      .push()
-      .build();
+    if (!this.worldContextId) {
+      this.log.debug('[Session] No active world session to end (no worldContextId)');
+      return;
+    }
 
-    // Send to world socket and schedule delayed closure
+    // From here on the world socket close is intentional — no auto-reconnect.
+    this.loggedOff = true;
+    this.log.debug(`[Session] Logging off ClientView ${this.worldContextId}`);
+
     const socket = this.sockets.get('world');
     if (socket && !socket.destroyed) {
       try {
-        writeRdoFrame(socket, endSessionCmd);
-        this.log.debug('[Session] Sent RDOEndSession to world socket');
+        // 1. ClientNotAware — legacy statement call (fire-and-forget)
+        writeRdoFrame(socket, RdoCommand.sel(this.worldContextId).call('ClientNotAware').push().build());
 
-        // Schedule socket closure 2 seconds after RDOEndSession
-        this.scheduleSocketClosure('world', socket, 2000);
+        // 2. Logoff — skip when the server is busy (a buffered request could
+        //    hang logout); the socket close alone triggers full server cleanup.
+        if (!this.isServerBusy) {
+          await this.sendRdoRequest('world', {
+            verb: RdoVerb.SEL,
+            targetId: this.worldContextId,
+            action: RdoAction.GET,
+            member: 'Logoff',
+          }, StarpeaceSession.LOGOFF_TIMEOUT_MS);
+          this.log.debug('[Session] Logoff acknowledged by InterfaceServer');
+        }
       } catch (err: unknown) {
-        this.log.error('[Session] Error sending RDOEndSession:', err);
+        this.log.warn('[Session] Logoff failed or timed out — closing socket anyway:', toErrorMessage(err));
+      }
+
+      // 3. Graceful close (FIN) — Delphi TClientView.OnDisconnect performs the
+      //    authoritative teardown when it sees the disconnect.
+      try {
+        socket.end();
+      } catch {
+        socket.destroy();
       }
     }
-
-    // Small delay to allow the command to be sent before cleanup
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    this.log.debug('[Session] Session ended successfully (sockets will close in 2 seconds)');
-  }
-
-  /**
-   * Schedule a socket to be closed after a delay
-   * @param socketName Name identifier for logging
-   * @param socket The TCP socket to close
-   * @param delayMs Delay in milliseconds before closing
-   */
-  private scheduleSocketClosure(socketName: string, socket: net.Socket, delayMs: number): void {
-    setTimeout(() => {
-      if (!socket.destroyed) {
-        this.log.debug(`[Session] Closing ${socketName} socket after ${delayMs}ms delay`);
-        try {
-          socket.end(); // Graceful close
-          // Force destroy after another second if still open
-          setTimeout(() => {
-            if (!socket.destroyed) {
-              this.log.debug(`[Session] Force destroying ${socketName} socket`);
-              socket.destroy();
-            }
-          }, 1000);
-        } catch (err: unknown) {
-          this.log.error(`[Session] Error closing ${socketName} socket:`, err);
-          socket.destroy();
-        }
-      }
-    }, delayMs);
   }
 
   /**

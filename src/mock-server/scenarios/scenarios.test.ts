@@ -315,9 +315,9 @@ describe('mail scenario', () => {
     expect(CAPTURED_MAIL_SEND.subject).toBe('test subjct');
   });
 
-  it('RDO has 14 exchanges covering all mail operations', () => {
+  it('RDO has 15 exchanges covering all mail operations', () => {
     const { rdo } = createMailScenario();
-    expect(rdo.exchanges).toHaveLength(14);
+    expect(rdo.exchanges).toHaveLength(15);
     const members = rdo.exchanges.map(
       e => e.matchKeys?.member ?? e.matchKeys?.targetId
     );
@@ -330,7 +330,9 @@ describe('mail scenario', () => {
       'Save',
       'CloseMessage',
     ]);
-    // Additional 8: Post, DeleteMessage, OpenMessage, GetHeaders, GetLines, GetAttachmentCount, CheckNewMail, AddHeaders
+    // Additional 9: Post, DeleteMessage, OpenMessage, GetHeaders, GetLines,
+    // GetAttachmentCount, LogServerOn (mail session id — MailServer.pas:100),
+    // CheckNewMail, AddHeaders
     expect(members.slice(6)).toEqual([
       'Post',
       'DeleteMessage',
@@ -338,6 +340,7 @@ describe('mail scenario', () => {
       'GetHeaders',
       'GetLines',
       'GetAttachmentCount',
+      'LogServerOn',
       'CheckNewMail',
       'AddHeaders',
     ]);
