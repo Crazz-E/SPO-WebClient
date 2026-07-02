@@ -4,13 +4,32 @@
  * Server-only — entire module is a no-op when running in the browser.
  */
 
+// Minimal structural types so this server-only module also typechecks under
+// tsconfig.client.json (no @types/node there). The runtime objects are the
+// real Node 'fs'/'path' modules; only the surface we use is declared.
+interface NodeFsLike {
+  mkdirSync(dir: string, opts: { recursive: boolean }): void;
+  statSync(p: string): { size: number };
+  appendFileSync(p: string, data: string, enc: string): void;
+  unlinkSync(p: string): void;
+  renameSync(oldPath: string, newPath: string): void;
+}
+interface NodePathLike {
+  dirname(p: string): string;
+}
+
+// Module-scoped ambient shadows: keep the browser tsconfig (no node globals)
+// happy while the server build still resolves the real CommonJS require.
+declare const process: unknown;
+declare function require(id: string): unknown;
+
 // Browser-safe guard: skip everything if we're not in Node.js
 const isNode = typeof window === 'undefined' && typeof process !== 'undefined';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 // Dynamic require so bundlers don't try to include 'fs' / 'path' in browser builds
-const fs: typeof import('fs') | null = isNode ? require('fs') : null;
-const path: typeof import('path') | null = isNode ? require('path') : null;
+const fs: NodeFsLike | null = isNode ? (require('fs') as NodeFsLike) : null;
+const path: NodePathLike | null = isNode ? (require('path') as NodePathLike) : null;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 export interface FileTransportOptions {
@@ -52,7 +71,8 @@ export class FileTransport {
     if (!fs || !path) return;
 
     const data = line + '\n';
-    const dataSize = Buffer.byteLength(data, 'utf8');
+    // TextEncoder (global in Node ≥ 11 and browsers) — avoids the node-only Buffer global
+    const dataSize = new TextEncoder().encode(data).length;
 
     try {
       // Rotate if needed before writing
