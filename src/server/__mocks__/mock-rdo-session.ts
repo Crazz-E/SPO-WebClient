@@ -300,20 +300,31 @@ export class MockRdoSession {
   }
 
   /**
-   * Simulates RDOEndSession command for graceful session termination
-   * Uses interfaceServerId (same target as Logon)
+   * Simulates the graceful world logoff — mirrors the legacy Voyager client
+   * (ServerCnxHandler.pas:2043-2063):
+   *   1. ClientNotAware — void procedure, fire-and-forget "*" (no RID)
+   *   2. get Logoff     — zero-arg COM property-get on the ClientView (5s deadline)
+   * Targets the worldContextId (ClientView returned by Logon), NOT the
+   * InterfaceServer — RDOEndSession is a TDirectorySession member and does
+   * not exist on the world server.
    */
-  async simulateEndSession(interfaceServerId: number): Promise<string> {
-    const rid = this.getNextRequestId();
-    const cmd = RdoCommand
-      .sel(interfaceServerId)
-      .withRequestId(rid)
-      .call('RDOEndSession')
-      .args()
+  async simulateLogoff(worldContextId: number): Promise<string[]> {
+    const notAwareCmd = RdoCommand
+      .sel(worldContextId)
+      .call('ClientNotAware')
+      .push()
       .build();
+    this.send(notAwareCmd);
 
-    this.send(cmd);
-    return cmd;
+    const rid = this.getNextRequestId();
+    const logoffCmd = RdoCommand
+      .sel(worldContextId)
+      .withRequestId(rid)
+      .get('Logoff')
+      .build();
+    this.send(logoffCmd);
+
+    return [notAwareCmd, logoffCmd];
   }
 
   // === Connection Management ===

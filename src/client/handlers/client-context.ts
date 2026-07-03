@@ -14,7 +14,7 @@ import type {
   BuildingDetailsResponse,
   SurfaceType,
 } from '../../shared/types';
-import type { IsometricRenderer } from '../renderer/isometric-renderer';
+import type { IsometricMapRenderer as IsometricRenderer } from '../renderer/isometric-map-renderer';
 import type { MapNavigationUI } from '../ui/map-navigation-ui';
 import type { SoundManager } from '../audio/sound-manager';
 

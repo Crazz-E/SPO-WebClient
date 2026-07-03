@@ -452,7 +452,9 @@ export class StarpeaceClient implements ClientHandlerContext {
 
   // ── ClientHandlerContext implementation ─────────────────────────────────────
 
-  public sendRequest<T extends WsMessage>(msg: T, timeoutMs = 90000): Promise<WsMessage> {
+  // Default L1 deadline must exceed the gateway's largest RDO (L3) deadline
+  // (ISProxyTimeOut = 180s) so the gateway's real error always arrives first.
+  public sendRequest<T extends WsMessage>(msg: T, timeoutMs = 200000): Promise<WsMessage> {
     return new Promise((resolve, reject) => {
       if (!this.ws || !this.isConnected) return reject(new Error('WebSocket not connected'));
 
@@ -712,7 +714,8 @@ export class StarpeaceClient implements ClientHandlerContext {
       this.mapNavigationUI.setOnEmptyMapClick(() => {
         // When building inspector is open, only clear the gold highlight — keep panel open
         if (useUiStore.getState().rightPanel === 'building') {
-          const r = this.mapNavigationUI.getRenderer();
+          // Optional chaining: the outer null-check doesn't narrow inside this callback
+          const r = this.mapNavigationUI?.getRenderer();
           if (r) r.clearSelectedBuilding();
           return;
         }

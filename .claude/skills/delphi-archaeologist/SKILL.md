@@ -5,7 +5,7 @@ user-invokable: true
 disable-model-invocation: false
 metadata:
   version: 1.0.0
-  codebase-path: C:\Users\RobinALEMAN\Documents\SPO\SPO-Original
+  codebase-path: ../SPO-Original
   file-count: 2383
   generation-date: 2026-02-24
 ---
@@ -16,7 +16,7 @@ Reverse-engineer the SPO-Original Delphi 5 codebase efficiently. Two modes: **Ex
 
 ## Codebase Root
 
-`C:\Users\RobinALEMAN\Documents\SPO\SPO-Original` — 67 directories, ~1747 .pas, ~256 .dpr, ~380 .dfm
+`../SPO-Original` — 67 directories, ~1747 .pas, ~256 .dpr, ~380 .dfm
 
 ## Triggers
 

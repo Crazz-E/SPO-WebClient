@@ -211,6 +211,41 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.errorCode).toBe(5);
       expect(packet.errorName).toBe('errUnexistentMethod');
     });
+
+    // Delphi GetCommand/SetCommand append the member name to property errors
+    // (RDOQueryServer.pas:274) — these MUST be detected as errors too.
+    it('should detect "error <n> getting <Prop>" (Delphi GetCommand format)', () => {
+      const packet = RdoProtocol.parse('A101 error 3 getting WorldName');
+      expect(packet.errorCode).toBe(3);
+      expect(packet.errorName).toBe('errUnexistentProperty (getting WorldName)');
+    });
+
+    it('should detect "error <n> setting <Prop>" (Delphi SetCommand format)', () => {
+      const packet = RdoProtocol.parse('A102 error 4 setting EnableEvents');
+      expect(packet.errorCode).toBe(4);
+      expect(packet.errorName).toBe('errIllegalPropValue (setting EnableEvents)');
+    });
+
+    it('should be case-insensitive on the getting/setting suffix', () => {
+      const packet = RdoProtocol.parse('A103 ERROR 5 GETTING Foo');
+      expect(packet.errorCode).toBe(5);
+      expect(packet.errorName).toBe('errUnexistentMethod (getting Foo)');
+    });
+
+    it('should NOT match "error <n>" embedded mid-payload', () => {
+      const packet = RdoProtocol.parse('A104 res="%error 5 getting Foo"');
+      expect(packet.errorCode).toBeUndefined();
+    });
+
+    it('should NOT match an error with trailing extra words beyond the member', () => {
+      const packet = RdoProtocol.parse('A105 error 3 getting Foo Bar');
+      expect(packet.errorCode).toBeUndefined();
+    });
+
+    it('should tolerate trailing whitespace after the member name', () => {
+      const packet = RdoProtocol.parse('A106 error 3 getting Foo  ');
+      expect(packet.errorCode).toBe(3);
+    });
   });
 
   describe('IDOF verb parsing', () => {
@@ -664,6 +699,62 @@ describe('RdoProtocol.format()', () => {
         raw: '', type: 'PUSH', verb: RdoVerb.IDOF,
         targetId: 'DirectoryServer'
       })).not.toThrow();
+    });
+  });
+});
+
+describe('Malformed busy rejection "Aerror <n>" (WinSockRDOConnectionsServer.pas:812)', () => {
+  // An overloaded server emits "A"+"error 17" with NO QueryId and NO ";" terminator.
+  // Tier-4 conformity: the framer must isolate it so it never corrupts the next frame,
+  // and the parser must surface errorCode 17 with no RID.
+
+  describe('RdoFramer recovery', () => {
+    it('separates "Aerror 17" glued to the next legitimate response', () => {
+      const framer = new RdoFramer();
+      const messages = framer.ingest('Aerror 17A55 ServerBusy="#0";');
+      expect(messages).toEqual(['Aerror 17', 'A55 ServerBusy="#0"']);
+    });
+
+    it('separates "Aerror 17" glued to a following push', () => {
+      const framer = new RdoFramer();
+      const messages = framer.ingest('Aerror 17C sel 40133496 call RefreshTycoon "*" "%1","%2","#2","#33","#70";');
+      expect(messages).toEqual(['Aerror 17', 'C sel 40133496 call RefreshTycoon "*" "%1","%2","#2","#33","#70"']);
+    });
+
+    it('holds a lone "Aerror 17" until the next byte proves the code is complete', () => {
+      const framer = new RdoFramer();
+      // No trailing byte yet — the error code could still be growing (chunk split)
+      expect(framer.ingest('Aerror 1')).toEqual([]);
+      // Next chunk completes the code AND starts the next frame
+      expect(framer.ingest('7A56 res="#0";')).toEqual(['Aerror 17', 'A56 res="#0"']);
+    });
+
+    it('does NOT trigger on legitimate suffixed error responses', () => {
+      const framer = new RdoFramer();
+      const messages = framer.ingest('A17 error 5 getting ServerBusy;');
+      expect(messages).toEqual(['A17 error 5 getting ServerBusy']);
+    });
+
+    it('does NOT trigger on "Aerror" text inside a quoted payload', () => {
+      const framer = new RdoFramer();
+      const messages = framer.ingest('A12 res="%Aerror 17 is just text";');
+      expect(messages).toEqual(['A12 res="%Aerror 17 is just text"']);
+    });
+  });
+
+  describe('RdoProtocol.parse classification', () => {
+    it('parses "Aerror 17" as a RESPONSE with errorCode 17 and no RID', () => {
+      const packet = RdoProtocol.parse('Aerror 17');
+      expect(packet.type).toBe('RESPONSE');
+      expect(packet.rid).toBeUndefined();
+      expect(packet.errorCode).toBe(17);
+      expect(packet.errorName).toBe('errServerBusy');
+    });
+
+    it('still parses regular error responses with RID normally', () => {
+      const packet = RdoProtocol.parse('A42 error 17');
+      expect(packet.rid).toBe(42);
+      expect(packet.errorCode).toBe(17);
     });
   });
 });

@@ -3,12 +3,17 @@
  * Used by spo_session.ts sendRdoRequest / executeRdoRequest.
  */
 
-/** Throws if a void push separator is used with sendRdoRequest (Delphi crash guard). */
+/**
+ * Throws if a void push separator is used with sendRdoRequest.
+ * PROJECT CONVENTION (one wire form per intent), not a crash fact: the server
+ * acks void+QueryId with "A<id> ;" (capture-proven — doc/rdo-protocol-architecture.md §8.5).
+ */
 export function assertNotVoidPush(packetData: { separator?: string; member?: string }): void {
   if (packetData.separator?.includes('*')) {
     throw new Error(
-      `FATAL: Void push separator "*" used with sendRdoRequest() — this WILL crash the Delphi server. ` +
-      `Command: ${packetData.member || 'unknown'}. Use socket.write() for fire-and-forget commands.`
+      `Void push separator "*" must not be used with sendRdoRequest() — project convention ` +
+      `(one form per intent; see doc/rdo-protocol-architecture.md §8.5). ` +
+      `Command: ${packetData.member || 'unknown'}. Use writeRdoFrame() for fire-and-forget commands.`
     );
   }
 }

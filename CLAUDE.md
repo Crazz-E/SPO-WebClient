@@ -13,11 +13,12 @@
 - Use `"^"` (VariantId) in fire-and-forget commands without a RID — `"^"` is forbidden in fire-and-forget except when paired with a request ID (RID). Fire-and-forget MUST use `"*"` (VoidId). Without a RID, the Delphi server has no destination for the response and crashes. Ref: RDOQueryServer.pas:419-424, live capture confirmation.
 
 **RDO conformity (MANDATORY for any RDO work):** Before writing or modifying ANY RDO-related code, you MUST:
-1. Read [doc/rdo-protocol-architecture.md](doc/rdo-protocol-architecture.md) — wire framing, dispatch internals, login sequence, push filtering rules
-2. Verify against SPO-Original Delphi source using `delphi-archaeologist` skill before implementing
+1. Read [doc/rdo-protocol-architecture.md](doc/rdo-protocol-architecture.md) — evidence hierarchy (§0), wire framing, response shapes, dispatch internals, push filtering rules
+2. Read [doc/rdo-session-lifecycle.md](doc/rdo-session-lifecycle.md) for anything touching sessions, connections, timers or timeouts — login/logoff sequences, KeepAlive, ServerBusy, reconnection policy
+3. Verify against SPO-Original Delphi source using `delphi-archaeologist` skill before implementing. **On any conflict, the live captures win** ([doc/Mock_Server_scenarios_captures.md](doc/Mock_Server_scenarios_captures.md)) — document why the captured form works, then follow it.
 This applies to new RDO calls, modified RDO calls, push handlers, and any code touching `sendRdoRequest()` or `RdoCommand`.
 
-**`sendRdoRequest()` + `"*"` separator = SERVER CRASH** — `sendRdoRequest()` adds a QueryId; void push (`"*"`) with QueryId crashes the Delphi server. Void push → `socket.write(RdoCommand.build())`. Synchronous → `sendRdoRequest()` with `"^"`.
+**`sendRdoRequest()` + `"*"` separator = FORBIDDEN (project convention)** — `sendRdoRequest()` adds a QueryId. Void + QueryId is wire-legal (the server acks `A<id> ;` — capture-proven, RDOQueryServer.pas:174-178), but the project standardizes on one form per intent, enforced by `assertNotVoidPush`. Void push → `writeRdoFrame(socket, RdoCommand.build())` (Latin-1, no QueryId). Synchronous → `sendRdoRequest()` with `"^"`. The actual crash risk is `"^"` WITHOUT a RID (rule above). Full matrix: [doc/rdo-protocol-architecture.md §8.5](doc/rdo-protocol-architecture.md).
 
 **Agent delegation strategy (when to use sub-agents vs direct tools vs skills):**
 - **Skills (default for advisory/auditing):** Skills auto-load into the main conversation via hooks — use them for domain guidance, code review checklists, and protocol verification. They keep context unified with zero spawning overhead.
@@ -75,7 +76,7 @@ Docs auto-load via hook when editing matching files. For planning/discussion, re
 
 | Context | Documents |
 |---------|-----------|
-| RDO protocol | [rdo-protocol-architecture.md](doc/rdo-protocol-architecture.md), [rdo_typing_system.md](doc/rdo_typing_system.md) |
+| RDO protocol | [rdo-protocol-architecture.md](doc/rdo-protocol-architecture.md), [rdo-session-lifecycle.md](doc/rdo-session-lifecycle.md), [rdo_typing_system.md](doc/rdo_typing_system.md) |
 | Renderer / textures | [texture-rendering-architecture.md](doc/texture-rendering-architecture.md) |
 | Concrete tiles | [concrete_rendering.md](doc/concrete_rendering.md) |
 | Roads | [road_rendering_reference.md](doc/road_rendering_reference.md) |

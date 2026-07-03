@@ -137,13 +137,14 @@ grep -n "IntToStr\|#9\|#13\|#10\|LineBreak\|^M" --include="*.pas" "Interface Ser
 
 ## Method Kinds for RDO
 
-| Delphi Declaration | Kind | RDO Verb | RDO Separator |
-|-------------------|------|----------|---------------|
+| Delphi Declaration | Kind | RDO Verb (what the legacy client emits) | RDO Separator |
+|-------------------|------|------------------------------------------|---------------|
 | `published property Foo: type read Get write Set` | property | `get` / `set` | N/A |
-| `published function Foo(...): OleVariant` | function | `call` | `^` (returns value) |
-| `published procedure Foo(...)` | procedure | `call` | `*` (void return) |
+| `published function Foo(args): OleVariant` — called with args | function | `call` | `^` (wants result, needs RID) |
+| `published function Foo: OleVariant` — **0 args, read in expression** | function | **`get`** (COM PROPERTYGET routing, RDOObjectProxy.pas:396-406) | N/A — answer echoes the member name |
+| `published procedure Foo(...)` | procedure | `call` | `*` (result discarded) |
 
-**TRAP**: `get` verb on a function works (falls through to `CallMethod` in `RDOObjectServer.pas`) but is semantically WRONG. Always use `call` for functions.
+**Rule (capture-first)**: the verb follows the **client's call shape**, not the server's property/function classification. `get` on a 0-arg function is exactly what the legacy client does (`get RDOOpenSession`, `get Logoff`, `get ServerBusy` — live captures); the server executes it via the GET fallthrough in `RDOObjectServer.pas`. Only use `call` where the legacy client used `call`.
 
 ## Type Mapping: Delphi → RDO
 

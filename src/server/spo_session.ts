@@ -1,7 +1,7 @@
 import * as net from 'net';
 import { EventEmitter } from 'events';
 import fetch from 'node-fetch';
-import { TimeoutCategory, TIMEOUT_CONFIG } from '../shared/timeout-categories';
+import { TimeoutCategory, TIMEOUT_CONFIG, IS_PROXY_TIMEOUT_MS } from '../shared/timeout-categories';
 import {
   RdoPacket,
   RdoVerb,
@@ -76,6 +76,8 @@ import {
   splitMultilinePayload as splitMultilinePayloadHelper,
   parsePropertyResponse as parsePropertyResponseHelper,
   parseIdOfResponse as parseIdOfResponseHelper,
+  isTrueOrdinal,
+  writeRdoFrame,
 } from './rdo-helpers';
 import { parseMessageListHtml } from './mail-list-parser';
 import type { AspActionUrl } from './asp-url-extractor';
@@ -245,6 +247,8 @@ export class StarpeaceSession extends EventEmitter {
   private mailAddr: string | null = null;
   private mailPort: number | null = null;
   public mailServerId: string | null = null;
+  /** Mail session id returned by LogServerOn — required by CheckNewMail (MailServer.pas:543). */
+  public mailIntServerId: string | null = null;
   public worldXSize: number | null = null;
   public worldYSize: number | null = null;
   private worldSeason: number | null = null;  // 0=Winter, 1=Spring, 2=Summer, 3=Autumn
@@ -296,10 +300,12 @@ export class StarpeaceSession extends EventEmitter {
   private readonly MAX_BUFFER_SIZE = 20; // Delphi queues far more; 5 was too aggressive
   private isServerBusy: boolean = false;
   private serverBusyCheckInterval: NodeJS.Timeout | null = null;
-  private readonly SERVER_BUSY_CHECK_INTERVAL_MS = 10000; // Check every 10 seconds
+  /** Legacy cadence: LEDsTimer (1s) gated `mod 50` → ServerBusy read every ~50s (ToolbarHandlerViewer.pas:160-162). */
+  private readonly SERVER_BUSY_CHECK_INTERVAL_MS = 50_000;
   private isPolling = false;
   private consecutivePollFailures = 0;
-  private static readonly MAX_CONSECUTIVE_POLL_FAILURES = 5;
+  /** Legacy: fExceptCount < 4 gate — polling STOPS after 4 consecutive exceptions, no reconnect (ServerCnxHandler.pas:3596-3611). */
+  private static readonly MAX_CONSECUTIVE_POLL_FAILURES = 4;
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private readonly KEEP_ALIVE_INTERVAL_MS = 60000; // Matches Delphi CacheConnectionTimeOut
 
@@ -308,12 +314,12 @@ export class StarpeaceSession extends EventEmitter {
   private modelServerDownCount = 0;
   private static readonly MAX_DOWN_COUNT_ALLOWED = 3; // Delphi: MaxDownCountAllowed = 3
 
-  // --- CONSECUTIVE RDO FAILURE COUNTER (mirrors Delphi fNetErrors + NetErrorsTimesOut) ---
-  // Tracks consecutive RDO request failures (timeout or error) across all request types.
-  // When threshold exceeded, triggers reconnect — unlike consecutivePollFailures which
-  // only counts ServerBusy poll failures.
+  // --- CONSECUTIVE RDO FAILURE COUNTER (telemetry only) ---
+  // Tracks consecutive RDO request timeouts. LEGACY PARITY: this never triggers
+  // a reconnect — the Voyager client's ReportCnxFailure is a no-op
+  // (ServerCnxHandler.pas:3394-3405); reconnection happens ONLY on a real
+  // socket disconnect. Exposed via logs/metrics for diagnostics.
   private consecutiveRdoFailures = 0;
-  private static readonly MAX_CONSECUTIVE_RDO_FAILURES = 3; // Delphi: NetErrorsTimesOut = 2
 
   // Map-specific throttling
   private activeMapRequests: number = 0;
@@ -334,6 +340,12 @@ export class StarpeaceSession extends EventEmitter {
   private static readonly RECONNECT_SLOW_RETRIES = 20; // 15s × 20 = 5 min
   private static readonly RECONNECT_MAX_RETRIES =
     StarpeaceSession.RECONNECT_FAST_RETRIES + StarpeaceSession.RECONNECT_SLOW_RETRIES;
+
+  // --- GRACEFUL LOGOFF (mirrors Delphi ServerCnxHandler.Logoff) ---
+  /** Delphi LogoffTimeOut = 5000 (ServerCnxHandler.pas:330) */
+  private static readonly LOGOFF_TIMEOUT_MS = 5000;
+  /** Set once endSession() has logged off — makes it idempotent and disables auto-reconnect on the resulting socket close. */
+  private loggedOff = false;
 
   constructor() {
     super();
@@ -627,7 +639,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 		  .push()
 		  .args(RdoValue.int(parseInt(this.currentFocusedBuildingId)))
 		  .build();
-		socket.write(unfocusCmd);
+		writeRdoFrame(socket, unfocusCmd);
 		this.log.debug('[Session] Sent UnfocusObject push command');
 	  }
 
@@ -697,8 +709,8 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
   }
 
   /**
-   * NEW: Check if a push command is a RefreshObject update
-   * Called from handleIncomingMessage when detecting push commands
+   * Check if a push command is a RefreshObject update.
+   * Called from processSingleCommand when detecting push commands.
    */
   public isRefreshObjectPush(packet: RdoPacket): boolean {
     return packet.type === 'PUSH' &&
@@ -908,7 +920,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
           RdoValue.string(this.cachedPassword!)
         )
         .build();
-      socket.write(logonCmd);
+      writeRdoFrame(socket, logonCmd);
       this.log.debug(`[Construction] Sent RDOLogonClient as "${loginUser}"`);
       // Small delay to let server process logon
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -946,17 +958,42 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     });
     this.mailServerId = parseIdOfResponseHelper(idPacket.payload);
     this.log.debug(`[Mail] Mail Server Ready. ServerId: ${this.mailServerId}`);
+
+    // Register with the mail server to obtain a session ServerId — mirrors the
+    // Interface Server handshake (InterfaceServer.pas:4137-4156, LogServerOn).
+    // CheckNewMail dereferences this id as a TInterfaceServerData POINTER
+    // (MailServer.pas:543); the previous "#0" placeholder AV'd server-side and
+    // made the call always return -1.
+    try {
+      const worldName = this.currentWorldInfo?.name || '';
+      const logOnPacket = await this.sendRdoRequest('mail', {
+        verb: RdoVerb.SEL,
+        targetId: this.mailServerId!,
+        action: RdoAction.CALL,
+        member: 'LogServerOn',
+        args: [RdoValue.string(worldName).format()],
+      });
+      const serverId = parsePropertyResponseHelper(logOnPacket.payload!, 'res');
+      this.mailIntServerId = serverId && serverId !== '0' ? serverId : null;
+      this.log.debug(`[Mail] LogServerOn → mail session id ${this.mailIntServerId}`);
+    } catch (e: unknown) {
+      this.mailIntServerId = null;
+      this.log.warn('[Mail] LogServerOn failed — RDO unread count disabled:', toErrorMessage(e));
+    }
   }
 
   /**
    * Ensure the mail socket is connected, reconnecting if the server closed it.
-   * The Delphi MailServer has a 10-second idle timeout (MailConnectionTimeOut)
-   * which closes idle TCP connections. This method transparently reconnects.
+   * The mail socket is only re-created after a REAL socket loss (the Delphi
+   * MailServer has no idle connection timeout — MailConnectionTimeOut=10s is
+   * the client-side CONNECT timeout, InterfaceServer.pas:14; message objects
+   * expire after 15 min via fMsgTimeOut, MailServer.pas:367).
    */
   public async ensureMailConnection(): Promise<void> {
     if (!this.sockets.has('mail')) {
-      this.log.debug('[Mail] Socket was closed (server idle timeout), reconnecting...');
+      this.log.debug('[Mail] Socket was closed — reconnecting...');
       this.mailServerId = null;
+      this.mailIntServerId = null;
       await this.connectMailService();
     }
   }
@@ -1187,7 +1224,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       .push()  // "*" separator, no RID — fire-and-forget (Delphi: procedure, not function)
       .args(RdoValue.int(x), RdoValue.int(y), RdoValue.int(dx), RdoValue.int(dy))
       .build();
-    socket.write(cmd);
+    writeRdoFrame(socket, cmd);
   }
 
   /**
@@ -1218,7 +1255,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
         RdoValue.int(parseInt(this.tycoonId, 10))
       )
       .build();
-    socket.write(cmd);
+    writeRdoFrame(socket, cmd);
     this.log.debug(`[CloneFacility] Sent: ${cmd}`);
   }
 
@@ -1353,7 +1390,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
         .push() // "*" separator — void procedure
         .args(RdoValue.int(parseInt(tempObjectId, 10)))
         .build();
-      socket.write(cmd);
+      writeRdoFrame(socket, cmd);
     } catch (e: unknown) {
       this.log.warn('[cacherCloseObject] Failed:', toErrorMessage(e));
     }
@@ -1428,7 +1465,15 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 
     socket.on('data', (chunk) => {
       const messages = framer.ingest(chunk);
-      messages.forEach(msg => this.processSingleCommand(name, msg));
+      for (const msg of messages) {
+        // A throw from one frame's handler must not kill the remaining frames,
+        // the socket, or (via uncaughtException → shutdown) the whole gateway.
+        try {
+          this.processSingleCommand(name, msg);
+        } catch (err: unknown) {
+          this.log.error(`[Session] Error processing RDO frame on ${name}: ${toErrorMessage(err)}. Frame: ${msg.slice(0, 200)}`);
+        }
+      }
     });
 
     socket.on('error', (err) => {
@@ -1445,7 +1490,9 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       this.framers.delete(name);
 
       // Auto-reconnect world socket (Delphi RenewWorldProxy pattern)
-      if (name === 'world' && this.phase === SessionPhase.WORLD_CONNECTED && !this.isClosing) {
+      // Skipped after a graceful Logoff — the close is intentional (legacy parity:
+      // the Voyager client clears OnDisconnect before logging off, ServerCnxHandler.pas:2052)
+      if (name === 'world' && this.phase === SessionPhase.WORLD_CONNECTED && !this.isClosing && !this.loggedOff) {
         this.log.warn('[Session] World socket lost, attempting auto-reconnect...');
         this.attemptWorldReconnect().catch(err => {
           this.log.error('[Session] World auto-reconnect failed:', toErrorMessage(err));
@@ -1481,7 +1528,13 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       {
         onData: (conn, chunk) => {
           const messages = conn.framer.ingest(chunk);
-          messages.forEach(msg => this.processSingleCommand('world', msg));
+          for (const msg of messages) {
+            try {
+              this.processSingleCommand('world', msg);
+            } catch (err: unknown) {
+              this.log.error(`[Pool] Error processing RDO frame: ${toErrorMessage(err)}. Frame: ${msg.slice(0, 200)}`);
+            }
+          }
         },
         onClose: (conn) => {
           this.log.debug('[Pool] World pool connection closed');
@@ -1508,10 +1561,12 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 
 /**
    * Attempt world socket reconnection with backoff and dedup.
-   * Mirrors Delphi InterfaceServer.RenewWorldProxy() pattern:
-   * - Exponential backoff (5s, 10s, 20s) to prevent reconnection storms
+   * Triggered EXCLUSIVELY by the socket 'close' event (legacy parity: Delphi's
+   * ReportCnxFailure is a no-op — never reconnect on query timeouts/errors).
+   * - Two bounded phases: 3 fast attempts (5/10/20 s) + 20 slow (15 s) = 23 total
+   *   over ~5.5 min, then give up (gentler than Delphi's infinite 100 ms loop)
+   * - ±25% jitter on every delay to desynchronize clients after a shared outage
    * - Promise dedup so concurrent callers share one attempt
-   * - Max 3 retries before giving up and notifying the client
    */
   public async attemptWorldReconnect(): Promise<void> {
     // Guard: only reconnect from WORLD_CONNECTED or RECONNECTING (dedup)
@@ -1521,7 +1576,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
     // Dedup: share pending reconnection promise
     if (this.worldReconnecting) return this.worldReconnecting;
 
-    // Max retries: give up after 3 attempts → notify client
+    // Max retries: give up after 23 bounded attempts (3 fast + 20 slow) → notify client
     if (this.worldReconnectAttempts >= StarpeaceSession.RECONNECT_MAX_RETRIES) {
       this.log.error('[Reconnect] Max retries exhausted, giving up');
       this.emit('worldDisconnected');
@@ -1532,9 +1587,12 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
     //   Fast phase: exponential 5s, 10s, 20s
     //   Slow phase: fixed 15s interval for extended recovery
     const inSlowPhase = this.worldReconnectAttempts >= StarpeaceSession.RECONNECT_FAST_RETRIES;
-    const backoffMs = inSlowPhase
+    const baseBackoffMs = inSlowPhase
       ? StarpeaceSession.RECONNECT_SLOW_INTERVAL_MS
       : StarpeaceSession.RECONNECT_BASE_BACKOFF_MS * Math.pow(2, this.worldReconnectAttempts);
+    // ±25% jitter (audit V5): fixed delays synchronize every client into a
+    // thundering herd against the IS fServerLock after a shared server outage.
+    const backoffMs = Math.round(baseBackoffMs * (0.75 + Math.random() * 0.5));
     const elapsed = Date.now() - this.worldReconnectLastAttempt;
     if (this.worldReconnectLastAttempt > 0 && elapsed < backoffMs) {
       throw new Error(`World reconnect throttled (${elapsed}ms < ${backoffMs}ms)`);
@@ -1623,8 +1681,10 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
   }
 
 /**
-   * Start ServerBusy polling (every 10 seconds)
-   * When server is busy, pause all requests except ServerBusy checks
+   * Start ServerBusy polling — legacy cadence (~50s, ToolbarHandlerViewer.pas:160-162)
+   * with the legacy 180s blocking-read deadline. When the server is busy, new
+   * requests are buffered. The ModelStatusChanged push (setServerBusyFromPush)
+   * remains the primary/instant busy signal; this poll is the fallback.
    */
   public startServerBusyPolling(): void {
     if (this.serverBusyCheckInterval) return; // Already running
@@ -1654,17 +1714,19 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         if (!socket) return;
 
         const rawString = RdoProtocol.format(packet);
-        socket.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
+        writeRdoFrame(socket, rawString + RDO_CONSTANTS.PACKET_DELIMITER);
 
         const response = await new Promise<RdoPacket>((resolve, reject) => {
           const timeoutHandle = setTimeout(() => {
             const entry = this.pendingRequests.get(rid);
             if (entry && entry.state === 'pending') {
-              // ServerBusy polls are short-lived — delete immediately, no grace period
+              // Legacy deadline: the ServerBusy read is a blocking property GET
+              // under ISProxyTimeOut = 180s (ServerCnxHandler.pas:3596-3611) —
+              // a busy-but-alive server must not be counted as failed after 1s.
               this.pendingRequests.delete(rid);
               reject(new Error('ServerBusy check timeout'));
             }
-          }, 1000);
+          }, IS_PROXY_TIMEOUT_MS);
 
           this.pendingRequests.set(rid, {
             resolve,
@@ -1679,7 +1741,9 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         this.consecutivePollFailures = 0;
         const busyValue = parsePropertyResponseHelper(response.payload!, 'ServerBusy');
         const wasBusy = this.isServerBusy;
-        this.isServerBusy = busyValue == '1';
+        // Wordbool true arrives as "#-1" on the wire (doc §2.2): any non-zero
+        // ordinal means busy (audit V1 — "== '1'" misread the canonical "#-1").
+        this.isServerBusy = isTrueOrdinal(busyValue);
 
         if (wasBusy && !this.isServerBusy) {
           this.log.debug('[ServerBusy] Server now available - resuming requests');
@@ -1696,14 +1760,15 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         );
 
         if (this.consecutivePollFailures >= StarpeaceSession.MAX_CONSECUTIVE_POLL_FAILURES) {
+          // LEGACY PARITY: after 4 consecutive failures the Voyager client simply
+          // STOPS polling (fExceptCount gate, ServerCnxHandler.pas:3596-3611) —
+          // it never reconnects from here. Busy state still updates instantly via
+          // the ModelStatusChanged push (setServerBusyFromPush). Polling restarts
+          // on the next successful (re)connect (startServerBusyPolling).
           this.log.error(
-            `[ServerBusy] ${this.consecutivePollFailures} consecutive poll failures — server appears unresponsive, triggering reconnect`
+            `[ServerBusy] ${this.consecutivePollFailures} consecutive poll failures — stopping ServerBusy polling (push channel remains active)`
           );
-          this.consecutivePollFailures = 0;
           this.stopServerBusyPolling();
-          this.attemptWorldReconnect().catch((reconnectErr: unknown) => {
-            this.log.error('[ServerBusy] Reconnect triggered by poll failures failed:', toErrorMessage(reconnectErr));
-          });
         }
       } finally {
         this.isPolling = false;
@@ -1723,14 +1788,17 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
   }
 
   /**
-   * Start KeepAlive timer for the Map Service cacher proxy.
-   * Sends a void push every 60s to prevent the server from releasing
-   * the WSObjectCacher RDO reference due to inactivity.
+   * Start KeepAlive timer for the ACTIVE inspector temp object.
    *
-   * Delphi reference: ObjectInspectorHandleViewer.pas:1172-1180
-   *   fCacheObj.KeepAlive — CacheConnectionTimeOut = 60000ms
+   * Delphi ground truth: KeepAlive is published on TCachedObjectWrap (the temp
+   * object, CachedObjectWrap.pas:36) — the TCacheServer root the WebClient
+   * resolves as 'WSObjectCacher' publishes NO KeepAlive (CacheServerReportForm.pas:100-118),
+   * so targeting cacherId (the previous behavior) produced errUnexistentMethod
+   * noise every 60s. The legacy client keep-alives the open inspector object
+   * (fCacheObj.KeepAlive, ObjectInspectorHandleViewer.pas:1172-1180); temp
+   * objects expire after 1 minute without it (TCacheServer.CheckObject, fMaxTTL).
    *
-   * CRITICAL: Uses socket.write() directly (void push with "*" separator).
+   * CRITICAL: Uses writeRdoFrame() directly (void push with "*" separator).
    * Must NOT use sendRdoRequest() — that adds a QueryId, and combining
    * QueryId + "*" separator crashes the Delphi server.
    */
@@ -1741,7 +1809,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       return;
     }
 
-    this.log.debug(`[KeepAlive] Starting 60s timer for cacherId ${this.cacherId}`);
+    this.log.debug('[KeepAlive] Starting 60s timer (targets the active inspector temp object)');
     this.keepAliveInterval = setInterval(() => {
       const socket = this.sockets.get('map');
       if (!socket || !this.cacherId) {
@@ -1749,13 +1817,16 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         this.stopCacherKeepAlive();
         return;
       }
+      // No open inspector → no temp object to keep alive → no traffic (legacy parity)
+      const tempObjectId = buildingDetailsHandler.getActiveInspectorTempObjectId(this);
+      if (!tempObjectId) return;
       try {
-        const cmd = RdoCommand.sel(this.cacherId)
+        const cmd = RdoCommand.sel(tempObjectId)
           .call('KeepAlive')
           .push()
           .build();
-        socket.write(cmd);
-        this.log.debug('[KeepAlive] Sent to cacher');
+        writeRdoFrame(socket, cmd);
+        this.log.debug(`[KeepAlive] Sent to inspector temp object ${tempObjectId}`);
       } catch (e: unknown) {
         this.log.warn('[KeepAlive] Failed:', toErrorMessage(e));
       }
@@ -1955,10 +2026,10 @@ private async executeWithRetry(
         `[RDO] Recoverable error ${result.errorCode} on ${packetData.member} — retry ${attempt + 1}/${classified.maxRetries} in ${delay}ms`
       );
 
-      // If connection degraded, attempt reconnect before retry
-      if (classified.connectionDegraded && socketName === 'world') {
-        await this.attemptWorldReconnect().catch(() => {/* swallow — retry will fail naturally if socket gone */});
-      }
+      // LEGACY PARITY (audit V4): never reconnect from a query-level error.
+      // Delphi's ReportCnxFailure is a no-op (ServerCnxHandler.pas:3394-3405);
+      // reconnection is driven EXCLUSIVELY by the socket 'close' event. If the
+      // transport is really dead, 'close' fires and handles it.
 
       await new Promise(r => setTimeout(r, delay));
       return this.executeWithRetry(socketName, packetData, timeoutMs, attempt + 1);
@@ -2012,7 +2083,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
 
   // GUARD: Void push ("*") + QueryId = Delphi server crash.
   // sendRdoRequest always adds a rid, so void push must never go through here.
-  // Void push commands must use socket.write() directly (no rid, no response).
+  // Void push commands must use writeRdoFrame() directly (no rid, no response).
   assertNotVoidPush(packetData);
 
   // Capture pool connection for slot release on completion
@@ -2048,15 +2119,12 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
         this.log.warn(`[RDO] TIMEOUT RID ${rid} ${socketName}/${member} after ${timeoutMs}ms (pending=${this.pendingRequests.size}, timedOut=${this.rdoMetrics.totalTimedOut}, consecutiveFails=${this.consecutiveRdoFailures})`);
         reject(new Error(`Request timeout: ${member}`));
 
-        // Check consecutive failure threshold (mirrors Delphi fNetErrors → ConnectionDropped)
-        if (this.consecutiveRdoFailures >= StarpeaceSession.MAX_CONSECUTIVE_RDO_FAILURES
-            && socketName === 'world' && !this.isClosing) {
-          this.log.error(`[RDO] ${this.consecutiveRdoFailures} consecutive RDO failures (timeout) — triggering reconnect`);
-          this.consecutiveRdoFailures = 0;
-          this.attemptWorldReconnect().catch((e: unknown) => {
-            this.log.error('[RDO] Reconnect from consecutive timeouts failed:', toErrorMessage(e));
-          });
-        }
+        // LEGACY PARITY: request-latency timeouts NEVER trigger a reconnect.
+        // The Voyager client's ReportCnxFailure is a no-op (ServerCnxHandler.pas:3394-3405);
+        // it reconnects ONLY on a real socket disconnect (OnSocketDisconnect →
+        // ConnectionDropped). A slow-but-alive server producing timeouts on an
+        // open socket must not be treated as a dead connection — doing so caused
+        // synchronized relogin storms. consecutiveRdoFailures is kept as telemetry.
       }
     }, timeoutMs);
 
@@ -2075,27 +2143,8 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
     // Send the request
     const rawString = RdoProtocol.format(packet);
     this.log.debug(`RDO>> ${socketName}`, { command: member, verb: packetData.verb, rid, timeoutMs, separator: packetData.separator, raw: redactRdoRaw(packetData.member, rawString) });
-    socket!.write(rawString + RDO_CONSTANTS.PACKET_DELIMITER);
+    writeRdoFrame(socket!, rawString + RDO_CONSTANTS.PACKET_DELIMITER);
   });
-}
-
-private handleIncomingMessage(socketName: string, raw: string) {
-  // CRITICAL FIX: Handle multiple commands in single message
-  // Split by ';' but keep the delimiter for proper parsing
-  const commands = raw.split(';').filter(cmd => cmd.trim().length > 0);
-  
-  // If multiple commands detected, process each separately
-  if (commands.length > 1) {
-    this.log.debug(`[Session] Multiple commands detected in message: ${commands.length}`);
-    commands.forEach(cmdRaw => {
-      const fullCmd = cmdRaw.trim() + ';';
-      this.processSingleCommand(socketName, fullCmd);
-    });
-    return;
-  }
-  
-  // Single command - process normally
-  this.processSingleCommand(socketName, raw);
 }
 
 	private processSingleCommand(socketName: string, raw: string) {
@@ -2184,6 +2233,13 @@ private handleIncomingMessage(socketName: string, raw: string) {
 		  // Truly orphaned — past grace period or unknown RID
 		  this.log.warn(`[RDO] Orphaned response RID ${packet.rid} on ${socketName} (no pending entry — GC'd or never tracked). Payload: ${(raw || '').slice(0, 200)}`);
 		  this.rdoMetrics.totalOrphaned++;
+		} else if (packet.errorCode === 17) {
+		  // Malformed busy rejection "A"+"error 17" with no RID and no terminator
+		  // (WinSockRDOConnectionsServer.pas:812) — the server refused the query
+		  // because it is busy. Flip the busy flag; the ModelStatusChanged push or
+		  // the ServerBusy poll will clear it when the server recovers.
+		  this.log.warn(`[RDO] Server busy rejection (malformed 'Aerror 17') on ${socketName}`);
+		  this.setServerBusyFromPush(true);
 		}
 	  } else {
 		// Push command
@@ -2200,11 +2256,21 @@ private handleIncomingMessage(socketName: string, raw: string) {
         const response = `${RDO_CONSTANTS.CMD_PREFIX_ANSWER}${packet.rid} objid="${objectId}"${RDO_CONSTANTS.PACKET_DELIMITER}`;
         const socket = this.sockets.get(socketName);
         if (socket) {
-          socket.write(response);
+          writeRdoFrame(socket, response);
           this.log.debug(`[Session] Auto-replied to server: ${response}`);
         }
       } else {
         this.log.warn(`[Session] Server requested unknown object: ${packet.targetId}`);
+      }
+    } else if (packet.action === RdoAction.CALL && packet.member === 'AnswerStatus' && packet.rid !== undefined) {
+      // Server liveness heartbeat on the reverse channel. Legacy client answers
+      // NOERROR (TISEvents.AnswerStatus, Voyager/URLHandlers/ServerCnxHandler.pas:666-669).
+      // Left unanswered, the server's query would sit until its 60 s timeout.
+      const response = `${RDO_CONSTANTS.CMD_PREFIX_ANSWER}${packet.rid} res="#0"${RDO_CONSTANTS.PACKET_DELIMITER}`;
+      const socket = this.sockets.get(socketName);
+      if (socket) {
+        writeRdoFrame(socket, response);
+        this.log.debug(`[Session] Answered AnswerStatus heartbeat: ${response}`);
       }
     }
   }
@@ -2273,13 +2339,13 @@ private handlePush(socketName: string, packet: RdoPacket) {
         .call('SetTycoonCookie').push()
         .args(RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastX.0'), RdoValue.string(String(this.lastPlayerX)))
         .build();
-      socket.write(cmdX);
+      writeRdoFrame(socket, cmdX);
 
       const cmdY = RdoCommand.sel(this.worldContextId)
         .call('SetTycoonCookie').push()
         .args(RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastY.0'), RdoValue.string(String(this.lastPlayerY)))
         .build();
-      socket.write(cmdY);
+      writeRdoFrame(socket, cmdY);
 
       this.log.debug('[Session] Player position saved');
     } catch (e: unknown) {
@@ -2395,79 +2461,73 @@ private handlePush(socketName: string, packet: RdoPacket) {
     this.currentChannel = '';
 
     // 6. Reset phase to allow new loginWorld()
+    this.loggedOff = false; // re-arm graceful logoff for the next world session
     this.phase = SessionPhase.DIRECTORY_CONNECTED;
 
     this.log.debug('[Session] World session cleanup complete, ready for new loginWorld()');
   }
 
   /**
-   * Send RDOEndSession to gracefully close the game server session
-   * Should be called before destroy() when user logs out
-   * RDO Command: C <RID> sel <interfaceServerId> call RDOEndSession "*" ;
-   * Schedules socket closure 2 seconds after RDOEndSession is sent
+   * Gracefully log off the world session — mirrors the legacy Voyager client
+   * (ServerCnxHandler.pas:2043-2063):
+   *   1. ClientNotAware   — void procedure, fire-and-forget "*"
+   *   2. get Logoff       — zero-arg COM property-get, 5s deadline (LogoffTimeOut)
+   *   3. socket.end()     — server-side cleanup runs in TClientView.OnDisconnect
+   *
+   * The published TClientView.Logoff is a no-op returning NOERROR
+   * (InterfaceServer.pas:2019-2022). The InterfaceServer does NOT publish
+   * RDOEndSession (that is a TDirectorySession member) — the previous
+   * implementation sent it here and only produced errUnexistentMethod noise.
+   *
+   * Idempotent: REQ_LOGOUT handler and ws.on('close') may both call this.
    */
   public async endSession(): Promise<void> {
-    // Save camera position before ending session
-    await this.savePlayerPosition();
-
-    if (!this.interfaceServerId) {
-      this.log.debug('[Session] No active world session to end (no interfaceServerId)');
+    if (this.loggedOff) {
+      this.log.debug('[Session] endSession: already logged off');
       return;
     }
 
-    this.log.debug(`[Session] Ending session for interfaceServerId: ${this.interfaceServerId}`);
+    // Save camera position before ending session
+    await this.savePlayerPosition();
 
-    // Build RDOEndSession command (same target as Logon)
-    const endSessionCmd = RdoCommand.sel(this.interfaceServerId)
-      .call('RDOEndSession')
-      .push()
-      .build();
+    if (!this.worldContextId) {
+      this.log.debug('[Session] No active world session to end (no worldContextId)');
+      return;
+    }
 
-    // Send to world socket and schedule delayed closure
+    // From here on the world socket close is intentional — no auto-reconnect.
+    this.loggedOff = true;
+    this.log.debug(`[Session] Logging off ClientView ${this.worldContextId}`);
+
     const socket = this.sockets.get('world');
     if (socket && !socket.destroyed) {
       try {
-        socket.write(endSessionCmd);
-        this.log.debug('[Session] Sent RDOEndSession to world socket');
+        // 1. ClientNotAware — legacy statement call (fire-and-forget)
+        writeRdoFrame(socket, RdoCommand.sel(this.worldContextId).call('ClientNotAware').push().build());
 
-        // Schedule socket closure 2 seconds after RDOEndSession
-        this.scheduleSocketClosure('world', socket, 2000);
+        // 2. Logoff — skip when the server is busy (a buffered request could
+        //    hang logout); the socket close alone triggers full server cleanup.
+        if (!this.isServerBusy) {
+          await this.sendRdoRequest('world', {
+            verb: RdoVerb.SEL,
+            targetId: this.worldContextId,
+            action: RdoAction.GET,
+            member: 'Logoff',
+          }, StarpeaceSession.LOGOFF_TIMEOUT_MS);
+          this.log.debug('[Session] Logoff acknowledged by InterfaceServer');
+        }
       } catch (err: unknown) {
-        this.log.error('[Session] Error sending RDOEndSession:', err);
+        this.log.warn('[Session] Logoff failed or timed out — closing socket anyway:', toErrorMessage(err));
+      }
+
+      // 3. Graceful close (FIN) — Delphi TClientView.OnDisconnect performs the
+      //    authoritative teardown when it sees the disconnect.
+      try {
+        socket.end();
+      } catch {
+        socket.destroy();
       }
     }
-
-    // Small delay to allow the command to be sent before cleanup
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    this.log.debug('[Session] Session ended successfully (sockets will close in 2 seconds)');
-  }
-
-  /**
-   * Schedule a socket to be closed after a delay
-   * @param socketName Name identifier for logging
-   * @param socket The TCP socket to close
-   * @param delayMs Delay in milliseconds before closing
-   */
-  private scheduleSocketClosure(socketName: string, socket: net.Socket, delayMs: number): void {
-    setTimeout(() => {
-      if (!socket.destroyed) {
-        this.log.debug(`[Session] Closing ${socketName} socket after ${delayMs}ms delay`);
-        try {
-          socket.end(); // Graceful close
-          // Force destroy after another second if still open
-          setTimeout(() => {
-            if (!socket.destroyed) {
-              this.log.debug(`[Session] Force destroying ${socketName} socket`);
-              socket.destroy();
-            }
-          }, 1000);
-        } catch (err: unknown) {
-          this.log.error(`[Session] Error closing ${socketName} socket:`, err);
-          socket.destroy();
-        }
-      }
-    }, delayMs);
   }
 
   /**

@@ -53,9 +53,25 @@ export class RdoFramer {
     }
 
     const messages: string[] = [];
-    let delimiterIndex: number;
 
-    while ((delimiterIndex = this.findDelimiter()) !== -1) {
+    while (true) {
+      // Malformed busy rejection recovery: an overloaded server emits "A"+"error <n>"
+      // with NO QueryId and NO ";" terminator (WinSockRDOConnectionsServer.pas:812).
+      // Left in the buffer it glues onto the next frame and corrupts it. The buffer
+      // always starts at a frame boundary here, and real frames start with "A<digits>"
+      // or "C", so this prefix can only be the malformed reply. The (?=\D) lookahead
+      // waits for the next byte (frames start with A/C) so a chunk-split error code
+      // is never truncated.
+      const busyMatch = this.buffer.match(/^A ?error \d+(?=\D)/);
+      if (busyMatch) {
+        messages.push(busyMatch[0]);
+        this.buffer = this.buffer.substring(busyMatch[0].length);
+        continue;
+      }
+
+      const delimiterIndex = this.findDelimiter();
+      if (delimiterIndex === -1) break;
+
       const message = this.buffer.substring(0, delimiterIndex).trim();
       if (message.length > 0) {
         messages.push(message);
@@ -92,6 +108,20 @@ export class RdoProtocol {
 		// Regex: A(\d+)\s+(.*)
 		const match = raw.match(/^A(\d+)\s*([\s\S]*)$/);
 		if (!match) {
+		  // Malformed busy rejection: "A"+"error <n>" with no QueryId
+		  // (WinSockRDOConnectionsServer.pas:812). Surface the error code so the
+		  // session can flip its busy flag instead of dropping the signal.
+		  const busyMatch = raw.match(/^A ?error (\d+)\s*$/);
+		  if (busyMatch) {
+			const code = parseInt(busyMatch[1], 10);
+			return {
+			  raw,
+			  type: 'RESPONSE',
+			  payload: raw.substring(1).trim(),
+			  errorCode: code,
+			  errorName: RDO_ERROR_CODES[code] ?? `unknownError(${code})`,
+			};
+		  }
 		  return { raw, type: 'RESPONSE', payload: raw };
 		}
 
@@ -103,12 +133,19 @@ export class RdoProtocol {
 		  payload,
 		};
 
-		// Check for RDO error response: "error <code>" (ErrorCodes.pas:0-17)
-		const errorMatch = payload.match(/^error\s+(\d+)$/i);
+		// Check for RDO error response (ErrorCodes.pas:0-17). Delphi emits three forms:
+		//   "error <code>"                       (CallCommand/IdOfCommand)
+		//   "error <code> getting <PropName>"    (GetCommand — RDOQueryServer.pas:274)
+		//   "error <code> setting <PropName>"    (SetCommand)
+		// Anchored full-match so quoted payloads containing the word "error" never match.
+		const errorMatch = payload.match(/^error\s+(\d+)(?:\s+(getting|setting)\s+(\S+))?\s*$/i);
 		if (errorMatch) {
 		  const code = parseInt(errorMatch[1], 10);
 		  packet.errorCode = code;
-		  packet.errorName = RDO_ERROR_CODES[code] ?? `unknownError(${code})`;
+		  const baseName = RDO_ERROR_CODES[code] ?? `unknownError(${code})`;
+		  packet.errorName = errorMatch[2]
+		    ? `${baseName} (${errorMatch[2].toLowerCase()} ${errorMatch[3]})`
+		    : baseName;
 		}
 
 		return packet;

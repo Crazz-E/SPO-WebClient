@@ -1,448 +1,183 @@
 /**
- * World Socket Auto-Reconnect Tests
+ * World socket auto-reconnect — drives the REAL StarpeaceSession
+ * (rewritten in Tier 4: the previous version tested a parallel mock class
+ * that hardcoded RECONNECT_MAX_RETRIES = 3 while production uses 23 — audit P6).
  *
- * Validates the reconnection logic added to spo_session.ts,
- * mirroring Delphi InterfaceServer.RenewWorldProxy() pattern:
- * - Light reconnect (TCP + IDOF + session validation)
- * - Full re-login fallback when session expired
- * - Exponential backoff (5s, 10s, 20s)
- * - Max 3 retries before giving up
- * - Promise dedup (concurrent callers share one attempt)
- * - Phase guards (only reconnect from WORLD_CONNECTED)
- * - Race protection with cleanupWorldSession()
- * - Pending request drain before reconnect
- * - Cache invalidation after reconnect
- * - Metrics tracking
+ * Policy under test (doc/rdo-session-lifecycle.md §4.5):
+ * - Reconnect trigger: socket 'close' ONLY, and only if !loggedOff
+ * - Two bounded phases: 3 fast (5/10/20s exponential) + 20 slow (15s) = 23 total
+ * - ±25% jitter on every backoff delay
+ * - Pending RIDs drained (rejected) BEFORE reconnecting (ghost-RID rule)
+ * - Promise dedup: concurrent callers share one attempt
+ * - Give up at max retries → emit 'worldDisconnected'
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { EventEmitter } from 'events';
+
+jest.mock('net', () => ({
+  Socket: jest.fn(),
+}));
+jest.mock('node-fetch', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
+
+import { createProtocolTestHarness, ProtocolTestHarness } from './protocol-validation/protocol-test-harness';
 import { SessionPhase } from '../../shared/types';
+import * as loginHandler from '../session/login-handler';
+import type { MockTcpSocket } from './protocol-validation/mock-tcp-socket';
 
-// ── Replicate reconnection state machine from spo_session.ts ──────────────
+const WORLD_CONTEXT_ID = '8161308';
 
-interface PendingRdoRequest {
-  resolve: (msg: unknown) => void;
-  reject: (err: unknown) => void;
-  state: 'pending' | 'timed-out';
-  sentAt: number;
-  member: string;
-  timeoutHandle: ReturnType<typeof setTimeout>;
+interface SessionStatics {
+  RECONNECT_FAST_RETRIES: number;
+  RECONNECT_SLOW_RETRIES: number;
+  RECONNECT_MAX_RETRIES: number;
+  RECONNECT_BASE_BACKOFF_MS: number;
+  RECONNECT_SLOW_INTERVAL_MS: number;
 }
 
-interface BufferedRequest {
-  socketName: string;
-  reject: (err: unknown) => void;
+interface SessionInternals {
+  worldReconnectAttempts: number;
+  worldReconnectLastAttempt: number;
+  loggedOff: boolean;
+  pendingRequests: Map<number, unknown>;
 }
 
-interface RdoMetrics {
-  totalReconnectAttempts: number;
-  totalReconnectSuccesses: number;
-  totalReconnectFailures: number;
-  lastReconnectAt: number | null;
+function statics(): SessionStatics {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { StarpeaceSession: SessionClass } = require('../spo_session');
+  return SessionClass as unknown as SessionStatics;
 }
 
-/**
- * Minimal harness mirroring the reconnection state machine in StarpeaceSession.
- * Tests the logic without TCP sockets or real RDO connections.
- */
-class WorldReconnectMachine extends EventEmitter {
-  phase: SessionPhase = SessionPhase.WORLD_CONNECTED;
-  isClosing = false;
-  worldReconnectLastAttempt = 0;
-  worldReconnecting: Promise<void> | null = null;
-  worldReconnectAttempts = 0;
-  pendingRequests = new Map<number, PendingRdoRequest>();
-  requestBuffer: BufferedRequest[] = [];
-  knownObjects = new Map<string, string>();
-  aspActionCache = new Map<string, unknown>();
-  metrics: RdoMetrics = {
-    totalReconnectAttempts: 0,
-    totalReconnectSuccesses: 0,
-    totalReconnectFailures: 0,
-    lastReconnectAt: null,
-  };
+describe('World reconnect (real session)', () => {
+  let harness: ProtocolTestHarness;
+  let worldSocket: MockTcpSocket;
+  let reconnectWorldSocketSpy: jest.SpiedFunction<typeof loginHandler.reconnectWorldSocket>;
 
-  static readonly RECONNECT_MAX_RETRIES = 3;
-  static readonly RECONNECT_BASE_BACKOFF_MS = 5000;
+  beforeEach(async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+    reconnectWorldSocketSpy = jest
+      .spyOn(loginHandler, 'reconnectWorldSocket')
+      .mockResolvedValue(undefined as never);
 
-  // Injected reconnect function (simulates loginHandler.reconnectWorldSocket)
-  reconnectFn: () => Promise<void> = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
-
-  serverBusyPollingActive = false;
-  startServerBusyPolling(): void { this.serverBusyPollingActive = true; }
-  stopServerBusyPolling(): void { this.serverBusyPollingActive = false; }
-
-  async attemptWorldReconnect(): Promise<void> {
-    if (this.phase !== SessionPhase.WORLD_CONNECTED && this.phase !== SessionPhase.RECONNECTING) return;
-    if (this.isClosing) return;
-
-    if (this.worldReconnecting) return this.worldReconnecting;
-
-    if (this.worldReconnectAttempts >= WorldReconnectMachine.RECONNECT_MAX_RETRIES) {
-      this.emit('worldDisconnected');
-      return;
-    }
-
-    const backoffMs = WorldReconnectMachine.RECONNECT_BASE_BACKOFF_MS * Math.pow(2, this.worldReconnectAttempts);
-    const elapsed = Date.now() - this.worldReconnectLastAttempt;
-    if (this.worldReconnectLastAttempt > 0 && elapsed < backoffMs) {
-      throw new Error(`World reconnect throttled (${elapsed}ms < ${backoffMs}ms)`);
-    }
-
-    this.worldReconnecting = (async () => {
-      this.worldReconnectLastAttempt = Date.now();
-      this.worldReconnectAttempts++;
-      this.metrics.totalReconnectAttempts++;
-
-      this.phase = SessionPhase.RECONNECTING;
-      this.stopServerBusyPolling();
-
-      // Drain pending requests
-      for (const [rid, entry] of this.pendingRequests.entries()) {
-        if (entry.state === 'pending') {
-          clearTimeout(entry.timeoutHandle);
-          entry.reject(new Error('World socket reconnecting'));
-        }
-        this.pendingRequests.delete(rid);
-      }
-
-      // Reject world-targeted buffered requests
-      this.requestBuffer = this.requestBuffer.filter(buf => {
-        if (buf.socketName === 'world') {
-          buf.reject(new Error('World socket reconnecting'));
-          return false;
-        }
-        return true;
-      });
-
-      try {
-        await this.reconnectFn();
-
-        this.knownObjects.clear();
-        this.aspActionCache.clear();
-        this.startServerBusyPolling();
-        this.phase = SessionPhase.WORLD_CONNECTED;
-        this.worldReconnectAttempts = 0;
-        this.metrics.totalReconnectSuccesses++;
-        this.metrics.lastReconnectAt = Date.now();
-        this.emit('worldReconnected');
-      } catch (err) {
-        this.metrics.totalReconnectFailures++;
-        throw err;
-      } finally {
-        this.worldReconnecting = null;
-      }
-    })();
-
-    return this.worldReconnecting;
-  }
-
-  /** Simulate cleanupWorldSession() guard */
-  cleanupWorldSession(): void {
-    this.phase = SessionPhase.WORLD_CONNECTING;
-    this.worldReconnecting = null;
-    this.worldReconnectAttempts = 0;
-  }
-
-  /** Helper: add a fake pending request */
-  addPendingRequest(rid: number, member: string): { resolve: jest.Mock; reject: jest.Mock } {
-    const resolve = jest.fn();
-    const reject = jest.fn();
-    this.pendingRequests.set(rid, {
-      resolve,
-      reject,
-      state: 'pending',
-      sentAt: Date.now(),
-      member,
-      timeoutHandle: setTimeout(() => {}, 30000),
+    harness = createProtocolTestHarness({
+      socketConfigs: [{ rdoScenarios: [], disableStrictValidation: true }],
     });
-    return { resolve, reject };
-  }
-}
-
-// ── Tests ──────────────────────────────────────────────────────────────────
-
-describe('World Socket Auto-Reconnect', () => {
-  let machine: WorldReconnectMachine;
-
-  beforeEach(() => {
-    machine = new WorldReconnectMachine();
-    jest.useFakeTimers();
+    await harness.session.createSocket('world', '127.0.0.1', 8000);
+    worldSocket = harness.getSockets()[0];
+    harness.session.setWorldContextId(WORLD_CONTEXT_ID);
+    harness.session.setPhase(SessionPhase.WORLD_CONNECTED);
   });
 
   afterEach(() => {
-    // Clear any pending timeouts from pending requests
-    for (const [, entry] of machine.pendingRequests) {
-      clearTimeout(entry.timeoutHandle);
-    }
+    reconnectWorldSocketSpy.mockRestore();
+    harness.session.destroy();
+    harness.cleanup();
     jest.useRealTimers();
   });
 
-  describe('Happy path — light reconnection', () => {
-    it('should reconnect successfully when world socket drops', async () => {
-      const reconnectFn = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
-      machine.reconnectFn = reconnectFn;
+  function internals(): SessionInternals {
+    return harness.session as unknown as SessionInternals;
+  }
 
-      await machine.attemptWorldReconnect();
-
-      expect(reconnectFn).toHaveBeenCalledTimes(1);
-      expect(machine.phase).toBe(SessionPhase.WORLD_CONNECTED);
-      expect(machine.worldReconnectAttempts).toBe(0); // Reset on success
-      expect(machine.metrics.totalReconnectAttempts).toBe(1);
-      expect(machine.metrics.totalReconnectSuccesses).toBe(1);
-      expect(machine.metrics.lastReconnectAt).not.toBeNull();
+  describe('real production constants (not a mock copy)', () => {
+    it('two bounded phases: 3 fast + 20 slow = 23 total attempts', () => {
+      expect(statics().RECONNECT_FAST_RETRIES).toBe(3);
+      expect(statics().RECONNECT_SLOW_RETRIES).toBe(20);
+      expect(statics().RECONNECT_MAX_RETRIES).toBe(23);
     });
 
-    it('should emit worldReconnected event on success', async () => {
-      const handler = jest.fn();
-      machine.on('worldReconnected', handler);
-
-      await machine.attemptWorldReconnect();
-
-      expect(handler).toHaveBeenCalledTimes(1);
+    it('fast base backoff 5s, slow interval 15s', () => {
+      expect(statics().RECONNECT_BASE_BACKOFF_MS).toBe(5000);
+      expect(statics().RECONNECT_SLOW_INTERVAL_MS).toBe(15_000);
     });
   });
 
-  describe('Pending request drain (CRITICAL — ghost RID collision prevention)', () => {
-    it('should reject all pending requests before reconnecting', async () => {
-      const { reject: reject1 } = machine.addPendingRequest(1001, 'GetPropertyList');
-      const { reject: reject2 } = machine.addPendingRequest(1002, 'ObjectsInArea');
-
-      await machine.attemptWorldReconnect();
-
-      expect(reject1).toHaveBeenCalledWith(expect.objectContaining({
-        message: 'World socket reconnecting',
-      }));
-      expect(reject2).toHaveBeenCalledWith(expect.objectContaining({
-        message: 'World socket reconnecting',
-      }));
-      expect(machine.pendingRequests.size).toBe(0);
+  describe('trigger policy: socket close only', () => {
+    it('socket close in WORLD_CONNECTED triggers a reconnect attempt', async () => {
+      worldSocket.emit('close');
+      await new Promise(resolve => setImmediate(resolve));
+      expect(reconnectWorldSocketSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('should reject buffered world requests but keep non-world requests', async () => {
-      const worldReject = jest.fn();
-      const mailReject = jest.fn();
-      machine.requestBuffer = [
-        { socketName: 'world', reject: worldReject },
-        { socketName: 'mail', reject: mailReject },
-      ];
+    it('socket close after graceful logoff does NOT reconnect (loggedOff flag)', async () => {
+      internals().loggedOff = true;
+      worldSocket.emit('close');
+      await new Promise(resolve => setImmediate(resolve));
+      expect(reconnectWorldSocketSpy).not.toHaveBeenCalled();
+    });
 
-      await machine.attemptWorldReconnect();
-
-      expect(worldReject).toHaveBeenCalledWith(expect.objectContaining({
-        message: 'World socket reconnecting',
-      }));
-      expect(mailReject).not.toHaveBeenCalled();
-      expect(machine.requestBuffer).toHaveLength(1);
-      expect(machine.requestBuffer[0].socketName).toBe('mail');
+    it('phase guard: no reconnect outside WORLD_CONNECTED/RECONNECTING', async () => {
+      harness.session.setPhase(SessionPhase.DIRECTORY_CONNECTED);
+      await harness.session.attemptWorldReconnect();
+      expect(reconnectWorldSocketSpy).not.toHaveBeenCalled();
     });
   });
 
-  describe('Exponential backoff', () => {
-    it('should allow first attempt immediately', async () => {
-      await machine.attemptWorldReconnect();
-      expect(machine.metrics.totalReconnectAttempts).toBe(1);
+  describe('attempt lifecycle', () => {
+    it('successful reconnect resets the attempt counter and returns to WORLD_CONNECTED', async () => {
+      await harness.session.attemptWorldReconnect();
+      expect(reconnectWorldSocketSpy).toHaveBeenCalledTimes(1);
+      expect(internals().worldReconnectAttempts).toBe(0); // reset on success
+      expect(harness.session.getPhase()).toBe(SessionPhase.WORLD_CONNECTED);
     });
 
-    it('should throttle second attempt within 5s window', async () => {
-      // First attempt fails
-      machine.reconnectFn = jest.fn<() => Promise<void>>().mockRejectedValue(new Error('fail'));
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
+    it('drains pending RIDs BEFORE reconnecting (ghost-RID rule)', async () => {
+      const pending = harness.session.sendRdoRequest('world', {
+        verb: 'sel' as never,
+        targetId: WORLD_CONTEXT_ID,
+        action: 'get' as never,
+        member: 'NeverAnswered',
+      }, 60_000);
+      const captured = pending.catch((err: Error) => err);
+      await new Promise(resolve => setImmediate(resolve));
+      expect(internals().pendingRequests.size).toBe(1);
 
-      // Second attempt within 5s should be throttled
-      // Phase is still RECONNECTING from failed attempt
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('throttled');
+      await harness.session.attemptWorldReconnect();
+
+      const err = await captured;
+      expect((err as Error).message).toContain('reconnecting');
+      expect(internals().pendingRequests.size).toBe(0);
     });
 
-    it('should allow retry after backoff period elapses', async () => {
-      // First attempt fails (attempts becomes 1, next backoff = 5000 * 2^1 = 10s)
-      machine.reconnectFn = jest.fn<() => Promise<void>>().mockRejectedValueOnce(new Error('fail'));
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
-
-      // Advance past 10s backoff (5000 * 2^1)
-      jest.advanceTimersByTime(10001);
-
-      // Now succeed
-      machine.reconnectFn = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
-      await machine.attemptWorldReconnect();
-      expect(machine.phase).toBe(SessionPhase.WORLD_CONNECTED);
+    it('dedup: concurrent callers share a single attempt', async () => {
+      const p1 = harness.session.attemptWorldReconnect();
+      const p2 = harness.session.attemptWorldReconnect();
+      await Promise.all([p1, p2]);
+      expect(reconnectWorldSocketSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('should increase backoff exponentially: 5s base, then 10s, 20s', async () => {
-      machine.reconnectFn = jest.fn<() => Promise<void>>().mockRejectedValue(new Error('fail'));
+    it('backoff throttle: an immediate second attempt is rejected as throttled', async () => {
+      reconnectWorldSocketSpy.mockRejectedValueOnce(new Error('still down') as never);
+      await harness.session.attemptWorldReconnect().catch(() => { /* first attempt fails */ });
 
-      // Attempt 1: immediate (backoff check skipped since worldReconnectLastAttempt=0)
-      // After: attempts=1, next backoff = 5000 * 2^1 = 10s
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
-      expect(machine.worldReconnectAttempts).toBe(1);
-
-      // Attempt 2: needs 10s wait — advance only 5s (should throttle)
-      jest.advanceTimersByTime(5000);
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('throttled');
-
-      // Advance remaining to pass 10s
-      jest.advanceTimersByTime(5001);
-      // After: attempts=2, next backoff = 5000 * 2^2 = 20s
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
-      expect(machine.worldReconnectAttempts).toBe(2);
-
-      // Attempt 3: needs 20s wait — advance 20001ms
-      jest.advanceTimersByTime(20001);
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
-      expect(machine.worldReconnectAttempts).toBe(3);
-    });
-  });
-
-  describe('Max retries', () => {
-    it('should give up after 3 failed attempts and emit worldDisconnected', async () => {
-      const disconnectHandler = jest.fn();
-      machine.on('worldDisconnected', disconnectHandler);
-      machine.reconnectFn = jest.fn<() => Promise<void>>().mockRejectedValue(new Error('fail'));
-
-      // Attempt 1: immediate → attempts=1, next backoff=10s
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
-      // Attempt 2: after 10s → attempts=2, next backoff=20s
-      jest.advanceTimersByTime(10001);
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
-      // Attempt 3: after 20s → attempts=3
-      jest.advanceTimersByTime(20001);
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
-
-      expect(machine.worldReconnectAttempts).toBe(3);
-
-      // Next attempt should give up (max retries reached)
-      jest.advanceTimersByTime(40001);
-      await machine.attemptWorldReconnect();
-      expect(disconnectHandler).toHaveBeenCalledTimes(1);
-      expect(machine.metrics.totalReconnectFailures).toBe(3);
-    });
-  });
-
-  describe('Promise dedup', () => {
-    it('should share pending reconnection between concurrent callers (only one reconnectFn call)', async () => {
-      let resolveReconnect!: () => void;
-      machine.reconnectFn = jest.fn<() => Promise<void>>(() =>
-        new Promise<void>(resolve => { resolveReconnect = resolve; })
-      );
-
-      const promise1 = machine.attemptWorldReconnect();
-      const promise2 = machine.attemptWorldReconnect();
-
-      // Both calls should result in only ONE reconnectFn invocation
-      expect(machine.reconnectFn).toHaveBeenCalledTimes(1);
-
-      resolveReconnect();
-      await promise1;
-      await promise2;
-      expect(machine.phase).toBe(SessionPhase.WORLD_CONNECTED);
-      expect(machine.metrics.totalReconnectAttempts).toBe(1);
-    });
-  });
-
-  describe('Phase guards', () => {
-    it('should NOT reconnect when phase is DISCONNECTED', async () => {
-      machine.phase = SessionPhase.DISCONNECTED;
-      await machine.attemptWorldReconnect();
-      expect(machine.metrics.totalReconnectAttempts).toBe(0);
+      // Second attempt immediately after: elapsed ≈ 0 < jittered backoff (≥ 3750ms)
+      await expect(harness.session.attemptWorldReconnect()).rejects.toThrow(/throttled/);
+      expect(reconnectWorldSocketSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('should NOT reconnect when phase is DIRECTORY_CONNECTED', async () => {
-      machine.phase = SessionPhase.DIRECTORY_CONNECTED;
-      await machine.attemptWorldReconnect();
-      expect(machine.metrics.totalReconnectAttempts).toBe(0);
+    it('jitter: the backoff gate stays within ±25% of its base on the second attempt window', async () => {
+      reconnectWorldSocketSpy.mockRejectedValueOnce(new Error('still down') as never);
+      await harness.session.attemptWorldReconnect().catch(() => { /* attempt 1 fails */ });
+
+      // After one failed attempt, the exponential base is 5s × 2¹ = 10s, so the
+      // jittered gate lies in [7.5s, 12.5s]. Beyond the worst case, a new
+      // attempt must always pass the throttle.
+      await jest.advanceTimersByTimeAsync(12_600);
+      await harness.session.attemptWorldReconnect();
+      expect(reconnectWorldSocketSpy).toHaveBeenCalledTimes(2);
     });
 
-    it('should NOT reconnect when phase is WORLD_CONNECTING', async () => {
-      machine.phase = SessionPhase.WORLD_CONNECTING;
-      await machine.attemptWorldReconnect();
-      expect(machine.metrics.totalReconnectAttempts).toBe(0);
-    });
+    it('gives up at RECONNECT_MAX_RETRIES and emits worldDisconnected', async () => {
+      internals().worldReconnectAttempts = statics().RECONNECT_MAX_RETRIES;
+      const disconnected = jest.fn();
+      harness.session.on('worldDisconnected', disconnected);
 
-    it('should NOT reconnect when isClosing is true', async () => {
-      machine.isClosing = true;
-      await machine.attemptWorldReconnect();
-      expect(machine.metrics.totalReconnectAttempts).toBe(0);
-    });
+      await harness.session.attemptWorldReconnect();
 
-    it('should allow reconnect from RECONNECTING phase (dedup path)', async () => {
-      machine.phase = SessionPhase.RECONNECTING;
-      await machine.attemptWorldReconnect();
-      expect(machine.metrics.totalReconnectAttempts).toBe(1);
-    });
-  });
-
-  describe('Race protection: cleanupWorldSession cancels reconnect', () => {
-    it('should cancel in-progress reconnect when cleanup runs', async () => {
-      let resolveReconnect!: () => void;
-      machine.reconnectFn = jest.fn<() => Promise<void>>(() =>
-        new Promise<void>(resolve => { resolveReconnect = resolve; })
-      );
-
-      const promise = machine.attemptWorldReconnect();
-      expect(machine.phase).toBe(SessionPhase.RECONNECTING);
-
-      // Simulate cleanupWorldSession() racing
-      machine.cleanupWorldSession();
-      expect(machine.phase).toBe(SessionPhase.WORLD_CONNECTING);
-      expect(machine.worldReconnecting).toBeNull();
-      expect(machine.worldReconnectAttempts).toBe(0);
-
-      // Resolve the now-detached promise (should not crash)
-      resolveReconnect();
-      await promise;
-    });
-  });
-
-  describe('ServerBusy polling lifecycle', () => {
-    it('should stop polling before reconnect and restart after', async () => {
-      machine.serverBusyPollingActive = true;
-
-      await machine.attemptWorldReconnect();
-
-      // After successful reconnect, polling should be restarted
-      expect(machine.serverBusyPollingActive).toBe(true);
-    });
-
-    it('should stop polling and not restart on failed reconnect', async () => {
-      machine.serverBusyPollingActive = true;
-      machine.reconnectFn = jest.fn<() => Promise<void>>().mockRejectedValue(new Error('fail'));
-
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
-
-      expect(machine.serverBusyPollingActive).toBe(false);
-    });
-  });
-
-  describe('Cache invalidation after reconnect', () => {
-    it('should clear knownObjects and aspActionCache on success', async () => {
-      machine.knownObjects.set('InterfaceEvents', '12345');
-      machine.aspActionCache.set('/path', { url: 'http://...' });
-
-      await machine.attemptWorldReconnect();
-
-      expect(machine.knownObjects.size).toBe(0);
-      expect(machine.aspActionCache.size).toBe(0);
-    });
-  });
-
-  describe('Metrics tracking', () => {
-    it('should track attempts, successes, and failures', async () => {
-      machine.reconnectFn = jest.fn<() => Promise<void>>().mockRejectedValueOnce(new Error('fail'));
-
-      // Failure (attempts=1, next backoff=10s)
-      await expect(machine.attemptWorldReconnect()).rejects.toThrow('fail');
-      expect(machine.metrics.totalReconnectAttempts).toBe(1);
-      expect(machine.metrics.totalReconnectFailures).toBe(1);
-      expect(machine.metrics.totalReconnectSuccesses).toBe(0);
-
-      // Success (after 10s backoff)
-      jest.advanceTimersByTime(10001);
-      machine.reconnectFn = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
-      await machine.attemptWorldReconnect();
-      expect(machine.metrics.totalReconnectAttempts).toBe(2);
-      expect(machine.metrics.totalReconnectSuccesses).toBe(1);
-      expect(machine.metrics.lastReconnectAt).not.toBeNull();
+      expect(disconnected).toHaveBeenCalledTimes(1);
+      expect(reconnectWorldSocketSpy).not.toHaveBeenCalled();
     });
   });
 });

@@ -5,7 +5,7 @@
  * Private helpers are module-private functions.
  *
  * Void procedures (AddHeaders, DeleteMessage) are fire-and-forget:
- * socket.write() with "*" (VoidId), no RID.
+ * writeRdoFrame() with "*" (VoidId), no RID.
  * AddLine and CloseMessage are synchronous (Delphi sets WaitForAnswer:=true)
  * — use sendRdoRequest() with separator '"^"'.
  * NEVER use sendRdoRequest() with separator '*' — it adds a QueryId,
@@ -18,7 +18,7 @@ import type { MailMessageHeader, MailMessageFull, MailAttachment } from '../../s
 import type { MailFolder } from '../../shared/types/domain-types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
-import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
+import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 import { parseMessageListHtml } from '../mail-list-parser';
 import { toErrorMessage } from '../../shared/error-utils';
 import fetch from 'node-fetch';
@@ -28,7 +28,7 @@ function mailFireAndForget(ctx: SessionContext, targetId: string, method: string
   const socket = ctx.getSocket('mail');
   if (!socket) throw new Error('Mail socket unavailable');
   const cmd = RdoCommand.sel(targetId).call(method).push().args(...args).build();
-  socket.write(cmd);
+  writeRdoFrame(socket, cmd);
   ctx.log.debug(`[Mail] Sent: ${cmd}`);
 }
 
@@ -394,14 +394,20 @@ export async function deleteMailMessage(
 /**
  * Get unread mail count for Inbox.
  * Reference: InterfaceServer.pas:4345 -- CountUnreadMessages proxies CheckNewMail
- * Note: CheckNewMail takes ServerId (from LogServerOn) + Account. Since we're
- * not an InterfaceServer, we pass 0 as ServerId (the MailServer uses it for
- * routing notifications, which we don't need for a count query).
+ *
+ * CheckNewMail(ServerId: integer; Account: widestring) dereferences ServerId
+ * as a TInterfaceServerData POINTER (MailServer.pas:543) — it MUST be the id
+ * returned by LogServerOn (obtained in connectMailService). Passing 0 caused
+ * a server-side access violation and a constant -1 result.
  */
 export async function getMailUnreadCount(ctx: SessionContext): Promise<number> {
   await ctx.ensureMailConnection();
   if (!ctx.mailServerId || !ctx.mailAccount) {
     throw new Error('Mail service not connected');
+  }
+  if (!ctx.mailIntServerId) {
+    ctx.log.debug('[Mail] No LogServerOn session id — skipping CheckNewMail');
+    return 0;
   }
 
   const packet = await ctx.sendRdoRequest('mail', {
@@ -409,10 +415,12 @@ export async function getMailUnreadCount(ctx: SessionContext): Promise<number> {
     targetId: ctx.mailServerId,
     action: RdoAction.CALL,
     member: 'CheckNewMail',
-    args: [RdoValue.int(0).toString(), RdoValue.string(ctx.mailAccount).toString()]
+    args: [RdoValue.int(parseInt(ctx.mailIntServerId, 10)).toString(), RdoValue.string(ctx.mailAccount).toString()]
   });
-  const countStr = parsePropertyResponseHelper(packet.payload!, 'CheckNewMail');
-  return parseInt(countStr, 10) || 0;
+  const countStr = parsePropertyResponseHelper(packet.payload!, 'res');
+  const count = parseInt(countStr, 10);
+  // The server returns -1 on internal failure — surface that as "no unread"
+  return count > 0 ? count : 0;
 }
 
 /**

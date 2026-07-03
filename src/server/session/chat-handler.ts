@@ -10,7 +10,7 @@ import type { SessionContext } from './session-context';
 import type { ChatUser } from '../../shared/types';
 import { RdoVerb, RdoAction, parseAccDesc } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
-import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
+import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 
 // =========================================================================
 // PRIVATE HELPERS
@@ -180,7 +180,7 @@ export async function setChatTypingStatus(ctx: SessionContext, isTyping: boolean
       .push()
       .args(RdoValue.int(status))
       .build();
-    socket.write(cmd);
+    writeRdoFrame(socket, cmd);
   }
 }
 

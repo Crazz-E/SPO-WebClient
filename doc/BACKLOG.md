@@ -1214,6 +1214,7 @@
   - Cleaner UI: STOP button only shown when relevant
 
 #### Logout Feature
+> ⚠️ **SUPERSEDED (2026-07-02, RDO conformity Tier 2):** the `RDOEndSession`-based logoff described below was WRONG — `RDOEndSession` does not exist on the Interface Server (it is a `TDirectorySession` member only → `error 5`). Current conformant logoff: `ClientNotAware` (fire-and-forget) + `get Logoff` (5 s deadline) on the ClientView, then close the socket. See [rdo-session-lifecycle.md §4.4](rdo-session-lifecycle.md) and `spo_session.ts endSession()`. This entry is kept as historical log only.
 - **Status:** ✅ COMPLETED (January 2026)
 - **Goal:** Gracefully end RDO session when user logs out, closes browser, or server shuts down
 - **Implementation:**

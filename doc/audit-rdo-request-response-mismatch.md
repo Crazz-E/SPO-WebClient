@@ -46,7 +46,7 @@ The legacy Delphi client (SPO-Original) uses **two distinct RDO call modes**:
 For EVERY `sendRdoRequest()` call site in `src/server/session/*.ts` and `src/server/spo_session.ts`:
 
 1. Read the call and note: socket name, verb, action, member, separator, whether a return value is used
-2. Cross-reference with the Delphi source in `C:\Users\RobinALEMAN\Documents\SPO\SPO-Original` — find the equivalent call and determine:
+2. Cross-reference with the Delphi source in `../SPO-Original` — find the equivalent call and determine:
    - Does Delphi use `Send()` (fire-and-forget) or `SendReceive()` (blocking)?
    - What is `WaitForAnswer` set to before this call?
    - What separator does Delphi use: `"*"` or `"^"`?

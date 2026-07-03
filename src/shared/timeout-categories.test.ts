@@ -1,7 +1,8 @@
 import { describe, it, expect } from '@jest/globals';
-import { TimeoutCategory, TIMEOUT_CONFIG } from './timeout-categories';
+import { TimeoutCategory, TIMEOUT_CONFIG, IS_PROXY_TIMEOUT_MS } from './timeout-categories';
 
 const ALL_CATEGORIES = [
+  TimeoutCategory.DIRECTORY,
   TimeoutCategory.FAST,
   TimeoutCategory.NORMAL,
   TimeoutCategory.SLOW,
@@ -9,12 +10,18 @@ const ALL_CATEGORIES = [
 ];
 
 describe('TimeoutCategories', () => {
-  it('defines four categories', () => {
-    expect(Object.keys(TimeoutCategory)).toHaveLength(4);
+  it('defines five categories', () => {
+    expect(Object.keys(TimeoutCategory)).toHaveLength(5);
+    expect(TimeoutCategory.DIRECTORY).toBe('DIRECTORY');
     expect(TimeoutCategory.FAST).toBe('FAST');
     expect(TimeoutCategory.NORMAL).toBe('NORMAL');
     expect(TimeoutCategory.SLOW).toBe('SLOW');
     expect(TimeoutCategory.VERY_SLOW).toBe('VERY_SLOW');
+  });
+
+  it('DIRECTORY matches the legacy DSProxy deadline (20s, LogonHandlerViewer.pas:341)', () => {
+    expect(TIMEOUT_CONFIG[TimeoutCategory.DIRECTORY].rdoMs).toBe(20_000);
+    expect(TIMEOUT_CONFIG[TimeoutCategory.DIRECTORY].wsMs).toBeGreaterThan(20_000);
   });
 
   it('has config for every category', () => {
@@ -33,20 +40,25 @@ describe('TimeoutCategories', () => {
     }
   });
 
-  it('SLOW rdoMs matches legacy Delphi 60s default', () => {
-    expect(TIMEOUT_CONFIG[TimeoutCategory.SLOW].rdoMs).toBe(60_000);
+  it('FAST rdoMs matches the legacy proxy DefTimeOut (60s)', () => {
+    expect(TIMEOUT_CONFIG[TimeoutCategory.FAST].rdoMs).toBe(60_000);
   });
 
-  it('VERY_SLOW rdoMs is 120s (approaching Delphi ISProxyTimeOut 180s)', () => {
-    expect(TIMEOUT_CONFIG[TimeoutCategory.VERY_SLOW].rdoMs).toBe(120_000);
+  it('all in-play categories share the legacy ISProxyTimeOut (180s)', () => {
+    // ServerCnxHandler.pas:329 — the legacy client waits 180s on every world
+    // call during play; timing out earlier surfaced false failures.
+    expect(IS_PROXY_TIMEOUT_MS).toBe(180_000);
+    for (const cat of [TimeoutCategory.NORMAL, TimeoutCategory.SLOW, TimeoutCategory.VERY_SLOW]) {
+      expect(TIMEOUT_CONFIG[cat].rdoMs).toBe(IS_PROXY_TIMEOUT_MS);
+    }
   });
 
-  it('categories are ordered by timeout duration', () => {
+  it('categories are ordered by non-decreasing timeout duration', () => {
     expect(TIMEOUT_CONFIG[TimeoutCategory.FAST].rdoMs)
-      .toBeLessThan(TIMEOUT_CONFIG[TimeoutCategory.NORMAL].rdoMs);
+      .toBeLessThanOrEqual(TIMEOUT_CONFIG[TimeoutCategory.NORMAL].rdoMs);
     expect(TIMEOUT_CONFIG[TimeoutCategory.NORMAL].rdoMs)
-      .toBeLessThan(TIMEOUT_CONFIG[TimeoutCategory.SLOW].rdoMs);
+      .toBeLessThanOrEqual(TIMEOUT_CONFIG[TimeoutCategory.SLOW].rdoMs);
     expect(TIMEOUT_CONFIG[TimeoutCategory.SLOW].rdoMs)
-      .toBeLessThan(TIMEOUT_CONFIG[TimeoutCategory.VERY_SLOW].rdoMs);
+      .toBeLessThanOrEqual(TIMEOUT_CONFIG[TimeoutCategory.VERY_SLOW].rdoMs);
   });
 });

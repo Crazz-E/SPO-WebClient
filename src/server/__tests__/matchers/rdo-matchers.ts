@@ -56,12 +56,14 @@ export const rdoMatchers = {
    * Note: Accepts optional space before semicolon (both formats are valid)
    */
   toMatchRdoFormat(command: string) {
-    // Matches both CALL and SET commands
+    // Matches CALL, SET and GET commands
     // Call pattern: may or may not have space before semicolon depending on args
     const callPattern = /^C( \d+)? sel \d+ call \w+ "[*^]"( ?".+")*( ?);$/;
     // Set pattern: space before = (RdoCommand builder joins parts with space)
     const setPattern = /^C( \d+)? sel \d+ set \w+ ?="[#$^!@%*].*";$/;
-    const pass = callPattern.test(command) || setPattern.test(command);
+    // Get pattern: property read (also used for zero-arg COM property-gets, e.g. Logoff)
+    const getPattern = /^C( \d+)? sel \d+ get \w+( ?);$/;
+    const pass = callPattern.test(command) || setPattern.test(command) || getPattern.test(command);
 
     return {
       pass,
@@ -70,7 +72,8 @@ export const rdoMatchers = {
         : `Command does not match RDO format:\n  ${command}\n` +
           `Expected format:\n` +
           `  C [RID] sel <id> call <method> <type> [args];\n` +
-          `  or: C [RID] sel <id> set <property>=<value>;`
+          `  or: C [RID] sel <id> set <property>=<value>;\n` +
+          `  or: C [RID] sel <id> get <property>;`
     };
   },
 

@@ -11,6 +11,7 @@ import fetch from 'node-fetch';
 import type { RdoPacket, WorldInfo, CompanyInfo } from '../../shared/types';
 import { RdoVerb, RdoAction, SessionPhase, DIRECTORY_QUERY } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { config } from '../../shared/config';
 import { AuthError } from '../../shared/auth-error';
 import { toErrorMessage } from '../../shared/error-utils';
@@ -18,6 +19,7 @@ import {
   parsePropertyResponse as parsePropertyResponseHelper,
   parseIdOfResponse as parseIdOfResponseHelper,
   cleanPayload as cleanPayloadHelper,
+  writeRdoFrame,
 } from '../rdo-helpers';
 
 // ── Login Context ───────────────────────────────────────────────────────────
@@ -37,7 +39,7 @@ export interface LoginContext {
   };
 
   // ── RDO Transport ──
-  sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>): Promise<RdoPacket>;
+  sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs?: number, category?: TimeoutCategory): Promise<RdoPacket>;
   getSocket(name: string): net.Socket | undefined;
   createSocket(name: string, host: string, port: number): Promise<net.Socket>;
   deleteSocket(name: string): void;
@@ -165,25 +167,37 @@ export async function connectDirectory(
 }
 
 /**
+ * Directory Server ops run at the legacy 20 s deadline
+ * (DSProxy.TimeOut := 20000, LogonHandlerViewer.pas:341).
+ */
+function sendDirectoryRequest(ctx: LoginContext, socketName: string, packetData: Partial<RdoPacket>): Promise<RdoPacket> {
+  return ctx.sendRdoRequest(socketName, packetData, undefined, TimeoutCategory.DIRECTORY);
+}
+
+/**
  * Helper Phase 1: Auth -> EndSession
  */
 async function performDirectoryAuth(ctx: LoginContext, username: string, pass: string): Promise<void> {
   const socket = await ctx.createSocket('directory_auth', config.rdo.directoryHost, config.rdo.ports.directory);
   try {
     // 1. Resolve & Open Session
-    const idPacket = await ctx.sendRdoRequest('directory_auth', { verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
+    const idPacket = await sendDirectoryRequest(ctx, 'directory_auth',{ verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
     const directoryServerId = parseIdOfResponseHelper(idPacket.payload);
-    const sessionPacket = await ctx.sendRdoRequest('directory_auth', {
+    // RDOOpenSession is a published METHOD (DirectoryServer.pas:143), but the legacy
+    // client reads it as a zero-arg COM property-get (RDOObjectProxy.pas:388-399 routes
+    // PROPERTYGET+0args → MarshalPropertyGet; LogonHandlerViewer.pas:308) — byte-exact
+    // wire is `get RDOOpenSession`, served by the Delphi get→CallMethod fallthrough.
+    const sessionPacket = await sendDirectoryRequest(ctx, 'directory_auth',{
       verb: RdoVerb.SEL, targetId: directoryServerId, action: RdoAction.GET, member: 'RDOOpenSession',
     });
     const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');
 
     // 2. Map & Logon
-    await ctx.sendRdoRequest('directory_auth', {
+    await sendDirectoryRequest(ctx, 'directory_auth',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOMapSegaUser',
       args: [username],
     });
-    const logonPacket = await ctx.sendRdoRequest('directory_auth', {
+    const logonPacket = await sendDirectoryRequest(ctx, 'directory_auth',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOLogonUser',
       args: [username, pass],
     });
@@ -191,8 +205,11 @@ async function performDirectoryAuth(ctx: LoginContext, username: string, pass: s
     const authCode = parseInt(res, 10);
     if (authCode !== 0) throw new AuthError(authCode);
 
-    // 3. End Session & Close (fire-and-forget — void push, no RID)
-    socket.write(RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
+    // 3. End Session & Close — fire-and-forget without RID: ACCEPTED DIVERGENCE
+    // (audit 2026-07-02, P2 — the captured legacy client sends this WITH a RID and
+    // waits for the "A<id> ;" ack [capture :16-17]; wire-legal either way, TCP
+    // delivers before FIN). See doc/rdo-session-lifecycle.md §9.
+    writeRdoFrame(socket, RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
     ctx.log.debug('[Session] Directory Authentication Success');
   } finally {
     socket.end();
@@ -207,16 +224,16 @@ async function performDirectoryQuery(ctx: LoginContext, zonePath?: string): Prom
   const socket = await ctx.createSocket('directory_query', config.rdo.directoryHost, config.rdo.ports.directory);
   try {
     // 1. Resolve & Open NEW Session
-    const idPacket = await ctx.sendRdoRequest('directory_query', { verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
+    const idPacket = await sendDirectoryRequest(ctx, 'directory_query',{ verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
     const directoryServerId = parseIdOfResponseHelper(idPacket.payload);
-    const sessionPacket = await ctx.sendRdoRequest('directory_query', {
+    const sessionPacket = await sendDirectoryRequest(ctx, 'directory_query',{
       verb: RdoVerb.SEL, targetId: directoryServerId, action: RdoAction.GET, member: 'RDOOpenSession',
     });
     const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');
 
     // 2. Query Worlds
     const worldPath = zonePath || 'Root/Areas/Asia/Worlds';
-    const queryPacket = await ctx.sendRdoRequest('directory_query', {
+    const queryPacket = await sendDirectoryRequest(ctx, 'directory_query',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOQueryKey',
       args: [worldPath, DIRECTORY_QUERY.QUERY_BLOCK],
     });
@@ -228,8 +245,11 @@ async function performDirectoryQuery(ctx: LoginContext, zonePath?: string): Prom
     }
     ctx.setAvailableWorlds(worldMap);
 
-    // 3. End Session & Close (fire-and-forget — void push, no RID)
-    socket.write(RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
+    // 3. End Session & Close — fire-and-forget without RID: ACCEPTED DIVERGENCE
+    // (audit 2026-07-02, P2 — the captured legacy client sends this WITH a RID and
+    // waits for the "A<id> ;" ack [capture :16-17]; wire-legal either way, TCP
+    // delivers before FIN). See doc/rdo-session-lifecycle.md §9.
+    writeRdoFrame(socket, RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
     return worlds;
   } finally {
     socket.end();
@@ -246,13 +266,13 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
   const socket = await ctx.createSocket('directory_search', config.rdo.directoryHost, config.rdo.ports.directory);
   try {
     // 1. Resolve DirectoryServer object
-    const idPacket = await ctx.sendRdoRequest('directory_search', {
+    const idPacket = await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.IDOF, targetId: 'DirectoryServer',
     });
     const directoryServerId = parseIdOfResponseHelper(idPacket.payload);
 
     // 2. Open Session
-    const sessionPacket = await ctx.sendRdoRequest('directory_search', {
+    const sessionPacket = await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.SEL, targetId: directoryServerId, action: RdoAction.GET, member: 'RDOOpenSession',
     });
     const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');
@@ -260,13 +280,13 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
     // 3. Navigate to the world's directory root
     const worldName = currentWorldInfo?.name || '';
     const worldPath = `${cachedZonePath}/${worldName}`;
-    await ctx.sendRdoRequest('directory_search', {
+    await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOSetCurrentKey',
       args: [worldPath],
     });
 
     // 4. Search for matching keys under the world
-    const searchPacket = await ctx.sendRdoRequest('directory_search', {
+    const searchPacket = await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOSearchKey',
       args: [`*${searchStr}*`, ''],
     });
@@ -276,7 +296,7 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
     const names = parseSearchKeyResults(ctx, resValue);
 
     // 6. End Session (fire-and-forget — void push, no RID)
-    socket.write(RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
+    writeRdoFrame(socket, RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
 
     return names;
   } catch (err: unknown) {
@@ -427,7 +447,7 @@ export async function loginWorld(
       .push()
       .args(RdoValue.string('0'))
       .build();
-    socket.write(setLangCmd);
+    writeRdoFrame(socket, setLangCmd);
     ctx.log.debug(`[Session] Sent SetLanguage push command`);
   }
 
@@ -485,20 +505,22 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   ctx.log.debug(`[Session] EnableEvents activated`);
 
   // 2. First PickEvent - Subscribe to Tycoon updates
+  // Delphi: TClientView.PickEvent(TycoonId: integer) — must be "#" int, not "%" string
   await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL,
     targetId: worldContextId,
     action: RdoAction.CALL,
     member: 'PickEvent',
-    args: [ctx.tycoonId!],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format()],
   });
   ctx.log.debug(`[Session] PickEvent #1 sent`);
 
   // 3. Get Tycoon Cookies — sequential (legacy client sends one at a time)
+  // Delphi: GetTycoonCookie(TycoonId: integer; CookieId: widestring)
   const lastYPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: worldContextId,
     action: RdoAction.CALL, member: 'GetTycoonCookie',
-    args: [ctx.tycoonId!, 'LastY.0'],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), 'LastY.0'],
   });
   const lastY = parsePropertyResponseHelper(lastYPacket.payload!, 'res');
   ctx.setLastPlayerY(parseInt(lastY, 10) || 0);
@@ -507,7 +529,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   const lastXPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: worldContextId,
     action: RdoAction.CALL, member: 'GetTycoonCookie',
-    args: [ctx.tycoonId!, 'LastX.0'],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), 'LastX.0'],
   });
   const lastX = parsePropertyResponseHelper(lastXPacket.payload!, 'res');
   ctx.setLastPlayerX(parseInt(lastX, 10) || 0);
@@ -516,7 +538,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   const allCookiesPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: worldContextId,
     action: RdoAction.CALL, member: 'GetTycoonCookie',
-    args: [ctx.tycoonId!, ''],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), ''],
   });
   const allCookies = parsePropertyResponseHelper(allCookiesPacket.payload!, 'res');
   ctx.log.debug(`[Session] All Cookies:\n${allCookies}`);
@@ -528,7 +550,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
       .call('ClientAware')
       .push()
       .build();
-    socket.write(clientAwareCmd);
+    writeRdoFrame(socket, clientAwareCmd);
     ctx.log.debug(`[Session] Sent ClientAware #1`);
   }
 
@@ -538,7 +560,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
     targetId: worldContextId,
     action: RdoAction.CALL,
     member: 'PickEvent',
-    args: [ctx.tycoonId!],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format()],
   });
   ctx.log.debug(`[Session] PickEvent #2 sent`);
 
@@ -548,7 +570,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
       .call('ClientAware')
       .push()
       .build();
-    socket.write(clientAwareCmd2);
+    writeRdoFrame(socket, clientAwareCmd2);
     ctx.log.debug(`[Session] Sent ClientAware #2`);
   }
 
@@ -1004,7 +1026,7 @@ export async function reconnectWorldSocket(ctx: LoginContext): Promise<void> {
         targetId: ctx.worldContextId!,
         action: RdoAction.CALL,
         member: 'PickEvent',
-        args: [ctx.tycoonId],
+        args: [RdoValue.int(parseInt(ctx.tycoonId, 10)).format()],
       });
       ctx.log.debug('[Reconnect] PickEvent re-sent for tycoon updates');
     }
@@ -1075,7 +1097,7 @@ async function fullWorldRelogin(ctx: LoginContext): Promise<void> {
     const setLangCmd = RdoCommand.sel(contextId)
       .call('SetLanguage').push()
       .args(RdoValue.string('0')).build();
-    socket.write(setLangCmd);
+    writeRdoFrame(socket, setLangCmd);
   }
 
   // Re-select company if one was active

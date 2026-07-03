@@ -10,6 +10,7 @@ import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { toErrorMessage } from '../../shared/error-utils';
+import { writeRdoFrame } from '../rdo-helpers';
 import { serialiseConstruction } from './construction-lock';
 
 // =========================================================================
@@ -139,7 +140,7 @@ async function setBuildingPropertyImpl(
     const fireAndForget = (cmd: string): void => {
       const socket = ctx.getSocket('construction');
       if (!socket) throw new Error('Construction socket unavailable');
-      socket.write(cmd);
+      writeRdoFrame(socket, cmd);
       ctx.log.debug(`[BuildingDetails] Sent: ${cmd}`);
     };
 
