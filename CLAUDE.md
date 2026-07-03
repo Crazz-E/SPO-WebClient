@@ -82,9 +82,9 @@ Docs auto-load via hook when editing matching files. For planning/discussion, re
 | Roads | [road_rendering_reference.md](doc/road_rendering_reference.md) |
 | Buildings / facilities | [building_details_protocol.md](doc/building_details_protocol.md), [facility-tabs-reference.md](doc/facility-tabs-reference.md) |
 | Voyager / inspector | [voyager-inspector-architecture.md](doc/voyager-inspector-architecture.md), [voyager-handler-reference.md](doc/voyager-handler-reference.md) |
-| Server / deployment | [architecture-overview.md](doc/architecture-overview.md), [logging-system.md](doc/logging-system.md), [deployment-security.md](doc/deployment-security.md) |
+| Server / deployment | [architecture-overview.md](doc/architecture-overview.md), [logging-system.md](doc/logging-system.md), [deployment-security.md](doc/deployment-security.md), [production-security-policy.md](doc/production-security-policy.md) |
 | Supply / research | [supply-system.md](doc/supply-system.md), [research-system-reference.md](doc/research-system-reference.md) |
-| E2E / mock server | [E2E-TESTING.md](doc/E2E-TESTING.md), [mock-server-guide.md](doc/mock-server-guide.md) |
+| E2E / mock server | [E2E-STRATEGY.md](doc/E2E-STRATEGY.md) (test strategy + coverage gates), [E2E-TESTING.md](doc/E2E-TESTING.md), [mock-server-guide.md](doc/mock-server-guide.md) |
 | Architecture | [architecture-overview.md](doc/architecture-overview.md) |
 | Troubleshooting | [troubleshooting.md](doc/troubleshooting.md) |
 
@@ -123,8 +123,9 @@ npm test -- --testNamePattern="X"  # Specific suite
 
 ## E2E Credentials
 
-Credentials: `SPO_test3` / `test3` / BETA zone / Shamba world / President of Shamba company
+Credentials: `SPO_test3` / `test3` / **Free Space** zone / **planitia** world / **SPO_test3 - Green** company
 **These credentials are LOCKED — never change without explicit developer approval.**
+Note: pick the **Free Space** region, not BETA — the live directory hosts `planitia`/`shamba`/`zorcon` under Free Space, while BETA only has `aries`.
 Full procedure and selectors: see `/e2e-test` skill and [doc/E2E-TESTING.md](doc/E2E-TESTING.md).
 
 ## Git Conventions

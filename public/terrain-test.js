@@ -949,7 +949,7 @@
       port: Number(getEnv("PORT")) || 8080,
       host: getEnv("HOST") || "0.0.0.0",
       singleUserMode: getEnv("SINGLE_USER_MODE") === "true",
-      /** Force all players into a specific world (format: "zoneId/worldName", e.g. "beta/Shamba"). Temporary test-phase override. */
+      /** Force all players into a specific world (format: "zoneId/worldName", e.g. "free/planitia"). Temporary test-phase override. */
       forceWorld: typeof window !== "undefined" && window.__SPO_FORCE_WORLD__ !== void 0 ? window.__SPO_FORCE_WORLD__ : getEnv("SPO_FORCE_WORLD") ?? void 0
     },
     /**

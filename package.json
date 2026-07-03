@@ -19,6 +19,7 @@
     "test:verbose": "jest --verbose",
     "test:changed": "jest --onlyChanged --bail",
     "test:smoke": "jest --selectProjects component --bail",
+    "capture:convert": "esbuild src/mock-server/capture-cli.ts --bundle --platform=node --format=cjs --outfile=dist/tools/convert-rdo-capture.js && node dist/tools/convert-rdo-capture.js",
     "release": "node scripts/release.js",
     "electron": "npm run build:server && cd electron && npm start",
     "electron:validate": "node scripts/validate-electron-package.js",

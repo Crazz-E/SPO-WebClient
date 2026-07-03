@@ -4,6 +4,38 @@
  */
 
 import type { Socket } from 'net';
+import { createLogger } from '../shared/logger';
+
+const wireLog = createLogger('RdoWire');
+
+/**
+ * Socket name tags for wire-tap logging. Sessions tag each RDO socket at
+ * creation (`tagRdoSocket(socket, 'world')`) so tap entries carry the
+ * logical socket role instead of an anonymous endpoint.
+ */
+const socketTags = new WeakMap<Socket, string>();
+
+export function tagRdoSocket(socket: Socket, name: string): void {
+  socketTags.set(socket, name);
+}
+
+export function getRdoSocketTag(socket: Socket): string {
+  return socketTags.get(socket) ?? 'untagged';
+}
+
+/**
+ * Frame-level credential redaction for the wire tap. Mirrors the member-based
+ * redaction in spo_session (redactRdoRaw): logon-family commands get their
+ * trailing "%<password>" argument replaced. Defense-in-depth — logon commands
+ * are synchronous and skip the tap (alreadyLogged), but a future refactor must
+ * not silently start logging passwords.
+ */
+const SENSITIVE_WIRE_MEMBERS = /(?:call|get)\s+(?:RDOLogonUser|Logon|AccountStatus|RDOLogonClient)\b/;
+
+export function redactSensitiveRdoFrame(frame: string): string {
+  if (!SENSITIVE_WIRE_MEMBERS.test(frame)) return frame;
+  return frame.replace(/,"%[^"]*"(?=\s*;?\s*$)/, ',"%[REDACTED]"');
+}
 
 /**
  * Write an RDO frame to a TCP socket using Latin-1 (ANSI) encoding.
@@ -17,8 +49,17 @@ import type { Socket } from 'net';
  *
  * ALL RDO frames MUST go through this helper; never call socket.write()
  * with a raw string on an RDO socket.
+ *
+ * Wire tap: every frame is logged at debug level as `RDO>* <socketTag>`
+ * unless the caller already emitted its own wire log (`alreadyLogged` —
+ * sendRdoRequest logs richer `RDO>>` entries). Together with the `RDO<<`
+ * log in processSingleCommand this gives a complete NDJSON record of the
+ * wire, which log-capture-converter turns into mock scenarios.
  */
-export function writeRdoFrame(socket: Socket, frame: string): boolean {
+export function writeRdoFrame(socket: Socket, frame: string, alreadyLogged = false): boolean {
+  if (!alreadyLogged) {
+    wireLog.debug(`RDO>* ${getRdoSocketTag(socket)}`, { raw: redactSensitiveRdoFrame(frame) });
+  }
   return socket.write(Buffer.from(frame, 'latin1'));
 }
 

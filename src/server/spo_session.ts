@@ -78,6 +78,7 @@ import {
   parseIdOfResponse as parseIdOfResponseHelper,
   isTrueOrdinal,
   writeRdoFrame,
+  tagRdoSocket,
 } from './rdo-helpers';
 import { parseMessageListHtml } from './mail-list-parser';
 import type { AspActionUrl } from './asp-url-extractor';
@@ -1459,6 +1460,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       connected = true;
       this.sockets.set(name, socket);
       this.framers.set(name, framer);
+      tagRdoSocket(socket, name);
       this.log.debug(`[Session] Connected to ${name} (${host}:${port})`);
       resolve(socket);
     });
@@ -2143,7 +2145,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
     // Send the request
     const rawString = RdoProtocol.format(packet);
     this.log.debug(`RDO>> ${socketName}`, { command: member, verb: packetData.verb, rid, timeoutMs, separator: packetData.separator, raw: redactRdoRaw(packetData.member, rawString) });
-    writeRdoFrame(socket!, rawString + RDO_CONSTANTS.PACKET_DELIMITER);
+    writeRdoFrame(socket!, rawString + RDO_CONSTANTS.PACKET_DELIMITER, true);
   });
 }
 

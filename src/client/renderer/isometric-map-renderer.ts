@@ -1286,6 +1286,43 @@ export class IsometricMapRenderer {
   }
 
   /**
+   * E2E probe (read-only): sample of known road tile world coordinates.
+   * Used by window.__spoDebug to let test drivers find existing roads.
+   */
+  public getRoadTiles(limit = 500): Array<{ x: number; y: number }> {
+    const tiles: Array<{ x: number; y: number }> = [];
+    for (const key of this.roadTilesMap.keys()) {
+      const [x, y] = key.split(',').map(Number);
+      tiles.push({ x, y });
+      if (tiles.length >= limit) break;
+    }
+    return tiles;
+  }
+
+  /**
+   * E2E probe (read-only): terrain/occupancy facts for one tile so test
+   * drivers can verify a tile is zonable/buildable BEFORE interacting.
+   */
+  public getTileProbe(x: number, y: number): {
+    hasRoad: boolean;
+    adjacentToRoad: boolean;
+    hasConcrete: boolean;
+    landClass: string;
+    isWater: boolean;
+  } {
+    const terrainLoader = this.terrainRenderer.getTerrainLoader();
+    const landId = terrainLoader ? terrainLoader.getLandId(x, y) : 0;
+    const decoded = decodeLandId(landId);
+    return {
+      hasRoad: this.hasRoadAt(x, y),
+      adjacentToRoad: this.isAdjacentToRoad(x, y),
+      hasConcrete: this.concreteTilesSet.has(`${x},${y}`),
+      landClass: ['G', 'M', 'D', 'W'][decoded.landClass] ?? '?',
+      isWater: decoded.isWater,
+    };
+  }
+
+  /**
    * Check if a tile is adjacent to an existing road (including diagonal adjacency)
    * Returns true if any of the 8 surrounding tiles has a road
    */

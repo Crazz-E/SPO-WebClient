@@ -57,6 +57,20 @@ interface SpoDebugWire {
   history: Array<{ dir: '→' | '←'; type: string; ts: number; reqId?: string }>;
   maxHistory: number;
   getState: (() => SpoDebugState) | null;
+  /** E2E read-only tile probe: terrain/road/concrete facts for one world tile. */
+  tileProbe: ((x: number, y: number) => SpoDebugTileProbe | null) | null;
+  /** E2E read-only sample of known road tiles (world coords). */
+  roadSample: ((limit?: number) => Array<{ x: number; y: number }>) | null;
+  /** E2E mapping: world tile → CSS client pixel (for real mouse input). */
+  worldToCss: ((x: number, y: number) => { x: number; y: number } | null) | null;
+}
+
+interface SpoDebugTileProbe {
+  hasRoad: boolean;
+  adjacentToRoad: boolean;
+  hasConcrete: boolean;
+  landClass: string;
+  isWater: boolean;
 }
 
 interface SpoDebugState {
@@ -120,6 +134,9 @@ function initSpoDebug(): SpoDebugWire {
     history: [],
     maxHistory: 200,
     getState: null,
+    tileProbe: null,
+    roadSample: null,
+    worldToCss: null,
   };
   // Always expose debug wire tracker (needed for "Send Debug Report" in production)
   (window as unknown as Record<string, unknown>).__spoDebug = debug;
@@ -233,6 +250,19 @@ export class StarpeaceClient implements ClientHandlerContext {
 
     this.debugWire = initSpoDebug(); // [E2E-DEBUG]
     this.debugWire.getState = () => this.getDebugState(); // [E2E-DEBUG]
+    this.debugWire.tileProbe = (x, y) => this.mapNavigationUI?.getRenderer()?.getTileProbe(x, y) ?? null; // [E2E-DEBUG]
+    this.debugWire.roadSample = (limit?: number) => this.mapNavigationUI?.getRenderer()?.getRoadTiles(limit) ?? []; // [E2E-DEBUG]
+    this.debugWire.worldToCss = (x, y) => { // [E2E-DEBUG]
+      const renderer = this.mapNavigationUI?.getRenderer();
+      const canvas = document.getElementById('game-canvas') as HTMLCanvasElement | null;
+      if (!renderer || !canvas) return null;
+      const p = renderer.worldToScreen(x, y);
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: rect.left + p.x * (rect.width / canvas.width),
+        y: rect.top + p.y * (rect.height / canvas.height),
+      };
+    };
     this.soundManager = new SoundManager();
     const callbacks: Partial<ClientCallbacks> = {
       onBuildRoad: () => roadHandler.toggleRoadBuildingMode(this),

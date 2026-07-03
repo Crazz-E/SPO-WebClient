@@ -14,6 +14,7 @@
 
 import * as net from 'net';
 import { RdoFramer } from '../rdo';
+import { tagRdoSocket } from '../rdo-helpers';
 import { toErrorMessage } from '../../shared/error-utils';
 
 export interface PooledConnection {
@@ -241,6 +242,7 @@ export class RdoConnectionPool {
       socket.connect(this.config.port, this.config.host, () => {
         connected = true;
         clearTimeout(timeout);
+        tagRdoSocket(socket, `pool:${this.config.host}:${this.config.port}`);
         this.log.debug(`[Pool] New connection established to ${this.config.host}:${this.config.port} (pool size: ${this.connections.length + 1})`);
         resolve(conn);
       });

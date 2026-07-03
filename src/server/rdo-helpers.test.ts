@@ -11,6 +11,9 @@ import {
   parsePropertyResponse,
   parseIdOfResponse,
   writeRdoFrame,
+  tagRdoSocket,
+  getRdoSocketTag,
+  redactSensitiveRdoFrame,
 } from './rdo-helpers';
 
 describe('writeRdoFrame', () => {
@@ -67,6 +70,68 @@ describe('writeRdoFrame', () => {
       }),
     } as unknown as Socket;
     expect(writeRdoFrame(socket, 'C sel 1 get X;')).toBe(false);
+  });
+
+  it('still writes the frame when alreadyLogged is true (tap skip must not skip the write)', () => {
+    const { socket, written } = mockSocket();
+    writeRdoFrame(socket, 'C 3 sel 42 get Name;', true);
+    expect(written).toHaveLength(1);
+    expect(written[0].toString('latin1')).toBe('C 3 sel 42 get Name;');
+  });
+});
+
+describe('tagRdoSocket / getRdoSocketTag', () => {
+  it('returns the tag set for a socket', () => {
+    const socket = { write: jest.fn() } as unknown as Socket;
+    tagRdoSocket(socket, 'world');
+    expect(getRdoSocketTag(socket)).toBe('world');
+  });
+
+  it('returns "untagged" for unknown sockets', () => {
+    const socket = { write: jest.fn() } as unknown as Socket;
+    expect(getRdoSocketTag(socket)).toBe('untagged');
+  });
+
+  it('re-tagging overwrites the previous tag', () => {
+    const socket = { write: jest.fn() } as unknown as Socket;
+    tagRdoSocket(socket, 'mail');
+    tagRdoSocket(socket, 'world');
+    expect(getRdoSocketTag(socket)).toBe('world');
+  });
+});
+
+describe('redactSensitiveRdoFrame', () => {
+  it('redacts the trailing password of RDOLogonUser frames', () => {
+    const frame = 'C 3 sel 142217260 call RDOLogonUser "^" "%SPO_test3","%test3"';
+    expect(redactSensitiveRdoFrame(frame)).toBe(
+      'C 3 sel 142217260 call RDOLogonUser "^" "%SPO_test3","%[REDACTED]"'
+    );
+  });
+
+  it('redacts Logon frames with trailing delimiter', () => {
+    const frame = 'C 7 sel 8161308 call Logon "^" "%SPO_test3","%test3";';
+    expect(redactSensitiveRdoFrame(frame)).toBe(
+      'C 7 sel 8161308 call Logon "^" "%SPO_test3","%[REDACTED]";'
+    );
+  });
+
+  it('redacts AccountStatus and RDOLogonClient frames', () => {
+    expect(
+      redactSensitiveRdoFrame('C 5 sel 1 call AccountStatus "^" "%user","%secret"')
+    ).toContain('%[REDACTED]');
+    expect(
+      redactSensitiveRdoFrame('C 6 sel 1 call RDOLogonClient "^" "%user","%secret"')
+    ).toContain('%[REDACTED]');
+  });
+
+  it('leaves non-sensitive frames untouched', () => {
+    const frame = 'C sel 42 call SayThis "*" "%","%Bonjour à l\'été";';
+    expect(redactSensitiveRdoFrame(frame)).toBe(frame);
+  });
+
+  it('does not redact members that merely contain a sensitive name', () => {
+    const frame = 'C 4 sel 42 call GetLogonHistory "^" "%user","%data"';
+    expect(redactSensitiveRdoFrame(frame)).toBe(frame);
   });
 });
 
