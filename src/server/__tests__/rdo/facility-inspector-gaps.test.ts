@@ -3,7 +3,8 @@
  * RDO Protocol Tests — Facility Inspector Gap Exchanges
  *
  * Tests RDO command format correctness and exchange definitions for all 5 critical
- * gaps identified in FACILITY-INSPECTOR-GAP-ANALYSIS.md:
+ * gaps identified in the 2026-02-23 facility-inspector gap analysis (point-in-time
+ * report removed in the v1.0 doc cleanup — git ca53f592; gaps since implemented):
  *
  *   GAP-02  Films action buttons (RDOLaunchMovie / RDOCancelMovie / RDOReleaseMovie)
  *   GAP-02  RDOVote command (entirely missing)

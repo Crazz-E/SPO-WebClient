@@ -719,9 +719,11 @@ describe('compInputs (SERVICES tab)', () => {
   });
 
   it('Demand slider: RDOSetCompanyInputDemand uses void push ("*") not function call', () => {
-    // Verified by shared RDO test — re-assert the key constraint here
-    // void push: server builds with .push() → "C sel <block> call RDOSetCompanyInputDemand "*" ..."
-    // If it were a function call ("^"), the server would crash (QueryId + void push)
+    // Verified by shared RDO test — re-assert the key constraint here.
+    // Void push: server builds with .push() → "C sel <block> call RDOSetCompanyInputDemand "*" ..."
+    // Legacy parity: the Delphi client sends this mutation fire-and-forget.
+    // ("^" would be wire-legal WITH a QueryId; the real crash risk is "^"
+    // without one — doc/rdo-protocol-architecture.md §8.5.)
     expect(ADVERTISEMENT_GROUP.rdoCommands?.['RDOSetCompanyInputDemand']).toBeDefined();
   });
 });

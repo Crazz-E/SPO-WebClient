@@ -328,6 +328,23 @@ export class StarpeaceSession extends EventEmitter {
   
   // --- REQUEST DEDUPLICATION ---
     private pendingMapRequests: Map<string, Promise<MapData>> = new Map();
+    /**
+     * Concurrent focusBuilding(x,y) calls for the SAME coordinates share one
+     * SwitchFocusEx. The client fires REQ_BUILDING_FOCUS and the details
+     * fetch in parallel on every building click — without dedup each click
+     * costs the server two identical SwitchFocusEx calls.
+     */
+    private pendingFocusRequests: Map<string, Promise<BuildingFocusInfo>> = new Map();
+    /**
+     * Short-lived reuse of the last focus result. The click's two WS
+     * messages are handled back-to-back (not concurrently), so the pending
+     * map alone doesn't dedup them. A repeat SwitchFocusEx(id,x,y) on the
+     * already-focused building makes the server do a pointless
+     * unfocus+refocus of the same object (SwitchFocus, InterfaceServer.pas:906-922).
+     */
+    private lastFocusInfo: BuildingFocusInfo | null = null;
+    private lastFocusAt = 0;
+    private static readonly FOCUS_REUSE_TTL_MS = 3000;
 
   // --- WORLD SOCKET AUTO-RECONNECT (mirrors Delphi RenewWorldProxy) ---
   private worldReconnectLastAttempt = 0;
@@ -589,14 +606,42 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 		throw new Error('Not logged into world');
 	  }
 
+	  // Share the in-flight SwitchFocusEx when the same coordinates are
+	  // requested concurrently (client sends focus + details in parallel)
+	  const requestKey = `${x},${y}`;
+	  const pending = this.pendingFocusRequests.get(requestKey);
+	  if (pending) {
+		this.log.debug(`[Session] Sharing pending focus request for ${requestKey}`);
+		return pending;
+	  }
+
+	  // Reuse a just-completed focus on the same building: the click's second
+	  // handler (details fetch) runs right after the first, not concurrently
+	  if (
+		this.lastFocusInfo
+		&& this.currentFocusedCoords?.x === x
+		&& this.currentFocusedCoords?.y === y
+		&& Date.now() - this.lastFocusAt < StarpeaceSession.FOCUS_REUSE_TTL_MS
+	  ) {
+		this.log.debug(`[Session] Reusing fresh focus result for ${requestKey}`);
+		return this.lastFocusInfo;
+	  }
+
+	  const promise = this.doFocusBuilding(x, y)
+		.finally(() => this.pendingFocusRequests.delete(requestKey));
+	  this.pendingFocusRequests.set(requestKey, promise);
+	  return promise;
+	}
+
+	private async doFocusBuilding(x: number, y: number): Promise<BuildingFocusInfo> {
 	  this.log.debug(`[Session] Focusing building at (${x}, ${y})`);
-	  
+
 	  // Get previous building ID (stored WITHOUT any prefix)
 	  const previousBuildingId = this.currentFocusedBuildingId || '0';
 
 	  const packet = await this.sendRdoRequest('world', {
 		verb: RdoVerb.SEL,
-		targetId: this.worldContextId,
+		targetId: this.worldContextId!,
 		action: RdoAction.CALL,
 		member: 'SwitchFocusEx',
 		separator: '"^"',
@@ -607,13 +652,15 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 	  const responseData = parsePropertyResponseHelper(packet.payload || '', 'res');
 
 	  const buildingInfo = parseBuildingFocusResponseHelper(responseData, x, y);
-	  
+
 	  // Store focus state so refreshBuildingProperties can reuse name/owner
 	  this.currentFocusedBuildingId = buildingInfo.buildingId;
 	  this.currentFocusedCoords = { x, y };
 	  this.currentFocusedBuildingName = buildingInfo.buildingName;
 	  this.currentFocusedOwnerName = buildingInfo.ownerName;
-	  
+	  this.lastFocusInfo = buildingInfo;
+	  this.lastFocusAt = Date.now();
+
 	  this.log.debug(`[Session] Focused on building ${buildingInfo.buildingId}: ${buildingInfo.buildingName}`);
 
 	  return buildingInfo;
@@ -652,6 +699,8 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 	  this.currentFocusedCoords = null;
 	  this.currentFocusedBuildingName = null;
 	  this.currentFocusedOwnerName = null;
+	  this.lastFocusInfo = null;
+	  this.lastFocusAt = 0;
 	}
 
   /**
@@ -1127,7 +1176,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
 
         // ObjectsInArea(x, y, dx, dy: integer) — InterfaceServer.pas
         // Args MUST use RdoValue.int() — autoTypeNumeric is disabled for CALL args
-        const objectsPacket = await this.sendRdoRequest('world', {
+        const objectsRequest: Partial<RdoPacket> = {
             verb: RdoVerb.SEL,
             targetId: worldCtxId,
             action: RdoAction.CALL,
@@ -1139,7 +1188,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
                 RdoValue.int(w).format(),
                 RdoValue.int(h).format(),
             ]
-        });
+        };
 
         // SegmentsInArea(CircuitId, x1, y1, x2, y2: integer) — InterfaceServer.pas
         const modeOrLayer = 1;
@@ -1148,7 +1197,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
         const x2 = targetX + w;
         const y2 = targetY + h;
 
-        const segmentsPacket = await this.sendRdoRequest('world', {
+        const segmentsRequest: Partial<RdoPacket> = {
             verb: RdoVerb.SEL,
             targetId: worldCtxId,
             action: RdoAction.CALL,
@@ -1160,7 +1209,22 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
                 RdoValue.int(x2).format(),
                 RdoValue.int(y2).format(),
             ]
-        });
+        };
+
+        // Both are independent read-only queries on the world context. With the
+        // flag on they go out concurrently over the world pool (1 RTT instead
+        // of 2); the server's own DA-pool design expects parallel connections.
+        let objectsPacket: RdoPacket;
+        let segmentsPacket: RdoPacket;
+        if (config.rdo.parallelAreaReads) {
+            [objectsPacket, segmentsPacket] = await Promise.all([
+                this.sendRdoRequest('world', objectsRequest),
+                this.sendRdoRequest('world', segmentsRequest),
+            ]);
+        } else {
+            objectsPacket = await this.sendRdoRequest('world', objectsRequest);
+            segmentsPacket = await this.sendRdoRequest('world', segmentsRequest);
+        }
 
         // Parse
         const buildingsRaw = splitMultilinePayloadHelper(objectsPacket.payload!);
@@ -1452,6 +1516,12 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
 public createSocket(name: string, host: string, port: number): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     const socket = new net.Socket();
+    // Disable Nagle: RDO frames are small request/response messages. With
+    // Nagle on, a second frame written before the first is ACKed sits in the
+    // kernel buffer for a full RTT (~100ms to the live servers) — measured
+    // live 2026-07-03 (SegmentsInArea RTT doubled when sent concurrently).
+    // Transport-only change: frame bytes are identical.
+    socket.setNoDelay(true);
     const framer = new RdoFramer();
     // Socket stored ONLY after connect succeeds (prevents writes to unconnected socket)
     let connected = false;
@@ -1800,9 +1870,11 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
    * (fCacheObj.KeepAlive, ObjectInspectorHandleViewer.pas:1172-1180); temp
    * objects expire after 1 minute without it (TCacheServer.CheckObject, fMaxTTL).
    *
-   * CRITICAL: Uses writeRdoFrame() directly (void push with "*" separator).
-   * Must NOT use sendRdoRequest() — that adds a QueryId, and combining
-   * QueryId + "*" separator crashes the Delphi server.
+   * Uses writeRdoFrame() directly (void push with "*" separator, no QueryId)
+   * — matches the legacy client's fire-and-forget KeepAlive. sendRdoRequest()
+   * is forbidden here by project convention (assertNotVoidPush, one form per
+   * intent) — wire-legal but the server would just ack `A<id> ;`.
+   * Ref: doc/rdo-protocol-architecture.md §8.5.
    */
   private startCacherKeepAlive(): void {
     if (this.keepAliveInterval) return;
@@ -2048,9 +2120,9 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
 
   if (socketName === 'world' && this.worldPool && this.worldPool.size > 0) {
     try {
+      // getConnection() acquires the slot atomically with selection
       poolConn = await this.worldPool.getConnection();
       socket = poolConn.socket;
-      this.worldPool.acquireSlot(poolConn);
     } catch {
       // Pool unavailable — fall back to primary socket
       socket = this.sockets.get(socketName);
@@ -2068,9 +2140,9 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
     // After reconnect, try pool again or fall back to socket
     if (this.worldPool && this.worldPool.size > 0) {
       try {
+        // getConnection() acquires the slot atomically with selection
         poolConn = await this.worldPool.getConnection();
         socket = poolConn.socket;
-        this.worldPool.acquireSlot(poolConn);
       } catch {
         socket = this.sockets.get(socketName);
       }
@@ -2083,9 +2155,11 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
     throw new Error(`Socket ${socketName} not active`);
   }
 
-  // GUARD: Void push ("*") + QueryId = Delphi server crash.
-  // sendRdoRequest always adds a rid, so void push must never go through here.
-  // Void push commands must use writeRdoFrame() directly (no rid, no response).
+  // GUARD (project convention, one form per intent): sendRdoRequest always
+  // adds a rid, so void pushes must never go through here — they use
+  // writeRdoFrame() directly (no rid, no response). Void+QueryId is wire-legal
+  // (server acks `A<id> ;`, capture-proven) — the guard protects consistency,
+  // not the server. Real crash risk = "^" WITHOUT a rid (arch doc §8.5).
   assertNotVoidPush(packetData);
 
   // Capture pool connection for slot release on completion
@@ -2424,6 +2498,9 @@ private handlePush(socketName: string, packet: RdoPacket) {
     }
     this.requestBuffer = [];
     this.pendingMapRequests.clear();
+    this.pendingFocusRequests.clear();
+    this.lastFocusInfo = null;
+    this.lastFocusAt = 0;
 
     // 5. Reset world-level state (preserve credentials + directory data)
     this.worldContextId = null;
@@ -2591,6 +2668,9 @@ private handlePush(socketName: string, packet: RdoPacket) {
     this.chatUsers.clear();
     this.requestBuffer = [];
     this.pendingMapRequests.clear();
+    this.pendingFocusRequests.clear();
+    this.lastFocusInfo = null;
+    this.lastFocusAt = 0;
 
     // Reset state
     this.phase = SessionPhase.DISCONNECTED;

@@ -40,6 +40,16 @@ export const config = {
     ports: {
       directory: 1111,
     },
+
+    /**
+     * Send the two independent viewport reads (ObjectsInArea + SegmentsInArea)
+     * concurrently over the world connection pool instead of sequentially.
+     * Same wire frames, same count — only the overlap in time changes; each
+     * request still goes through sendRdoRequest() (ServerBusy buffering,
+     * timeouts, retry). Saves one ~100ms RTT per map refresh.
+     * Opt-in while under live validation: RDO_PARALLEL_AREA_READS=true
+     */
+    parallelAreaReads: getEnv('RDO_PARALLEL_AREA_READS') === 'true',
   },
 
   /**

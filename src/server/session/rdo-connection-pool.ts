@@ -8,8 +8,11 @@
  * - Periodic health check validates all connections
  *
  * Architecture: The pool wraps multiple TCP sockets to the same Delphi server.
- * Each socket is independent and can handle one RDO request at a time (Delphi
- * is single-threaded per connection). The pool enables parallel requests.
+ * The server dispatches same-connection queries concurrently (24-thread global
+ * queue, doc/rdo-protocol-architecture.md §3.5 — verified 2026-07-03), so the
+ * pool is not required for correctness; it spreads load and avoids head-of-line
+ * blocking on one socket's kernel buffer. Same-world reads serialize on the
+ * shared IS→Model DA path regardless (§3.5) — pooling does not defeat that.
  */
 
 import * as net from 'net';
@@ -95,6 +98,13 @@ export class RdoConnectionPool {
    * Get the best connection for a new request (minimum activeRequests).
    * Creates a new connection if pool has capacity and all existing connections are busy.
    * Mirrors Delphi TRDOConnectionPool.GetConnection().
+   *
+   * The returned connection's slot is ALREADY ACQUIRED (activeRequests
+   * incremented synchronously with selection) — callers must releaseSlot()
+   * when the request settles, and must NOT call acquireSlot() themselves.
+   * Rationale: selection and acquisition used to be two steps; two
+   * concurrent requests both saw the same "idle" connection before either
+   * incremented, landing on one socket (measured live 2026-07-03).
    */
   async getConnection(): Promise<PooledConnection> {
     if (this.closed) throw new Error('Connection pool is closed');
@@ -111,8 +121,10 @@ export class RdoConnectionPool {
       }
     }
 
-    // If best connection is idle (0 active), use it immediately
+    // If best connection is idle (0 active), use it immediately.
+    // Acquire synchronously — no await between selection and increment.
     if (best && best.activeRequests === 0) {
+      this.acquireSlot(best);
       return best;
     }
 
@@ -120,6 +132,7 @@ export class RdoConnectionPool {
     if (this.connections.length < this.config.maxSize) {
       try {
         const newConn = await this.createConnection();
+        this.acquireSlot(newConn);
         this.connections.push(newConn);
         this.log.debug(`[Pool] Expanded pool to ${this.connections.length}/${this.config.maxSize} connections`);
         return newConn;
@@ -130,18 +143,23 @@ export class RdoConnectionPool {
     }
 
     // All connections busy and pool full — use least loaded
-    if (best) return best;
+    if (best) {
+      this.acquireSlot(best);
+      return best;
+    }
 
     // No connections at all — try to create one
     const newConn = await this.createConnection();
+    this.acquireSlot(newConn);
     this.connections.push(newConn);
     return newConn;
   }
 
   /**
    * Mark a request as started on a connection.
+   * Internal: getConnection() acquires for you — external callers only releaseSlot().
    */
-  acquireSlot(conn: PooledConnection): void {
+  private acquireSlot(conn: PooledConnection): void {
     conn.activeRequests++;
   }
 
@@ -220,6 +238,9 @@ export class RdoConnectionPool {
   private createConnection(): Promise<PooledConnection> {
     return new Promise((resolve, reject) => {
       const socket = new net.Socket();
+      // Disable Nagle — see createSocket() in spo_session.ts: concurrent small
+      // RDO writes must not wait a full RTT in the kernel buffer.
+      socket.setNoDelay(true);
       const framer = new RdoFramer();
       let connected = false;
 

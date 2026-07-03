@@ -518,8 +518,11 @@ describe('Protocol Validation: loginWorld()', () => {
     });
 
     it('should send all commands strictly sequentially (no parallel batching)', async () => {
-      // The legacy Delphi server is single-threaded and expects sequential
-      // command-response pairs. Sending multiple commands at once crashes it.
+      // Conformity: the LOGIN sequence must replay the legacy client's exact
+      // command order (arch doc §5.2) — each step depends on the previous
+      // answer (session id → property gets → Logon → ClientView id). The
+      // server itself dispatches concurrent queries fine (arch doc §3.5);
+      // this is about sequence fidelity, and one frame per write.
       // Verify: no single write() call should contain more than one C command.
       await runFullLoginFlow();
 

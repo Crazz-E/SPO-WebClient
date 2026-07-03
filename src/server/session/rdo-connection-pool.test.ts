@@ -73,11 +73,44 @@ describe('RdoConnectionPool', () => {
     });
   });
 
-  describe('acquireSlot', () => {
-    it('increments activeRequests', () => {
-      const conn = { activeRequests: 0 } as PooledConnection;
-      pool.acquireSlot(conn);
-      expect(conn.activeRequests).toBe(1);
+  describe('getConnection — atomic slot acquisition', () => {
+    /** Inject fabricated live connections into the pool's private list */
+    function injectConnections(count: number): PooledConnection[] {
+      const conns = Array.from({ length: count }, () => ({
+        socket: { destroyed: false } as never,
+        framer: {} as never,
+        activeRequests: 0,
+        consecutiveTimeouts: 0,
+        replacing: false,
+        createdAt: 0,
+      } as PooledConnection));
+      (pool as unknown as { connections: PooledConnection[] }).connections = conns;
+      return conns;
+    }
+
+    it('acquires the slot synchronously with selection', async () => {
+      const [conn] = injectConnections(1);
+      const got = await pool.getConnection();
+      expect(got).toBe(conn);
+      expect(got.activeRequests).toBe(1);
+    });
+
+    it('two concurrent requests get two DIFFERENT connections (no shared-socket race)', async () => {
+      injectConnections(2);
+      const [a, b] = await Promise.all([pool.getConnection(), pool.getConnection()]);
+      expect(a).not.toBe(b);
+      expect(a.activeRequests).toBe(1);
+      expect(b.activeRequests).toBe(1);
+    });
+
+    it('falls back to least-loaded when pool is full and all are busy', async () => {
+      const conns = injectConnections(3); // maxSize = 3
+      conns[0].activeRequests = 2;
+      conns[1].activeRequests = 3;
+      conns[2].activeRequests = 5;
+      const got = await pool.getConnection();
+      expect(got).toBe(conns[0]);
+      expect(got.activeRequests).toBe(3); // acquired on top of existing load
     });
   });
 
