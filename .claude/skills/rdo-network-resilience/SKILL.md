@@ -58,7 +58,7 @@ Browser Client ──WebSocket──▶ Node.js Gateway ──RDO TCP──▶ D
 | Delphi Pattern | WebClient Equivalent | Key Difference |
 |----------------|---------------------|----------------|
 | `RenewWorldProxy()` + 5s throttle | `attemptWorldReconnect()` | WebClient: exponential backoff (5s, 10s, 20s) |
-| `TReconnectThread` (unlimited retries, 100ms loop) | `RECONNECT_MAX_RETRIES = 3` | **GAP**: WebClient gives up; Delphi never does |
+| `TReconnectThread` (unlimited retries, 100ms loop) | `RECONNECT_MAX_RETRIES = 23` (3 fast + 20 slow, ~5.5 min) | **Accepted divergence D3** (`doc/rdo-session-lifecycle.md` §9): WebClient gives up after 23 jittered attempts; strictly gentler than Delphi's infinite loop |
 | `fDALastTick` rate limiting | `worldReconnectLastAttempt` | Same concept, different timing |
 | `GetNewWorldProxy()` + `GetDAConnection()` | `loginHandler.reconnectWorldSocket()` | WebClient re-does IDOF + session validation |
 | `OnDADisconnect → RenewWorldProxy` | `socket.on('close') → attemptWorldReconnect()` | Equivalent for world socket only |
@@ -148,8 +148,8 @@ Live capture proof: `C sel 381792472 call RDODisconnectInput "*" "%Plastics","%7
 ### 3. Ghost RID Prevention
 Before reconnecting, ALWAYS drain all pending requests. After reconnect, Delphi reuses query IDs. Leftover pending entries would match wrong responses.
 
-### 4. Sequential RDO Commands
-Never use `Promise.all()` for concurrent RDO commands on the same socket. Delphi is single-threaded per connection.
+### 4. Sequential RDO Commands (default)
+Default to sequential RDO commands — but for the right reason. The server does NOT serialize per connection (24-thread global queue, same-connection queries execute concurrently, answers in completion order — `doc/rdo-protocol-architecture.md` §3.5, verified 2026-07-03). Sequential remains the default because same-world reads serialize on the shared IS→Model DA path anyway (parallel ≈ no latency gain, measured live) and stateful calls (`SwitchFocusEx`) must never overlap. Exceptions: the D2 cacher pipelining (`doc/rdo-session-lifecycle.md` §9) and ClientView-stateless area reads behind `RDO_PARALLEL_AREA_READS` (default off).
 
 ### 5. Request Buffering During ServerBusy
 When `isServerBusy === true`, new requests go to `requestBuffer`. When busy clears, they flush with 50ms delay between each. Buffer has a max size — overflow rejects the request.
@@ -167,8 +167,8 @@ RDO errors classified via `rdo-error-classifier.ts`:
 
 ### 8. Reconnect Strategy (Tier-3 conformity)
 - **Trigger: world socket `close` event ONLY**, and only if `!loggedOff`. NEVER reconnect on a query timeout or a ServerBusy poll failure — legacy `ReportCnxFailure` is a no-op (ServerCnxHandler.pas:3394-3405); reconnect-on-timeout causes login storms serialized on the IS `fServerLock`.
-- **Backoff**: two bounded phases — 3 fast attempts (5/10/20 s exponential) then 20 slow attempts (15 s fixed) = `RECONNECT_MAX_RETRIES = 23` over ~5.5 min, then give up and surface the error to the user (`spo_session.ts:335-341`).
-- **Deliberate divergence**: legacy Delphi retries forever in a 100 ms loop; the WebClient caps retries to protect the shared server. ⚠️ `world-reconnect.test.ts` currently asserts `3` against a mock reimplementation, not the real constant (audit P6 — rewrite to drive the real `StarpeaceSession`).
+- **Backoff**: two bounded phases — 3 fast attempts (5/10/20 s exponential) then 20 slow attempts (15 s fixed) = `RECONNECT_MAX_RETRIES = 23` over ~5.5 min, then give up and surface the error to the user (`spo_session.ts` `RECONNECT_FAST_RETRIES`/`RECONNECT_SLOW_RETRIES`).
+- **Deliberate divergence D3** (`doc/rdo-session-lifecycle.md` §9): legacy Delphi retries forever in a 100 ms loop; the WebClient caps retries to protect the shared server. (Audit P6 resolved Tier 4: `world-reconnect.test.ts` drives the real `StarpeaceSession` and asserts 23.)
 - **ServerBusy poll**: ~50 s cadence (`SERVER_BUSY_CHECK_INTERVAL_MS = 50_000`), stop after 4 consecutive failures (`MAX_CONSECUTIVE_POLL_FAILURES`) WITHOUT reconnecting — mirrors LEDsTimer `mod 50` + `fExceptCount < 4` (ToolbarHandlerViewer.pas:160-162, ServerCnxHandler.pas:3596-3611).
 - Before reconnecting, drain all pending RIDs (rule 3); after re-Logon, all old object ids are stale.
 

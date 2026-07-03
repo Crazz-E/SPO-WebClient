@@ -1,5 +1,10 @@
 # Audit de conformité RDO du WebClient — implémentation & gestion des sessions
 
+> **Statut : INTÉGRÉ (2026-07-03)** — instantané daté, conservé comme piste d'audit (grille 35 règles,
+> V1-V5/P1-P6, annexe Tier-4). Les décisions durables sont canoniques : divergences acceptées D1-D4 →
+> [doc/rdo-session-lifecycle.md §9](../doc/rdo-session-lifecycle.md) ; erratum `RECONNECT_MAX_RETRIES=23` →
+> intégré docs + skill `rdo-network-resilience` ; P6 (tests contre la vraie session) → résolu Tier 4.
+
 > **Date :** 2026-07-02 · **Branche :** `fix/rdo-conformity-tier3` · **Référentiel :** `doc/rdo-protocol-architecture.md` + `doc/rdo-session-lifecycle.md` (vérifiés ligne à ligne contre le source Delphi et les captures le même jour)
 > **Méthode :** 3 auditeurs indépendants (émission fil / lecture-parsing / sessions-timers), 35 règles, chaque violation re-vérifiée à la main dans le code avant publication.
 > **Sévérité :** CRITIQUE = corruption/crash serveur · HAUTE = risque réel côté serveur ou passerelle · MOYENNE = divergence comportementale vs client legacy · BASSE = impureté tolérée par le serveur.

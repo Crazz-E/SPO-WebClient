@@ -1,5 +1,12 @@
 # SPO WebClient ↔ Serveur legacy Delphi — Rapport de conformité RDO
 
+> **Statut : INTÉGRÉ (2026-07-03)** — instantané daté, conservé comme piste d'audit. Les faits durables
+> (vérité fil §2, corrections Tier 1-3, timings de session) sont canoniques dans
+> [doc/rdo-protocol-architecture.md](../doc/rdo-protocol-architecture.md) et
+> [doc/rdo-session-lifecycle.md](../doc/rdo-session-lifecycle.md). Ne PAS citer ce rapport comme référence
+> protocole — uniquement les verdicts A1-A10/V1-V3, le récit des revirements (§4) et les défauts serveur (§6),
+> qui n'existent que dans ce fichier. Suite : `rdo-webclient-conformity-audit.md` (2e passe, score 100 %).
+
 **Date :** 2026-07-02
 **Audience :** développeur WebClient **et** développeur serveur (Delphi)
 **Périmètre :** conformité de la couche RDO du WebClient (protocole + gestion des sessions réseau) vs le code source `SPO-Original`. Aucune modification serveur — les défauts serveur sont remontés en §6.

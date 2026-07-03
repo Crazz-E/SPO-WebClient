@@ -1,5 +1,14 @@
 # SPO WebClient ↔ Delphi Server — Network Layer Risk Report
 
+> **Status: PARTIALLY SUPERSEDED (2026-07-03).** Read §1/§3 (server model, S1-S5) as still-valid,
+> report-only ground truth — a condensed version now lives in
+> [doc/rdo-protocol-architecture.md §3.5](../doc/rdo-protocol-architecture.md). The **WebClient half is
+> historical**: B1/B2/B3 were fixed by Tier 3 (F8/F9), C9/B3-jitter by Tier 4 (V3/V5), B4's dormant pool
+> was activated with atomic slot acquisition (2026-07-03) — see `rdo-conformity-report.md` and
+> `rdo-webclient-conformity-audit.md` (both 2026-07-02). The §6 note on the void-push "crash" uses
+> pre-retirement framing: since 2026-07-02, void+QueryId is documented as wire-legal (acked `A<id> ;`),
+> not a crash — the guard is a project convention (arch doc §8.5).
+
 **Date:** 2026-06-21
 **Audience:** Server (Delphi) developer **and** WebClient (Node.js / TypeScript) developer
 **Scope:** Risks in the WebClient network layer that can make the **official Delphi game server** slow or unresponsive.
@@ -152,7 +161,7 @@ If the server **cannot** be changed, treat it as a fragile, login-serialized, le
 |------|------------------------------|
 | Retry amplification on `errServerBusy` | Inert — the RDO `Busy` flag is never set by the IS, so `errServerBusy(17)` is never emitted; remaining retries are GET-only on already-broken sockets. |
 | Pool health-check timer leak (`drainAll` vs `close`) | Real bug, but the leaked timer does **zero network I/O** — gateway-local only. One-line fix: use `close()` at [spo_session.ts:1555-1558](../src/server/spo_session.ts#L1555). |
-| Void-push (`"*"`+QueryId) crash | Correctly guarded by `assertNotVoidPush` on the only `sendRdoRequest` path ([rdo-request-guards.ts:7-14](../src/server/session/rdo-request-guards.ts#L7)). |
+| Void-push (`"*"`+QueryId) crash | Correctly guarded by `assertNotVoidPush` on the only `sendRdoRequest` path ([rdo-request-guards.ts:7-14](../src/server/session/rdo-request-guards.ts#L7)). *Framing superseded 2026-07-02: void+QueryId does not crash at all (acked `A<id> ;`, capture-proven) — the guard is a project convention; see arch doc §8.5.* |
 | Concurrent fan-out on one connection | Directory uses 2 separate sockets; the only live concurrency (3-way) lands on the 16-thread cacher. |
 | **C3** — end-of-period profile storm | Profile fetch goes to **IIS/ASP** (`TycoonCurriculum.asp` + `RenderTycoon.asp`), issues **zero** `sendRdoRequest`; does not touch the RDO IS. (Folds into C8 as a minor IIS sync-fetch nuance.) |
 | **C5** — inspector 30 s poll "double-refresh" | The 30 s timer and the ~5 s push call **different** methods (heavy vs lightweight), not duplicates; 1/30 s cadence, pauses on hidden tab, hits the 16-thread cacher. |

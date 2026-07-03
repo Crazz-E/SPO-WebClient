@@ -14,7 +14,6 @@
 | [building_details_protocol.md](building_details_protocol.md) | Wire protocol format: GetPropertyList, GetInputNames, SetPath, response parsing |
 | [voyager-handler-reference.md](voyager-handler-reference.md) | Per-handler RDO commands, properties, permissions (companion doc) |
 | [spo-original-reference.md](spo-original-reference.md) | RDO server-side method signatures, type mappings, dispatch rules |
-| [FACILITY-INSPECTOR-GAP-ANALYSIS.md](FACILITY-INSPECTOR-GAP-ANALYSIS.md) | WebClient implementation status and gaps |
 | [research-system-reference.md](research-system-reference.md) | Research/Inventions system (hdqInventions handler) |
 
 ---

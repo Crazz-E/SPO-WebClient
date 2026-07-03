@@ -12,11 +12,16 @@ The RDO protocol defines 7 type prefixes:
 |--------|---------------|-----------------|--------------------------------|
 | `#`    | OrdinalId     | `number`        | Integer values                 |
 | `$`    | StringId      | `string`        | Short string identifiers       |
-| `^`    | VariantId     | `string/number` | Variant type (mixed)           |
+| `^`    | VariantId     | `string/number` | Variant type (mixed) — see note below |
 | `!`    | SingleId      | `number`        | Float (single precision)       |
 | `@`    | DoubleId      | `number`        | Double (double precision)      |
 | `%`    | OLEStringId   | `string`        | Wide string (most common)      |
 | `*`    | VoidId        | `void`          | Void/no return value           |
+
+> **`^` on the wire:** in every live capture, `^` appears only as the **empty method separator** `"^"`
+> (return-value marker) — no capture contains a value-carrying `^text` literal. `RdoValue.variant()` exists
+> for API completeness; conformity-first code should not emit `^<value>` arguments. See
+> [rdo-protocol-architecture.md §2.1/§8.5](rdo-protocol-architecture.md).
 
 ## Module: `rdo-types.ts`
 
@@ -221,7 +226,12 @@ const formatted = args.map(a => a.format()).join(',');
 
 ## 5. Practical Examples
 
-### Example 1: Login Command
+### Example 1: Construction-Service Logon (fire-and-forget push)
+
+> This is the **construction/map service** logon (`RDOLogonClient`), which really is fire-and-forget
+> (`"*"`, no QueryId) — mirrors `spo_session.ts` `connectConstructionService()`. Do NOT confuse it with
+> the **world login** (`AccountStatus` + `Logon "^"` WITH a QueryId, [rdo-protocol-architecture.md §5.2](rdo-protocol-architecture.md#52-complete-login-sequence-world--interface-server)),
+> which goes through `sendRdoRequest()` because it must capture the returned ClientView id.
 
 ```typescript
 // Old way
@@ -479,5 +489,5 @@ const { prefix, value } = RdoParser.extract(token);
 
 ---
 
-**Last Updated:** 2026-07-02 (RDO conformity audit alignment)
-**Version:** 1.1.0
+**Last Updated:** 2026-07-03 (doc-strategy audit — `^` wire note, construction-logon example clarified, orphaned `rdo_typing_examples.ts` removed: its runnable twins of §5 had drifted into non-conformant forms)
+**Version:** 1.2.0

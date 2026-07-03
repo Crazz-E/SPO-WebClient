@@ -18,12 +18,12 @@ These mistakes either genuinely endanger the shared Delphi server or violate pro
 | Void push with QueryId | `sendRdoRequest(RdoCommand.build("*"))` | `writeRdoFrame(socket, RdoCommand.build("*"))` |
 | `"^"` without a RID | fire-and-forget with `"^"` separator | Fire-and-forget always uses `"*"`; wanting a result implies `sendRdoRequest()` + RID (**real crash risk**) |
 | Raw socket writes | `socket.write(str)` — UTF-8 corrupts bytes ≥ 0x80 | `writeRdoFrame()` (Latin-1), enforced by `no-raw-rdo-writes.test.ts` |
-| Concurrent RDO commands | `Promise.all([sendRdo(...), sendRdo(...)])` | Sequential `await sendRdo(...)` then `await sendRdo(...)` |
+| Concurrent RDO commands | `Promise.all([sendRdo(...), sendRdo(...)])` by default | Sequential by default; concurrency only for verified ClientView-stateless reads (arch doc §3.5) |
 | Wrong separator | `"*"` for synchronous request | `"^"` for synchronous, `"*"` for void push only |
 
 **Rule:** `sendRdoRequest()` adds a QueryId automatically. Combining it with `"*"` is forbidden by **project convention** (`assertNotVoidPush` — one form per intent). It is wire-legal (the server just acks `A<id> ;`, capture-proven), so this guard protects consistency, not the server. The REAL crash risk is `"^"` WITHOUT a RID. Full matrix: `doc/rdo-protocol-architecture.md` §8.5.
 
-**Rule:** Never use `Promise.all()` for concurrent RDO commands on the same socket. The Delphi server is single-threaded per connection.
+**Rule:** Default to sequential RDO commands. NOT because the server serializes per connection — it does not (24-thread global queue, same-connection queries run concurrently; `doc/rdo-protocol-architecture.md` §3.5, verified 2026-07-03) — but because (1) same-world reads serialize on the shared IS→Model path anyway (parallel ≈ no gain, measured live), and (2) stateful calls (`SwitchFocusEx`) have data-dependent params and non-atomic server-side effects. `Promise.all` is acceptable only for reads proven ClientView-stateless in §3.5 (e.g. `ObjectsInArea`+`SegmentsInArea`, behind `RDO_PARALLEL_AREA_READS`).
 
 **Rule:** `worldContextId` = world operations (map focus, queries); `interfaceServerId` = building operations. Mixing them up sends commands to the wrong server object.
 

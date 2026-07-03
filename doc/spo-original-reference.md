@@ -1,25 +1,32 @@
 # SPO-Original Delphi Reference Index
 
 > **Source path:** See `delphi-archaeologist` skill for current codebase path
+> **Status:** canonical catalog (per-object RDO member tables) — maintained by the `delphi-archaeologist` skill; new discoveries are added here
+> **Last verified:** 2026-07-03 (dispatch-rule block aligned with the 2026-07-02 conformity audit + 2026-07-03 concurrency findings)
 >
 > Pre-indexed reference for RDO conformity checking. Consult this before implementing any RDO request.
+> Wire semantics (verbs, separators, QueryId, concurrency) are canonical in [rdo-protocol-architecture.md](rdo-protocol-architecture.md) — this file defers to it.
 > Conformity workflow: [rdo-protocol-architecture.md](rdo-protocol-architecture.md) (§0 evidence hierarchy) + [rdo-session-lifecycle.md](rdo-session-lifecycle.md); the archaeology checklist is in the `delphi-archaeologist` skill (`resources/rdo-archaeology-checklist.md`).
 
 ## RDO Dispatch Rules (from RDOObjectServer.pas)
 
 | Delphi declaration | RDO verb | Separator | Response |
 |--------------------|----------|-----------|----------|
-| `published property Foo : type read Get write Set` | `get` / `set` | *(none)* | `res=<prefix><value>` |
-| Synchronous call (with RID, expects response) | `call` | `^` (VariantId) | `res=<prefix><value>` or `res=*` |
-| Fire-and-forget (no RID, no response expected) | `call` | `*` (VoidId) | *(no response)* |
+| `published property Foo : type read Get write Set` | `get` / `set` | *(none)* | `get` → `<Prop>=<prefix><value>`; `set` → empty ack `A<id> ;` |
+| Synchronous call (with RID, expects response) | `call` | `^` (VariantId) | `res=<prefix><value>` |
+| Fire-and-forget (no RID) | `call` | `*` (VoidId) | *(no response — server discards the reply when the echoed QueryId is empty)* |
+| Void call WITH a RID (legacy client does this routinely) | `call` | `*` (VoidId) | empty ack `A<id> ;` — wire-legal, **not** a crash (arch doc §8.5; retired-claim note) |
 
 **Separator rule:** The `^` vs `*` separator does NOT distinguish function/procedure or parameterized/parameterless.
-Both separators parse parameters identically (RDOQueryServer.pas:425-454). The separator controls
+Both separators parse parameters identically (RDOQueryServer.pas:419-424). The separator controls
 whether the server captures the return value (`^`) or discards it (`*`). Using `^` without a RID
-crashes the Delphi server — it tries to route a response to a non-existent query.
+crashes the Delphi server — it tries to route a response to a non-existent query (arch doc §8.5, last row).
 Live capture confirms: `RDODisconnectInput "*" "%Plastics","%706,436,"` (params after `*`).
 
-**TRAP:** `get` on a `function` works (falls through to `CallMethod` at line 115 of RDOObjectServer.pas) but is **semantically wrong** and may behave differently under edge cases.
+**GET fallthrough (capture-first rule, revised 2026-07-02):** `get` on a `function` works — `GetProperty`
+falls through to `CallMethod` (RDOObjectServer.pas:112-116) — and **is what the reference client emits**
+for 0-arg function reads (`RDOOpenSession`, `Logoff` — COM PROPERTYGET marshaling). It is NOT a mistake
+to avoid: follow the capture, never "fix" a captured `get` into a `call`. See arch doc §8.1.
 
 ## Delphi Type -> RDO Prefix Mapping
 
@@ -243,7 +250,7 @@ Live capture confirms: `RDODisconnectInput "*" "%Plastics","%706,436,"` (params 
 | Member | Kind | Verb | Signature | Return | Line | Notes |
 |--------|------|------|-----------|--------|------|-------|
 | `SetViewedArea` | procedure | `call` | `(#x, #y, #dx, #dy)` | void | 144 | |
-| `ObjectsInArea` | function | `call` | `(#x, #y, #dx, #dy)` | `%data` | 145 | Multi-line building list |
+| `ObjectsInArea` | function | `call` | `(#x, #y, #dx, #dy)` | `%data` | 145 | Multi-line building list. **ClientView-stateless** read (server-global locked cache, InterfaceServer.pas:751-782) — concurrency-safe; see arch doc §3.5 |
 | `ObjectAt` | function | `call` | `(#x, #y)` | olevariant | 146 | |
 | `ObjectStatusText` | function | `call` | `(#kind, #Id, #TycoonId)` | olevariant | 147 | kind=TStatusKind |
 | `AllObjectStatusText` | function | `call` | `(#Id, #TycoonId)` | olevariant | 148 | |
@@ -252,7 +259,7 @@ Live capture confirms: `RDODisconnectInput "*" "%Plastics","%706,436,"` (params 
 | `FocusObject` | procedure | `call` | `(#Id)` | void | 151 | |
 | `UnfocusObject` | procedure | `call` | `(#Id)` | void | 152 | |
 | `SwitchFocus` | function | `call` | `(#From, #toX, #toY)` | olevariant | 153 | |
-| `SwitchFocusEx` | function | `call` | `(#From, #toX, #toY)` | olevariant | 154 | Extended version |
+| `SwitchFocusEx` | function | `call` | `(#From, #toX, #toY)` | olevariant | 154 | Extended version (returns focus + status text). Non-atomic unfocus→focus pair; `#From` = previous focus id — **never send two concurrently** (arch doc §3.5) |
 | `ConnectFacilities` | function | `call` | `(#Facility1, #Facility2)` | olevariant | 155 | Skipped if ServerBusy |
 | `PickEvent` | function | `call` | `(#TycoonId)` | olevariant | 166 | |
 | `GetUserName` | function | `call` | `()` | olevariant | 167 | |
@@ -269,7 +276,7 @@ Live capture confirms: `RDODisconnectInput "*" "%Plastics","%706,436,"` (params 
 | `CreateCircuitSeg` | function | `call` | `(#CircuitId, #OwnerId, #x1, #y1, #x2, #y2, #cost)` | olevariant | 156 | **7 integer params** |
 | `BreakCircuitAt` | function | `call` | `(#CircuitId, #OwnerId, #x, #y)` | olevariant | 157 | |
 | `WipeCircuit` | function | `call` | `(#CircuitId, #OwnerId, #x1, #y1, #x2, #y2)` | olevariant | 158 | |
-| `SegmentsInArea` | function | `call` | `(#CircuitId, #x1, #y1, #x2, #y2)` | olevariant | 159 | |
+| `SegmentsInArea` | function | `call` | `(#CircuitId, #x1, #y1, #x2, #y2)` | olevariant | 159 | **ClientView-stateless** read (server-global roads cache, InterfaceServer.pas:1012-1058) — concurrency-safe; see arch doc §3.5 |
 
 ### Surface & zone operations
 

@@ -418,6 +418,11 @@ export function createMyScenario(
 
 ## Capture Text Format (.capture.txt)
 
+> **Two complementary capture routes:** this section covers hand-authored `.capture.txt` files
+> (`capture-importer.ts`). The OTHER route — converting a **live gateway wire log** into a mock
+> scenario (`npm run capture:convert`, output in `src/mock-server/scenarios/captured/`) — is
+> documented in [E2E-TESTING.md § Capture Pipeline](E2E-TESTING.md).
+
 The `capture-importer.ts` module can parse structured `.capture.txt` files:
 
 ```

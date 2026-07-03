@@ -1,7 +1,7 @@
 # RDO Method Archaeology Checklist
 
 > Load this resource when reverse-engineering RDO methods from Delphi source.
-> Extends the 8-step conformity check in CLAUDE.md with concrete search procedures.
+> Extends the 3-point RDO-conformity gate in the root CLAUDE.md (read docs → verify vs Delphi → captures win) with the concrete 8-step search procedure below.
 
 ## Prerequisites
 

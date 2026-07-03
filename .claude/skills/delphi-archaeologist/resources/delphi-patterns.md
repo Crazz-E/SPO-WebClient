@@ -1,7 +1,7 @@
 # Delphi 5 Code Navigation Patterns
 
 > Load this resource when navigating or searching Delphi source code.
-> All paths relative to `C:\Users\RobinALEMAN\Documents\SPO\SPO-Original`
+> All paths relative to `../SPO-Original` (sibling folder of SPO-WebClient — absolute path varies per machine)
 
 ## File Type Quick Reference
 

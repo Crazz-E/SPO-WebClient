@@ -348,18 +348,17 @@ Detailed technical docs live in the [doc/](doc/) directory:
 **Protocol & Architecture**
 - [RDO Protocol Architecture](doc/rdo-protocol-architecture.md) — Wire framing, dispatch, login sequence, push filtering
 - [RDO Typing System](doc/rdo_typing_system.md) — RdoValue/RdoCommand/RdoParser API reference
+- [RDO Session Lifecycle](doc/rdo-session-lifecycle.md) — Timers, login/logoff sequences, reconnection, accepted divergences
 - [SPO-Original Reference](doc/spo-original-reference.md) — Delphi source analysis and patterns
-- [Interface Server Migration](doc/interface-server-migration-feasibility.md) — Architecture migration feasibility
 
 **Building System**
 - [Building Details Protocol](doc/building_details_protocol.md) — Property query protocol
 - [Facility Tabs Reference](doc/facility-tabs-reference.md) — Inspector tab configurations
-- [Facility Inspector Gap Analysis](doc/FACILITY-INSPECTOR-GAP-ANALYSIS.md) — Feature coverage
 - [Supply System](doc/supply-system.md) — Supply/demand mechanics
 - [Research System Reference](doc/research-system-reference.md) — Research and technology tree
 
 **Rendering**
-- [Road Rendering](doc/road_rendering.md) — Road topology and texture mapping
+- [Road Rendering](doc/road_rendering_reference.md) — Road topology and texture mapping
 - [Concrete Rendering](doc/concrete_rendering.md) — Concrete tile system
 - [Road Texture Mapping](doc/ROAD-TEXTURE-MAPPING.md) — Texture selection logic
 - [Canvas 2D Texture Analysis](doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md) — Texture pipeline

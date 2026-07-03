@@ -1,20 +1,24 @@
 # RDO Protocol Architecture — Server & Client Perspectives
 
 > **Source path:** `../SPO-Original/Rdo/` (sibling folder of SPO-WebClient)
-> **Generated:** 2026-02-24 by delphi-archaeologist skill — **revised 2026-07-02 against live wire captures** (RDO conformity audit, `report/rdo-conformity-report.md`)
+> **Generated:** 2026-02-24 by delphi-archaeologist skill — **revised 2026-07-02 against live wire captures** (RDO conformity audit, `report/rdo-conformity-report.md`); **§1.3/§3.5 concurrency model added 2026-07-03** (dispatch archaeology + live A/B measurement)
 > **Evidence confidence:** HIGH — claims cite live capture lines and/or Delphi source lines. Where a capture and a source-reading disagreed, the capture won (see §0).
-> **Variants:** 3 parallel implementations (`Rdo/`, `Rdo.IS/`, `Rdo.BIN/`) share identical structure; this doc references the base `Rdo/` variant.
+> **Variants:** 3 parallel implementations (`Rdo/`, `Rdo.IS/`, `Rdo.BIN/`) share identical structure; this doc references the base `Rdo/` variant. The Interface Server compiles against `Rdo/` (`Interface Server/FIVEInterfaceServer.cfg:38-41`, `.dof:46`).
 
 ## Overview
 
 RDO (Remote Data Objects) is SPO's custom text-based RPC protocol. It exposes Delphi `published` members (properties, functions, procedures) over TCP sockets, using Delphi's RTTI (Run-Time Type Information) for dynamic dispatch. The protocol is **bidirectional** — both sides of a TCP connection can send queries and receive responses.
 
-**Related docs:**
-- [RDO Session Lifecycle](rdo-session-lifecycle.md) — login sequences, logoff, timeouts, KeepAlive, ServerBusy, reconnection (**mandatory companion** for any session/connection work)
-- [RDO Typing System (TypeScript API)](rdo_typing_system.md) — WebClient's type-safe builder classes
-- [SPO-Original Reference Index](spo-original-reference.md) — Per-object RDO member tables
-- [Building Details Protocol](building_details_protocol.md) — Building property queries
-- [Live wire captures](Mock_Server_scenarios_captures.md) and [building_details_rdo.txt](building_details_rdo.txt) — raw evidence (primary reference)
+**RDO knowledge map** (one canonical home per fact — derived docs link here, never restate):
+
+| Layer | Files | Role |
+|---|---|---|
+| **Evidence** (immutable) | [Mock_Server_scenarios_captures.md](Mock_Server_scenarios_captures.md), [building_details_rdo.txt](building_details_rdo.txt) | Raw wire captures — the primary reference; on conflict, they win (§0) |
+| **Canon — protocol** | this file | Wire framing, types, verbs, dispatch, concurrency, push, errors (§8.5 matrix) |
+| **Canon — lifecycle** | [rdo-session-lifecycle.md](rdo-session-lifecycle.md) | Sessions, timers, login/logoff order, reconnection, **accepted divergences §9** (**mandatory companion** for session/connection work) |
+| **Catalogs** | [spo-original-reference.md](spo-original-reference.md) (per-object member tables), [rdo_typing_system.md](rdo_typing_system.md) (WebClient TypeScript builder API) | Lookup references — defer to canon for wire semantics |
+| **Domain references** | [building_details_protocol.md](building_details_protocol.md), [voyager-handler-reference.md](voyager-handler-reference.md), [facility-tabs-reference.md](facility-tabs-reference.md) | Feature-level protocol surfaces (properties, handlers, tabs) |
+| **Reports** (point-in-time) | `report/rdo-conformity-report.md`, `report/rdo-webclient-conformity-audit.md`, `report/network-server-risk-report.md` | Dated audit trail — durable facts have been integrated into the canon; read their status banners |
 
 ---
 
@@ -106,12 +110,20 @@ Param       := '"' <TypePrefix> <Value> '"'
 
 **Evidence:** `RDOProtocol.pas:8-12` (commands), `RDOQueryServer.pas:76-179` (parser)
 
-**Multiple sub-commands** can follow a single `sel`, and results are concatenated:
+**Multiple sub-commands** can follow a single `sel` (whitespace-separated), and results are concatenated:
 
 ```
 sel 42 get Name, get Population, call RDOGetStatus "^";
-→ Name="%Shamba" Population="#1500000" res="#0"
+→ Name="%Shamba" Population="#1500000" res="#0"     ← spacing illustrative, see below
 ```
+
+> **Wire-legal but unusable (verified 2026-07-03, do not adopt):** `ExecQuery` loops over sub-commands
+> [RDOQueryServer.pas:133-160] and builds the reply by **raw string concatenation with NO inserted
+> separator** (`Result := Result + fragment`, :141/:146/:151) — `get A get B` can yield `A="1"B="2"`.
+> Only some fragments carry their own trailing blank (call by-ref params, :498), so multi-result
+> replies are ambiguous to parse. A **second `sel` in one query is rejected** (`errMalformedQuery`,
+> :153-157). The legacy client never emitted multi-sub-command queries (no capture contains one).
+> **Project rule: one sub-command per query.**
 
 ### 1.4 Response Grammar
 
@@ -333,18 +345,30 @@ When a query arrives:
 
 **Evidence:** `RDOObjectServer.pas:190-332` — includes full x86 `asm` block for register allocation.
 
-### 3.5 Thread Safety Model
+### 3.5 Thread Safety & Concurrency Model
 
-**Two-level locking:**
+*(Verified 2026-07-03 — dispatch archaeology on `Rdo/Server/` + live A/B measurement against planitia.)*
+
+**Locking mechanism (generic RDO layer):**
 
 | Level | Mechanism | Scope | Evidence |
 |-------|-----------|-------|----------|
-| Global | `fCriticalSection` on `TRDOObjectServer` | All RDO operations | `RDOObjectServer.pas:79` |
+| Global | `fCriticalSection` on `TRDOObjectServer` — **optional**: `Lock`/`UnLock` are no-ops when the CS is nil | All RDO operations *of that server instance* | `RDOObjectServer.pas:48-60,79` |
 | Per-Object | `ILockObject` interface (optional) | Individual target objects | `RDOObjectServer.pas:88-91` |
 
 Lock ordering: **Global first, then per-object** (inside global lock).
 
 **Atomic call counter:** `Windows.InterlockedIncrement(RDOCallCounter)` provides a monotonic sequence number for debugging [RDOObjectServer.pas:231].
+
+**Interface Server client port — the deployment that matters:**
+
+- The IS creates its client-facing RDO server with **24 worker threads and a nil critical section** — `TRDOServer.Create(…, ISMaxThreads, nil)` with `SetCriticalSection` commented out [`InterfaceServer.pas:20, 2628-2631`]. The global lock above is therefore **inactive** on this port.
+- **One message-loop thread** per `TRDOServer` pumps all sockets' FD_READ events; complete `;`-terminated queries go into **one global query queue shared by ALL connections** [`WinSockRDOConnectionsServer.pas:465-513, 785-825`], served by the worker pool with **no per-connection or per-user affinity** [:268-411].
+- Consequences: **queries pipelined on one TCP connection execute concurrently**; **answers return in completion order** (possibly out of order vs requests), correlated by QueryId; each socket write is guarded by a per-socket critical section shared with the push path [:364-371].
+- Other TRDOServer instances in the IS use 1 thread each; deployment-wide read path: IS 24 threads → **one shared IS→Model DA connection** (`fDAProxy`) → **8-thread Model DA pool shared by ALL users** [`InterfaceServer.pas:2635-2648`, `ModelServer.pas:1257`]. Cacher = 16 threads, mail = 5. Full server risk model: `report/network-server-risk-report.md` §1.
+- `ObjectsInArea` / `SegmentsInArea` are **ClientView-stateless** reads (server-global internally-locked caches; no per-ClientView field written) [`InterfaceServer.pas:751-782, 1012-1058`] — concurrency-safe per se. `SwitchFocusEx` mutates focus state via a **non-atomic unfocus→focus pair** with a data-dependent `From` param [`InterfaceServer.pas:906-946`] — **never run two concurrently**; dedup/reuse instead.
+
+**Live-measured ceiling (planitia, 2026-07-03):** sending the two independent area reads concurrently gains nothing — pair wall-clock ≈ sequential (231 ms vs 206 ms, RTT ~100 ms). One query returns in ~95 ms, the other completes at ~230 ms, order sometimes flipping — the RDO layer parallelizes, but **same-world reads serialize on the shared IS→Model DA path**. WebClient corollaries: `RDO_PARALLEL_AREA_READS` stays default-off; `socket.setNoDelay(true)` on all RDO sockets (Nagle held a second small frame a full RTT); pool slot acquisition is atomic with selection; focus calls are dedup/TTL-reused (1 click = 1 `SwitchFocusEx`). See [rdo-session-lifecycle.md §9](rdo-session-lifecycle.md) D2 for the related cacher-pipelining divergence.
 
 ### 3.6 Thread Priority
 
@@ -764,6 +788,8 @@ Two independent axes: **QueryId present or absent** (decides whether the server 
 | QueryId + `"*"` (or `set`) | YES | empty ack `A<id> ;` | **Forbidden by project convention** (`assertNotVoidPush` guard): the WebClient standardizes on one form per intent. Not a crash risk — if a void ack is ever needed, `A<id> ;` is the expected reply, and `set` via `sendRdoRequest()` legitimately receives it. |
 | no QueryId + `"*"` | YES | silence | `writeRdoFrame(socket, cmd)` — canonical fire-and-forget; matches legacy `Send()` usage (`ClientAware`, `SetViewedArea`, `MsgCompositionChanged` [capture :1017, :1032]) |
 | no QueryId + `"^"` | **NO** | reply is built then has no destination; reported to crash the server (live incident) | **MUST NOT.** The legacy client cannot produce this form — wanting a result implies `SendReceive` + QueryId. No capture contains it. |
+
+**Gateway design decision (settled 2026-07-02):** the WebClient deliberately uses **QueryId + response for every request — reads AND mutations** — where the legacy client sent many mutations fire-and-forget. This is wire-legal (row 2), gives error detection and confirmation, and pairs with the rule that **mutations (CALL/SET) are never auto-retried** ([rdo-session-lifecycle.md §8](rdo-session-lifecycle.md)). Fire-and-forget (`writeRdoFrame`) is reserved for the calls the legacy client also fired blind (`ClientAware`, `SetViewedArea`, KeepAlive, `UnfocusObject`…). An earlier investigation brief questioning this choice (`doc/audit-rdo-request-response-mismatch.md`) was resolved by the conformity audit and removed — its premise rested on the retired crash claim above.
 
 ### 8.6 Channel Codec Never Implemented
 

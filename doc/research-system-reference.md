@@ -159,7 +159,7 @@ call RDOGetInvDescEx ^ %<inventionId> %<langId>
 ← res="%<description text>"
 ```
 
-**CRITICAL**: `RDOQueueResearch` and `RDOCancelResearch` are void **procedures** — they use push separator `*`. The Voyager client sets `WaitForAnswer := true` (synchronous void call). In WebClient: these should use `socket.write(RdoCommand.build())` (fire-and-forget push), NOT `sendRdoRequest()` which adds a QueryId and would crash the server per CLAUDE.md rules.
+**CRITICAL**: `RDOQueueResearch` and `RDOCancelResearch` are void **procedures** — they use push separator `*`. The Voyager client sets `WaitForAnswer := true` (synchronous void call: `"*"` WITH a QueryId, acked `A<id> ;` — wire-legal, [rdo-protocol-architecture.md §8.5](rdo-protocol-architecture.md)). In the WebClient, project convention (one form per intent, `assertNotVoidPush`) maps void procedures to `writeRdoFrame(socket, RdoCommand.build())` (fire-and-forget, no QueryId) — never `socket.write()` directly (UTF-8 corruption) and never `sendRdoRequest()` with `"*"`.
 
 ## Cache Properties (StoreToCache, ResearchCenter.pas:770-828)
 

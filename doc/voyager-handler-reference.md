@@ -14,7 +14,6 @@
 | [facility-tabs-reference.md](facility-tabs-reference.md) | Tab configs from CLASSES.BIN, handler→PropertyGroup mapping |
 | [building_details_protocol.md](building_details_protocol.md) | Wire protocol: GetPropertyList, GetInputNames, SetPath |
 | [spo-original-reference.md](spo-original-reference.md) | RDO server method signatures, dispatch rules |
-| [FACILITY-INSPECTOR-GAP-ANALYSIS.md](FACILITY-INSPECTOR-GAP-ANALYSIS.md) | WebClient implementation gaps |
 
 ## Reading Guide
 

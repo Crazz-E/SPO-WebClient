@@ -42,15 +42,7 @@ All values are **legacy client values** — the WebClient must match them (Tier-
 
 ## 3. Directory Sessions (auth, world lists)
 
-Pattern per operation — **never keep a directory session open** [capture :8-17, :21-60, :64-151]:
-
-```
-C 0 idof "DirectoryServer";                            A0 objid="39751288";
-C 1 sel 39751288 get RDOOpenSession;                   A1 RDOOpenSession="#142217260";
-C 2 sel 142217260 call RDOMapSegaUser "^" "%Crazz";    A2 res="%";
-C 3 sel 142217260 call RDOLogonUser "^" "%Crazz","%…"; A3 res="#0";
-C 4 sel 142217260 call RDOEndSession "*" ;             A4 ;
-```
+Pattern per operation — **never keep a directory session open** [capture :8-17, :21-60, :64-151]. The exact 5-frame wire shape (`idof` → `get RDOOpenSession` → `RDOMapSegaUser` → `RDOLogonUser` → `RDOEndSession`) and its evidence chain are canonical in [rdo-protocol-architecture.md §5.3](rdo-protocol-architecture.md#53-directory-server-session).
 
 - `RDOOpenSession` goes out as **`get`** (0-arg function read → COM PROPERTYGET); the answer echoes the member name. See architecture doc §5.3/§8.1.
 - `RDOEndSession` is a void call **with QueryId**, acked `A<id> ;`. It is a published member of `TDirectorySession` **only** (`DServer/DirectoryServer.pas:31`) — never send it to the Interface Server (→ `error 5`). (A grep will find one hit in `InterfaceServer.pas:2733`, but that is the IS acting as a *client* closing its own directory proxy — not an inbound member.)
@@ -90,7 +82,7 @@ C sel <CVId> call ClientAware "*" ;                         ← fire-and-forget,
 |---|---|---|
 | ServerBusy poll (~50 s) | `sel <CVId> get ServerBusy` → `A<id> ServerBusy="#0"` [capture :993-994] | On exception, increment failure count; **at 4, stop polling** — do not reconnect, do not tear down. A success resets the count. |
 | PickEvent poll | `call PickEvent "^" "#<TycoonId>"` | News/events; response `res="%"` when empty |
-| Map data | **Server pushes** (`RefreshArea`/`RefreshObject`/`RefreshTycoon`) — the client never polls the map | Push filtering: viewport intersect / focused objects (architecture doc §6.4) |
+| Map data | **Server pushes** (`RefreshArea`/`RefreshObject`/`RefreshTycoon`) — the legacy client never polls the map | Push filtering: viewport intersect / focused objects (architecture doc §6.4). The WebClient additionally reads `ObjectsInArea`/`SegmentsInArea` on camera moves — both are **ClientView-stateless** reads (architecture doc §3.5); same-world reads serialize on the shared IS→Model path, so parallelizing them buys nothing (D2 note, §9) |
 | Mail notification | **Push** `ReportNewMail` from the IS [`InterfaceServer.pas:1927, :4330-4340`] | Voyager never polls mail counts itself — see §6 |
 
 There is **no world-socket or mail-socket keep-alive** in the legacy client. The only keep-alive is the cacher's (§7).
@@ -118,7 +110,7 @@ There is **no world-socket or mail-socket keep-alive** in the legacy client. The
 - `ReportCnxFailure` — called from ~20 error sites — is a **no-op** (body commented out, :3394-3405). Query failures and timeouts NEVER reconnect.
 - Before reconnecting, **drain all pending QueryIds**: ids are reused after reconnect and stale entries would match wrong responses.
 - After re-`Logon`, the server delivers a **new ClientView id** — all cached object ids from the old session are stale.
-- Deliberate WebClient divergence: legacy retries forever in a 100 ms loop; the WebClient uses a **bounded two-phase backoff** — 3 fast attempts (5/10/20 s) then 20 slow attempts (15 s each), i.e. `RECONNECT_MAX_RETRIES = 23` over ~5.5 min, then gives up (`spo_session.ts` `RECONNECT_FAST_RETRIES`/`RECONNECT_SLOW_RETRIES`). Strictly gentler than the legacy infinite loop. ⚠️ Audit 2026-07-02: `world-reconnect.test.ts` asserts `3` against a mock class, not the real constant — see `report/rdo-webclient-conformity-audit.md` P6.
+- Deliberate WebClient divergence: legacy retries forever in a 100 ms loop; the WebClient uses a **bounded two-phase backoff** — 3 fast attempts (5/10/20 s) then 20 slow attempts (15 s each), i.e. `RECONNECT_MAX_RETRIES = 23` over ~5.5 min, then gives up (`spo_session.ts` `RECONNECT_FAST_RETRIES`/`RECONNECT_SLOW_RETRIES`). Strictly gentler than the legacy infinite loop. (Audit P6 resolved Tier 4: `world-reconnect.test.ts` now drives the real `StarpeaceSession` and asserts 23.)
 
 ---
 
@@ -203,7 +195,7 @@ Deliberate, documented departures from the reference client. Each is wire-legal 
 | # | Divergence | Legacy behavior | WebClient behavior | Why it is safe |
 |---|---|---|---|---|
 | D1 | `RDOEndSession` without RID | Sent WITH a QueryId, client waits for `A<id> ;` [capture :16-17] | Fire-and-forget (`writeRdoFrame`, no RID), then close | Server tears the directory session down either way; TCP delivers the frame before FIN; no reply needed since the socket closes. `login-handler.ts` |
-| D2 | Concurrent reads on the cacher socket | Strictly sequential per socket; parallelism via connection POOL (§4.5 arch doc) | Up to 3 QueryId-correlated READ requests pipelined on the single `map` socket | Bounded (cap 3 < Delphi `MAX_BUFFER_SIZE=5`), read-only, cacher server runs a 16-thread pool. `building-details-handler.ts` `batchedParallel` |
+| D2 | Concurrent reads on the cacher socket | Sequential *client* behavior — each `SendReceive` blocks its calling thread; parallelism via connection POOL (§4.5 arch doc). Not a server constraint: the RDO server dispatches same-connection queries concurrently (arch doc §3.5, verified 2026-07-03) | Up to 3 QueryId-correlated READ requests pipelined on the single `map` socket | Bounded (cap 3 < Delphi `MAX_BUFFER_SIZE=5`), read-only, cacher server runs a 16-thread pool. Note: same-WORLD reads still serialize on the shared IS→Model DA path (arch §3.5) — pipelining is safe but not faster. `building-details-handler.ts` `batchedParallel` |
 | D3 | Bounded reconnection | Infinite 100 ms retry loop (`TReconnectThread`) | 3 fast (5/10/20 s) + 20 slow (15 s) = 23 jittered attempts, then give up | Strictly gentler on the IS `fServerLock` than the legacy client |
 | D4 | Login property reads | Reads `DSArea`; polls `PickEvent` continuously | Reads `DAPort` instead of `DSArea`; adds one `GetCompanyCount`; sends `PickEvent` only at login/company-select | Benign extra/omitted READS; strictly less polling load than legacy |
 
