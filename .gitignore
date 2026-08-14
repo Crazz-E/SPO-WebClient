@@ -63,3 +63,4 @@ electron/node_modules/
 .claude/install-cdn-skills.js
 .claude/install-new-skills.js
 .claude/scheduled_tasks.lock
+.claude/.typecheck-dirty

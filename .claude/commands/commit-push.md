@@ -1,3 +1,9 @@
+---
+description: Commit and push only the changes made during the current session
+argument-hint: "[commit message]"
+allowed-tools: Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git add*), Bash(git commit*), Bash(git push*), Bash(git branch*), Read, Grep, Glob
+---
+
 # Commit and Push Current Session Changes
 
 Commit and push ONLY changes made during the current session.

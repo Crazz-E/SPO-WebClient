@@ -1,3 +1,8 @@
+---
+description: Run the L3 live smoke test against the real servers via Playwright MCP
+argument-hint: "[login|smoke|custom]"
+---
+
 # Full Game E2E Test
 
 Run the live smoke test against the real servers using Playwright MCP tools.

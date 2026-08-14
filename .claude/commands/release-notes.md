@@ -1,3 +1,10 @@
+---
+description: Generate release notes from git history since the last tag
+argument-hint: "[version, e.g. 1.3.0]"
+allowed-tools: Bash(git log*), Bash(git describe*), Bash(git tag*), Bash(git diff*), Bash(npm run release*), Read, Write, Edit
+model: fable
+---
+
 # Generate Release Notes
 
 Generate release notes from git history since the last tag.

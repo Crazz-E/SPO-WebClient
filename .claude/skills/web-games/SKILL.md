@@ -1,161 +1,68 @@
 ---
 name: web-games
-description: "TRIGGER: When working on game loop, Canvas 2D renderer, or isometric engine. Covers frame budget, game-specific optimization, PWA."
+description: "TRIGGER: When working on the game loop, the Canvas 2D isometric renderer (src/client/renderer/), or the frame budget. Covers draw-call batching, chunk caching, tab throttling, and SPO-specific renderer traps."
+user-invokable: false
+disable-model-invocation: false
 ---
 
-# Web Browser Game Development
+# Isometric Renderer & Frame Budget
 
-> Framework selection and browser-specific principles.
+The engine is a **hand-written Canvas 2D isometric renderer**. There is no Phaser, PixiJS,
+Three.js, Babylon or WebGPU in this project, and no plan to add one — proposals to adopt a
+framework are out of scope. `package.json` is the authority.
 
----
+Renderer modules (`src/client/renderer/`):
+`isometric-map-renderer.ts`, `isometric-terrain-renderer.ts`, `concrete-texture-system.ts`,
+`road-texture-system.ts`, `car-class-system.ts`, `vehicle-animation-system.ts`.
 
-## 1. Framework Selection
+Full pipeline: [doc/texture-rendering-architecture.md](../../../doc/texture-rendering-architecture.md),
+[doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md](../../../doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md).
 
-### Decision Tree
+## SPO renderer traps
 
-```
-What type of game?
-│
-├── 2D Game
-│   ├── Full game engine features? → Phaser
-│   └── Raw rendering power? → PixiJS
-│
-├── 3D Game
-│   ├── Full engine (physics, XR)? → Babylon.js
-│   └── Rendering focused? → Three.js
-│
-└── Hybrid / Canvas
-    └── Custom → Raw Canvas/WebGL
-```
-
-### Comparison (2025)
-
-| Framework | Type | Best For |
-|-----------|------|----------|
-| **Phaser 4** | 2D | Full game features |
-| **PixiJS 8** | 2D | Rendering, UI |
-| **Three.js** | 3D | Visualizations, lightweight |
-| **Babylon.js 7** | 3D | Full engine, XR |
-
----
-
-## 2. WebGPU Adoption
-
-### Browser Support (2025)
-
-| Browser | Support |
-|---------|---------|
-| Chrome | ✅ Since v113 |
-| Edge | ✅ Since v113 |
-| Firefox | ✅ Since v131 |
-| Safari | ✅ Since 18.0 |
-| **Total** | **~73%** global |
-
-### Decision
-
-- **New projects**: Use WebGPU with WebGL fallback
-- **Legacy support**: Start with WebGL
-- **Feature detection**: Check `navigator.gpu`
-
----
-
-## 3. Performance Principles
-
-### Browser Constraints
-
-| Constraint | Strategy |
-|------------|----------|
-| No local file access | Asset bundling, CDN |
-| Tab throttling | Pause when hidden |
-| Mobile data limits | Compress assets |
-| Audio autoplay | Require user interaction |
-
-### Optimization Priority
-
-1. **Asset compression** - KTX2, Draco, WebP
-2. **Lazy loading** - Load on demand
-3. **Object pooling** - Avoid GC
-4. **Draw call batching** - Reduce state changes
-5. **Web Workers** - Offload heavy computation
-
----
-
-## 4. Asset Strategy
-
-### Compression Formats
-
-| Type | Format |
-|------|--------|
-| Textures | KTX2 + Basis Universal |
-| Audio | WebM/Opus (fallback: MP3) |
-| 3D Models | glTF + Draco/Meshopt |
-
-### Loading Strategy
-
-| Phase | Load |
-|-------|------|
-| Startup | Core assets, <2MB |
-| Gameplay | Stream on demand |
-| Background | Prefetch next level |
-
----
-
-## 5. PWA for Games
-
-### Benefits
-
-- Offline play
-- Install to home screen
-- Full screen mode
-- Push notifications
-
-### Requirements
-
-- Service worker for caching
-- Web app manifest
-- HTTPS
-
----
-
-## 6. Audio Handling
-
-### Browser Requirements
-
-- Audio context requires user interaction
-- Create AudioContext on first click/tap
-- Resume context if suspended
-
-### Best Practices
-
-- Use Web Audio API
-- Pool audio sources
-- Preload common sounds
-- Compress with WebM/Opus
-
----
-
-## 7. Anti-Patterns
-
-| ❌ Don't | ✅ Do |
-|----------|-------|
-| Load all assets upfront | Progressive loading |
-| Ignore tab visibility | Pause when hidden |
-| Block on audio load | Lazy load audio |
-| Skip compression | Compress everything |
-| Assume fast connection | Handle slow networks |
-
----
-
-> **Remember:** Browser is the most accessible platform. Respect its constraints.
-
----
-
-## 8. SPO Isometric Renderer Gotchas
-
-Project-specific traps for the Starpeace Online Canvas 2D isometric engine:
+These are real bugs that have shipped. Check each before touching coordinate code.
 
 | Trap | Detail |
 |------|--------|
-| TerrainLoader i/j swap | `getTextureId(j, i)` — provider uses (i,j), loader expects (x,y). Swapping causes wrong tiles. |
-| Concrete tile coordinates | Stored as `"${x},${y}"` (col,row) NOT `"${i},${j}"` (row,col). Wrong order = misplaced concrete. |
-| ROAD_TYPE `as const` | Constants are `as const` — use explicit `number` type annotation for local vars to avoid type narrowing issues. |
+| **TerrainLoader i/j swap** | `getTextureId(j, i)` — the provider uses `(i, j)` but the loader expects `(x, y)`. Swapping them renders the wrong tiles, with no error. |
+| **Concrete tile coordinates** | Stored as `` `${x},${y}` `` (col,row), **not** `` `${i},${j}` `` (row,col). Wrong order silently misplaces concrete. See [doc/concrete_rendering.md](../../../doc/concrete_rendering.md). |
+| **ROAD_TYPE `as const`** | The constants are `as const`; annotate local vars as `number` explicitly or type narrowing bites. See [doc/road_rendering_reference.md](../../../doc/road_rendering_reference.md). |
+| **Painter's order** | Back-to-front by `i + j`. Any change to iteration order must preserve this or sprites overlap wrongly. |
+
+## Frame budget
+
+16.7 ms at 60 fps. The renderer shares the main thread with React and the WebSocket bridge,
+so the realistic draw budget is **under 10 ms**.
+
+Priority order when the budget is blown — measure before assuming:
+
+1. **Chunk cache hit rate** — re-rasterising a static terrain chunk every frame is the
+   usual culprit. Cache to an offscreen canvas, invalidate on tile change only.
+2. **Draw call count** — batch by texture atlas. Every `drawImage` with a different source
+   forces a state change.
+3. **Per-frame allocation** — object pooling for vehicles and sprites. GC pauses read as
+   stutter, not as slow frames.
+4. **Overdraw** — cull to the viewport before sorting, not after.
+5. **Offload** — heavy non-draw computation to a Web Worker.
+
+Do not optimise on intuition: profile with the Performance panel and quote real numbers
+in the commit message.
+
+## Browser constraints that actually apply here
+
+| Constraint | Handling |
+|------------|----------|
+| Tab throttling | Pause the loop on `visibilitychange`; do not let RDO keep-alive drift. |
+| Audio autoplay policy | AudioContext must be created on a user gesture, then resumed if suspended. |
+| Mobile data | Assets ship via the CAB cache pipeline — see [doc/CAB-EXTRACTION.md](../../../doc/CAB-EXTRACTION.md). |
+| No local file access | Assets served by the gateway; nothing reads the disk from the client. |
+
+## Anti-patterns
+
+| Do NOT | Instead |
+|--------|---------|
+| Propose Phaser/PixiJS/Three.js | The engine is bespoke Canvas 2D; work within it |
+| Rasterise static chunks every frame | Offscreen canvas + invalidate on change |
+| Allocate vectors/objects inside the draw loop | Pool and reuse |
+| Run the loop while the tab is hidden | Pause on `visibilitychange` |
+| Assume 16.7 ms is yours alone | React and the bridge share the thread |

@@ -1,5 +1,5 @@
 ---
-name: debug-systematically
+name: debugging
 description: Use this skill when diagnosing a bug, unexpected behavior, test failure, or any situation where code does not behave as expected. Follow a structured debugging process instead of randomly changing code.
 category: coding
 ---

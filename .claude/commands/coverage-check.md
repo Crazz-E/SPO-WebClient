@@ -1,3 +1,10 @@
+---
+description: Run the test suite with coverage and verify it against the ratchet thresholds
+argument-hint: "[update]"
+allowed-tools: Bash(npm run test:coverage*), Bash(npm test*), Read, Edit, Grep, Glob
+model: fable
+---
+
 # Coverage Check and Ratchet Verification
 
 Run the test suite with coverage and verify against the ratchet thresholds.

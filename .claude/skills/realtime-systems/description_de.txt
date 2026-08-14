@@ -1,1 +1,0 @@
-WebSocket, Echtzeitkommunikation und ereignisgesteuerte Architekturen

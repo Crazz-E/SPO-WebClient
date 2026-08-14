@@ -99,10 +99,14 @@ Every interactive UI element must have a complete action chain, not just render 
 Before considering any work session complete, verify ALL of these pass:
 
 ```bash
-npx tsc --noEmit                          # server types
+npm run typecheck                          # server + client tsconfigs
 npm test                                   # all 3107+ tests (130 suites)
 npm run build                              # full build (tsc + vite + esbuild)
 ```
+
+`npm run typecheck` is enforced automatically: the `Stop` hook (`.claude/hooks/sanctuarize.sh`)
+runs it once per turn whenever a `.ts`/`.tsx` file was written, and blocks the turn on failure.
+`npm test` and `npm run build` remain manual — run them before declaring a session complete.
 
 **Invariants that must hold:**
 1. All tests pass — zero failures, zero skipped
@@ -115,5 +119,6 @@ npm run build                              # full build (tsc + vite + esbuild)
 4. All new UI elements have wired actions (Section E)
 5. Coverage thresholds in `jest.config.js` are not lowered
 
-**Known debt (do not regress further):**
-- `src/client/client.ts` has 6 pre-existing TypeScript errors under `tsconfig.client.json` (TS1064, TS2353, TS2367). These are tracked for cleanup. Do not add more.
+**Known debt:** none outstanding. Both tsconfigs are clean as of commit `bd84ad7f`
+(the 6 former `client.ts` errors — TS1064, TS2353, TS2367 — are fixed). Any typecheck
+error you see is one you introduced.

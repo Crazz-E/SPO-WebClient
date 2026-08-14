@@ -1,263 +1,220 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "installedAt": "2026-03-15T23:33:13.262Z",
+  "generatedAt": "2026-08-14T13:15:02.496Z",
   "source": "skillsmp.com",
+  "generator": ".claude/generate-skills-manifest.js",
+  "counts": {
+    "total": 23,
+    "project": 10,
+    "community": 13,
+    "withRecordedProvenance": 10
+  },
   "skills": [
     {
-      "name": "typescript",
-      "skillName": "typescript",
-      "author": "prowler-cloud",
-      "stars": 13317,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\typescript",
-      "githubUrl": "https://github.com/prowler-cloud/prowler/tree/master/skills/typescript"
-    },
-    {
-      "name": "nodejs-backend",
-      "skillName": "nodejs-backend-patterns",
-      "author": "wshobson",
-      "stars": 31169,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\nodejs-backend",
-      "githubUrl": "https://github.com/wshobson/agents/tree/main/plugins/javascript-typescript/skills/nodejs-backend-patterns"
-    },
-    {
-      "name": "jest-testing",
-      "skillName": "tdd-guide",
-      "author": "alirezarezvani",
-      "stars": 5180,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\jest-testing",
-      "githubUrl": "https://github.com/alirezarezvani/claude-skills/tree/main/engineering-team/tdd-guide"
-    },
-    {
-      "name": "security-auditor",
-      "skillName": "qa-agent",
-      "author": "first-fluke",
-      "stars": 333,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\security-auditor",
-      "githubUrl": "https://github.com/first-fluke/oh-my-agent/tree/main/.agents/skills/qa-agent"
-    },
-    {
-      "name": "memory-optimization",
-      "skillName": "python-performance-optimization",
-      "author": "wshobson",
-      "stars": 31169,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\memory-optimization",
-      "githubUrl": "https://github.com/wshobson/agents/tree/main/plugins/python-development/skills/python-performance-optimization"
-    },
-    {
-      "name": "protocol-reverse-engineering",
-      "skillName": "protocol-reverse-engineering",
-      "author": "wshobson",
-      "stars": 31169,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\protocol-reverse-engineering",
-      "githubUrl": "https://github.com/wshobson/agents/tree/main/plugins/reverse-engineering/skills/protocol-reverse-engineering"
-    },
-    {
-      "name": "web-performance",
-      "skillName": "web-performance-optimization",
-      "author": "sickn33",
-      "stars": 24446,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\web-performance",
-      "githubUrl": "https://github.com/sickn33/antigravity-awesome-skills/tree/main/skills/web-performance-optimization"
-    },
-    {
-      "name": "git-workflow",
-      "skillName": "git-workflow",
-      "author": "ScientiaCapital",
-      "stars": 5,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\git-workflow",
-      "githubUrl": "https://github.com/ScientiaCapital/skills/tree/main/active/git-workflow-skill"
-    },
-    {
-      "name": "debugging",
-      "skillName": "debug-systematically",
-      "author": "aiming-lab",
-      "stars": 1197,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\debugging",
-      "githubUrl": "https://github.com/aiming-lab/MetaClaw/tree/main/memory_data/skills/debug-systematically"
-    },
-    {
-      "name": "e2e-testing",
-      "skillName": "e2e-tester",
-      "author": "redpanda-data",
-      "stars": 4248,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\e2e-testing",
-      "githubUrl": "https://github.com/redpanda-data/console/tree/master/frontend/.claude/skills/e2e-tester"
-    },
-    {
-      "name": "refactoring",
-      "skillName": "codebase-cleanup-refactor-clean",
-      "author": "sickn33",
-      "stars": 24446,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\refactoring",
-      "githubUrl": "https://github.com/sickn33/antigravity-awesome-skills/tree/main/skills/codebase-cleanup-refactor-clean"
+      "name": "canvas-api",
+      "skillName": "canvas-api",
+      "origin": "community",
+      "path": ".claude/skills/canvas-api",
+      "hasSkillMd": true,
+      "provenance": "unrecorded"
     },
     {
       "name": "claude-md-improver",
       "skillName": "claude-md-improver",
+      "origin": "community",
+      "path": ".claude/skills/claude-md-improver",
+      "hasSkillMd": true,
       "author": "anthropics",
       "stars": 11581,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\claude-md-improver",
-      "githubUrl": "https://github.com/anthropics/claude-plugins-official/tree/main/plugins/claude-md-management/skills/claude-md-improver"
+      "githubUrl": "https://github.com/anthropics/claude-plugins-official/tree/main/plugins/claude-md-management/skills/claude-md-improver",
+      "upstreamName": "claude-md-improver"
     },
     {
-      "name": "claude-code-workflow",
-      "skillName": "claude-code-workflow",
-      "author": "ilude",
-      "stars": 7,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\claude-code-workflow",
-      "githubUrl": "https://github.com/ilude/claude-code-config/tree/main/skills/claude-code-workflow"
+      "name": "code-guardian",
+      "skillName": "code-guardian",
+      "origin": "project",
+      "path": ".claude/skills/code-guardian",
+      "hasSkillMd": true
     },
     {
-      "name": "context-master",
-      "skillName": "context-master",
-      "author": "JosiahSiegel",
-      "stars": 20,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\context-master",
-      "githubUrl": "https://github.com/JosiahSiegel/claude-plugin-marketplace/tree/main/plugins/context-master/skills/context-master"
+      "name": "css-modules-vite",
+      "skillName": "css-modules-vite",
+      "origin": "community",
+      "path": ".claude/skills/css-modules-vite",
+      "hasSkillMd": true,
+      "provenance": "unrecorded"
     },
     {
-      "name": "agentic-jumpstart-testing",
-      "skillName": "agentic-jumpstart-testing",
-      "author": "webdevcody",
-      "stars": 21,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\agentic-jumpstart-testing",
-      "githubUrl": "https://github.com/webdevcody/agentic-jumpstart/tree/main/.claude/skills/agentic-jumpstart-testing"
+      "name": "debugging",
+      "skillName": "debugging",
+      "origin": "community",
+      "path": ".claude/skills/debugging",
+      "hasSkillMd": true,
+      "author": "aiming-lab",
+      "stars": 1197,
+      "githubUrl": "https://github.com/aiming-lab/MetaClaw/tree/main/memory_data/skills/debug-systematically",
+      "upstreamName": "debug-systematically"
+    },
+    {
+      "name": "delphi-archaeologist",
+      "skillName": "delphi-archaeologist",
+      "origin": "project",
+      "path": ".claude/skills/delphi-archaeologist",
+      "hasSkillMd": true
+    },
+    {
+      "name": "dependencies",
+      "skillName": "dependencies",
+      "origin": "project",
+      "path": ".claude/skills/dependencies",
+      "hasSkillMd": true
     },
     {
       "name": "docs-codebase",
       "skillName": "docs-codebase",
+      "origin": "community",
+      "path": ".claude/skills/docs-codebase",
+      "hasSkillMd": true,
       "author": "vasilyu1983",
       "stars": 41,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\docs-codebase",
-      "githubUrl": "https://github.com/vasilyu1983/AI-Agents-public/tree/main/frameworks/shared-skills/skills/docs-codebase"
+      "githubUrl": "https://github.com/vasilyu1983/AI-Agents-public/tree/main/frameworks/shared-skills/skills/docs-codebase",
+      "upstreamName": "docs-codebase"
     },
     {
-      "name": "r3f-performance",
-      "skillName": "r3f-performance",
-      "author": "Bbeierle12",
-      "stars": 7,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\r3f-performance",
-      "githubUrl": "https://github.com/Bbeierle12/Skill-MCP-Claude/tree/main/skills/r3f-performance"
+      "name": "e2e-test",
+      "skillName": "e2e-test",
+      "origin": "project",
+      "path": ".claude/skills/e2e-test",
+      "hasSkillMd": true
     },
     {
-      "name": "webgl-expert",
-      "skillName": "webgl-expert",
-      "author": "ronnycoding",
-      "stars": 16,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\webgl-expert",
-      "githubUrl": "https://github.com/ronnycoding/.claude/tree/main/skills/webgl-expert"
+      "name": "git-workflow",
+      "skillName": "git-workflow",
+      "origin": "community",
+      "path": ".claude/skills/git-workflow",
+      "hasSkillMd": true,
+      "author": "ScientiaCapital",
+      "stars": 5,
+      "githubUrl": "https://github.com/ScientiaCapital/skills/tree/main/active/git-workflow-skill",
+      "upstreamName": "git-workflow"
     },
     {
-      "name": "store-data-structures",
-      "skillName": "store-data-structures",
-      "author": "lobehub",
-      "stars": 73673,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\store-data-structures",
-      "githubUrl": "https://github.com/lobehub/lobehub/tree/canary/.agents/skills/store-data-structures"
-    },
-    {
-      "name": "react-state-management",
-      "skillName": "react-state-management",
-      "author": "wshobson",
-      "stars": 31169,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\react-state-management",
-      "githubUrl": "https://github.com/wshobson/agents/tree/main/plugins/frontend-mobile-development/skills/react-state-management"
-    },
-    {
-      "name": "accessibility-compliance",
-      "skillName": "accessibility-compliance",
-      "author": "wshobson",
-      "stars": 31169,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\accessibility-compliance",
-      "githubUrl": "https://github.com/wshobson/agents/tree/main/plugins/ui-design/skills/accessibility-compliance"
-    },
-    {
-      "name": "accessibility-auditor",
-      "skillName": "accessibility-auditor",
-      "author": "davila7",
-      "stars": 22944,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\accessibility-auditor",
-      "githubUrl": "https://github.com/davila7/claude-code-templates/tree/main/cli-tool/components/skills/creative-design/accessibility-auditor"
-    },
-    {
-      "name": "zustand-store-ts",
-      "skillName": "zustand-store-ts",
-      "author": "sickn33",
-      "stars": 24446,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\zustand-store-ts",
-      "githubUrl": "https://github.com/sickn33/antigravity-awesome-skills/tree/main/skills/zustand-store-ts"
-    },
-    {
-      "name": "react-expert",
-      "skillName": "react-expert",
-      "author": "sundial-org",
-      "stars": 447,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\react-expert",
-      "githubUrl": "https://github.com/sundial-org/awesome-openclaw-skills/tree/main/skills/react-expert"
-    },
-    {
-      "name": "react-patterns",
-      "skillName": "react-patterns",
-      "author": "sickn33",
-      "stars": 24446,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\react-patterns",
-      "githubUrl": "https://github.com/sickn33/antigravity-awesome-skills/tree/main/skills/react-patterns"
-    },
-    {
-      "name": "pwa-development-v2",
-      "skillName": "pwa-development",
-      "author": "alinaqi",
-      "stars": 531,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\pwa-development-v2",
-      "githubUrl": "https://github.com/alinaqi/claude-bootstrap/tree/main/skills/pwa-development"
-    },
-    {
-      "name": "design-system-patterns",
-      "skillName": "design-system-patterns",
-      "author": "wshobson",
-      "stars": 31169,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\design-system-patterns",
-      "githubUrl": "https://github.com/wshobson/agents/tree/main/plugins/ui-design/skills/design-system-patterns"
-    },
-    {
-      "name": "interaction-design",
-      "skillName": "interaction-design",
-      "author": "wshobson",
-      "stars": 31169,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\interaction-design",
-      "githubUrl": "https://github.com/wshobson/agents/tree/main/plugins/ui-design/skills/interaction-design"
-    },
-    {
-      "name": "animation-micro-interaction-pack",
-      "skillName": "animation-micro-interaction-pack",
-      "author": "majiayu000",
-      "stars": 118,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\animation-micro-interaction-pack",
-      "githubUrl": "https://github.com/majiayu000/claude-skill-registry/tree/main/skills/data/animation-micro-interaction-pack"
-    },
-    {
-      "name": "ui-ux-pro-max",
-      "skillName": "team-frontend",
-      "author": "catlog22",
-      "stars": 1475,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\ui-ux-pro-max",
-      "githubUrl": "https://github.com/catlog22/Claude-Code-Workflow/tree/main/.claude/skills/team-frontend"
+      "name": "mobile-ux-optimizer",
+      "skillName": "mobile-ux-optimizer",
+      "origin": "project",
+      "path": ".claude/skills/mobile-ux-optimizer",
+      "hasSkillMd": true
     },
     {
       "name": "pwa-expert",
       "skillName": "pwa-expert",
+      "origin": "community",
+      "path": ".claude/skills/pwa-expert",
+      "hasSkillMd": true,
       "author": "NeverSight",
       "stars": 80,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\pwa-expert",
-      "githubUrl": "https://github.com/NeverSight/learn-skills.dev/tree/main/data/skills-md/curiositech/some_claude_skills/pwa-expert"
+      "githubUrl": "https://github.com/NeverSight/learn-skills.dev/tree/main/data/skills-md/curiositech/some_claude_skills/pwa-expert",
+      "upstreamName": "pwa-expert"
+    },
+    {
+      "name": "rdo-conformity",
+      "skillName": "rdo-conformity",
+      "origin": "project",
+      "path": ".claude/skills/rdo-conformity",
+      "hasSkillMd": true
+    },
+    {
+      "name": "rdo-network-resilience",
+      "skillName": "rdo-network-resilience",
+      "origin": "project",
+      "path": ".claude/skills/rdo-network-resilience",
+      "hasSkillMd": true
+    },
+    {
+      "name": "react-best-practices",
+      "skillName": "react-best-practices",
+      "origin": "community",
+      "path": ".claude/skills/react-best-practices",
+      "hasSkillMd": true,
+      "provenance": "unrecorded"
+    },
+    {
+      "name": "reviewing-code",
+      "skillName": "reviewing-code",
+      "origin": "community",
+      "path": ".claude/skills/reviewing-code",
+      "hasSkillMd": true,
+      "provenance": "unrecorded"
+    },
+    {
+      "name": "security-auditor",
+      "skillName": "security-auditor",
+      "origin": "community",
+      "path": ".claude/skills/security-auditor",
+      "hasSkillMd": true,
+      "author": "first-fluke",
+      "stars": 333,
+      "githubUrl": "https://github.com/first-fluke/oh-my-agent/tree/main/.agents/skills/qa-agent",
+      "upstreamName": "qa-agent"
+    },
+    {
+      "name": "spo-testing",
+      "skillName": "spo-testing",
+      "origin": "project",
+      "path": ".claude/skills/spo-testing",
+      "hasSkillMd": true
+    },
+    {
+      "name": "typescript",
+      "skillName": "typescript",
+      "origin": "community",
+      "path": ".claude/skills/typescript",
+      "hasSkillMd": true,
+      "author": "prowler-cloud",
+      "stars": 13317,
+      "githubUrl": "https://github.com/prowler-cloud/prowler/tree/master/skills/typescript",
+      "upstreamName": "typescript"
     },
     {
       "name": "web-accessibility",
       "skillName": "web-accessibility",
+      "origin": "community",
+      "path": ".claude/skills/web-accessibility",
+      "hasSkillMd": true,
       "author": "aiskillstore",
       "stars": 215,
-      "path": "c:\\Users\\Crazz\\Documents\\SPO\\SPO-WebClient\\.claude\\skills\\web-accessibility",
-      "githubUrl": "https://github.com/aiskillstore/marketplace/tree/main/skills/supercent-io/web-accessibility"
+      "githubUrl": "https://github.com/aiskillstore/marketplace/tree/main/skills/supercent-io/web-accessibility",
+      "upstreamName": "web-accessibility"
+    },
+    {
+      "name": "web-games",
+      "skillName": "web-games",
+      "origin": "project",
+      "path": ".claude/skills/web-games",
+      "hasSkillMd": true
+    },
+    {
+      "name": "web-performance",
+      "skillName": "web-performance",
+      "origin": "community",
+      "path": ".claude/skills/web-performance",
+      "hasSkillMd": true,
+      "author": "sickn33",
+      "stars": 24446,
+      "githubUrl": "https://github.com/sickn33/antigravity-awesome-skills/tree/main/skills/web-performance-optimization",
+      "upstreamName": "web-performance-optimization"
+    },
+    {
+      "name": "zustand-store-ts",
+      "skillName": "zustand-store-ts",
+      "origin": "project",
+      "path": ".claude/skills/zustand-store-ts",
+      "hasSkillMd": true,
+      "author": "sickn33",
+      "stars": 24446,
+      "githubUrl": "https://github.com/sickn33/antigravity-awesome-skills/tree/main/skills/zustand-store-ts",
+      "upstreamName": "zustand-store-ts"
     }
   ]
 }

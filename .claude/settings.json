@@ -1,40 +1,27 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/skill-reminder.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npx tsc --noEmit && npx tsc --noEmit -p tsconfig.client.json",
-            "timeout": 30
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
+    "additionalDirectories": [
+      "../SPO-Original"
+    ],
     "allow": [
       "Read",
       "Write",
       "Edit",
       "Grep",
       "Glob",
-      "Bash(npm *)",
+      "Bash(npm run *)",
+      "Bash(npm test*)",
+      "Bash(npm ci*)",
+      "Bash(npm install*)",
+      "Bash(npm ls*)",
+      "Bash(npm audit*)",
+      "Bash(npm outdated*)",
       "Bash(node *)",
-      "Bash(npx *)",
+      "Bash(npx tsc*)",
+      "Bash(npx jest*)",
+      "Bash(npx vite*)",
+      "Bash(npx esbuild*)",
+      "Bash(npx playwright*)",
       "Bash(git status*)",
       "Bash(git log*)",
       "Bash(git diff*)",
@@ -70,28 +57,12 @@
       "Bash(git reflog*)",
       "Bash(git reset*)",
       "Bash(ls *)",
-      "Bash(cat *)",
-      "Bash(pwd *)",
+      "Bash(pwd*)",
       "Bash(cd *)",
-      "Bash(find *)",
-      "Bash(grep *)",
-      "Bash(head *)",
-      "Bash(tail *)",
       "Bash(wc *)",
       "Bash(tree *)",
       "Bash(which *)",
-      "Bash(echo *)",
-      "Bash(powershell*Get-Content*SPO-Original*)",
-      "Bash(powershell*Get-ChildItem*SPO-Original*)",
-      "Bash(powershell*Select-String*SPO-Original*)",
-      "Bash(powershell*Test-Path*SPO-Original*)",
-      "Bash(powershell.exe*Get-Content*SPO-Original*)",
-      "Bash(powershell.exe*Get-ChildItem*SPO-Original*)",
-      "Bash(powershell.exe*Select-String*SPO-Original*)",
-      "Bash(powershell.exe*Test-Path*SPO-Original*)",
-      "Bash(cmd.exe*type*SPO-Original*)",
-      "Bash(cmd.exe*dir*SPO-Original*)",
-      "Bash(cmd.exe*findstr*SPO-Original*)"
+      "Bash(echo *)"
     ],
     "deny": [
       "Bash(git clean*)",
@@ -105,6 +76,42 @@
       "Bash(git push -f*)",
       "Bash(git reset --hard*)",
       "Bash(git branch -D*)"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/context-router.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/typecheck-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/sanctuarize.sh",
+            "timeout": 120
+          }
+        ]
+      }
     ]
   }
 }

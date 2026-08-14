@@ -1,74 +1,87 @@
 ---
 name: zustand-store-ts
-description: "Create Zustand stores with TypeScript, subscribeWithSelector middleware, and proper state/action separation. Use when building React state management, creating global stores, or implementing reacti..."
-risk: unknown
-source: community
-date_added: "2026-02-27"
+description: "TRIGGER: When creating or modifying a Zustand store in src/client/store/. Covers subscribeWithSelector, state/action separation, and the selector-stability rules that prevent React error #185."
+user-invokable: false
+disable-model-invocation: false
 ---
 
-# Zustand Store
+# Zustand Stores
 
-Create Zustand stores following established patterns with proper TypeScript types and middleware.
+Stores live in `src/client/store/` — one file per domain:
+`building`, `chat`, `empire`, `game`, `log`, `mail`, `politics`, `profile`, `search`,
+`transport`, `ui`. Tests sit beside them as `<name>-store.test.ts`.
 
-## Quick Start
+## Selector stability comes first
 
-Copy the template from assets/template.ts and replace placeholders:
-- `{{StoreName}}` → PascalCase store name (e.g., `Project`)
-- `{{description}}` → Brief description for JSDoc
+This is the highest-frequency real bug in the client, not a style preference. A selector
+that builds a new reference on every call causes React error #185 (maximum update depth
+exceeded) — an infinite re-render loop, not a warning.
 
-## Always Use subscribeWithSelector
+| Wrong | Right | Why |
+|-------|-------|-----|
+| `useStore((s) => s.data?.items ?? [])` | `useStore((s) => s.data?.items) ?? []` | Fallback **inside** the selector returns a fresh `[]` every render |
+| `useStore((s) => s.data?.obj ?? {})` | `useStore((s) => s.data?.obj) ?? {}` | Same, with `{}` |
+| `useStore((s) => s.items.filter(...))` | select `s.items`, then `useMemo` | `.filter()` allocates a new array every render |
+| `useStore((s) => ({ a: s.a, b: s.b }))` | two separate selector calls | Object literal is a new reference every time |
+
+**Rule:** never write `?? []`, `?? {}`, or `|| []` inside a selector body. Move the
+fallback outside the call. Cross-reference: `code-guardian` §B.
+
+## Always wrap in subscribeWithSelector
 
 ```typescript
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 
-export const useMyStore = create<MyStore>()(
+export const useGameStore = create<GameStore>()(
   subscribeWithSelector((set, get) => ({
     // state and actions
   }))
 );
 ```
 
-## Separate State and Actions
+Non-React code (the renderer, the WebSocket bridge) subscribes to slices directly, which
+requires this middleware:
 
 ```typescript
-export interface MyState {
-  items: Item[];
-  isLoading: boolean;
-}
-
-export interface MyActions {
-  addItem: (item: Item) => void;
-  loadItems: () => Promise<void>;
-}
-
-export type MyStore = MyState & MyActions;
-```
-
-## Use Individual Selectors
-
-```typescript
-// Good - only re-renders when `items` changes
-const items = useMyStore((state) => state.items);
-
-// Avoid - re-renders on any state change
-const { items, isLoading } = useMyStore();
-```
-
-## Subscribe Outside React
-
-```typescript
-useMyStore.subscribe(
-  (state) => state.selectedId,
-  (selectedId) => console.log('Selected:', selectedId)
+useGameStore.subscribe(
+  (state) => state.selectedBuildingId,
+  (id) => renderer.highlight(id)
 );
 ```
 
-## Integration Steps
+## Separate state from actions
 
-1. Create store in `src/frontend/src/store/`
-2. Export from `src/frontend/src/store/index.ts`
-3. Add tests in `src/frontend/src/store/*.test.ts`
+```typescript
+export interface BuildingState {
+  buildings: Building[];
+  isLoading: boolean;
+}
 
-## When to Use
-This skill is applicable to execute the workflow or actions described in the overview.
+export interface BuildingActions {
+  addBuilding: (b: Building) => void;
+  loadBuildings: () => Promise<void>;
+}
+
+export type BuildingStore = BuildingState & BuildingActions;
+```
+
+## Actions that reach the server
+
+A store action that mutates game state does not write to the socket itself — it goes
+through the bridge, which owns RDO framing and the request lifecycle. The full chain
+(`code-guardian` §E) must be complete before the UI element ships:
+
+```
+onClick → store action → bridge method → RDO command → response handler → store update → UI
+```
+
+Never leave an action that only sets local state when the server also needs to know.
+
+## Checklist
+
+- [ ] No `??`/`||` fallback inside any selector
+- [ ] `subscribeWithSelector` applied
+- [ ] State and action interfaces declared separately
+- [ ] No `any` — `unknown` in catch blocks, `toErrorMessage(err)` from `@/shared/error-utils`
+- [ ] Test added at `src/client/store/<name>-store.test.ts` (coverage floor 93%)

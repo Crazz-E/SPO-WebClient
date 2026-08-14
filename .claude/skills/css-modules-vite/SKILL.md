@@ -1,5 +1,5 @@
 ---
-name: css-modules
+name: css-modules-vite
 description: |
   CSS Modules with Lightning CSS and PostCSS for component-scoped styling.
   Covers *.module.css patterns, TypeScript integration, Vite configuration, and composition.

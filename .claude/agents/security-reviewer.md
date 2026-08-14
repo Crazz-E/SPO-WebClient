@@ -1,6 +1,8 @@
 ---
 name: security-reviewer
-description: Security audit for WebSocket authentication, RDO protocol parsing, session management, and OWASP Top 10 vulnerabilities
+description: Security audit for WebSocket authentication, RDO protocol parsing, session management, and OWASP Top 10 vulnerabilities. Read-only — reports findings ranked by severity, does not edit.
+tools: Read, Grep, Glob, Bash
+model: opus
 ---
 
 # Security Reviewer Subagent

@@ -1,6 +1,8 @@
 ---
 name: performance-analyzer
-description: Analyze performance bottlenecks in isometric rendering, chunk caching, and frame-budget systems
+description: Analyze performance bottlenecks in the Canvas 2D isometric renderer, chunk caching, and frame-budget systems. Read-only — reports measurements and recommendations, does not edit.
+tools: Read, Grep, Glob, Bash
+model: opus
 ---
 
 # Performance Analyzer Subagent
