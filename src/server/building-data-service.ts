@@ -1,7 +1,8 @@
 /**
  * Building Data Service - Manages building metadata from CLASSES.BIN
  *
- * Source: cache/BuildingClasses/CLASSES.BIN (863 entries with correct texture paths)
+ * Source: cache/BuildingClasses/CLASSES.BIN (863+ entries — the cache asset is
+ * re-synced from the live server and its count grows over time)
  *
  * CLASSES.BIN is the SOLE AUTHORITATIVE source for VisualClass → texture mapping.
  * It contains 100% of building classes (construction + complete + all variants).
@@ -68,7 +69,7 @@ export class BuildingDataService implements Service {
     try {
       logger.info('[BuildingDataService] Initializing...');
 
-      // Load CLASSES.BIN (sole authoritative source — all 863 building classes)
+      // Load CLASSES.BIN (sole authoritative source — all building classes)
       const classesBinPath = path.join(getCacheDir(), 'BuildingClasses/CLASSES.BIN');
       if (fs.existsSync(classesBinPath)) {
         this.loadFromClassesBin(classesBinPath);
