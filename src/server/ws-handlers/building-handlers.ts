@@ -32,6 +32,7 @@ import {
 } from '../../shared/types';
 import * as ErrorCodes from '../../shared/error-codes';
 import { toErrorMessage } from '../../shared/error-utils';
+import { assertValidRdoIdentifier } from '../../shared/rdo-types';
 import type { WsHandlerContext } from './types';
 import { sendResponse, sendError, withErrorHandler } from './ws-utils';
 
@@ -119,7 +120,10 @@ export async function handlePlaceBuilding(ctx: WsHandlerContext, msg: WsMessage)
         wsRequestId: msg.wsRequestId,
         x: req.x,
         y: req.y,
-        buildingId: result.buildingId || '',
+        // M-A: the protocol never returns the new building's id (World.pas:3562
+        // discards it into a variable named `Useless`). Coercing null to '' turned
+        // "unknown" into a plausible-looking empty id; the field is optional now.
+        ...(result.buildingId !== null && { buildingId: result.buildingId }),
       };
       sendResponse(ctx.ws, response);
     } else {
@@ -141,7 +145,10 @@ export async function handleBuildCapitol(ctx: WsHandlerContext, msg: WsMessage):
         wsRequestId: msg.wsRequestId,
         x: req.x,
         y: req.y,
-        buildingId: result.buildingId || '',
+        // M-A: the protocol never returns the new building's id (World.pas:3562
+        // discards it into a variable named `Useless`). Coercing null to '' turned
+        // "unknown" into a plausible-looking empty id; the field is optional now.
+        ...(result.buildingId !== null && { buildingId: result.buildingId }),
       };
       sendResponse(ctx.ws, response);
     } else {
@@ -203,6 +210,18 @@ export async function handleBuildingSetProperty(ctx: WsHandlerContext, msg: WsMe
   console.log(`[Gateway] Setting building property ${req.propertyName}=${req.value} at (${req.x}, ${req.y})`);
 
   await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_AccessDenied, async () => {
+    // Frontier allow-list (P-H3): `propertyName` becomes an RDO member name
+    // verbatim (building-property-handler.ts:147-174 — `set <name>` or the
+    // fallback `call <name>`). Delphi's ReadIdent stops at the first invalid
+    // character and the remainder is re-parsed as sub-commands
+    // (RDOUtils.pas:127-145 + RDOQueryServer.pas:133-160). Reject here so the
+    // request never reaches the session, in addition to the guard inside
+    // RdoCommand.call/set.
+    assertValidRdoIdentifier(req.propertyName, 'propertyName');
+    if (req.additionalParams?.propertyName !== undefined) {
+      assertValidRdoIdentifier(req.additionalParams.propertyName, 'additionalParams.propertyName');
+    }
+
     const result = await ctx.session.setBuildingProperty(
       req.x,
       req.y,
@@ -217,6 +236,11 @@ export async function handleBuildingSetProperty(ctx: WsHandlerContext, msg: WsMe
       success: result.success,
       propertyName: req.propertyName,
       newValue: result.newValue,
+      // M-E: `success` only says the command went out without throwing.
+      // `confirmed` says the server was re-read and actually holds the new
+      // value. The two used to be conflated, and `newValue` echoed the request
+      // when the read-back was empty — so a discarded mutation was invisible.
+      confirmed: result.confirmed,
     };
     sendResponse(ctx.ws, response);
   });

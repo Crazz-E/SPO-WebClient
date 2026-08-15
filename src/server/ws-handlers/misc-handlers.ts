@@ -23,6 +23,8 @@ import {
   SessionPhase,
 } from '../../shared/types';
 import * as ErrorCodes from '../../shared/error-codes';
+import { RdoVerb, RdoAction } from '../../shared/types';
+import { assertValidRdoIdentifier } from '../../shared/rdo-types';
 import type { WsHandlerContext, WsHandler } from './types';
 import { sendResponse, sendError, withErrorHandler } from './ws-utils';
 
@@ -151,6 +153,32 @@ export const handleEmpireFacilities: WsHandler = async (ctx: WsHandlerContext, m
 
 const RDO_DIRECT_BURST = 10;
 const RDO_DIRECT_TOKENS_PER_SEC = 5;
+
+/**
+ * Members this endpoint may `call`.
+ *
+ * An allowlist, not a blocklist, and the distinction is the whole point. This
+ * path forces the `"^"` separator — `WsReqRdoDirect` carries no separator field,
+ * so `RdoProtocol.format` falls back to METHOD_SEPARATOR once `sendRdoRequest`
+ * assigns a rid. `"^"` on a Delphi `procedure` freezes the shared Interface
+ * Server, and a single frame is enough (live-proven 2026-08-15).
+ *
+ * `assertNotVariantOnVoidMember` cannot defend this path: it only fires for
+ * names already known to be void, so any *unlisted* procedure sails through.
+ * Published procedures reachable by a forged WebSocket message included
+ * `SetViewedArea`, `SetTycoonCookie`, `CloneFacility`, `VoiceThis` and
+ * `DisconnectUser` (Interface Server/InterfaceServer.pas:144,163,164,180,262).
+ *
+ * Only `call` is constrained: `get` emits no separator and `set` uses `=`.
+ *
+ * Every entry must be a Delphi `function`, with its declaration cited. When the
+ * probe harness (lot L9-pré) needs another member, add it here with its Pascal
+ * signature — never widen the check instead.
+ */
+const RDO_DIRECT_CALLABLE_MEMBERS: ReadonlyMap<string, string> = new Map([
+  ['ObjectAt', 'function ObjectAt( x, y : integer ) : OleVariant — InterfaceServer.pas:146'],
+  ['GetTycoonCookie', 'function GetTycoonCookie( TycoonId : integer; CookieName : widestring ) : OleVariant — InterfaceServer.pas:162'],
+]);
 const rdoDirectBuckets = new WeakMap<object, { tokens: number; lastRefill: number }>();
 
 /** @internal Exported for testing. Returns false when the session is over its budget. */
@@ -180,12 +208,40 @@ export const handleRdoDirect: WsHandler = async (ctx: WsHandlerContext, msg: WsM
 
     const req = msg as WsReqRdoDirect;
 
-    if (!['get', 'set', 'call', 'sel'].includes(req.verb)) {
-      throw new Error(`Invalid RDO verb: ${req.verb}`);
+    // The grammar's two axes are distinct: RdoVerb selects the object (idof /
+    // sel), RdoAction selects what to do with it (get / set / call). The old
+    // list conflated them — it rejected the legitimate `idof` and accepted
+    // three values that are not verbs at all.
+    if (!Object.values(RdoVerb).includes(req.verb as RdoVerb)) {
+      throw new Error(`Invalid RDO verb: ${req.verb} (expected ${Object.values(RdoVerb).join(' or ')})`);
     }
 
     if (!req.targetId || !req.action || !req.member) {
       throw new Error('Missing required RDO fields: targetId, action, and member are required');
+    }
+
+    // This handler writes the whole frame body from browser input, so every
+    // field that lands unquoted in the frame is validated here as well as at
+    // the RdoProtocol.format() chokepoint (P-H3 / P-M2). All four matter:
+    // member, targetId and action are spliced in unquoted, so an unvalidated
+    // one becomes a second sub-command that the server's ExecQuery loop runs
+    // (RDOQueryServer.pas:133-160).
+    assertValidRdoIdentifier(req.member, 'member');
+    if (!/^\d+$/.test(req.targetId)) {
+      throw new Error(`Invalid RDO target ID: ${req.targetId} (expected a decimal object id)`);
+    }
+    if (!Object.values(RdoAction).includes(req.action as RdoAction)) {
+      throw new Error(`Invalid RDO action: ${req.action} (expected ${Object.values(RdoAction).join(', ')})`);
+    }
+
+    // `call` through this path always emits "^" (see RDO_DIRECT_CALLABLE_MEMBERS),
+    // which freezes the server on a Delphi `procedure`. Allowlist, not blocklist.
+    if (req.action === RdoAction.CALL && !RDO_DIRECT_CALLABLE_MEMBERS.has(req.member)) {
+      throw new Error(
+        `Member "${req.member}" may not be called through REQ_RDO_DIRECT. This path emits the ` +
+        `"^" separator, which freezes the shared Delphi server on a procedure. Allowed: ` +
+        `${[...RDO_DIRECT_CALLABLE_MEMBERS.keys()].join(', ')}.`
+      );
     }
 
     const result = await ctx.session.executeRdo('world', {

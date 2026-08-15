@@ -4,7 +4,22 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { RdoValue, RdoParser, RdoCommand, rdoArgs, RdoTypePrefix } from './rdo-types';
+import {
+  RdoValue,
+  RdoParser,
+  RdoCommand,
+  rdoArgs,
+  RdoTypePrefix,
+  RdoIdentifierError,
+  RDO_IDENTIFIER_PATTERN,
+  RDO_TYPE_PREFIXES,
+  assertValidRdoIdentifier,
+  encodeRdoLiteral,
+  isRdoTypePrefix,
+  isValidRdoIdentifier,
+  isWellFormedRdoLiteral,
+} from './rdo-types';
+import { ERROR_InvalidParameter, getErrorMessage } from './error-codes';
 
 describe('RdoValue', () => {
   describe('int() - Integer values (OrdinalId)', () => {
@@ -490,6 +505,55 @@ describe('RdoCommand', () => {
     });
   });
 
+  // P-L4 — QueryId and separator are two independent axes
+  // (doc/rdo-protocol-architecture.md §8.5). withRequestId() used to overwrite
+  // the separator unconditionally, which made the reference client's void form
+  // — `C 2174 sel 30430748 call AddLine "*" "%test message";` → `A2174 ;`
+  // [capture :3542-3543] — impossible to express with RdoCommand.
+  describe('QueryId × separator decoupling (P-L4)', () => {
+    it('does not overwrite an explicit push() when a request ID is added', () => {
+      const cmd = RdoCommand.sel(30430748)
+        .call('AddLine')
+        .push()
+        .withRequestId(2174)
+        .args(RdoValue.string('test message'))
+        .build();
+      expect(cmd).toBe('C 2174 sel 30430748 call AddLine "*" "%test message";');
+    });
+
+    it('accepts push() after withRequestId() too — order must not matter', () => {
+      const cmd = RdoCommand.sel(30430748)
+        .call('AddLine')
+        .withRequestId(2174)
+        .push()
+        .args(RdoValue.string('test message'))
+        .build();
+      expect(cmd).toBe('C 2174 sel 30430748 call AddLine "*" "%test message";');
+    });
+
+    it('keeps the "^" default when no separator was stated explicitly', () => {
+      expect(RdoCommand.sel(100).call('M').withRequestId(7).build())
+        .toBe('C 7 sel 100 call M "^";');
+    });
+
+    it('does not overwrite an explicit method() either', () => {
+      expect(RdoCommand.sel(100).call('M').method().withRequestId(7).build())
+        .toBe('C 7 sel 100 call M "^";');
+    });
+
+    it('still defaults to "*" with no request ID and no explicit separator', () => {
+      expect(RdoCommand.sel(100).call('M').build()).toBe('C sel 100 call M "*";');
+    });
+
+    it('never produces the one unsafe form — "^" without a QueryId', () => {
+      // withRequestId only ever ADDS a QueryId, so it cannot create row 4 of the
+      // §8.5 matrix. Reaching "^" without a rid still requires an explicit
+      // method() call, which is unchanged behaviour.
+      const cmd = RdoCommand.sel(100).call('M').withRequestId(9).build();
+      expect(cmd.startsWith('C 9 ')).toBe(true);
+    });
+  });
+
   describe('Complex real-world examples', () => {
     it('should build RDOSetPrice command', () => {
       const cmd = RdoCommand.sel(100575368)
@@ -596,5 +660,119 @@ describe('RdoCommand', () => {
     it('should accept valid string ID', () => {
       expect(() => RdoCommand.sel('100575368')).not.toThrow();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lot L2 — the boundary primitives exported for rdo.ts and for lot L5
+// ---------------------------------------------------------------------------
+
+describe('RDO_TYPE_PREFIXES / isRdoTypePrefix', () => {
+  it('lists exactly the seven wire prefixes', () => {
+    expect([...RDO_TYPE_PREFIXES].sort()).toEqual(['!', '#', '$', '%', '*', '@', '^']);
+  });
+
+  it('recognises each of them, and only single characters', () => {
+    for (const p of RDO_TYPE_PREFIXES) expect(isRdoTypePrefix(p)).toBe(true);
+    expect(isRdoTypePrefix('a')).toBe(false);
+    expect(isRdoTypePrefix('')).toBe(false);
+    expect(isRdoTypePrefix('##')).toBe(false);
+  });
+});
+
+describe('encodeRdoLiteral', () => {
+  it('narrows to the wire alphabet BEFORE escaping (RDOUtils.pas:379)', () => {
+    // U+0122 truncates to 0x22 '"' under a naive latin1 write. Narrowing first
+    // turns it into '?', so no metacharacter can be forged after escaping.
+    expect(encodeRdoLiteral('%', 'a\u0122b')).toBe('"%a?b"');
+  });
+
+  it('doubles internal quotes (RDOUtils.pas:246-254)', () => {
+    expect(encodeRdoLiteral('%', 'say "hi"')).toBe('"%say ""hi"""');
+  });
+
+  it('leaves Latin-1 accents untouched', () => {
+    expect(encodeRdoLiteral('%', 'déjà vu')).toBe('"%déjà vu"');
+  });
+
+  it('is what RdoValue.format() emits', () => {
+    expect(RdoValue.string('a"b').format()).toBe(encodeRdoLiteral('%', 'a"b'));
+    expect(RdoValue.int(-1).format()).toBe(encodeRdoLiteral('#', '-1'));
+  });
+});
+
+describe('isWellFormedRdoLiteral', () => {
+  it('accepts anything RdoValue.format() produces', () => {
+    for (const v of [
+      RdoValue.int(42), RdoValue.string(''), RdoValue.string('say "hi"'),
+      RdoValue.string('a;b,c'), RdoValue.float(3.14), RdoValue.void(),
+      RdoValue.stringId('x'), RdoValue.double(1.5), RdoValue.variant('v'),
+    ]) {
+      expect(isWellFormedRdoLiteral(v.format())).toBe(true);
+    }
+  });
+
+  it('rejects a token that closes its literal early', () => {
+    expect(isWellFormedRdoLiteral('"%evil" call Evil "*" "')).toBe(false);
+    expect(isWellFormedRdoLiteral('"%a""')).toBe(false);
+    expect(isWellFormedRdoLiteral('"%a"b"')).toBe(false);
+  });
+
+  it('rejects tokens without quotes or without a type prefix', () => {
+    expect(isWellFormedRdoLiteral('%hello')).toBe(false);
+    expect(isWellFormedRdoLiteral('"hello"')).toBe(false);
+    expect(isWellFormedRdoLiteral('')).toBe(false);
+    expect(isWellFormedRdoLiteral('"')).toBe(false);
+  });
+
+  it('matches in linear time on a long hostile token', () => {
+    // The alternation is unambiguous, so there is no backtracking blowup.
+    const started = Date.now();
+    expect(isWellFormedRdoLiteral(`"%${'a"'.repeat(20000)}`)).toBe(false);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+});
+
+describe('assertValidRdoIdentifier / isValidRdoIdentifier (P-H3, contract for lot L5)', () => {
+  it('exposes the Delphi grammar as a pattern', () => {
+    expect(RDO_IDENTIFIER_PATTERN.source).toBe('^[A-Za-z_][A-Za-z0-9_]*$');
+  });
+
+  it.each(['RDOOpenSession', '_x', 'a1', 'Tax0Id', 'EnableEvents'])('accepts %j', (name) => {
+    expect(isValidRdoIdentifier(name)).toBe(true);
+    expect(() => assertValidRdoIdentifier(name)).not.toThrow();
+  });
+
+  it.each(['', '1a', 'a b', 'a;', 'a.b', 'a-b', 'a"', 'a\tb', 'a=1'])('rejects %j', (name) => {
+    expect(isValidRdoIdentifier(name)).toBe(false);
+    expect(() => assertValidRdoIdentifier(name)).toThrow(RdoIdentifierError);
+  });
+
+  it('rejects non-string input without throwing a TypeError', () => {
+    expect(isValidRdoIdentifier(undefined)).toBe(false);
+    expect(isValidRdoIdentifier(42)).toBe(false);
+    expect(isValidRdoIdentifier(null)).toBe(false);
+  });
+
+  it('carries identifier, context and a protocol error code', () => {
+    const err = (() => {
+      try {
+        assertValidRdoIdentifier('Foo Bar', 'propertyName');
+        return null;
+      } catch (e: unknown) {
+        return e as RdoIdentifierError;
+      }
+    })();
+    expect(err).toBeInstanceOf(RdoIdentifierError);
+    expect(err!.identifier).toBe('Foo Bar');
+    expect(err!.context).toBe('propertyName');
+    expect(err!.errorCode).toBe(ERROR_InvalidParameter);
+    expect(getErrorMessage(err!.errorCode)).toBe('Invalid parameter');
+    expect(err!.message).toContain('propertyName');
+    expect(err!.message).toContain('RDOUtils.pas:70-78');
+  });
+
+  it('defaults the context label to "member"', () => {
+    expect(() => assertValidRdoIdentifier('a b')).toThrow(/for member/);
   });
 });

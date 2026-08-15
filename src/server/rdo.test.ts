@@ -6,6 +6,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { RdoFramer, RdoProtocol } from './rdo';
 import { RdoVerb, RdoAction } from '../shared/types';
+import { RdoIdentifierError } from '../shared/rdo-types';
 
 describe('RdoFramer', () => {
   describe('ingest() - Packet framing and buffering', () => {
@@ -664,10 +665,22 @@ describe('RdoProtocol.format()', () => {
     });
 
     it('should preserve get commands', () => {
-      const original = 'C 1234 sel 456 get srvName;';
+      // parse() consumes FRAMED messages: RdoFramer.ingest() has already stripped
+      // the ';' terminator (rdo.ts:75). Feeding the terminator in leaves it glued
+      // to the member name — 'srvName;' — which format() now rejects as a
+      // non-identifier (P-H3). Frame it the way production does.
+      const [original] = new RdoFramer().ingest('C 1234 sel 456 get srvName;');
       const parsed = RdoProtocol.parse(original);
       const formatted = RdoProtocol.format(parsed);
-      expect(formatted).toBe('C 1234 sel 456 get srvName;');
+      expect(formatted).toBe('C 1234 sel 456 get srvName');
+    });
+
+    it('rejects a member name still carrying the frame terminator', () => {
+      // Regression guard for the artifact above: an unframed string must not be
+      // silently re-emitted with ';' embedded in the member name.
+      const parsed = RdoProtocol.parse('C 1234 sel 456 get srvName;');
+      expect(parsed.member).toBe('srvName;');
+      expect(() => RdoProtocol.format(parsed)).toThrow(RdoIdentifierError);
     });
   });
 

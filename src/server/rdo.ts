@@ -9,8 +9,20 @@ import {
   RdoValue,
   RdoParser,
   RdoCommand,
-  RdoTypePrefix
+  assertValidRdoIdentifier,
+  encodeRdoLiteral,
+  isRdoTypePrefix,
+  isWellFormedRdoLiteral
 } from '../shared/rdo-types';
+import { decodeAnsi } from '../shared/cp1252';
+
+/**
+ * The three actions the grammar admits (§1.3). Kept as a runtime set because
+ * `RdoAction` is erased at compile time: WebSocket messages arrive as plain
+ * `JSON.parse` output, so the type annotation guarantees nothing about what
+ * actually reaches `format()`.
+ */
+const RDO_ACTIONS: ReadonlySet<string> = new Set(Object.values(RdoAction));
 
 /**
  * RDO Protocol Engine
@@ -43,13 +55,31 @@ export class RdoFramer {
   }
 
   public ingest(chunk: Buffer | string): string[] {
-    this.buffer += chunk.toString('latin1');
+    // decodeAnsi, not toString('latin1') — the read half of P-H2. latin1 maps
+    // every byte to the code point of the same value, so 0x93 (what a Delphi
+    // client sends for `"`) arrived as U+0093, a C1 control, and rendered as
+    // mojibake. Metacharacters are ASCII, so framing is unaffected either way.
+    this.buffer += typeof chunk === 'string' ? chunk : decodeAnsi(chunk);
 
     // Guard against unbounded buffer growth (malformed packets with unclosed quotes)
+    //
+    // P-L6: this used to do `this.buffer = ''` and `return []`, discarding the
+    // COMPLETE frames sitting at the head of the buffer along with the corrupt
+    // tail. Overflow means one frame never terminated; everything before its
+    // start is intact and already parsed by the loop below. Losing those is a
+    // silent data loss on top of the corruption — and the responses they carry
+    // are requests that then wait out their full timeout (see P-L7).
+    //
+    // Keep the parsed prefix, drop only from the last frame boundary onward.
     if (this.buffer.length > RdoFramer.MAX_BUFFER_SIZE) {
-      console.error(`[RdoFramer] Buffer exceeded ${RdoFramer.MAX_BUFFER_SIZE} bytes, clearing to prevent memory exhaustion`);
-      this.buffer = '';
-      return [];
+      const lastBoundary = this.buffer.lastIndexOf(RDO_CONSTANTS.PACKET_DELIMITER);
+      const salvaged = lastBoundary >= 0 ? this.buffer.slice(0, lastBoundary + 1) : '';
+      console.error(
+        `[RdoFramer] Buffer exceeded ${RdoFramer.MAX_BUFFER_SIZE} bytes; ` +
+        `discarding ${this.buffer.length - salvaged.length} bytes of unterminated tail, ` +
+        `keeping ${salvaged.length} bytes of complete frames`
+      );
+      this.buffer = salvaged;
     }
 
     const messages: string[] = [];
@@ -342,20 +372,45 @@ export class RdoProtocol {
       if (packet.verb === RdoVerb.SEL && (!packet.targetId || packet.targetId === '0')) {
         throw new Error(`Invalid RDO target ID: ${packet.targetId} (sel 0 is a null pointer on the server)`);
       }
-      // CRITICAL FIX: For idof, the targetId MUST be in quotes
+      // Object ids are Delphi pointers rendered as decimal (RDOObjectServer.pas
+      // registration). Anything else is a caller-supplied string being spliced
+      // into the frame unquoted — `42 call Evil "*" "` would be a second
+      // sub-command. `handleRdoDirect` relays `targetId` straight from the
+      // browser (ws-handlers/misc-handlers.ts:191-197), so this is reachable.
+      if (packet.verb === RdoVerb.SEL && !/^\d+$/.test(packet.targetId!)) {
+        throw new Error(`Invalid RDO target ID: ${packet.targetId} (sel takes a decimal object id)`);
+      }
+      // CRITICAL FIX: For idof, the targetId MUST be in quotes.
+      // The name is a bare quoted string (no type prefix) — `idof "DirectoryServer"`
+      // [capture :8] — so its own quotes must be doubled or it breaks out.
       if (packet.verb === RdoVerb.IDOF && packet.targetId) {
-        parts.push(`"${packet.targetId}"`);
+        parts.push(`"${packet.targetId.replace(/"/g, '""')}"`);
       } else if (packet.targetId) {
         parts.push(packet.targetId);
       }
     }
 
-    // 3. Action
+    // 3. Action — spliced in unquoted at the <SubCmd> position of the grammar
+    // (§1.3), the very position the `repeat … until QueryTerm` loop of
+    // ExecQuery re-iterates (RDOQueryServer.pas:133-160). An unvalidated value
+    // is therefore a second sub-command, exactly like member and targetId were.
+    // Reachable: handleRdoDirect relays req.action verbatim from the browser,
+    // and `action?: RdoAction` is a compile-time type only — WS messages are
+    // plain JSON.parse with no schema.
     if (packet.action) {
+      if (!RDO_ACTIONS.has(packet.action)) {
+        throw new Error(
+          `Invalid RDO action: ${JSON.stringify(packet.action)} (expected get, set or call)`
+        );
+      }
       parts.push(packet.action);
 
-      // 4. Member (Method/Property)
+      // 4. Member (Method/Property). Delphi's ReadIdent (RDOUtils.pas:70-78)
+      // stops at the first non-identifier character and feeds the remainder back
+      // to the sub-command loop, so an unvalidated name is a code-execution
+      // primitive, not a parse error (P-H3).
       if (packet.member) {
+        assertValidRdoIdentifier(packet.member, packet.action);
         if (packet.action === RdoAction.SET) {
           // Simplified SET format
           parts.push(`${packet.member}=${this.formatTypedToken(packet.args?.[0] || '')}`);
@@ -370,10 +425,15 @@ export class RdoProtocol {
           ? packet.separator
           : (packet.rid !== undefined ? RDO_CONSTANTS.METHOD_SEPARATOR : RDO_CONSTANTS.PUSH_SEPARATOR);
 
-        // CRITICAL FIX: Separator must be quoted in protocol
-        // Convert ^, *, etc to "^", "*"
-        const quotedSeparator = separator.startsWith('"') ? separator : `"${separator.replace(/"/g, '')}"`;
-        parts.push(quotedSeparator);
+        // CRITICAL FIX: Separator must be quoted in protocol — convert ^, * to "^", "*".
+        // Only the two ReturnMarker literals of the grammar (§1.3) are accepted:
+        // the separator is spliced into the frame unquoted, so a free-form value
+        // would be one more injection point (same family as P-M2).
+        const bareSeparator = separator.replace(/"/g, '');
+        if (bareSeparator !== '^' && bareSeparator !== '*') {
+          throw new Error(`Invalid RDO separator: ${JSON.stringify(separator)} (expected "^" or "*")`);
+        }
+        parts.push(`"${bareSeparator}"`);
 
         // Format arguments with proper quoting
         if (packet.args && packet.args.length > 0) {
@@ -392,33 +452,69 @@ export class RdoProtocol {
 
 
   /**
-   * Format typed token with proper quoting per RDO spec
-   * Uses RdoValue/RdoParser for consistent type handling
+   * Format one argument into exactly one RDO literal.
+   *
+   * ## Invariant (P-M2, `report/rdo-audit-2026-08-14-annexe-moyennes-basses.md` §1)
+   *
+   * **Whatever `val` contains, the returned token is a single balanced RDO
+   * literal.** It can never terminate its own quotes early, so it can never
+   * become a second sub-command of the enclosing `sel` — which the Delphi
+   * `ExecQuery` loop would happily execute (`RDOQueryServer.pas:133-160`).
+   *
+   * Before this rewrite two branches broke that invariant by returning a token
+   * verbatim whenever it merely *started* with a type prefix, without doubling
+   * its internal `"`. Reachable pre-authentication through `username` / `pass`
+   * (`session/login-handler.ts:198,202`), and in pure ASCII — so the L1 codec
+   * did not close it.
+   *
+   * ## Byte-identity
+   *
+   * For every input that contains no `"` the output is bit-for-bit what the
+   * previous implementation produced; likewise for any token already emitted by
+   * `RdoValue.format()`, which is well-formed by construction and passed through
+   * untouched (step 1). Only malformed / hostile tokens change — and only to
+   * become correctly escaped.
+   *
+   * @param val             raw argument, possibly already an RDO literal
+   * @param autoTypeNumeric SET only: bare integers become `"#n"`. Kept ON for
+   *                        SET — `set EnableEvents` relies on it (O-L7).
    */
   private static formatTypedToken(val: string, autoTypeNumeric = true): string {
-    // If already fully formatted with quotes and type prefix, return as-is
-    if (val.startsWith('"') && val.endsWith('"')) {
-      const extracted = RdoParser.extract(val);
-      if (extracted.prefix) {
-        return val; // Already properly formatted
-      }
+    // 1. Already exactly one complete, correctly escaped literal (the normal
+    //    case for anything built with RdoValue.format()). Pass through
+    //    untouched — re-encoding here would run encodeAnsi a second time, which
+    //    is lossy once the CP1252 band is active (shared/cp1252.ts, lot L11).
+    if (isWellFormedRdoLiteral(val)) {
+      return val;
     }
 
-    // Strip any existing outer quotes for re-processing
+    // 2. Bare typed token, no quotes anywhere: `#42`, `%Inbox`, `!3.14`.
+    //    Quoting is all that is missing, and with no `"` in the value there is
+    //    nothing to escape — byte-identical to the previous behaviour, and no
+    //    transcoding pass is introduced where there was none.
+    if (isRdoTypePrefix(val.charAt(0)) && !val.includes('"')) {
+      return `"${val}"`;
+    }
+
+    // 3. Everything else is untrusted text. Strip a stray pair of outer quotes
+    //    (an unbalanced literal — a well-formed one was caught by step 1), then
+    //    re-emit through the single escaping chokepoint.
     let cleaned = val;
-    if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+    if (cleaned.length >= 2 && cleaned.startsWith('"') && cleaned.endsWith('"')) {
       cleaned = cleaned.substring(1, cleaned.length - 1);
     }
 
-    // If already has type prefix but no quotes, wrap it
-    const knownPrefixes = Object.values(RdoTypePrefix) as string[];
-    if (knownPrefixes.includes(cleaned.charAt(0))) {
-      return `"${cleaned}"`;
+    // 3a. Caller declared a type prefix but the body carries a quote: honour the
+    //     declared type, escape the body. Same prefix as before the fix, same
+    //     bytes whenever the body is quote-free — but now unbreakable.
+    const declaredPrefix = cleaned.charAt(0);
+    if (isRdoTypePrefix(declaredPrefix)) {
+      return encodeRdoLiteral(declaredPrefix, cleaned.substring(1));
     }
 
-    // Auto-type numeric values only for SET operations (property assignments).
-    // CALL args default to OLEString — numeric usernames/passwords must remain
-    // as "%12345" not "#12345" (Delphi Logon expects OLEString parameters).
+    // 3b. Auto-type numeric values only for SET operations (property assignments).
+    //     CALL args default to OLEString — numeric usernames/passwords must remain
+    //     as "%12345" not "#12345" (Delphi Logon expects OLEString parameters).
     if (autoTypeNumeric && /^-?\d+$/.test(cleaned)) {
       return RdoValue.int(parseInt(cleaned, 10)).format();
     }

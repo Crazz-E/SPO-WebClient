@@ -116,6 +116,8 @@ export function getErrorMessage(errorCode: number): string {
       return 'Request denied';
     case ERROR_ZoneMissmatch:
       return 'Zone mismatch';
+    case ERROR_InvalidParameter:
+      return 'Invalid parameter';
     case ERROR_InsuficientSpace:
       return 'Insufficient space';
     case ERROR_CannotRegisterEvents:
