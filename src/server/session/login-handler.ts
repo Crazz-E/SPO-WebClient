@@ -21,6 +21,7 @@ import {
   cleanPayload as cleanPayloadHelper,
   writeRdoFrame,
 } from '../rdo-helpers';
+import { RDO_PREFIX_STRIP } from '../../shared/rdo-types';
 
 // ── Login Context ───────────────────────────────────────────────────────────
 
@@ -195,11 +196,15 @@ async function performDirectoryAuth(ctx: LoginContext, username: string, pass: s
     // 2. Map & Logon
     await sendDirectoryRequest(ctx, 'directory_auth',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOMapSegaUser',
-      args: [username],
+      // Explicit OLEString: credentials are the earliest attacker-controlled text
+      // on the wire (pre-authentication). A raw string would be re-interpreted by
+      // formatTypedToken as a typed literal whenever it starts with # $ ^ ! @ % *
+      // — the type-confusion half of P-M2. Delphi signature is widestring.
+      args: [RdoValue.string(username).format()],
     });
     const logonPacket = await sendDirectoryRequest(ctx, 'directory_auth',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOLogonUser',
-      args: [username, pass],
+      args: [RdoValue.string(username).format(), RdoValue.string(pass).format()],
     });
     const res = parsePropertyResponseHelper(logonPacket.payload || '', 'res');
     const authCode = parseInt(res, 10);
@@ -235,7 +240,8 @@ async function performDirectoryQuery(ctx: LoginContext, zonePath?: string): Prom
     const worldPath = zonePath || 'Root/Areas/Asia/Worlds';
     const queryPacket = await sendDirectoryRequest(ctx, 'directory_query',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOQueryKey',
-      args: [worldPath, DIRECTORY_QUERY.QUERY_BLOCK],
+      // zonePath is relayed from the browser (REQ_WORLD_LIST) — explicit OLEString.
+      args: [RdoValue.string(worldPath).format(), RdoValue.string(DIRECTORY_QUERY.QUERY_BLOCK).format()],
     });
     const resValue = parsePropertyResponseHelper(queryPacket.payload || '', 'res');
     const worlds = parseDirectoryResult(ctx, resValue);
@@ -282,13 +288,19 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
     const worldPath = `${cachedZonePath}/${worldName}`;
     await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOSetCurrentKey',
-      args: [worldPath],
+      args: [RdoValue.string(worldPath).format()],
     });
 
-    // 4. Search for matching keys under the world
+    // 4. Search for matching keys under the world.
+    //    P-M1: the pattern MUST carry the OLEString prefix explicitly. Passed raw,
+    //    its leading `*` was read as the VoidId type prefix, and the Delphi decoder
+    //    returns `Unassigned` for VoidId (RDOUtils.pas:351-352) — the search pattern
+    //    was destroyed before RDOSearchKey(SearchPattern, ValueNameList: widestring)
+    //    ever saw it (Directory Server/DirectoryServer.pas:78). Wire form must be
+    //    "%*<pattern>*", never "*<pattern>*".
     const searchPacket = await sendDirectoryRequest(ctx, 'directory_search',{
       verb: RdoVerb.SEL, targetId: sessionId, action: RdoAction.CALL, member: 'RDOSearchKey',
-      args: [`*${searchStr}*`, ''],
+      args: [RdoValue.string(`*${searchStr}*`).format(), RdoValue.string('').format()],
     });
     const resValue = parsePropertyResponseHelper(searchPacket.payload || '', 'res');
 
@@ -357,7 +369,8 @@ export async function loginWorld(
     targetId: interfaceServerId,
     action: RdoAction.CALL,
     member: 'AccountStatus',
-    args: [username, pass],
+    // Explicit OLEString — see performDirectoryAuth (P-M2).
+    args: [RdoValue.string(username).format(), RdoValue.string(pass).format()],
   });
   const statusPayload = parsePropertyResponseHelper(statusPacket.payload!, 'res');
   ctx.log.debug(`[Session] AccountStatus: ${statusPayload}`);
@@ -368,7 +381,7 @@ export async function loginWorld(
     targetId: interfaceServerId,
     action: RdoAction.CALL,
     member: 'Logon',
-    args: [username, pass],
+    args: [RdoValue.string(username).format(), RdoValue.string(pass).format()],
   });
 
   let contextId = cleanPayloadHelper(logonPacket.payload!);
@@ -494,14 +507,29 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
     ctx.log.debug(`[Session] Current company set: ${matched.name}`);
   }
 
-  // 1. EnableEvents (set to -1 to activate)
-  await ctx.sendRdoRequest('world', {
+  // 1. EnableEvents (set to -1 to activate).
+  //    Explicit RdoValue.int: this used to lean on formatTypedToken's implicit
+  //    numeric auto-typing for SET (O-L7). The bytes are identical ("#-1"), but
+  //    the dependency was invisible — and a silent fallback to "%-1" would kill
+  //    every push with no error anywhere.
+  const enableEvents = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL,
     targetId: worldContextId,
     action: RdoAction.SET,
     member: 'EnableEvents',
-    args: ['-1'],
+    args: [RdoValue.int(-1).format()],
   });
+  // P-L1: the reply used to be discarded. Combined with P-M3 — no call site
+  // reads errorCode — an error here was indistinguishable from success, and
+  // this is the call that turns pushes ON. Failing it silently produces the
+  // exact symptom O-H1 produced: a session that looks connected, loads the map,
+  // and never updates again. Cheap to check, and the only place it can be.
+  if (enableEvents.errorCode && enableEvents.errorCode > 0) {
+    throw new Error(
+      `EnableEvents failed (${enableEvents.errorName ?? 'error'} ${enableEvents.errorCode}) — ` +
+      `the session would receive no pushes at all`
+    );
+  }
   ctx.log.debug(`[Session] EnableEvents activated`);
 
   // 2. First PickEvent - Subscribe to Tycoon updates
@@ -520,7 +548,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   const lastYPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: worldContextId,
     action: RdoAction.CALL, member: 'GetTycoonCookie',
-    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), 'LastY.0'],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), RdoValue.string('LastY.0').format()],
   });
   const lastY = parsePropertyResponseHelper(lastYPacket.payload!, 'res');
   ctx.setLastPlayerY(parseInt(lastY, 10) || 0);
@@ -529,7 +557,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   const lastXPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: worldContextId,
     action: RdoAction.CALL, member: 'GetTycoonCookie',
-    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), 'LastX.0'],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), RdoValue.string('LastX.0').format()],
   });
   const lastX = parsePropertyResponseHelper(lastXPacket.payload!, 'res');
   ctx.setLastPlayerX(parseInt(lastX, 10) || 0);
@@ -538,7 +566,7 @@ export async function selectCompany(ctx: LoginContext, companyId: string): Promi
   const allCookiesPacket = await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL, targetId: worldContextId,
     action: RdoAction.CALL, member: 'GetTycoonCookie',
-    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), ''],
+    args: [RdoValue.int(parseInt(ctx.tycoonId!, 10)).format(), RdoValue.string('').format()],
   });
   const allCookies = parsePropertyResponseHelper(allCookiesPacket.payload!, 'res');
   ctx.log.debug(`[Session] All Cookies:\n${allCookies}`);
@@ -860,7 +888,7 @@ async function fetchCompaniesViaHttp(
  */
 function parseDirectoryResult(ctx: LoginContext, payload: string): WorldInfo[] {
   let raw = payload.trim();
-  raw = raw.replace(/^[%#$@]/, '');
+  raw = raw.replace(RDO_PREFIX_STRIP, '');
   const lines = raw.split(/\n/);
   const data: Map<string, string> = new Map();
 
@@ -918,7 +946,7 @@ function parseDirectoryResult(ctx: LoginContext, payload: string): WorldInfo[] {
  */
 function parseSearchKeyResults(ctx: LoginContext, payload: string): string[] {
   let raw = payload.trim();
-  raw = raw.replace(/^[%#$@]/, '');
+  raw = raw.replace(RDO_PREFIX_STRIP, '');
   const lines = raw.split(/\n/);
   const data: Map<string, string> = new Map();
 
@@ -950,9 +978,11 @@ function parseSearchKeyResults(ctx: LoginContext, payload: string): string[] {
 // ── World Socket Reconnection ────────────────────────────────────────────────
 
 /**
- * Light reconnection: new TCP socket + IDOF + session validation.
- * Mirrors Delphi InterfaceServer.RenewWorldProxy() pattern.
- * Falls back to full re-login if session expired server-side.
+ * Reconnect the world socket: new TCP socket + IDOF + full re-Logon.
+ *
+ * There is deliberately no "light" path. See the comment at step 3 — the probe
+ * that used to select it cannot fail, because the Delphi ClientView survives its
+ * own logoff (O-H1).
  */
 export async function reconnectWorldSocket(ctx: LoginContext): Promise<void> {
   const world = ctx.currentWorldInfo;
@@ -975,67 +1005,37 @@ export async function reconnectWorldSocket(ctx: LoginContext): Promise<void> {
   ctx.setInterfaceServerId(newId);
   ctx.log.debug(`[Reconnect] InterfaceServer ID: ${newId}`);
 
-  // 3. Verify session still valid by reading a property
-  try {
-    const tycoonPacket = await ctx.sendRdoRequest('world', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.worldContextId!,
-      action: RdoAction.GET,
-      member: 'TycoonId',
-    });
-    const tid = parsePropertyResponseHelper(tycoonPacket.payload!, 'TycoonId');
-    ctx.log.info(`[Reconnect] Session still valid (tycoon=${tid})`);
-
-    // 4. Re-register InterfaceEvents virtual object
-    //    (cleared by knownObjects.clear() in attemptWorldReconnect before this call)
-    const virtualEventId = (Math.floor(Math.random() * 6000000) + 38000000).toString();
-    ctx.setKnownObject('InterfaceEvents', virtualEventId);
-    ctx.log.debug(`[Reconnect] Re-registered InterfaceEvents virtual ID: ${virtualEventId}`);
-
-    // 5. Re-register for push events on the NEW socket
-    //    Delphi binds events to a specific connection handle — new socket needs new registration.
-    //    Mirrors initial login path (login-handler.ts:397-405) and fullWorldRelogin (line 1012-1018).
-    const rdoCnntId = ctx.rdoCnntId;
-    if (rdoCnntId) {
-      ctx.sendRdoRequest('world', {
-        verb: RdoVerb.SEL,
-        targetId: ctx.worldContextId!,
-        action: RdoAction.CALL,
-        member: 'RegisterEventsById',
-        args: [RdoValue.int(parseInt(rdoCnntId, 10)).format()],
-      }).catch(() => {
-        ctx.log.debug('[Reconnect] RegisterEventsById completed (or timed out, normal)');
-      });
-    }
-
-    // 6. Re-enable events (mirrors selectCompany EnableEvents call at line 472-479)
-    //    Value -1 activates event delivery on the Delphi IS side.
-    await ctx.sendRdoRequest('world', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.worldContextId!,
-      action: RdoAction.SET,
-      member: 'EnableEvents',
-      args: ['-1'],
-    });
-    ctx.log.debug('[Reconnect] EnableEvents re-activated');
-
-    // 7. Re-subscribe to tycoon updates (mirrors selectCompany PickEvent at line 482-490)
-    if (ctx.tycoonId) {
-      await ctx.sendRdoRequest('world', {
-        verb: RdoVerb.SEL,
-        targetId: ctx.worldContextId!,
-        action: RdoAction.CALL,
-        member: 'PickEvent',
-        args: [RdoValue.int(parseInt(ctx.tycoonId, 10)).format()],
-      });
-      ctx.log.debug('[Reconnect] PickEvent re-sent for tycoon updates');
-    }
-
-    ctx.log.info(`[Reconnect] Light reconnection complete with event re-registration`);
-  } catch {
-    ctx.log.warn('[Reconnect] Session expired, performing full re-login...');
-    await fullWorldRelogin(ctx);
-  }
+  // 3. Always re-Logon. There is no correct cheap path, and the cheap path we
+  //    had was worse than useless: it reported success while leaving the player
+  //    invisible.
+  //
+  //    The old code probed the OLD ClientViewId with `get TycoonId` and took a
+  //    "light" path when it answered. That probe cannot fail. On disconnect,
+  //    TInterfaceServer.Logoff (InterfaceServer.pas:3296-3331) does:
+  //        fClients.Extract(ClientView);              // :3314 — Extract, not Remove
+  //        ClientView.fClientEventsProxy := Unassigned;  // :3317
+  //        ClientView.fClientConnection  := nil;         // :3318
+  //        //ClientView.Free;                            // :3326 — COMMENTED OUT
+  //    so the object is leaked but alive. `get TycoonId` reads a plain field and
+  //    answers normally, essentially always — while we have already been removed
+  //    from fClients, which is the list the IS iterates to deliver pushes.
+  //
+  //    Result: the map loaded, buildings opened, and nothing ever updated again;
+  //    other players could not see us; and the gateway announced
+  //    EVENT_WORLD_RECONNECTED. No published member exposes fClients membership,
+  //    so no cheaper probe can be made reliable. The legacy client re-Logons
+  //    every time (ServerCnxHandler.pas:3407-3473); so do we now.
+  //
+  //    This also removes O-H2: the light path re-used the RDOCnntId read from the
+  //    OLD socket, and that id is the memory address of the socket object
+  //    (WinSockRDOConnectionsServer.pas:664-668). Best case it matched nothing;
+  //    worst case Delphi had recycled the address for another client's socket and
+  //    our pushes went down their wire.
+  //    fullWorldRelogin re-reads RDOCnntId from the NEW socket and re-runs
+  //    RegisterEventsById, SetLanguage and selectCompany (which carries
+  //    EnableEvents and PickEvent), so the light path's steps 4-7 were not just
+  //    redundant — they replayed those calls against stale ids.
+  await fullWorldRelogin(ctx);
 }
 
 /**
@@ -1056,7 +1056,7 @@ async function fullWorldRelogin(ctx: LoginContext): Promise<void> {
     targetId: interfaceServerId,
     action: RdoAction.CALL,
     member: 'Logon',
-    args: [username, password],
+    args: [RdoValue.string(username).format(), RdoValue.string(password).format()],
   });
 
   let contextId = cleanPayloadHelper(logonPacket.payload!);
@@ -1079,6 +1079,17 @@ async function fullWorldRelogin(ctx: LoginContext): Promise<void> {
     action: RdoAction.GET, member: 'RDOCnntId',
   });
   ctx.setRdoCnntId(parsePropertyResponseHelper(cnntPacket.payload!, 'RDOCnntId'));
+
+  // Re-register the InterfaceEvents virtual object BEFORE RegisterEventsById.
+  // attemptWorldReconnect clears knownObjects, and RegisterEventsById makes the
+  // server turn around and ask us `idof "InterfaceEvents"` — if we cannot
+  // resolve it, that handshake dies and InitClient never arrives. The initial
+  // login path registers it first for exactly this reason (see :348-351).
+  // This lives here rather than in the caller so every path into re-login is
+  // correct: the old `catch` branch called this function without it.
+  const virtualEventId = (Math.floor(Math.random() * 6000000) + 38000000).toString();
+  ctx.setKnownObject('InterfaceEvents', virtualEventId);
+  ctx.log.debug(`[Reconnect] InterfaceEvents virtual ID: ${virtualEventId}`);
 
   // RegisterEvents + SetLanguage
   const rdoCnntId = ctx.rdoCnntId;

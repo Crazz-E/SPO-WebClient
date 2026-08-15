@@ -12,8 +12,18 @@
  * timing out earlier than the original client is a conformity divergence
  * (it surfaced false failures the legacy client never saw).
  *
- * Two layers must stay aligned: RDO (L3) < WS (L1).
- * L3 always rejects first so the user gets the real error message.
+ * ## `wsMs` describes an intent, not a mechanism (O-L4)
+ *
+ * This header used to assert: *"Two layers must stay aligned: RDO (L3) < WS (L1).
+ * L3 always rejects first so the user gets the real error message."* The second
+ * sentence is a **consequence that nothing enforces**: `wsMs` is read by no code
+ * at all — there is no WebSocket-side timer. What actually happens is that the
+ * RDO layer is the only one with a deadline, so it does reject first, by default
+ * rather than by design.
+ *
+ * The values are kept because they express the invariant a future WS timer must
+ * respect (`wsMs > rdoMs`, verified by a test), and removing them would lose
+ * that. But do not read this table as documentation of a live safety net.
  */
 
 export enum TimeoutCategory {
@@ -35,6 +45,12 @@ export const IS_PROXY_TIMEOUT_MS = 180_000;
 /** Legacy Directory session deadline (DSProxy.TimeOut := 20000, LogonHandlerViewer.pas:341). */
 export const DIRECTORY_TIMEOUT_MS = 20_000;
 
+/**
+ * @property rdoMs the live deadline, armed by `sendRdoRequest`.
+ * @property wsMs  **not consumed by any code today** — the budget a future
+ *                 WebSocket-side timer would use. Must stay above `rdoMs` so the
+ *                 RDO error reaches the user instead of a generic WS timeout.
+ */
 export const TIMEOUT_CONFIG: Record<TimeoutCategory, { rdoMs: number; wsMs: number }> = {
   [TimeoutCategory.DIRECTORY]: { rdoMs: DIRECTORY_TIMEOUT_MS, wsMs: 30_000 },
   [TimeoutCategory.FAST]:      { rdoMs: 60_000,              wsMs: 70_000 },

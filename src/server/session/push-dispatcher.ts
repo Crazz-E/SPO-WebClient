@@ -26,7 +26,7 @@ import {
   type WsEventMoveTo,
   type WsEventChannelListChange,
 } from '../../shared/types';
-import { RdoParser } from '../../shared/rdo-types';
+import { RdoParser, RDO_PREFIX_STRIP } from '../../shared/rdo-types';
 
 // ── Push Context ────────────────────────────────────────────────────────────
 
@@ -156,8 +156,8 @@ export function dispatchPush(ctx: PushContext, _socketName: string, packet: RdoP
     ctx.log.debug(`[Chat] Args length:`, packet.args?.length);
 
     if (packet.args && packet.args.length >= 2) {
-      let from = packet.args[0].replace(/^[%#@$]/, '');
-      const message = packet.args[1].replace(/^[%#@$]/, '');
+      let from = packet.args[0].replace(RDO_PREFIX_STRIP, '');
+      const message = packet.args[1].replace(RDO_PREFIX_STRIP, '');
 
       if (from.includes('/')) {
         from = from.split('/')[0];
@@ -182,8 +182,8 @@ export function dispatchPush(ctx: PushContext, _socketName: string, packet: RdoP
 
   // 2. NotifyMsgCompositionState - User typing status
   if (packet.member === 'NotifyMsgCompositionState' && packet.args && packet.args.length >= 2) {
-    const username = packet.args[0].replace(/^[%#@$]/, '');
-    const statusStr = packet.args[1].replace(/^[%#@$]/, '');
+    const username = packet.args[0].replace(RDO_PREFIX_STRIP, '');
+    const statusStr = packet.args[1].replace(RDO_PREFIX_STRIP, '');
     const isTyping = statusStr === '1';
 
     ctx.log.debug(`[Chat] ${username} is ${isTyping ? 'typing' : 'idle'}`);
@@ -200,7 +200,7 @@ export function dispatchPush(ctx: PushContext, _socketName: string, packet: RdoP
 
   // 3. NotifyChannelChange - Channel switched
   if (packet.member === 'NotifyChannelChange' && packet.args && packet.args.length >= 1) {
-    const channelName = packet.args[0].replace(/^[%#@$]/, '');
+    const channelName = packet.args[0].replace(RDO_PREFIX_STRIP, '');
     ctx.setCurrentChannel(channelName);
 
     ctx.log.debug(`[Chat] Channel changed to: ${channelName || 'Lobby'}`);
@@ -217,8 +217,8 @@ export function dispatchPush(ctx: PushContext, _socketName: string, packet: RdoP
   // 4. NotifyUserListChange - User joined/left
   // Delphi sends Name as "name", "name/id", or "name/id/afk" — handle all formats
   if (packet.member === 'NotifyUserListChange' && packet.args && packet.args.length >= 2) {
-    const userInfo = packet.args[0].replace(/^[%#@$]/, '');
-    const actionCode = packet.args[1].replace(/^[%#@$]/, '');
+    const userInfo = packet.args[0].replace(RDO_PREFIX_STRIP, '');
+    const actionCode = packet.args[1].replace(RDO_PREFIX_STRIP, '');
     const userParts = userInfo.split('/');
 
     if (userParts[0]?.trim()) {
@@ -247,7 +247,7 @@ export function dispatchPush(ctx: PushContext, _socketName: string, packet: RdoP
   // 5. RefreshTycoon parsing
   if (packet.member === 'RefreshTycoon' && packet.args && packet.args.length >= 5) {
     try {
-      const cleanArgs = packet.args.map(arg => arg.replace(/^[%#@$]/, ''));
+      const cleanArgs = packet.args.map(arg => arg.replace(RDO_PREFIX_STRIP, ''));
 
       const tycoonUpdate: WsEventTycoonUpdate = {
         type: WsMessageType.EVENT_TYCOON_UPDATE,

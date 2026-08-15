@@ -199,4 +199,23 @@ Deliberate, documented departures from the reference client. Each is wire-legal 
 | D3 | Bounded reconnection | Infinite 100 ms retry loop (`TReconnectThread`) | 3 fast (5/10/20 s) + 20 slow (15 s) = 23 jittered attempts, then give up | Strictly gentler on the IS `fServerLock` than the legacy client |
 | D4 | Login property reads | Reads `DSArea`; polls `PickEvent` continuously | Reads `DAPort` instead of `DSArea`; adds one `GetCompanyCount`; sends `PickEvent` only at login/company-select | Benign extra/omitted READS; strictly less polling load than legacy |
 
+> **World connection pool — actual state (corrected 2026-08-15).** `RdoConnectionPool`
+> exists and `initWorldPool()` constructs it, but until this date it was **never populated**:
+> `initialize()` was called nowhere in production, and `getConnection()` — the only other path
+> that adds a connection — sits behind a `worldPool.size > 0` guard that could therefore never
+> become true (audit O-M1). Every world frame went down the single primary socket, and
+> `config.rdo.parallelAreaReads` pipelined onto that one wire rather than across connections.
+>
+> The chicken-and-egg is fixed, together with **O-L1** — a server request arriving on a pool
+> connection used to be answered on the primary socket, and Delphi parks its pending query on the
+> connection object (`WinSockRDOServerClientConnection.pas:227-252`), so the reply would never
+> have signalled it. That had to be corrected first; populating the pool would have turned a
+> dormant defect into an active one.
+>
+> Population is **opt-in** (`RDO_WORLD_POOL=true`), matching the posture already used for
+> `parallelAreaReads`: this is a path production has never exercised. It also cannot be covered
+> by the protocol test harness yet — the pool builds its own `net.Socket` instead of going through
+> `createSocket()`, which the harness intercepts. Injecting a socket factory is the prerequisite
+> for testing it, and for turning the flag on by default.
+
 ---
