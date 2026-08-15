@@ -5,6 +5,8 @@
 
 import type { Socket } from 'net';
 import { createLogger } from '../shared/logger';
+import { clampToWireBytes } from '../shared/cp1252';
+import { RDO_PREFIX_STRIP } from '../shared/rdo-types';
 
 const wireLog = createLogger('RdoWire');
 
@@ -34,7 +36,10 @@ const SENSITIVE_WIRE_MEMBERS = /(?:call|get)\s+(?:RDOLogonUser|Logon|AccountStat
 
 export function redactSensitiveRdoFrame(frame: string): string {
   if (!SENSITIVE_WIRE_MEMBERS.test(frame)) return frame;
-  return frame.replace(/,"%[^"]*"(?=\s*;?\s*$)/, ',"%[REDACTED]"');
+  // P-L8, same defect as redactRdoRaw in spo_session.ts: `[^"]*` stopped at the
+  // first quote, so a password containing one (doubled to `""` on the wire) fell
+  // out of the match and the frame was logged in the clear.
+  return frame.replace(/,"%(?:[^"]|"")*"(?=\s*;?\s*$)/, ',"%[REDACTED]"');
 }
 
 /**
@@ -55,12 +60,23 @@ export function redactSensitiveRdoFrame(frame: string): string {
  * sendRdoRequest logs richer `RDO>>` entries). Together with the `RDO<<`
  * log in processSingleCommand this gives a complete NDJSON record of the
  * wire, which log-capture-converter turns into mock scenarios.
+ *
+ * Encoding safety net (P-C1, report/rdo-audit-2026-08-14.md §2): `Buffer.from(
+ * s, 'latin1')` truncates `charCode & 0xFF` with NO replacement character, so a
+ * code point above 0xFF whose low byte is an RDO metacharacter used to reach the
+ * wire AS that metacharacter (`U+0122 Ģ` → `0x22 '"'`, `U+013B Ļ` → `0x3B ';'`)
+ * — enough to terminate our frame and inject a second, syntactically valid one.
+ * The narrowing itself belongs upstream, in `RdoValue.format()`, where it runs
+ * before quote escaping (mirroring `RDOUtils.pas:379`). `clampToWireBytes()`
+ * here is the idempotent last line of defence for any frame assembled on a path
+ * that did not go through `RdoValue` (e.g. `RdoProtocol.formatTypedToken`'s
+ * prefixed-but-unquoted branch, or a raw `packet.payload`).
  */
 export function writeRdoFrame(socket: Socket, frame: string, alreadyLogged = false): boolean {
   if (!alreadyLogged) {
     wireLog.debug(`RDO>* ${getRdoSocketTag(socket)}`, { raw: redactSensitiveRdoFrame(frame) });
   }
-  return socket.write(Buffer.from(frame, 'latin1'));
+  return socket.write(Buffer.from(clampToWireBytes(frame), 'latin1'));
 }
 
 /**
@@ -145,14 +161,39 @@ export function isTrueOrdinal(value: string): boolean {
   return value !== '' && value !== '0';
 }
 
+/**
+ * Extract the `res="#N"` result code from a CALL response payload.
+ *
+ * P-L9: this was open-coded at seven call sites with two different patterns —
+ * `/res="#(\d+)"/` and `/res="#(-?\d+)"/`. The unsigned variant fails to match a
+ * negative code, falls through to the `-1` default, and so reports failure
+ * anyway; correct by accident, not by construction. Booleans on the wire are
+ * `#-1` / `#0` (arch doc §2.2), so negative ordinals are ordinary here.
+ *
+ * @returns the code, or -1 when the payload carries none (which every caller
+ *          already treats as failure).
+ */
+export function parseResultCode(payload: string | undefined | null): number {
+  const match = /res="#(-?\d+)"/.exec(payload || '');
+  return match ? parseInt(match[1], 10) : -1;
+}
+
 export function parsePropertyResponse(payload: string, propName: string): string {
   // Try to extract value using Property="value" format
   // Handles doubled quotes inside: Property="%Hello ""World"""
-  const regex = new RegExp(`${propName}\\s*=\\s*"((?:[^"]|"")*)"`, 'i');
+  //
+  // P-M5, three defects in one line:
+  //  - `propName` was interpolated raw, so regex metacharacters in a name that
+  //    reached here from the browser (see P-H3 / M-D) changed what was matched;
+  //  - the pattern was unanchored, so `get Property` against a payload holding
+  //    `XProperty="a" Property="b"` returned `a` — the wrong property's value;
+  //  - `i` made `taxid` match `TaxId`, and RDO identifiers are case-sensitive.
+  const escaped = propName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(?:^|[\\s,])${escaped}\\s*=\\s*"((?:[^"]|"")*)"`);
   const match = payload.match(regex);
   if (match && match[1]) {
     // Unescape doubled quotes and remove type prefix (#, $, %, @)
-    return match[1].replace(/""/g, '"').replace(/^[$#%@]/, '');
+    return match[1].replace(/""/g, '"').replace(RDO_PREFIX_STRIP, '');
   }
 
   // Handle case where payload starts directly with property name
@@ -161,9 +202,9 @@ export function parsePropertyResponse(payload: string, propName: string): string
     // Remove = and quotes if present, then type prefix
     const valueMatch = cleaned.match(/^=\s*"?((?:[^"]|"")*)"?$/);
     if (valueMatch) {
-      return valueMatch[1].replace(/""/g, '"').replace(/^[$#%@]/, '');
+      return valueMatch[1].replace(/""/g, '"').replace(RDO_PREFIX_STRIP, '');
     }
-    return cleaned.replace(/^[$#%@]/, '');
+    return cleaned.replace(RDO_PREFIX_STRIP, '');
   }
 
   // Fallback: clean and return payload as-is (for backward compatibility)
@@ -195,7 +236,7 @@ export function parseIdOfResponse(payload: string | undefined): string {
   const objidMatch = payload.match(/objid\s*=\s*"((?:[^"]|"")*)"/i);
   if (objidMatch && objidMatch[1]) {
     // Unescape doubled quotes and remove type prefix (#, $, %, @) if present
-    return objidMatch[1].replace(/""/g, '"').replace(/^[$#%@]/, '').trim();
+    return objidMatch[1].replace(/""/g, '"').replace(RDO_PREFIX_STRIP, '').trim();
   }
 
   // Fallback: clean payload and remove type prefixes
