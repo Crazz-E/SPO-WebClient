@@ -782,12 +782,36 @@ Two independent axes: **QueryId present or absent** (decides whether the server 
 
 > **Retired claim (2026-07-02):** earlier revisions of this document asserted that `"*"` + QueryId "crashes the Delphi server's FIVE layer" and corrupts all subsequent queries. The live captures disprove this, and `RDOQueryServer.pas:174-178` shows why (void result → empty body → `A<id> ;`). The claim is retired; do not reintroduce it.
 
+**The separator must match the member's Delphi declaration.** This is the axis the matrix below
+turns on, and getting it wrong on a `procedure` is the most damaging thing this gateway can do.
+
 | Form | Wire-legal? | Server behavior | WebClient policy |
 |------|-------------|-----------------|------------------|
-| QueryId + `"^"` | YES | `A<id> res="…"` | `sendRdoRequest()` — canonical synchronous form |
-| QueryId + `"*"` (or `set`) | YES | empty ack `A<id> ;` | **Forbidden by project convention** (`assertNotVoidPush` guard): the WebClient standardizes on one form per intent. Not a crash risk — if a void ack is ever needed, `A<id> ;` is the expected reply, and `set` via `sendRdoRequest()` legitimately receives it. |
+| QueryId + `"^"` on a **`function`** | YES | `A<id> res="…"` | `sendRdoRequest()` — canonical synchronous form. Capture-proven: `GetTycoonCookie` → `A36 res="%395";` [capture :982-983] |
+| QueryId + `"^"` on a **`procedure`** | parses, but | **FREEZES THE SERVER** | **MUST NOT — live-proven 2026-08-15.** See the box below. Blocked by `assertNotVariantOnVoidMember`. |
+| QueryId + `"*"` (or `set`) | YES | empty ack `A<id> ;` | **REQUIRED for void members** — the reference client's own form [capture :3542-3543, :3548-3549]. For every other member, still avoided by project convention (`assertNotVoidPush`, one form per intent); `VOID_MEMBERS` in `session/rdo-request-guards.ts` carries the exemptions, each with its Pascal declaration. |
 | no QueryId + `"*"` | YES | silence | `writeRdoFrame(socket, cmd)` — canonical fire-and-forget; matches legacy `Send()` usage (`ClientAware`, `SetViewedArea`, `MsgCompositionChanged` [capture :1017, :1032]) |
 | no QueryId + `"^"` | **NO** | reply is built then has no destination; reported to crash the server (live incident) | **MUST NOT.** The legacy client cannot produce this form — wanting a result implies `SendReceive` + QueryId. No capture contains it. |
+
+> **⚠️ Retired claim (2026-08-15) — the convention pointed at the danger.** Until this revision,
+> row 3 read *"Forbidden by project convention"*, and the code obeyed it: `SayThis`, `AddLine` and
+> `CloseMessage` — all three declared `procedure` — were emitted with `"^"`. That is the inverse of
+> what the reference client does, and it is not merely non-conformant.
+>
+> A **single** `call SayThis "^"` frame **froze the shared production Interface Server** (live probe,
+> 2026-08-15). The same probe disproved the hoped-for escape: the server *does* execute the procedure
+> body (the chat line appeared in `FIVEINTERFACESERVER/Chat`) before failing to marshal a result that
+> does not exist.
+>
+> Mechanism: `"^"` sets `TVarData(Res).VType := varVariant` [RDOQueryServer.pas:422-424], so
+> `CallMethod` passes `@Res` as a hidden extra argument [RDOObjectServer.pas:281-292]. When the
+> member has enough parameters for `RegsUsed` to reach `MaxRegs = 3`, that pointer is pushed on the
+> stack (`push edi`, `:292`) — and a `register`-convention `procedure` with no stack parameters never
+> pops it. `SayThis( Dest, Msg : widestring )` has exactly that profile. `AddLine` and `CloseMessage`
+> (one parameter) landed the pointer in a register instead and were merely non-conformant.
+>
+> Every chat message a player sent carried the dangerous form. Do not reintroduce it: check the
+> Pascal declaration before choosing a separator.
 
 **Gateway design decision (settled 2026-07-02):** the WebClient deliberately uses **QueryId + response for every request — reads AND mutations** — where the legacy client sent many mutations fire-and-forget. This is wire-legal (row 2), gives error detection and confirmation, and pairs with the rule that **mutations (CALL/SET) are never auto-retried** ([rdo-session-lifecycle.md §8](rdo-session-lifecycle.md)). Fire-and-forget (`writeRdoFrame`) is reserved for the calls the legacy client also fired blind (`ClientAware`, `SetViewedArea`, KeepAlive, `UnfocusObject`…). An earlier investigation brief questioning this choice (`doc/audit-rdo-request-response-mismatch.md`) was resolved by the conformity audit and removed — its premise rested on the retired crash claim above.
 

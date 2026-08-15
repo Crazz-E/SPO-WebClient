@@ -138,7 +138,7 @@ export async function composeMail(
       targetId: msgId,
       action: RdoAction.CALL,
       member: 'AddLine',
-      separator: '"^"',
+      separator: '"*"',
       args: [RdoValue.string(line).format()]
     });
   }
@@ -164,7 +164,7 @@ export async function composeMail(
       targetId: ctx.mailServerId,
       action: RdoAction.CALL,
       member: 'CloseMessage',
-      separator: '"^"',
+      separator: '"*"',
       args: [RdoValue.int(parseInt(msgId, 10)).format()]
     });
   } catch (e: unknown) {
@@ -231,7 +231,7 @@ export async function saveDraft(
       targetId: msgId,
       action: RdoAction.CALL,
       member: 'AddLine',
-      separator: '"^"',
+      separator: '"*"',
       args: [RdoValue.string(line).format()]
     });
   }
@@ -257,7 +257,7 @@ export async function saveDraft(
       targetId: ctx.mailServerId,
       action: RdoAction.CALL,
       member: 'CloseMessage',
-      separator: '"^"',
+      separator: '"*"',
       args: [RdoValue.int(parseInt(msgId, 10)).format()]
     });
   } catch (e: unknown) {
@@ -363,7 +363,7 @@ export async function readMailMessage(
         targetId: ctx.mailServerId,
         action: RdoAction.CALL,
         member: 'CloseMessage',
-        separator: '"^"',
+        separator: '"*"',
         args: [RdoValue.int(parseInt(msgId, 10)).format()]
       });
     } catch (e: unknown) {

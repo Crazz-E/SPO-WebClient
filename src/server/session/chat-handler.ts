@@ -113,7 +113,11 @@ export async function getChatChannelInfo(ctx: SessionContext, channelName: strin
     targetId: ctx.worldContextId,
     action: RdoAction.CALL,
     member: 'GetChannelInfo',
-    args: [channelName],
+    // Explicit OLEString (P-M2): channelName is browser-supplied. Raw, a name
+    // starting with an RDO prefix was re-read as a typed literal, and one
+    // containing a `"` escaped its own literal into a second sub-command of the
+    // same `sel` (RDOQueryServer.pas:133-160). Bytes unchanged for real names.
+    args: [RdoValue.string(channelName).format()],
     // WARN: unquoted '^' — should be '"^"' per protocol convention.
     // No issue observed as of 2026-04-02 (RdoProtocol.format() auto-quotes),
     // but inconsistent with the rest of the codebase. Fix if chat breaks.
@@ -134,7 +138,8 @@ export async function joinChatChannel(ctx: SessionContext, channelName: string):
     targetId: ctx.worldContextId,
     action: RdoAction.CALL,
     member: 'JoinChannel',
-    args: [channelName, ''],
+    // Explicit OLEString (P-M2) — see getChatChannelInfo.
+    args: [RdoValue.string(channelName).format(), RdoValue.string('').format()],
     // WARN: unquoted '^' — should be '"^"' per protocol convention.
     // No issue observed as of 2026-04-02 (RdoProtocol.format() auto-quotes),
     // but inconsistent with the rest of the codebase. Fix if chat breaks.
@@ -156,13 +161,24 @@ export async function sendChatMessage(ctx: SessionContext, message: string): Pro
 
   ctx.log.debug(`[Chat] Sending message: ${message}`);
 
-  // Synchronous: Delphi IClientView.SayThis has an out ErrorCode param → SendReceive with RID.
+  // `procedure SayThis( Dest, Msg : widestring )` — InterfaceServer.pas:179. A
+  // procedure: no return value. So the separator is "*" (VoidId) WITH a QueryId,
+  // which the server acks `A<id> ;` — the reference client's form.
+  //
+  // This previously emitted "^", justified by a comment claiming SayThis had an
+  // out ErrorCode param. That signature exists only in a TEST unit
+  // (Tests/3D Viewer/ClientView.pas:60); the production server declares a bare
+  // 2-argument procedure. "^" made the server push a hidden result pointer the
+  // procedure never pops (RDOQueryServer.pas:422-424 → RDOObjectServer.pas:292),
+  // and a SINGLE such frame froze the shared Interface Server (live probe,
+  // 2026-08-15). Every chat message a player sent carried this form.
+  // assertNotVariantOnVoidMember now makes reintroducing it impossible.
   await ctx.sendRdoRequest('world', {
     verb: RdoVerb.SEL,
     targetId: ctx.worldContextId,
     action: RdoAction.CALL,
     member: 'SayThis',
-    separator: '"^"',
+    separator: '"*"',
     args: [RdoValue.string('').format(), RdoValue.string(message).format()]
   });
 }

@@ -422,24 +422,37 @@ to avoid: follow the capture, never "fix" a captured `get` into a `call`. See ar
 
 ### Supply management (SupplySheetForm.pas)
 
-| Member | Kind | Verb | Signature | Return | Source Line | Notes |
-|--------|------|------|-----------|--------|-------------|-------|
-| `RDOConnectInput` | function | `call` | `(%fluidId, %cnxList)` | olevariant | 295 | cnxList="x1,y1,x2,y2,..."; WaitForAnswer=true |
-| `RDODisconnectInput` | function | `call` | `(%fluidId, %cnxList)` | olevariant | 418 | cnxList="x1,y1,x2,y2,..."; WaitForAnswer=false |
-| `RDOSetInputOverPrice` | function | `call` | `(%fluidId, #index, #overprice)` | olevariant | 435 | Uses MSProxy directly |
-| `RDOSetInputMinK` | function | `call` | `(%fluidId, #value)` | olevariant | 653 | BindTo(ObjectId) |
-| `RDOSetInputMaxPrice` | function | `call` | `(%fluidId, #value)` | olevariant | 676 | BindTo(ObjectId) |
-| `RDOSelSelected` | function | `call` | `(#boolVal)` | olevariant | 699 | BindTo(ObjectId); WordBool: -1=true, 0=false |
-| `RDOSetInputSortMode` | function | `call` | `(%fluidId, #mode)` | olevariant | 722 | BindTo(ObjectId); 0=cost, 1=quality |
-| `RDOSetBuyingStatus` | function | `call` | `(#fingerIndex, #boolVal)` | olevariant | 741 | BindTo(ObjectId); WordBool |
+> **⚠️ Corrected 2026-08-15 — these were all listed as `function … olevariant`, and they are not.**
+> The "Source Line" column points at the **client** form (`SupplySheetForm.pas`), where the call is
+> late-bound and carries no declaration. Every one of these members is declared `procedure` on the
+> server (`Kernel/Kernel.pas`). The same confusion — reading a client call-site or a test unit as if
+> it were the server declaration — is what kept `SayThis` emitting `"^"` until a single such frame
+> froze the shared Interface Server. **`WaitForAnswer` does not choose the separator**: it only sets
+> `fTimeOut` (`RDOObjectProxy.pas:441-443`), while the separator follows whether the call site
+> consumes a return value (`:438-440`). Waiting for the ack is fine; `"^"` is not.
+> See `rdo-protocol-architecture.md` §8.5 and `VOID_MEMBERS` in `session/rdo-request-guards.ts`.
+
+| Member | Kind | Verb | Signature | Server declaration | Notes |
+|--------|------|------|-----------|--------------------|-------|
+| `RDOConnectInput` | **procedure** | `call` | `(%fluidId, %cnxList)` | `Kernel/Kernel.pas:1077` | cnxList="x1,y1,x2,y2,..."; we wait for the ack, separator `"*"` |
+| `RDODisconnectInput` | **procedure** | `call` | `(%fluidId, %cnxList)` | `Kernel/Kernel.pas:1079` | fire-and-forget in the legacy client and in ours |
+| `RDOSetInputOverPrice` | **procedure** | `call` | `(%fluidId, #index, #overprice)` | `Kernel/Kernel.pas:1082` | Uses MSProxy directly |
+| `RDOSetInputMinK` | **procedure** | `call` | `(%fluidId, #value)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId) |
+| `RDOSetInputMaxPrice` | **procedure** | `call` | `(%fluidId, #value)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId) |
+| `RDOSelSelected` | **procedure** | `call` | `(#boolVal)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId); WordBool: -1=true, 0=false |
+| `RDOSetInputSortMode` | **procedure** | `call` | `(%fluidId, #mode)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId); 0=cost, 1=quality |
+| `RDOSetBuyingStatus` | **procedure** | `call` | `(#fingerIndex, #boolVal)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId); WordBool |
 
 ### Product management (ProdSheetForm.pas)
 
-| Member | Kind | Verb | Signature | Return | Source Line | Notes |
-|--------|------|------|-----------|--------|-------------|-------|
-| `RDOConnectOutput` | function | `call` | `(%fluidId, %cnxList)` | olevariant | 265 | cnxList="x1,y1,x2,y2,..."; WaitForAnswer=true |
-| `RDODisconnectOutput` | function | `call` | `(%fluidId, %cnxList)` | olevariant | 363 | cnxList="x1,y1,x2,y2,..."; WaitForAnswer=false+true |
-| `RDOSetOutputPrice` | function | `call` | `(%fluidId, #price)` | olevariant | 567 | WaitForAnswer=false |
+> **⚠️ Corrected 2026-08-15** — same error as the table above: the line numbers point at
+> `ProdSheetForm.pas`, a client form. All three are `procedure` on the server.
+
+| Member | Kind | Verb | Signature | Server declaration | Notes |
+|--------|------|------|-----------|--------------------|-------|
+| `RDOConnectOutput` | **procedure** | `call` | `(%fluidId, %cnxList)` | `Kernel/Kernel.pas:1078` | cnxList="x1,y1,x2,y2,..."; we wait for the ack, separator `"*"` |
+| `RDODisconnectOutput` | **procedure** | `call` | `(%fluidId, %cnxList)` | `Kernel/Kernel.pas:1080` | fire-and-forget |
+| `RDOSetOutputPrice` | **procedure** | `call` | `(%fluidId, #price)` | `Kernel/Kernel.pas:1081` | fire-and-forget |
 
 ### Industry general (IndustryGeneralSheet.pas)
 
