@@ -9,6 +9,7 @@ import type { SessionContext } from './session-context';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { toErrorMessage } from '../../shared/error-utils';
+import { parseResultCode } from '../rdo-helpers';
 
 /** Cost per road tile in game currency units. */
 export const ROAD_COST_PER_TILE = 2000000;
@@ -198,8 +199,7 @@ export async function buildRoad(
       }, undefined, TimeoutCategory.SLOW);
 
       // Parse response
-      const resultMatch = /res="#(-?\d+)"/.exec(result.payload || '');
-      const resultCode = resultMatch ? parseInt(resultMatch[1], 10) : -1;
+      const resultCode = parseResultCode(result.payload);
 
       if (resultCode === 0) {
         totalCost += segCost;
@@ -344,8 +344,7 @@ export async function demolishRoad(
       ]
     }, undefined, TimeoutCategory.SLOW);
 
-    const resultMatch = /res="#(-?\d+)"/.exec(result.payload || '');
-    const resultCode = resultMatch ? parseInt(resultMatch[1], 10) : -1;
+    const resultCode = parseResultCode(result.payload);
 
     if (resultCode === 0) {
       ctx.log.debug(`[RoadDemolish] Road demolished at (${x}, ${y})`);
@@ -419,8 +418,7 @@ export async function wipeCircuit(
       ]
     }, undefined, TimeoutCategory.SLOW);
 
-    const resultMatch = /res="#(-?\d+)"/.exec(result.payload || '');
-    const resultCode = resultMatch ? parseInt(resultMatch[1], 10) : -1;
+    const resultCode = parseResultCode(result.payload);
 
     if (resultCode === 0) {
       ctx.log.debug(`[RoadDemolish] Area wiped (${nx1},${ny1})→(${nx2},${ny2})`);

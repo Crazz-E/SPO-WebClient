@@ -425,11 +425,13 @@ export async function searchConnections(
       member: method,
       // Delphi: FindSuppliers/FindClients(Output, World, Town, Name: widestring;
       //         Count, X, Y, SortMode, Role: integer) — CacheServerReportForm.pas:108-109
+      // Explicit OLEString on every widestring parameter (P-M2): the town and
+      // company filters are free text typed by the player.
       args: [
-        fluidId,                                            // Output (widestring)
-        worldName,                                          // World (widestring)
-        filters?.town || '',                                // Town filter (empty = all)
-        filters?.company || '',                             // Name/company filter (empty = all)
+        RdoValue.string(fluidId).format(),                  // Output (widestring)
+        RdoValue.string(worldName).format(),                // World (widestring)
+        RdoValue.string(filters?.town || '').format(),      // Town filter (empty = all)
+        RdoValue.string(filters?.company || '').format(),   // Name/company filter (empty = all)
         RdoValue.int(filters?.maxResults || 20).format(),   // Count
         RdoValue.int(buildingX).format(),                   // X
         RdoValue.int(buildingY).format(),                   // Y

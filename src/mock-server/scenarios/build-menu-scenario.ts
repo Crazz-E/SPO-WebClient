@@ -209,7 +209,9 @@ export function createBuildMenuScenario(
             wsRequestId: 'bm-001',
             x: CAPTURED_BUILD_SUCCESS.x,
             y: CAPTURED_BUILD_SUCCESS.y,
-            buildingId: '0',
+            // No buildingId: the protocol does not return one (M-A). The mock
+            // used to answer '0', which is what let the gateway's dead
+            // `/sel (\d+)/` parse look plausible for as long as it did.
           } as WsMessage,
         ],
         tags: ['build'],

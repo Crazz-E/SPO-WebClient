@@ -236,6 +236,19 @@ async function setBuildingPropertyImpl(
     const response = await ctx.sendRequest(req) as WsRespBuildingSetProperty;
 
     if (response.success) {
+      // M-E: `success` means the command went out, not that it took effect.
+      // `confirmed === false` means the gateway re-read the property and found
+      // nothing — the mutation may have been discarded by the server. Marking
+      // that as confirmed would paint an optimistic value the server does not
+      // hold, which is precisely the lie the audit found. `undefined` means the
+      // command has no read-back property (the disconnect family), so there is
+      // nothing to contradict and the optimistic value stands.
+      if (response.confirmed === false) {
+        ClientBridge.failPendingUpdate(pendingKey, value, 'Change could not be confirmed by the server');
+        ClientBridge.log('Error', `${propertyName} was sent but could not be confirmed`);
+        return false;
+      }
+
       ClientBridge.confirmPendingUpdate(pendingKey);
       ClientBridge.log('Building', `Property ${propertyName} updated to ${response.newValue}`);
       return true;

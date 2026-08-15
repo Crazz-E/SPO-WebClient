@@ -984,7 +984,7 @@ async function getSupplyPaths(
     targetId: tempObjectId,
     action: RdoAction.CALL,
     member: 'GetInputNames',
-    args: [RdoValue.int(0).format(), '0'], // useless: integer, lang: widestring
+    args: [RdoValue.int(0).format(), RdoValue.string('0').format()], // useless: integer, lang: widestring
   });
 
   const inputNamesRaw = cleanPayloadHelper(inputNamesPacket.payload || '');
@@ -1235,7 +1235,7 @@ async function fetchSupplyDetails(
     targetId: tempObjectId,
     action: RdoAction.CALL,
     member: 'SetPath',
-    args: [path],
+    args: [RdoValue.string(path).format()],
   });
   const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
 
@@ -1376,7 +1376,7 @@ async function getProductPaths(
     targetId: tempObjectId,
     action: RdoAction.CALL,
     member: 'GetOutputNames',
-    args: [RdoValue.int(0).format(), '0'], // useless: integer, lang: widestring
+    args: [RdoValue.int(0).format(), RdoValue.string('0').format()], // useless: integer, lang: widestring
   });
 
   const outputNamesRaw = cleanPayloadHelper(outputNamesPacket.payload || '');
@@ -1422,7 +1422,7 @@ async function fetchProductDetails(
     targetId: tempObjectId,
     action: RdoAction.CALL,
     member: 'SetPath',
-    args: [path],
+    args: [RdoValue.string(path).format()],
   });
 
   const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
@@ -1541,7 +1541,7 @@ async function fetchSubObjectProperties(
       targetId: tempObjectId,
       action: RdoAction.CALL,
       member: 'GetSubObjectProps',
-      args: [RdoValue.int(subIndex).format(), query], // index: integer, names: WideString
+      args: [RdoValue.int(subIndex).format(), RdoValue.string(query).format()], // index: integer, names: WideString
     });
 
     const raw = cleanPayloadHelper(packet.payload || '');

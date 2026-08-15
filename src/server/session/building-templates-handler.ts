@@ -18,6 +18,7 @@ import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue } from '../../shared/rdo-types';
 import { deriveResidenceClass } from './session-utils';
 import fetch from 'node-fetch';
+import { parseResultCode } from '../rdo-helpers';
 
 // ===========================================================================
 // CLUSTER BROWSING
@@ -532,16 +533,21 @@ export async function placeBuilding(
     });
 
     // Parse response for result code
-    const resultMatch = /res="#(\d+)"/.exec(packet.payload || '');
-    const resultCode = resultMatch ? parseInt(resultMatch[1], 10) : -1;
+    const resultCode = parseResultCode(packet.payload);
 
     if (resultCode === 0) {
-      // Extract new building ID if available
-      const buildingIdMatch = /sel (\d+)/.exec(packet.payload || '');
-      const buildingId = buildingIdMatch?.[1] || null;
-
-      ctx.log.debug(`[BuildConstruction] Building placed successfully. ID: ${buildingId}`);
-      return { success: true, buildingId };
+      // The protocol does not return the new building's id, and never has.
+      // TWorld.RDONewFacility discards the created object into a variable the
+      // Delphi source literally names `Useless` (World.pas:3562,3566), so the
+      // response only ever carries a result code: `A<rid> res="#0";`
+      // (capture doc/Mock_Server_scenarios_captures.md:3399-3400). The legacy
+      // client never learns the id either — it repaints the area instead
+      // (MapIsoHandler.pas:1022-1047), exactly as our client does.
+      // A previous `/sel (\d+)/` match against the RESPONSE lived here: `sel`
+      // only ever appears in requests, so it always yielded null. Do not
+      // reintroduce it — null is the honest answer, not a parsing failure.
+      ctx.log.debug('[BuildConstruction] Building placed successfully (id not returned by protocol)');
+      return { success: true, buildingId: null };
     } else {
       ctx.log.warn(`[BuildConstruction] Building placement failed. Result code: ${resultCode}`);
       return { success: false, buildingId: null };
@@ -583,14 +589,13 @@ export async function placeCapitol(
       ]
     });
 
-    const resultMatch = /res="#(\d+)"/.exec(packet.payload || '');
-    const resultCode = resultMatch ? parseInt(resultMatch[1], 10) : -1;
+    const resultCode = parseResultCode(packet.payload);
 
     if (resultCode === 0) {
-      const buildingIdMatch = /sel (\d+)/.exec(packet.payload || '');
-      const buildingId = buildingIdMatch?.[1] || null;
-      ctx.log.debug(`[Capitol] Capitol placed successfully. ID: ${buildingId}`);
-      return { success: true, buildingId };
+      // Same as placeBuilding: NewFacility never returns the created object's
+      // id (World.pas:3562,3566). See the comment there before touching this.
+      ctx.log.debug('[Capitol] Capitol placed successfully (id not returned by protocol)');
+      return { success: true, buildingId: null };
     } else {
       ctx.log.warn(`[Capitol] Capitol placement failed. Result code: ${resultCode}`);
       return { success: false, buildingId: null };

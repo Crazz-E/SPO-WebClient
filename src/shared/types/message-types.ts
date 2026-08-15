@@ -674,7 +674,16 @@ export interface WsRespBuildingPlaced extends WsMessage {
   type: WsMessageType.RESP_BUILDING_PLACED;
   x: number;
   y: number;
-  buildingId: string;
+  /**
+   * Absent in practice — the RDO protocol does not return the new building's id.
+   *
+   * `TWorld.RDONewFacility` produces the created object and discards it into a
+   * variable the Delphi source names `Useless` (World.pas:3562,3566); the reply
+   * carries only a result code (capture :3399-3400). The legacy client never
+   * learns the id either — it repaints the area instead. Optional rather than
+   * `''`, so "unknown" cannot be mistaken for an id (M-A).
+   */
+  buildingId?: string;
 }
 
 export interface WsRespSurfaceData extends WsMessage {
@@ -749,9 +758,21 @@ export interface WsReqBuildingSetProperty extends WsMessage {
 
 export interface WsRespBuildingSetProperty extends WsMessage {
   type: WsMessageType.RESP_BUILDING_SET_PROPERTY;
+  /** The command was issued and the round-trip did not throw. */
   success: boolean;
   propertyName: string;
+  /** What the server actually holds after the write — empty if unconfirmed. */
   newValue: string;
+  /**
+   * The value was re-read from the server and matches a real stored value.
+   *
+   * Distinct from `success` on purpose (M-E): several legitimate commands — the
+   * disconnect family — have no read-back property at all, so they succeed
+   * without ever being confirmable. `newValue` used to echo the requested value
+   * when the read-back came back empty, which made a mutation the server threw
+   * away indistinguishable from one it applied.
+   */
+  confirmed?: boolean;
 }
 
 export interface WsReqBuildingUpgrade extends WsMessage {
@@ -1484,7 +1505,8 @@ export interface WsRespCapitolPlaced extends WsMessage {
   type: WsMessageType.RESP_CAPITOL_PLACED;
   x: number;
   y: number;
-  buildingId: string;
+  /** Absent in practice — see {@link WsRespBuildingPlaced.buildingId} (M-A). */
+  buildingId?: string;
 }
 
 export interface WsRespCapitolCoords extends WsMessage {

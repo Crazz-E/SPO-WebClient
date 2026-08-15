@@ -27,7 +27,7 @@ import { RevenueGraph } from './RevenueGraph';
 import { SuppliesPanel } from './SuppliesGroup';
 import { ProductsPanel } from './ProductsGroup';
 import { CompInputsPanel } from './InputsGroup';
-import { resolveRdoCommand, computePendingKey, checkIsMayor, getColorClass } from './property-utils';
+import { resolveRdoCommand, computePendingKey, checkIsMayor, getColorClass, collectSalaryTriplet } from './property-utils';
 import { SliderInput, TextInput } from './PropertyInputs';
 import { RatioValue, BooleanValue, StopToggle } from './PropertyDisplays';
 import { WorkforceTable, DataTable, ServiceCardList, ProductSummaryCards } from './PropertyTables';
@@ -191,13 +191,22 @@ function DefinedProperties({
       // Resolve raw property name to RDO command via rdoCommands mapping.
       // e.g., 'srvPrices0' → RDOSetPrice with index=0
       const resolved = resolveRdoCommand(propertyName, rdoCommands);
+
+      // RDOSetSalaries writes the whole triplet at once, so the two untouched
+      // salaries travel with the edited one. The gateway refuses a partial
+      // triplet rather than defaulting the missing values, which is what used
+      // to overwrite them silently (M-C).
+      const params = resolved.command === 'RDOSetSalaries'
+        ? { ...resolved.params, ...collectSalaryTriplet(properties, resolved.params?.index ?? '0', value) }
+        : resolved.params;
+
       client.onSetBuildingProperty(
         buildingX, buildingY,
         resolved.command, String(value),
-        resolved.params,
+        params,
       );
     },
-    [buildingX, buildingY, client, rdoCommands],
+    [buildingX, buildingY, client, rdoCommands, properties],
   );
 
   const handleStringPropertyChange = useCallback(

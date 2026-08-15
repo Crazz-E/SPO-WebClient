@@ -11,7 +11,7 @@ import type { PoliticalRoleInfo } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
-import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
+import { parsePropertyResponse as parsePropertyResponseHelper, parseResultCode, writeRdoFrame } from '../rdo-helpers';
 import { toErrorMessage } from '../../shared/error-utils';
 import { serialiseConstruction } from './construction-lock';
 
@@ -137,7 +137,9 @@ async function manageConstructionImpl(
       targetId: currBlock,
       action: RdoAction.SET,
       member: 'RDOAcceptCloning',
-      args: ['-1']
+      // Explicit RdoValue.int — was leaning on implicit SET numeric auto-typing
+      // (O-L7). Bytes unchanged: "#-1" (Delphi wordbool TRUE).
+      args: [RdoValue.int(-1).format()]
     }, undefined, TimeoutCategory.SLOW);
 
     // Step 4: Execute construction action (no request ID - push command)
@@ -349,7 +351,21 @@ async function deleteFacilityImpl(
       args: [RdoValue.int(x).format(), RdoValue.int(y).format()]
     }, undefined, TimeoutCategory.SLOW);
 
-    ctx.log.debug(`[Session] Building deleted successfully, result: ${result}`);
+    // M-B: this used to log `result` and return success unconditionally, so a
+    // demolition the server refused was indistinguishable from one it applied.
+    // RDODelFacility answers `res="#<TErrorCode>"`; 0 is NOERROR
+    // (Protocol/Protocol.pas). Anything else means the building is still there.
+    const resultCode = parseResultCode(result.payload);
+
+    if (resultCode !== 0) {
+      ctx.log.warn(`[Session] Building deletion refused by server, code ${resultCode}`);
+      return {
+        success: false,
+        message: `Building deletion refused by the server (error ${resultCode})`,
+      };
+    }
+
+    ctx.log.debug('[Session] Building deleted successfully');
 
     // Clear focused building since it no longer exists
     ctx.clearBuildingFocus();

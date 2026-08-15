@@ -40,7 +40,12 @@ export function resolveRdoCommand(
   if (match) {
     const [, baseName, indexStr] = match;
     const mapping = rdoCommands[baseName];
-    if (mapping?.indexed) {
+    // M-C: `allSalaries` was declared on the Salaries mapping and read nowhere.
+    // Only `indexed` was honoured, so `Salaries0` matched nothing, fell through
+    // to the passthrough at the bottom of this function, and was sent to the
+    // server as `call Salaries0` — a member it does not publish. The edit did
+    // nothing, silently. Both flags mean "this name carries a trailing index".
+    if (mapping?.indexed || mapping?.allSalaries) {
       const params: Record<string, string> = { index: indexStr, ...mapping.params };
       if (mapping.command === 'property') {
         return { command: 'property', params: { propertyName, ...params } };
@@ -67,6 +72,36 @@ export function resolveRdoCommand(
 
   // No mapping found — pass through as-is
   return { command: propertyName };
+}
+
+/**
+ * Collect the full salary triplet for an `RDOSetSalaries` call.
+ *
+ * The server writes all three salaries in one command, so editing one means
+ * resending the other two unchanged. Sending only the edited value made the
+ * gateway default the other two — to the value just typed, overwriting them
+ * silently (M-C). The gateway now refuses a partial triplet, so the three
+ * values have to be assembled here, where the current ones are known.
+ *
+ * @param properties  the building's current property values
+ * @param editedIndex '0' | '1' | '2' — the salary the user changed
+ * @param newValue    its new value
+ */
+export function collectSalaryTriplet(
+  properties: BuildingPropertyValue[],
+  editedIndex: string,
+  newValue: number,
+): Record<string, string> {
+  const current = new Map<string, string>();
+  for (const p of properties) current.set(p.name, p.value);
+
+  const triplet: Record<string, string> = {};
+  for (let i = 0; i < 3; i++) {
+    triplet[`salary${i}`] = String(i === Number(editedIndex)
+      ? newValue
+      : parseInt(current.get(`Salaries${i}`) ?? '0', 10) || 0);
+  }
+  return triplet;
 }
 
 /**

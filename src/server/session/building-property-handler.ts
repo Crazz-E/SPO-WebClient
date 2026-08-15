@@ -13,6 +13,31 @@ import { toErrorMessage } from '../../shared/error-utils';
 import { writeRdoFrame } from '../rdo-helpers';
 import { serialiseConstruction } from './construction-lock';
 
+/**
+ * Every command `buildRdoCommandArgs` knows how to build arguments for.
+ *
+ * Kept in lockstep with that switch: a name here with no `case` produces a
+ * command with no arguments, and a `case` missing here is rejected before it
+ * ever reaches the switch. Adding a command means touching both.
+ *
+ * This exists because the fallback branch used to forward anything at all
+ * (M-D), which turned a mapping bug into a silent no-op on the wire.
+ */
+export const KNOWN_RDO_COMMANDS: ReadonlySet<string> = new Set([
+  'RDOAcceptCloning', 'RDOAutoProduce', 'RDOAutoRelease', 'RDOBanMinister',
+  'RDOCacncelTransc', 'RDOCancelMovie', 'RDOCancelResearch', 'RDOConnectInput',
+  'RDOConnectOutput', 'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
+  'RDODisconnectInput', 'RDODisconnectOutput', 'RDOLaunchMovie',
+  'RDOQueueResearch', 'RDOReleaseMovie', 'RDOSelSelected', 'RDOSelectWare',
+  'RDOSetBuyingStatus', 'RDOSetCompanyInputDemand', 'RDOSetInputFluidPerc',
+  'RDOSetInputMaxPrice', 'RDOSetInputMinK', 'RDOSetInputOverPrice',
+  'RDOSetInputSortMode', 'RDOSetLoanPerc', 'RDOSetMinSalaryValue',
+  'RDOSetMinistryBudget', 'RDOSetOutputPrice', 'RDOSetPrice', 'RDOSetRole',
+  'RDOSetSalaries', 'RDOSetTaxValue', 'RDOSetTownTaxes', 'RDOSetTradeLevel',
+  'RDOSetWordsOfWisdom', 'RDOSitMayor', 'RDOSitMinister', 'RDOVote', 'RDOVoteOf',
+  'RdoRepair', 'RdoStopRepair',
+]);
+
 // =========================================================================
 // PUBLIC — setBuildingProperty
 // =========================================================================
@@ -24,7 +49,7 @@ export function setBuildingProperty(
   propertyName: string,
   value: string,
   additionalParams?: Record<string, string>
-): Promise<{ success: boolean; newValue: string }> {
+): Promise<{ success: boolean; newValue: string; confirmed?: boolean }> {
   return serialiseConstruction(ctx, () => setBuildingPropertyImpl(ctx, x, y, propertyName, value, additionalParams));
 }
 
@@ -35,7 +60,7 @@ async function setBuildingPropertyImpl(
   propertyName: string,
   value: string,
   additionalParams?: Record<string, string>
-): Promise<{ success: boolean; newValue: string }> {
+): Promise<{ success: boolean; newValue: string; confirmed?: boolean }> {
   ctx.log.debug(`[BuildingDetails] Setting ${propertyName}=${value} at (${x}, ${y})`);
 
   try {
@@ -128,8 +153,18 @@ async function setBuildingPropertyImpl(
       'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
     ]);
 
-    // Connection commands: synchronous (matches Delphi WaitForAnswer:=true).
-    // Delphi recalculates trade routes on connect — can take 5-30s.
+    // Connection commands: synchronous — we wait for the ack, because Delphi
+    // recalculates trade routes on connect and that takes 5-30s.
+    //
+    // Waiting is NOT what picks the separator, and conflating the two is what
+    // put "^" here. In the legacy client the separator depends only on whether
+    // the call site consumes a return value (RDOObjectProxy.pas:438-440), while
+    // WaitForAnswer only sets fTimeOut (:441-443). `MSProxy.RDOConnectInput(...)`
+    // is a statement, so RetValue stays varEmpty and RDOMarshalers.pas:213-217
+    // emits VoidId. Both members are `procedure` (Kernel/Kernel.pas:1077-1078),
+    // so "^" made the server push a result pointer they never pop — the SayThis
+    // freeze, on every supply-chain connect. Keep the wait, use "*".
+    //
     // Disconnect commands remain fire-and-forget (Delphi: WaitForAnswer:=false).
     // RDOConnectToTycoon: fire-and-forget (Delphi WHGeneralSheet.pas:386 — no WaitForAnswer)
     const SYNCHRONOUS_RDO_COMMANDS: ReadonlySet<string> = new Set([
@@ -162,11 +197,27 @@ async function setBuildingPropertyImpl(
         targetId: target,
         action: RdoAction.CALL,
         member: propertyName,
-        separator: '"^"',
+        separator: '"*"',
         args: formattedArgs,
       }, undefined, TimeoutCategory.SLOW);
       ctx.log.debug(`[BuildingDetails] Synchronous ${propertyName} completed`);
     } else {
+      // M-D: this branch used to accept ANY propertyName and put it on the wire
+      // verbatim. That silent fallback did two things: it masked M-C (the
+      // workforce editor emits `Salaries0`, which resolveRdoCommand cannot map
+      // because the mapping is flagged `allSalaries`, not `indexed` — so it
+      // arrived here and was sent as `call Salaries0`, a member the server does
+      // not publish), and it handed a browser-controlled string straight to the
+      // frame builder, which is the reachable half of P-H3.
+      //
+      // An unmapped name is a bug on our side, not a command. Say so.
+      if (!KNOWN_RDO_COMMANDS.has(propertyName)) {
+        throw new Error(
+          `Unknown building property command "${propertyName}" — not in KNOWN_RDO_COMMANDS. ` +
+          `It was previously sent to the server verbatim, which silently did nothing.`
+        );
+      }
+
       // Fire-and-forget RDO method call — no RID, no response expected.
       // Always use "*" (VoidId) — "^" without RID crashes the Delphi server.
       const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
@@ -182,10 +233,30 @@ async function setBuildingPropertyImpl(
       // Extract property name from RDO command for verification
       const propertyToRead = mapRdoCommandToPropertyName(ctx, propertyName, additionalParams);
       const readValues = await ctx.cacherGetPropertyList(verifyObjectId, [propertyToRead]);
-      const newValue = readValues[0] || value;
 
-      ctx.log.debug(`[BuildingDetails] Property ${propertyName} updated successfully to ${newValue}`);
-      return { success: true, newValue };
+      // M-E: this used to be `readValues[0] || value` — when the read-back came
+      // back empty, it echoed the value we had just ASKED for. A mutation the
+      // server threw away then looked exactly like one it applied, which is the
+      // single worst property a confirmation step can have. Report the value the
+      // server actually holds, or nothing.
+      //
+      // `success` still reflects "the command was issued and the round-trip did
+      // not throw" — several legitimate commands (the disconnect family) have no
+      // read-back property at all, and the client uses `success` to drive its
+      // notifications. `confirmed` is the honest signal.
+      const readBack = readValues[0];
+      const confirmed = readBack !== undefined && readBack !== '';
+
+      if (!confirmed) {
+        ctx.log.warn(
+          `[BuildingDetails] ${propertyName} was issued but could not be confirmed — ` +
+          `read-back of "${propertyToRead}" came back empty`
+        );
+      } else {
+        ctx.log.debug(`[BuildingDetails] Property ${propertyName} confirmed at ${readBack}`);
+      }
+
+      return { success: true, newValue: confirmed ? readBack : '', confirmed };
     } finally {
       await ctx.cacherCloseObject(verifyObjectId);
     }
@@ -230,11 +301,26 @@ function buildRdoCommandArgs(
     }
 
     case 'RDOSetSalaries': {
-      // Args: Salaries0, Salaries1, Salaries2 (all 3 values required)
-      const sal0 = parseInt(params.salary0 || value, 10);
-      const sal1 = parseInt(params.salary1 || value, 10);
-      const sal2 = parseInt(params.salary2 || value, 10);
-      args.push(RdoValue.int(sal0), RdoValue.int(sal1), RdoValue.int(sal2));
+      // Args: Salaries0, Salaries1, Salaries2 — the server takes all three at
+      // once, so editing one salary means resending the other two unchanged.
+      //
+      // M-C: the fallback used to be `params.salaryN || value`, which silently
+      // set ALL THREE salaries to the one the user had just typed. That is worse
+      // than failing: the two untouched salaries were overwritten without any
+      // indication. If the caller has not supplied the full triplet, refuse.
+      const missing = ['salary0', 'salary1', 'salary2'].filter(k => params[k] === undefined);
+      if (missing.length > 0) {
+        throw new Error(
+          `RDOSetSalaries needs all three salaries (missing: ${missing.join(', ')}). ` +
+          `The server writes the whole triplet; defaulting the absent ones to the ` +
+          `edited value would silently overwrite the other two.`
+        );
+      }
+      args.push(
+        RdoValue.int(parseInt(params.salary0, 10)),
+        RdoValue.int(parseInt(params.salary1, 10)),
+        RdoValue.int(parseInt(params.salary2, 10)),
+      );
       break;
     }
 
