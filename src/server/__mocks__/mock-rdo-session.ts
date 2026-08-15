@@ -95,12 +95,27 @@ export class MockRdoSession {
     const rid2 = this.getNextRequestId();
     const rid3 = this.getNextRequestId();
 
-    // SetLanguage command
-    const setLanguageCmd = `C ${rid1} sel ${interfaceServerId} call SetLanguage "*" "%English";`;
+    // Built with the production RdoCommand rather than hand-written strings.
+    //
+    // These two were hardcoded literals, so every assertion in login-flow.test.ts
+    // measured this file instead of the command builder — the §7 blind spot of
+    // the 2026-08-14 audit. A separator or quoting regression in RdoCommand
+    // could not have been observed here, because RdoCommand was never involved.
+    const setLanguageCmd = RdoCommand
+      .sel(interfaceServerId)
+      .withRequestId(rid1)
+      .call('SetLanguage')
+      .push()
+      .args(RdoValue.string('English'))
+      .build();
     this.send(setLanguageCmd);
 
-    // ClientAware command
-    const clientAwareCmd = `C ${rid2} sel ${interfaceServerId} call ClientAware "*" ;`;
+    const clientAwareCmd = RdoCommand
+      .sel(interfaceServerId)
+      .withRequestId(rid2)
+      .call('ClientAware')
+      .push()
+      .build();
     this.send(clientAwareCmd);
 
     // Logon command

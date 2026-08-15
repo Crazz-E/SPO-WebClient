@@ -970,7 +970,44 @@
        * timeouts, retry). Saves one ~100ms RTT per map refresh.
        * Opt-in while under live validation: RDO_PARALLEL_AREA_READS=true
        */
-      parallelAreaReads: getEnv("RDO_PARALLEL_AREA_READS") === "true"
+      parallelAreaReads: getEnv("RDO_PARALLEL_AREA_READS") === "true",
+      /**
+       * Populate the world connection pool.
+       *
+       * The pool was dead code: `initialize()` was called nowhere, and the only
+       * other path that adds a connection sits behind a `size > 0` guard, so it
+       * could never hold one (audit O-M1). Everything went down the primary
+       * socket — including `parallelAreaReads`, which pipelined onto a single
+       * wire. `rdo-session-lifecycle.md` §9 D2 described a behaviour the code
+       * did not have.
+       *
+       * The chicken-and-egg is fixed and O-L1 (answering a server request on the
+       * connection that asked) is fixed with it, so populating is now correct.
+       * It stays opt-in because it is a path production has never exercised, and
+       * because the pool builds its own sockets rather than going through
+       * `createSocket()` — which the protocol test harness intercepts. Enabling it
+       * under test needs a socket factory the harness can supply.
+       *
+       * Same posture as `parallelAreaReads`: RDO_WORLD_POOL=true to enable.
+       */
+      worldPool: getEnv("RDO_WORLD_POOL") === "true",
+      /**
+       * What `sendRdoRequest()` does when the server answers `A<id> error N;`.
+       *
+       * Today the promise RESOLVES and `packet.errorCode` is read by nobody:
+       * of the 93 call sites, none inspects it (audit P-M3). A refused mutation
+       * is therefore indistinguishable from an applied one — M-B and M-E are two
+       * instances of that, not two separate bugs.
+       *
+       * - `observe` (default): resolve as before, but emit one `RDO-CONTRACT`
+       *   log line per error response. Changes no behaviour; the log IS the list
+       *   of call sites that would start throwing, which is what has to be
+       *   triaged before flipping.
+       * - `reject`: the promise rejects with RdoServerError. The end state.
+       *
+       * Set RDO_ERROR_CONTRACT=reject to flip.
+       */
+      errorContract: getEnv("RDO_ERROR_CONTRACT") === "reject" ? "reject" : "observe"
     },
     /**
      * Static asset CDN — official Cloudflare R2 CDN for terrain/object assets.

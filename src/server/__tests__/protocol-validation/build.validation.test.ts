@@ -325,14 +325,15 @@ describe('Protocol Validation: buildRoad() + placeBuilding()', () => {
       expect(extracted.value).toBe(String(CAPTURED_BUILD_SUCCESS.result));
     });
 
-    it('should return result code #33 for duplicate building', () => {
-      // Verify the scenario contains a duplicate error response (bm-rdo-002)
+    it('should return result code #33 (ERROR_TooManyFacilities) for a refused build', () => {
+      // #33 is ERROR_TooManyFacilities (Protocol/Protocol.pas:62), NOT a
+      // "duplicate building" — the fixture name predates that identification.
       const duplicateExchange = createBuildMenuScenario().rdo.exchanges.find(
         e => e.id === 'bm-rdo-002'
       );
       expect(duplicateExchange).toBeDefined();
 
-      // The duplicate response should contain res="#33"
+      // The refusal response should contain res="#33"
       expect(duplicateExchange!.response).toContain('res="#33"');
 
       // Verify the result code value matches captured data

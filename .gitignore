@@ -64,3 +64,7 @@ electron/node_modules/
 .claude/install-new-skills.js
 .claude/scheduled_tasks.lock
 .claude/.typecheck-dirty
+
+# Live server log snapshots harvested for byte-level analysis (U3-b).
+# Machine-generated and large; the analysis result is recorded in report/, not the corpus.
+report/campaign/logs-cache/

@@ -86,12 +86,17 @@ describe('RDO Login Flow', () => {
       expect(clientAwareCmd).toMatchRdoCallFormat('ClientAware');
     });
 
-    it('should have no arguments', async () => {
+    it('should have no arguments and the void separator', async () => {
       await mockSession.simulateLogin('user', 'pass', 1);
       const clientAwareCmd = mockSession.getCommand(/call ClientAware/);
 
-      // Command should end with "*" ; (no arguments after separator)
-      expect(clientAwareCmd).toMatch(/"[*^]" ;$/);
+      // Was `/"[*^]" ;$/` — which accepts BOTH separators, so it could never
+      // catch a separator defect. That is the §7 blind spot: the assertion was
+      // written loose enough to pass whatever the code did. ClientAware is a
+      // `procedure` (InterfaceServer.pas:197) and the reference client emits it
+      // void — `call ClientAware "*" ;` [capture :1017, :1019].
+      expect(clientAwareCmd).toMatch(/"\*"\s*;$/);
+      expect(clientAwareCmd).not.toContain('"^"');
     });
   });
 
