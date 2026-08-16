@@ -45,6 +45,22 @@ export interface HarnessConfig {
   httpScenarios?: HttpScenario[];
   /** Global strict validation config overrides */
   strictValidation?: Partial<StrictValidatorConfig>;
+  /**
+   * World connection pool. Off by default: a populated pool takes over world
+   * traffic, so leaving it on would silently move every wire assertion in this
+   * directory onto a connection the test never configured.
+   *
+   * When enabled, pool sockets are built from `poolSocketConfigs` and tracked
+   * separately — they do NOT consume `socketConfigs` entries and do NOT shift
+   * `getSockets()` indices.
+   */
+  worldPool?: {
+    enabled: boolean;
+    /** Per-pool-connection configs, in creation order */
+    socketConfigs?: SocketConfig[];
+    /** Make the Nth pool connection (0-based) fail to connect */
+    failConnectionAt?: number;
+  };
 }
 
 /** The test harness instance */
@@ -55,6 +71,10 @@ export interface ProtocolTestHarness {
   httpMock: HttpMock;
   /** Get all MockTcpSocket instances created during the test */
   getSockets(): MockTcpSocket[];
+  /** Get the MockTcpSocket instances the world pool built (empty unless enabled) */
+  getPoolSockets(): MockTcpSocket[];
+  /** Commands captured on pool connections only */
+  getPoolCapturedCommands(): string[];
   /** Get the RdoMock for a specific socket */
   getRdoMock(socketIndex: number): RdoMock | undefined;
   /** Get captured commands from all sockets combined */
@@ -93,12 +113,11 @@ export function createProtocolTestHarness(config: HarnessConfig): ProtocolTestHa
     }
   }
 
-  // Configure net.Socket mock — each call gets its own RdoMock from socketConfigs
-  const netMock = jest.requireMock('net');
-  netMock.Socket.mockImplementation(() => {
-    const idx = socketCreateCount++;
-    const socketConfig = config.socketConfigs[idx];
+  const poolSockets: MockTcpSocket[] = [];
+  let poolCreateCount = 0;
 
+  /** Build one MockTcpSocket from a SocketConfig, registering its mock + validator. */
+  const buildSocket = (socketConfig: SocketConfig | undefined): MockTcpSocket => {
     // Create per-socket RdoMock
     const rdoMock = new RdoMock();
     if (socketConfig) {
@@ -150,6 +169,13 @@ export function createProtocolTestHarness(config: HarnessConfig): ProtocolTestHa
       }
     }
 
+    return socket;
+  };
+
+  // Configure net.Socket mock — each call gets its own RdoMock from socketConfigs
+  const netMock = jest.requireMock('net');
+  netMock.Socket.mockImplementation(() => {
+    const socket = buildSocket(config.socketConfigs[socketCreateCount++]);
     createdSockets.push(socket);
     return socket;
   });
@@ -212,12 +238,42 @@ export function createProtocolTestHarness(config: HarnessConfig): ProtocolTestHa
   const { StarpeaceSession: SessionClass } = require('../../spo_session');
   const session = new SessionClass() as StarpeaceSession;
 
+  // The pool is off unless a test opts in — see HarnessConfig.worldPool.
+  const poolEnabled = config.worldPool?.enabled === true;
+  session.setWorldPoolEnabled(poolEnabled);
+
+  // Pool sockets come from their own list so they neither consume socketConfigs
+  // entries nor shift getSockets() indices.
+  session.setSocketFactory((purpose: string) => {
+    if (!purpose.startsWith('pool:')) {
+      return new netMock.Socket();
+    }
+    const idx = poolCreateCount++;
+    if (config.worldPool?.failConnectionAt === idx) {
+      const failing = buildSocket(undefined);
+      failing.failNextConnect = true;
+      poolSockets.push(failing);
+      return failing;
+    }
+    const socket = buildSocket(config.worldPool?.socketConfigs?.[idx]);
+    poolSockets.push(socket);
+    return socket;
+  });
+
   return {
     session,
     httpMock,
 
     getSockets(): MockTcpSocket[] {
       return [...createdSockets];
+    },
+
+    getPoolSockets(): MockTcpSocket[] {
+      return [...poolSockets];
+    },
+
+    getPoolCapturedCommands(): string[] {
+      return poolSockets.flatMap(s => s.getCapturedCommands());
     },
 
     getRdoMock(socketIndex: number): RdoMock | undefined {
@@ -271,14 +327,16 @@ export function createProtocolTestHarness(config: HarnessConfig): ProtocolTestHa
     },
 
     cleanup(): void {
-      for (const socket of createdSockets) {
+      for (const socket of [...createdSockets, ...poolSockets]) {
         socket.destroy();
         socket.removeAllListeners();
       }
       createdSockets.length = 0;
+      poolSockets.length = 0;
       rdoMocks.length = 0;
       validators.length = 0;
       socketCreateCount = 0;
+      poolCreateCount = 0;
       httpMock.reset();
     },
   };

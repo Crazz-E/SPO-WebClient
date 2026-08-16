@@ -131,8 +131,19 @@ export class MockTcpSocket extends EventEmitter {
     return true;
   }
 
+  /**
+   * When set, the next connect() emits 'error' instead of succeeding.
+   * Lets a test drive the pool's "could not be populated" fallback.
+   */
+  failNextConnect = false;
+
   /** Simulates socket.connect() — resolves immediately */
   connect(port: number, host: string, callback?: () => void): this {
+    if (this.failNextConnect) {
+      this.failNextConnect = false;
+      setImmediate(() => this.emit('error', new Error(`ECONNREFUSED ${host}:${port}`)));
+      return this;
+    }
     if (callback) {
       setImmediate(callback);
     }

@@ -61,6 +61,7 @@ function makeCtx(): { ctx: LoginContext; sent: Sent[]; known: Map<string, string
     log: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
     createSocket: jest.fn().mockResolvedValue(undefined),
     initWorldPool: jest.fn(),
+    populateWorldPool: jest.fn(),
     getSocket: jest.fn().mockReturnValue(null),
     sendRdoRequest,
     setInterfaceServerId: jest.fn(),

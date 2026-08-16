@@ -63,12 +63,55 @@ export const config = {
      *
      * The chicken-and-egg is fixed and O-L1 (answering a server request on the
      * connection that asked) is fixed with it, so populating is now correct.
-     * It stays opt-in because it is a path production has never exercised, and
-     * because the pool builds its own sockets rather than going through
-     * `createSocket()` — which the protocol test harness intercepts. Enabling it
-     * under test needs a socket factory the harness can supply.
+     * The socket factory the test harness needed exists (`PoolSocketFactory`),
+     * and `world-pool.validation.test.ts` exercises a populated pool, so the
+     * path is no longer untested.
      *
-     * Same posture as `parallelAreaReads`: RDO_WORLD_POOL=true to enable.
+     * OFF by default — decided 2026-08-16 on conformity grounds, after checking
+     * what the reference client actually does. See the CONFORMITY note below;
+     * the machinery is correct and tested, it is the *policy* that is off.
+     *
+     * TWO ordering rules make it safe when enabled, both proven by that suite:
+     * - the pool is populated only AFTER the session is bound to the primary
+     *   socket (`populateWorldPool()`, called past RegisterEventsById), because
+     *   `get RDOCnntId` is answered with the id of the CARRYING connection
+     *   (RDOQueryServer.pas:269-274) and that id binds the server-side
+     *   TClientView's push channel and teardown trigger
+     *   (InterfaceServer.pas:1919-1923);
+     * - `CONNECTION_BOUND_MEMBERS` keeps that read on the primary socket even if
+     *   the ordering is ever broken again.
+     *
+     * CONFORMITY — why it is off. The reference client has NO connection
+     * concurrency to the Interface Server at all. Established 2026-08-16 by
+     * exhaustive sweep of `Voyager/`, not by sampling:
+     *
+     * - All 11 `.Server :=` assignments under Voyager/ were enumerated. Exactly
+     *   two target the IS (`ServerCnxHandler.pas:1034` and `:2737`) and both
+     *   assign the SAME single field `fISCnx`; the second calls
+     *   `fISProxy.Logoff()` first, so it is the reconnect path, not a second
+     *   connection. The fields are singular — `fISCnx : IRDOConnectionInit`,
+     *   `fWSISCnx : TWinSockRDOConnection` (`:184-185`). No array, no collection.
+     *   The others go to Directory, Data Access/Model, Cache and Mail.
+     * - Voyager does not multiplex on that one connection either. Its only
+     *   concurrency knob, `WaitForAnswer`, just selects the timeout handed to
+     *   `MarshalMethodCall`: `fTimeOut` when a reply is needed, `0` when it is
+     *   not (`Rdo/Client/RDOObjectProxy.pas:441-443`, and `:459-461` for `set`).
+     *   Calls serialise behind `TRDOObjectProxy.Lock` / `fDispLock`.
+     * - Delphi's TRDOConnectionPool is the IS's pool of connections to the DATA
+     *   ACCESS server (`InterfaceServer.pas:333, 2634, 2816`), never instantiated
+     *   anywhere under Voyager/, and it allocates by OWNERSHIP — one connection
+     *   bound to a ClientView for its lifetime (`InterfaceServer.pas:3230-3234`,
+     *   observed live in the 2026-08-16 server logs), refcounted, not
+     *   round-robin per request (`RDOConnectionPool.pas:78-120`).
+     *
+     * So a world pool is our own shape, with no precedent in the client we are
+     * wire-compatible with, and it would put up to 6 connections per user on a
+     * shared server. No known fact contradicts Voyager here, so Voyager wins.
+     *
+     * It also buys little: `parallelAreaReads` is the only caller that overlaps
+     * requests, and it is opt-in too.
+     *
+     * RDO_WORLD_POOL=true to enable — everything behind it is tested and safe.
      */
     worldPool: getEnv('RDO_WORLD_POOL') === 'true',
 

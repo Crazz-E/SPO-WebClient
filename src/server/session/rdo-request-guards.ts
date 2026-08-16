@@ -19,6 +19,15 @@
  * server *does* execute the procedure body before failing to marshal the
  * phantom result, so there is no "the server rejects it harmlessly" escape.
  *
+ * **Nor is a low parameter count an escape.** Probe U1-a (2026-08-16) emitted
+ * `"^"` on `ClientAware` — a `procedure` with 0 parameters, so the hidden result
+ * pointer stays in a register and the stack stays balanced. The server did not
+ * freeze; it answered `A<rid> error 9;` (`errIllegalFunctionRes`,
+ * `RDOQueryServer.pas:484`) in 91 ms. That is still an ERROR, never an ack: the
+ * call site cannot tell whether the procedure ran. So arity changes the blast
+ * radius, not the verdict — every procedure takes `"*"` + QueryId.
+ * See `doc/rdo-protocol-architecture.md` §2.1.0.
+ *
  * The reference client emits these with `"*"` + a QueryId and receives a clean
  * empty ack:
  *   `C 2174 sel 30430748 call AddLine "*" "%test message";`  → `A2174 ;`
@@ -79,6 +88,46 @@ export function assertNotVoidPush(packetData: { separator?: string; member?: str
     `(one form per intent; see doc/rdo-protocol-architecture.md §8.5). ` +
     `Command: ${packetData.member || 'unknown'}. Use writeRdoFrame() for fire-and-forget commands.`
   );
+}
+
+/**
+ * Members whose value is a property of the TCP connection the query arrived on,
+ * not of the addressed object. They MUST travel the primary world socket — the
+ * one the session is bound to — never a pool connection.
+ *
+ * `RDOCnntId` is intercepted by the query parser *before* any object lookup and
+ * answered with `ConnId`, the id of the connection carrying the frame
+ * (`RDOQueryServer.pas:269-274`, constant `tidConnRequestName` at :9). The id is
+ * the address of the socket object itself
+ * (`WinSockRDOConnectionsServer.pas:664-668`).
+ *
+ * The value is then fed straight to `RegisterEventsById`, which binds the
+ * server-side `TClientView` to that connection — both as the push channel and as
+ * the teardown trigger:
+ *
+ *   fClientConnection := fServer.fClientsServerConn.GetClientConnectionById(ClientId);
+ *   fClientConnection.OnDisconnect := OnDisconnect;
+ *   fClientEventsProxy.SetConnection(fClientConnection);
+ *     — Interface Server/InterfaceServer.pas:1919-1923
+ *
+ * Read on a pool connection, the session binds to a socket the pool owns and may
+ * destroy at will (`RdoConnectionPool.replaceConnection` on a degraded
+ * connection): `OnDisconnect` then tears down the whole ClientView while the
+ * primary socket is healthy — the zombie-session failure of O-H1/O-H2, from a
+ * new direction.
+ *
+ * Add a member here only with the server-side interception cited.
+ */
+export const CONNECTION_BOUND_MEMBERS: ReadonlyMap<string, string> = new Map([
+  ['RDOCnntId', 'answered from ConnId before object lookup — Rdo/Server/RDOQueryServer.pas:269-274'],
+]);
+
+/**
+ * Returns true when the request reads a value bound to the carrying connection,
+ * and must therefore bypass the world connection pool.
+ */
+export function isConnectionBoundMember(packetData: { member?: string }): boolean {
+  return !!packetData.member && CONNECTION_BOUND_MEMBERS.has(packetData.member);
 }
 
 /** Returns true if the buffer can accept another request. */

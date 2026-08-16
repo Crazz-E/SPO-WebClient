@@ -33,6 +33,18 @@ export interface PooledConnection {
   createdAt: number;
 }
 
+/**
+ * Builds the raw TCP socket a pool connection wraps.
+ *
+ * Exists so the socket can be substituted without mocking the `net` module:
+ * the protocol test harness replaces `net.Socket` globally and hands out
+ * per-socket RDO scenarios in creation order, so a pool that constructs its own
+ * sockets silently consumes the scenarios meant for named sockets. With a
+ * factory the harness supplies pool sockets from a separate list and the
+ * indices of `getSockets()` stay stable.
+ */
+export type PoolSocketFactory = () => net.Socket;
+
 export interface PoolConfig {
   /** Maximum connections in the pool */
   maxSize: number;
@@ -44,12 +56,15 @@ export interface PoolConfig {
   connectTimeoutMs: number;
   /** Max consecutive timeouts before marking connection degraded */
   maxConsecutiveTimeouts: number;
+  /** How to build the underlying socket (default: `new net.Socket()`) */
+  socketFactory: PoolSocketFactory;
 }
 
 const DEFAULT_POOL_CONFIG: Partial<PoolConfig> = {
   maxSize: 6,
   connectTimeoutMs: 10_000,
   maxConsecutiveTimeouts: 3,
+  socketFactory: () => new net.Socket(),
 };
 
 type LogFn = {
@@ -237,7 +252,7 @@ export class RdoConnectionPool {
    */
   private createConnection(): Promise<PooledConnection> {
     return new Promise((resolve, reject) => {
-      const socket = new net.Socket();
+      const socket = this.config.socketFactory();
       // Disable Nagle — see createSocket() in spo_session.ts: concurrent small
       // RDO writes must not wait a full RTT in the kernel buffer.
       socket.setNoDelay(true);
@@ -310,6 +325,9 @@ export class RdoConnectionPool {
       const active = this.connections.reduce((sum, c) => sum + c.activeRequests, 0);
       this.log.debug(`[Pool] Health: ${this.connections.length}/${this.config.maxSize} connections, ${active} active requests`);
     }, this.HEALTH_CHECK_INTERVAL_MS);
+    // A 60 s repeating timer is not a reason to keep the process alive — and
+    // under Jest it is a leaked handle that outlives the test file.
+    this.healthCheckInterval.unref?.();
   }
 
   /**
