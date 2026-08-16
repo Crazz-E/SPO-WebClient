@@ -212,10 +212,27 @@ Deliberate, documented departures from the reference client. Each is wire-legal 
 > have signalled it. That had to be corrected first; populating the pool would have turned a
 > dormant defect into an active one.
 >
-> Population is **opt-in** (`RDO_WORLD_POOL=true`), matching the posture already used for
-> `parallelAreaReads`: this is a path production has never exercised. It also cannot be covered
-> by the protocol test harness yet — the pool builds its own `net.Socket` instead of going through
-> `createSocket()`, which the harness intercepts. Injecting a socket factory is the prerequisite
-> for testing it, and for turning the flag on by default.
+> **Update 2026-08-16.** The socket-factory prerequisite is done (`PoolSocketFactory`), the harness
+> exercises a populated pool (`world-pool.validation.test.ts`), and one more defect was found and
+> fixed on the way: `initWorldPool()` ran *before* the login sequence, so `get RDOCnntId` could
+> travel a pool connection. That value is answered with the id of the CARRYING connection
+> (`RDOQueryServer.pas:269-274`) and binds the `TClientView` to it as push channel and teardown
+> trigger (`InterfaceServer.pas:1919-1923`) — a connection the pool may destroy on degradation.
+> Population is now a separate step (`populateWorldPool()`, past `RegisterEventsById`), and
+> `CONNECTION_BOUND_MEMBERS` keeps that read on the primary socket regardless.
+>
+> Population nevertheless stays **opt-in** (`RDO_WORLD_POOL=true`) — now on **conformity** grounds
+> rather than for lack of tests. The reference client has no connection concurrency to the IS at
+> all: all 11 `.Server :=` sites under `Voyager/` were enumerated, exactly two target the IS and
+> both assign the same single field `fISCnx` (`ServerCnxHandler.pas:1034`, `:2737`, the second
+> behind a `Logoff` — the reconnect path). `WaitForAnswer`, its only concurrency knob, merely
+> selects the timeout passed to `MarshalMethodCall` (`RDOObjectProxy.pas:441-443`); calls serialise
+> behind `fDispLock`. Delphi's `TRDOConnectionPool` is the IS→DataAccess pool
+> (`InterfaceServer.pas:333, 2634, 2816`), never instantiated under `Voyager/`, and it allocates by
+> ownership — one connection bound to a `ClientView` for its lifetime (`:3230-3234`, observed live
+> in the 2026-08-16 server logs) — not round-robin per request (`RDOConnectionPool.pas:78-120`).
+>
+> A world pool is therefore our own shape, with no precedent in the client we are wire-compatible
+> with. Everything behind the flag is tested and safe; it is the policy that is off.
 
 ---
