@@ -1,0 +1,1059 @@
+{
+  "tool": "rdo-conformance",
+  "version": 1,
+  "startedAt": "2026-08-16T19:35:45.132Z",
+  "finishedAt": "2026-08-16T19:36:24.116Z",
+  "target": "shared",
+  "transport": "live",
+  "world": "planitia",
+  "session": {
+    "clientViewId": "6968340",
+    "interfaceServerId": "6501416",
+    "tycoonId": "37",
+    "company": "SPO_test3 - Green",
+    "loginAt": "2026-08-16T19:35:49.171Z",
+    "logoffAt": "2026-08-16T19:36:24.116Z"
+  },
+  "suites": [
+    {
+      "name": "types",
+      "steps": [
+        {
+          "suite": "types",
+          "id": "string-property-username",
+          "intent": "a published `string` property reads back as `$` — live 2026-08-16 (`UserName=\"$SPO_test3\"`), InterfaceServer.pas:126",
+          "frame": "C sel 6968340 get UserName",
+          "outcome": {
+            "response": "UserName=\"$SPO_test3\"",
+            "elapsedMs": 226
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^UserName=\"\\$[^\"]+\"$/; got \"UserName=\\\"$SPO_test3\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "string-property-mailaccount",
+          "intent": "`MailAccount` is `$` and carries an address — live 2026-08-16, capture login-full",
+          "frame": "C sel 6968340 get MailAccount",
+          "outcome": {
+            "response": "MailAccount=\"$SPO_test3@Planitia.net\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^MailAccount=\"\\$[^\"@]+@[^\"]+\"$/; got \"MailAccount=\\\"$SPO_test3@Planitia.net\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "string-property-compositename",
+          "intent": "`CompositeName` is `$` — live 2026-08-16, InterfaceServer.pas:127",
+          "frame": "C sel 6968340 get CompositeName",
+          "outcome": {
+            "response": "CompositeName=\"$SPO_test3\"",
+            "elapsedMs": 92
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^CompositeName=\"\\$[^\"]+\"$/; got \"CompositeName=\\\"$SPO_test3\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "string-property-worldname",
+          "intent": "a `string` property on the InterfaceServer is `$` too — capture login-full (`WorldName=\"$Planitia\"`)",
+          "frame": "C sel 6501416 get WorldName",
+          "outcome": {
+            "response": "WorldName=\"$Planitia\"",
+            "elapsedMs": 90
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^WorldName=\"\\$[^\"]+\"$/; got \"WorldName=\\\"$Planitia\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "int-property-tycoonid",
+          "intent": "an `integer` property reads back as `#` — capture login-full (`TycoonId=\"#37\"`)",
+          "frame": "C sel 6968340 get TycoonId",
+          "outcome": {
+            "response": "TycoonId=\"#37\"",
+            "elapsedMs": 92
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^TycoonId=\"#\\d+\"$/; got \"TycoonId=\\\"#37\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "int-property-worldxsize",
+          "intent": "`WorldXSize` is `#` — capture login-full (`WorldXSize=\"#2000\"`)",
+          "frame": "C sel 6501416 get WorldXSize",
+          "outcome": {
+            "response": "WorldXSize=\"#2000\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^WorldXSize=\"#\\d+\"$/; got \"WorldXSize=\\\"#2000\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "olevariant-function-result",
+          "intent": "a function returning OleVariant answers `res=\"%…\"` — capture :986-990",
+          "outcome": {
+            "response": "res=\"%LastX.0=939\r\nLastY.0=994\r\nLastTimeOnline=2026-08-16\r\n\"",
+            "elapsedMs": 483
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%/; got \"res=\\\"%LastX.0=939\\r\\nLastY.0=994\\r\\nLastTimeOnline=2026-08-16\\r\\n\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-int-control",
+          "intent": "control — `#1` parses; if this is not error 3 the harness is wrong",
+          "frame": "C sel 6968340 set RdoConfProbe=\"#1\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 93
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-bool-true",
+          "intent": "booleans travel as `#-1` and parse as integers",
+          "frame": "C sel 6968340 set RdoConfProbe=\"#-1\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 92
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-double-integral",
+          "intent": "`@1` — double without decimal separator",
+          "frame": "C sel 6968340 set RdoConfProbe=\"@1\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-double-fractional",
+          "intent": "`@1234.5` — the server locale decimal separator is `.` (live 2026-08-16); a `,` locale would answer error 4",
+          "frame": "C sel 6968340 set RdoConfProbe=\"@1234.5\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 92
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-single-fractional",
+          "intent": "`!3.14` — same question in single precision",
+          "frame": "C sel 6968340 set RdoConfProbe=\"!3.14\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 104
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "separators",
+      "steps": [
+        {
+          "suite": "separators",
+          "id": "variant-on-function",
+          "intent": "`\"^\"` on a Delphi function answers `res=` — capture :986",
+          "outcome": {
+            "response": "res=\"%939\"",
+            "elapsedMs": 278
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"[%$]/; got \"res=\\\"%939\\\"\""
+          }
+        },
+        {
+          "suite": "separators",
+          "id": "set-acks-empty",
+          "intent": "`set` carries no separator and is acked `A<id> ;` — capture :978-979 (`set EnableEvents=\"#-1\"`)",
+          "frame": "C sel 6968340 set EnableEvents=\"#-1\"",
+          "outcome": {
+            "response": "",
+            "elapsedMs": 90
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "exact \"\"; got \"\""
+          }
+        }
+      ],
+      "skipped": [
+        {
+          "id": "variant-on-zero-param-procedure",
+          "reason": "\"^\" on a procedure — needs --allow-variant-on-procedure (settled live 2026-08-16: error 9; re-running buys nothing)"
+        }
+      ],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "errors",
+      "steps": [
+        {
+          "suite": "errors",
+          "id": "set-unknown-property-grammar",
+          "intent": "`error N setting <Prop>` — RDOQueryServer.pas:338-346",
+          "frame": "C sel 6968340 set RdoConfProbe=\"#1\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "errors",
+          "id": "get-unknown-property-grammar",
+          "intent": "`error N getting <Prop>` — RDOQueryServer.pas:278. [INFERRED] N = 5: GetPropInfo nil → CallMethod fallthrough (RDOObjectServer.pas:112-116) → MethodAddress nil → errUnexistentMethod (:326)",
+          "frame": "C sel 6968340 get RdoConfProbe",
+          "outcome": {
+            "response": "error 5 getting RdoConfProbe",
+            "errorCode": 5,
+            "elapsedMs": 92
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^error [35] getting RdoConfProbe$/; got \"error 5 getting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "errors",
+          "id": "call-unknown-method",
+          "intent": "`call` on a name that is no method answers bare `error 5` — RDOObjectServer.pas:326 (MethodAddress nil, nothing runs), CallCommand appends no suffix (RDOQueryServer.pas:504)",
+          "frame": "C sel 6968340 call RdoConfNoSuchMethod \"^\"",
+          "outcome": {
+            "response": "error 5",
+            "errorCode": 5,
+            "elapsedMs": 473
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 5 matching /^error 5$/; got \"error 5\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "lifecycle",
+      "steps": [
+        {
+          "suite": "lifecycle",
+          "id": "rdocnntid-connection-bound",
+          "intent": "`RDOCnntId` is answered from the carrying connection (RDOQueryServer.pas:269-274) as `$` — capture login-full",
+          "frame": "C sel 6968340 get RDOCnntId",
+          "outcome": {
+            "response": "RDOCnntId=\"$7263428\"",
+            "elapsedMs": 406
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^RDOCnntId=\"\\$\\d+\"$/; got \"RDOCnntId=\\\"$7263428\\\"\""
+          }
+        },
+        {
+          "suite": "lifecycle",
+          "id": "serverbusy-poll",
+          "intent": "`get ServerBusy` on the ClientView is a boolean `#0`/`#-1` — capture :993-994",
+          "frame": "C sel 6968340 get ServerBusy",
+          "outcome": {
+            "response": "ServerBusy=\"#0\"",
+            "elapsedMs": 7670
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^ServerBusy=\"#(0|-1)\"$/; got \"ServerBusy=\\\"#0\\\"\""
+          }
+        },
+        {
+          "suite": "lifecycle",
+          "id": "pick-event",
+          "intent": "`call PickEvent \"^\" \"#<TycoonId>\"` answers `res=\"%…\"` — capture :980-981",
+          "outcome": {
+            "response": "res=\"%\"",
+            "elapsedMs": 100
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%/; got \"res=\\\"%\\\"\""
+          }
+        },
+        {
+          "suite": "lifecycle",
+          "id": "company-count",
+          "intent": "`GetCompanyCount` reads as `#` — capture login-full",
+          "frame": "C sel 6968340 get GetCompanyCount",
+          "outcome": {
+            "response": "GetCompanyCount=\"#1\"",
+            "elapsedMs": 101
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^GetCompanyCount=\"#\\d+\"$/; got \"GetCompanyCount=\\\"#1\\\"\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "reads",
+      "steps": [
+        {
+          "suite": "reads",
+          "id": "world-y-size",
+          "intent": "`WorldYSize` is `#` — capture login-full",
+          "frame": "C sel 6501416 get WorldYSize",
+          "outcome": {
+            "response": "WorldYSize=\"#2000\"",
+            "elapsedMs": 99
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^WorldYSize=\"#\\d+\"$/; got \"WorldYSize=\\\"#2000\\\"\""
+          }
+        },
+        {
+          "suite": "reads",
+          "id": "world-season",
+          "intent": "`WorldSeason` is `#` — capture login-full (`WorldSeason=\"#2\"`)",
+          "frame": "C sel 6501416 get WorldSeason",
+          "outcome": {
+            "response": "WorldSeason=\"#1\"",
+            "elapsedMs": 100
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^WorldSeason=\"#\\d+\"$/; got \"WorldSeason=\\\"#1\\\"\""
+          }
+        },
+        {
+          "suite": "reads",
+          "id": "da-addr",
+          "intent": "`DAAddr` is `$` — capture login-full",
+          "frame": "C sel 6501416 get DAAddr",
+          "outcome": {
+            "response": "DAAddr=\"$158.69.153.134\"",
+            "elapsedMs": 100
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^DAAddr=\"\\$[^\"]+\"$/; got \"DAAddr=\\\"$158.69.153.134\\\"\""
+          }
+        },
+        {
+          "suite": "reads",
+          "id": "mail-port",
+          "intent": "`MailPort` is `#` — capture login-full",
+          "frame": "C sel 6501416 get MailPort",
+          "outcome": {
+            "response": "MailPort=\"#10000\"",
+            "elapsedMs": 99
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^MailPort=\"#\\d+\"$/; got \"MailPort=\\\"#10000\\\"\""
+          }
+        },
+        {
+          "suite": "reads",
+          "id": "tycoon-cookie-blob",
+          "intent": "the empty cookie id returns the whole blob as `Key=Value` lines — capture :986-990",
+          "outcome": {
+            "response": "res=\"%LastX.0=939\r\nLastY.0=994\r\nLastTimeOnline=2026-08-16\r\n\"",
+            "elapsedMs": 117
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "predicate: res=\"%…\" whose lines are all `Key=Value` (or empty); got \"res=\\\"%LastX.0=939\\r\\nLastY.0=994\\r\\nLastTimeOnline=2026-08-16\\r\\n\\\"\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "map",
+      "steps": [
+        {
+          "suite": "map",
+          "id": "connect-map-service",
+          "intent": "`idof WSObjectCacher` on the map socket (port 6000) answers an object id — capture login-full :431-432",
+          "outcome": {
+            "response": "objid=\"3173064\"",
+            "elapsedMs": 185,
+            "wire": [
+              ">> C 1057 idof \"WSObjectCacher\";",
+              "<< A1057 objid=\"3173064\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^objid=\"\\d+\"$/; got \"objid=\\\"3173064\\\"\""
+          }
+        },
+        {
+          "suite": "map",
+          "id": "objects-in-area",
+          "intent": "`call ObjectsInArea \"^\" #x,#y,#w,#h` at the tycoon's last camera position — 5 ints per object, CRLF (login-full :529-530)",
+          "outcome": {
+            "response": "res=\"%1500\r\n29\r\n16\r\n933\r\n1000\r\n2842\r\n36\r\n17\r\n941\r\n1049\r\n2812\r\n36\r\n17\r\n943\r\n996\r\n4822\r\n36\r\n17\r\n944\r\n1046\r\n2432\r\n36\r\n17\r\n944\r\n1055\r\n652\r\n36\r\n17\r\n947\r\n996\r\n7272\r\n36\r\n17\r\n947\r\n1044\r\n2722\r\n36\r\n16\r\n947\r\n1045\r\n2662\r\n36\r\n16\r\n947\r\n1046\r\n2712\r\n36\r\n16\r\n947\r\n1047\r\n1782\r\n36\r\n17\r\n948\r\n1045\r\n2732\r\n36\r\n16\r\n948\r\n1047\r\n2892\r\n36\r\n16\r\n949\r\n1047\r\n602\r\n36\r\n17\r\n950\r\n996\r\n752\r\n36\r\n17\r\n950\r\n1000\r\n7262\r\n36\r\n17\r\n950\r\n1047\"",
+            "elapsedMs": 207,
+            "wire": [
+              ">> C 1058 sel 6968340 call ObjectsInArea \"^\" \"#939\",\"#994\",\"#64\",\"#64\";",
+              "<< A1058 res=\"%1500\r\n29\r\n16\r\n933\r\n1000\r\n2842\r\n36\r\n17\r\n941\r\n1049\r\n2812\r\n36\r\n17\r\n943\r\n996\r\n4822\r\n36\r\n17\r\n944\r\n1046\r\n2432\r\n36\r\n17\r\n944\r\n1055\r\n652\r\n36\r\n17\r\n947\r\n996\r\n7272\r\n36\r\n17\r\n947\r\n1044\r\n2722\r\n36\r\n16\r\n947\r\n1045\r\n2662\r\n36\r\n16\r\n947\r\n1046\r\n2712\r\n36\r\n16\r\n947\r\n1047\r\n1782\r\n36\r\n17\r\n948\r\n1045\r\n2732\r\n36\r\n16\r\n948\r\n1047\r\n2892\r\n36\r\n16\r\n949\r\n1047\r\n602\r\n36\r\n17\r\n950\r\n996\r\n752\r\n36\r\n17\r\n950\r\n1000\r\n7262\r\n36\r\n17\r\n950\r\n1047\"",
+              ">> C 1059 sel 6968340 call SegmentsInArea \"^\" \"#1\",\"#939\",\"#994\",\"#1003\",\"#1058\";",
+              "<< A1059 res=\"%967\r\n999\r\n981\r\n999\r\n-13\r\n-7\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1048\r\n946\r\n1048\r\n23\r\n46\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1041\r\n946\r\n1041\r\n52\r\n76\r\n2\r\n2\r\n0\r\n0\r\n932\r\n1034\r\n946\r\n1034\r\n35\r\n59\r\n0\r\n1\r\n0\r\n0\r\n932\r\n1027\r\n946\r\n1027\r\n0\r\n25\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1020\r\n939\r\n1020\r\n5\r\n-42\r\n1\r\n5\r\n0\r\n0\r\n932\r\n1013\r\n939\r\n1013\r\n45\r\n-2\r\n-1\r\n3\r\n0\r\n0\r\n932\r\n999\r\n946\r\n999\r\n2\r\n28\r\n0\r\n0\r\n0\r\n0\r\n946\r\n992\r\n946\r\n999\r\n34\r\n28\r\n2\r\n0\r\n0\r\n0\r\n946\r\n999\r\n953\r\n999\r\n28\r\n13\r\n0\r\n2\r\n0\r\n0\r\n946\r\n999\r\n946\r\n1006\r\n28\r\n40\r\n0\r\n3\r\n0\r\n0\r\n953\r\n992\r\n953\r\n999\r\n19\r\n13\r\n4\r\n2\r\n0\r\n0\r\n953\r\n999\r\n967\r\n999\r\n13\r\n-13\r\n2\r\n0\r\n0\r\n0\r\n953\r\n999\r\n953\r\n1006\r\n13\r\n26\r\n2\r\n5\r\n0\r\n0\r\n967\r\n985\r\n967\r\n999\r\n19\r\n-13\r\n4\r\n0\r\n0\r\n0\r\n967\r\n999\r\n967\r\n1013\r\n-13\r\n29\r\n0\r\n-1\r\n0\r\n0\r\n981\r\n999\r\n1174\r\n999\r\n-7\r\n34\r\n0\r\n-2\r\n0\r\n0\r\n981\r\n999\r\n981\r\n1013\r\n-7\r\n36\r\n0\r\n0\r\n0\r\n0\r\n981\r\n985\r\n981\r\n999\r\n26\r\n-7\r\n4\r\n0\r\n0\r\n0\r\n981\r\n1013\r\n988\r\n1013\r\n36\r\n67\r\n0\r\n2\r\n0\r\n0\r\n981\r\n1013\r\n981\r\n1020\r\n36\r\n-3\r\n0\r\n1\r\n0\r\n0\r\n967\r\n1013\r\n981\r\n1013\r\n29\r\n36\r\n-1\r\n0\r\n0\r\n0\r\n960\r\n1013\r\n967\r\n1013\r\n-4\r\n29\r\n2\r\n-1\r\n0\r\n0\r\n946\r\n1020\r\n946\r\n1027\r\n30\r\n25\r\n1\r\n0\r\n0\r\n0\r\n946\r\n1027\r\n946\r\n1034\r\n25\r\n59\r\n0\r\n1\r\n0\r\n0\r\n946\r\n1034\r\n946\r\n1041\r\n59\r\n76\r\n1\r\n2\r\n0\r\n0\r\n946\r\n1041\r\n953\r\n1041\r\n76\r\n64\r\n2\r\n5\r\n0\r\n0\r\n946\r\n1041\r\n946\r\n1048\r\n76\r\n46\r\n2\r\n0\r\n0\r\n0\r\n953\r\n1034\r\n953\r\n1041\r\n45\r\n64\r\n3\r\n5\r\n0\r\n0\r\n953\r\n1041\r\n953\r\n1048\r\n64\r\n33\r\n5\r\n2\r\n0\r\n0\r\n953\r\n1048\r\n953\r\n1055\r\n33\r\n84\r\n2\r\n4\r\n0\r\n0\r\n946\r\n1048\r\n953\r\n1048\r\n46\r\n33\r\n0\r\n2\r\n0\r\n0\r\n946\r\n1048\r\n946\r\n1055\r\n46\r\n98\r\n0\r\n2\r\n0\r\n0\r\n\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%((-?\\d+\\r?\\n){4}-?\\d+(\\r?\\n)?)*\"$/; got \"res=\\\"%1500\\r\\n29\\r\\n16\\r\\n933\\r\\n1000\\r\\n2842\\r\\n36\\r\\n17\\r\\n941\\r\\n1049\\r\\n2812\\r\\n36\\r\\n17\\r\\n943\\r\\n996\\r\\n4822\\r\\n36\\r\\n17\\r\\n944\\r\\n1046\\r\\n2432\\r\\n36\\r\\n17\\r\\n944\\r\\n1055\\r\\n652\\r\\n36\\r\\n17\\r\\n947\\r\\n996\\r\\n7272\\r\\n36\\r\\n17\\r\\n947\\r\\n1044\\r\\n2722\\r\\n36\\r\\n16\\r\\n947\\r\\n1045\\r\\n2662\\r\\n36\\r\\n16\\r\\n947\\r\\n1046\\r\\n2712\\r\\n36\\r\\n16\\r\\n947\\r\\n1047\\r\\n1782\\r\\n36\\r\\n17\\r\\n948\\r\\n1045\\r\\n2732\\r\\n36\\r\\n16\\r\\n948\\r\\n1047\\r\\n2892\\r\\n36\\r\\n16\\r\\n949\\r\\n1047\\r\\n602\\r\\n36\\r\\n17\\r\\n950\\r\\n996\\r\\n752\\r\\n36\\r\\n17\\r\\n950\\r\\n1000\\r\\n7262\\r\\n36\\r\\n17\\r\\n950\\r\\n1047\\\"\""
+          }
+        },
+        {
+          "suite": "map",
+          "id": "segments-in-area",
+          "intent": "`call SegmentsInArea \"^\" #1,#x1,#y1,#x2,#y2` — 10 ints per segment (login-full :539-540). Divergence noted by the census: the reference client pads the box by one tile (doc :2020-2031); the gateway does not",
+          "outcome": {
+            "response": "res=\"%967\r\n999\r\n981\r\n999\r\n-13\r\n-7\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1048\r\n946\r\n1048\r\n23\r\n46\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1041\r\n946\r\n1041\r\n52\r\n76\r\n2\r\n2\r\n0\r\n0\r\n932\r\n1034\r\n946\r\n1034\r\n35\r\n59\r\n0\r\n1\r\n0\r\n0\r\n932\r\n1027\r\n946\r\n1027\r\n0\r\n25\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1020\r\n939\r\n1020\r\n5\r\n-42\r\n1\r\n5\r\n0\r\n0\r\n932\r\n1013\r\n939\r\n1013\r\n45\r\n-2\r\n-1\r\n3\r\n0\r\n0\r\n932\r\n999\r\n946\r\n999\r\n2\r\n28\r\n0\r\n0\r\n0\r\n0\r\n946\r\n992\r\n946\r\n999\r\n34\r\n28\r\n2\r\n0\r\n0\r\n0\r\n946\r\n999\r\n953\r\n999\r\n28\r\n13\r\n0\r\n2\r\n0\r\n0\r\n946\r\n999\r\n946\r\n1006\r\n28\r\n40\r\n0\r\n3\r\n0\r\n0\r\n953\r\n992\r\n953\r\n999\r\n19\r\n13\r\n4\r\n2\r\n0\r\n0\r\n953\r\n999\r\n967\r\n999\r\n13\r\n-13\r\n2\r\n0\r\n0\r\n0\r\n953\r\n999\r\n953\r\n1006\r\n13\r\n26\r\n2\r\n5\r\n0\r\n0\r\n967\r\n985\r\n967\r\n999\r\n19\r\n-13\r\n4\r\n0\r\n0\r\n0\r\n967\r\n999\r\n967\r\n1013\r\n-13\r\n29\r\n0\r\n-1\r\n0\r\n0\r\n981\r\n999\r\n1174\r\n999\r\n-7\r\n34\r\n0\r\n-2\r\n0\r\n0\r\n981\r\n999\r\n981\r\n1013\r\n-7\r\n36\r\n0\r\n0\r\n0\r\n0\r\n981\r\n985\r\n981\r\n999\r\n26\r\n-7\r\n4\r\n0\r\n0\r\n0\r\n981\r\n1013\r\n988\r\n1013\r\n36\r\n67\r\n0\r\n2\r\n0\r\n0\r\n981\r\n1013\r\n981\r\n1020\r\n36\r\n-3\r\n0\r\n1\r\n0\r\n0\r\n967\r\n1013\r\n981\r\n1013\r\n29\r\n36\r\n-1\r\n0\r\n0\r\n0\r\n960\r\n1013\r\n967\r\n1013\r\n-4\r\n29\r\n2\r\n-1\r\n0\r\n0\r\n946\r\n1020\r\n946\r\n1027\r\n30\r\n25\r\n1\r\n0\r\n0\r\n0\r\n946\r\n1027\r\n946\r\n1034\r\n25\r\n59\r\n0\r\n1\r\n0\r\n0\r\n946\r\n1034\r\n946\r\n1041\r\n59\r\n76\r\n1\r\n2\r\n0\r\n0\r\n946\r\n1041\r\n953\r\n1041\r\n76\r\n64\r\n2\r\n5\r\n0\r\n0\r\n946\r\n1041\r\n946\r\n1048\r\n76\r\n46\r\n2\r\n0\r\n0\r\n0\r\n953\r\n1034\r\n953\r\n1041\r\n45\r\n64\r\n3\r\n5\r\n0\r\n0\r\n953\r\n1041\r\n953\r\n1048\r\n64\r\n33\r\n5\r\n2\r\n0\r\n0\r\n953\r\n1048\r\n953\r\n1055\r\n33\r\n84\r\n2\r\n4\r\n0\r\n0\r\n946\r\n1048\r\n953\r\n1048\r\n46\r\n33\r\n0\r\n2\r\n0\r\n0\r\n946\r\n1048\r\n946\r\n1055\r\n46\r\n98\r\n0\r\n2\r\n0\r\n0\r\n\"",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C 1059 sel 6968340 call SegmentsInArea \"^\" \"#1\",\"#939\",\"#994\",\"#1003\",\"#1058\"",
+              "<< A1059 res=\"%967\r\n999\r\n981\r\n999\r\n-13\r\n-7\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1048\r\n946\r\n1048\r\n23\r\n46\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1041\r\n946\r\n1041\r\n52\r\n76\r\n2\r\n2\r\n0\r\n0\r\n932\r\n1034\r\n946\r\n1034\r\n35\r\n59\r\n0\r\n1\r\n0\r\n0\r\n932\r\n1027\r\n946\r\n1027\r\n0\r\n25\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1020\r\n939\r\n1020\r\n5\r\n-42\r\n1\r\n5\r\n0\r\n0\r\n932\r\n1013\r\n939\r\n1013\r\n45\r\n-2\r\n-1\r\n3\r\n0\r\n0\r\n932\r\n999\r\n946\r\n999\r\n2\r\n28\r\n0\r\n0\r\n0\r\n0\r\n946\r\n992\r\n946\r\n999\r\n34\r\n28\r\n2\r\n0\r\n0\r\n0\r\n946\r\n999\r\n953\r\n999\r\n28\r\n13\r\n0\r\n2\r\n0\r\n0\r\n946\r\n999\r\n946\r\n1006\r\n28\r\n40\r\n0\r\n3\r\n0\r\n0\r\n953\r\n992\r\n953\r\n999\r\n19\r\n13\r\n4\r\n2\r\n0\r\n0\r\n953\r\n999\r\n967\r\n999\r\n13\r\n-13\r\n2\r\n0\r\n0\r\n0\r\n953\r\n999\r\n953\r\n1006\r\n13\r\n26\r\n2\r\n5\r\n0\r\n0\r\n967\r\n985\r\n967\r\n999\r\n19\r\n-13\r\n4\r\n0\r\n0\r\n0\r\n967\r\n999\r\n967\r\n1013\r\n-13\r\n29\r\n0\r\n-1\r\n0\r\n0\r\n981\r\n999\r\n1174\r\n999\r\n-7\r\n34\r\n0\r\n-2\r\n0\r\n0\r\n981\r\n999\r\n981\r\n1013\r\n-7\r\n36\r\n0\r\n0\r\n0\r\n0\r\n981\r\n985\r\n981\r\n999\r\n26\r\n-7\r\n4\r\n0\r\n0\r\n0\r\n981\r\n1013\r\n988\r\n1013\r\n36\r\n67\r\n0\r\n2\r\n0\r\n0\r\n981\r\n1013\r\n981\r\n1020\r\n36\r\n-3\r\n0\r\n1\r\n0\r\n0\r\n967\r\n1013\r\n981\r\n1013\r\n29\r\n36\r\n-1\r\n0\r\n0\r\n0\r\n960\r\n1013\r\n967\r\n1013\r\n-4\r\n29\r\n2\r\n-1\r\n0\r\n0\r\n946\r\n1020\r\n946\r\n1027\r\n30\r\n25\r\n1\r\n0\r\n0\r\n0\r\n946\r\n1027\r\n946\r\n1034\r\n25\r\n59\r\n0\r\n1\r\n0\r\n0\r\n946\r\n1034\r\n946\r\n1041\r\n59\r\n76\r\n1\r\n2\r\n0\r\n0\r\n946\r\n1041\r\n953\r\n1041\r\n76\r\n64\r\n2\r\n5\r\n0\r\n0\r\n946\r\n1041\r\n946\r\n1048\r\n76\r\n46\r\n2\r\n0\r\n0\r\n0\r\n953\r\n1034\r\n953\r\n1041\r\n45\r\n64\r\n3\r\n5\r\n0\r\n0\r\n953\r\n1041\r\n953\r\n1048\r\n64\r\n33\r\n5\r\n2\r\n0\r\n0\r\n953\r\n1048\r\n953\r\n1055\r\n33\r\n84\r\n2\r\n4\r\n0\r\n0\r\n946\r\n1048\r\n953\r\n1048\r\n46\r\n33\r\n0\r\n2\r\n0\r\n0\r\n946\r\n1048\r\n946\r\n1055\r\n46\r\n98\r\n0\r\n2\r\n0\r\n0\r\n\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%(-?\\d+\\r?\\n)*(-?\\d+)?\"$/; got \"res=\\\"%967\\r\\n999\\r\\n981\\r\\n999\\r\\n-13\\r\\n-7\\r\\n0\\r\\n0\\r\\n0\\r\\n0\\r\\n932\\r\\n1048\\r\\n946\\r\\n1048\\r\\n23\\r\\n46\\r\\n0\\r\\n0\\r\\n0\\r\\n0\\r\\n932\\r\\n1041\\r\\n946\\r\\n1041\\r\\n52\\r\\n76\\r\\n2\\r\\n2\\r\\n0\\r\\n0\\r\\n932\\r\\n1034\\r\\n946\\r\\n1034\\r\\n35\\r\\n59\\r\\n0\\r\\n1\\r\\n0\\r\\n0\\r\\n932\\r\\n1027\\r\\n946\\r\\n1027\\r\\n0\\r\\n25\\r\\n0\\r\\n0\\r\\n0\\r\\n0\\r\\n932\\r\\n1020\\r\\n939\\r\\n1020\\r\\n5\\r\\n-42\\r\\n1\\r\\n5\\r\\n0\\r\\n0\\r\\n932\\r\\n1013\\r\\n939\\r\\n1013\\r\\n45\\r\\n-2\\r\\n-1\\r\\n3\\r\\n0\\r\\n0\\r\\n932\\r\\n999\\r\\n946\\r\\n999\\r\\n2\\r\\n28\\r\\n0\\r\\n0\\r\\n0\\r\\n0\\r\\n946\\r\\n992\\r\\n946\\r\\n999\\r\\n34\\r\\n28\\r\\n2\\r\\n0\\r\\n0\\r\\n0\\r\\n946\\r\\n999\\r\\n953\\r\\n999\\r\\n28\\r\\n13\\r\\n0\\r\\n2\\r\\n0\\r\\n0\\r\\n946\\r\\n999\\r\\n946\\r\\n1006\\r\\n28\\r\\n40\\r\\n0\\r\\n3\\r\\n0\\r\\n0\\r\\n953\\r\\n992\\r\\n953\\r\\n999\\r\\n19\\r\\n13\\r\\n4\\r\\n2\\r\\n0\\r\\n0\\r\\n953\\r\\n999\\r\\n967\\r\\n999\\r\\n13\\r\\n-13\\r\\n2\\r\\n0\\r\\n0\\r\\n0\\r\\n953\\r\\n999\\r\\n953\\r\\n1006\\r\\n13\\r\\n26\\r\\n2\\r\\n5\\r\\n0\\r\\n0\\r\\n967\\r\\n985\\r\\n967\\r\\n999\\r\\n19\\r\\n-13\\r\\n4\\r\\n0\\r\\n0\\r\\n0\\r\\n967\\r\\n999\\r\\n967\\r\\n1013\\r\\n-13\\r\\n29\\r\\n0\\r\\n-1\\r\\n0\\r\\n0\\r\\n981\\r\\n999\\r\\n1174\\r\\n999\\r\\n-7\\r\\n34\\r\\n0\\r\\n-2\\r\\n0\\r\\n0\\r\\n981\\r\\n999\\r\\n981\\r\\n1013\\r\\n-7\\r\\n36\\r\\n0\\r\\n0\\r\\n0\\r\\n0\\r\\n981\\r\\n985\\r\\n981\\r\\n999\\r\\n26\\r\\n-7\\r\\n4\\r\\n0\\r\\n0\\r\\n0\\r\\n981\\r\\n1013\\r\\n988\\r\\n1013\\r\\n36\\r\\n67\\r\\n0\\r\\n2\\r\\n0\\r\\n0\\r\\n981\\r\\n1013\\r\\n981\\r\\n1020\\r\\n36\\r\\n-3\\r\\n0\\r\\n1\\r\\n0\\r\\n0\\r\\n967\\r\\n1013\\r\\n981\\r\\n1013\\r\\n29\\r\\n36\\r\\n-1\\r\\n0\\r\\n0\\r\\n0\\r\\n960\\r\\n1013\\r\\n967\\r\\n1013\\r\\n-4\\r\\n29\\r\\n2\\r\\n-1\\r\\n0\\r\\n0\\r\\n946\\r\\n1020\\r\\n946\\r\\n1027\\r\\n30\\r\\n25\\r\\n1\\r\\n0\\r\\n0\\r\\n0\\r\\n946\\r\\n1027\\r\\n946\\r\\n1034\\r\\n25\\r\\n59\\r\\n0\\r\\n1\\r\\n0\\r\\n0\\r\\n946\\r\\n1034\\r\\n946\\r\\n1041\\r\\n59\\r\\n76\\r\\n1\\r\\n2\\r\\n0\\r\\n0\\r\\n946\\r\\n1041\\r\\n953\\r\\n1041\\r\\n76\\r\\n64\\r\\n2\\r\\n5\\r\\n0\\r\\n0\\r\\n946\\r\\n1041\\r\\n946\\r\\n1048\\r\\n76\\r\\n46\\r\\n2\\r\\n0\\r\\n0\\r\\n0\\r\\n953\\r\\n1034\\r\\n953\\r\\n1041\\r\\n45\\r\\n64\\r\\n3\\r\\n5\\r\\n0\\r\\n0\\r\\n953\\r\\n1041\\r\\n953\\r\\n1048\\r\\n64\\r\\n33\\r\\n5\\r\\n2\\r\\n0\\r\\n0\\r\\n953\\r\\n1048\\r\\n953\\r\\n1055\\r\\n33\\r\\n84\\r\\n2\\r\\n4\\r\\n0\\r\\n0\\r\\n946\\r\\n1048\\r\\n953\\r\\n1048\\r\\n46\\r\\n33\\r\\n0\\r\\n2\\r\\n0\\r\\n0\\r\\n946\\r\\n1048\\r\\n946\\r\\n1055\\r\\n46\\r\\n98\\r\\n0\\r\\n2\\r\\n0\\r\\n0\\r\\n\\\"\""
+          }
+        },
+        {
+          "suite": "map",
+          "id": "set-viewed-area",
+          "intent": "fire-and-forget `SetViewedArea \"*\" #x,#y,#dx,#dy` — what makes RefreshArea / RefreshObject pushes flow (capture :2111; login-full :450-451)",
+          "outcome": {
+            "response": "(push) C sel 6968340 call SetViewedArea \"*\" \"#939\",\"#994\",\"#64\",\"#64\"",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C sel 6968340 call SetViewedArea \"*\" \"#939\",\"#994\",\"#64\",\"#64\";"
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^\\(push\\) C sel \\d+ call SetViewedArea \"\\*\" \"#-?\\d+\",\"#-?\\d+\",\"#\\d+\",\"#\\d+\"$/; got \"(push) C sel 6968340 call SetViewedArea \\\"*\\\" \\\"#939\\\",\\\"#994\\\",\\\"#64\\\",\\\"#64\\\"\""
+          }
+        },
+        {
+          "suite": "map",
+          "id": "surface-zones",
+          "intent": "`call GetSurface \"^\" \"%ZONES\",#x1,#y1,#x2,#y2` answers `res=\"%w:h:<rle rows>\"` — doc capture :2120-2123 (Shamba). First observation through the gateway on planitia",
+          "outcome": {
+            "response": "res=\"%64:64:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:\"",
+            "elapsedMs": 93,
+            "wire": [
+              ">> C 1060 sel 6968340 call GetSurface \"^\" \"%ZONES\",\"#939\",\"#994\",\"#1002\",\"#1057\";",
+              "<< A1060 res=\"%64:64:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%\\d+:\\d+:/; got \"res=\\\"%64:64:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:\\\"\""
+          }
+        },
+        {
+          "suite": "map",
+          "id": "pushes-after-viewport",
+          "intent": "observation — which server pushes arrived since the viewport was set (RefreshTycoon / RefreshArea / RefreshDate / ChatMsg… captures :1014-1018, login-full :691-971). No oracle: cadence is the simulation's",
+          "outcome": {
+            "response": "(none within 3 s)",
+            "elapsedMs": 3000,
+            "wire": []
+          },
+          "verdict": {
+            "kind": "UNKNOWN",
+            "detail": "no oracle; observed \"(none within 3 s)\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "focus",
+      "steps": [
+        {
+          "suite": "focus",
+          "id": "switch-focus",
+          "intent": "`call SwitchFocusEx \"^\" #0,#x,#y` answers `res=\"%<objectId>\\n<name>\\n…\"` — doc capture :2079-2097 (LF there; CRLF vs LF live is [UNKNOWN] per census)",
+          "outcome": {
+            "response": "res=\"%254354412\r\nTown Hall\n\rHelartia\n\r20,269 inhabitants:-:248 High class (0% unemp), 1,026 Middle class (49% unemp), 18,993 Low class (87% unemp).:-:6 citizens of High class moved in last day.3% due to good residential offers, 91% to find a job, 5% due to good quality of public services.2 citizens of Middle class moved in last day.7% due to good residential offers, 75% to find a job, 18% due to good quality of public services.4 citizens of Low class moved out last day.5% due to salaries and work conditions, 15% due to residential conditions, 21% due to low coverage of public services, 2% due to unemployment, 56% due to lack of products and services.:-:\"",
+            "elapsedMs": 99,
+            "wire": [
+              ">> C 1061 sel 6968340 call SwitchFocusEx \"^\" \"#0\",\"#933\",\"#1000\";",
+              "<< A1061 res=\"%254354412\r\nTown Hall\n\rHelartia\n\r20,269 inhabitants:-:248 High class (0% unemp), 1,026 Middle class (49% unemp), 18,993 Low class (87% unemp).:-:6 citizens of High class moved in last day.3% due to good residential offers, 91% to find a job, 5% due to good quality of public services.2 citizens of Middle class moved in last day.7% due to good residential offers, 75% to find a job, 18% due to good quality of public services.4 citizens of Low class moved out last day.5% due to salaries and work conditions, 15% due to residential conditions, 21% due to low coverage of public services, 2% due to unemployment, 56% due to lack of products and services.:-:\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%\\d+(\\r?\\n|\")/; got \"res=\\\"%254354412\\r\\nTown Hall\\n\\rHelartia\\n\\r20,269 inhabitants:-:248 High class (0% unemp), 1,026 Middle class (49% unemp), 18,993 Low class (87% unemp).:-:6 citizens of High class moved in last day.3% due to good residential offers, 91% to find a job, 5% due to good quality of public services.2 citizens of Middle class moved in last day.7% due to good residential offers, 75% to find a job, 18% due to good quality of public services.4 citizens of Low class moved out last day.5% due to salaries and work conditions, 15% due to residential conditions, 21% due to low coverage of public services, 2% due to unemployment, 56% due to lack of products and services.:-:\\\"\""
+          }
+        },
+        {
+          "suite": "focus",
+          "id": "unfocus",
+          "intent": "fire-and-forget `UnfocusObject \"*\" #objectId` — mail-read :1509-1510, panels-tour :1594-1595",
+          "outcome": {
+            "response": "(push) C sel 6968340 call UnfocusObject \"*\" \"#254354412\"",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C sel 6968340 call UnfocusObject \"*\" \"#254354412\";"
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^\\(push\\) C sel \\d+ call UnfocusObject \"\\*\" \"#\\d+\"$/; got \"(push) C sel 6968340 call UnfocusObject \\\"*\\\" \\\"#254354412\\\"\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "inspector",
+      "steps": [
+        {
+          "suite": "inspector",
+          "id": "property-list-at",
+          "intent": "`getCacherPropertyListAt(x,y,[Name,Creator,CurrBlock,ObjectId])` — CreateObject → SetObject → GetPropertyList → CloseObject \"*\"; reply is tab-separated WITH trailing tab (building_details_rdo.txt:3-4, 9-10)",
+          "outcome": {
+            "response": "res=\"%Town Hall\tMayor of Helartia\t254354600\t254354412\t\"",
+            "elapsedMs": 359,
+            "wire": [
+              ">> C 1062 sel 3173064 call CreateObject \"^\" \"%Planitia\";",
+              "<< A1062 res=\"#80466680\"",
+              ">> C 1063 sel 80466680 call SetObject \"^\" \"#933\",\"#1000\";",
+              "<< A1063 res=\"#-1\"",
+              ">> C 1064 sel 80466680 call GetPropertyList \"^\" \"%Name\tCreator\tCurrBlock\tObjectId\t\";",
+              "<< A1064 res=\"%Town Hall\tMayor of Helartia\t254354600\t254354412\t\"",
+              ">> C sel 3173064 call CloseObject \"*\" \"#80466680\";"
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%([^\\t\"]*\\t){4}\"$/; got \"res=\\\"%Town Hall\\tMayor of Helartia\\t254354600\\t254354412\\t\\\"\""
+          }
+        },
+        {
+          "suite": "inspector",
+          "id": "create-object",
+          "intent": "`call CreateObject \"^\" \"%<world>\"` on WSObjectCacher answers `res=\"#<tempId>\"` — login-full :440-441",
+          "outcome": {
+            "response": "res=\"#80466680\"",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C 1062 sel 3173064 call CreateObject \"^\" \"%Planitia\"",
+              "<< A1062 res=\"#80466680\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"#\\d+\"$/; got \"res=\\\"#80466680\\\"\""
+          }
+        },
+        {
+          "suite": "inspector",
+          "id": "set-object",
+          "intent": "`call SetObject \"^\" #x,#y` on the temp object answers `res=\"#-1\"` — building_details_rdo.txt:1-2 (doc-only until now)",
+          "outcome": {
+            "response": "res=\"#-1\"",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C 1063 sel 80466680 call SetObject \"^\" \"#933\",\"#1000\"",
+              "<< A1063 res=\"#-1\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "exact \"res=\\\"#-1\\\"\"; got \"res=\\\"#-1\\\"\""
+          }
+        },
+        {
+          "suite": "inspector",
+          "id": "close-object",
+          "intent": "fire-and-forget `CloseObject \"*\" #tempId` — building_details_rdo.txt:22, login-full :480-481",
+          "outcome": {
+            "response": "(push) C sel 3173064 call CloseObject \"*\" \"#80466680\"",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C sel 3173064 call CloseObject \"*\" \"#80466680\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^\\(push\\) C sel \\d+ call CloseObject \"\\*\" \"#\\d+\"$/; got \"(push) C sel 3173064 call CloseObject \\\"*\\\" \\\"#80466680\\\"\""
+          }
+        },
+        {
+          "suite": "inspector",
+          "id": "tycoon-role",
+          "intent": "`SetPath \"%Tycoons\\<user>.five\\\"` then `GetPropertyList IsMayor…Ministry` — 6 fields, trailing tab (login-full :460-471; chat :471 shows `1\\tAgriculture`)",
+          "outcome": {
+            "response": "res=\"%\t\t\t\t\t\t\"",
+            "elapsedMs": 742,
+            "wire": [
+              ">> C 1065 sel 3173064 call CreateObject \"^\" \"%Planitia\";",
+              "<< A1065 res=\"#4132028\"",
+              ">> C 1066 sel 4132028 call SetPath \"^\" \"%Tycoons\\SPO_test3.five\\\";",
+              "<< A1066 res=\"#-1\"",
+              ">> C 1067 sel 4132028 call GetPropertyList \"^\" \"%IsMayor\tTown\tIsCapitalMayor\tIsPresident\tIsMinister\tMinistry\t\";",
+              "<< A1067 res=\"%\t\t\t\t\t\t\"",
+              ">> C sel 3173064 call CloseObject \"*\" \"#4132028\";"
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%([^\\t\"]*\\t){6}\"$/; got \"res=\\\"%\\t\\t\\t\\t\\t\\t\\\"\""
+          }
+        },
+        {
+          "suite": "inspector",
+          "id": "basic-details",
+          "intent": "inspector open — SwitchFocusEx, CreateObject, SetObject, GetPropertyList in batches ≤ 50 (building_details_rdo.txt); the temp object stays open as the ActiveInspector",
+          "outcome": {
+            "response": "res=\"%0\t0\t0\t0\t5512592.8321\t658579.4099\t632166.6923\t0\t0\t1137356.3795\t266535.6782\t0\t0\t0\t54790.5133\t178309.0995\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t127107.8003\t0\t0\t0\t\"",
+            "elapsedMs": 11092,
+            "wire": [
+              ">> C 1068 sel 6968340 call SwitchFocusEx \"^\" \"#0\",\"#933\",\"#1000\";",
+              "<< A1068 res=\"%254354412\r\nTown Hall\n\rHelartia\n\r20,270 inhabitants:-:245 High class (0% unemp), 1,026 Middle class (49% unemp), 18,997 Low class (87% unemp).:-:6 citizens of High class moved in last day.3% due to good residential offers, 91% to find a job, 5% due to good quality of public services.2 citizens of Middle class moved in last day.7% due to good residential offers, 75% to find a job, 18% due to good quality of public services.4 citizens of Low class moved out last day.5% due to salaries and work conditions, 15% due to residential conditions, 21% due to low coverage of public services, 2% due to unemployment, 56% due to lack of products and services.:-:\"",
+              ">> C 1069 sel 3173064 call CreateObject \"^\" \"%Planitia\";",
+              "<< A1069 res=\"#3948136\"",
+              ">> C 1070 sel 3948136 call SetObject \"^\" \"#933\",\"#1000\";",
+              "<< A1070 res=\"#-1\"",
+              ">> C 1071 sel 3948136 call GetPropertyList \"^\" \"%ActualRuler\tTown\tNewspaperName\tRulerPrestige\tRulerRating\tTycoonsRating\tYearsToElections\tHasRuler\tRulerPeriods\tCampaignCount\tGQOS\thiWorkDemand\thiPrivateWorkDemand\thiSalary\thiSalaryValue\thiMinSalary\thiActualMinSalary\tmidWorkDemand\tmidPrivateWorkDemand\tmidSalary\tmidSalaryValue\tmidMinSalary\tmidActualMinSalary\tloWorkDemand\tloPrivateWorkDemand\tloSalary\tloSalaryValue\tloMinSalary\tloActualMinSalary\thiResDemand\thiRentPrice\thiResQ\tmidResDemand\tmidRentPrice\tmidResQ\tloResDemand\tloRentPrice\tloResQ\tTrouble\tRulerName\tRulerVotes\tRulerCmpRat\tRulerCmpPnts\tcovCount\tsrvCount\tTaxCount\tCampaignCount\t\";",
+              "<< A1071 res=\"%\tHelartia\tHelartia Herald\t\t\t\t\t\t\t0\t27\t5\t0\t113\t183\t0\t0\t0\t0\t123\t47\t0\t0\t0\t0\t113\t8\t0\t0\t351\t200\t70\t1073\t200\t38\t7006\t200\t32\t0\t\t\t\t\t9\t16\t47\t0\t\"",
+              ">> C 1072 sel 3948136 call GetPropertyList \"^\" \"%covName0.0\tcovName1.0\tcovName2.0\tcovName3.0\tcovName4.0\tcovName5.0\tcovName6.0\tcovName7.0\tcovName8.0\tcovValue0\tcovValue1\tcovValue2\tcovValue3\tcovValue4\tcovValue5\tcovValue6\tcovValue7\tcovValue8\tsvrName0.0\tsvrName1.0\tsvrName2.0\tsvrName3.0\tsvrName4.0\tsvrName5.0\tsvrName6.0\tsvrName7.0\tsvrName8.0\tsvrName9.0\tsvrName10.0\tsvrName11.0\tsvrName12.0\tsvrName13.0\tsvrName14.0\tsvrName15.0\tsvrDemand0\tsvrDemand1\tsvrDemand2\tsvrDemand3\tsvrDemand4\tsvrDemand5\tsvrDemand6\tsvrDemand7\tsvrDemand8\tsvrDemand9\tsvrDemand10\tsvrDemand11\tsvrDemand12\tsvrDemand13\tsvrDemand14\tsvrDemand15\t\";",
+              "<< A1072 res=\"%Colleges\tGarbage Disposal\tFire Coverage\tHealth Coverage\tJails\tMuseums\tPolice Coverage\tSchool Coverage\tRecreation Facilities\t0\t247\t49\t195\t0\t0\t74\t97\t35\tBars\tBooks\tCars\tCDs\tClothing and Footwear\tComputers\tPharmaceutics\tProcessed Food\tFresh Food\tFunerals\tFurniture\tGas\tHousehold Appliances\tMovies\tRestaurants\tToys\t370.097137451172\t28.0916690826416\t0.694764077663422\t51.3023796081543\t73.382942199707\t0.717686474323273\t69.3928604125977\t201.036666870117\t75.2400054931641\t0.0524761900305748\t9.18958377838135\t295.800018310547\t21.4381484985352\t392.190490722656\t150.221435546875\t34.6964302062988\t\"",
+              ">> C 1073 sel 3948136 call GetPropertyList \"^\" \"%svrOffer0\tsvrOffer1\tsvrOffer2\tsvrOffer3\tsvrOffer4\tsvrOffer5\tsvrOffer6\tsvrOffer7\tsvrOffer8\tsvrOffer9\tsvrOffer10\tsvrOffer11\tsvrOffer12\tsvrOffer13\tsvrOffer14\tsvrOffer15\tsvrCapacity0\tsvrCapacity1\tsvrCapacity2\tsvrCapacity3\tsvrCapacity4\tsvrCapacity5\tsvrCapacity6\tsvrCapacity7\tsvrCapacity8\tsvrCapacity9\tsvrCapacity10\tsvrCapacity11\tsvrCapacity12\tsvrCapacity13\tsvrCapacity14\tsvrCapacity15\tsvrRatio0\tsvrRatio1\tsvrRatio2\tsvrRatio3\tsvrRatio4\tsvrRatio5\tsvrRatio6\tsvrRatio7\tsvrRatio8\tsvrRatio9\tsvrRatio10\tsvrRatio11\tsvrRatio12\tsvrRatio13\tsvrRatio14\tsvrRatio15\tsvrMarketPrice0\tsvrMarketPrice1\t\";",
+              "<< A1073 res=\"%0\t6.21656322479248\t0.537200689315796\t0\t17.9934635162354\t0\t0\t91.2186813354492\t13.9956998825073\t0\t1.13846981525421\t53.252857208252\t6.49206495285034\t0\t0\t10.7022275924683\t0\t225\t4\t0\t30\t0\t0\t120\t120\t0\t18\t240\t15\t0\t0\t30\t0\t0.221295610070229\t0.773213088512421\t0\t0.245199531316757\t0\t0\t0.453741520643234\t0.186014071106911\t0\t0.123886980116367\t0.180029928684235\t0.302827686071396\t0\t0\t0.308453291654587\t7\t15\t\"",
+              ">> C 1074 sel 3948136 call GetPropertyList \"^\" \"%svrMarketPrice2\tsvrMarketPrice3\tsvrMarketPrice4\tsvrMarketPrice5\tsvrMarketPrice6\tsvrMarketPrice7\tsvrMarketPrice8\tsvrMarketPrice9\tsvrMarketPrice10\tsvrMarketPrice11\tsvrMarketPrice12\tsvrMarketPrice13\tsvrMarketPrice14\tsvrMarketPrice15\tsvrPrice0\tsvrPrice1\tsvrPrice2\tsvrPrice3\tsvrPrice4\tsvrPrice5\tsvrPrice6\tsvrPrice7\tsvrPrice8\tsvrPrice9\tsvrPrice10\tsvrPrice11\tsvrPrice12\tsvrPrice13\tsvrPrice14\tsvrPrice15\tsvrQuality0\tsvrQuality1\tsvrQuality2\tsvrQuality3\tsvrQuality4\tsvrQuality5\tsvrQuality6\tsvrQuality7\tsvrQuality8\tsvrQuality9\tsvrQuality10\tsvrQuality11\tsvrQuality12\tsvrQuality13\tsvrQuality14\tsvrQuality15\tTax0Id\tTax1Id\tTax2Id\tTax3Id\t\";",
+              "<< A1074 res=\"%7000\t15\t25\t800\t40\t15\t4\t20000\t100\t2\t110\t5\t20\t32\t0\t467\t293\t0\t393\t0\t0\t312\t353\t0\t338\t349\t386\t0\t0\t308\t0\t87\t93\t0\t40\t0\t0\t40\t92\t0\t40\t66\t34\t0\t0\t40\t100\t110\t120\t130\t\"",
+              ">> C 1075 sel 3948136 call GetPropertyList \"^\" \"%Tax4Id\tTax5Id\tTax6Id\tTax7Id\tTax8Id\tTax9Id\tTax10Id\tTax11Id\tTax12Id\tTax13Id\tTax14Id\tTax15Id\tTax16Id\tTax17Id\tTax18Id\tTax19Id\tTax20Id\tTax21Id\tTax22Id\tTax23Id\tTax24Id\tTax25Id\tTax26Id\tTax27Id\tTax28Id\tTax29Id\tTax30Id\tTax31Id\tTax32Id\tTax33Id\tTax34Id\tTax35Id\tTax36Id\tTax37Id\tTax38Id\tTax39Id\tTax40Id\tTax41Id\tTax42Id\tTax43Id\tTax44Id\tTax45Id\tTax46Id\tTax0Name0\tTax1Name0\tTax2Name0\tTax3Name0\tTax4Name0\tTax5Name0\tTax6Name0\t\";",
+              "<< A1075 res=\"%140\t150\t160\t170\t180\t190\t195\t2\t200\t210\t215\t220\t225\t230\t235\t240\t250\t260\t270\t280\t295\t300\t305\t310\t320\t330\t340\t345\t350\t360\t400\t410\t420\t425\t435\t440\t450\t460\t500\t505\t510\t520\t6\tFarms\tBusiness Machines\tCar industries\tChemical plants\tClothes\tConstruction\tElectronic\t\"",
+              ">> C 1076 sel 3948136 call GetPropertyList \"^\" \"%Tax7Name0\tTax8Name0\tTax9Name0\tTax10Name0\tTax11Name0\tTax12Name0\tTax13Name0\tTax14Name0\tTax15Name0\tTax16Name0\tTax17Name0\tTax18Name0\tTax19Name0\tTax20Name0\tTax21Name0\tTax22Name0\tTax23Name0\tTax24Name0\tTax25Name0\tTax26Name0\tTax27Name0\tTax28Name0\tTax29Name0\tTax30Name0\tTax31Name0\tTax32Name0\tTax33Name0\tTax34Name0\tTax35Name0\tTax36Name0\tTax37Name0\tTax38Name0\tTax39Name0\tTax40Name0\tTax41Name0\tTax42Name0\tTax43Name0\tTax44Name0\tTax45Name0\tTax46Name0\tTax0Kind\tTax1Kind\tTax2Kind\tTax3Kind\tTax4Kind\tTax5Kind\tTax6Kind\tTax7Kind\tTax8Kind\tTax9Kind\t\";",
+              "<< A1076 res=\"%Food Processing\tHeavy industry\tAppliance Industries\tToys\tResidentials\tMetallurgic industry\tMines\tOil rigs\tTextile industry\tRefineries\tSoftware\tPlastics\tLegal Services\tCars\tClothes Stores\tFood\tBars\tFuneral Parlors\tHousehold Appliances\tToy Stores\tSupermarkets\tRestaurants\tMovie Theaters\tFurniture Stores\tBook Stores\tWarehouses\tTV\tPharmaceutics\tLiquor Production\tLumber Mills\tFurniture Industry\tMovie Studios\tPaper Industry\tPrinting Plant\tCD Industry\tDrug Stores\tGas Stations\tComputer Stores\tCD Stores\tOffices\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t\"",
+              ">> C 1077 sel 3948136 call GetPropertyList \"^\" \"%Tax10Kind\tTax11Kind\tTax12Kind\tTax13Kind\tTax14Kind\tTax15Kind\tTax16Kind\tTax17Kind\tTax18Kind\tTax19Kind\tTax20Kind\tTax21Kind\tTax22Kind\tTax23Kind\tTax24Kind\tTax25Kind\tTax26Kind\tTax27Kind\tTax28Kind\tTax29Kind\tTax30Kind\tTax31Kind\tTax32Kind\tTax33Kind\tTax34Kind\tTax35Kind\tTax36Kind\tTax37Kind\tTax38Kind\tTax39Kind\tTax40Kind\tTax41Kind\tTax42Kind\tTax43Kind\tTax44Kind\tTax45Kind\tTax46Kind\tTax0Percent\tTax1Percent\tTax2Percent\tTax3Percent\tTax4Percent\tTax5Percent\tTax6Percent\tTax7Percent\tTax8Percent\tTax9Percent\tTax10Percent\tTax11Percent\tTax12Percent\t\";",
+              "<< A1077 res=\"%0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t\"",
+              ">> C 1078 sel 3948136 call GetPropertyList \"^\" \"%Tax13Percent\tTax14Percent\tTax15Percent\tTax16Percent\tTax17Percent\tTax18Percent\tTax19Percent\tTax20Percent\tTax21Percent\tTax22Percent\tTax23Percent\tTax24Percent\tTax25Percent\tTax26Percent\tTax27Percent\tTax28Percent\tTax29Percent\tTax30Percent\tTax31Percent\tTax32Percent\tTax33Percent\tTax34Percent\tTax35Percent\tTax36Percent\tTax37Percent\tTax38Percent\tTax39Percent\tTax40Percent\tTax41Percent\tTax42Percent\tTax43Percent\tTax44Percent\tTax45Percent\tTax46Percent\tTax0LastYear\tTax1LastYear\tTax2LastYear\tTax3LastYear\tTax4LastYear\tTax5LastYear\tTax6LastYear\tTax7LastYear\tTax8LastYear\tTax9LastYear\tTax10LastYear\tTax11LastYear\tTax12LastYear\tTax13LastYear\tTax14LastYear\tTax15LastYear\t\";",
+              "<< A1078 res=\"%10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t7320250.0841\t0\t0\t0\t0\t\"",
+              ">> C 1079 sel 3948136 call GetPropertyList \"^\" \"%Tax16LastYear\tTax17LastYear\tTax18LastYear\tTax19LastYear\tTax20LastYear\tTax21LastYear\tTax22LastYear\tTax23LastYear\tTax24LastYear\tTax25LastYear\tTax26LastYear\tTax27LastYear\tTax28LastYear\tTax29LastYear\tTax30LastYear\tTax31LastYear\tTax32LastYear\tTax33LastYear\tTax34LastYear\tTax35LastYear\tTax36LastYear\tTax37LastYear\tTax38LastYear\tTax39LastYear\tTax40LastYear\tTax41LastYear\tTax42LastYear\tTax43LastYear\tTax44LastYear\tTax45LastYear\tTax46LastYear\t\";",
+              "<< A1079 res=\"%0\t0\t0\t0\t5512592.8321\t658579.4099\t632166.6923\t0\t0\t1137356.3795\t266535.6782\t0\t0\t0\t54790.5133\t178309.0995\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t127107.8003\t0\t0\t0\t\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%([^\\t\"]*\\t)*\"$/; got \"res=\\\"%0\\t0\\t0\\t0\\t5512592.8321\\t658579.4099\\t632166.6923\\t0\\t0\\t1137356.3795\\t266535.6782\\t0\\t0\\t0\\t54790.5133\\t178309.0995\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t127107.8003\\t0\\t0\\t0\\t\\\"\""
+          }
+        },
+        {
+          "suite": "inspector",
+          "id": "refresh",
+          "intent": "inspector refresh — SetObject again on the SAME temp object then GetPropertyList (parity with TObjectInspectorContainer.Refresh; no capture)",
+          "outcome": {
+            "response": "res=\"%0\t0\t0\t0\t5512592.8321\t658579.4099\t632166.6923\t0\t0\t1137356.3795\t266535.6782\t0\t0\t0\t54790.5133\t178309.0995\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t127107.8003\t0\t0\t0\t\"",
+            "elapsedMs": 3234,
+            "wire": [
+              ">> C 1080 sel 3948136 call SetObject \"^\" \"#933\",\"#1000\";",
+              "<< A1080 res=\"#-1\"",
+              ">> C 1081 sel 3948136 call GetPropertyList \"^\" \"%ActualRuler\tTown\tNewspaperName\tRulerPrestige\tRulerRating\tTycoonsRating\tYearsToElections\tHasRuler\tRulerPeriods\tCampaignCount\tGQOS\thiWorkDemand\thiPrivateWorkDemand\thiSalary\thiSalaryValue\thiMinSalary\thiActualMinSalary\tmidWorkDemand\tmidPrivateWorkDemand\tmidSalary\tmidSalaryValue\tmidMinSalary\tmidActualMinSalary\tloWorkDemand\tloPrivateWorkDemand\tloSalary\tloSalaryValue\tloMinSalary\tloActualMinSalary\thiResDemand\thiRentPrice\thiResQ\tmidResDemand\tmidRentPrice\tmidResQ\tloResDemand\tloRentPrice\tloResQ\tTrouble\tRulerName\tRulerVotes\tRulerCmpRat\tRulerCmpPnts\tcovCount\tsrvCount\tTaxCount\tCampaignCount\t\";",
+              "<< A1081 res=\"%\tHelartia\tHelartia Herald\t\t\t\t\t\t\t0\t27\t5\t0\t113\t183\t0\t0\t0\t0\t123\t47\t0\t0\t0\t0\t113\t8\t0\t0\t351\t200\t70\t1073\t200\t38\t7006\t200\t32\t0\t\t\t\t\t9\t16\t47\t0\t\"",
+              ">> C 1082 sel 3948136 call GetPropertyList \"^\" \"%covName0.0\tcovName1.0\tcovName2.0\tcovName3.0\tcovName4.0\tcovName5.0\tcovName6.0\tcovName7.0\tcovName8.0\tcovValue0\tcovValue1\tcovValue2\tcovValue3\tcovValue4\tcovValue5\tcovValue6\tcovValue7\tcovValue8\tsvrName0.0\tsvrName1.0\tsvrName2.0\tsvrName3.0\tsvrName4.0\tsvrName5.0\tsvrName6.0\tsvrName7.0\tsvrName8.0\tsvrName9.0\tsvrName10.0\tsvrName11.0\tsvrName12.0\tsvrName13.0\tsvrName14.0\tsvrName15.0\tsvrDemand0\tsvrDemand1\tsvrDemand2\tsvrDemand3\tsvrDemand4\tsvrDemand5\tsvrDemand6\tsvrDemand7\tsvrDemand8\tsvrDemand9\tsvrDemand10\tsvrDemand11\tsvrDemand12\tsvrDemand13\tsvrDemand14\tsvrDemand15\t\";",
+              "<< A1082 res=\"%Colleges\tGarbage Disposal\tFire Coverage\tHealth Coverage\tJails\tMuseums\tPolice Coverage\tSchool Coverage\tRecreation Facilities\t0\t247\t49\t195\t0\t0\t74\t97\t35\tBars\tBooks\tCars\tCDs\tClothing and Footwear\tComputers\tPharmaceutics\tProcessed Food\tFresh Food\tFunerals\tFurniture\tGas\tHousehold Appliances\tMovies\tRestaurants\tToys\t370.097137451172\t28.0916690826416\t0.694764077663422\t51.3023796081543\t73.382942199707\t0.717686474323273\t69.3928604125977\t201.036666870117\t75.2400054931641\t0.0524761900305748\t9.18958377838135\t295.800018310547\t21.4381484985352\t392.190490722656\t150.221435546875\t34.6964302062988\t\"",
+              ">> C 1083 sel 3948136 call GetPropertyList \"^\" \"%svrOffer0\tsvrOffer1\tsvrOffer2\tsvrOffer3\tsvrOffer4\tsvrOffer5\tsvrOffer6\tsvrOffer7\tsvrOffer8\tsvrOffer9\tsvrOffer10\tsvrOffer11\tsvrOffer12\tsvrOffer13\tsvrOffer14\tsvrOffer15\tsvrCapacity0\tsvrCapacity1\tsvrCapacity2\tsvrCapacity3\tsvrCapacity4\tsvrCapacity5\tsvrCapacity6\tsvrCapacity7\tsvrCapacity8\tsvrCapacity9\tsvrCapacity10\tsvrCapacity11\tsvrCapacity12\tsvrCapacity13\tsvrCapacity14\tsvrCapacity15\tsvrRatio0\tsvrRatio1\tsvrRatio2\tsvrRatio3\tsvrRatio4\tsvrRatio5\tsvrRatio6\tsvrRatio7\tsvrRatio8\tsvrRatio9\tsvrRatio10\tsvrRatio11\tsvrRatio12\tsvrRatio13\tsvrRatio14\tsvrRatio15\tsvrMarketPrice0\tsvrMarketPrice1\t\";",
+              "<< A1083 res=\"%0\t6.21656322479248\t0.537200689315796\t0\t17.9934635162354\t0\t0\t91.2186813354492\t13.9956998825073\t0\t1.13846981525421\t53.252857208252\t6.49206495285034\t0\t0\t10.7022275924683\t0\t225\t4\t0\t30\t0\t0\t120\t120\t0\t18\t240\t15\t0\t0\t30\t0\t0.221295610070229\t0.773213088512421\t0\t0.245199531316757\t0\t0\t0.453741520643234\t0.186014071106911\t0\t0.123886980116367\t0.180029928684235\t0.302827686071396\t0\t0\t0.308453291654587\t7\t15\t\"",
+              ">> C 1084 sel 3948136 call GetPropertyList \"^\" \"%svrMarketPrice2\tsvrMarketPrice3\tsvrMarketPrice4\tsvrMarketPrice5\tsvrMarketPrice6\tsvrMarketPrice7\tsvrMarketPrice8\tsvrMarketPrice9\tsvrMarketPrice10\tsvrMarketPrice11\tsvrMarketPrice12\tsvrMarketPrice13\tsvrMarketPrice14\tsvrMarketPrice15\tsvrPrice0\tsvrPrice1\tsvrPrice2\tsvrPrice3\tsvrPrice4\tsvrPrice5\tsvrPrice6\tsvrPrice7\tsvrPrice8\tsvrPrice9\tsvrPrice10\tsvrPrice11\tsvrPrice12\tsvrPrice13\tsvrPrice14\tsvrPrice15\tsvrQuality0\tsvrQuality1\tsvrQuality2\tsvrQuality3\tsvrQuality4\tsvrQuality5\tsvrQuality6\tsvrQuality7\tsvrQuality8\tsvrQuality9\tsvrQuality10\tsvrQuality11\tsvrQuality12\tsvrQuality13\tsvrQuality14\tsvrQuality15\tTax0Id\tTax1Id\tTax2Id\tTax3Id\t\";",
+              "<< A1084 res=\"%7000\t15\t25\t800\t40\t15\t4\t20000\t100\t2\t110\t5\t20\t32\t0\t467\t293\t0\t393\t0\t0\t312\t353\t0\t338\t349\t386\t0\t0\t308\t0\t87\t93\t0\t40\t0\t0\t40\t92\t0\t40\t66\t34\t0\t0\t40\t100\t110\t120\t130\t\"",
+              ">> C 1085 sel 3948136 call GetPropertyList \"^\" \"%Tax4Id\tTax5Id\tTax6Id\tTax7Id\tTax8Id\tTax9Id\tTax10Id\tTax11Id\tTax12Id\tTax13Id\tTax14Id\tTax15Id\tTax16Id\tTax17Id\tTax18Id\tTax19Id\tTax20Id\tTax21Id\tTax22Id\tTax23Id\tTax24Id\tTax25Id\tTax26Id\tTax27Id\tTax28Id\tTax29Id\tTax30Id\tTax31Id\tTax32Id\tTax33Id\tTax34Id\tTax35Id\tTax36Id\tTax37Id\tTax38Id\tTax39Id\tTax40Id\tTax41Id\tTax42Id\tTax43Id\tTax44Id\tTax45Id\tTax46Id\tTax0Name0\tTax1Name0\tTax2Name0\tTax3Name0\tTax4Name0\tTax5Name0\tTax6Name0\t\";",
+              "<< C sel 39127461 call RefreshTycoon \"*\" \"%87179256\",\"%0\",\"#16\",\"#0\",\"#70\"",
+              "<< A1085 res=\"%140\t150\t160\t170\t180\t190\t195\t2\t200\t210\t215\t220\t225\t230\t235\t240\t250\t260\t270\t280\t295\t300\t305\t310\t320\t330\t340\t345\t350\t360\t400\t410\t420\t425\t435\t440\t450\t460\t500\t505\t510\t520\t6\tFarms\tBusiness Machines\tCar industries\tChemical plants\tClothes\tConstruction\tElectronic\t\"",
+              ">> C 1086 sel 3948136 call GetPropertyList \"^\" \"%Tax7Name0\tTax8Name0\tTax9Name0\tTax10Name0\tTax11Name0\tTax12Name0\tTax13Name0\tTax14Name0\tTax15Name0\tTax16Name0\tTax17Name0\tTax18Name0\tTax19Name0\tTax20Name0\tTax21Name0\tTax22Name0\tTax23Name0\tTax24Name0\tTax25Name0\tTax26Name0\tTax27Name0\tTax28Name0\tTax29Name0\tTax30Name0\tTax31Name0\tTax32Name0\tTax33Name0\tTax34Name0\tTax35Name0\tTax36Name0\tTax37Name0\tTax38Name0\tTax39Name0\tTax40Name0\tTax41Name0\tTax42Name0\tTax43Name0\tTax44Name0\tTax45Name0\tTax46Name0\tTax0Kind\tTax1Kind\tTax2Kind\tTax3Kind\tTax4Kind\tTax5Kind\tTax6Kind\tTax7Kind\tTax8Kind\tTax9Kind\t\";",
+              "<< A1086 res=\"%Food Processing\tHeavy industry\tAppliance Industries\tToys\tResidentials\tMetallurgic industry\tMines\tOil rigs\tTextile industry\tRefineries\tSoftware\tPlastics\tLegal Services\tCars\tClothes Stores\tFood\tBars\tFuneral Parlors\tHousehold Appliances\tToy Stores\tSupermarkets\tRestaurants\tMovie Theaters\tFurniture Stores\tBook Stores\tWarehouses\tTV\tPharmaceutics\tLiquor Production\tLumber Mills\tFurniture Industry\tMovie Studios\tPaper Industry\tPrinting Plant\tCD Industry\tDrug Stores\tGas Stations\tComputer Stores\tCD Stores\tOffices\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t\"",
+              ">> C 1087 sel 3948136 call GetPropertyList \"^\" \"%Tax10Kind\tTax11Kind\tTax12Kind\tTax13Kind\tTax14Kind\tTax15Kind\tTax16Kind\tTax17Kind\tTax18Kind\tTax19Kind\tTax20Kind\tTax21Kind\tTax22Kind\tTax23Kind\tTax24Kind\tTax25Kind\tTax26Kind\tTax27Kind\tTax28Kind\tTax29Kind\tTax30Kind\tTax31Kind\tTax32Kind\tTax33Kind\tTax34Kind\tTax35Kind\tTax36Kind\tTax37Kind\tTax38Kind\tTax39Kind\tTax40Kind\tTax41Kind\tTax42Kind\tTax43Kind\tTax44Kind\tTax45Kind\tTax46Kind\tTax0Percent\tTax1Percent\tTax2Percent\tTax3Percent\tTax4Percent\tTax5Percent\tTax6Percent\tTax7Percent\tTax8Percent\tTax9Percent\tTax10Percent\tTax11Percent\tTax12Percent\t\";",
+              "<< A1087 res=\"%0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t\"",
+              ">> C 1088 sel 3948136 call GetPropertyList \"^\" \"%Tax13Percent\tTax14Percent\tTax15Percent\tTax16Percent\tTax17Percent\tTax18Percent\tTax19Percent\tTax20Percent\tTax21Percent\tTax22Percent\tTax23Percent\tTax24Percent\tTax25Percent\tTax26Percent\tTax27Percent\tTax28Percent\tTax29Percent\tTax30Percent\tTax31Percent\tTax32Percent\tTax33Percent\tTax34Percent\tTax35Percent\tTax36Percent\tTax37Percent\tTax38Percent\tTax39Percent\tTax40Percent\tTax41Percent\tTax42Percent\tTax43Percent\tTax44Percent\tTax45Percent\tTax46Percent\tTax0LastYear\tTax1LastYear\tTax2LastYear\tTax3LastYear\tTax4LastYear\tTax5LastYear\tTax6LastYear\tTax7LastYear\tTax8LastYear\tTax9LastYear\tTax10LastYear\tTax11LastYear\tTax12LastYear\tTax13LastYear\tTax14LastYear\tTax15LastYear\t\";",
+              "<< A1088 res=\"%10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t10\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t7320250.0841\t0\t0\t0\t0\t\"",
+              ">> C 1089 sel 3948136 call GetPropertyList \"^\" \"%Tax16LastYear\tTax17LastYear\tTax18LastYear\tTax19LastYear\tTax20LastYear\tTax21LastYear\tTax22LastYear\tTax23LastYear\tTax24LastYear\tTax25LastYear\tTax26LastYear\tTax27LastYear\tTax28LastYear\tTax29LastYear\tTax30LastYear\tTax31LastYear\tTax32LastYear\tTax33LastYear\tTax34LastYear\tTax35LastYear\tTax36LastYear\tTax37LastYear\tTax38LastYear\tTax39LastYear\tTax40LastYear\tTax41LastYear\tTax42LastYear\tTax43LastYear\tTax44LastYear\tTax45LastYear\tTax46LastYear\t\";",
+              "<< C sel 39127461 call RefreshTycoon \"*\" \"%87179256\",\"%0\",\"#16\",\"#0\",\"#70\"",
+              "<< A1089 res=\"%0\t0\t0\t0\t5512592.8321\t658579.4099\t632166.6923\t0\t0\t1137356.3795\t266535.6782\t0\t0\t0\t54790.5133\t178309.0995\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\t127107.8003\t0\t0\t0\t\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%([^\\t\"]*\\t)*\"$/; got \"res=\\\"%0\\t0\\t0\\t0\\t5512592.8321\\t658579.4099\\t632166.6923\\t0\\t0\\t1137356.3795\\t266535.6782\\t0\\t0\\t0\\t54790.5133\\t178309.0995\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t0\\t127107.8003\\t0\\t0\\t0\\t\\\"\""
+          }
+        },
+        {
+          "suite": "inspector",
+          "id": "release",
+          "intent": "inspector release — `CloseObject \"*\" #tempId` on the ActiveInspector",
+          "outcome": {
+            "response": "(push) C sel 3173064 call CloseObject \"*\" \"#3948136\"",
+            "elapsedMs": 1,
+            "wire": [
+              ">> C sel 3173064 call CloseObject \"*\" \"#3948136\";"
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^\\(push\\) C sel \\d+ call CloseObject \"\\*\" \"#\\d+\"$/; got \"(push) C sel 3173064 call CloseObject \\\"*\\\" \\\"#3948136\\\"\""
+          }
+        }
+      ],
+      "skipped": [
+        {
+          "id": "tab-supplies",
+          "reason": "template Class1500 has no supplies tab"
+        },
+        {
+          "id": "tab-products",
+          "reason": "template Class1500 has no products tab"
+        }
+      ],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "chat",
+      "steps": [
+        {
+          "suite": "chat",
+          "id": "channel-list",
+          "intent": "`call GetChannelList \"^\" \"%ROOT\"` answers name / password line pairs — login-full :589-590",
+          "outcome": {
+            "response": "res=\"%Punta Morena\r\n\r\nWest Bank\r\n\r\nKidney Lake\r\n\r\nManica\r\n\r\nNew Suez\r\n\r\nMarsica\r\n\r\nPodan\r\n\r\nNorvenia\r\n\r\nPlano\r\n\r\nSkandral\r\n\r\nTrespunta\r\n\r\nLoi Lan\r\n\r\nGulfia\r\n\r\nMarinaria\r\n\r\nSpryng\r\n\r\nFlamingo\r\n\r\nLago Ojo\r\n\r\nShitab\r\n\r\nEttoria\r\n\r\nHelartia\r\n\r\nFortenac\r\n\r\nHookya\r\n\r\nBlakh\r\n\r\nFlumenia\r\n\r\nLungo Rio\r\n\r\n\"",
+            "elapsedMs": 181,
+            "wire": [
+              ">> C 1090 sel 6968340 call GetChannelList \"^\" \"%ROOT\";",
+              "<< C sel 39127461 call RefreshObject \"*\" \"#254354412\",\"#0\",\"%Town Hall\n\rHelartia\n\r20,272 inhabitants:-:246 High class (0% unemp), 1,026 Middle class (49% unemp), 18,999 Low class (87% unemp).:-:6 citizens of High class moved in last day.3% due to good residential offers, 91% to find a job, 5% due to good quality of public services.2 citizens of Middle class moved in last day.7% due to good residential offers, 75% to find a job, 18% due to good quality of public services.4 citizens of Low class moved out last day.5% due to salaries and work conditions, 15% due to residential conditions, 21% due to low coverage of public services, 2% due to unemployment, 56% due to lack of products and services.:-:\"",
+              "<< A1090 res=\"%Punta Morena\r\n\r\nWest Bank\r\n\r\nKidney Lake\r\n\r\nManica\r\n\r\nNew Suez\r\n\r\nMarsica\r\n\r\nPodan\r\n\r\nNorvenia\r\n\r\nPlano\r\n\r\nSkandral\r\n\r\nTrespunta\r\n\r\nLoi Lan\r\n\r\nGulfia\r\n\r\nMarinaria\r\n\r\nSpryng\r\n\r\nFlamingo\r\n\r\nLago Ojo\r\n\r\nShitab\r\n\r\nEttoria\r\n\r\nHelartia\r\n\r\nFortenac\r\n\r\nHookya\r\n\r\nBlakh\r\n\r\nFlumenia\r\n\r\nLungo Rio\r\n\r\n\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%/; got \"res=\\\"%Punta Morena\\r\\n\\r\\nWest Bank\\r\\n\\r\\nKidney Lake\\r\\n\\r\\nManica\\r\\n\\r\\nNew Suez\\r\\n\\r\\nMarsica\\r\\n\\r\\nPodan\\r\\n\\r\\nNorvenia\\r\\n\\r\\nPlano\\r\\n\\r\\nSkandral\\r\\n\\r\\nTrespunta\\r\\n\\r\\nLoi Lan\\r\\n\\r\\nGulfia\\r\\n\\r\\nMarinaria\\r\\n\\r\\nSpryng\\r\\n\\r\\nFlamingo\\r\\n\\r\\nLago Ojo\\r\\n\\r\\nShitab\\r\\n\\r\\nEttoria\\r\\n\\r\\nHelartia\\r\\n\\r\\nFortenac\\r\\n\\r\\nHookya\\r\\n\\r\\nBlakh\\r\\n\\r\\nFlumenia\\r\\n\\r\\nLungo Rio\\r\\n\\r\\n\\\"\""
+          }
+        },
+        {
+          "suite": "chat",
+          "id": "join-lobby",
+          "intent": "`call JoinChannel \"^\" \"%\",\"%\"` (empty name = lobby, as the reference client at login) answers `res=\"#0\"` — login-full :659-660",
+          "outcome": {
+            "response": "res=\"#0\"",
+            "elapsedMs": 91,
+            "wire": [
+              ">> C 1091 sel 6968340 call JoinChannel \"^\" \"%\",\"%\";",
+              "<< A1091 res=\"#0\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "exact \"res=\\\"#0\\\"\"; got \"res=\\\"#0\\\"\""
+          }
+        },
+        {
+          "suite": "chat",
+          "id": "user-list",
+          "intent": "`call GetUserList \"^\"` answers `name/accDesc/status` lines — login-full :732-733",
+          "outcome": {
+            "response": "res=\"%lord kaio/8393958/0\r\nSPO_test3/0/0\r\n\"",
+            "elapsedMs": 109,
+            "wire": [
+              ">> C 1092 sel 6968340 call GetUserList \"^\";",
+              "<< A1092 res=\"%lord kaio/8393958/0\r\nSPO_test3/0/0\r\n\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%([^/\\r\\n\"]+\\/-?\\d+\\/-?\\d+(\\r?\\n)?)*\"$/; got \"res=\\\"%lord kaio/8393958/0\\r\\nSPO_test3/0/0\\r\\n\\\"\""
+          }
+        },
+        {
+          "suite": "chat",
+          "id": "channel-info",
+          "intent": "`call GetChannelInfo \"^\" \"%<channel>\"` on the first listed channel — [INFERRED] no reply evidence anywhere; first live observation",
+          "outcome": {
+            "response": "res=\"%Channel \"\"Punta Morena\"\", created by Punta Morena.  0 users .\"",
+            "elapsedMs": 92,
+            "wire": [
+              ">> C 1093 sel 6968340 call GetChannelInfo \"^\" \"%Punta Morena\";",
+              "<< A1093 res=\"%Channel \"\"Punta Morena\"\", created by Punta Morena.  0 users .\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "any answer; got \"res=\\\"%Channel \\\"\\\"Punta Morena\\\"\\\", created by Punta Morena.  0 users .\\\"\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "mail",
+      "steps": [
+        {
+          "suite": "mail",
+          "id": "log-server-on",
+          "intent": "`call LogServerOn \"^\" \"%<world>\"` on MailServer answers `res=\"#<id>\"` — login-full :499-500",
+          "outcome": {
+            "response": "res=\"#4804536\"",
+            "elapsedMs": 289,
+            "wire": [
+              ">> C 1094 idof \"MailServer\";",
+              "<< A1094 objid=\"4809072\"",
+              ">> C 1095 sel 4809072 call LogServerOn \"^\" \"%Planitia\";",
+              "<< A1095 res=\"#4804536\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"#\\d+\"$/; got \"res=\\\"#4804536\\\"\""
+          }
+        },
+        {
+          "suite": "mail",
+          "id": "check-new-mail",
+          "intent": "`call CheckNewMail \"^\" #srv,\"%<account>\"` answers `res=\"#<count>\"` — login-full :509-510",
+          "outcome": {
+            "response": "res=\"#2\"",
+            "elapsedMs": 91,
+            "wire": [
+              ">> C 1096 sel 4809072 call CheckNewMail \"^\" \"#4804536\",\"%SPO_test3@Planitia.net\";",
+              "<< A1096 res=\"#2\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"#-?\\d+\"$/; got \"res=\\\"#2\\\"\""
+          }
+        },
+        {
+          "suite": "mail",
+          "id": "inbox-listing-http",
+          "intent": "transport C — `MessageList.asp` over HTTP, no RDO frame; yields the message ids the RDO read needs",
+          "outcome": {
+            "response": "2 message(s)",
+            "elapsedMs": 361
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^\\d+ message\\(s\\)$/; got \"2 message(s)\""
+          }
+        },
+        {
+          "suite": "mail",
+          "id": "read-message",
+          "intent": "`readMailMessage(Inbox, id)` — OpenMessage / GetHeaders / GetLines / GetAttachmentCount / CloseMessage \"*\"+rid; judged here on GetHeaders `res=\"%[Header]…\"` (mail-read :981-982)",
+          "outcome": {
+            "response": "res=\"%[Header]\r\nFromAddr=mailer@GlobalPlanitia.net\r\nToAddr=SPO_test3@Planitia.net\r\nSubject=Welcome Minister\r\nMessageId=269161B0B2B26174E\r\nStamp=14\r\nDate=167173\r\nContentType=text/html\r\nFrom=mailer@GlobalPlanitia.net\r\nTo=SPO_test3\r\nDateFmt=2357-09-13\r\n\"",
+            "elapsedMs": 464,
+            "wire": [
+              ">> C 1097 sel 4809072 call OpenMessage \"^\" \"%Planitia\",\"%SPO_test3@Planitia.net\",\"%Inbox\",\"%269161B0B2B26174E\";",
+              "<< A1097 res=\"#4819028\"",
+              ">> C 1098 sel 4819028 call GetHeaders \"^\" \"#0\";",
+              "<< A1098 res=\"%[Header]\r\nFromAddr=mailer@GlobalPlanitia.net\r\nToAddr=SPO_test3@Planitia.net\r\nSubject=Welcome Minister\r\nMessageId=269161B0B2B26174E\r\nStamp=14\r\nDate=167173\r\nContentType=text/html\r\nFrom=mailer@GlobalPlanitia.net\r\nTo=SPO_test3\r\nDateFmt=2357-09-13\r\n\"",
+              ">> C 1099 sel 4819028 call GetLines \"^\" \"#0\";",
+              "<< A1099 res=\"%<HEAD>\r\n<META HTTP-EQUIV=\"\"REFRESH\"\" CONTENT=\"\"0; URL=http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=SPO_test3&Ministry=Agriculture&President=RolloCat&WorldName=Planitia\"\">\r\n</HEAD>\r\n\"",
+              ">> C 1100 sel 4819028 call GetAttachmentCount \"^\" \"#0\";",
+              "<< A1100 res=\"#0\"",
+              ">> C 1101 sel 4809072 call CloseMessage \"*\" \"#4819028\";",
+              "<< A1101"
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%\\[Header\\]/; got \"res=\\\"%[Header]\\r\\nFromAddr=mailer@GlobalPlanitia.net\\r\\nToAddr=SPO_test3@Planitia.net\\r\\nSubject=Welcome Minister\\r\\nMessageId=269161B0B2B26174E\\r\\nStamp=14\\r\\nDate=167173\\r\\nContentType=text/html\\r\\nFrom=mailer@GlobalPlanitia.net\\r\\nTo=SPO_test3\\r\\nDateFmt=2357-09-13\\r\\n\\\"\""
+          }
+        },
+        {
+          "suite": "mail",
+          "id": "read-message-open",
+          "intent": "`OpenMessage \"^\" \"%<world>\",\"%<account>\",\"%Inbox\",\"%<id>\"` answers `res=\"#<msg>\"` — mail-read :971-972",
+          "outcome": {
+            "response": "res=\"#4819028\"",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C 1097 sel 4809072 call OpenMessage \"^\" \"%Planitia\",\"%SPO_test3@Planitia.net\",\"%Inbox\",\"%269161B0B2B26174E\"",
+              "<< A1097 res=\"#4819028\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"#\\d+\"$/; got \"res=\\\"#4819028\\\"\""
+          }
+        },
+        {
+          "suite": "mail",
+          "id": "read-message-lines",
+          "intent": "`GetLines \"^\" #0` answers `res=\"%…\"` (embedded quotes doubled) — mail-read :991-992",
+          "outcome": {
+            "response": "res=\"%<HEAD>\r\n<META HTTP-EQUIV=\"\"REFRESH\"\" CONTENT=\"\"0; URL=http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=SPO_test3&Ministry=Agriculture&President=RolloCat&WorldName=Planitia\"\">\r\n</HEAD>\r\n\"",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C 1099 sel 4819028 call GetLines \"^\" \"#0\"",
+              "<< A1099 res=\"%<HEAD>\r\n<META HTTP-EQUIV=\"\"REFRESH\"\" CONTENT=\"\"0; URL=http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=SPO_test3&Ministry=Agriculture&President=RolloCat&WorldName=Planitia\"\">\r\n</HEAD>\r\n\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%/; got \"res=\\\"%<HEAD>\\r\\n<META HTTP-EQUIV=\\\"\\\"REFRESH\\\"\\\" CONTENT=\\\"\\\"0; URL=http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=SPO_test3&Ministry=Agriculture&President=RolloCat&WorldName=Planitia\\\"\\\">\\r\\n</HEAD>\\r\\n\\\"\""
+          }
+        },
+        {
+          "suite": "mail",
+          "id": "read-message-attachment-count",
+          "intent": "`GetAttachmentCount \"^\" #0` answers `res=\"#n\"` — mail-read :1001-1002",
+          "outcome": {
+            "response": "res=\"#0\"",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C 1100 sel 4819028 call GetAttachmentCount \"^\" \"#0\"",
+              "<< A1100 res=\"#0\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"#\\d+\"$/; got \"res=\\\"#0\\\"\""
+          }
+        },
+        {
+          "suite": "mail",
+          "id": "read-message-close-ack",
+          "intent": "`CloseMessage \"*\"` WITH QueryId (VOID_MEMBERS) is acked `A<id> ;` — doc :3548-3549; the live capture only holds the rejected `\"^\"` form (error 9, mail-read :1011-1012). First live observation of the corrected form",
+          "outcome": {
+            "response": "",
+            "elapsedMs": 0,
+            "wire": [
+              ">> C 1101 sel 4809072 call CloseMessage \"*\" \"#4819028\"",
+              "<< A1101 "
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "exact \"\"; got \"\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "politics",
+      "steps": [
+        {
+          "suite": "politics",
+          "id": "owned-facilities",
+          "intent": "`call RDOFavoritesGetSubItems \"^\" \"%\"` answers `res=\"%…\"` — panels-tour :1246-1247 (empty there); non-empty shape [INFERRED] from parseFavoritesResponse",
+          "outcome": {
+            "response": "res=\"%\"",
+            "elapsedMs": 92,
+            "wire": [
+              ">> C 1102 sel 6968340 call RDOFavoritesGetSubItems \"^\" \"%\";",
+              "<< A1102 res=\"%\""
+            ]
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%/; got \"res=\\\"%\\\"\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "research",
+      "steps": [],
+      "skipped": [
+        {
+          "id": "inventory",
+          "reason": "the account owns no facility with coordinates"
+        }
+      ],
+      "stoppedOnSilence": false
+    }
+  ],
+  "summary": {
+    "pass": 54,
+    "fail": 0,
+    "unknown": 1
+  },
+  "serverLogs": {
+    "bracketFound": true,
+    "serverLoginAt": "7:35:47 PM",
+    "serverDisconnectAt": "7:36:24 PM",
+    "serverIp": "88.167.51.32",
+    "clockOffsetSec": -2,
+    "clientsRow": {
+      "login": "7:35:48 PM",
+      "logout": "7:36:24 PM",
+      "exitCode": 0
+    },
+    "anomalies": [
+      "7:36:21 PM - Error in RefreshTycoon: Unspecified error"
+    ],
+    "heartbeatGaps": [],
+    "otherSessionsToday": 4,
+    "failures": []
+  }
+}

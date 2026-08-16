@@ -1,0 +1,472 @@
+{
+  "tool": "rdo-conformance",
+  "version": 1,
+  "startedAt": "2026-08-16T19:32:52.725Z",
+  "finishedAt": "2026-08-16T19:33:01.764Z",
+  "target": "shared",
+  "transport": "live",
+  "world": "planitia",
+  "session": {
+    "clientViewId": "7149132",
+    "interfaceServerId": "6501416",
+    "tycoonId": "37",
+    "company": "SPO_test3 - Green",
+    "loginAt": "2026-08-16T19:32:57.194Z",
+    "logoffAt": "2026-08-16T19:33:01.764Z"
+  },
+  "suites": [
+    {
+      "name": "types",
+      "steps": [
+        {
+          "suite": "types",
+          "id": "string-property-username",
+          "intent": "a published `string` property reads back as `$` — live 2026-08-16 (`UserName=\"$SPO_test3\"`), InterfaceServer.pas:126",
+          "frame": "C sel 7149132 get UserName",
+          "outcome": {
+            "response": "UserName=\"$SPO_test3\"",
+            "elapsedMs": 234
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^UserName=\"\\$[^\"]+\"$/; got \"UserName=\\\"$SPO_test3\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "string-property-mailaccount",
+          "intent": "`MailAccount` is `$` and carries an address — live 2026-08-16, capture login-full",
+          "frame": "C sel 7149132 get MailAccount",
+          "outcome": {
+            "response": "MailAccount=\"$SPO_test3@Planitia.net\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^MailAccount=\"\\$[^\"@]+@[^\"]+\"$/; got \"MailAccount=\\\"$SPO_test3@Planitia.net\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "string-property-compositename",
+          "intent": "`CompositeName` is `$` — live 2026-08-16, InterfaceServer.pas:127",
+          "frame": "C sel 7149132 get CompositeName",
+          "outcome": {
+            "response": "CompositeName=\"$SPO_test3\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^CompositeName=\"\\$[^\"]+\"$/; got \"CompositeName=\\\"$SPO_test3\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "string-property-worldname",
+          "intent": "a `string` property on the InterfaceServer is `$` too — capture login-full (`WorldName=\"$Planitia\"`)",
+          "frame": "C sel 6501416 get WorldName",
+          "outcome": {
+            "response": "WorldName=\"$Planitia\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^WorldName=\"\\$[^\"]+\"$/; got \"WorldName=\\\"$Planitia\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "int-property-tycoonid",
+          "intent": "an `integer` property reads back as `#` — capture login-full (`TycoonId=\"#37\"`)",
+          "frame": "C sel 7149132 get TycoonId",
+          "outcome": {
+            "response": "TycoonId=\"#37\"",
+            "elapsedMs": 90
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^TycoonId=\"#\\d+\"$/; got \"TycoonId=\\\"#37\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "int-property-worldxsize",
+          "intent": "`WorldXSize` is `#` — capture login-full (`WorldXSize=\"#2000\"`)",
+          "frame": "C sel 6501416 get WorldXSize",
+          "outcome": {
+            "response": "WorldXSize=\"#2000\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^WorldXSize=\"#\\d+\"$/; got \"WorldXSize=\\\"#2000\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "olevariant-function-result",
+          "intent": "a function returning OleVariant answers `res=\"%…\"` — capture :986-990",
+          "outcome": {
+            "response": "res=\"%LastX.0=939\r\nLastY.0=994\r\nLastTimeOnline=2026-08-16\r\n\"",
+            "elapsedMs": 259
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%/; got \"res=\\\"%LastX.0=939\\r\\nLastY.0=994\\r\\nLastTimeOnline=2026-08-16\\r\\n\\\"\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-int-control",
+          "intent": "control — `#1` parses; if this is not error 3 the harness is wrong",
+          "frame": "C sel 7149132 set RdoConfProbe=\"#1\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 92
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-bool-true",
+          "intent": "booleans travel as `#-1` and parse as integers",
+          "frame": "C sel 7149132 set RdoConfProbe=\"#-1\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 94
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-double-integral",
+          "intent": "`@1` — double without decimal separator",
+          "frame": "C sel 7149132 set RdoConfProbe=\"@1\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 93
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-double-fractional",
+          "intent": "`@1234.5` — the server locale decimal separator is `.` (live 2026-08-16); a `,` locale would answer error 4",
+          "frame": "C sel 7149132 set RdoConfProbe=\"@1234.5\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "types",
+          "id": "literal-single-fractional",
+          "intent": "`!3.14` — same question in single precision",
+          "frame": "C sel 7149132 set RdoConfProbe=\"!3.14\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "separators",
+      "steps": [
+        {
+          "suite": "separators",
+          "id": "variant-on-function",
+          "intent": "`\"^\"` on a Delphi function answers `res=` — capture :986",
+          "outcome": {
+            "response": "res=\"%939\"",
+            "elapsedMs": 175
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"[%$]/; got \"res=\\\"%939\\\"\""
+          }
+        },
+        {
+          "suite": "separators",
+          "id": "set-acks-empty",
+          "intent": "`set` carries no separator and is acked `A<id> ;` — capture :978-979 (`set EnableEvents=\"#-1\"`)",
+          "frame": "C sel 7149132 set EnableEvents=\"#-1\"",
+          "outcome": {
+            "response": "",
+            "elapsedMs": 92
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "exact \"\"; got \"\""
+          }
+        }
+      ],
+      "skipped": [
+        {
+          "id": "variant-on-zero-param-procedure",
+          "reason": "\"^\" on a procedure — needs --allow-variant-on-procedure (settled live 2026-08-16: error 9; re-running buys nothing)"
+        }
+      ],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "errors",
+      "steps": [
+        {
+          "suite": "errors",
+          "id": "set-unknown-property-grammar",
+          "intent": "`error N setting <Prop>` — RDOQueryServer.pas:338-346",
+          "frame": "C sel 7149132 set RdoConfProbe=\"#1\"",
+          "outcome": {
+            "response": "error 3 setting RdoConfProbe",
+            "errorCode": 3,
+            "elapsedMs": 90
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 3 matching /^error 3 setting RdoConfProbe$/; got \"error 3 setting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "errors",
+          "id": "get-unknown-property-grammar",
+          "intent": "`error N getting <Prop>` — RDOQueryServer.pas:278. [INFERRED] N = 5: GetPropInfo nil → CallMethod fallthrough (RDOObjectServer.pas:112-116) → MethodAddress nil → errUnexistentMethod (:326)",
+          "frame": "C sel 7149132 get RdoConfProbe",
+          "outcome": {
+            "response": "error 5 getting RdoConfProbe",
+            "errorCode": 5,
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^error [35] getting RdoConfProbe$/; got \"error 5 getting RdoConfProbe\""
+          }
+        },
+        {
+          "suite": "errors",
+          "id": "call-unknown-method",
+          "intent": "`call` on a name that is no method answers bare `error 5` — RDOObjectServer.pas:326 (MethodAddress nil, nothing runs), CallCommand appends no suffix (RDOQueryServer.pas:504)",
+          "frame": "C sel 7149132 call RdoConfNoSuchMethod \"^\"",
+          "outcome": {
+            "response": "error 5",
+            "errorCode": 5,
+            "elapsedMs": 102
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "error 5 matching /^error 5$/; got \"error 5\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "lifecycle",
+      "steps": [
+        {
+          "suite": "lifecycle",
+          "id": "rdocnntid-connection-bound",
+          "intent": "`RDOCnntId` is answered from the carrying connection (RDOQueryServer.pas:269-274) as `$` — capture login-full",
+          "frame": "C sel 7149132 get RDOCnntId",
+          "outcome": {
+            "response": "RDOCnntId=\"$7143996\"",
+            "elapsedMs": 90
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^RDOCnntId=\"\\$\\d+\"$/; got \"RDOCnntId=\\\"$7143996\\\"\""
+          }
+        },
+        {
+          "suite": "lifecycle",
+          "id": "serverbusy-poll",
+          "intent": "`get ServerBusy` on the ClientView is a boolean `#0`/`#-1` — capture :993-994",
+          "frame": "C sel 7149132 get ServerBusy",
+          "outcome": {
+            "response": "ServerBusy=\"#0\"",
+            "elapsedMs": 90
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^ServerBusy=\"#(0|-1)\"$/; got \"ServerBusy=\\\"#0\\\"\""
+          }
+        },
+        {
+          "suite": "lifecycle",
+          "id": "pick-event",
+          "intent": "`call PickEvent \"^\" \"#<TycoonId>\"` answers `res=\"%…\"` — capture :980-981",
+          "outcome": {
+            "response": "res=\"%\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^res=\"%/; got \"res=\\\"%\\\"\""
+          }
+        },
+        {
+          "suite": "lifecycle",
+          "id": "company-count",
+          "intent": "`GetCompanyCount` reads as `#` — capture login-full",
+          "frame": "C sel 7149132 get GetCompanyCount",
+          "outcome": {
+            "response": "GetCompanyCount=\"#1\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^GetCompanyCount=\"#\\d+\"$/; got \"GetCompanyCount=\\\"#1\\\"\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "reads",
+      "steps": [
+        {
+          "suite": "reads",
+          "id": "world-y-size",
+          "intent": "`WorldYSize` is `#` — capture login-full",
+          "frame": "C sel 6501416 get WorldYSize",
+          "outcome": {
+            "response": "WorldYSize=\"#2000\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^WorldYSize=\"#\\d+\"$/; got \"WorldYSize=\\\"#2000\\\"\""
+          }
+        },
+        {
+          "suite": "reads",
+          "id": "world-season",
+          "intent": "`WorldSeason` is `#` — capture login-full (`WorldSeason=\"#2\"`)",
+          "frame": "C sel 6501416 get WorldSeason",
+          "outcome": {
+            "response": "WorldSeason=\"#1\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^WorldSeason=\"#\\d+\"$/; got \"WorldSeason=\\\"#1\\\"\""
+          }
+        },
+        {
+          "suite": "reads",
+          "id": "da-addr",
+          "intent": "`DAAddr` is `$` — capture login-full",
+          "frame": "C sel 6501416 get DAAddr",
+          "outcome": {
+            "response": "DAAddr=\"$158.69.153.134\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^DAAddr=\"\\$[^\"]+\"$/; got \"DAAddr=\\\"$158.69.153.134\\\"\""
+          }
+        },
+        {
+          "suite": "reads",
+          "id": "mail-port",
+          "intent": "`MailPort` is `#` — capture login-full",
+          "frame": "C sel 6501416 get MailPort",
+          "outcome": {
+            "response": "MailPort=\"#10000\"",
+            "elapsedMs": 91
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "pattern /^MailPort=\"#\\d+\"$/; got \"MailPort=\\\"#10000\\\"\""
+          }
+        },
+        {
+          "suite": "reads",
+          "id": "tycoon-cookie-blob",
+          "intent": "the empty cookie id returns the whole blob as `Key=Value` lines — capture :986-990",
+          "outcome": {
+            "response": "res=\"%LastX.0=939\r\nLastY.0=994\r\nLastTimeOnline=2026-08-16\r\n\"",
+            "elapsedMs": 276
+          },
+          "verdict": {
+            "kind": "PASS",
+            "detail": "predicate: res=\"%…\" whose lines are all `Key=Value` (or empty); got \"res=\\\"%LastX.0=939\\r\\nLastY.0=994\\r\\nLastTimeOnline=2026-08-16\\r\\n\\\"\""
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": false
+    },
+    {
+      "name": "map",
+      "steps": [
+        {
+          "suite": "map",
+          "id": "connect-map-service",
+          "intent": "`idof WSObjectCacher` on the map socket (port 6000) answers an object id — capture login-full :431-432",
+          "outcome": {
+            "response": null,
+            "elapsedMs": 195,
+            "wire": [
+              "<< A1057 objid=\"3173064\""
+            ],
+            "error": "no idof:WSObjectCacher frame was emitted"
+          },
+          "verdict": {
+            "kind": "FAIL",
+            "detail": "unanswered — no idof:WSObjectCacher frame was emitted"
+          }
+        }
+      ],
+      "skipped": [],
+      "stoppedOnSilence": true
+    }
+  ],
+  "summary": {
+    "pass": 26,
+    "fail": 1,
+    "unknown": 0
+  },
+  "serverLogs": {
+    "bracketFound": true,
+    "serverLoginAt": "7:32:55 PM",
+    "serverDisconnectAt": "7:33:01 PM",
+    "serverIp": "88.167.51.32",
+    "clockOffsetSec": -2,
+    "clientsRow": {
+      "login": "7:32:56 PM",
+      "logout": "7:33:01 PM",
+      "exitCode": 0
+    },
+    "anomalies": [],
+    "heartbeatGaps": [],
+    "otherSessionsToday": 3,
+    "failures": []
+  }
+}

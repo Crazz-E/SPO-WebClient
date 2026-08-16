@@ -68,3 +68,6 @@ electron/node_modules/
 # Live server log snapshots harvested for byte-level analysis (U3-b).
 # Machine-generated and large; the analysis result is recorded in report/, not the corpus.
 report/campaign/logs-cache/
+
+# RDO conformance git gate — per machine, written by `npm run conformance`
+.conformance-gate.json

@@ -106,6 +106,25 @@ describe('reject mode (the end state)', () => {
     });
   });
 
+  // The conformance suite diffs replies against a baseline, and a baseline of
+  // `error 3` cannot tell `error 3 setting X` from `error 3 getting X`.
+  it('carries the raw reply payload when the call site supplies it', () => {
+    withContract('reject', () => {
+      const error = handleRdoErrorResponse(
+        { ...OBSERVATION, errorCode: 3, payload: 'error 3 setting RdoProbeU4' },
+        { warn: jest.fn() },
+      );
+      expect(error!.payload).toBe('error 3 setting RdoProbeU4');
+    });
+  });
+
+  it('falls back to `error <code>` when no payload was supplied', () => {
+    withContract('reject', () => {
+      const error = handleRdoErrorResponse(OBSERVATION, { warn: jest.fn() });
+      expect(error!.payload).toBe('error 9');
+    });
+  });
+
   it('still records the observation, so the census survives the flip', () => {
     withContract('reject', () => {
       handleRdoErrorResponse(OBSERVATION, { warn: jest.fn() });

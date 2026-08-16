@@ -206,8 +206,10 @@ Session report: `report/campaign/sondes-live-2026-08-16.md`.
 
 #### 2.1.1 The server does emit `$`, and it accepts `.` as the decimal separator
 
-Both settled by live probe against planitia, **2026-08-16 10:03 UTC** (`src/tools/rdo-probe.ts`,
-probes U6 and U4-a; session report `report/campaign/sondes-live-2026-08-16.md`). Byte-exact live
+Both settled by live probe against planitia, **2026-08-16 10:03 UTC** (probe harness, since
+generalised into the conformance suite — `types/string-property-*` and `types/literal-*` in
+`src/tools/conformance/suites.ts`, see [rdo-conformance-suite.md](rdo-conformance-suite.md);
+session report `report/campaign/sondes-live-2026-08-16.md`). Byte-exact live
 observations are capture-grade evidence (§0), so these supersede the `[INFERRED]` readings they
 confirm.
 

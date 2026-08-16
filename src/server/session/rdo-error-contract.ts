@@ -64,6 +64,12 @@ export interface RdoErrorObservation {
   errorCode: number;
   errorName?: string;
   rid?: number;
+  /**
+   * The reply payload exactly as parsed off the wire — `error 3 setting X`,
+   * not just `3`. The conformance suite diffs replies against a baseline and
+   * wants the bytes; re-parsing them from `errorName` would be a second parser.
+   */
+  payload?: string;
 }
 
 /**
@@ -73,6 +79,8 @@ export interface RdoErrorObservation {
 export class RdoServerError extends Error {
   public readonly errorCode: number;
   public readonly member: string;
+  /** Raw reply payload (`error 3 setting X`) when the caller supplied it; else `error <code>`. */
+  public readonly payload: string;
 
   constructor(observation: RdoErrorObservation) {
     super(
@@ -82,6 +90,7 @@ export class RdoServerError extends Error {
     this.name = 'RdoServerError';
     this.errorCode = observation.errorCode;
     this.member = observation.member;
+    this.payload = observation.payload ?? `error ${observation.errorCode}`;
   }
 }
 

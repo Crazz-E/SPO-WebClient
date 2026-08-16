@@ -84,6 +84,12 @@ case "$PROMPT" in
 esac
 
 case "$PROMPT" in
+  *conformance*|*conformité*|*conformite*|*probe*|*sonde*|*baseline*)
+    add "CONFORMANCE SUITE — doc/rdo-conformance-suite.md (usage, suites, risk tiering, replay/live) + src/tools/conformance/ (suites.ts is the catalogue). Never --transport live against the SHARED server for mutations; --allow-variant-on-procedure is never combined with --suite all."
+    ;;
+esac
+
+case "$PROMPT" in
   *mock*|*capture*|*fixture*)
     add "MOCK / CAPTURES — src/mock-server/CLAUDE.md (API) + doc/mock-server-guide.md (step-by-step) + doc/Mock_Server_scenarios_captures.md (the 14 live captures). Generated scenarios in scenarios/captured/ are never hand-edited. Captures outrank Delphi source on conflict — see the rdo-conformity skill."
     ;;

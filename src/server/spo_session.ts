@@ -2524,6 +2524,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
 				errorCode: packet.errorCode,
 				errorName: packet.errorName,
 				rid: packet.rid,
+				payload: packet.payload,
 			  }, this.log);
 			  if (contractError) {
 				this.rdoMetrics.totalResolved++;

@@ -21,6 +21,7 @@
     "test:changed": "jest --onlyChanged --bail",
     "test:smoke": "jest --selectProjects component --bail",
     "capture:convert": "esbuild src/mock-server/capture-cli.ts --bundle --platform=node --format=cjs --outfile=dist/tools/convert-rdo-capture.js && node dist/tools/convert-rdo-capture.js",
+    "conformance": "esbuild src/tools/rdo-conformance.ts --bundle --platform=node --format=cjs --outfile=dist/tools/rdo-conformance.js && node --disable-warning=DEP0040 --disable-warning=DEP0169 dist/tools/rdo-conformance.js",
     "release": "node scripts/release.js",
     "electron": "npm run build:server && cd electron && npm start",
     "electron:validate": "node scripts/validate-electron-package.js",

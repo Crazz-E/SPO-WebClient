@@ -1,0 +1,64 @@
+{"ts":"2026-08-16T19:32:53.385Z","msg":"RDO<< directory_query","meta":{"rid":1000,"raw":"A1000 objid=\"39423540\""}}
+{"ts":"2026-08-16T19:32:53.387Z","msg":"RDO<< directory_auth","meta":{"rid":1001,"raw":"A1001 objid=\"39423540\""}}
+{"ts":"2026-08-16T19:32:53.477Z","msg":"RDO<< directory_query","meta":{"rid":1002,"raw":"A1002 RDOOpenSession=\"#128358768\""}}
+{"ts":"2026-08-16T19:32:53.478Z","msg":"RDO<< directory_auth","meta":{"rid":1003,"raw":"A1003 RDOOpenSession=\"#128359080\""}}
+{"ts":"2026-08-16T19:32:53.573Z","msg":"RDO<< directory_query","meta":{"rid":1004,"raw":"A1004 res=\"%Count=4\r\nKey0=planitia\r\ngeneral/date0=2535\r\ngeneral/investors0=19\r\ngeneral/online0=1\r\ngeneral/population0=126519075\r\ninterface/ip0=158.69.153.134\r\ninterface/port0=8000\r\ninterface/running0=true\r\ninterface/url0=http://158.69.153.134/Five/\r\nKey1=shamba\r\ngeneral/date1=2646\r\ngeneral/investors1=17\r\ngeneral/online1=0\r\ngeneral/population1=56338244\r\ninterface/ip1=142.44.158.91\r\ninterface/port1=8000\r\ninterface/running1=true\r\ninterface/url1=http://142.44.158.91/Five/\r\nKey2=trinity\r\ngeneral/date2=3412\r\ngeneral/investors2=26\r\ngeneral/online2=1\r\ngeneral/population2=47890344\r\nKey3=zorcon\r\ngeneral/date3=2142\r\ngeneral/investors3=16\r\ngeneral/online3=3\r\ngeneral/population3=8298128\r\ninterface/ip3=142.4.193.58\r\ninterface/port3=8000\r\ninterface/running3=true\r\ninterface/url3=http://142.4.193.58/Five/\r\n\""}}
+{"ts":"2026-08-16T19:32:53.601Z","msg":"RDO<< directory_auth","meta":{"rid":1005,"raw":"A1005 res=\"%\""}}
+{"ts":"2026-08-16T19:32:54.102Z","msg":"RDO<< directory_auth","meta":{"rid":1006,"raw":"A1006 res=\"#0\""}}
+{"ts":"2026-08-16T19:32:54.286Z","msg":"RDO<< world","meta":{"rid":1007,"raw":"A1007 objid=\"6501416\""}}
+{"ts":"2026-08-16T19:32:54.377Z","msg":"RDO<< world","meta":{"rid":1008,"raw":"A1008 WorldName=\"$Planitia\""}}
+{"ts":"2026-08-16T19:32:54.468Z","msg":"RDO<< world","meta":{"rid":1009,"raw":"A1009 WorldURL=\"$http://158.69.153.134/Five/\""}}
+{"ts":"2026-08-16T19:32:54.559Z","msg":"RDO<< world","meta":{"rid":1010,"raw":"A1010 DAAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-16T19:32:54.650Z","msg":"RDO<< world","meta":{"rid":1011,"raw":"A1011 DAPort=\"#7000\""}}
+{"ts":"2026-08-16T19:32:54.742Z","msg":"RDO<< world","meta":{"rid":1012,"raw":"A1012 DALockPort=\"#7001\""}}
+{"ts":"2026-08-16T19:32:54.832Z","msg":"RDO<< world","meta":{"rid":1013,"raw":"A1013 MailAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-16T19:32:54.925Z","msg":"RDO<< world","meta":{"rid":1014,"raw":"A1014 MailPort=\"#10000\""}}
+{"ts":"2026-08-16T19:32:55.016Z","msg":"RDO<< world","meta":{"rid":1015,"raw":"A1015 WorldXSize=\"#2000\""}}
+{"ts":"2026-08-16T19:32:55.106Z","msg":"RDO<< world","meta":{"rid":1016,"raw":"A1016 WorldYSize=\"#2000\""}}
+{"ts":"2026-08-16T19:32:55.218Z","msg":"RDO<< world","meta":{"rid":1017,"raw":"A1017 WorldSeason=\"#1\""}}
+{"ts":"2026-08-16T19:32:55.310Z","msg":"RDO<< world","meta":{"rid":1018,"raw":"A1018 res=\"#0\""}}
+{"ts":"2026-08-16T19:32:55.840Z","msg":"RDO<< world","meta":{"rid":1019,"raw":"A1019 res=\"#7149132\""}}
+{"ts":"2026-08-16T19:32:55.932Z","msg":"RDO<< world","meta":{"rid":1020,"raw":"A1020 MailAccount=\"$SPO_test3@Planitia.net\""}}
+{"ts":"2026-08-16T19:32:56.026Z","msg":"RDO<< world","meta":{"rid":1021,"raw":"A1021 TycoonId=\"#37\""}}
+{"ts":"2026-08-16T19:32:56.120Z","msg":"RDO<< world","meta":{"rid":1022,"raw":"A1022 RDOCnntId=\"$7143996\""}}
+{"ts":"2026-08-16T19:32:56.211Z","msg":"RDO<< world","meta":{"raw":"C 19 idof \"InterfaceEvents\""}}
+{"ts":"2026-08-16T19:32:56.305Z","msg":"RDO<< world","meta":{"raw":"C sel 40696507 call InitClient \"*\" \"@232007\",\"%87179256\",\"#0\",\"#298755856\""}}
+{"ts":"2026-08-16T19:32:56.395Z","msg":"RDO<< world","meta":{"raw":"C sel 40696507 call NewMail \"*\" \"#2\""}}
+{"ts":"2026-08-16T19:32:56.395Z","msg":"RDO<< world","meta":{"rid":1023,"raw":"A1023 res=\"#0\""}}
+{"ts":"2026-08-16T19:32:56.529Z","msg":"RDO<< world","meta":{"rid":1024,"raw":"A1024 GetCompanyCount=\"#1\""}}
+{"ts":"2026-08-16T19:32:57.285Z","msg":"RDO<< world","meta":{"rid":1025,"raw":"A1025"}}
+{"ts":"2026-08-16T19:32:57.377Z","msg":"RDO<< world","meta":{"rid":1026,"raw":"A1026 res=\"%\""}}
+{"ts":"2026-08-16T19:32:57.566Z","msg":"RDO<< world","meta":{"rid":1027,"raw":"A1027 res=\"%994\""}}
+{"ts":"2026-08-16T19:32:57.672Z","msg":"RDO<< world","meta":{"rid":1028,"raw":"A1028 res=\"%939\""}}
+{"ts":"2026-08-16T19:32:58.269Z","msg":"RDO<< world","meta":{"rid":1029,"raw":"A1029 res=\"%LastX.0=939\r\nLastY.0=994\r\nLastTimeOnline=2026-08-16\r\n\""}}
+{"ts":"2026-08-16T19:32:58.359Z","msg":"RDO<< world","meta":{"rid":1030,"raw":"A1030 res=\"%\""}}
+{"ts":"2026-08-16T19:32:58.449Z","msg":"RDO<< world","meta":{"raw":"C sel 40696507 call ChatMsg \"*\" \"%SYSTEM\",\"%SPO_test3 has entered Planitia\""}}
+{"ts":"2026-08-16T19:32:58.595Z","msg":"RDO<< world","meta":{"rid":1031,"raw":"A1031 UserName=\"$SPO_test3\""}}
+{"ts":"2026-08-16T19:32:58.686Z","msg":"RDO<< world","meta":{"rid":1032,"raw":"A1032 MailAccount=\"$SPO_test3@Planitia.net\""}}
+{"ts":"2026-08-16T19:32:58.779Z","msg":"RDO<< world","meta":{"rid":1033,"raw":"A1033 CompositeName=\"$SPO_test3\""}}
+{"ts":"2026-08-16T19:32:58.870Z","msg":"RDO<< world","meta":{"rid":1034,"raw":"A1034 WorldName=\"$Planitia\""}}
+{"ts":"2026-08-16T19:32:58.961Z","msg":"RDO<< world","meta":{"rid":1035,"raw":"A1035 TycoonId=\"#37\""}}
+{"ts":"2026-08-16T19:32:59.052Z","msg":"RDO<< world","meta":{"rid":1036,"raw":"A1036 WorldXSize=\"#2000\""}}
+{"ts":"2026-08-16T19:32:59.311Z","msg":"RDO<< world","meta":{"rid":1037,"raw":"A1037 res=\"%LastX.0=939\r\nLastY.0=994\r\nLastTimeOnline=2026-08-16\r\n\""}}
+{"ts":"2026-08-16T19:32:59.402Z","msg":"RDO<< world","meta":{"rid":1038,"raw":"A1038 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-16T19:32:59.496Z","msg":"RDO<< world","meta":{"rid":1039,"raw":"A1039 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-16T19:32:59.589Z","msg":"RDO<< world","meta":{"rid":1040,"raw":"A1040 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-16T19:32:59.680Z","msg":"RDO<< world","meta":{"rid":1041,"raw":"A1041 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-16T19:32:59.771Z","msg":"RDO<< world","meta":{"rid":1042,"raw":"A1042 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-16T19:32:59.946Z","msg":"RDO<< world","meta":{"rid":1043,"raw":"A1043 res=\"%939\""}}
+{"ts":"2026-08-16T19:33:00.039Z","msg":"RDO<< world","meta":{"rid":1044,"raw":"A1044"}}
+{"ts":"2026-08-16T19:33:00.129Z","msg":"RDO<< world","meta":{"rid":1045,"raw":"A1045 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-16T19:33:00.219Z","msg":"RDO<< world","meta":{"rid":1046,"raw":"A1046 error 5 getting RdoConfProbe"}}
+{"ts":"2026-08-16T19:33:00.321Z","msg":"RDO<< world","meta":{"rid":1047,"raw":"A1047 error 5"}}
+{"ts":"2026-08-16T19:33:00.412Z","msg":"RDO<< world","meta":{"rid":1048,"raw":"A1048 RDOCnntId=\"$7143996\""}}
+{"ts":"2026-08-16T19:33:00.502Z","msg":"RDO<< world","meta":{"rid":1049,"raw":"A1049 ServerBusy=\"#0\""}}
+{"ts":"2026-08-16T19:33:00.594Z","msg":"RDO<< world","meta":{"rid":1050,"raw":"A1050 res=\"%\""}}
+{"ts":"2026-08-16T19:33:00.685Z","msg":"RDO<< world","meta":{"rid":1051,"raw":"A1051 GetCompanyCount=\"#1\""}}
+{"ts":"2026-08-16T19:33:00.776Z","msg":"RDO<< world","meta":{"rid":1052,"raw":"A1052 WorldYSize=\"#2000\""}}
+{"ts":"2026-08-16T19:33:00.867Z","msg":"RDO<< world","meta":{"rid":1053,"raw":"A1053 WorldSeason=\"#1\""}}
+{"ts":"2026-08-16T19:33:00.958Z","msg":"RDO<< world","meta":{"rid":1054,"raw":"A1054 DAAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-16T19:33:01.048Z","msg":"RDO<< world","meta":{"rid":1055,"raw":"A1055 MailPort=\"#10000\""}}
+{"ts":"2026-08-16T19:33:01.325Z","msg":"RDO<< world","meta":{"rid":1056,"raw":"A1056 res=\"%LastX.0=939\r\nLastY.0=994\r\nLastTimeOnline=2026-08-16\r\n\""}}
+{"ts":"2026-08-16T19:33:01.520Z","msg":"RDO<< map","meta":{"rid":1057,"raw":"A1057 objid=\"3173064\""}}
+{"ts":"2026-08-16T19:33:01.619Z","msg":"RDO<< world","meta":{"raw":"C sel 40696507 call ChatMsg \"*\" \"%SYSTEM\",\"%SPO_test3 has left Planitia.\""}}
+{"ts":"2026-08-16T19:33:01.763Z","msg":"RDO<< world","meta":{"rid":1058,"raw":"A1058 Logoff=\"#0\""}}

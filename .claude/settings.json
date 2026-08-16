@@ -112,6 +112,18 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/conformance-gate.sh",
+            "timeout": 20
+          }
+        ]
+      }
     ]
   }
 }
