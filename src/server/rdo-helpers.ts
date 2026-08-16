@@ -7,6 +7,7 @@ import type { Socket } from 'net';
 import { createLogger } from '../shared/logger';
 import { clampToWireBytes } from '../shared/cp1252';
 import { RDO_PREFIX_STRIP } from '../shared/rdo-types';
+import { recordPropertyFallback } from './session/property-fallback-census';
 
 const wireLog = createLogger('RdoWire');
 
@@ -207,7 +208,17 @@ export function parsePropertyResponse(payload: string, propName: string): string
     return cleaned.replace(RDO_PREFIX_STRIP, '');
   }
 
-  // Fallback: clean and return payload as-is (for backward compatibility)
+  // Fallback: clean and return payload as-is (for backward compatibility).
+  //
+  // Load-bearing — several members answer with a bare value and no property
+  // name — but it also answers the wrong question silently: `Tax.Id` against
+  // `Tax0Id="#5"` matches nothing and yields `Tax0Id="#5` as if it were a value.
+  // Measured before being changed (P-M3 method): the census separates "payload
+  // was structured, we picked another property's text" from "payload was a bare
+  // value". Observation only — no behaviour change here.
+  // Readout: GET /api/property-fallback.
+  recordPropertyFallback(propName, payload);
+
   const cleaned = cleanPayload(payload);
 
   // Handle multi-line responses - take first non-empty line

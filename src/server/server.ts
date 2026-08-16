@@ -28,6 +28,7 @@ import {
 } from '../shared/types';
 import { toErrorMessage } from '../shared/error-utils';
 import { wsHandlerRegistry } from './ws-handlers';
+import { buildErrorContractReadout, buildPropertyFallbackReadout } from './session/diagnostics-readouts';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
 import { getPublicDir, getCacheDir, getWebclientCacheDir, setElectronUserDataPath, setElectronResourcesPath } from './paths';
 
@@ -672,6 +673,34 @@ const server = http.createServer(async (req, res) => {
   // Terrain info endpoint: /api/terrain-info/:terrainType
   // Returns available seasons and default season for a terrain type
   // Example: /api/terrain-info/Alien%20Swamp
+  // P-M3 readout — the census that decides whether the errorCode contract can
+  // flip to `reject`. `handleRdoErrorResponse` has been tallying every
+  // `A<id> error N;` reply since the observation mode went in, but nothing read
+  // the tally back: it accumulated in memory and died with the process, so the
+  // list the operator is meant to triage was only ever reachable by grepping
+  // `RDO-CONTRACT` out of the logs. Sorted most frequent first.
+  if (safePath === '/api/rdo-error-contract') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+    });
+    res.end(JSON.stringify(buildErrorContractReadout(config.rdo.errorContract), null, 2));
+    return;
+  }
+
+  // parsePropertyResponse fallback census — measure before changing (P-M3
+  // method). `structured: true` entries are the ones that returned another
+  // property's text; `false` entries are the bare-value callers the fallback
+  // legitimately serves. Triage the first group before touching the fallback.
+  if (safePath === '/api/property-fallback') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
+    });
+    res.end(JSON.stringify(buildPropertyFallbackReadout(), null, 2));
+    return;
+  }
+
   // Road block classes endpoint — served from in-memory cache
   if (safePath === '/api/road-block-classes') {
     res.writeHead(200, {
