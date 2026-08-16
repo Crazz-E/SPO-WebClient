@@ -44,8 +44,9 @@ encodage, identifiants, valeurs numériques, sémantique du verbe, codes de reto
 Suite complète **verte : 4382 tests**, typecheck propre, build OK, couverture globale 43,88 %
 (plancher machine 38, partie de 42,21 %).
 
-**⚠️ RIEN N'EST COMMITÉ.** L'arbre de travail porte l'intégralité de ces changements, une
-quarantaine de fichiers. C'est délibéré : le développeur n'a pas demandé de commit.
+**Mise à jour 2026-08-16 :** ces lots sont désormais **commités** — 7 commits `df818e09` →
+`e46ccd6b` (63 fichiers). Arbre propre, 4382 verts re-confirmés à la reprise. (La version
+initiale de ce briefing disait « rien n'est commité » : c'était vrai le 2026-08-15 seulement.)
 
 | Lot | Contenu |
 |---|---|
@@ -93,6 +94,30 @@ balaie systématiquement ses voisins immédiats — même fonction, même famill
 membre Delphi.**
 
 ## 3. Ce qui reste
+
+> ### ⚠ Mise à jour 2026-08-16 — cette section est périmée, lire d'abord le rapport d'audit
+>
+> La session du 2026-08-16 a fermé **tout** ce que cette section §3 listait. État réel :
+> bloc d'état de [rdo-audit-2026-08-14.md](rdo-audit-2026-08-14.md), section « Session 2026-08-16 ».
+> Résumé : **39/39 constats fermés**, 4424 tests verts, couverture 44,23 %.
+>
+> | Sujet §3 | Devenu |
+> |---|---|
+> | L9-pré, harnais de sonde | ✅ écrit, testé — `src/tools/rdo-probe.ts` (18 tests) |
+> | Sondes U6 et U4-a | ✅ **exécutées en live le 2026-08-16, tranchées** — [campaign/sondes-live-2026-08-16.md](campaign/sondes-live-2026-08-16.md) |
+> | Sonde U1-a | ⏸ **non exécutée, sur recommandation** — risque de gel réel contre un gain purement documentaire (argumentaire : rapport de sonde §4) |
+> | O-L3 `TimeoutCategory` | ✅ fermé — obligatoire par le type, 93 sites |
+> | O-L5 sonde ServerBusy | ✅ fermé — deux options nommées sur la primitive |
+> | Pool monde (D5) | ✅ activé par défaut — **mais lire la réserve de conformité** dans le rapport d'audit avant de l'y laisser |
+> | Contrat `errorCode` (D4) | 🟡 toujours en mesure, **par décision** — le recensement est maintenant lisible : `GET /api/rdo-error-contract` |
+> | `parsePropertyResponse` | 🟡 instrumenté en mesure — `GET /api/property-fallback` |
+>
+> **Deux décisions restent au développeur**, et elles ont maintenant les données pour être prises :
+> basculer `RDO_ERROR_CONTRACT=reject` après lecture du recensement, et lancer ou non U1-a.
+>
+> **Rien n'est commité.** L'arbre porte la session complète.
+>
+> *Le texte d'origine suit, conservé pour le contexte.*
 
 ### L9-pré — le harnais de sonde (non commencé, bloquant pour le live)
 

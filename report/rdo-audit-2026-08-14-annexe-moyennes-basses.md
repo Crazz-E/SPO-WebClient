@@ -180,12 +180,31 @@ buffer est non vide.
 
 ---
 
-## 5.1 État au 2026-08-16 — ce qui reste ouvert
+## 5.1 État au 2026-08-16 — les 25 constats sont fermés
 
-**23 des 25 constats sont fermés**, avec tests de régression. Deux restent, tous deux
-délibérément, et pour la même raison : le correctif coûte plus que le défaut.
+**25 sur 25**, avec tests de régression. Les deux derniers ont été traités le 2026-08-16, dans la
+passe dédiée que cette section réclamait. Le texte d'origine est conservé sous chaque titre : il
+explique pourquoi le report était justifié, et ce qui a changé.
 
-### O-L3 — 81 des 93 sites `sendRdoRequest()` sans `TimeoutCategory` — ⏸️ OUVERT
+### O-L3 — 81 des 93 sites `sendRdoRequest()` sans `TimeoutCategory` — ✅ FERMÉ 2026-08-16
+
+**Correctif.** La catégorie est **obligatoire par le type** : `category: TimeoutCategory` n'a plus
+de valeur par défaut dans `sendRdoRequest()` ni dans `LoginContext` / `SessionContext`. Le
+compilateur est l'exécutant — 93 sites renseignés, `npm run typecheck` refuse tout nouvel appel
+sans catégorie.
+
+**Ce qui a été délibérément NON fait : raccourcir des délais.** `timeout-categories.ts` établit que
+le client legacy utilisait `ISProxyTimeOut = 180 s` pour **tout appel en jeu**, et avertit
+qu'expirer plus tôt que lui est une divergence de conformité qui produit des échecs que l'original
+ne voyait pas. `FAST` (60 s, `DefTimeOut`) est donc réservé aux lectures **pré-login** et annuaire :
+`idof`, `AccountStatus`, les 10 propriétés monde, `MailAccount` / `TycoonId` / `RDOCnntId` /
+`GetCompanyCount`. Tout le reste garde 180 s ; `NORMAL` / `SLOW` / `VERY_SLOW` ne diffèrent que par
+ce que le site d'appel déclare de lui-même.
+
+**Le gain réel est donc l'explicitation, pas le délai** — et c'est cohérent avec le diagnostic
+d'origine ci-dessous, qui mesurait l'impact « uniquement sur le délai d'échec ».
+
+*Diagnostic d'origine :*
 
 `src/server/CLAUDE.md` impose une catégorie explicite à chaque appel ; le défaut retombe sur
 `NORMAL`. **L'impact réel est faible** : `NORMAL`, `SLOW` et `VERY_SLOW` partagent tous les
@@ -197,7 +216,26 @@ gain qui se mesure uniquement sur le délai d'échec. **À faire dans une passe 
 milieu d'un lot de correctifs de conformité — le diff mécanique noierait les changements qui
 comptent.
 
-### O-L5 — la sonde ServerBusy réimplémente `sendRdoRequest` — ⏸️ PARTIELLEMENT TRAITÉ
+### O-L5 — la sonde ServerBusy réimplémente `sendRdoRequest` — ✅ FERMÉ 2026-08-16
+
+**Correctif.** La sonde appelle `sendRdoRequest` comme tout le monde. Les deux raisons qui
+l'obligeaient à contourner la primitive sont devenues deux options nommées (`RdoRequestOptions`,
+non exportée — un appelant qui en a besoin est soit la sonde, soit un bug) :
+
+- `bypassBusyGate` — émettre malgré `isServerBusy`. Correct pour la seule requête qui **décide** si
+  le serveur est encore occupé : la bufferiser est un interblocage, puisque rien d'autre ne lève le
+  drapeau hors d'un push `ModelStatusChanged`.
+- `forcePrimarySocket` — ne jamais prendre une connexion du pool. La sonde mesure la santé de la
+  connexion où **vit la session** ; une réponse portée par une connexion que le pool s'apprête à
+  remplacer compterait comme un échec de sonde, et quatre de suite arrêtent la surveillance
+  définitivement (parité legacy).
+
+Elle retrouve donc `assertNotVoidPush`, le contrat `errorCode` (P-M3), les métriques et le journal
+`RDO>>`. Trois tests la fixent (`tier4-conformity.validation.test.ts`), dont un qui a dû être
+réécrit : la première version asseyait l'absence de `RDO>*` sur un logger qui n'émet pas cette
+ligne — elle passait dans les deux cas.
+
+*Diagnostic d'origine :*
 
 La sonde réécrit à la main l'allocation de rid, l'écriture de trame, l'entrée
 `pendingRequests` et le minuteur. Elle **doit** contourner la primitive : `sendRdoRequest`
@@ -217,8 +255,14 @@ projet**. Ce n'est pas un changement à glisser en fin de lot.
 
 ## 6. Ce qui n'a pas pu être établi
 
+- ~~**[UNKNOWN]** Le serveur émet-il jamais du `$` ?~~ → **TRANCHÉ 2026-08-16 par la sonde U6** :
+  oui. `UserName`, `MailAccount` et `CompositeName` répondent toutes `="$…"`. Preuve de rang
+  capture, promue dans `rdo-protocol-architecture.md` §2.1.1.
+  Voir [campaign/sondes-live-2026-08-16.md](campaign/sondes-live-2026-08-16.md).
 - **[UNKNOWN]** Quelle propriété publiée est concrètement déclarée `single` (P-M6). `RDOUtils.pas:369-370`
-  prouve que le serveur *peut* émettre `!` ; aucune capture n'en contient. → étendre la sonde **U6** à `!`.
+  prouve que le serveur *peut* émettre `!` ; aucune capture n'en contient. U6 a couvert les
+  propriétés `string`, pas `single` — la question reste ouverte. (U4-a a en revanche prouvé que le
+  serveur **accepte** un `!` fractionnaire en entrée.)
 - **[UNKNOWN]** Ce que fait `fDirMng.SearchKey('')` avec un motif vide (P-M1). Ne change pas le
   verdict : les octets émis sont faux quel qu'en soit l'effet.
 - **[INFERRED]** L'`Unassigned` décodé pour un paramètre `widestring` devient `''` plutôt que de lever.

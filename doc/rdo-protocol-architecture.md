@@ -178,6 +178,69 @@ Every value in the protocol is prefixed with a single character identifying its 
 
 **Evidence:** `RDOProtocol.pas:29-35`, `RDOUtils.pas:319-393` (serialization/deserialization)
 
+#### 2.1.0 `"^"` on a Delphi `procedure` — the mechanism, both halves observed
+
+Live probes bracket `RDOObjectServer.pas:281-292` exactly. What decides the outcome is **where the
+hidden result pointer lands**, and that follows from the parameter count — not from the member.
+
+| Member | Params | Hidden result pointer | Observed | Date |
+|---|---|---|---|---|
+| `SayThis` | 2 widestrings | **stack** — `RegsUsed` hits `MaxRegs = 3` → `push edi` [`RDOObjectServer.pas:292`] | **server froze** | 2026-08-15 |
+| `ClientAware` | 0 | register — stack stays balanced | `A<rid> error 9;` in 91 ms | 2026-08-16 |
+
+`"^"` makes the server set `TVarData(Res).VType := varVariant` [`RDOQueryServer.pas:422-424`], so
+`CallMethod` passes `@Res` as a hidden extra argument. A `register`-convention procedure with no
+stack parameters never pops it — hence the freeze once it is pushed.
+
+Two conclusions, and the second matters as much as the first:
+
+1. **The freeze needs the pointer on the stack.** The 0-parameter case is safe, which is why probe
+   U1-a could be run at all.
+2. **`"^"` on a procedure is a wire divergence even when it does NOT freeze.** The balanced case
+   answers `error 9` — `errIllegalFunctionRes`, raised at `RDOQueryServer.pas:484` when the server
+   fails to serialise a result that does not exist. It is never an ack. So the call site cannot
+   tell whether the procedure ran, and `VOID_MEMBERS` + `"*"` + QueryId remains the only correct
+   form for every procedure regardless of arity.
+
+Session report: `report/campaign/sondes-live-2026-08-16.md`.
+
+#### 2.1.1 The server does emit `$`, and it accepts `.` as the decimal separator
+
+Both settled by live probe against planitia, **2026-08-16 10:03 UTC** (`src/tools/rdo-probe.ts`,
+probes U6 and U4-a; session report `report/campaign/sondes-live-2026-08-16.md`). Byte-exact live
+observations are capture-grade evidence (§0), so these supersede the `[INFERRED]` readings they
+confirm.
+
+**`$` (StringId) is real on the wire.** No capture contained `="$`, and rule 4 says absence proves
+nothing — so it was asked directly. Three `string` properties published on `TClientView`:
+
+```
+get UserName      → UserName="$SPO_test3"
+get MailAccount   → MailAccount="$SPO_test3@Planitia.net"
+get CompositeName → CompositeName="$SPO_test3"
+```
+
+This confirms the source path that was previously `[INFERRED]`: `GetProperty` routes
+`tkString, tkLString, tkWString` through one branch, `GetStrProp` [`RDOObjectServer.pas:96-97`],
+whose `string` result lands in a `variant` as `varString`, which `GetStrFromVariant` serialises as
+`StringId + …` [`RDOUtils.pas:376-377`]. **Any published `string` property read by `get` answers
+`$`.** Our decoder already handles it (`rdo-helpers.ts:98`, `RDO_PREFIX_STRIP`).
+
+**`@` and `!` fractional literals parse — the server's decimal separator is `.`.** The concern was
+that a server locale using `,` would make `VarCast(string → varDouble)` reject every fractional
+value we emit, losing it silently. Probed against a property that does not exist, so the literal is
+parsed and nothing is written [`RDOQueryServer.pas:338-346`]: a parse failure answers `error 4`, a
+successful parse answers `error 3` (`errUnexistentProperty`).
+
+| Emitted | Answer | Reading |
+|---|---|---|
+| `set RdoProbeU4="#1"` | `error 3` | control — harness and oracle valid |
+| `set RdoProbeU4="@1"` | `error 3` | `@` accepted |
+| `set RdoProbeU4="@1234.5"` | `error 3` | **fractional `@` parses; separator is `.`** |
+| `set RdoProbeU4="!3.14"` | `error 3` | same for `!` |
+
+`RdoValue.double()` / `.float()` emission is therefore conform. No change required.
+
 ### 2.2 Boolean Encoding
 
 Booleans travel as **ordinals under the `#` prefix** — `varBoolean` shares the ordinal marshaling branch [RDOUtils.pas:360-393].
