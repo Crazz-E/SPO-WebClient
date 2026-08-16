@@ -21,6 +21,7 @@ import type {
   WarehouseWareData,
 } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import {
   getTemplateForVisualClass,
   collectTemplatePropertyNamesStructured,
@@ -941,7 +942,7 @@ async function enrichVotesTab(
       member: 'RDOVoteOf',
       separator: '"^"',
       args: [RdoValue.string(username).format()],
-    });
+    }, undefined, TimeoutCategory.NORMAL);
     const votedFor = parsePropertyResponseHelper(voteOfPacket.payload || '', 'res');
     if (votedFor) {
       groups['votes'].push({ name: 'VoteOf', value: votedFor });
@@ -985,7 +986,7 @@ async function getSupplyPaths(
     action: RdoAction.CALL,
     member: 'GetInputNames',
     args: [RdoValue.int(0).format(), RdoValue.string('0').format()], // useless: integer, lang: widestring
-  });
+  }, undefined, TimeoutCategory.NORMAL);
 
   const inputNamesRaw = cleanPayloadHelper(inputNamesPacket.payload || '');
   if (!inputNamesRaw || inputNamesRaw === '0' || inputNamesRaw === '-1') {
@@ -1236,7 +1237,7 @@ async function fetchSupplyDetails(
     action: RdoAction.CALL,
     member: 'SetPath',
     args: [RdoValue.string(path).format()],
-  });
+  }, undefined, TimeoutCategory.SLOW);
   const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
 
   ctx.log.debug(`[BuildingDetails] SetPath('${path}') result: "${setPathResult}"`);
@@ -1377,7 +1378,7 @@ async function getProductPaths(
     action: RdoAction.CALL,
     member: 'GetOutputNames',
     args: [RdoValue.int(0).format(), RdoValue.string('0').format()], // useless: integer, lang: widestring
-  });
+  }, undefined, TimeoutCategory.NORMAL);
 
   const outputNamesRaw = cleanPayloadHelper(outputNamesPacket.payload || '');
   if (!outputNamesRaw || outputNamesRaw === '0' || outputNamesRaw === '-1') {
@@ -1423,7 +1424,7 @@ async function fetchProductDetails(
     action: RdoAction.CALL,
     member: 'SetPath',
     args: [RdoValue.string(path).format()],
-  });
+  }, undefined, TimeoutCategory.SLOW);
 
   const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
   ctx.log.debug(`[BuildingDetails] Product SetPath('${path}') result: "${setPathResult}"`);
@@ -1542,7 +1543,7 @@ async function fetchSubObjectProperties(
       action: RdoAction.CALL,
       member: 'GetSubObjectProps',
       args: [RdoValue.int(subIndex).format(), RdoValue.string(query).format()], // index: integer, names: WideString
-    });
+    }, undefined, TimeoutCategory.NORMAL);
 
     const raw = cleanPayloadHelper(packet.payload || '');
     if (raw.includes('\t')) {

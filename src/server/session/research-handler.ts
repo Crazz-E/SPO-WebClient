@@ -8,6 +8,7 @@
 import type { SessionContext } from './session-context';
 import type { ResearchCategoryData, ResearchInventionDetails } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
 import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
 import { parseResearchItems } from './session-utils';
@@ -123,7 +124,7 @@ export async function getResearchDetails(
     member: 'RDOGetInvPropsByLang',
     separator: '"^"',
     args: [RdoValue.string(inventionId).format(), RdoValue.string('0').format()],
-  });
+  }, undefined, TimeoutCategory.NORMAL);
   const properties = parsePropertyResponseHelper(propsPacket.payload || '', 'res') || '';
 
   // Call RDOGetInvDescEx — function (olevariant return), "^" separator
@@ -134,7 +135,7 @@ export async function getResearchDetails(
     member: 'RDOGetInvDescEx',
     separator: '"^"',
     args: [RdoValue.string(inventionId).format(), RdoValue.string('0').format()],
-  });
+  }, undefined, TimeoutCategory.NORMAL);
   const description = parsePropertyResponseHelper(descPacket.payload || '', 'res') || '';
 
   ctx.log.debug(`[Research] Details for "${inventionId}": props=${properties.length} chars, desc=${description.length} chars`);

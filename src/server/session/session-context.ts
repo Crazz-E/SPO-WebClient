@@ -12,7 +12,7 @@ import type { AspActionUrl } from '../asp-url-extractor';
 
 export interface SessionContext {
   // ── RDO Transport ──────────────────────────────────────────────────────
-  sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs?: number, category?: TimeoutCategory): Promise<RdoPacket>;
+  sendRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs: number | undefined, category: TimeoutCategory): Promise<RdoPacket>;
 
   // ── Socket access (for fire-and-forget push commands) ──────────────────
   getSocket(name: string): import('net').Socket | undefined;

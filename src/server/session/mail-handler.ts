@@ -19,6 +19,7 @@ import type { SessionContext } from './session-context';
 import type { MailMessageHeader, MailMessageFull, MailAttachment } from '../../shared/types';
 import type { MailFolder } from '../../shared/types/domain-types';
 import { RdoVerb, RdoAction } from '../../shared/types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 import { parseMessageListHtml } from '../mail-list-parser';
@@ -116,7 +117,7 @@ export async function composeMail(
       RdoValue.string(to).toString(),
       RdoValue.string(subject).toString()
     ]
-  });
+  }, undefined, TimeoutCategory.NORMAL);
   const msgId = parsePropertyResponseHelper(newMailPacket.payload!, 'NewMail');
   ctx.log.debug(`[Mail] Created message, msgId: ${msgId}`);
 
@@ -140,7 +141,7 @@ export async function composeMail(
       member: 'AddLine',
       separator: '"*"',
       args: [RdoValue.string(line).format()]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
   }
 
   // 3. Post (send) the message
@@ -150,7 +151,7 @@ export async function composeMail(
     action: RdoAction.CALL,
     member: 'Post',
     args: [RdoValue.string(worldName).toString(), RdoValue.int(parseInt(msgId, 10)).toString()]
-  });
+  }, undefined, TimeoutCategory.SLOW);
   // Post returns wordbool: #-1 = true (success), #0 = false (failure)
   const resultStr = parsePropertyResponseHelper(postPacket.payload!, 'Post');
   const success = resultStr === '-1';
@@ -166,7 +167,7 @@ export async function composeMail(
       member: 'CloseMessage',
       separator: '"*"',
       args: [RdoValue.int(parseInt(msgId, 10)).format()]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after post:', e);
   }
@@ -210,7 +211,7 @@ export async function saveDraft(
       RdoValue.string(to).toString(),
       RdoValue.string(subject).toString()
     ]
-  });
+  }, undefined, TimeoutCategory.NORMAL);
   const msgId = parsePropertyResponseHelper(newMailPacket.payload!, 'NewMail');
 
   if (!msgId || msgId === '0') {
@@ -233,7 +234,7 @@ export async function saveDraft(
       member: 'AddLine',
       separator: '"*"',
       args: [RdoValue.string(line).format()]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
   }
 
   // 4. Save to Draft folder (not Post/send)
@@ -243,7 +244,7 @@ export async function saveDraft(
     action: RdoAction.CALL,
     member: 'Save',
     args: [RdoValue.string(worldName).toString(), RdoValue.int(parseInt(msgId, 10)).toString()]
-  });
+  }, undefined, TimeoutCategory.SLOW);
   // Save returns wordbool: #-1 = true (success), #0 = false (failure)
   const resultStr = parsePropertyResponseHelper(savePacket.payload!, 'Save');
   const success = resultStr === '-1';
@@ -259,7 +260,7 @@ export async function saveDraft(
       member: 'CloseMessage',
       separator: '"*"',
       args: [RdoValue.int(parseInt(msgId, 10)).format()]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after save:', e);
   }
@@ -296,7 +297,7 @@ export async function readMailMessage(
       RdoValue.string(folder).toString(),
       RdoValue.string(messageId).toString()
     ]
-  });
+  }, undefined, TimeoutCategory.NORMAL);
   const msgId = parsePropertyResponseHelper(openPacket.payload!, 'OpenMessage');
   ctx.log.debug(`[Mail] Opened message, msgId: ${msgId}`);
 
@@ -308,7 +309,7 @@ export async function readMailMessage(
       action: RdoAction.CALL,
       member: 'GetHeaders',
       args: [RdoValue.int(0).toString()]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
     const headersText = parsePropertyResponseHelper(headersPacket.payload || '', 'res');
 
     // 3. Get body lines
@@ -318,7 +319,7 @@ export async function readMailMessage(
       action: RdoAction.CALL,
       member: 'GetLines',
       args: [RdoValue.int(0).toString()]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
     const bodyText = parsePropertyResponseHelper(linesPacket.payload || '', 'res');
 
     // 4. Get attachments
@@ -328,7 +329,7 @@ export async function readMailMessage(
       action: RdoAction.CALL,
       member: 'GetAttachmentCount',
       args: [RdoValue.int(0).toString()]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
     const attachCountStr = parsePropertyResponseHelper(attachCountPacket.payload!, 'GetAttachmentCount');
     const attachCount = parseInt(attachCountStr, 10) || 0;
 
@@ -340,7 +341,7 @@ export async function readMailMessage(
         action: RdoAction.CALL,
         member: 'GetAttachment',
         args: [RdoValue.int(i).toString()]
-      });
+      }, undefined, TimeoutCategory.NORMAL);
       const attachText = attachPacket.payload || '';
       attachments.push(parseMailAttachment(attachText));
     }
@@ -365,7 +366,7 @@ export async function readMailMessage(
         member: 'CloseMessage',
         separator: '"*"',
         args: [RdoValue.int(parseInt(msgId, 10)).format()]
-      });
+      }, undefined, TimeoutCategory.NORMAL);
     } catch (e: unknown) {
       ctx.log.warn('[Mail] Failed to close message:', e);
     }
@@ -418,7 +419,7 @@ export async function getMailUnreadCount(ctx: SessionContext): Promise<number> {
     action: RdoAction.CALL,
     member: 'CheckNewMail',
     args: [RdoValue.int(parseInt(ctx.mailIntServerId, 10)).toString(), RdoValue.string(ctx.mailAccount).toString()]
-  });
+  }, undefined, TimeoutCategory.NORMAL);
   const countStr = parsePropertyResponseHelper(packet.payload!, 'res');
   const count = parseInt(countStr, 10);
   // The server returns -1 on internal failure — surface that as "no unread"

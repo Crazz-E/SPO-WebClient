@@ -9,6 +9,7 @@
 import type { SessionContext } from './session-context';
 import type { ChatUser } from '../../shared/types';
 import { RdoVerb, RdoAction, parseAccDesc } from '../../shared/types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 
@@ -79,7 +80,7 @@ export async function getChatUserList(ctx: SessionContext): Promise<ChatUser[]> 
     action: RdoAction.CALL,
     member: 'GetUserList',
     separator: '"^"'
-  });
+  }, undefined, TimeoutCategory.NORMAL);
 
   const rawUsers = parsePropertyResponseHelper(packet.payload || '', 'res');
   return parseChatUserList(ctx, rawUsers);
@@ -97,7 +98,7 @@ export async function getChatChannelList(ctx: SessionContext): Promise<string[]>
     member: 'GetChannelList',
     args: [RdoValue.string('ROOT').format()],
     separator: '"^"'
-  });
+  }, undefined, TimeoutCategory.NORMAL);
 
   const rawChannels = parsePropertyResponseHelper(packet.payload || '', 'res');
   return parseChatChannelList(ctx, rawChannels);
@@ -122,7 +123,7 @@ export async function getChatChannelInfo(ctx: SessionContext, channelName: strin
     // No issue observed as of 2026-04-02 (RdoProtocol.format() auto-quotes),
     // but inconsistent with the rest of the codebase. Fix if chat breaks.
     separator: '^'
-  });
+  }, undefined, TimeoutCategory.NORMAL);
 
   return parsePropertyResponseHelper(packet.payload || '', 'res');
 }
@@ -144,7 +145,7 @@ export async function joinChatChannel(ctx: SessionContext, channelName: string):
     // No issue observed as of 2026-04-02 (RdoProtocol.format() auto-quotes),
     // but inconsistent with the rest of the codebase. Fix if chat breaks.
     separator: '^'
-  });
+  }, undefined, TimeoutCategory.NORMAL);
 
   const result = parsePropertyResponseHelper(packet.payload || '', 'res');
   if (result !== '0') {
@@ -180,7 +181,7 @@ export async function sendChatMessage(ctx: SessionContext, message: string): Pro
     member: 'SayThis',
     separator: '"*"',
     args: [RdoValue.string('').format(), RdoValue.string(message).format()]
-  });
+  }, undefined, TimeoutCategory.NORMAL);
 }
 
 export async function setChatTypingStatus(ctx: SessionContext, isTyping: boolean): Promise<void> {

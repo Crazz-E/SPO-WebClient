@@ -15,6 +15,7 @@ import type {
   BuildingInfo,
 } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
 import { deriveResidenceClass } from './session-utils';
 import fetch from 'node-fetch';
@@ -530,7 +531,7 @@ export async function placeBuilding(
       member: 'NewFacility',
       separator: '"^"',
       args: [RdoValue.string(facilityClass).format(), RdoValue.int(companyId).format(), RdoValue.int(x).format(), RdoValue.int(y).format()]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
 
     // Parse response for result code
     const resultCode = parseResultCode(packet.payload);
@@ -587,7 +588,7 @@ export async function placeCapitol(
         RdoValue.int(x).format(),
         RdoValue.int(y).format(),
       ]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
 
     const resultCode = parseResultCode(packet.payload);
 

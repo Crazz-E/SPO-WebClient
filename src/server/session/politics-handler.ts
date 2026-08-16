@@ -16,6 +16,7 @@ import type {
   ConnectionSearchResult,
 } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 import { splitMultilinePayload as splitMultilinePayloadHelper } from '../rdo-helpers';
@@ -204,7 +205,7 @@ export async function fetchOwnedFacilities(ctx: SessionContext): Promise<Favorit
     action: RdoAction.CALL,
     member: 'RDOFavoritesGetSubItems',
     args: [RdoValue.string('').format()],
-  });
+  }, undefined, TimeoutCategory.NORMAL);
 
   const raw = parsePropertyResponseHelper(packet.payload!, 'res');
   return parseFavoritesResponse(raw);
@@ -438,7 +439,9 @@ export async function searchConnections(
         RdoValue.int(1).format(),                           // SortMode (1=quality)
         RdoValue.int(filters?.roles || 31).format(),        // Role bitmask (31 = all 5 roles)
       ],
-    });
+      // Cache Server supply-chain search across the whole world — the member is
+      // chosen at runtime (FindSuppliers / FindClients), so no literal to key on.
+    }, undefined, TimeoutCategory.SLOW);
 
     const results = parseRdoConnectionResults(packet.payload || '', direction);
     ctx.log.debug(`[Connections] ${method} returned ${results.length} results`);

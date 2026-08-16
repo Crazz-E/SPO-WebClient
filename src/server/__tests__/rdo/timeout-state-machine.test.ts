@@ -24,6 +24,7 @@ import { createProtocolTestHarness, ProtocolTestHarness } from './../protocol-va
 import { SessionPhase } from '../../../shared/types';
 import { IS_PROXY_TIMEOUT_MS } from '../../../shared/timeout-categories';
 import type { MockTcpSocket } from './../protocol-validation/mock-tcp-socket';
+import { TimeoutCategory } from '../../../shared/timeout-categories';
 
 const WORLD_CONTEXT_ID = '8161308';
 
@@ -74,7 +75,7 @@ describe('RDO timeout lifecycle (real session)', () => {
       targetId: WORLD_CONTEXT_ID,
       action: 'get' as never,
       member,
-    }, timeoutMs);
+    }, timeoutMs, TimeoutCategory.NORMAL);
     return promise.then(
       () => { throw new Error('expected rejection'); },
       (err: Error) => err,
@@ -146,7 +147,7 @@ describe('RDO timeout lifecycle (real session)', () => {
         targetId: WORLD_CONTEXT_ID,
         action: 'get' as never,
         member: 'Answered',
-      }, 5_000);
+      }, 5_000, TimeoutCategory.NORMAL);
       await new Promise(resolve => setImmediate(resolve));
       return p;
     })();

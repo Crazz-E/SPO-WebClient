@@ -26,6 +26,7 @@ import { createProtocolTestHarness, ProtocolTestHarness } from './protocol-valid
 import { SessionPhase } from '../../shared/types';
 import * as loginHandler from '../session/login-handler';
 import type { MockTcpSocket } from './protocol-validation/mock-tcp-socket';
+import { TimeoutCategory } from '../../shared/timeout-categories';
 
 const WORLD_CONTEXT_ID = '8161308';
 
@@ -129,7 +130,7 @@ describe('World reconnect (real session)', () => {
         targetId: WORLD_CONTEXT_ID,
         action: 'get' as never,
         member: 'NeverAnswered',
-      }, 60_000);
+      }, 60_000, TimeoutCategory.NORMAL);
       const captured = pending.catch((err: Error) => err);
       await new Promise(resolve => setImmediate(resolve));
       expect(internals().pendingRequests.size).toBe(1);

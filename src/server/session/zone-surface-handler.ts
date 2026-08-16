@@ -89,7 +89,7 @@ export async function getSurfaceData(
     member: 'GetSurface',
     separator: '"^"',
     args: [RdoValue.string(surfaceType).format(), RdoValue.int(x1).format(), RdoValue.int(y1).format(), RdoValue.int(x2).format(), RdoValue.int(y2).format()]
-  });
+  }, undefined, TimeoutCategory.NORMAL);
 
   return parseRLEResponse(ctx, packet.payload || '');
 }
