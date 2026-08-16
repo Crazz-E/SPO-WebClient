@@ -17,6 +17,39 @@
  */
 
 import { config } from '../../shared/config';
+import { classifyRdoError, ErrorRecovery } from './rdo-error-classifier';
+
+/** `errIllegalObject` — ErrorCodes.pas:8. The one rejectable code that happens in normal play. */
+const ERR_ILLEGAL_OBJECT = 2;
+
+/**
+ * Whether the contract must let this code through and resolve as before.
+ *
+ * Two reasons, and only the second is a policy choice:
+ *
+ * 1. **RECOVERABLE codes — a correctness invariant, in every mode.** They are
+ *    owned by `executeWithRetry`, which inspects `result.errorCode` on the
+ *    RESOLVED packet. Rejecting one settles the promise first, so the retry
+ *    never runs: flipping the contract would silently disable auto-retry for
+ *    `errQueryTimedOut`, `errSendError`, `errServerBusy` and friends. The
+ *    contract and the retry classifier partition the codes; they must not
+ *    overlap.
+ * 2. **`errIllegalObject` (2) in `reject-except-stale`** — a deliberate first
+ *    step. It is the only FATAL code that occurs in normal play (stale
+ *    ClientViewId, demolished building id, cacherId gone after reconnect), so
+ *    rejecting it would break code that copes with it today. It stays in the
+ *    census; `RDO_ERROR_CONTRACT=reject` includes it once the census says what
+ *    it costs.
+ *
+ * Residual gap, deliberately not closed here: a RECOVERABLE code that survives
+ * every retry still resolves with `errorCode` set, and no caller reads it. That
+ * belongs in `executeWithRetry` — after the retry decision — not in this
+ * function, which runs before it.
+ */
+function isExemptFromRejection(errorCode: number, mode: string): boolean {
+  if (classifyRdoError(errorCode).recovery === ErrorRecovery.RECOVERABLE) return true;
+  return mode === 'reject-except-stale' && errorCode === ERR_ILLEGAL_OBJECT;
+}
 
 /** The only logging capability this module needs. */
 interface WarnLogger {
@@ -90,17 +123,26 @@ export function handleRdoErrorResponse(
   }
 
   const occurrences = tally.get(key)!.count;
+  const mode = config.rdo.errorContract;
 
-  if (config.rdo.errorContract === 'reject') {
+  if (mode !== 'observe' && !isExemptFromRejection(observation.errorCode, mode)) {
     return new RdoServerError(observation);
   }
 
-  // Observe mode. One line per error reply, tagged so the census is greppable:
+  // Resolving anyway — say WHY, because "observe mode" and "exempt code" are
+  // very different reasons to see this line and lead to different actions.
+  const reason = mode === 'observe'
+    ? 'config.rdo.errorContract=observe'
+    : classifyRdoError(observation.errorCode).recovery === ErrorRecovery.RECOVERABLE
+      ? 'recoverable — owned by executeWithRetry, never rejected by the contract'
+      : `exempt in ${mode} (errIllegalObject occurs in normal play)`;
+
+  // One line per error reply, tagged so the census is greppable:
   //   grep RDO-CONTRACT logs/*.ndjson
   log.warn(
-    `[RDO-CONTRACT] would reject: ${observation.member} -> ${observation.errorName ?? 'error'} ` +
+    `[RDO-CONTRACT] not rejected: ${observation.member} -> ${observation.errorName ?? 'error'} ` +
     `(code ${observation.errorCode}) on ${observation.socketName} ` +
-    `[seen ${occurrences}x] — resolving anyway (config.rdo.errorContract=observe)`
+    `[seen ${occurrences}x] — ${reason}`
   );
   return null;
 }

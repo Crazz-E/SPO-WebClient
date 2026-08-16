@@ -56,6 +56,7 @@ import { RdoVerb, RdoAction } from '../shared/types';
 import type { WorldInfo } from '../shared/types';
 import { TimeoutCategory } from '../shared/timeout-categories';
 import { toErrorMessage } from '../shared/error-utils';
+import { RdoServerError } from '../server/session/rdo-error-contract';
 
 /**
  * TODO (session dédiée — mise en place du test protocolaire en production).
@@ -86,6 +87,12 @@ import { toErrorMessage } from '../shared/error-utils';
  * 6. **Baseline capture.** Record answers on a known-good run and diff against
  *    it, so unexpected server-side changes surface without a hand-written
  *    expectation for every frame.
+ * 7. **Restore full payload fidelity on error replies.** Since the errorCode
+ *    contract rejects by default, an `A<id> error N;` reply reaches us as an
+ *    `RdoServerError`, which carries the code but NOT the raw text. U4-a used to
+ *    record `error 3 setting RdoProbeU4` and now records `error 3` — enough for
+ *    its own oracle, but a conformity suite that diffs against a baseline wants
+ *    the bytes. Add the payload to RdoServerError rather than re-parsing here.
  *
  * Deliberately NOT done in this session: the shape should be driven by the E2E
  * protocol strategy, not guessed at from here.
@@ -105,9 +112,11 @@ export interface ProbeFrame {
 }
 
 export interface ProbeResult extends ProbeFrame {
-  /** Raw payload the server answered, or null when it did not answer. */
+  /** Raw payload the server answered, or null when it did not answer at all. */
   response: string | null;
-  /** Set when the request threw (timeout, transport error). */
+  /** Set when the server answered `A<id> error N;` — an answer, not a failure. */
+  errorCode?: number;
+  /** Set when the request genuinely failed (timeout, transport error). */
   error?: string;
   elapsedMs: number;
 }
@@ -305,6 +314,14 @@ export function parseProbeArgs(argv: string[], env: NodeJS.ProcessEnv = process.
  *
  * Never throws: an unanswered frame is itself a result (and, for u1a, the worst
  * one — it means the request thread died). The caller decides whether to stop.
+ *
+ * An `A<id> error N;` reply is an ANSWER, not a failure. Several probes are
+ * built so that the error code IS the oracle — U4-a distinguishes `error 3`
+ * from `error 4` to decide the server's decimal separator, and U1-a's whole
+ * result was `error 9`. Since the errorCode contract rejects by default
+ * (`reject-except-stale`), those replies now arrive as `RdoServerError`, and
+ * treating them as transport failures would make `runProbe` stop on its
+ * ARRÊT TOTAL rule and report "no answer" for a server that answered perfectly.
  */
 export async function emitProbeFrame(
   session: StarpeaceSession,
@@ -322,6 +339,14 @@ export async function emitProbeFrame(
     }, TimeoutCategory.FAST);
     return { ...frame, response, elapsedMs: Date.now() - startedAt };
   } catch (err: unknown) {
+    if (err instanceof RdoServerError) {
+      return {
+        ...frame,
+        response: `error ${err.errorCode}`,
+        errorCode: err.errorCode,
+        elapsedMs: Date.now() - startedAt,
+      };
+    }
     return {
       ...frame,
       response: null,

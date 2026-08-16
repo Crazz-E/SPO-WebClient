@@ -66,9 +66,28 @@ Le rayon d'impact n'est **pas** les 93 sites. Il se réduit à trois familles :
 Aujourd'hui ils sont avalés et le code continue avec une valeur vide. **Les faire lever est
 exactement le but de la bascule** : ce sont des erreurs de programmation qui se taisent.
 
-**(b) Transport et charge — 1, 8, 10, 13, 15, 17.** Déjà traités en amont : `classifyRdoError`
-(`session/rdo-error-classifier.ts`) les classe et `executeWithRetry` retente les `RECOVERABLE`.
-`errServerBusy` (17) a son propre chemin. **La bascule ne les change pas.**
+**(b) Transport et charge — 8, 10, 11, 13, 14, 17.** ⚠ **Cette section disait initialement « la
+bascule ne les change pas ». C'était faux, et c'est le défaut le plus important trouvé en
+appliquant la recommandation.**
+
+`classifyRdoError` les marque `RECOVERABLE` et `executeWithRetry` les retente — mais la retentative
+lit `result.errorCode` sur le paquet **résolu**. Le contrat, lui, agit plus tôt, dans le dispatch de
+réponse : `entry.reject(contractError)` règle la promesse **avant** qu'`executeWithRetry` ne
+l'inspecte. Basculer naïvement aurait donc **désactivé silencieusement l'auto-retentative** pour
+`errQueryTimedOut`, `errSendError`, `errServerBusy` et les autres.
+
+**Correctif appliqué :** le contrat ne rejette **jamais** un code `RECOVERABLE`, quel que soit le
+mode. Ce n'est pas une concession de premier tour mais un **invariant** — le contrat et le
+classifieur de retentatives partitionnent les codes, ils ne doivent pas se recouvrir. Fixé par test
+(`rdo-error-contract.test.ts`, un cas par code, dans les deux modes).
+
+*Trou résiduel, assumé :* un code `RECOVERABLE` qui survit à toutes ses retentatives se résout
+toujours avec `errorCode` positionné, et personne ne le lit. Le fermer demande d'appliquer le
+contrat dans `executeWithRetry`, **après** la décision de retentative — pas dans
+`handleRdoErrorResponse`, qui s'exécute avant. Hors périmètre de cette bascule.
+
+Note : le code **1** (`errMalformedQuery`) n'appartient pas à cette famille — il est `FATAL` et
+signale une trame malformée de notre côté. Il est rejeté, avec (a).
 
 **(c) Le seul risque réel — `errIllegalObject` (2).** Levé sur cinq sites
 (`RDOObjectServer.pas:124, 185, 207, 329, 340`) chaque fois qu'un id d'objet ne résout plus :
@@ -76,22 +95,32 @@ exactement le but de la bascule** : ce sont des erreurs de programmation qui se 
 après reconnexion. Ces cas **arrivent en régime normal**, et du code qui aujourd'hui continue
 tranquillement se mettrait à lever.
 
-## 5. Recommandation
+## 5. Recommandation — ✅ **APPLIQUÉE le 2026-08-16**
 
-**Basculer, mais en exemptant `errIllegalObject` (2) au premier tour.**
+**Basculée, en exemptant `errIllegalObject` (2) au premier tour.**
 
-Le contrat rejetterait 5, 6, 7 (bugs silencieux — le gain) et laisserait 2 se résoudre comme
-aujourd'hui, le temps de voir ce que le recensement d'exécution en dit. Un troisième mode
-`reject-except-stale` est un ajout de quelques lignes dans `handleRdoErrorResponse`, du même ordre
-que la distinction déjà faite pour `VOID_MEMBERS` ailleurs.
+`config.rdo.errorContract` a trois modes ; le défaut est désormais **`reject-except-stale`**.
 
-Ça donne le bénéfice de la bascule — les erreurs de programmation cessent de se taire — sans le
-risque d'origine, qui était de « faire remonter d'un coup des années d'erreurs avalées, y compris
+| Codes | Comportement | Pourquoi |
+|---|---|---|
+| 1, 3, 4, 5, 6, 7, 9, 12, 15, 16 | **rejetés** (`RdoServerError`) | bugs silencieux — le gain de la bascule |
+| **2** `errIllegalObject` | résolu, recensé | survient en jeu normal (id périmé) ; `RDO_ERROR_CONTRACT=reject` l'inclut |
+| 8, 10, 11, 13, 14, 17 | résolu, recensé — **dans tous les modes** | invariant : ils appartiennent à `executeWithRetry` (voir §4b) |
+
+Le bénéfice est acquis — les erreurs de programmation cessent de se taire — sans le risque
+d'origine, qui était de « faire remonter d'un coup des années d'erreurs avalées, y compris
 bénignes ».
 
-**Ce que la source ne peut pas dire, et qu'il faut mesurer :** la fréquence réelle de
-`errIllegalObject` en jeu. C'est la seule inconnue restante, et `GET /api/rdo-error-contract` la
-donnera dès qu'une session de jeu normale aura tourné.
+**Validé en live le 2026-08-16 11:17 UTC.** La sonde U4-a a été rejouée sous le nouveau contrat :
+les quatre `error 3` sont bien rejetés par le transport *et* correctement rapportés comme des
+réponses par le harnais. Cette double lecture a exigé un correctif dans la sonde — un
+`A<id> error N;` est une **réponse**, pas un échec de transport, et pour U4-a et U1-a le code
+d'erreur **est** l'oracle. Sans ça, `runProbe` se serait arrêté sur sa règle d'ARRÊT TOTAL et aurait
+rapporté « aucune réponse » pour un serveur qui répondait parfaitement.
+
+**Ce que la source ne peut toujours pas dire, et qu'il faut mesurer :** la fréquence réelle de
+`errIllegalObject` (2) en jeu. C'est la seule inconnue restante avant le second tour, et
+`GET /api/rdo-error-contract` la donnera dès qu'une session de jeu normale aura tourné.
 
 ## 6. Vérification croisée — la seule donnée live disponible
 

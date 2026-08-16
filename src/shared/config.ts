@@ -123,15 +123,34 @@ export const config = {
      * is therefore indistinguishable from an applied one — M-B and M-E are two
      * instances of that, not two separate bugs.
      *
-     * - `observe` (default): resolve as before, but emit one `RDO-CONTRACT`
-     *   log line per error response. Changes no behaviour; the log IS the list
-     *   of call sites that would start throwing, which is what has to be
-     *   triaged before flipping.
-     * - `reject`: the promise rejects with RdoServerError. The end state.
+     * - `observe`: resolve as before, but emit one `RDO-CONTRACT` log line per
+     *   error response. Changes no behaviour; the log IS the census.
+     * - `reject-except-stale` (**default since 2026-08-16**): reject, except for
+     *   `errIllegalObject` (2). See below.
+     * - `reject`: reject on every non-recoverable code. The end state.
      *
-     * Set RDO_ERROR_CONTRACT=reject to flip.
+     * INVARIANT, independent of the mode: the contract NEVER rejects a code that
+     * `classifyRdoError` marks RECOVERABLE (8, 10, 11, 13, 14, 17). Those belong
+     * to `executeWithRetry`, and rejecting one short-circuits its retry — the
+     * promise settles before `result.errorCode` is ever inspected. Enforced in
+     * `handleRdoErrorResponse`, pinned by test.
+     *
+     * Why `errIllegalObject` (2) is exempt at first: it is the only rejectable
+     * code that occurs in NORMAL play — a stale ClientViewId after a session
+     * expires, a building id demolished between read and write, a cacherId gone
+     * after reconnect. Code that copes with it today would start throwing. The
+     * other rejected codes (1, 3, 4, 5, 6, 7, 9, 12, 15, 16) are programming
+     * errors that are currently swallowed, which is exactly what the flip is for.
+     * Derivation and per-call-shape matrix: report/pm3-inventaire-codes-erreur.md.
+     *
+     * Set RDO_ERROR_CONTRACT=reject to include 2, or =observe to go back to
+     * measuring.
      */
-    errorContract: (getEnv('RDO_ERROR_CONTRACT') === 'reject' ? 'reject' : 'observe') as 'observe' | 'reject',
+    errorContract: ((): 'observe' | 'reject-except-stale' | 'reject' => {
+      const raw = getEnv('RDO_ERROR_CONTRACT');
+      if (raw === 'observe' || raw === 'reject') return raw;
+      return 'reject-except-stale';
+    })(),
   },
 
   /**
