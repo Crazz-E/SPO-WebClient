@@ -23,6 +23,7 @@ jest.mock('node-fetch', () => ({
 import { createProtocolTestHarness, ProtocolTestHarness } from './protocol-test-harness';
 import { SessionPhase } from '../../../shared/types';
 import type { MockTcpSocket } from './mock-tcp-socket';
+import { TimeoutCategory } from '../../../shared/timeout-categories';
 
 const WORLD_CONTEXT_ID = '8161308';
 
@@ -87,6 +88,67 @@ describe('Tier-4 RDO conformity (real session)', () => {
     });
   });
 
+  // ===================================================================
+  // O-L5 — the busy poll goes through sendRdoRequest, not around it
+  //
+  // It used to be a second implementation of the primitive (its own rid
+  // allocation, frame write, pendingRequests entry and timer), which drifted
+  // from the real one. It now calls sendRdoRequest with two explicit options.
+  // Both are load-bearing, so both are pinned.
+  // ===================================================================
+  describe('O-L5 — ServerBusy poll uses the shared primitive', () => {
+    it('still emits while isServerBusy — buffering the poll would deadlock the session', async () => {
+      // The flag can only be cleared by this very poll or a ModelStatusChanged
+      // push. If the busy gate buffered it, a busy server would be permanent.
+      internals(harness).isServerBusy = true;
+      worldSocket.addFallbackResponse({ member: 'ServerBusy', payload: 'ServerBusy="#0"' });
+
+      harness.session.startServerBusyPolling();
+      await jest.advanceTimersByTimeAsync(50_000 + 100);
+
+      expect(worldSocket.getCapturedCommands().some(c => /get ServerBusy/.test(c))).toBe(true);
+      expect(internals(harness).isServerBusy).toBe(false);
+    });
+
+    it('logs the poll as a real RDO>> request, with a rid', async () => {
+      // The duplication's visible symptom: the poll was the only RDO traffic in
+      // the project that never produced an `RDO>> <socket>` entry — it wrote the
+      // frame directly, so it only showed up on the raw `RDO>*` wire tap, which
+      // belongs to a different logger (rdo-helpers.ts:77) and is therefore NOT
+      // observable from this spy. Asserting its absence here would pass either
+      // way; the positive assertion is what bites.
+      const debugSpy = jest.spyOn(harness.session.log, 'debug');
+      worldSocket.addFallbackResponse({ member: 'ServerBusy', payload: 'ServerBusy="#0"' });
+
+      harness.session.startServerBusyPolling();
+      await jest.advanceTimersByTimeAsync(50_000 + 100);
+
+      const requestLog = debugSpy.mock.calls.find(([msg, payload]) =>
+        typeof msg === 'string' && msg.startsWith('RDO>> world')
+        && (payload as { command?: string })?.command === 'ServerBusy',
+      );
+      expect(requestLog).toBeDefined();
+      expect((requestLog![1] as { rid?: number }).rid).toEqual(expect.any(Number));
+    });
+
+    it('keeps the poll on the primary socket when a world pool is live', async () => {
+      // A poll answered by a pool connection about to be replaced counts as a
+      // poll failure, and four of those stop polling for good (legacy parity).
+      harness.session.setWorldPoolEnabled(true);
+      harness.session.initWorldPool('127.0.0.1', 8000);
+      harness.session.populateWorldPool();
+      await jest.advanceTimersByTimeAsync(100);
+      expect(harness.session.getWorldPool()!.size).toBeGreaterThan(0);
+
+      worldSocket.addFallbackResponse({ member: 'ServerBusy', payload: 'ServerBusy="#0"' });
+      harness.session.startServerBusyPolling();
+      await jest.advanceTimersByTimeAsync(50_000 + 100);
+
+      expect(worldSocket.getCapturedCommands().some(c => /get ServerBusy/.test(c))).toBe(true);
+      expect(harness.getPoolCapturedCommands().some(c => /ServerBusy/.test(c))).toBe(false);
+    });
+  });
+
   describe('V2 — toxic push must not kill frame processing', () => {
     it('a throwing ws_event listener does not prevent the next frame in the same chunk', () => {
       harness.session.on('ws_event', () => {
@@ -120,7 +182,7 @@ describe('Tier-4 RDO conformity (real session)', () => {
         targetId: WORLD_CONTEXT_ID,
         action: 'get' as never,
         member: 'TestProp',
-      }, 10_000);
+      }, 10_000, TimeoutCategory.NORMAL);
       promise.catch(() => { /* handled below — avoid unhandled-rejection noise */ });
 
       // Advance fake time in 1s steps with a real setImmediate breath between

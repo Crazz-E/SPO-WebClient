@@ -104,7 +104,7 @@ import * as researchHandler from './session/research-handler';
 import type { SessionContext } from './session/session-context';
 import { dispatchPush } from './session/push-dispatcher';
 import * as loginHandler from './session/login-handler';
-import { assertNotVoidPush, assertNotVariantOnVoidMember, canBufferRequest } from './session/rdo-request-guards';
+import { assertNotVoidPush, assertNotVariantOnVoidMember, canBufferRequest, isConnectionBoundMember } from './session/rdo-request-guards';
 import { classifyRdoError, ErrorRecovery } from './session/rdo-error-classifier';
 import { handleRdoErrorResponse } from './session/rdo-error-contract';
 import { RdoConnectionPool, PooledConnection } from './session/rdo-connection-pool';
@@ -153,6 +153,33 @@ interface RdoMetrics {
   totalServerBusyPollFailures: number;
 }
 
+/**
+ * Escape hatches on `sendRdoRequest()` — the function every RDO call in the
+ * project goes through. Both exist for the ServerBusy poll (audit O-L5), which
+ * previously hand-rolled the whole primitive to get them, and drifted: it
+ * bypassed `assertNotVoidPush`, the `errorCode` contract (P-M3), the metrics,
+ * and logged `RDO>*` instead of `RDO>>`.
+ *
+ * Deliberately not exported for general use — a caller that needs either of
+ * these is either the busy poll or a bug.
+ */
+interface RdoRequestOptions {
+  /**
+   * Send even while `isServerBusy`, instead of buffering.
+   * Only correct for the request that DECIDES whether the server is still busy:
+   * buffering it deadlocks the session, since the only other thing that clears
+   * the flag is a `ModelStatusChanged` push.
+   */
+  bypassBusyGate?: boolean;
+  /**
+   * Never take a world pool connection. The busy poll measures the health of
+   * the connection the session actually lives on, and a poll answered by a pool
+   * connection that is about to be replaced would count as a poll failure —
+   * four of those stop polling for good (legacy parity, `MAX_CONSECUTIVE_POLL_FAILURES`).
+   */
+  forcePrimarySocket?: boolean;
+}
+
 export class StarpeaceSession extends EventEmitter {
   public readonly sid = generateSessionId();
   public readonly startedAt = Date.now();
@@ -162,6 +189,19 @@ export class StarpeaceSession extends EventEmitter {
   /** Per-user DA connection pool (mirrors Delphi TRDOConnectionPool, MaxDAPoolCnx=8) */
   private worldPool: RdoConnectionPool | null = null;
   private static readonly WORLD_POOL_SIZE = 6;
+  /**
+   * Builds every raw TCP socket the session opens — named sockets and pool
+   * connections alike. `purpose` is the socket name ('world', 'map', …) or
+   * `pool:<host>:<port>`, so an injected factory can tell them apart.
+   * Injected by the protocol test harness; production keeps the default.
+   */
+  private socketFactory: (purpose: string) => net.Socket = () => new net.Socket();
+  /**
+   * Whether this session may populate its world pool at all. Defaults to the
+   * global config; the protocol harness overrides it per session so pool
+   * behaviour is exercised only by the tests that opt in.
+   */
+  private worldPoolEnabled: boolean = config.rdo.worldPool;
   private phase: SessionPhase = SessionPhase.DISCONNECTED;
   private isClosing = false;
   private requestIdCounter: number = 1000;
@@ -655,7 +695,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 		member: 'SwitchFocusEx',
 		separator: '"^"',
 		args: [RdoValue.int(parseInt(previousBuildingId, 10)).format(), RdoValue.int(x).format(), RdoValue.int(y).format()]
-	  });
+	  }, undefined, TimeoutCategory.NORMAL);
 
 	  // CRITICAL: Extract the 'res' property first (format is res="%...")
 	  const responseData = parsePropertyResponseHelper(packet.payload || '', 'res');
@@ -725,7 +765,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       member: 'ObjectAt',
       separator: '"^"',
       args: [RdoValue.int(x).format(), RdoValue.int(y).format()],
-    });
+    }, undefined, TimeoutCategory.NORMAL);
 
     const objectId = parsePropertyResponseHelper(packet.payload || '', 'res');
     if (!objectId) throw new Error(`No object found at (${x}, ${y})`);
@@ -759,7 +799,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       member: 'ConnectFacilities',
       separator: '"^"',
       args: [RdoValue.int(parseInt(sourceObjectId, 10)).format(), RdoValue.int(parseInt(targetObjectId, 10)).format()],
-    });
+    }, undefined, TimeoutCategory.SLOW);
 
     const resultMessage = parsePropertyResponseHelper(packet.payload || '', 'res') || '';
     this.log.debug(`[Session] ConnectFacilities result: ${resultMessage}`);
@@ -930,7 +970,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     const idPacket = await this.sendRdoRequest('map', {
       verb: RdoVerb.IDOF,
       targetId: 'WSObjectCacher'
-    });
+    }, undefined, TimeoutCategory.FAST);
     this.cacherId = parseIdOfResponseHelper(idPacket.payload);
     this.log.debug(`[Session] Map Service Ready. CacherID: ${this.cacherId}`);
     this.startCacherKeepAlive();
@@ -964,7 +1004,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     const idPacket = await this.sendRdoRequest('construction', {
       verb: RdoVerb.IDOF,
       targetId: 'World'
-    });
+    }, undefined, TimeoutCategory.FAST);
     this.worldId = parseIdOfResponseHelper(idPacket.payload);
     this.log.debug(`[Construction] World ID: ${this.worldId}`);
 
@@ -1014,7 +1054,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     const idPacket = await this.sendRdoRequest('mail', {
       verb: RdoVerb.IDOF,
       targetId: 'MailServer'
-    });
+    }, undefined, TimeoutCategory.FAST);
     this.mailServerId = parseIdOfResponseHelper(idPacket.payload);
     this.log.debug(`[Mail] Mail Server Ready. ServerId: ${this.mailServerId}`);
 
@@ -1031,7 +1071,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
         action: RdoAction.CALL,
         member: 'LogServerOn',
         args: [RdoValue.string(worldName).format()],
-      });
+      }, undefined, TimeoutCategory.NORMAL);
       const serverId = parsePropertyResponseHelper(logOnPacket.payload!, 'res');
       this.mailIntServerId = serverId && serverId !== '0' ? serverId : null;
       this.log.debug(`[Mail] LogServerOn → mail session id ${this.mailIntServerId}`);
@@ -1227,12 +1267,12 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
         let segmentsPacket: RdoPacket;
         if (config.rdo.parallelAreaReads) {
             [objectsPacket, segmentsPacket] = await Promise.all([
-                this.sendRdoRequest('world', objectsRequest),
-                this.sendRdoRequest('world', segmentsRequest),
+                this.sendRdoRequest('world', objectsRequest, undefined, TimeoutCategory.NORMAL),
+                this.sendRdoRequest('world', segmentsRequest, undefined, TimeoutCategory.NORMAL),
             ]);
         } else {
-            objectsPacket = await this.sendRdoRequest('world', objectsRequest);
-            segmentsPacket = await this.sendRdoRequest('world', segmentsRequest);
+            objectsPacket = await this.sendRdoRequest('world', objectsRequest, undefined, TimeoutCategory.NORMAL);
+            segmentsPacket = await this.sendRdoRequest('world', segmentsRequest, undefined, TimeoutCategory.NORMAL);
         }
 
         // Parse
@@ -1377,7 +1417,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       action: RdoAction.CALL,
       member: 'CreateObject',
       args: [RdoValue.string(this.currentWorldInfo.name).format()]
-    });
+    }, undefined, TimeoutCategory.SLOW);
     return cleanPayloadHelper(packet.payload || '');
   }
 
@@ -1392,7 +1432,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       action: RdoAction.CALL,
       member: 'SetObject',
       args: [RdoValue.int(x).format(), RdoValue.int(y).format()]
-    });
+    }, undefined, TimeoutCategory.SLOW);
     // Brief delay for server to populate cache (reduced from 100ms)
     await new Promise(resolve => setTimeout(resolve, 30));
   }
@@ -1406,7 +1446,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       // Explicit OLEString (P-M2): `path` interpolates a tycoon name supplied by
       // the browser — `Tycoons\<name>.five\` (building-management-handler.ts:45).
       args: [RdoValue.string(path).format()]
-    });
+    }, undefined, TimeoutCategory.SLOW);
     // No delay needed — Delphi SetPath is synchronous (loads file inline before responding)
   }
 
@@ -1418,7 +1458,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
       action: RdoAction.CALL,
       member: 'GetPropertyList',
       args: [RdoValue.string(query).format()]
-    });
+    }, undefined, TimeoutCategory.NORMAL);
     // Extract tab-delimited values WITHOUT trimming — cleanPayload's .trim()
     // strips leading/trailing tabs, destroying empty values at the boundaries.
     // The Delphi cache server always returns one value per requested property
@@ -1511,12 +1551,17 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     return roadHandler.wipeCircuit(this, x1, y1, x2, y2);
   }
 
-  public async executeRdo(serviceName: string, packetData: Partial<RdoPacket>): Promise<string> {
+  /**
+   * Generic escape hatch (REQ_RDO_DIRECT probe harness, debug tooling): the
+   * packet is caller-supplied, so no member-specific category can be inferred.
+   * NORMAL is the legacy in-play deadline and the right default here.
+   */
+  public async executeRdo(serviceName: string, packetData: Partial<RdoPacket>, category: TimeoutCategory = TimeoutCategory.NORMAL): Promise<string> {
     if (!this.sockets.has(serviceName)) {
       throw new Error(`Service ${serviceName} not connected`);
     }
 
-    const res = await this.sendRdoRequest(serviceName, packetData);
+    const res = await this.sendRdoRequest(serviceName, packetData, undefined, category);
     return res.payload || '';
   }
 
@@ -1524,9 +1569,23 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
   // INTERNAL HELPERS
   // =========================================================================
 
+/**
+ * Inject the socket factory used for every socket this session opens.
+ * Test seam only — see {@link socketFactory}. Must be called before any
+ * connection is made.
+ */
+public setSocketFactory(factory: (purpose: string) => net.Socket): void {
+  this.socketFactory = factory;
+}
+
+/** Override whether this session may populate its world pool (test seam). */
+public setWorldPoolEnabled(enabled: boolean): void {
+  this.worldPoolEnabled = enabled;
+}
+
 public createSocket(name: string, host: string, port: number): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
-    const socket = new net.Socket();
+    const socket = this.socketFactory(name);
     // Disable Nagle: RDO frames are small request/response messages. With
     // Nagle on, a second frame written before the first is ACKed sits in the
     // kernel buffer for a full RTT (~100ms to the live servers) — measured
@@ -1607,6 +1666,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         host,
         port,
         maxSize: StarpeaceSession.WORLD_POOL_SIZE,
+        socketFactory: () => this.socketFactory(`pool:${host}:${port}`),
       },
       {
         onData: (conn, chunk) => {
@@ -1641,12 +1701,37 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
     // went down the primary socket, and `config.rdo.parallelAreaReads` pipelined
     // onto one wire. The log line below claimed otherwise for months.
     //
-    // Populated only after O-L1 was fixed: until then, a server request arriving
-    // on a pool connection would have been answered on the primary socket, and
-    // Delphi's pending query — which lives on the connection object — would have
-    // waited out its full timeout.
-    if (!config.rdo.worldPool) {
-      this.log.info('[Pool] World pool constructed but not populated (RDO_WORLD_POOL is off) — all world traffic uses the primary socket');
+    // Populating is now a SEPARATE step — see populateWorldPool(). It must not
+    // happen here: initWorldPool() runs before the login sequence, and a pool
+    // populated at that moment captures the session-establishing frames.
+    this.log.debug('[Pool] World pool constructed (empty) — populated after the session is bound');
+  }
+
+  /**
+   * Populate the world pool. Called ONLY once the session is bound to the
+   * primary socket, i.e. after `RegisterEventsById`.
+   *
+   * Ordering is a correctness requirement, not a preference. `get RDOCnntId` is
+   * answered by the query parser with the id of the connection carrying the
+   * frame (`RDOQueryServer.pas:269-274`), and that id is handed to
+   * `RegisterEventsById`, which binds the server-side `TClientView` to that
+   * connection as both push channel and teardown trigger
+   * (`InterfaceServer.pas:1919-1923`). Populate before login and the pool can
+   * carry those frames, binding the session to a socket the pool owns and may
+   * destroy on degradation — the O-H1/O-H2 zombie session, re-entered from a new
+   * direction. {@link isConnectionBoundMember} keeps that specific read on the
+   * primary socket even if this ordering is ever broken again.
+   *
+   * Populated only after O-L1 was fixed: until then, a server request arriving
+   * on a pool connection would have been answered on the primary socket, and
+   * Delphi's pending query — which lives on the connection object — would have
+   * waited out its full timeout.
+   */
+  public populateWorldPool(): void {
+    if (!this.worldPool) return;
+
+    if (!this.worldPoolEnabled) {
+      this.log.info('[Pool] World pool left empty (RDO_WORLD_POOL is off) — all world traffic uses the primary socket');
       return;
     }
 
@@ -1826,56 +1911,30 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       this.isPolling = true;
 
       try {
-        // O-L5 (partial): this poll hand-rolls what sendRdoRequest does — rid
-        // allocation, frame write, pendingRequests entry, timer. It has to,
-        // because sendRdoRequest refuses to send while `isServerBusy` and this
-        // is the call that clears that flag. But the duplication drifts: it
-        // bypasses assertNotVoidPush, the errorCode contract (P-M3), the
-        // metrics, and it logs `RDO>*` instead of `RDO>>`.
+        // O-L5 CLOSED: this used to hand-roll rid allocation, frame write,
+        // pendingRequests entry and timer — a second implementation of
+        // sendRdoRequest that drifted from the real one (no assertNotVoidPush,
+        // no errorCode contract, no metrics, logged `RDO>*` instead of `RDO>>`).
         //
-        // At minimum it must not collide, so it shares the allocator with the
-        // main path (O-L6). The rest of the duplication is documented in the
-        // annex as still open — collapsing it needs a "bypass busy gate" flag
-        // on the primitive, which is a change to the one function every RDO call
-        // goes through.
-        const rid = this.allocateRequestId();
-        const packet: RdoPacket = {
-          raw: '',
-          verb: RdoVerb.SEL,
-          targetId: this.worldContextId,
-          action: RdoAction.GET,
-          member: 'ServerBusy',
-          rid,
-          type: 'REQUEST'
-        };
-
-        const socket = this.sockets.get('world');
-        if (!socket) return;
-
-        const rawString = RdoProtocol.format(packet);
-        writeRdoFrame(socket, rawString + RDO_CONSTANTS.PACKET_DELIMITER);
-
-        const response = await new Promise<RdoPacket>((resolve, reject) => {
-          const timeoutHandle = setTimeout(() => {
-            const entry = this.pendingRequests.get(rid);
-            if (entry && entry.state === 'pending') {
-              // Legacy deadline: the ServerBusy read is a blocking property GET
-              // under ISProxyTimeOut = 180s (ServerCnxHandler.pas:3596-3611) —
-              // a busy-but-alive server must not be counted as failed after 1s.
-              this.pendingRequests.delete(rid);
-              reject(new Error('ServerBusy check timeout'));
-            }
-          }, IS_PROXY_TIMEOUT_MS);
-
-          this.pendingRequests.set(rid, {
-            resolve,
-            reject,
-            state: 'pending',
-            sentAt: Date.now(),
+        // It duplicated the primitive for exactly two reasons, now both
+        // expressed as options: it must send while `isServerBusy` (it is the
+        // call that clears the flag), and it must stay on the primary socket.
+        // The legacy deadline is unchanged: the ServerBusy read is a blocking
+        // property GET under ISProxyTimeOut = 180 s
+        // (ServerCnxHandler.pas:3596-3611) — a busy-but-alive server must not be
+        // counted as failed after 1 s.
+        const response = await this.sendRdoRequest(
+          'world',
+          {
+            verb: RdoVerb.SEL,
+            targetId: this.worldContextId,
+            action: RdoAction.GET,
             member: 'ServerBusy',
-            timeoutHandle,
-          });
-        });
+          },
+          IS_PROXY_TIMEOUT_MS,
+          TimeoutCategory.NORMAL,
+          { bypassBusyGate: true, forcePrimarySocket: true },
+        );
 
         this.consecutivePollFailures = 0;
         const busyValue = parsePropertyResponseHelper(response.payload!, 'ServerBusy');
@@ -2108,8 +2167,16 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
 public sendRdoRequest(
   socketName: string,
   packetData: Partial<RdoPacket>,
-  timeoutMs?: number,
-  category: TimeoutCategory = TimeoutCategory.NORMAL
+  timeoutMs: number | undefined,
+  // O-L3: REQUIRED, not defaulted. src/server/CLAUDE.md has always demanded an
+  // explicit category; 81 of 93 call sites ignored it, and a silent default is
+  // exactly why nobody noticed. Read what the categories do before picking one:
+  // NORMAL/SLOW/VERY_SLOW all carry the legacy in-play deadline (180 s,
+  // ISProxyTimeOut) and differ only in what the call site declares about itself.
+  // FAST (60 s, legacy DefTimeOut) is for pre-login and directory reads ONLY —
+  // expiring earlier than the reference client is a conformity divergence.
+  category: TimeoutCategory,
+  options?: RdoRequestOptions,
 ): Promise<RdoPacket> {
   const effectiveTimeout = timeoutMs ?? TIMEOUT_CONFIG[category].rdoMs;
   return new Promise((resolve, reject) => {
@@ -2117,8 +2184,10 @@ public sendRdoRequest(
       return reject(new Error('Session is closing'));
     }
 
-    // If server is busy, buffer the request
-    if (this.isServerBusy) {
+    // If server is busy, buffer the request — unless this IS the request that
+    // decides whether the server is still busy (O-L5). Buffering that one is a
+    // deadlock: nothing else can clear the flag except a ModelStatusChanged push.
+    if (this.isServerBusy && !options?.bypassBusyGate) {
       if (!canBufferRequest(this.requestBuffer.length, this.MAX_BUFFER_SIZE)) {
         // Buffer is full, drop the request
         this.log.warn('[Buffer] Buffer full, dropping request:', packetData.member);
@@ -2168,7 +2237,7 @@ public sendRdoRequest(
     }
 
     // Server not busy, execute with auto-retry for recoverable errors
-    this.executeWithRetry(socketName, packetData, effectiveTimeout)
+    this.executeWithRetry(socketName, packetData, effectiveTimeout, 0, options)
       .then(resolve)
       .catch(reject);
   });
@@ -2183,8 +2252,9 @@ private async executeWithRetry(
   packetData: Partial<RdoPacket>,
   timeoutMs: number,
   attempt = 0,
+  options?: RdoRequestOptions,
 ): Promise<RdoPacket> {
-  const result = await this.executeRdoRequest(socketName, packetData, timeoutMs);
+  const result = await this.executeRdoRequest(socketName, packetData, timeoutMs, options);
 
   // DELPHI PARITY: Never retry mutations (CALL/SET). Delphi pattern:
   // try→except→RenewWorldProxy→return ERROR_Unknown (InterfaceServer.pas:1359).
@@ -2208,19 +2278,24 @@ private async executeWithRetry(
       // transport is really dead, 'close' fires and handles it.
 
       await new Promise(r => setTimeout(r, delay));
-      return this.executeWithRetry(socketName, packetData, timeoutMs, attempt + 1);
+      return this.executeWithRetry(socketName, packetData, timeoutMs, attempt + 1, options);
     }
   }
 
   return result;
 }
 
-private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs: number): Promise<RdoPacket> {
+private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacket>, timeoutMs: number, options?: RdoRequestOptions): Promise<RdoPacket> {
   // For world requests: use connection pool if available (parallel RDO via multiple sockets)
   let poolConn: PooledConnection | undefined;
   let socket: net.Socket | undefined;
 
-  if (socketName === 'world' && this.worldPool && this.worldPool.size > 0) {
+  // Values that belong to the carrying connection rather than to the addressed
+  // object must never leave the primary socket — the session binds to whichever
+  // connection answered them (RDOQueryServer.pas:269-274 → InterfaceServer.pas:1919-1923).
+  const connectionBound = isConnectionBoundMember(packetData) || options?.forcePrimarySocket === true;
+
+  if (socketName === 'world' && this.worldPool && this.worldPool.size > 0 && !connectionBound) {
     try {
       // getConnection() acquires the slot atomically with selection
       poolConn = await this.worldPool.getConnection();
@@ -2240,7 +2315,7 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
     this.log.warn('[Session] World socket not active, attempting reconnect before request...');
     await this.attemptWorldReconnect();
     // After reconnect, try pool again or fall back to socket
-    if (this.worldPool && this.worldPool.size > 0) {
+    if (this.worldPool && this.worldPool.size > 0 && !connectionBound) {
       try {
         // getConnection() acquires the slot atomically with selection
         poolConn = await this.worldPool.getConnection();
@@ -2802,7 +2877,7 @@ private handlePush(socketName: string, packet: RdoPacket) {
             targetId: this.worldContextId,
             action: RdoAction.GET,
             member: 'Logoff',
-          }, StarpeaceSession.LOGOFF_TIMEOUT_MS);
+          }, StarpeaceSession.LOGOFF_TIMEOUT_MS, TimeoutCategory.NORMAL);
           this.log.debug('[Session] Logoff acknowledged by InterfaceServer');
         }
       } catch (err: unknown) {
