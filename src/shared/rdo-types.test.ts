@@ -18,6 +18,7 @@ import {
   isRdoTypePrefix,
   isValidRdoIdentifier,
   isWellFormedRdoLiteral,
+  stripRdoPrefix,
 } from './rdo-types';
 import { ERROR_InvalidParameter, getErrorMessage } from './error-codes';
 
@@ -774,5 +775,123 @@ describe('assertValidRdoIdentifier / isValidRdoIdentifier (P-H3, contract for lo
 
   it('defaults the context label to "member"', () => {
     expect(() => assertValidRdoIdentifier('a b')).toThrow(/for member/);
+  });
+});
+
+describe('numeric wire guards (P-M4)', () => {
+  // Coordinates and counts arrive from browser JSON with nothing validating
+  // them at the WebSocket boundary. Delphi's decoder does
+  // VarCast(Result, tmp, varInteger) (RDOUtils.pas:333-344) and raises on a
+  // non-numeric literal, so a "#NaN" reaches the shared server as a malformed
+  // query — the class of frame this project must never emit.
+  it.each([
+    ['NaN', NaN],
+    ['Infinity', Infinity],
+    ['-Infinity', -Infinity],
+  ])('int() refuses %s instead of formatting it', (_label, value) => {
+    expect(() => RdoValue.int(value)).toThrow(RangeError);
+    expect(() => RdoValue.int(value)).toThrow(/needs a finite number/);
+  });
+
+  it('float() and double() refuse a non-finite value, naming themselves', () => {
+    expect(() => RdoValue.float(NaN)).toThrow(/RdoValue\.float\(\) needs a finite number/);
+    expect(() => RdoValue.double(Infinity)).toThrow(/RdoValue\.double\(\) needs a finite number/);
+  });
+
+  it('int() refuses a magnitude that would stringify in exponential form', () => {
+    // 1e21 formats as "1e+21", which is not an RDO ordinal.
+    expect(() => RdoValue.int(1e21)).toThrow(/needs a safe integer/);
+    expect(() => RdoValue.int(Number.MAX_SAFE_INTEGER + 1)).toThrow(RangeError);
+  });
+
+  it('accepts the boundary values on either side of the guard', () => {
+    expect(RdoValue.int(Number.MAX_SAFE_INTEGER).format()).toBe(`"#${Number.MAX_SAFE_INTEGER}"`);
+    expect(RdoValue.int(0).format()).toBe('"#0"');
+    // Delphi wordbool TRUE — the one value that must never be normalised to 1.
+    expect(RdoValue.int(-1).format()).toBe('"#-1"');
+  });
+});
+
+describe('stripRdoPrefix', () => {
+  // P-M6: eleven sites open-coded `[$#%@]` and lost `!` (SingleId) and `^`
+  // (VariantId) — RDOUtils.pas:369-370 and :381 show the server emitting both.
+  it.each([
+    ['#42', '42'],
+    ['$id', 'id'],
+    ['%wide', 'wide'],
+    ['@3.14', '3.14'],
+    ['!0.85', '0.85'],
+    ['^42', '42'],
+    ['*', ''],
+  ])('strips %s down to %s', (input, expected) => {
+    expect(stripRdoPrefix(input)).toBe(expected);
+  });
+
+  it('leaves an unprefixed value alone, and only strips the leading character', () => {
+    expect(stripRdoPrefix('Bakery')).toBe('Bakery');
+    expect(stripRdoPrefix('')).toBe('');
+    expect(stripRdoPrefix('##7')).toBe('#7');
+  });
+});
+
+describe('rdoArgs — prefix round-trip', () => {
+  // rdoArgs re-types an already-formatted token; the prefix decides which
+  // RdoValue constructor is used, and therefore what goes back on the wire.
+  it.each([
+    ['#42', '"#42"'],
+    ['!0.5', '"!0.5"'],
+    ['@3.14', '"@3.14"'],
+    ['$Sess', '"$Sess"'],
+    ['%wide', '"%wide"'],
+    ['^42', '"^42"'],
+  ])('rebuilds %s as %s', (input, expected) => {
+    expect(rdoArgs(input)[0].format()).toBe(expected);
+  });
+
+  it('treats the void prefix as a void value', () => {
+    expect(rdoArgs('*')[0].format()).toBe('"*"');
+  });
+
+  it('treats an unprefixed string as a widestring, and a number as an ordinal', () => {
+    expect(rdoArgs('Bakery')[0].format()).toBe('"%Bakery"');
+    expect(rdoArgs(42)[0].format()).toBe('"#42"');
+  });
+
+  it('passes an RdoValue through untouched', () => {
+    const value = RdoValue.stringId('Cacher');
+    expect(rdoArgs(value)[0]).toBe(value);
+  });
+});
+
+describe('RdoCommand.build — argument grammar guards (P-L5)', () => {
+  // The grammar has no place for GET arguments and exactly one place for a SET
+  // value. build() used to drop the surplus silently; the next caller to write
+  // `.get('X').args(y)` would have watched `y` vanish onto the wire.
+  it('refuses arguments on a get', () => {
+    expect(() => RdoCommand.sel('8161308').get('Money').args(RdoValue.int(1)).build())
+      .toThrow(/RDO get Money was given 1 argument\(s\)/);
+  });
+
+  it('refuses a second argument on a set', () => {
+    expect(() => RdoCommand.sel('8161308').set('Name').args(RdoValue.string('a'), RdoValue.string('b')).build())
+      .toThrow(/RDO set Name was given 2 arguments/);
+  });
+
+  it('still builds the legitimate single-argument set and no-argument get', () => {
+    // build() appends the packet delimiter (RDO_CONSTANTS.PACKET_DELIMITER).
+    expect(RdoCommand.sel('8161308').set('EnableEvents').args(RdoValue.int(-1)).build())
+      .toBe('C sel 8161308 set EnableEvents="#-1";');
+    expect(RdoCommand.sel('8161308').get('Money').build()).toBe('C sel 8161308 get Money;');
+  });
+});
+
+describe('RdoCommand.build — incomplete commands', () => {
+  it('emits an empty assignment for a set with no value', () => {
+    expect(RdoCommand.sel('8161308').set('Name').build()).toBe('C sel 8161308 set Name=;');
+  });
+
+  it('emits the default push separator when no member was named', () => {
+    // `.sel()` alone: action defaults to 'call' and the separator to "*".
+    expect(RdoCommand.sel('8161308').build()).toBe('C sel 8161308 call "*";');
   });
 });

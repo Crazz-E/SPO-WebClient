@@ -771,3 +771,214 @@ describe('Malformed busy rejection "Aerror <n>" (WinSockRDOConnectionsServer.pas
     });
   });
 });
+
+describe('RdoFramer — buffer overflow salvage (P-L6)', () => {
+  const MAX_BUFFER_SIZE = 5 * 1024 * 1024;
+
+  it('keeps the complete frames and drops only the unterminated tail', () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const framer = new RdoFramer();
+
+    // One complete frame, then a frame that never terminates. The old code
+    // cleared the whole buffer, losing the response the first frame carried —
+    // its request then waited out a full timeout for nothing (P-L7).
+    const packets = framer.ingest('A42 res="#0";' + 'x'.repeat(MAX_BUFFER_SIZE));
+
+    expect(packets).toEqual(['A42 res="#0"']);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('Buffer exceeded 5242880 bytes'));
+    // The framer is usable again straight away.
+    expect(framer.ingest('A43 res="#0";')).toEqual(['A43 res="#0"']);
+    error.mockRestore();
+  });
+
+  it('discards everything when no frame boundary was ever seen', () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const framer = new RdoFramer();
+
+    const packets = framer.ingest('x'.repeat(MAX_BUFFER_SIZE + 1));
+
+    expect(packets).toEqual([]);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('keeping 0 bytes of complete frames'));
+    expect(framer.ingest('A44 res="#0";')).toEqual(['A44 res="#0"']);
+    error.mockRestore();
+  });
+});
+
+describe('RdoProtocol.parse — responses that carry no QueryId', () => {
+  it('surfaces the malformed busy rejection as an error code', () => {
+    // "A"+"error <n>" with no QueryId and no ";" — an overloaded server
+    // (WinSockRDOConnectionsServer.pas:812). Dropping it would lose the signal
+    // that flips the session's busy flag.
+    const packet = RdoProtocol.parse('A error 17');
+
+    expect(packet.type).toBe('RESPONSE');
+    expect(packet.errorCode).toBe(17);
+    expect(packet.errorName).toBe('errServerBusy');
+    expect(packet.payload).toBe('error 17');
+  });
+
+  it('names an error code the enum does not know', () => {
+    const packet = RdoProtocol.parse('A error 99');
+
+    expect(packet.errorCode).toBe(99);
+    expect(packet.errorName).toBe('unknownError(99)');
+  });
+
+  it('keeps an unparsable answer whole rather than inventing a rid', () => {
+    const packet = RdoProtocol.parse('Answer with no query id');
+
+    expect(packet.type).toBe('RESPONSE');
+    expect(packet.rid).toBeUndefined();
+    expect(packet.errorCode).toBeUndefined();
+    expect(packet.payload).toBe('Answer with no query id');
+  });
+});
+
+describe('RdoProtocol.parse — call arguments', () => {
+  it('yields an empty argument list for a bare fire-and-forget call', () => {
+    // `ClientAware` takes no parameter [capture :1017]; args must be [] and not
+    // undefined, so a consumer can iterate without a guard.
+    const packet = RdoProtocol.parse('C sel 8161308 call ClientAware "*"');
+
+    expect(packet.member).toBe('ClientAware');
+    expect(packet.separator).toBe('"*"');
+    expect(packet.args).toEqual([]);
+  });
+
+  it('keeps a call with no separator at all as a bare member', () => {
+    const packet = RdoProtocol.parse('C sel 8161308 call ClientAware');
+
+    expect(packet.member).toBe('ClientAware');
+    expect(packet.separator).toBeUndefined();
+  });
+});
+
+describe('RdoProtocol.format — injection guards on the unquoted positions', () => {
+  // Every one of these values is spliced into the frame unquoted, at a position
+  // the `repeat … until QueryTerm` loop of ExecQuery re-iterates
+  // (RDOQueryServer.pas:133-160). handleRdoDirect relays targetId, action and
+  // separator verbatim from the browser, so none of these is hypothetical.
+  it('refuses a target id that is not a decimal object id', () => {
+    expect(() => RdoProtocol.format({
+      raw: '', type: 'REQUEST', verb: RdoVerb.SEL, targetId: '42 call Evil "*" "',
+      action: RdoAction.CALL, member: 'Foo',
+    })).toThrow(/sel takes a decimal object id/);
+  });
+
+  it('refuses an action outside get / set / call', () => {
+    expect(() => RdoProtocol.format({
+      raw: '', type: 'REQUEST', verb: RdoVerb.SEL, targetId: '8161308',
+      action: 'exec' as RdoAction, member: 'Foo',
+    })).toThrow(/Invalid RDO action/);
+  });
+
+  it('refuses a separator that is neither of the two ReturnMarker literals', () => {
+    expect(() => RdoProtocol.format({
+      raw: '', type: 'REQUEST', verb: RdoVerb.SEL, targetId: '8161308',
+      action: RdoAction.CALL, member: 'Foo', separator: '"x"',
+    })).toThrow(/Invalid RDO separator/);
+  });
+});
+
+describe('RdoProtocol.format — argument literals', () => {
+  function callFrame(args: string[]): string {
+    return RdoProtocol.format({
+      raw: '', type: 'REQUEST', verb: RdoVerb.SEL, targetId: '8161308',
+      action: RdoAction.CALL, member: 'Foo', separator: '"^"', args,
+    });
+  }
+
+  it('passes a well-formed literal through without re-encoding it', () => {
+    // Re-encoding would run encodeAnsi a second time, which is lossy once the
+    // CP1252 band is active (shared/cp1252.ts, lot L11).
+    expect(callFrame(['"%Caf\u00e9"'])).toBe('C sel 8161308 call Foo "^" "%Café"');
+  });
+
+  it('quotes a bare typed token', () => {
+    expect(callFrame(['#42'])).toBe('C sel 8161308 call Foo "^" "#42"');
+  });
+
+  it('strips a stray pair of outer quotes before re-escaping', () => {
+    // Unbalanced literal: outer quotes present, body carries an unescaped one.
+    expect(callFrame(['"%a"b"'])).toBe('C sel 8161308 call Foo "^" "%a""b"');
+  });
+
+  it('honours a declared prefix while escaping a quote in the body', () => {
+    expect(callFrame(['%Say "hi"'])).toBe('C sel 8161308 call Foo "^" "%Say ""hi"""');
+  });
+
+  it('leaves a numeric CALL argument as a widestring', () => {
+    // Numeric usernames and passwords must not be mistyped as ordinals —
+    // Delphi Logon expects OLEString parameters.
+    expect(callFrame(['12345'])).toBe('C sel 8161308 call Foo "^" "%12345"');
+  });
+});
+
+describe('RdoProtocol.format — verbless packets', () => {
+  it('emits the payload as-is when there is no verb to build from', () => {
+    // The relay path: a packet carrying only a pre-built payload (no verb, no
+    // action) is passed through rather than being rebuilt from parts.
+    expect(RdoProtocol.format({ raw: '', type: 'RESPONSE', rid: 42, payload: 'res="#0"' }))
+      .toBe('C 42 res="#0"');
+  });
+
+  it('emits the bare prefix when there is neither verb nor payload', () => {
+    expect(RdoProtocol.format({ raw: '', type: 'RESPONSE' })).toBe('C');
+  });
+});
+
+describe('RdoProtocol.parse — degenerate commands', () => {
+  it('returns a bare packet for a command with no content at all', () => {
+    const packet = RdoProtocol.parse('C');
+
+    expect(packet.type).toBe('PUSH');
+    expect(packet.verb).toBeUndefined();
+    expect(packet.member).toBeUndefined();
+  });
+
+  it('ignores a sel with no action token', () => {
+    const packet = RdoProtocol.parse('C sel 8161308');
+
+    expect(packet.verb).toBe(RdoVerb.SEL);
+    expect(packet.targetId).toBeUndefined();
+    expect(packet.action).toBeUndefined();
+  });
+
+  it('ignores a third token that is not get, set or call', () => {
+    const packet = RdoProtocol.parse('C sel 8161308 frobnicate Foo');
+
+    expect(packet.targetId).toBe('8161308');
+    expect(packet.action).toBeUndefined();
+    expect(packet.member).toBeUndefined();
+  });
+
+  it('skips empty argument slots rather than emitting empty strings', () => {
+    const withHoles = RdoProtocol.parse('C sel 8161308 call Foo "^" "#1",,"#2",');
+    const control = RdoProtocol.parse('C sel 8161308 call Foo "^" "#1","#2"');
+
+    // An empty slot and a trailing comma must not shift the argument indices —
+    // that is what would put a value on the wrong Delphi parameter.
+    expect(withHoles.args).toEqual(control.args);
+    expect(withHoles.args).toHaveLength(2);
+  });
+});
+
+describe('RdoProtocol.format — incomplete packets', () => {
+  it('emits nothing for the target when an idof carries no name', () => {
+    expect(RdoProtocol.format({ raw: '', type: 'REQUEST', verb: RdoVerb.IDOF }))
+      .toBe('C idof');
+  });
+
+  it('emits the action alone when there is no member', () => {
+    expect(RdoProtocol.format({
+      raw: '', type: 'REQUEST', verb: RdoVerb.SEL, targetId: '8161308', action: RdoAction.CALL,
+    })).toBe('C sel 8161308 call "*"');
+  });
+
+  it('emits an empty assignment for a set with no value', () => {
+    expect(RdoProtocol.format({
+      raw: '', type: 'REQUEST', verb: RdoVerb.SEL, targetId: '8161308',
+      action: RdoAction.SET, member: 'Name',
+    })).toBe('C sel 8161308 set Name="%"');
+  });
+});

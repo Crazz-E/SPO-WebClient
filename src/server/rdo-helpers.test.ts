@@ -14,7 +14,14 @@ import {
   tagRdoSocket,
   getRdoSocketTag,
   redactSensitiveRdoFrame,
+  extractRevenue,
+  isTrueOrdinal,
+  parseResultCode,
 } from './rdo-helpers';
+import {
+  getPropertyFallbackCensus,
+  resetPropertyFallbackCensus,
+} from './session/property-fallback-census';
 
 describe('writeRdoFrame', () => {
   /** Capture what writeRdoFrame hands to socket.write. */
@@ -359,5 +366,151 @@ describe('splitMultilinePayload', () => {
   it('should filter empty lines', () => {
     const result = splitMultilinePayload('res="%A\n\nB"');
     expect(result).toEqual(['A', 'B']);
+  });
+});
+
+describe('extractRevenue', () => {
+  // Facility list lines carry the hourly balance in parentheses; the sign is
+  // what tells a profitable plant from one bleeding money.
+  it('extracts a positive amount and drops the parentheses', () => {
+    expect(extractRevenue('Bakery ($26,564/h)')).toBe('$26,564/h');
+  });
+
+  it('keeps the minus sign of a loss', () => {
+    expect(extractRevenue('Foundry (-$39,127/h)')).toBe('-$39,127/h');
+    expect(extractRevenue('Silo (-$28,858/h)')).toBe('-$28,858/h');
+  });
+
+  it('matches an amount that is not parenthesised', () => {
+    expect(extractRevenue('balance $1,000/h now')).toBe('$1,000/h');
+  });
+
+  it('returns an empty string when the line carries no amount', () => {
+    expect(extractRevenue('Bakery')).toBe('');
+    expect(extractRevenue('')).toBe('');
+    // A total with no /h suffix is not an hourly revenue.
+    expect(extractRevenue('($26,564)')).toBe('');
+  });
+});
+
+describe('isTrueOrdinal', () => {
+  // doc/rdo-protocol-architecture.md §2.2: Delphi wordbool TRUE is -1, but the
+  // decoder does a VarCast to integer, so ANY non-zero ordinal is true. A test
+  // that only accepted "-1" would reject a legitimate server-side "#1".
+  it.each(['-1', '1', '2', '-42'])('reads %s as true', (value) => {
+    expect(isTrueOrdinal(value)).toBe(true);
+  });
+
+  it('reads 0 as false', () => {
+    expect(isTrueOrdinal('0')).toBe(false);
+  });
+
+  it('reads an unparsable empty value as false', () => {
+    expect(isTrueOrdinal('')).toBe(false);
+  });
+});
+
+describe('parseResultCode', () => {
+  // P-L9: the seven open-coded copies of this regex disagreed on whether the
+  // code could be negative. `#-1` and `#0` are the boolean encoding (§2.2), so
+  // a negative ordinal is ordinary here, not a parse failure.
+  it('reads the success code', () => {
+    expect(parseResultCode('res="#0"')).toBe(0);
+  });
+
+  it('reads a negative code instead of falling through to -1 by accident', () => {
+    expect(parseResultCode('res="#-1"')).toBe(-1);
+    expect(parseResultCode('res="#-33"')).toBe(-33);
+  });
+
+  it('reads a refusal code the caller maps through getErrorMessage', () => {
+    expect(parseResultCode('res="#33"')).toBe(33);
+  });
+
+  it('finds the code inside a larger payload', () => {
+    expect(parseResultCode('objid="4242" res="#27" ')).toBe(27);
+  });
+
+  it.each([
+    ['an absent payload', undefined],
+    ['a null payload', null],
+    ['an empty payload', ''],
+    ['a payload with no res=', 'Name="%Bakery"'],
+    ['a res= that is not an ordinal', 'res="%ok"'],
+  ])('reports -1 for %s, which every caller treats as failure', (_label, payload) => {
+    expect(parseResultCode(payload)).toBe(-1);
+  });
+});
+
+describe('parsePropertyResponse — fallback paths', () => {
+  beforeEach(() => {
+    resetPropertyFallbackCensus();
+  });
+
+  it('reads an unquoted value when the payload starts with the property name', () => {
+    // The anchored regex requires quotes; this is the second chance.
+    expect(parsePropertyResponse('Count=5', 'Count')).toBe('5');
+    expect(parsePropertyResponse('Count = #5', 'Count')).toBe('5');
+  });
+
+  it('strips the type prefix when there is no "=" at all', () => {
+    expect(parsePropertyResponse('Count#5', 'Count')).toBe('5');
+  });
+
+  it('falls through when the matched value is empty', () => {
+    // `Name=""` matches the regex but yields '', so the guard sends it on to
+    // the startsWith branch — which returns '' as well, by another route.
+    expect(parsePropertyResponse('Name=""', 'Name')).toBe('');
+  });
+
+  it('returns an empty string and warns when the payload cleans to nothing', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(parsePropertyResponse('', 'Whatever')).toBe('');
+
+    expect(warn).toHaveBeenCalledWith('[RdoHelpers] Empty response for property Whatever');
+    warn.mockRestore();
+  });
+
+  it('records the bare-value fallback in the census', () => {
+    // Observation only (P-M3 method): the census separates "we picked another
+    // property's text" from "the payload really was a bare value".
+    parsePropertyResponse('res="#42"', 'SomeProp');
+
+    const census = getPropertyFallbackCensus();
+    expect(census).toHaveLength(1);
+    expect(census[0].observation.propName).toBe('SomeProp');
+  });
+
+  it('does not record a census entry when the property was matched properly', () => {
+    parsePropertyResponse('SomeProp="#42"', 'SomeProp');
+
+    expect(getPropertyFallbackCensus()).toEqual([]);
+  });
+});
+
+describe('parseIdOfResponse — fallback paths', () => {
+  it('falls back to the cleaned payload when there is no objid', () => {
+    // Some members answer an idof with a bare res= instead of objid=.
+    expect(parseIdOfResponse('res="#39751288"')).toBe('39751288');
+  });
+
+  it('strips leftover type punctuation from the fallback', () => {
+    expect(parseIdOfResponse('  "#3975$1288"  ')).toBe('39751288');
+  });
+
+  it('falls back when objid carries an empty value, and returns junk', () => {
+    // KNOWN DEFECT (lot 1): `objid=""` matches the regex with an empty group,
+    // so the `objidMatch[1]` guard sends it to the fallback, which only strips
+    // punctuation. The caller gets the string `objid=` and hands it to
+    // RdoCommand.sel(), which accepts it (non-empty, not '0') and emits
+    // `C sel objid= …`. The symmetric case — an empty payload — throws.
+    // Pinning CURRENT behaviour, not endorsing it; see the lot report.
+    expect(parseIdOfResponse('objid=""')).toBe('objid=');
+  });
+
+  it('throws on an empty payload rather than returning a null id', () => {
+    // `sel ''` would be a null pointer on the server; failing here is the point.
+    expect(() => parseIdOfResponse('')).toThrow('Empty idof response');
   });
 });
