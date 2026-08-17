@@ -185,7 +185,26 @@ hidden result pointer lands**, and that follows from the parameter count — not
 
 | Member | Params | Hidden result pointer | Observed | Date |
 |---|---|---|---|---|
-| `SayThis` | 2 widestrings | **stack** — `RegsUsed` hits `MaxRegs = 3` → `push edi` [`RDOObjectServer.pas:292`] | **server froze** | 2026-08-15 |
+| `SayThis` | 2 widestrings | **stack** — `RegsUsed` hits `MaxRegs = 3` → `push edi` [`RDOObjectServer.pas:292`] | **server froze** | 2026-08-14 21:29:22 UTC |
+
+> **Attribution corrected 2026-08-17** (log forensics + developer confirmation). This freeze was
+> long recorded as caused by our own `U2`/`U1-b` probe on 2026-08-15. **Both facts were wrong.**
+> The freeze is at 2026-08-14 21:29:22 UTC — the last line of `IS-2026-08-14.log` — and it was
+> caused by the **deployed production WebClient**, which runs `63d9eb0b` (2026-07-03), a build
+> predating the separator fixes and therefore still emitting `"^"` on `SayThis`,
+> `RDOConnectOutput`/`RDOConnectInput` and `AddLine`/`CloseMessage`.
+> A **second, identical freeze** followed on 2026-08-17 at 14:54 UTC, from the production gateway's
+> IP — 22 min 56 s of silence, no `Clients` line, `ISCnx timeout` from the Model Server.
+>
+> **The mechanism below is unchanged and now better evidenced**: two production incidents instead of
+> one probe. Every guard, test and `VOID_MEMBERS` entry stands. `U2` stays cancelled — on the
+> mechanism, not on the incident.
+>
+> **The freeze signature is the absence of a signal, not a message.** No exception, no
+> `Start Disconnecting`, **no `Clients` line at all** — the log simply stops. The only witness is
+> external: the Model Server logs unanswered `ModelStatusChanged` pushes until
+> `ISCnx Error writing to socket`. Consequence: **`Clients exit code 0` does not detect a freeze**
+> (see [E2E-LIVE-CAMPAIGN.md §2.2](E2E-LIVE-CAMPAIGN.md)).
 | `ClientAware` | 0 | register — stack stays balanced | `A<rid> error 9;` in 91 ms | 2026-08-16 |
 
 `"^"` makes the server set `TVarData(Res).VType := varVariant` [`RDOQueryServer.pas:422-424`], so
@@ -853,7 +872,7 @@ turns on, and getting it wrong on a `procedure` is the most damaging thing this 
 | Form | Wire-legal? | Server behavior | WebClient policy |
 |------|-------------|-----------------|------------------|
 | QueryId + `"^"` on a **`function`** | YES | `A<id> res="…"` | `sendRdoRequest()` — canonical synchronous form. Capture-proven: `GetTycoonCookie` → `A36 res="%395";` [capture :982-983] |
-| QueryId + `"^"` on a **`procedure`** | parses, but | **FREEZES THE SERVER** | **MUST NOT — live-proven 2026-08-15.** See the box below. Blocked by `assertNotVariantOnVoidMember`. |
+| QueryId + `"^"` on a **`procedure`** | parses, but | **FREEZES THE SERVER** | **MUST NOT — live-proven twice in production, 2026-08-14 and 2026-08-17** (attribution corrected 2026-08-17: the deployed `63d9eb0b` build, not our probe — see §above). Blocked by `assertNotVariantOnVoidMember`. |
 | QueryId + `"*"` (or `set`) | YES | empty ack `A<id> ;` | **REQUIRED for void members** — the reference client's own form [capture :3542-3543, :3548-3549]. For every other member, still avoided by project convention (`assertNotVoidPush`, one form per intent); `VOID_MEMBERS` in `session/rdo-request-guards.ts` carries the exemptions, each with its Pascal declaration. |
 | no QueryId + `"*"` | YES | silence | `writeRdoFrame(socket, cmd)` — canonical fire-and-forget; matches legacy `Send()` usage (`ClientAware`, `SetViewedArea`, `MsgCompositionChanged` [capture :1017, :1032]) |
 | no QueryId + `"^"` | **NO** | reply is built then has no destination; reported to crash the server (live incident) | **MUST NOT.** The legacy client cannot produce this form — wanting a result implies `SendReceive` + QueryId. No capture contains it. |

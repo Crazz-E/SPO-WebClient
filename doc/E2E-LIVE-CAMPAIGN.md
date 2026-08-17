@@ -17,6 +17,17 @@ L1  Protocol conformance       (unchanged)
 L0  Unit + component           (unchanged)
 ```
 
+**Policy delta 2 — 2026-08-17.** The developer authorizes **mutations on the SHARED `planitia`
+server** ("c'est bon pour faire du test lourd dessus"). This lifts the "mutations need the dedicated
+instance" rule for this campaign. **What it does NOT lift, and cannot:**
+`"^"` on a Delphi `procedure` **freezes** the Interface Server — a proven property of the server,
+not a precaution, and no authorization changes it. **Observed twice in production, 2026-08-14
+21:29:22 UTC and 2026-08-17 14:54 UTC**, both caused by the deployed `63d9eb0b` build (attribution
+corrected 2026-08-17 — it was never our probe). The U2 probe stays **cancelled for good**, on the
+mechanism rather than on the incident. Malformed-frame and fuzzing work remains L2-only. Every mutation still
+documents and executes its reset (`assertSuitesSafe` enforces it), and adversarial *timing*
+variants (V4 race) are out of scope for a shared server.
+
 **Policy delta.** [E2E-STRATEGY.md §9](E2E-STRATEGY.md) rules "no destructive actions on the live server, ever". The developer's 2026-08-14 directive supersedes that rule **for this campaign only**: placements, demolitions of our own placements, and value mutations with the locked `SPO_test3` account are authorized under the guardrails of §7. The exception is scoped — L2 remains the only home for protocol-level adversarial input (malformed frames, fuzzing), and L3 smoke remains read-only.
 
 **Why live, when L2 exists.** The mock replays what we already believe; only the live Delphi stack can falsify it. The campaign's purpose is to *provoke* divergences: real RTTI dispatch, real economy state, real concurrency, real push timing — then catch them through three independent evidence streams (wire, UI state, server logs).
@@ -60,6 +71,28 @@ In-browser, `window.__spoDebug` provides `sent/received/errors`, `history` (last
 | `FIVEMODELSERVER` | `favorites` | `"<tycoon>" Get "<path>", "<name>"` per favorites access | Favorites-mutation correlation (Set expected symmetric) |
 | `FIVEMODELSERVER` | `TimeWarp` | World restart/timewarp reports with political summary | **Red alert**: a TimeWarp during our window may mean we took the world down |
 | `FIVECACHESERVER` / `FIVEMAILSERVER` | `Survival` | Server heartbeats | Health oracle for inspector/mail tests |
+
+> **Three corrections established by the 2026-08-17 log forensics**
+> ([report/campaign/forensique-logs-2026-08-17.md](../report/campaign/forensique-logs-2026-08-17.md)).
+> Each invalidates something this section previously asserted.
+>
+> 1. **`Demolition` is NOT a demolition log.** It is a **generic Delphi destructor** trace. The 354
+>    `TCircuit` entries of 2026-08-17 come from **world reloads**, not from anyone demolishing roads.
+>    Correlating a teardown by `Demolition` + time window is a **false friend** — it will confirm
+>    demolitions that never happened. The O4 cleanup oracle (§7) rests on this and must be rebuilt.
+> 2. **A frozen session is INVISIBLE in `Clients`, not marked.** The 2026-08-14 freeze
+>    (21:29:22 UTC, `LOGON SUCCESS: ClientViewId=7272232` — the **last line of the file**) produced
+>    no exception, no `Start Disconnecting`, and **no `Clients` line at all**. The only witness was
+>    **external**: the Model Server logged 34 unanswered `ModelStatusChanged` pushes until
+>    `ISCnx Error writing to socket`. Outage: **12 h 41 min 25 s**.
+>    → **`Clients exit code 0` does not detect a freeze.** Every "logs propres" verdict recorded so
+>    far is weaker than it reads. **Oracle O5 must be rewritten** around the Model Server's
+>    `ISCnx` channel, which is the only one that sees the silence.
+> 3. **`SPO_test3` is NOT used by us alone.** On 2026-08-17 at 14:54 UTC a `LOGON SUCCESS` for
+>    `SPO_test3` came from **IP 82.165.165.224** — not ours — and produced the freeze signature
+>    above (22 min 56 s of silence, no `Clients` line, `ISCnx timeout` at 15:06). The correlation
+>    model below states "the account is used by no one else": **that premise is false**, and
+>    attribution must rest on `ClientViewId` **plus egress IP**, never on the account name.
 
 **Known blind spots** (to confirm with the developer, §10): no dedicated *construction* log was observed (placements must be verified through pushes + re-reads + next-day logs, not a build log); `Demolition` has no actor attribution (correlate by time + class + our registry); log scope may be planitia-only (`TimeWarp` names Planitia; `Office` names Marsica) — multi-world coverage unknown; no exception/stack-trace category observed so far — IS `Survival` is the closest thing to an error channel.
 
@@ -218,6 +251,19 @@ A row is DONE when its nominal case and every listed adversarial variant have ru
 - Every anomaly gets: a minimal repro (matrix id + params), the wire excerpt (`sid` + `rid` + frames), the server-log excerpt (file + line), a classification — **client bug / gateway bug / conformity divergence (our bytes vs Voyager's) / server-behavior-to-tolerate / server bug candidate** — and a severity.
 - Filed in [BACKLOG.md](BACKLOG.md); fixes follow normal branch conventions (`fix/…`), each with L0/L1 regression tests per the coverage ratchet, and — where the finding is protocol-shaped — a mock scenario so L2 guards it forever (`npm run capture:convert` on the campaign's own NDJSON log makes this nearly free).
 - Byte-exact live observations from campaign logs are **capture-grade evidence** (evidence hierarchy §0): protocol discoveries are promoted into [rdo-protocol-architecture.md](rdo-protocol-architecture.md)/[rdo-session-lifecycle.md](rdo-session-lifecycle.md) with dated notes, following the retired-claim pattern.
+
+### 9.1 What could NOT be run is a deliverable (developer directive, 2026-08-17)
+
+- **Account: `SPO_test3` / `test3` only.** It is configured for this campaign; no other account is
+  used for a live run, ever. See CLAUDE.md § *E2E credentials — LOCKED*.
+- **Every session report ends with the list of rows that could not be executed, each with a typed
+  reason** — `blocked:no-facility`, `blocked:ui-disabled`, `blocked:ui-absent`, `blocked:role`,
+  `blocked:funds`, `blocked:precondition`, `blocked:server` (taxonomy and cell format in
+  [report/campaign/coverage-matrix.md](../report/campaign/coverage-matrix.md) §1).
+- A silent gap and a documented impossibility look identical in a coverage table and mean opposite
+  things: one is work not done, the other is a fact about the account, the world state, or the UI.
+  Only the second tells the developer whether to provision a facility, grant a role, or strike the
+  row. **Not reporting the reason is the failure mode this rule exists to prevent.**
 
 ---
 

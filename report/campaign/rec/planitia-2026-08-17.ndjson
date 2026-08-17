@@ -1,0 +1,215 @@
+{"ts":"2026-08-17T17:45:10.425Z","msg":"RDO>> directory_auth","meta":{"rid":1000,"raw":"C 1000 idof \"DirectoryServer\";"}}
+{"ts":"2026-08-17T17:45:10.429Z","msg":"RDO>> directory_query","meta":{"rid":1001,"raw":"C 1001 idof \"DirectoryServer\";"}}
+{"ts":"2026-08-17T17:45:10.520Z","msg":"RDO<< directory_auth","meta":{"rid":1000,"raw":"A1000 objid=\"39423540\""}}
+{"ts":"2026-08-17T17:45:10.521Z","msg":"RDO>> directory_auth","meta":{"rid":1002,"raw":"C 1002 sel 39423540 get RDOOpenSession;"}}
+{"ts":"2026-08-17T17:45:10.522Z","msg":"RDO<< directory_query","meta":{"rid":1001,"raw":"A1001 objid=\"39423540\""}}
+{"ts":"2026-08-17T17:45:10.522Z","msg":"RDO>> directory_query","meta":{"rid":1003,"raw":"C 1003 sel 39423540 get RDOOpenSession;"}}
+{"ts":"2026-08-17T17:45:10.611Z","msg":"RDO<< directory_auth","meta":{"rid":1002,"raw":"A1002 RDOOpenSession=\"#129819080\""}}
+{"ts":"2026-08-17T17:45:10.612Z","msg":"RDO>> directory_auth","meta":{"rid":1004,"raw":"C 1004 sel 129819080 call RDOMapSegaUser \"^\" \"%SPO_test3\";"}}
+{"ts":"2026-08-17T17:45:10.617Z","msg":"RDO<< directory_query","meta":{"rid":1003,"raw":"A1003 RDOOpenSession=\"#126453752\""}}
+{"ts":"2026-08-17T17:45:10.617Z","msg":"RDO>> directory_query","meta":{"rid":1005,"raw":"C 1005 sel 126453752 call RDOQueryKey \"^\" \"%Root/Areas/America/Worlds\",\"%General/Population\nGeneral/Investors\nGeneral/Online\nGeneral/Date\nInterface/IP\nInterface/Port\nInterface/URL\nInterface/Running\";"}}
+{"ts":"2026-08-17T17:45:10.702Z","msg":"RDO<< directory_auth","meta":{"rid":1004,"raw":"A1004 res=\"%\""}}
+{"ts":"2026-08-17T17:45:10.703Z","msg":"RDO>> directory_auth","meta":{"rid":1006,"raw":"C 1006 sel 129819080 call RDOLogonUser \"^\" \"%SPO_test3\",\"%[REDACTED]\";"}}
+{"ts":"2026-08-17T17:45:10.716Z","msg":"RDO<< directory_query","meta":{"rid":1005,"raw":"A1005 res=\"%Count=4\r\nKey0=planitia\r\ngeneral/date0=2538\r\ngeneral/investors0=18\r\ngeneral/online0=0\r\ngeneral/population0=130519481\r\ninterface/ip0=158.69.153.134\r\ninterface/port0=8000\r\ninterface/running0=true\r\ninterface/url0=http://158.69.153.134/Five/\r\nKey1=shamba\r\ngeneral/date1=2649\r\ngeneral/investors1=17\r\ngeneral/online1=0\r\ngeneral/population1=56346469\r\ninterface/ip1=142.44.158.91\r\ninterface/port1=8000\r\ninterface/running1=true\r\ninterface/url1=http://142.44.158.91/Five/\r\nKey2=trinity\r\ngeneral/date2=3412\r\ngeneral/investors2=26\r\ngeneral/online2=1\r\ngeneral/population2=47890344\r\nKey3=zorcon\r\ngeneral/date3=2144\r\ngeneral/investors3=16\r\ngeneral/online3=2\r\ngeneral/population3=8459711\r\ninterface/ip3=142.4.193.58\r\ninterface/port3=8000\r\ninterface/running3=true\r\ninterface/url3=http://142.4.193.58/Five/\r\n\""}}
+{"ts":"2026-08-17T17:45:10.718Z","msg":"RDO>* directory_query","meta":{"raw":"C sel 126453752 call RDOEndSession \"*\";"}}
+{"ts":"2026-08-17T17:45:13.244Z","msg":"RDO<< directory_auth","meta":{"rid":1006,"raw":"A1006 res=\"#0\""}}
+{"ts":"2026-08-17T17:45:13.245Z","msg":"RDO>* directory_auth","meta":{"raw":"C sel 129819080 call RDOEndSession \"*\";"}}
+{"ts":"2026-08-17T17:45:13.335Z","msg":"RDO>> world","meta":{"rid":1007,"raw":"C 1007 idof \"InterfaceServer\";"}}
+{"ts":"2026-08-17T17:45:13.424Z","msg":"RDO<< world","meta":{"rid":1007,"raw":"A1007 objid=\"29570088\""}}
+{"ts":"2026-08-17T17:45:13.425Z","msg":"RDO>> world","meta":{"rid":1008,"raw":"C 1008 sel 29570088 get WorldName;"}}
+{"ts":"2026-08-17T17:45:13.514Z","msg":"RDO<< world","meta":{"rid":1008,"raw":"A1008 WorldName=\"$Planitia\""}}
+{"ts":"2026-08-17T17:45:13.515Z","msg":"RDO>> world","meta":{"rid":1009,"raw":"C 1009 sel 29570088 get WorldURL;"}}
+{"ts":"2026-08-17T17:45:13.611Z","msg":"RDO<< world","meta":{"rid":1009,"raw":"A1009 WorldURL=\"$http://158.69.153.134/Five/\""}}
+{"ts":"2026-08-17T17:45:13.611Z","msg":"RDO>> world","meta":{"rid":1010,"raw":"C 1010 sel 29570088 get DAAddr;"}}
+{"ts":"2026-08-17T17:45:13.701Z","msg":"RDO<< world","meta":{"rid":1010,"raw":"A1010 DAAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-17T17:45:13.701Z","msg":"RDO>> world","meta":{"rid":1011,"raw":"C 1011 sel 29570088 get DAPort;"}}
+{"ts":"2026-08-17T17:45:13.794Z","msg":"RDO<< world","meta":{"rid":1011,"raw":"A1011 DAPort=\"#7000\""}}
+{"ts":"2026-08-17T17:45:13.794Z","msg":"RDO>> world","meta":{"rid":1012,"raw":"C 1012 sel 29570088 get DALockPort;"}}
+{"ts":"2026-08-17T17:45:13.884Z","msg":"RDO<< world","meta":{"rid":1012,"raw":"A1012 DALockPort=\"#7001\""}}
+{"ts":"2026-08-17T17:45:13.884Z","msg":"RDO>> world","meta":{"rid":1013,"raw":"C 1013 sel 29570088 get MailAddr;"}}
+{"ts":"2026-08-17T17:45:13.974Z","msg":"RDO<< world","meta":{"rid":1013,"raw":"A1013 MailAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-17T17:45:13.975Z","msg":"RDO>> world","meta":{"rid":1014,"raw":"C 1014 sel 29570088 get MailPort;"}}
+{"ts":"2026-08-17T17:45:14.064Z","msg":"RDO<< world","meta":{"rid":1014,"raw":"A1014 MailPort=\"#10000\""}}
+{"ts":"2026-08-17T17:45:14.064Z","msg":"RDO>> world","meta":{"rid":1015,"raw":"C 1015 sel 29570088 get WorldXSize;"}}
+{"ts":"2026-08-17T17:45:14.153Z","msg":"RDO<< world","meta":{"rid":1015,"raw":"A1015 WorldXSize=\"#2000\""}}
+{"ts":"2026-08-17T17:45:14.154Z","msg":"RDO>> world","meta":{"rid":1016,"raw":"C 1016 sel 29570088 get WorldYSize;"}}
+{"ts":"2026-08-17T17:45:14.244Z","msg":"RDO<< world","meta":{"rid":1016,"raw":"A1016 WorldYSize=\"#2000\""}}
+{"ts":"2026-08-17T17:45:14.244Z","msg":"RDO>> world","meta":{"rid":1017,"raw":"C 1017 sel 29570088 get WorldSeason;"}}
+{"ts":"2026-08-17T17:45:14.334Z","msg":"RDO<< world","meta":{"rid":1017,"raw":"A1017 WorldSeason=\"#2\""}}
+{"ts":"2026-08-17T17:45:14.334Z","msg":"RDO>> world","meta":{"rid":1018,"raw":"C 1018 sel 29570088 call AccountStatus \"^\" \"%SPO_test3\",\"%[REDACTED]\";"}}
+{"ts":"2026-08-17T17:45:14.424Z","msg":"RDO<< world","meta":{"rid":1018,"raw":"A1018 res=\"#0\""}}
+{"ts":"2026-08-17T17:45:14.425Z","msg":"RDO>> world","meta":{"rid":1019,"raw":"C 1019 sel 29570088 call Logon \"^\" \"%SPO_test3\",\"%[REDACTED]\";"}}
+{"ts":"2026-08-17T17:45:17.618Z","msg":"RDO<< world","meta":{"rid":1019,"raw":"A1019 res=\"#29601272\""}}
+{"ts":"2026-08-17T17:45:17.618Z","msg":"RDO>> world","meta":{"rid":1020,"raw":"C 1020 sel 29601272 get MailAccount;"}}
+{"ts":"2026-08-17T17:45:17.707Z","msg":"RDO<< world","meta":{"rid":1020,"raw":"A1020 MailAccount=\"$SPO_test3@Planitia.net\""}}
+{"ts":"2026-08-17T17:45:17.708Z","msg":"RDO>> world","meta":{"rid":1021,"raw":"C 1021 sel 29601272 get TycoonId;"}}
+{"ts":"2026-08-17T17:45:17.812Z","msg":"RDO<< world","meta":{"rid":1021,"raw":"A1021 TycoonId=\"#37\""}}
+{"ts":"2026-08-17T17:45:17.812Z","msg":"RDO>> world","meta":{"rid":1022,"raw":"C 1022 sel 29601272 get RDOCnntId;"}}
+{"ts":"2026-08-17T17:45:17.911Z","msg":"RDO<< world","meta":{"rid":1022,"raw":"A1022 RDOCnntId=\"$29597796\""}}
+{"ts":"2026-08-17T17:45:17.911Z","msg":"RDO>> world","meta":{"rid":1023,"raw":"C 1023 sel 29601272 call RegisterEventsById \"^\" \"#29597796\";"}}
+{"ts":"2026-08-17T17:45:18.012Z","msg":"RDO<< world","meta":{"raw":"C 1 idof \"InterfaceEvents\""}}
+{"ts":"2026-08-17T17:45:18.013Z","msg":"RDO>* world","meta":{"raw":"A1 objid=\"40311002\";"}}
+{"ts":"2026-08-17T17:45:18.104Z","msg":"RDO<< world","meta":{"raw":"C sel 40311002 call InitClient \"*\" \"@233250\",\"%1904713200217\",\"#0\",\"#287038816\""}}
+{"ts":"2026-08-17T17:45:18.105Z","msg":"RDO>* world","meta":{"raw":"C sel 29601272 call SetLanguage \"*\" \"%0\";"}}
+{"ts":"2026-08-17T17:45:18.105Z","msg":"RDO>> world","meta":{"rid":1024,"raw":"C 1024 sel 29601272 get GetCompanyCount;"}}
+{"ts":"2026-08-17T17:45:18.194Z","msg":"RDO<< world","meta":{"rid":1023,"raw":"A1023 res=\"#0\""}}
+{"ts":"2026-08-17T17:45:18.194Z","msg":"RDO<< world","meta":{"raw":"C sel 40311002 call NewMail \"*\" \"#2\""}}
+{"ts":"2026-08-17T17:45:18.337Z","msg":"RDO<< world","meta":{"rid":1024,"raw":"A1024 GetCompanyCount=\"#4\""}}
+{"ts":"2026-08-17T17:45:18.985Z","msg":"RDO>> world","meta":{"rid":1025,"raw":"C 1025 sel 29601272 set EnableEvents=\"#-1\";"}}
+{"ts":"2026-08-17T17:45:19.075Z","msg":"RDO<< world","meta":{"rid":1025,"raw":"A1025"}}
+{"ts":"2026-08-17T17:45:19.075Z","msg":"RDO>> world","meta":{"rid":1026,"raw":"C 1026 sel 29601272 call PickEvent \"^\" \"#37\";"}}
+{"ts":"2026-08-17T17:45:19.165Z","msg":"RDO<< world","meta":{"rid":1026,"raw":"A1026 res=\"%\""}}
+{"ts":"2026-08-17T17:45:19.166Z","msg":"RDO>> world","meta":{"rid":1027,"raw":"C 1027 sel 29601272 call GetTycoonCookie \"^\" \"#37\",\"%LastY.0\";"}}
+{"ts":"2026-08-17T17:45:19.833Z","msg":"RDO<< world","meta":{"rid":1027,"raw":"A1027 res=\"%997\""}}
+{"ts":"2026-08-17T17:45:19.834Z","msg":"RDO>> world","meta":{"rid":1028,"raw":"C 1028 sel 29601272 call GetTycoonCookie \"^\" \"#37\",\"%LastX.0\";"}}
+{"ts":"2026-08-17T17:45:19.983Z","msg":"RDO<< world","meta":{"rid":1028,"raw":"A1028 res=\"%925\""}}
+{"ts":"2026-08-17T17:45:19.983Z","msg":"RDO>> world","meta":{"rid":1029,"raw":"C 1029 sel 29601272 call GetTycoonCookie \"^\" \"#37\",\"%\";"}}
+{"ts":"2026-08-17T17:45:21.173Z","msg":"RDO<< world","meta":{"rid":1029,"raw":"A1029 res=\"%LastX.0=925\r\nLastY.0=997\r\nLastTimeOnline=2026-08-17\r\n\""}}
+{"ts":"2026-08-17T17:45:21.173Z","msg":"RDO>* world","meta":{"raw":"C sel 29601272 call ClientAware \"*\";"}}
+{"ts":"2026-08-17T17:45:21.174Z","msg":"RDO>> world","meta":{"rid":1030,"raw":"C 1030 sel 29601272 call PickEvent \"^\" \"#37\";"}}
+{"ts":"2026-08-17T17:45:21.264Z","msg":"RDO<< world","meta":{"raw":"C sel 40311002 call ChatMsg \"*\" \"%SYSTEM\",\"%SPO_test3 has entered Planitia\""}}
+{"ts":"2026-08-17T17:45:21.411Z","msg":"RDO<< world","meta":{"rid":1030,"raw":"A1030 res=\"%\""}}
+{"ts":"2026-08-17T17:45:21.411Z","msg":"RDO>* world","meta":{"raw":"C sel 29601272 call ClientAware \"*\";"}}
+{"ts":"2026-08-17T17:45:21.413Z","msg":"RDO>> world","meta":{"rid":1031,"raw":"C 1031 sel 29601272 get UserName;"}}
+{"ts":"2026-08-17T17:45:21.512Z","msg":"RDO<< world","meta":{"rid":1031,"raw":"A1031 UserName=\"$SPO_test3\""}}
+{"ts":"2026-08-17T17:45:21.512Z","msg":"RDO>> world","meta":{"rid":1032,"raw":"C 1032 sel 29601272 get MailAccount;"}}
+{"ts":"2026-08-17T17:45:21.612Z","msg":"RDO<< world","meta":{"rid":1032,"raw":"A1032 MailAccount=\"$SPO_test3@Planitia.net\""}}
+{"ts":"2026-08-17T17:45:21.612Z","msg":"RDO>> world","meta":{"rid":1033,"raw":"C 1033 sel 29601272 get CompositeName;"}}
+{"ts":"2026-08-17T17:45:21.700Z","msg":"RDO<< world","meta":{"raw":"C sel 40311002 call RefreshTycoon \"*\" \"%1904713117008\",\"%-17113\",\"#13\",\"#35\",\"#70\""}}
+{"ts":"2026-08-17T17:45:21.856Z","msg":"RDO<< world","meta":{"rid":1033,"raw":"A1033 CompositeName=\"$SPO_test3\""}}
+{"ts":"2026-08-17T17:45:21.857Z","msg":"RDO>> world","meta":{"rid":1034,"raw":"C 1034 sel 29570088 get WorldName;"}}
+{"ts":"2026-08-17T17:45:21.951Z","msg":"RDO<< world","meta":{"rid":1034,"raw":"A1034 WorldName=\"$Planitia\""}}
+{"ts":"2026-08-17T17:45:21.951Z","msg":"RDO>> world","meta":{"rid":1035,"raw":"C 1035 sel 29601272 get TycoonId;"}}
+{"ts":"2026-08-17T17:45:22.040Z","msg":"RDO<< world","meta":{"rid":1035,"raw":"A1035 TycoonId=\"#37\""}}
+{"ts":"2026-08-17T17:45:22.040Z","msg":"RDO>> world","meta":{"rid":1036,"raw":"C 1036 sel 29570088 get WorldXSize;"}}
+{"ts":"2026-08-17T17:45:22.130Z","msg":"RDO<< world","meta":{"rid":1036,"raw":"A1036 WorldXSize=\"#2000\""}}
+{"ts":"2026-08-17T17:45:22.132Z","msg":"RDO>> world","meta":{"rid":1037,"raw":"C 1037 sel 29601272 call GetTycoonCookie \"^\" \"#37\",\"%\";"}}
+{"ts":"2026-08-17T17:45:22.287Z","msg":"RDO<< world","meta":{"rid":1037,"raw":"A1037 res=\"%LastX.0=925\r\nLastY.0=997\r\nLastTimeOnline=2026-08-17\r\n\""}}
+{"ts":"2026-08-17T17:45:22.287Z","msg":"RDO>> world","meta":{"rid":1038,"raw":"C 1038 sel 29601272 set RdoConfProbe=\"#1\";"}}
+{"ts":"2026-08-17T17:45:22.376Z","msg":"RDO<< world","meta":{"rid":1038,"raw":"A1038 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-17T17:45:22.377Z","msg":"RDO>> world","meta":{"rid":1039,"raw":"C 1039 sel 29601272 set RdoConfProbe=\"#-1\";"}}
+{"ts":"2026-08-17T17:45:22.467Z","msg":"RDO<< world","meta":{"rid":1039,"raw":"A1039 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-17T17:45:22.467Z","msg":"RDO>> world","meta":{"rid":1040,"raw":"C 1040 sel 29601272 set RdoConfProbe=\"@1\";"}}
+{"ts":"2026-08-17T17:45:22.557Z","msg":"RDO<< world","meta":{"rid":1040,"raw":"A1040 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-17T17:45:22.558Z","msg":"RDO>> world","meta":{"rid":1041,"raw":"C 1041 sel 29601272 set RdoConfProbe=\"@1234.5\";"}}
+{"ts":"2026-08-17T17:45:22.648Z","msg":"RDO<< world","meta":{"rid":1041,"raw":"A1041 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-17T17:45:22.649Z","msg":"RDO>> world","meta":{"rid":1042,"raw":"C 1042 sel 29601272 set RdoConfProbe=\"!3.14\";"}}
+{"ts":"2026-08-17T17:45:22.738Z","msg":"RDO<< world","meta":{"rid":1042,"raw":"A1042 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-17T17:45:22.738Z","msg":"RDO>> world","meta":{"rid":1043,"raw":"C 1043 sel 29601272 call GetTycoonCookie \"^\" \"#37\",\"%LastX.0\";"}}
+{"ts":"2026-08-17T17:45:23.545Z","msg":"RDO<< world","meta":{"rid":1043,"raw":"A1043 res=\"%925\""}}
+{"ts":"2026-08-17T17:45:23.545Z","msg":"RDO>> world","meta":{"rid":1044,"raw":"C 1044 sel 29601272 set EnableEvents=\"#-1\";"}}
+{"ts":"2026-08-17T17:45:23.633Z","msg":"RDO<< world","meta":{"rid":1044,"raw":"A1044"}}
+{"ts":"2026-08-17T17:45:23.634Z","msg":"RDO>> world","meta":{"rid":1045,"raw":"C 1045 sel 29601272 set RdoConfProbe=\"#1\";"}}
+{"ts":"2026-08-17T17:45:23.723Z","msg":"RDO<< world","meta":{"rid":1045,"raw":"A1045 error 3 setting RdoConfProbe"}}
+{"ts":"2026-08-17T17:45:23.723Z","msg":"RDO>> world","meta":{"rid":1046,"raw":"C 1046 sel 29601272 get RdoConfProbe;"}}
+{"ts":"2026-08-17T17:45:23.813Z","msg":"RDO<< world","meta":{"rid":1046,"raw":"A1046 error 5 getting RdoConfProbe"}}
+{"ts":"2026-08-17T17:45:23.814Z","msg":"RDO>> world","meta":{"rid":1047,"raw":"C 1047 sel 29601272 call RdoConfNoSuchMethod \"^\";"}}
+{"ts":"2026-08-17T17:45:23.903Z","msg":"RDO<< world","meta":{"rid":1047,"raw":"A1047 error 5"}}
+{"ts":"2026-08-17T17:45:23.903Z","msg":"RDO>> world","meta":{"rid":1048,"raw":"C 1048 sel 29601272 get RDOCnntId;"}}
+{"ts":"2026-08-17T17:45:24.083Z","msg":"RDO<< world","meta":{"rid":1048,"raw":"A1048 RDOCnntId=\"$29597796\""}}
+{"ts":"2026-08-17T17:45:24.084Z","msg":"RDO>> world","meta":{"rid":1049,"raw":"C 1049 sel 29601272 get ServerBusy;"}}
+{"ts":"2026-08-17T17:45:24.173Z","msg":"RDO<< world","meta":{"rid":1049,"raw":"A1049 ServerBusy=\"#0\""}}
+{"ts":"2026-08-17T17:45:24.173Z","msg":"RDO>> world","meta":{"rid":1050,"raw":"C 1050 sel 29601272 call PickEvent \"^\" \"#37\";"}}
+{"ts":"2026-08-17T17:45:24.263Z","msg":"RDO<< world","meta":{"rid":1050,"raw":"A1050 res=\"%\""}}
+{"ts":"2026-08-17T17:45:24.263Z","msg":"RDO>> world","meta":{"rid":1051,"raw":"C 1051 sel 29601272 get GetCompanyCount;"}}
+{"ts":"2026-08-17T17:45:24.354Z","msg":"RDO<< world","meta":{"rid":1051,"raw":"A1051 GetCompanyCount=\"#4\""}}
+{"ts":"2026-08-17T17:45:24.354Z","msg":"RDO>> world","meta":{"rid":1052,"raw":"C 1052 sel 29570088 get WorldYSize;"}}
+{"ts":"2026-08-17T17:45:24.444Z","msg":"RDO<< world","meta":{"rid":1052,"raw":"A1052 WorldYSize=\"#2000\""}}
+{"ts":"2026-08-17T17:45:24.444Z","msg":"RDO>> world","meta":{"rid":1053,"raw":"C 1053 sel 29570088 get WorldSeason;"}}
+{"ts":"2026-08-17T17:45:24.534Z","msg":"RDO<< world","meta":{"rid":1053,"raw":"A1053 WorldSeason=\"#2\""}}
+{"ts":"2026-08-17T17:45:24.534Z","msg":"RDO>> world","meta":{"rid":1054,"raw":"C 1054 sel 29570088 get DAAddr;"}}
+{"ts":"2026-08-17T17:45:24.624Z","msg":"RDO<< world","meta":{"rid":1054,"raw":"A1054 DAAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-17T17:45:24.624Z","msg":"RDO>> world","meta":{"rid":1055,"raw":"C 1055 sel 29570088 get MailPort;"}}
+{"ts":"2026-08-17T17:45:24.714Z","msg":"RDO<< world","meta":{"rid":1055,"raw":"A1055 MailPort=\"#10000\""}}
+{"ts":"2026-08-17T17:45:24.714Z","msg":"RDO>> world","meta":{"rid":1056,"raw":"C 1056 sel 29601272 call GetTycoonCookie \"^\" \"#37\",\"%\";"}}
+{"ts":"2026-08-17T17:45:25.157Z","msg":"RDO<< world","meta":{"rid":1056,"raw":"A1056 res=\"%LastX.0=925\r\nLastY.0=997\r\nLastTimeOnline=2026-08-17\r\n\""}}
+{"ts":"2026-08-17T17:45:25.247Z","msg":"RDO>> map","meta":{"rid":1057,"raw":"C 1057 idof \"WSObjectCacher\";"}}
+{"ts":"2026-08-17T17:45:25.337Z","msg":"RDO<< map","meta":{"rid":1057,"raw":"A1057 objid=\"3173064\""}}
+{"ts":"2026-08-17T17:45:25.339Z","msg":"RDO>> world","meta":{"rid":1058,"raw":"C 1058 sel 29601272 call ObjectsInArea \"^\" \"#925\",\"#997\",\"#64\",\"#64\";"}}
+{"ts":"2026-08-17T17:45:25.430Z","msg":"RDO<< world","meta":{"rid":1058,"raw":"A1058 res=\"%8042\r\n37\r\n17\r\n924\r\n1005\r\n6032\r\n0\r\n16\r\n928\r\n1000\r\n1510\r\n0\r\n16\r\n933\r\n997\r\n1500\r\n29\r\n16\r\n933\r\n1000\r\n4802\r\n37\r\n17\r\n935\r\n997\r\n4812\r\n37\r\n17\r\n937\r\n997\r\n4832\r\n37\r\n17\r\n939\r\n997\r\n2842\r\n37\r\n17\r\n941\r\n1049\r\n4702\r\n37\r\n17\r\n942\r\n1044\r\n4742\r\n37\r\n16\r\n942\r\n1046\r\n2432\r\n37\r\n16\r\n942\r\n1055\r\n4692\r\n37\r\n16\r\n944\r\n1044\r\n1782\r\n37\r\n17\r\n944\r\n1046\r\n7262\r\n37\r\n17\r\n947\r\n1042\r\n2732\r\n37\r\n16\r\n947\r\n1043\r\n2662\r\n37\r\n16\r\n948\r\n1043\r\n7272\r\n37\r\n17\r\n948\r\n1044\r\n2722\r\n37\r\n16\r\n949\r\n1043\r\n2712\r\n37\r\n16\r\n949\r\n1044\r\n4742\r\n37\r\n16\r\n960\r\n997\r\n4692\r\n37\r\n16\r\n962\r\n997\r\n1782\r\n37\r\n17\r\n962\r\n1000\r\n702\r\n37\r\n17\r\n964\r\n996\r\n602\r\n37\r\n17\r\n964\r\n1000\r\n752\r\n37\r\n17\r\n968\r\n996\r\n652\r\n37\r\n17\r\n968\r\n1000\""}}
+{"ts":"2026-08-17T17:45:25.430Z","msg":"RDO>> world","meta":{"rid":1059,"raw":"C 1059 sel 29601272 call SegmentsInArea \"^\" \"#1\",\"#925\",\"#997\",\"#989\",\"#1061\";"}}
+{"ts":"2026-08-17T17:45:25.525Z","msg":"RDO<< world","meta":{"rid":1059,"raw":"A1059 res=\"%932\r\n1048\r\n932\r\n1148\r\n24\r\n-17\r\n0\r\n0\r\n0\r\n0\r\n932\r\n1048\r\n946\r\n1048\r\n24\r\n35\r\n0\r\n0\r\n0\r\n0\r\n918\r\n1048\r\n932\r\n1048\r\n-24\r\n24\r\n3\r\n0\r\n0\r\n0\r\n932\r\n1041\r\n932\r\n1048\r\n49\r\n24\r\n1\r\n0\r\n0\r\n0\r\n932\r\n1041\r\n946\r\n1041\r\n49\r\n62\r\n1\r\n2\r\n0\r\n0\r\n918\r\n1041\r\n932\r\n1041\r\n1\r\n49\r\n4\r\n1\r\n0\r\n0\r\n932\r\n1034\r\n932\r\n1041\r\n-8\r\n49\r\n-1\r\n1\r\n0\r\n0\r\n932\r\n1034\r\n946\r\n1034\r\n-8\r\n4\r\n-1\r\n0\r\n0\r\n0\r\n918\r\n1034\r\n932\r\n1034\r\n-56\r\n-8\r\n2\r\n-1\r\n0\r\n0\r\n932\r\n1027\r\n932\r\n1034\r\n-2\r\n-8\r\n3\r\n-1\r\n0\r\n0\r\n932\r\n1027\r\n946\r\n1027\r\n-2\r\n11\r\n3\r\n4\r\n0\r\n0\r\n918\r\n1027\r\n932\r\n1027\r\n-50\r\n-2\r\n6\r\n3\r\n0\r\n0\r\n932\r\n1020\r\n932\r\n1027\r\n6\r\n-2\r\n0\r\n3\r\n0\r\n0\r\n932\r\n1020\r\n939\r\n1020\r\n6\r\n-45\r\n0\r\n4\r\n0\r\n0\r\n925\r\n1020\r\n932\r\n1020\r\n10\r\n6\r\n-3\r\n0\r\n0\r\n0\r\n932\r\n1013\r\n932\r\n1020\r\n-8\r\n6\r\n3\r\n0\r\n0\r\n0\r\n932\r\n1013\r\n939\r\n1013\r\n-8\r\n-60\r\n3\r\n7\r\n0\r\n0\r\n925\r\n1013\r\n932\r\n1013\r\n-4\r\n-8\r\n0\r\n3\r\n0\r\n0\r\n932\r\n999\r\n932\r\n1013\r\n-24\r\n-8\r\n-1\r\n3\r\n0\r\n0\r\n932\r\n999\r\n946\r\n999\r\n-24\r\n-10\r\n-1\r\n0\r\n0\r\n0\r\n918\r\n999\r\n932\r\n999\r\n-72\r\n-24\r\n2\r\n-1\r\n0\r\n0\r\n932\r\n978\r\n932\r\n999\r\n6\r\n-24\r\n0\r\n-1\r\n0\r\n0\r\n946\r\n992\r\n946\r\n999\r\n-5\r\n-10\r\n-2\r\n0\r\n0\r\n0\r\n946\r\n999\r\n953\r\n999\r\n-10\r\n-25\r\n0\r\n3\r\n0\r\n0\r\n946\r\n999\r\n946\r\n1006\r\n-10\r\n-1\r\n0\r\n4\r\n0\r\n0\r\n953\r\n992\r\n953\r\n999\r\n-20\r\n-25\r\n0\r\n3\r\n0\r\n0\r\n953\r\n999\r\n967\r\n999\r\n-25\r\n-41\r\n3\r\n3\r\n0\r\n0\r\n953\r\n999\r\n953\r\n1006\r\n-25\r\n-16\r\n3\r\n6\r\n0\r\n0\r\n967\r\n985\r\n967\r\n999\r\n-32\r\n-41\r\n3\r\n3\r\n0\r\n0\r\n967\r\n999\r\n967\r\n1013\r\n-41\r\n-25\r\n3\r\n7\r\n0\r\n0\r\n967\r\n999\r\n981\r\n999\r\n-41\r\n-31\r\n3\r\n-1\r\n0\r\n0\r\n981\r\n999\r\n1174\r\n999\r\n-31\r\n11\r\n-1\r\n-1\r\n0\r\n0\r\n981\r\n999\r\n981\r\n1013\r\n-31\r\n-14\r\n-1\r\n3\r\n0\r\n0\r\n981\r\n985\r\n981\r\n999\r\n-22\r\n-31\r\n0\r\n-1\r\n0\r\n0\r\n981\r\n1013\r\n988\r\n1013\r\n-14\r\n-17\r\n3\r\n5\r\n0\r\n0\r\n981\r\n1013\r\n981\r\n1020\r\n-14\r\n-1\r\n3\r\n0\r\n0\r\n0\r\n967\r\n1013\r\n981\r\n1013\r\n-25\r\n-14\r\n7\r\n3\r\n0\r\n0\r\n960\r\n1013\r\n967\r\n1013\r\n-59\r\n-25\r\n2\r\n7\r\n0\r\n0\r\n946\r\n1020\r\n946\r\n1027\r\n20\r\n11\r\n1\r\n4\r\n0\r\n0\r\n946\r\n1027\r\n946\r\n1034\r\n11\r\n4\r\n4\r\n0\r\n0\r\n0\r\n946\r\n1034\r\n946\r\n1041\r\n4\r\n62\r\n0\r\n2\r\n0\r\n0\r\n946\r\n1041\r\n953\r\n1041\r\n62\r\n49\r\n2\r\n4\r\n0\r\n0\r\n946\r\n1041\r\n946\r\n1048\r\n62\r\n35\r\n2\r\n0\r\n0\r\n0\r\n953\r\n1034\r\n953\r\n1041\r\n-10\r\n49\r\n2\r\n4\r\n0\r\n0\r\n953\r\n1041\r\n953\r\n1048\r\n49\r\n21\r\n4\r\n3\r\n0\r\n0\r\n953\r\n1048\r\n953\r\n1055\r\n21\r\n70\r\n3\r\n-1\r\n0\r\n0\r\n946\r\n1048\r\n953\r\n1048\r\n35\r\n21\r\n0\r\n3\r\n0\r\n0\r\n946\r\n1048\r\n946\r\n1055\r\n35\r\n84\r\n0\r\n-4\r\n0\r\n0\r\n\""}}
+{"ts":"2026-08-17T17:45:25.527Z","msg":"RDO>* world","meta":{"raw":"C sel 29601272 call SetViewedArea \"*\" \"#925\",\"#997\",\"#64\",\"#64\";"}}
+{"ts":"2026-08-17T17:45:25.527Z","msg":"RDO>> world","meta":{"rid":1060,"raw":"C 1060 sel 29601272 call GetSurface \"^\" \"%ZONES\",\"#925\",\"#997\",\"#988\",\"#1060\";"}}
+{"ts":"2026-08-17T17:45:25.618Z","msg":"RDO<< world","meta":{"rid":1060,"raw":"A1060 res=\"%64:64:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:0=64,:\""}}
+{"ts":"2026-08-17T17:45:28.631Z","msg":"RDO>> world","meta":{"rid":1061,"raw":"C 1061 sel 29601272 call SwitchFocusEx \"^\" \"#0\",\"#924\",\"#1005\";"}}
+{"ts":"2026-08-17T17:45:28.750Z","msg":"RDO<< world","meta":{"rid":1061,"raw":"A1061 res=\"%279013752\r\nCollege\n\rYellow Inc. TEST\n\r63% operational.\n\r(-$3,013/h):-:Upgrade Level: 1   Colleges coverage accross the city reported at 100%.:-:Hint: You should attract more workers to this facility in case you want to rise its operation ratio.:-:\""}}
+{"ts":"2026-08-17T17:45:28.751Z","msg":"RDO>* world","meta":{"raw":"C sel 29601272 call UnfocusObject \"*\" \"#279013752\";"}}
+{"ts":"2026-08-17T17:45:28.751Z","msg":"RDO>> map","meta":{"rid":1062,"raw":"C 1062 sel 3173064 call CreateObject \"^\" \"%Planitia\";"}}
+{"ts":"2026-08-17T17:45:28.840Z","msg":"RDO<< map","meta":{"rid":1062,"raw":"A1062 res=\"#80581928\""}}
+{"ts":"2026-08-17T17:45:28.840Z","msg":"RDO>> map","meta":{"rid":1063,"raw":"C 1063 sel 80581928 call SetObject \"^\" \"#924\",\"#1005\";"}}
+{"ts":"2026-08-17T17:45:29.075Z","msg":"RDO<< map","meta":{"rid":1063,"raw":"A1063 res=\"#-1\""}}
+{"ts":"2026-08-17T17:45:29.113Z","msg":"RDO>> map","meta":{"rid":1064,"raw":"C 1064 sel 80581928 call GetPropertyList \"^\" \"%Name\tCreator\tCurrBlock\tObjectId\t\";"}}
+{"ts":"2026-08-17T17:45:29.202Z","msg":"RDO<< map","meta":{"rid":1064,"raw":"A1064 res=\"%College\tSPO_test3\t279013912\t279013752\t\""}}
+{"ts":"2026-08-17T17:45:29.203Z","msg":"RDO>* map","meta":{"raw":"C sel 3173064 call CloseObject \"*\" \"#80581928\";"}}
+{"ts":"2026-08-17T17:45:29.204Z","msg":"RDO>> map","meta":{"rid":1065,"raw":"C 1065 sel 3173064 call CreateObject \"^\" \"%Planitia\";"}}
+{"ts":"2026-08-17T17:45:29.293Z","msg":"RDO<< map","meta":{"rid":1065,"raw":"A1065 res=\"#81232292\""}}
+{"ts":"2026-08-17T17:45:29.293Z","msg":"RDO>> map","meta":{"rid":1066,"raw":"C 1066 sel 81232292 call SetPath \"^\" \"%Tycoons\\SPO_test3.five\\\";"}}
+{"ts":"2026-08-17T17:45:29.493Z","msg":"RDO<< map","meta":{"rid":1066,"raw":"A1066 res=\"#-1\""}}
+{"ts":"2026-08-17T17:45:29.493Z","msg":"RDO>> map","meta":{"rid":1067,"raw":"C 1067 sel 81232292 call GetPropertyList \"^\" \"%IsMayor\tTown\tIsCapitalMayor\tIsPresident\tIsMinister\tMinistry\t\";"}}
+{"ts":"2026-08-17T17:45:29.596Z","msg":"RDO<< map","meta":{"rid":1067,"raw":"A1067 res=\"%\t\t\t\t\t\t\""}}
+{"ts":"2026-08-17T17:45:29.597Z","msg":"RDO>* map","meta":{"raw":"C sel 3173064 call CloseObject \"*\" \"#81232292\";"}}
+{"ts":"2026-08-17T17:45:29.598Z","msg":"RDO>> world","meta":{"rid":1068,"raw":"C 1068 sel 29601272 call SwitchFocusEx \"^\" \"#0\",\"#924\",\"#1005\";"}}
+{"ts":"2026-08-17T17:45:29.689Z","msg":"RDO<< world","meta":{"rid":1068,"raw":"A1068 res=\"%279013752\r\nCollege\n\rYellow Inc. TEST\n\r63% operational.\n\r(-$3,013/h):-:Upgrade Level: 1   Colleges coverage accross the city reported at 100%.:-:Hint: You should attract more workers to this facility in case you want to rise its operation ratio.:-:\""}}
+{"ts":"2026-08-17T17:45:29.690Z","msg":"RDO>> map","meta":{"rid":1069,"raw":"C 1069 sel 3173064 call CreateObject \"^\" \"%Planitia\";"}}
+{"ts":"2026-08-17T17:45:29.779Z","msg":"RDO<< map","meta":{"rid":1069,"raw":"A1069 res=\"#80581928\""}}
+{"ts":"2026-08-17T17:45:29.780Z","msg":"RDO>> map","meta":{"rid":1070,"raw":"C 1070 sel 80581928 call SetObject \"^\" \"#924\",\"#1005\";"}}
+{"ts":"2026-08-17T17:45:29.870Z","msg":"RDO<< map","meta":{"rid":1070,"raw":"A1070 res=\"#-1\""}}
+{"ts":"2026-08-17T17:45:29.901Z","msg":"RDO>> map","meta":{"rid":1071,"raw":"C 1071 sel 80581928 call GetPropertyList \"^\" \"%Name\tCreator\tCost\tROI\tYears\tStopped\tdemolish\tWorkers0\tWorkersMax0\tWorkersK0\tSalaries0\tWorkForcePrice0\tWorkersCap0\tMinSalaries0\tSalaryValues0\tWorkers1\tWorkersMax1\tWorkersK1\tSalaries1\tWorkForcePrice1\tWorkersCap1\tMinSalaries1\tSalaryValues1\tWorkers2\tWorkersMax2\tWorkersK2\tSalaries2\tWorkForcePrice2\tWorkersCap2\tMinSalaries2\tSalaryValues2\tUpgradeLevel\tMaxUpgrade\tNextUpgCost\tUpgrading\tPending\tUpgradeActions\tAcceptCloning\tCloneMenu0\t\";"}}
+{"ts":"2026-08-17T17:45:29.993Z","msg":"RDO<< map","meta":{"rid":1071,"raw":"A1071 res=\"%College\tSPO_test3\t1600049798.2054\t-1\t0\t\t\t19\t40\t50\t150\t20\t40\t0\t30\t192\t300\t0\t150\t8\t300\t0\t12\t49\t50\t50\t150\t2\t50\t0\t3\t1\t50\t800000000\t0\t0\t\t\tSalaries|256|\t\""}}
+{"ts":"2026-08-17T17:45:29.994Z","msg":"RDO>> map","meta":{"rid":1072,"raw":"C 1072 sel 80581928 call SetObject \"^\" \"#924\",\"#1005\";"}}
+{"ts":"2026-08-17T17:45:30.084Z","msg":"RDO<< map","meta":{"rid":1072,"raw":"A1072 res=\"#-1\""}}
+{"ts":"2026-08-17T17:45:30.130Z","msg":"RDO>> map","meta":{"rid":1073,"raw":"C 1073 sel 80581928 call GetPropertyList \"^\" \"%Name\tCreator\tCost\tROI\tYears\tStopped\tdemolish\tWorkers0\tWorkersMax0\tWorkersK0\tSalaries0\tWorkForcePrice0\tWorkersCap0\tMinSalaries0\tSalaryValues0\tWorkers1\tWorkersMax1\tWorkersK1\tSalaries1\tWorkForcePrice1\tWorkersCap1\tMinSalaries1\tSalaryValues1\tWorkers2\tWorkersMax2\tWorkersK2\tSalaries2\tWorkForcePrice2\tWorkersCap2\tMinSalaries2\tSalaryValues2\tUpgradeLevel\tMaxUpgrade\tNextUpgCost\tUpgrading\tPending\tUpgradeActions\tAcceptCloning\tCloneMenu0\t\";"}}
+{"ts":"2026-08-17T17:45:30.221Z","msg":"RDO<< map","meta":{"rid":1073,"raw":"A1073 res=\"%College\tSPO_test3\t1600049798.2054\t-1\t0\t\t\t19\t40\t50\t150\t20\t40\t0\t30\t192\t300\t0\t150\t8\t300\t0\t12\t49\t50\t50\t150\t2\t50\t0\t3\t1\t50\t800000000\t0\t0\t\t\tSalaries|256|\t\""}}
+{"ts":"2026-08-17T17:45:30.222Z","msg":"RDO>* map","meta":{"raw":"C sel 3173064 call CloseObject \"*\" \"#80581928\";"}}
+{"ts":"2026-08-17T17:45:30.223Z","msg":"RDO>> world","meta":{"rid":1074,"raw":"C 1074 sel 29601272 call GetChannelList \"^\" \"%ROOT\";"}}
+{"ts":"2026-08-17T17:45:30.311Z","msg":"RDO<< world","meta":{"rid":1074,"raw":"A1074 res=\"%Punta Morena\r\n\r\nWest Bank\r\n\r\nKidney Lake\r\n\r\nManica\r\n\r\nNew Suez\r\n\r\nMarsica\r\n\r\nPodan\r\n\r\nNorvenia\r\n\r\nPlano\r\n\r\nSkandral\r\n\r\nTrespunta\r\n\r\nLoi Lan\r\n\r\nGulfia\r\n\r\nMarinaria\r\n\r\nSpryng\r\n\r\nFlamingo\r\n\r\nLago Ojo\r\n\r\nShitab\r\n\r\nEttoria\r\n\r\nHelartia\r\n\r\nFortenac\r\n\r\nHookya\r\n\r\nBlakh\r\n\r\nFlumenia\r\n\r\nLungo Rio\r\n\r\n\""}}
+{"ts":"2026-08-17T17:45:30.312Z","msg":"RDO>> world","meta":{"rid":1075,"raw":"C 1075 sel 29601272 call JoinChannel \"^\" \"%\",\"%\";"}}
+{"ts":"2026-08-17T17:45:30.402Z","msg":"RDO<< world","meta":{"rid":1075,"raw":"A1075 res=\"#0\""}}
+{"ts":"2026-08-17T17:45:30.402Z","msg":"RDO>> world","meta":{"rid":1076,"raw":"C 1076 sel 29601272 call GetUserList \"^\";"}}
+{"ts":"2026-08-17T17:45:30.492Z","msg":"RDO<< world","meta":{"rid":1076,"raw":"A1076 res=\"%SPO_test3/0/0\r\n\""}}
+{"ts":"2026-08-17T17:45:30.493Z","msg":"RDO>> world","meta":{"rid":1077,"raw":"C 1077 sel 29601272 call GetChannelInfo \"^\" \"%Punta Morena\";"}}
+{"ts":"2026-08-17T17:45:30.586Z","msg":"RDO<< world","meta":{"rid":1077,"raw":"A1077 res=\"%Channel \"\"Punta Morena\"\", created by Punta Morena.  0 users .\""}}
+{"ts":"2026-08-17T17:45:30.678Z","msg":"RDO>> mail","meta":{"rid":1078,"raw":"C 1078 idof \"MailServer\";"}}
+{"ts":"2026-08-17T17:45:30.770Z","msg":"RDO<< mail","meta":{"rid":1078,"raw":"A1078 objid=\"4809072\""}}
+{"ts":"2026-08-17T17:45:30.770Z","msg":"RDO>> mail","meta":{"rid":1079,"raw":"C 1079 sel 4809072 call LogServerOn \"^\" \"%Planitia\";"}}
+{"ts":"2026-08-17T17:45:30.862Z","msg":"RDO<< mail","meta":{"rid":1079,"raw":"A1079 res=\"#4799656\""}}
+{"ts":"2026-08-17T17:45:30.863Z","msg":"RDO>> mail","meta":{"rid":1080,"raw":"C 1080 sel 4809072 call CheckNewMail \"^\" \"#4799656\",\"%SPO_test3@Planitia.net\";"}}
+{"ts":"2026-08-17T17:45:30.957Z","msg":"RDO<< mail","meta":{"rid":1080,"raw":"A1080 res=\"#2\""}}
+{"ts":"2026-08-17T17:45:31.390Z","msg":"RDO>> mail","meta":{"rid":1081,"raw":"C 1081 sel 4809072 call OpenMessage \"^\" \"%Planitia\",\"%SPO_test3@Planitia.net\",\"%Inbox\",\"%269161B0B2B26174E\";"}}
+{"ts":"2026-08-17T17:45:31.481Z","msg":"RDO<< mail","meta":{"rid":1081,"raw":"A1081 res=\"#4827072\""}}
+{"ts":"2026-08-17T17:45:31.482Z","msg":"RDO>> mail","meta":{"rid":1082,"raw":"C 1082 sel 4827072 call GetHeaders \"^\" \"#0\";"}}
+{"ts":"2026-08-17T17:45:31.574Z","msg":"RDO<< mail","meta":{"rid":1082,"raw":"A1082 res=\"%[Header]\r\nFromAddr=mailer@GlobalPlanitia.net\r\nToAddr=SPO_test3@Planitia.net\r\nSubject=Welcome Minister\r\nMessageId=269161B0B2B26174E\r\nStamp=14\r\nDate=167173\r\nContentType=text/html\r\nFrom=mailer@GlobalPlanitia.net\r\nTo=SPO_test3\r\nDateFmt=2357-09-13\r\n\""}}
+{"ts":"2026-08-17T17:45:31.574Z","msg":"RDO>> mail","meta":{"rid":1083,"raw":"C 1083 sel 4827072 call GetLines \"^\" \"#0\";"}}
+{"ts":"2026-08-17T17:45:31.665Z","msg":"RDO<< mail","meta":{"rid":1083,"raw":"A1083 res=\"%<HEAD>\r\n<META HTTP-EQUIV=\"\"REFRESH\"\" CONTENT=\"\"0; URL=http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=SPO_test3&Ministry=Agriculture&President=RolloCat&WorldName=Planitia\"\">\r\n</HEAD>\r\n\""}}
+{"ts":"2026-08-17T17:45:31.666Z","msg":"RDO>> mail","meta":{"rid":1084,"raw":"C 1084 sel 4827072 call GetAttachmentCount \"^\" \"#0\";"}}
+{"ts":"2026-08-17T17:45:31.757Z","msg":"RDO<< mail","meta":{"rid":1084,"raw":"A1084 res=\"#0\""}}
+{"ts":"2026-08-17T17:45:31.757Z","msg":"RDO>> mail","meta":{"rid":1085,"raw":"C 1085 sel 4809072 call CloseMessage \"*\" \"#4827072\";"}}
+{"ts":"2026-08-17T17:45:31.848Z","msg":"RDO<< mail","meta":{"rid":1085,"raw":"A1085"}}
+{"ts":"2026-08-17T17:45:31.849Z","msg":"RDO>> world","meta":{"rid":1086,"raw":"C 1086 sel 29601272 call RDOFavoritesGetSubItems \"^\" \"%\";"}}
+{"ts":"2026-08-17T17:45:31.943Z","msg":"RDO<< world","meta":{"rid":1086,"raw":"A1086 res=\"%12\u00011\u0001Company Headquarters\u0001Company Headquarters,968,1000,1\u00010\u0001\u000213\u00011\u0001Balloon House\u0001Balloon House,985,976,1\u00010\u0001\u000214\u00011\u0001The Mushrooms\u0001The Mushrooms,942,1055,1\u00010\u0001\u000215\u00011\u0001The Barracks\u0001The Barracks,879,1018,1\u00010\u0001\u000216\u00011\u0001Book Store 1\u0001Book Store 1,948,1044,1\u00010\u0001\u000217\u00011\u0001Food Store 1\u0001Food Store 1,949,1044,1\u00010\u0001\u000218\u00011\u0001Clothes Store 2\u0001Clothes Store 2,947,1043,1\u00010\u0001\u000219\u00011\u0001Household Appliances Store 1\u0001Household Appliances Store 1,948,1043,1\u00010\u0001\u000220\u00011\u0001Car Store 1\u0001Car Store 1,949,1043,1\u00010\u0001\u000221\u00011\u0001Furniture Store 1\u0001Furniture Store 1,947,1042,1\u00010\u0001\u000222\u00011\u0001Company Headquarters\u0001Company Headquarters,964,1000,1\u00010\u0001\u000223\u00011\u0001Company Headquarters\u0001Company Headquarters,964,996,1\u00010\u0001\u000224\u00011\u0001Company Headquarters\u0001Company Headquarters,968,996,1\u00010\u0001\u000225\u00011\u0001Gas Station 1\u0001Gas Station 1,884,1018,1\u00010\u0001\u000226\u00011\u0001Gas Station 2\u0001Gas Station 2,944,1046,1\u00010\u0001\u000227\u00011\u0001Gas Station 3\u0001Gas Station 3,982,986,1\u00010\u0001\u000228\u00011\u0001Gas Station 4\u0001Gas Station 4,962,1000,1\u00010\u0001\u000229\u00011\u0001Car Store 1\u0001Car Store 1,884,1016,1\u00010\u0001\u000230\u00011\u0001Car Store 2\u0001Car Store 2,944,1044,1\u00010\u0001\u000231\u00011\u0001Car Store 3\u0001Car Store 3,984,986,1\u00010\u0001\u000232\u00011\u0001Car Store 4\u0001Car Store 4,962,997,1\u00010\u0001\u000233\u00011\u0001Mart 1\u0001Mart 1,886,1018,1\u00010\u0001\u000234\u00011\u0001Mart 2\u0001Mart 2,942,1046,1\u00010\u0001\u000235\u00011\u0001Mart 3\u0001Mart 3,982,988,1\u00010\u0001\u000236\u00011\u0001Mart 4\u0001Mart 4,960,997,1\u00010\u0001\u000237\u00011\u0001Hospital\u0001Hospital,935,997,1\u00010\u0001\u000238\u00011\u0001School\u0001School,937,997,1\u00010\u0001\u000239\u00011\u0001Fire Station\u0001Fire Station,939,997,1\u00010\u0001\u000240\u00011\u0001Park\u0001Park,982,979,1\u00010\u0001\u000241\u00011\u0001Park\u0001Park,941,1049,1\u00010\u0001\u000242\u00011\u0001Park\u0001Park,878,1021,1\u00010\u0001\u000243\u00011\u0001Tennis courts\u0001Tennis courts,987,979,1\u00010\u0001\u000244\u00011\u0001Tennis courts\u0001Tennis courts,987,982,1\u00010\u0001\u000245\u00011\u0001College\u0001College,924,1005,1\u00010\u0001\u000246\u00011\u0001Dump\u0001Dump,713,980,1\u00010\u0001\u000247\u00011\u0001Jail\u0001Jail,718,980,1\u00010\u0001\u000248\u00011\u0001Drug Store 1\u0001Drug Store 1,886,1016,1\u00010\u0001\u000249\u00011\u0001Drug Store 2\u0001Drug Store 2,942,1044,1\u00010\u0001\u000250\u00011\u0001Drug Store 3\u0001Drug Store 3,984,988,1\u00010\u0001\u000251\u00011\u0001Import Storage 1\u0001Import Storage 1,723,980,1\u00010\u0001\u000252\u00011\u0001Export Storage 1\u0001Export Storage 1,727,980,1\u00010\u0001\u0002\""}}
+{"ts":"2026-08-17T17:45:31.944Z","msg":"RDO>> map","meta":{"rid":1087,"raw":"C 1087 sel 3173064 call CreateObject \"^\" \"%Planitia\";"}}
+{"ts":"2026-08-17T17:45:32.034Z","msg":"RDO<< map","meta":{"rid":1087,"raw":"A1087 res=\"#81232292\""}}
+{"ts":"2026-08-17T17:45:32.034Z","msg":"RDO>> map","meta":{"rid":1088,"raw":"C 1088 sel 81232292 call SetObject \"^\" \"#968\",\"#1000\";"}}
+{"ts":"2026-08-17T17:45:32.827Z","msg":"RDO<< map","meta":{"rid":1088,"raw":"A1088 res=\"#-1\""}}
+{"ts":"2026-08-17T17:45:32.861Z","msg":"RDO>> map","meta":{"rid":1089,"raw":"C 1089 sel 81232292 call GetPropertyList \"^\" \"%avlCount0\tdevCount0\thasCount0\t\";"}}
+{"ts":"2026-08-17T17:45:32.952Z","msg":"RDO<< map","meta":{"rid":1089,"raw":"A1089 res=\"%55\t0\t1\t\""}}
+{"ts":"2026-08-17T17:45:32.952Z","msg":"RDO>> map","meta":{"rid":1090,"raw":"C 1090 sel 81232292 call GetPropertyList \"^\" \"%avl0RsId0\tavl0RsEnabled0\tavl0RsName0\tavl0RsDyn0\tavl0RsParent0\tavl0RsId1\tavl0RsEnabled1\tavl0RsName1\tavl0RsDyn1\tavl0RsParent1\tavl0RsId2\tavl0RsEnabled2\tavl0RsName2\tavl0RsDyn2\tavl0RsParent2\tavl0RsId3\tavl0RsEnabled3\tavl0RsName3\tavl0RsDyn3\tavl0RsParent3\tavl0RsId4\tavl0RsEnabled4\tavl0RsName4\tavl0RsDyn4\tavl0RsParent4\tavl0RsId5\tavl0RsEnabled5\tavl0RsName5\tavl0RsDyn5\tavl0RsParent5\tavl0RsId6\tavl0RsEnabled6\tavl0RsName6\tavl0RsDyn6\tavl0RsParent6\tavl0RsId7\tavl0RsEnabled7\tavl0RsName7\tavl0RsDyn7\tavl0RsParent7\tavl0RsId8\tavl0RsEnabled8\tavl0RsName8\tavl0RsDyn8\tavl0RsParent8\tavl0RsId9\tavl0RsEnabled9\tavl0RsName9\tavl0RsDyn9\tavl0RsParent9\t\";"}}
+{"ts":"2026-08-17T17:45:33.113Z","msg":"RDO<< map","meta":{"rid":1090,"raw":"A1090 res=\"%Banking\t0\tBanking Basics\tyes\tBanks\tLawyerFirms\t0\tLegal Services Basics\tyes\tLawyer Firms\tCharityWork\t0\t\t\t\tHospitalVultures\t0\t\t\t\tExtraterrestrialLaw\t0\t\t\t\tJudgeConsultants\t0\t\t\t\tWorldsLawyerNetwork\t0\t\t\t\tDigitalLibraryOnly\t0\t\t\t\tOnEarthStage\t0\t\t\t\tLongHoursPolicy\t0\t\t\t\t\""}}
+{"ts":"2026-08-17T17:45:33.113Z","msg":"RDO>> map","meta":{"rid":1091,"raw":"C 1091 sel 81232292 call GetPropertyList \"^\" \"%avl0RsId10\tavl0RsEnabled10\tavl0RsName10\tavl0RsDyn10\tavl0RsParent10\tavl0RsId11\tavl0RsEnabled11\tavl0RsName11\tavl0RsDyn11\tavl0RsParent11\tavl0RsId12\tavl0RsEnabled12\tavl0RsName12\tavl0RsDyn12\tavl0RsParent12\tavl0RsId13\tavl0RsEnabled13\tavl0RsName13\tavl0RsDyn13\tavl0RsParent13\tavl0RsId14\tavl0RsEnabled14\tavl0RsName14\tavl0RsDyn14\tavl0RsParent14\tavl0RsId15\tavl0RsEnabled15\tavl0RsName15\tavl0RsDyn15\tavl0RsParent15\tavl0RsId16\tavl0RsEnabled16\tavl0RsName16\tavl0RsDyn16\tavl0RsParent16\tavl0RsId17\tavl0RsEnabled17\tavl0RsName17\tavl0RsDyn17\tavl0RsParent17\tavl0RsId18\tavl0RsEnabled18\tavl0RsName18\tavl0RsDyn18\tavl0RsParent18\tavl0RsId19\tavl0RsEnabled19\tavl0RsName19\tavl0RsDyn19\tavl0RsParent19\t\";"}}
+{"ts":"2026-08-17T17:45:33.255Z","msg":"RDO<< map","meta":{"rid":1091,"raw":"A1091 res=\"%AssociateGoal\t0\t\t\t\tLawSchoolsRecruitment\t0\t\t\t\tCorporateCars\t0\t\t\t\tCompulsoryQuota\t0\t\t\t\tSecurityCodes\t0\t\t\t\tParalegalsExploitation\t0\t\t\t\tProLawyersCampaign\t0\t\t\t\tSoftwareFirms\t0\tSoftware Firm Basics\tyes\tSoftware Firms\tVideogamesDevelopment\t0\t\t\t\tOceanusHistory\t0\t\t\t\t\""}}
+{"ts":"2026-08-17T17:45:33.255Z","msg":"RDO>> map","meta":{"rid":1092,"raw":"C 1092 sel 81232292 call GetPropertyList \"^\" \"%avl0RsId20\tavl0RsEnabled20\tavl0RsName20\tavl0RsDyn20\tavl0RsParent20\tavl0RsId21\tavl0RsEnabled21\tavl0RsName21\tavl0RsDyn21\tavl0RsParent21\tavl0RsId22\tavl0RsEnabled22\tavl0RsName22\tavl0RsDyn22\tavl0RsParent22\tavl0RsId23\tavl0RsEnabled23\tavl0RsName23\tavl0RsDyn23\tavl0RsParent23\tavl0RsId24\tavl0RsEnabled24\tavl0RsName24\tavl0RsDyn24\tavl0RsParent24\tavl0RsId25\tavl0RsEnabled25\tavl0RsName25\tavl0RsDyn25\tavl0RsParent25\tavl0RsId26\tavl0RsEnabled26\tavl0RsName26\tavl0RsDyn26\tavl0RsParent26\tavl0RsId27\tavl0RsEnabled27\tavl0RsName27\tavl0RsDyn27\tavl0RsParent27\tavl0RsId28\tavl0RsEnabled28\tavl0RsName28\tavl0RsDyn28\tavl0RsParent28\tavl0RsId29\tavl0RsEnabled29\tavl0RsName29\tavl0RsDyn29\tavl0RsParent29\t\";"}}
+{"ts":"2026-08-17T17:45:33.446Z","msg":"RDO<< map","meta":{"rid":1092,"raw":"A1092 res=\"%RelaxedWorkEnvironment\t0\t\t\t\tHackersRecruiting\t0\t\t\t\tVirusAntivirusBusiness\t0\t\t\t\tWorkingFromHome\t0\t\t\t\tCheapHardware\t0\t\t\t\tCDMeltingSecurity\t0\t\t\t\tDigitalMovies\t0\t\t\t\tCellPhonesTechnology\t0\t\t\t\tConvolutedCode\t0\t\t\t\tThroughPortalsDataTransfer\t0\t\t\t\t\""}}
+{"ts":"2026-08-17T17:45:33.446Z","msg":"RDO>> map","meta":{"rid":1093,"raw":"C 1093 sel 81232292 call GetPropertyList \"^\" \"%avl0RsId30\tavl0RsEnabled30\tavl0RsName30\tavl0RsDyn30\tavl0RsParent30\tavl0RsId31\tavl0RsEnabled31\tavl0RsName31\tavl0RsDyn31\tavl0RsParent31\tavl0RsId32\tavl0RsEnabled32\tavl0RsName32\tavl0RsDyn32\tavl0RsParent32\tavl0RsId33\tavl0RsEnabled33\tavl0RsName33\tavl0RsDyn33\tavl0RsParent33\tavl0RsId34\tavl0RsEnabled34\tavl0RsName34\tavl0RsDyn34\tavl0RsParent34\tavl0RsId35\tavl0RsEnabled35\tavl0RsName35\tavl0RsDyn35\tavl0RsParent35\tavl0RsId36\tavl0RsEnabled36\tavl0RsName36\tavl0RsDyn36\tavl0RsParent36\tavl0RsId37\tavl0RsEnabled37\tavl0RsName37\tavl0RsDyn37\tavl0RsParent37\tavl0RsId38\tavl0RsEnabled38\tavl0RsName38\tavl0RsDyn38\tavl0RsParent38\tavl0RsId39\tavl0RsEnabled39\tavl0RsName39\tavl0RsDyn39\tavl0RsParent39\t\";"}}
+{"ts":"2026-08-17T17:45:33.617Z","msg":"RDO<< map","meta":{"rid":1093,"raw":"A1093 res=\"%LaptopsAndDockingStations\t0\t\t\t\tIntraworldsECommerce\t0\t\t\t\tHologramGraphic\t0\t\t\t\tBasicTelevision\t0\tTelevision\tyes\tTelevision\tRealityShows\t0\t\t\t\tSitComInvasion\t0\t\t\t\tLaughTracksBan\t0\t\t\t\tTrashyTalkshows\t0\t\t\t\tDigitalPlatform\t0\t\t\t\tSingleSportChannels\t0\t\t\t\t\""}}
+{"ts":"2026-08-17T17:45:33.617Z","msg":"RDO>> map","meta":{"rid":1094,"raw":"C 1094 sel 81232292 call GetPropertyList \"^\" \"%avl0RsId40\tavl0RsEnabled40\tavl0RsName40\tavl0RsDyn40\tavl0RsParent40\tavl0RsId41\tavl0RsEnabled41\tavl0RsName41\tavl0RsDyn41\tavl0RsParent41\tavl0RsId42\tavl0RsEnabled42\tavl0RsName42\tavl0RsDyn42\tavl0RsParent42\tavl0RsId43\tavl0RsEnabled43\tavl0RsName43\tavl0RsDyn43\tavl0RsParent43\tavl0RsId44\tavl0RsEnabled44\tavl0RsName44\tavl0RsDyn44\tavl0RsParent44\tavl0RsId45\tavl0RsEnabled45\tavl0RsName45\tavl0RsDyn45\tavl0RsParent45\tavl0RsId46\tavl0RsEnabled46\tavl0RsName46\tavl0RsDyn46\tavl0RsParent46\tavl0RsId47\tavl0RsEnabled47\tavl0RsName47\tavl0RsDyn47\tavl0RsParent47\tavl0RsId48\tavl0RsEnabled48\tavl0RsName48\tavl0RsDyn48\tavl0RsParent48\tavl0RsId49\tavl0RsEnabled49\tavl0RsName49\tavl0RsDyn49\tavl0RsParent49\t\";"}}
+{"ts":"2026-08-17T17:45:33.750Z","msg":"RDO<< map","meta":{"rid":1094,"raw":"A1094 res=\"%Subtitles\t0\t\t\t\tCommentatorsForTheBlind\t0\t\t\t\tQuizShows\t0\t\t\t\tSoapOperasExcellency\t0\t\t\t\tLocalNews\t0\t\t\t\tInvestigativeJournalism\t0\t\t\t\tNewTalents\t0\t\t\t\tSexyVarietyShows\t0\t\t\t\tPayPerView\t0\t\t\t\tCartoons\t0\t\t\t\t\""}}
+{"ts":"2026-08-17T17:45:33.750Z","msg":"RDO>> map","meta":{"rid":1095,"raw":"C 1095 sel 81232292 call GetPropertyList \"^\" \"%avl0RsId50\tavl0RsEnabled50\tavl0RsName50\tavl0RsDyn50\tavl0RsParent50\tavl0RsId51\tavl0RsEnabled51\tavl0RsName51\tavl0RsDyn51\tavl0RsParent51\tavl0RsId52\tavl0RsEnabled52\tavl0RsName52\tavl0RsDyn52\tavl0RsParent52\tavl0RsId53\tavl0RsEnabled53\tavl0RsName53\tavl0RsDyn53\tavl0RsParent53\tavl0RsId54\tavl0RsEnabled54\tavl0RsName54\tavl0RsDyn54\tavl0RsParent54\thas0RsId0\thas0RsCost0\thas0RsName0\thas0RsDyn0\thas0RsParent0\t\";"}}
+{"ts":"2026-08-17T17:45:33.865Z","msg":"RDO<< map","meta":{"rid":1095,"raw":"A1095 res=\"%DetctiveSeries\t0\t\t\t\tInfomercials\t0\t\t\t\tAwardShows\t0\t\t\t\tLateNightShows\t0\t\t\t\tWaterQuest\t1\tWater Quest Licenses\tyes\tWaterQuest Project\tDistributedDirection\t$1,000,000\tAdvanced Technologies\tyes\tGeneral\t\""}}
+{"ts":"2026-08-17T17:45:33.866Z","msg":"RDO>* map","meta":{"raw":"C sel 3173064 call CloseObject \"*\" \"#81232292\";"}}
+{"ts":"2026-08-17T17:45:33.866Z","msg":"RDO>* world","meta":{"raw":"C sel 29601272 call SetTycoonCookie \"*\" \"#37\",\"%LastX.0\",\"%925\";"}}
+{"ts":"2026-08-17T17:45:33.866Z","msg":"RDO>* world","meta":{"raw":"C sel 29601272 call SetTycoonCookie \"*\" \"#37\",\"%LastY.0\",\"%997\";"}}
+{"ts":"2026-08-17T17:45:33.867Z","msg":"RDO>* world","meta":{"raw":"C sel 29601272 call ClientNotAware \"*\";"}}
+{"ts":"2026-08-17T17:45:33.867Z","msg":"RDO>> world","meta":{"rid":1096,"raw":"C 1096 sel 29601272 get Logoff;"}}
+{"ts":"2026-08-17T17:45:33.957Z","msg":"RDO<< world","meta":{"raw":"C sel 40311002 call ChatMsg \"*\" \"%SYSTEM\",\"%SPO_test3 has left Planitia.\""}}
+{"ts":"2026-08-17T17:45:34.095Z","msg":"RDO<< world","meta":{"rid":1096,"raw":"A1096 Logoff=\"#0\""}}

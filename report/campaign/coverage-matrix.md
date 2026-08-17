@@ -31,6 +31,29 @@ This is both the campaign's progress ledger and its **execution plan**. Rows can
 
 **Status** — `todo` · `nominal` · `adversarial` (all listed variants passed) · `blocked` · `bug:<id>` · `excluded`.
 
+**`blocked` DOIT porter une raison typée** (directive développeur, 2026-08-17). Une ligne qu'on n'a
+pas pu exécuter est une information, pas un trou : sans la raison, personne ne sait s'il faut
+re-tenter, provisionner un bâtiment, ou déclarer la ligne hors d'atteinte. Taxonomie :
+
+| Raison | Sens |
+|---|---|
+| `blocked:no-facility` | aucun bâtiment du type requis n'est possédé par le compte |
+| `blocked:ui-disabled` | le contrôle existe mais est grisé / non cliquable pour ce compte |
+| `blocked:ui-absent` | le contrôle n'apparaît pas du tout dans l'interface |
+| `blocked:role` | exige un rôle politique que le compte n'a pas (maire, président, GM) |
+| `blocked:funds` | fonds insuffisants pour l'action |
+| `blocked:precondition` | une autre ligne de la matrice doit passer d'abord (préciser laquelle) |
+| `blocked:target` | la ligne est une **mutation** et la session tourne sur le serveur **partagé** (planitia) — elle exige `--target dedicated`. Ce n'est ni un manque du compte ni un défaut : c'est la règle de sécurité §7 |
+| `blocked:server` | refus ou erreur serveur empêchant l'exécution (joindre la trace) |
+| `blocked:harness` | la ligne exigerait d'écrire sous `src/` — ce qui **ré-arme le gate de conformité** et invaliderait les runs de la session. Ajoutée le 2026-08-17 : ce n'est ni le compte, ni la cible, ni le serveur, c'est l'outillage qui l'interdit tant que le gate n'est pas consommé par un commit |
+
+Format attendu en cellule : `blocked:no-facility` + une note d'une ligne dans le compte rendu de
+session. **Le rapport de fin de session liste toutes les lignes `blocked` avec leur raison** — c'est
+un livrable, pas un commentaire.
+
+**Compte — verrouillé.** Toutes les exécutions live utilisent **`SPO_test3` / `test3`** et rien
+d'autre ; le compte est configuré pour cette campagne. Voir CLAUDE.md § E2E credentials — LOCKED.
+
 ---
 
 ## 2. Oracle availability by transport — the constraint that shapes the campaign
