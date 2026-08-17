@@ -29,19 +29,117 @@ import fetch from 'node-fetch';
 // PRIVATE HELPERS
 // =========================================================================
 
+/** Drop every tag and collapse the ASP source's tabs/newlines to single spaces. */
+function stripTags(fragment: string): string {
+  return fragment.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * `<td>` whose `class` is exactly `className`, quoted or not, with any number of
+ * further attributes before the closing `>`.
+ *
+ * The `(?![\w-])` boundary is what keeps `class=label` from matching
+ * `class=labelAccountLevel2`; the trailing `[^>]*>` is what lets it match the
+ * four event handlers `tycoonratings.asp:136-139` hangs off the same cell.
+ */
+function cellPattern(className: string): RegExp {
+  return new RegExp(
+    `<td\\b[^>]*\\bclass\\s*=\\s*["']?${className}(?![\\w-])["']?[^>]*>([\\s\\S]*?)</td>`,
+    'i',
+  );
+}
+
+const RATING_LABEL_CELL = cellPattern('label');
+const RATING_VALUE_CELL = cellPattern('value');
+
+/**
+ * One table row. The trailing alternation accepts a row the server never closed
+ * (a truncated response) without letting the body run into the next row.
+ */
+const TABLE_ROW = /<tr\b[^>]*>([\s\S]*?)(?:<\/tr>|(?=<tr\b)|$)/gi;
+
+/** `tycoonratings.asp:153-159` — the opinion dropdown, whose options are percentages too. */
+const OPINION_SELECT = /<select\b[\s\S]*?<\/select>/gi;
+
+/**
+ * Parse one ratings table. The three Politics pages render the same two-cell row.
+ *
+ * `popularratings.asp:66-73` (and `ifelratings.asp:64-71`, identical but for the
+ * property read):
+ *
+ *     <tr style="margin-top: 2px">
+ *         <td class=label>
+ *             <%= CacheObj.Name( LangId ) %>
+ *         </td>
+ *         <td class=value align="right">
+ *             <%= CacheObj.PeopleRating %>%
+ *         </td>
+ *     </tr>
+ *
+ * `tycoonratings.asp:135-162` renders the same pair, but hangs four event
+ * handlers off each cell and wraps the number two levels deep:
+ *
+ *     <td class=label
+ *         OnMouseOver="onRowMouseOver()" … onClick="onRowMouseClick()">
+ *     <td class=value align="right" OnMouseOver=… >
+ *         <div id=LabelDiv_<Id> class=value>
+ *             <span id=Value_<Id>><%= CacheObj.TycoonsRating %>%</span>
+ *
+ * Two defects this row-scoped form kills:
+ *
+ *  - the old pattern demanded `<td class=label>` with an IMMEDIATE `>`, so it
+ *    never matched one single `tycoonratings.asp` row — the tab was structurally
+ *    empty (audit B-4, second half);
+ *  - it also let `[\s\S]*?` run across row boundaries: a value the server
+ *    rendered empty paired label N with the value of row N+1 and shifted the
+ *    whole table, silently (audit B-18). A row now stands or falls alone.
+ *
+ * Rows without both cells are skipped by construction: the 1-pixel separator
+ * (`popularratings.asp:74-77`) and the trailing note (`tycoonratings.asp:174-187`,
+ * a `class=label` cell with no value cell) never reach the output.
+ */
 export function parsePoliticsRatings(html: string): PoliticsRatingEntry[] {
   const ratings: PoliticsRatingEntry[] = [];
-  // Pattern: <td class=label>Name</td> ... <td class=value ...>Value%</td>
-  const rowRegex = /<td\s+class=label>\s*([\s\S]*?)\s*<\/td>[\s\S]*?<td\s+class=value[^>]*>\s*([\d.]+)%?\s*<\/td>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = rowRegex.exec(html)) !== null) {
-    const name = match[1].trim();
-    const value = parseFloat(match[2]) || 0;
-    if (name) {
-      ratings.push({ name, value });
-    }
+  TABLE_ROW.lastIndex = 0;
+  let row: RegExpExecArray | null;
+  while ((row = TABLE_ROW.exec(html)) !== null) {
+    const labelCell = RATING_LABEL_CELL.exec(row[1]);
+    const valueCell = RATING_VALUE_CELL.exec(row[1]);
+    if (!labelCell || !valueCell) continue;
+
+    const name = stripTags(labelCell[1]);
+    if (!name) continue;
+
+    const text = stripTags(valueCell[1].replace(OPINION_SELECT, ' '));
+    const numeric = /-?\d+(?:\.\d+)?/.exec(text);
+    ratings.push({ name, value: numeric ? parseFloat(numeric[0]) : 0 });
   }
   return ratings;
+}
+
+/**
+ * Fetch one Politics ratings page.
+ *
+ * `resp.ok` is the only signal these pages give for "page missing", and it went
+ * unread for the whole life of this code: `tycoonratings.asp` was requested as
+ * `tycoonsratings.asp`, IIS answered 404 with an HTML error body, the
+ * surrounding `try/catch` therefore never fired, and the tab stayed empty
+ * without a single log line (audit A-12 / B-4, first half).
+ *
+ * An absent ratings FOLDER is a different case and is NOT an error: it is a 200
+ * with an empty table (`popularratings.asp:60` `if not Itr.Empty`), which
+ * legitimately parses to `[]`.
+ */
+async function fetchRatingsPage(
+  ctx: SessionContext, url: string, label: string
+): Promise<PoliticsRatingEntry[]> {
+  ctx.log.debug(`[Politics] Fetching ${label} from ${url}`);
+  const resp = await fetch(url, { redirect: 'follow' });
+  if (!resp.ok) {
+    ctx.log.warn(`[Politics] ${label} page answered HTTP ${resp.status} — ${url}`);
+    return [];
+  }
+  return parsePoliticsRatings(await resp.text());
 }
 
 async function fetchMayorDataFromBuilding(ctx: SessionContext, x: number, y: number): Promise<{
@@ -92,9 +190,16 @@ async function fetchMayorDataFromBuilding(ctx: SessionContext, x: number, y: num
 }
 
 /**
- * Build URL params for tycoonCampaign.asp.
+ * Build URL params for tycooncampaign.asp — parameter for parameter the form the
+ * page's own buttons carry (`tycooncampaign.asp:233`, `:380`).
+ *
  * Capitol (president): Capitol=YES, x/y = building coords, TownName empty.
  * Town Hall (mayor): TownName=<name>, Capitol/x/y empty.
+ *
+ * `Recache=YES` is not decoration: `:12` reads it, `:29` and `:90` push it into
+ * `Town.Recache` and `CacheObject.Recache`, so the response is re-rendered from
+ * a FRESH read of the campaign cache. That is what makes the state-after oracle
+ * of `parseCampaignResponse` sound on this page.
  */
 function buildCampaignParams(
   ctx: SessionContext,
@@ -117,24 +222,86 @@ function buildCampaignParams(
 }
 
 /**
- * Parse the HTML response from tycoonCampaign.asp for success/denial.
- * Denial: contains a `<div class=label>` with an error message.
- * Success: no denial div (may contain project sliders or empty body).
+ * The two mutually exclusive state markers `tycooncampaign.asp` publishes.
+ *
+ * `:233` renders the "Withdraw Campaign" button — and only that button carries
+ * `Cancel=TRUE` — when the campaign exists (`:222` `FullAccess and LaunchError = 0`,
+ * `:223` not the ruler, `:224` `CacheObjectValid`).
+ * `:380` renders the "Launch Campaign" button — the only `Launch=TRUE` — on the
+ * same page when the campaign does NOT exist (`:362`).
+ *
+ * The third button (`:339`, "Check Minister Names") carries neither, so the two
+ * patterns cannot both be true.
  */
-export function parseCampaignResponse(html: string): { success: boolean; message: string } {
-  // Check for denial message: <div class=label ...>message text</div>
-  const denialMatch = html.match(/<div\s+class=label[^>]*>\s*([\s\S]*?)\s*<\/div>/i);
-  if (denialMatch) {
-    const message = denialMatch[1]
-      .replace(/<[^>]*>/g, '')  // strip nested HTML tags
-      .replace(/\s+/g, ' ')    // normalize whitespace
-      .trim();
-    if (message) {
-      return { success: false, message };
+const CAMPAIGN_CANCEL_BUTTON = /info\s*=\s*["'][^"']*tycooncampaign\.asp\?[^"']*[?&]Cancel=TRUE/i;
+const CAMPAIGN_LAUNCH_BUTTON = /info\s*=\s*["'][^"']*tycooncampaign\.asp\?[^"']*[?&]Launch=TRUE/i;
+
+/** `tycooncampaign.asp:364`, `:391`, `:400` — the only three `<div class=label>` on the page. */
+const CAMPAIGN_LABEL_DIV = /<div\s+class\s*=\s*["']?label(?![\w-])["']?[^>]*>([\s\S]*?)<\/div>/i;
+
+/** The sentence the page shows, without the button table `:364`/`:372` nests inside it. */
+function campaignLabelText(html: string): string {
+  const match = CAMPAIGN_LABEL_DIV.exec(html);
+  return match ? stripTags(match[1].split(/<table\b/i)[0]) : '';
+}
+
+export type CampaignAction = 'Launch' | 'Cancel';
+
+/**
+ * Read the outcome of a campaign mutation off `tycooncampaign.asp`.
+ *
+ * **The state after is the oracle.** The page this returns IS the campaign page
+ * re-rendered: `:89-96` re-reads the campaign cache object after the RDO call,
+ * and `:90` honours `Recache` — which `buildCampaignParams` always sends as
+ * `Recache=YES` (`:233`, `:380`, our `:12`). So a launch that took effect is
+ * visible in this very response, and the usual COM-cache-freshness reservation
+ * does NOT apply to this page.
+ *
+ * What the previous heuristic — "success = the page carries no `<div class=label>`" —
+ * got wrong, in both directions (audit B-5):
+ *
+ *  ① a **wrong password** makes `FullAccess` false (`:48`), the RDO call is never
+ *    issued (`:50`, `:67`), and `:400-413` renders a label div that is EMPTY
+ *    because its inner `if FullAccess` is false → reported as success;
+ *  ② a `LaunchError` outside {100, 101, 102} falls through a `select case` with
+ *    no `case else` (`:402-411`) → same empty div → reported as success;
+ *  ③ a **successful withdrawal** makes `CacheObjectValid` false (`:91-96`), so
+ *    `:364` renders the "you are not participating" invitation — a non-empty
+ *    label div → reported as failure. The nominal path was the failing one.
+ *
+ * `RDOCancelCampaign`'s own result is not usable: `:76` calls it without
+ * assigning (unlike `:59`), so the code never reaches the page.
+ */
+export function parseCampaignResponse(
+  html: string, action: CampaignAction
+): { success: boolean; message: string } {
+  const campaignRuns = CAMPAIGN_CANCEL_BUTTON.test(html);
+  const campaignAbsent = CAMPAIGN_LAUNCH_BUTTON.test(html);
+  const published = campaignLabelText(html);
+
+  if (action === 'Launch') {
+    if (campaignRuns) {
+      return { success: true, message: 'Campaign launched' };
     }
+    // Still no campaign: either the page published a reason (`:403` code 100,
+    // `:406`/`:408` code 101, `:410` code 102, `:391` already the ruler, `:364`
+    // the launch invitation) or it published nothing at all — cases ① and ②.
+    return {
+      success: false,
+      message: published || 'Campaign launch refused — the page published no reason',
+    };
   }
-  // No denial found — treat as success
-  return { success: true, message: 'Campaign updated successfully' };
+
+  if (campaignAbsent) {
+    return { success: true, message: 'Campaign withdrawn' };
+  }
+  if (campaignRuns) {
+    return { success: false, message: 'Campaign withdrawal refused — the campaign is still running' };
+  }
+  return {
+    success: false,
+    message: published || 'Campaign withdrawal refused — the page published no reason',
+  };
 }
 
 /**
@@ -234,31 +401,24 @@ export async function getPoliticsData(
     });
 
     const baseUrl = `http://${worldIp}/Five/0/Visual/Voyager/Politics`;
+    const query = queryParams.toString().replace(/\+/g, '%20');
 
-    // Fetch popular ratings page
-    const ratingsUrl = `${baseUrl}/popularratings.asp?${queryParams.toString().replace(/\+/g, '%20')}`;
-    ctx.log.debug(`[Politics] Fetching popular ratings from ${ratingsUrl}`);
-    const ratingsResp = await fetch(ratingsUrl, { redirect: 'follow' });
-    const ratingsHtml = await ratingsResp.text();
-    const popularRatings = parsePoliticsRatings(ratingsHtml);
+    const popularRatings = await fetchRatingsPage(ctx, `${baseUrl}/popularratings.asp?${query}`, 'popular ratings');
+    const ifelRatings = await fetchRatingsPage(ctx, `${baseUrl}/ifelratings.asp?${query}`, 'IFEL ratings');
 
-    // Fetch IFEL ratings page
-    const ifelUrl = `${baseUrl}/ifelratings.asp?${queryParams.toString().replace(/\+/g, '%20')}`;
-    ctx.log.debug(`[Politics] Fetching IFEL ratings from ${ifelUrl}`);
-    const ifelResp = await fetch(ifelUrl, { redirect: 'follow' });
-    const ifelHtml = await ifelResp.text();
-    const ifelRatings = parsePoliticsRatings(ifelHtml);
-
-    // Fetch tycoons ratings page
+    // `tycoonratings.asp` — SINGULAR. This call asked for `tycoonsratings.asp`
+    // for the whole life of the file; no such page exists among the 2 774 `.asp`
+    // of the Voyager tree, so every request 404'd and the tab was permanently
+    // empty (audit A-12 / B-4). The page reads the same five parameters as its
+    // two siblings (`tycoonratings.asp:6-22`), plus `Password` (`:103`), which
+    // `queryParams` already carries.
     let tycoonsRatings: PoliticsRatingEntry[] = [];
     try {
-      const tycoonsUrl = `${baseUrl}/tycoonsratings.asp?${queryParams.toString().replace(/\+/g, '%20')}`;
-      ctx.log.debug(`[Politics] Fetching tycoons ratings from ${tycoonsUrl}`);
-      const tycoonsResp = await fetch(tycoonsUrl, { redirect: 'follow' });
-      const tycoonsHtml = await tycoonsResp.text();
-      tycoonsRatings = parsePoliticsRatings(tycoonsHtml);
+      tycoonsRatings = await fetchRatingsPage(ctx, `${baseUrl}/tycoonratings.asp?${query}`, 'tycoon ratings');
     } catch (e: unknown) {
-      ctx.log.debug(`[Politics] Tycoons ratings fetch failed: ${toErrorMessage(e)}`);
+      // Kept narrower than the outer catch on purpose: a transport failure on
+      // this optional tab must not empty the two ratings lists already read.
+      ctx.log.warn(`[Politics] Tycoons ratings fetch failed: ${toErrorMessage(e)}`);
     }
 
     // Fetch mayor data from the town hall building properties
@@ -356,7 +516,13 @@ export async function politicsLaunchCampaign(
     ctx.log.debug(`[Politics] Launching campaign via ASP: ${url}`);
     const resp = await fetch(url, { redirect: 'follow' });
     const html = await resp.text();
-    return parseCampaignResponse(html);
+    // `resp.ok` catches the absent page and the IIS fault, nothing more: the 298
+    // Voyager pages carry no `Response.Status`, so a refused launch and a wrong
+    // password both answer 200. The body is the oracle — see parseCampaignResponse.
+    if (!resp.ok) {
+      return { success: false, message: `Launch campaign failed: HTTP ${resp.status}` };
+    }
+    return parseCampaignResponse(html, 'Launch');
   } catch (e: unknown) {
     ctx.log.warn(`[Politics] LaunchCampaign failed: ${toErrorMessage(e)}`);
     return { success: false, message: toErrorMessage(e) };
@@ -382,7 +548,11 @@ export async function politicsCancelCampaign(
     ctx.log.debug(`[Politics] Cancelling campaign via ASP: ${url}`);
     const resp = await fetch(url, { redirect: 'follow' });
     const html = await resp.text();
-    return parseCampaignResponse(html);
+    // Same reasoning as politicsLaunchCampaign above.
+    if (!resp.ok) {
+      return { success: false, message: `Cancel campaign failed: HTTP ${resp.status}` };
+    }
+    return parseCampaignResponse(html, 'Cancel');
   } catch (e: unknown) {
     ctx.log.warn(`[Politics] CancelCampaign failed: ${toErrorMessage(e)}`);
     return { success: false, message: toErrorMessage(e) };

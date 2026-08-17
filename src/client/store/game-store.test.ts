@@ -170,7 +170,9 @@ describe('game-store cluster browsing state', () => {
   it('setClusterFacilities should store facilities and clear loading', () => {
     useGameStore.getState().setClusterFacilitiesLoading(true);
     const facilities = [
-      { name: 'Farm A', iconUrl: '/icon.gif', cost: '$500K', buildTime: '100 m.', zoneType: 'Rural', description: '' },
+      // `area` — CacheClass.Size, a surface (NewLogon/FacilityList.asp:227).
+      // Was called `buildTime` until 7B-2 (audit B-12).
+      { name: 'Farm A', iconUrl: '/icon.gif', cost: '$500K', area: '100 m.', zoneType: 'Rural', description: '' },
     ];
     useGameStore.getState().setClusterFacilities(facilities);
 
@@ -185,7 +187,7 @@ describe('game-store cluster browsing state', () => {
       id: 'PGI', displayName: 'PGI', description: 'test', categories: [],
     });
     useGameStore.getState().setClusterFacilities([
-      { name: 'X', iconUrl: '', cost: '', buildTime: '', zoneType: '', description: '' },
+      { name: 'X', iconUrl: '', cost: '', area: '', zoneType: '', description: '' },
     ]);
 
     useGameStore.getState().reset();

@@ -273,8 +273,10 @@ export interface ClusterCategory {
 export interface ClusterFacilityPreview {
   name: string;                    // 'Company Headquarters'
   iconUrl: string;                 // Proxy URL for icon
-  cost: string;                    // '$8,000K'
-  buildTime: string;               // '3600 m.'
+  cost: string;                    // '$8,000K' — CacheClass.ImportPrice
+  // Ground surface, NOT a duration: the page renders CacheClass.Size
+  // (NewLogon/FacilityList.asp:227). Was named `buildTime` and displayed as one.
+  area: string;                    // '3600 m.'
   zoneType: string;                // Zone tooltip text
   description: string;             // Optional description
 }
@@ -893,11 +895,20 @@ export interface SupplierEntry {
 }
 
 export interface AutoConnectionFluid {
+  /** Localised product name — TycoonAutoConnections.asp:90 */
   fluidName: string;
+  /** Internal fluid id, the `<div id=…>` of the section header — :89 */
   fluidId: string;
   suppliers: SupplierEntry[];
   hireTradeCenter: boolean;
   onlyWarehouses: boolean;
+  /**
+   * Whether the product can be warehoused. The `…HireWH` checkbox is rendered
+   * only under `Obj.Properties("AutoConnection<Fluid>Storable")` (:103-104), so
+   * a missing checkbox means "not storable", not "storable but unchecked" —
+   * without this flag the client cannot tell the two apart.
+   */
+  storable: boolean;
 }
 
 export interface AutoConnectionsData {

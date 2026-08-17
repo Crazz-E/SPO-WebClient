@@ -226,7 +226,9 @@ export function CompanyCreationModal() {
                   </div>
                   <div className={styles.facilityMeta}>
                     {fac.cost && <span className={styles.facilityCost}>{fac.cost}</span>}
-                    {fac.buildTime && <span className={styles.facilityTime}>{fac.buildTime}</span>}
+                    {/* CacheClass.Size — a ground surface in metres, never a duration
+                        (NewLogon/FacilityList.asp:227). Renamed from `buildTime`. */}
+                    {fac.area && <span className={styles.facilityTime}>{fac.area}</span>}
                   </div>
                 </div>
               ))

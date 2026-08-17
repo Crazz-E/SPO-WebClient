@@ -22,6 +22,32 @@ import fetch from 'node-fetch';
 import { parseResultCode } from '../rdo-helpers';
 
 // ===========================================================================
+// SHARED — HTTP oracle
+// ===========================================================================
+
+/**
+ * Fetch one Voyager page and hand back its body, or `null` when the server did
+ * not serve the page at all.
+ *
+ * None of these four scrapers used to read `response.status`: an IIS 404 or 500
+ * body was parsed as if it were data and the caller got a silent empty list —
+ * exactly how `tycoonsratings.asp` stayed unnoticed for the whole life of the
+ * politics handler (audit A-12).
+ *
+ * It is the ONLY thing `status` can tell us here: none of the 298 Voyager pages
+ * sets `Response.Status`, so an empty folder, an unknown cluster and a company
+ * path that will not open all answer 200 with a different body.
+ */
+async function fetchVoyagerPage(ctx: SessionContext, url: string, what: string): Promise<string | null> {
+  const response = await fetch(url, { redirect: 'follow' });
+  if (!response.ok) {
+    ctx.log.error(`[ClusterBrowse] ${what} answered HTTP ${response.status} — ${url}`);
+    return null;
+  }
+  return response.text();
+}
+
+// ===========================================================================
 // CLUSTER BROWSING
 // ===========================================================================
 
@@ -35,29 +61,39 @@ export async function fetchClusterInfo(ctx: SessionContext, clusterName: string)
 
   const url = `http://${ctx.currentWorldInfo.ip}/Five/0/Visual/Voyager/NewLogon/info.asp?ClusterName=${encodeURIComponent(clusterName)}`;
   ctx.log.debug(`[ClusterBrowse] Fetching cluster info: ${clusterName}`);
+  const empty: ClusterInfo = { id: clusterName, displayName: clusterName, description: '', categories: [] };
 
   try {
-    const response = await fetch(url, { redirect: 'follow' });
-    const html = await response.text();
-    return parseClusterInfo(ctx, clusterName, html);
+    const html = await fetchVoyagerPage(ctx, url, `info.asp for ${clusterName}`);
+    return html === null ? empty : parseClusterInfo(ctx, clusterName, html);
   } catch (e: unknown) {
     ctx.log.error(`[ClusterBrowse] Failed to fetch cluster info for ${clusterName}:`, e);
-    return { id: clusterName, displayName: clusterName, description: '', categories: [] };
+    return empty;
   }
 }
 
 /**
  * Parse info.asp HTML to extract cluster description and building categories.
  *
- * HTML structure (from trace):
- *   <div class="sealExpln" ...>description text</div>
- *   <td id="finger0" ... folder="00000002.DissidentsDirectionFacilities.five" ...>
- *     <div class="hiLabel"><nobr>Headquarters</nobr></div>
+ * Real markup — `info.asp:95`, `:101-116`, `:20-23`:
+ *   <table id="main" cluster="<%= ClusterName%>" bgcolor="#345950" …>
+ *   <div class="sealExpln" style="padding: 20px">description text</div>
+ *   <td id="finger0" … folder="<%= FacItr.Current%>" onClick="onFingerClick()">
+ *     <div class="hiLabel"><nobr><%=CacheClass.Name(LangId)%></nobr></div>
  *   </td>
+ *
+ * The description is empty for any cluster outside the five the `select case` of
+ * `:103-114` knows (`Dissidents`, `PGI`, `Moab`, `Mariko`, `Magna`). That is the
+ * page, not the parser.
  */
 function parseClusterInfo(ctx: SessionContext, clusterName: string, html: string): ClusterInfo {
-  // Extract display name from cluster attribute on main table
-  const clusterAttrMatch = /cluster\s*=\s*["']?([^"'\s>]+)/i.exec(html);
+  // Display name from the `cluster` attribute of the main table — `info.asp:95`.
+  // ANCHORED ON `<table id="main"` on purpose: an unanchored /cluster\s*=/i hits
+  // `info.asp:53` first, in the <head> script, where `onFingerClick()` builds
+  // `"facilityList.asp?Cluster=<%= ClusterName%>&Folder=" + td.folder`. With no
+  // quote after `Cluster=`, the capture ran to the closing `"` of the JS string
+  // and the UI showed `PGI&Folder=` as the cluster name (audit B-10).
+  const clusterAttrMatch = /<table\b[^>]*\bid\s*=\s*["']?main["']?[^>]*\bcluster\s*=\s*["']([^"']*)["']/i.exec(html);
   const displayName = clusterAttrMatch?.[1] || clusterName;
 
   // Extract description from sealExpln div
@@ -107,9 +143,8 @@ export async function fetchClusterFacilities(ctx: SessionContext, cluster: strin
   ctx.log.debug(`[ClusterBrowse] Fetching facilities: ${cluster}/${folder}`);
 
   try {
-    const response = await fetch(url, { redirect: 'follow' });
-    const html = await response.text();
-    return parseClusterFacilities(ctx, html);
+    const html = await fetchVoyagerPage(ctx, url, `facilityList.asp for ${cluster}/${folder}`);
+    return html === null ? [] : parseClusterFacilities(ctx, html);
   } catch (e: unknown) {
     ctx.log.error(`[ClusterBrowse] Failed to fetch facilities for ${cluster}/${folder}:`, e);
     return [];
@@ -119,18 +154,28 @@ export async function fetchClusterFacilities(ctx: SessionContext, cluster: strin
 /**
  * Parse facilityList.asp HTML to extract facility previews.
  *
- * HTML structure (from trace):
- *   <span ...>
- *     <div class=comment ...>Company Headquarters</div>
+ * Real markup — `NewLogon/FacilityList.asp:181-236`, one `<span>` per facility:
+ *   <span style="width:200px; padding: 3px; …">
+ *     <div class=comment style="font-size: 11px; …"><%=CacheClass.Name(LangId)%></div>
  *     <table><tr height=80>
- *       <td><img src=/five/icons/MapDisHQ1.gif /></td>
- *       <td>
- *         <img src="images/zone-commerce.gif" title="Building must be located in...">
- *         <div class=comment ...>$8,000K<br><nobr>3600 m.</nobr></div>
+ *       <td><img src=<%= GetBlockIcon( CacheClass.TypicalVisualClass ) %> border="0"/></td>
+ *       <td valign="top">
+ *         <img src="images/zone-commerce.gif" … title="<%= strBlueZone %>.">
+ *         <div class=comment style="font-size: 9px; …">
+ *           <%=CacheClass.ImportPrice%><br>
+ *           <nobr><%=CacheClass.Size%></nobr>
+ *         </div>
  *       </td>
- *     </tr></table>
- *     <div class="description" ...>optional description</div>
+ *     </table>
+ *     <div class="description" …><%=CacheClass.Desc(LangId)%><br><%=CacheClass.Requires(LangId)%></div>
  *   </span>
+ *
+ * The `<nobr>` holds `CacheClass.Size` — a SURFACE, and it used to feed a field
+ * named `buildTime` (audit B-12). Proof, twice over: the identical expression at
+ * `Build/FacilityList.asp:248` is read into `BuildingInfo.area` by
+ * `parseBuildingFacilities` below, and the live capture of that twin page renders
+ * it `<nobr>3600 m.</nobr>` — metres, next to `$8,000K`
+ * (doc/Mock_Server_scenarios_captures.md:3173-3176). The field is `area` now.
  */
 function parseClusterFacilities(ctx: SessionContext, html: string): ClusterFacilityPreview[] {
   const facilities: ClusterFacilityPreview[] = [];
@@ -154,16 +199,17 @@ function parseClusterFacilities(ctx: SessionContext, html: string): ClusterFacil
     const zoneMatch = /<img[^>]*zone[^>]*title\s*=\s*["']([^"']+)["']/i.exec(block);
     const zoneType = zoneMatch?.[1] || '';
 
-    // Extract cost and build time from the second comment div (smaller font)
+    // Extract price and surface from the second comment div (smaller font) —
+    // `NewLogon/FacilityList.asp:225-228`, `ImportPrice` then `Size`.
     const metaMatch = /<div[^>]*class\s*=\s*["']?comment["']?[^>]*font-size:\s*9px[^>]*>([\s\S]*?)<\/div>/i.exec(block);
     let cost = '';
-    let buildTime = '';
+    let area = '';
     if (metaMatch) {
       const metaText = metaMatch[1];
       const costMatch = /(\$[\d,]+\.?\d*\s*[KM]?)/i.exec(metaText);
       cost = costMatch?.[1] || '';
-      const timeMatch = /<nobr>([\d,]+\s*m\.)<\/nobr>/i.exec(metaText);
-      buildTime = timeMatch?.[1] || '';
+      const areaMatch = /<nobr>([\d,]+\s*m\.)<\/nobr>/i.exec(metaText);
+      area = areaMatch?.[1] || '';
     }
 
     // Extract description
@@ -173,7 +219,7 @@ function parseClusterFacilities(ctx: SessionContext, html: string): ClusterFacil
       description = descMatch[1].replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').trim();
     }
 
-    facilities.push({ name, iconUrl, cost, buildTime, zoneType, description });
+    facilities.push({ name, iconUrl, cost, area, zoneType, description });
   }
 
   ctx.log.debug(`[ClusterBrowse] Parsed ${facilities.length} facility previews`);
@@ -203,10 +249,8 @@ export async function fetchBuildingCategories(ctx: SessionContext, companyName: 
   ctx.log.debug(`[BuildConstruction] Fetching categories from ${url}`);
 
   try {
-    const response = await fetch(url, { redirect: 'follow' });
-    const html = await response.text();
-
-    return parseBuildingCategories(ctx, html);
+    const html = await fetchVoyagerPage(ctx, url, `KindList.asp for ${companyName}`);
+    return html === null ? [] : parseBuildingCategories(ctx, html);
   } catch (e: unknown) {
     ctx.log.error('[BuildConstruction] Failed to fetch categories:', e);
     return [];
@@ -214,10 +258,40 @@ export async function fetchBuildingCategories(ctx: SessionContext, companyName: 
 }
 
 /**
- * Parse HTML response from KindList.asp to extract building categories
+ * Parse HTML response from KindList.asp to extract building categories.
+ *
+ * Real markup — `KindList.asp:173-187`, one `<td>` per kind:
+ *   <td align="center" valign="bottom" style="…" onClick="onKindClick()"
+ *       ref="FacilityList.asp?Company=…&WorldName=…&Cluster=<%=ClusterName%>
+ *            &Kind=<%=CacheClass.Id%>&KindName=<%=CacheClass.Name%>
+ *            &Folder=<%= FacItr.Current%>&TycoonLevel=<%=TycoonLevel%>"
+ *       normColor="black" hiColor="#3A5950">
+ *     <img title="<%=CacheClass.Name(LangId)%>" src="<%= GetKindIcon(…) %>" …>
+ *     <div class=link><%=CacheClass.Name(LangId)%></div>
+ *   </td>
+ *
+ * The two leading cells are NOT kinds and are correctly skipped by the
+ * `FacilityList.asp` requirement in the ref: `:104` is `ref="RoadOptions.asp"`
+ * and `:127` is `ref="MayorOptions.asp?…"`; their disabled twins (`:113`, `:146`)
+ * carry no ref at all.
+ *
+ * KNOWN, ACCEPTED DIVERGENCE — the label. `:178` puts `KindName=<%=CacheClass.Name%>`
+ * (NOT localised) in the ref while `:185` displays `<%=CacheClass.Name(LangId)%>`
+ * (localised). We read the displayed one and hand it back as the `KindName`
+ * parameter. `Build/FacilityList.asp:364` merely echoes that parameter as a
+ * caption, so nothing downstream keys on it, and `Five/0/Includes/language.inc`
+ * pins `LangId = 0`, where the two forms coincide. Only a `Five/1..5` tree —
+ * which this gateway never requests — would tell them apart (audit field 75).
  */
 function parseBuildingCategories(ctx: SessionContext, html: string): BuildingCategory[] {
   const categories: BuildingCategory[] = [];
+
+  // `KindList.asp:211-217` — when the company path will not open, the page
+  // renders `Error="Couldn't open the path…"` (`:18`) as bare text instead of a
+  // table. Without this the caller sees the same empty list as an empty cluster.
+  if (/Couldn't open the path/i.test(html)) {
+    ctx.log.error('[BuildConstruction] KindList.asp could not open the company path — no categories will be listed');
+  }
 
   // Match <td> elements with ref attribute containing FacilityList.asp
   // Handle both quoted and unquoted ref attributes
@@ -234,34 +308,27 @@ function parseBuildingCategories(ctx: SessionContext, html: string): BuildingCat
     // Parse query parameters from ref
     const urlParams = new URLSearchParams(ref.split('?')[1] || '');
 
-    // Extract category name from content
-    // Try multiple patterns:
-    // 1. <div class=link> or <div class="link">
-    // 2. title attribute on img tag
-    let kindName = '';
-
-    // Pattern 1: <div> with class=link (quoted or unquoted)
+    // Category name — `KindList.asp:184-186`, `<div class=link>` holding
+    // `CacheClass.Name(LangId)`. Emitted unconditionally in the same branch as
+    // the `ref`, so every cell reaching this loop has one.
+    //
+    // A second pattern used to fall back to the `title` attribute of the icon.
+    // It is removed: `:181` interpolates `CacheClass.Name(LangId)` into that
+    // title — the SAME expression as `:185`. The fallback could not add a name
+    // the div did not already carry, and when the class name is empty both are
+    // empty. Dead by construction, not merely untaken.
     const divMatch = /<div[^>]*class\s*=\s*["']?link["']?[^>]*>\s*([^<]+)\s*<\/div>/i.exec(content);
-    if (divMatch) {
-      kindName = divMatch[1].trim();
-    }
-
-    // Pattern 2: title attribute (fallback)
-    if (!kindName) {
-      const titleMatch = /title\s*=\s*["']([^"']+)["']/i.exec(content);
-      if (titleMatch) {
-        kindName = titleMatch[1].trim();
-      }
-    }
+    const kindName = divMatch ? divMatch[1].trim() : '';
 
     // Extract icon path (handle both quoted and unquoted src)
     const iconMatch = /src\s*=\s*["']?([^"'\s>]+)["']?/i.exec(content);
     const iconPath = iconMatch?.[1] || '';
 
-    if (kindName && urlParams.get('Kind')) {
+    const kind = urlParams.get('Kind');
+    if (kindName && kind) {
       const category = {
         kindName: kindName,
-        kind: urlParams.get('Kind') || '',
+        kind,
         cluster: urlParams.get('Cluster') || '',
         folder: urlParams.get('Folder') || '',
         tycoonLevel: parseInt(urlParams.get('TycoonLevel') || '0', 10),
@@ -271,7 +338,7 @@ function parseBuildingCategories(ctx: SessionContext, html: string): BuildingCat
       ctx.log.debug(`[BuildConstruction] Parsed category: ${category.kindName} (${category.kind})`);
       categories.push(category);
     } else {
-      ctx.log.warn(`[BuildConstruction] Skipped category - kindName: "${kindName}", Kind: "${urlParams.get('Kind')}"`);
+      ctx.log.warn(`[BuildConstruction] Skipped category - kindName: "${kindName}", Kind: "${kind}"`);
     }
   }
 
@@ -313,10 +380,8 @@ export async function fetchBuildingFacilities(
   ctx.log.debug(`[BuildConstruction] Fetching facilities from ${url}`);
 
   try {
-    const response = await fetch(url, { redirect: 'follow' });
-    const html = await response.text();
-
-    return parseBuildingFacilities(ctx, html);
+    const html = await fetchVoyagerPage(ctx, url, `FacilityList.asp for ${kind}`);
+    return html === null ? [] : parseBuildingFacilities(ctx, html);
   } catch (e: unknown) {
     ctx.log.error('[BuildConstruction] Failed to fetch facilities:', e);
     return [];
@@ -324,7 +389,31 @@ export async function fetchBuildingFacilities(
 }
 
 /**
- * Parse HTML response from FacilityList.asp to extract building information
+ * The slice of the document that belongs to one `Cell_<i>`.
+ *
+ * `Build/FacilityList.asp:224-345` wraps each facility in a `<tr id="Cell_i">`
+ * that contains two nested `<tr>`s, so a non-greedy `</tr>` scan stops at
+ * `:283` — before the description (`:288`, `:292`) and before the `info`
+ * attribute (`:307`). Anything living in the second inner row has to be read
+ * from this window instead.
+ *
+ * `cellIndex` always comes from a `Cell_(\d+)` match on this very document, so
+ * the anchor is always found; `span` bounds the window when the cell is the last
+ * one and no `Cell_` follows it.
+ */
+function cellWindow(html: string, cellIndex: string, span: number): string {
+  const anchor = html.indexOf(`Cell_${cellIndex}`);
+  const nextCell = html.indexOf('Cell_', anchor + 5);
+  return html.substring(anchor, nextCell >= 0 ? nextCell : anchor + span);
+}
+
+/**
+ * Parse HTML response from FacilityList.asp to extract building information.
+ *
+ * Reference for every offset below: the live capture of this page
+ * (doc/Mock_Server_scenarios_captures.md:3006-3252), which outranks the ASP
+ * source, plus `Build/FacilityList.asp:217-345` for the branches the capture
+ * does not exercise — it holds a single, AVAILABLE facility.
  */
 function parseBuildingFacilities(ctx: SessionContext, html: string): BuildingInfo[] {
   const facilities: BuildingInfo[] = [];
@@ -387,25 +476,30 @@ function parseBuildingFacilities(ctx: SessionContext, html: string): BuildingInf
     let facilityClass = '';
     let visualClassId = '';
 
-    // PRIMARY: Extract FacilityClass from info attribute near this Cell_N
-    const cellAnchor = html.indexOf(`Cell_${cellIndex}`);
-    if (cellAnchor >= 0) {
-      const nextCellPos = html.indexOf('Cell_', cellAnchor + 5);
-      const searchEnd = nextCellPos >= 0 ? nextCellPos : cellAnchor + 3000;
-      const searchWindow = html.substring(cellAnchor, searchEnd);
-      const fcMatch = /FacilityClass=([A-Za-z0-9_]+)/i.exec(searchWindow);
-      if (fcMatch) {
-        facilityClass = fcMatch[1];
-        ctx.log.debug(`[BuildConstruction] Extracted facilityClass "${facilityClass}" from info attribute`);
-      }
+    // PRIMARY: Extract FacilityClass from the info attribute of this Cell_N —
+    // `FacilityList.asp:307`, captured at Mock_Server_scenarios_captures.md:3201.
+    const fcMatch = /FacilityClass=([A-Za-z0-9_]+)/i.exec(cellWindow(html, cellIndex, 3000));
+    if (fcMatch) {
+      facilityClass = fcMatch[1];
+      ctx.log.debug(`[BuildConstruction] Extracted facilityClass "${facilityClass}" from info attribute`);
     }
 
-    // FALLBACK: Extract from icon filename (for HTML without info attributes)
-    if (!facilityClass && iconPath) {
+    // FALLBACK — icon filename, and ONLY for a facility the server marked
+    // unavailable. `FacilityList.asp:300-314` emits the whole "Build now" cell,
+    // hence the only `info=` and the only `CacheClass.Id`, under `if Available`:
+    // a locked facility structurally has no kernel class on the page (audit B-15).
+    // The icon name is a VISUAL asset name and is provably not the class — the
+    // capture pairs icon `MapPGIHQ1.gif` with class `PGIGeneralHeadquarterSTA`
+    // (:3163 vs :3201). It is kept as an identity for the greyed-out card, which
+    // the client cannot click (`BuildMenu.tsx:68`, `:75`), never as something to
+    // hand to `NewFacility`. On an AVAILABLE facility a missing `info=` means the
+    // page is not the page: guessing there would put a fabricated class on a
+    // buildable card, so the facility is dropped by the guard below instead.
+    if (!facilityClass && !available && iconPath) {
       const iconFilenameMatch = /Map([A-Z][a-zA-Z0-9]+?)(?:\d+x\d+(?:x\d+)?)?\.gif/i.exec(iconPath);
       if (iconFilenameMatch) {
         facilityClass = iconFilenameMatch[1];
-        ctx.log.warn(`[BuildConstruction] FacilityClass from icon fallback: "${facilityClass}" (may differ from kernel class)`);
+        ctx.log.warn(`[BuildConstruction] FacilityClass from icon fallback: "${facilityClass}" — visual asset name, not the kernel class; locked facility, not buildable`);
       }
     }
 
@@ -419,17 +513,11 @@ function parseBuildingFacilities(ctx: SessionContext, html: string): BuildingInf
       if (visualIdMatch) {
         visualClassId = visualIdMatch[1];
       } else if (facilityClass) {
-        // Last resort: search the full HTML for VisualClassId near this Cell_N
-        // IMPORTANT: Scope to cell boundary to avoid bleeding into neighboring cells
-        const cellAnchor2 = html.indexOf(`Cell_${cellIndex}`);
-        if (cellAnchor2 >= 0) {
-          const nextCell = html.indexOf('Cell_', cellAnchor2 + 5);
-          const end = nextCell >= 0 ? nextCell : cellAnchor2 + 2000;
-          const searchWindow = html.substring(cellAnchor2, end);
-          const windowMatch = /VisualClassId[=:](\d+)/i.exec(searchWindow);
-          if (windowMatch) {
-            visualClassId = windowMatch[1];
-          }
+        // Last resort: search the full HTML for VisualClassId near this Cell_N.
+        // IMPORTANT: scoped to the cell boundary to avoid bleeding into neighbours.
+        const windowMatch = /VisualClassId[=:](\d+)/i.exec(cellWindow(html, cellIndex, 2000));
+        if (windowMatch) {
+          visualClassId = windowMatch[1];
         }
       }
     }
@@ -451,9 +539,26 @@ function parseBuildingFacilities(ctx: SessionContext, html: string): BuildingInf
     const areaMatch = /([\d,]+)\s*m\./i.exec(cellContent);
     const area = areaMatch ? parseInt(areaMatch[1].replace(/,/g, ''), 10) : 0;
 
-    // Extract description - handle both quoted and unquoted class
-    const descMatch = /<div[^>]*class\s*=\s*["']?description["']?[^>]*>([^<]+)</i.exec(cellContent);
-    const description = descMatch?.[1]?.trim() || '';
+    // Extract description — `FacilityList.asp:292`, `<div id=infoBlock_<i>
+    // class="description" … display: none>` holding `CacheClass.Desc(LangId)`,
+    // captured at Mock_Server_scenarios_captures.md:3186.
+    //
+    // Two reasons this is anchored on `infoBlock_<i>` and read from the cell
+    // WINDOW rather than from `cellContent`:
+    //  - `cellContent` stops at the first inner `</tr>` (`:283`), and both
+    //    description divs sit after it, so this field was ALWAYS empty in
+    //    production — not "the prerequisites instead of the description" as
+    //    audit B-19 described it;
+    //  - a facility the server marked unavailable gets a SECOND, earlier
+    //    `class="description"` div (`:288`) carrying `CacheClass.Requires`. An
+    //    unanchored match takes that one and shows the prerequisites as the
+    //    description. `infoBlock_<i>` is unique and is emitted in both branches.
+    const descRegex = new RegExp(
+      `<div[^>]*\\bid\\s*=\\s*["']?infoBlock_${cellIndex}["']?[^>]*>([\\s\\S]*?)</div>`,
+      'i'
+    );
+    const descMatch = descRegex.exec(cellWindow(html, cellIndex, 3000));
+    const description = descMatch ? descMatch[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '';
 
     // Extract zone image src and title for residential classification
     // Try src-before-title first (standard order), then title-before-src (reversed)

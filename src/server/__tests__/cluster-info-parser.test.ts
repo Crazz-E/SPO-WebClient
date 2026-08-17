@@ -63,7 +63,9 @@ const iconRegex = /<img\s+src\s*=\s*["']?([^"'\s>]*icons[^"'\s>]*)["']?/i;
 const zoneRegex = /<img[^>]*zone[^>]*title\s*=\s*["']([^"']+)["']/i;
 const metaRegex = /<div[^>]*class\s*=\s*["']?comment["']?[^>]*font-size:\s*9px[^>]*>([\s\S]*?)<\/div>/i;
 const costRegex = /(\$[\d,]+\.?\d*\s*[KM]?)/i;
-const timeRegex = /<nobr>([\d,]+\s*m\.)<\/nobr>/i;
+// `NewLogon/FacilityList.asp:227` renders `CacheClass.Size` here — a surface in
+// metres, not a duration. Named `time` until 7B-2 (audit B-12).
+const sizeRegex = /<nobr>([\d,]+\s*m\.)<\/nobr>/i;
 const descFacRegex = /<div[^>]*class\s*=\s*["']?description["']?[^>]*>([\s\S]*?)<\/div>/i;
 
 function parseClusterFacilitiesFromHtml(html: string): ClusterFacilityPreview[] {
@@ -84,12 +86,12 @@ function parseClusterFacilitiesFromHtml(html: string): ClusterFacilityPreview[] 
 
     const mt = metaRegex.exec(block);
     let cost = '';
-    let buildTime = '';
+    let area = '';
     if (mt) {
       const cm = costRegex.exec(mt[1]);
       cost = cm?.[1] || '';
-      const tm = timeRegex.exec(mt[1]);
-      buildTime = tm?.[1] || '';
+      const tm = sizeRegex.exec(mt[1]);
+      area = tm?.[1] || '';
     }
 
     const dm = descFacRegex.exec(block);
@@ -98,7 +100,7 @@ function parseClusterFacilitiesFromHtml(html: string): ClusterFacilityPreview[] 
       description = dm[1].replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').trim();
     }
 
-    facilities.push({ name, iconUrl, cost, buildTime, zoneType, description });
+    facilities.push({ name, iconUrl, cost, area, zoneType, description });
   }
   spanRegex.lastIndex = 0;
 
@@ -292,10 +294,10 @@ describe('parseClusterFacilities', () => {
     expect(result[1].cost).toBe('$12,500K');
   });
 
-  it('extracts build time from nobr element', () => {
+  it('extracts the surface from the nobr element', () => {
     const result = parseClusterFacilitiesFromHtml(FACILITY_LIST_HTML);
-    expect(result[0].buildTime).toBe('3600 m.');
-    expect(result[1].buildTime).toBe('4800 m.');
+    expect(result[0].area).toBe('3600 m.');
+    expect(result[1].area).toBe('4800 m.');
   });
 
   it('extracts description when present', () => {
@@ -330,6 +332,6 @@ describe('parseClusterFacilities', () => {
     expect(result[0].name).toBe('No Icon Building');
     expect(result[0].iconUrl).toBe('');
     expect(result[0].cost).toBe('$500K');
-    expect(result[0].buildTime).toBe('100 m.');
+    expect(result[0].area).toBe('100 m.');
   });
 });

@@ -23,6 +23,35 @@ import { config } from '../../shared/config';
 import fetch from 'node-fetch';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PRIVATE — ASP money format
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Every money value on these pages goes through the same server helper:
+ *   `FormatValue = FormatCurrency( value, 0, 0, 0, -1 )`
+ * — TycoonCurriculum.asp:17-23, TycoonBankAccount.asp:75-81,
+ *   TycoonProfitAndLoses.asp:16-22 (identical bodies), and `FormatValue(0)`
+ *   short-circuits to the literal `"$0"`.
+ *
+ * The 4th argument is `0` (vbFalse) = **do not** use parentheses for negatives,
+ * so a loss renders `-$1,234` — the sign lands BEFORE the `$`. The locale's
+ * NegativeCurrencyFormat can still produce `($1,234)`; both are accepted below.
+ *
+ * Anchoring on `$` alone (what this file did) let `[\s\S]*?` swallow the sign:
+ * every negative amount was reported positive (audit B-7, B-20).
+ */
+const ASP_MONEY_SOURCE = String.raw`(\()?\s*(-)?\s*\$\s*(\d[\d,]*(?:\.\d+)?)`;
+const ASP_MONEY = new RegExp(ASP_MONEY_SOURCE);
+
+/** Normalise one `FormatValue()` rendering to a signed, group-free string. */
+function parseAspMoney(text: string): string | null {
+  const m = ASP_MONEY.exec(text);
+  if (!m) return null;
+  const sign = m[1] || m[2] ? '-' : '';
+  return sign + m[3].replace(/,/g, '');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // PUBLIC — fetchTycoonProfile
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -69,7 +98,16 @@ export async function fetchTycoonProfile(ctx: SessionContext): Promise<TycoonPro
       if (photoMatch) {
         const rawUrl = photoMatch[1];
         const baseUrl = `http://${worldIp}/five/0/visual/voyager/new%20directory`;
-        const fullUrl = rawUrl.startsWith('http') ? rawUrl : `${baseUrl}/${rawUrl}`;
+        // RenderTycoon.asp:58 emits
+        //   <img id=picture src="/fivedata/userinfo/<World>/<Tycoon>/largephoto.jpg" …>
+        // — root-relative, so it resolves against the HOST. Concatenating it to
+        // the page directory produced `…/new%20directory//fivedata/…`, i.e. a
+        // guaranteed 404: the avatar was never displayed (audit B-11).
+        const fullUrl = rawUrl.startsWith('http')
+          ? rawUrl
+          : rawUrl.startsWith('/')
+            ? `http://${worldIp}${rawUrl}`
+            : `${baseUrl}/${rawUrl}`;
         profile.photoUrl = `/proxy-image?url=${encodeURIComponent(fullUrl)}`;
       }
     }
@@ -88,42 +126,53 @@ export async function fetchTycoonProfile(ctx: SessionContext): Promise<TycoonPro
 /**
  * Parse TycoonCurriculum.asp HTML to extract level/prestige data into a profile.
  * The ASP page renders level images (e.g., levelParadigm.gif) and prestige values.
+ *
+ * Markup this reads (TycoonCurriculum.asp:128-161), invariant over the page:
+ *
+ *     <div class=label style="margin-left: 20px; margin-top: 20px">
+ *         Total Prestige:
+ *         <span class=value>
+ *             1234  points
+ *         </span>
+ *     </div>
+ *
+ * The label lives in the SAME `<div class=label>` as the `<span class=value>`,
+ * and nothing closes between them. The pattern used to require a `</span>` or
+ * `</div>` right after the label, so it matched no real page at all and
+ * prestige / nobility stayed 0 (audit B-8). Two more defects came with it:
+ * the label is `strTotalPrestige = "Total Prestige"` (eNewTycon.lng:124), not
+ * `prestige`; and the page carries NO "Facility prestige", "Research prestige",
+ * "Buildings" or "Area" label — neither in the ASP nor in eNewTycon.lng — so
+ * those four switch arms were unreachable and are gone. `facCount`/`facMax`
+ * keep their RDO-push values; `facPrestige`/`researchPrestige`/`area` have no
+ * transport-C source at all.
  */
 function parseCurriculumHtml(html: string, profile: TycoonProfileFull): void {
-  // Level image: src="images/level<Name>.gif" — extract level name
+  // Level image: src="images/level<Name>.gif" — extract level name (:229, :235)
   const levelMatch = /images\/level(\w+)\.gif/i.exec(html);
   if (levelMatch) {
     profile.levelName = levelMatch[1]; // e.g., "Paradigm"
   }
 
-  // Parse key-value pairs from HTML (format: <span class=label>Key:</span> ... <span class=value>Value</span>)
-  const kvPattern = /class=label[^>]*>\s*([^<:]+):\s*<\/(?:span|div)>\s*(?:<[^>]*>\s*)*?class=value[^>]*>\s*([^<]+)/gi;
+  // Label / value pairs — the `<span class=value>` opens INSIDE the label div.
+  const kvPattern = /class=label[^>]*>\s*([^<:]+):\s*(?:<[^>]*>\s*)*?<[^>]*\bclass=value[^>]*>\s*([^<]+)/gi;
   let kvMatch;
   while ((kvMatch = kvPattern.exec(html)) !== null) {
     const key = kvMatch[1].trim().toLowerCase();
     const val = kvMatch[2].trim().replace(/[$,\s]/g, '');
     switch (key) {
-      case 'prestige': profile.prestige = parseFloat(val) || 0; break;
-      case 'facility prestige': profile.facPrestige = parseFloat(val) || 0; break;
-      case 'research prestige': profile.researchPrestige = parseFloat(val) || 0; break;
-      case 'buildings': {
-        // Format: "13 / 100"
-        const parts = val.split('/');
-        if (parts.length === 2) {
-          profile.facCount = parseInt(parts[0], 10) || profile.facCount;
-          profile.facMax = parseInt(parts[1], 10) || profile.facMax;
-        }
-        break;
-      }
-      case 'area': profile.area = parseFloat(val) || 0; break;
+      // :143 `<%= strTotalPrestige %>:` → "Total Prestige" (eNewTycon.lng:124)
+      case 'total prestige': profile.prestige = parseFloat(val) || 0; break;
+      // :153 `<%= strNobPoints %>:` → "Nobility" (eNewTycon.lng:125)
       case 'nobility': profile.nobPoints = parseFloat(val) || 0; break;
     }
   }
 
-  // Level names → tier mapping
+  // Level names → tier mapping. `legendx` is what :235 renders past level 5
+  // (`images/levelLegendX.gif`); without it a Legend+ tycoon fell back to tier 0.
   const levelTiers: Record<string, number> = {
     apprentice: 0, entrepreneur: 1, tycoon: 2, master: 3,
-    paradigm: 4, legend: 5, beyondlegend: 6,
+    paradigm: 4, legend: 5, beyondlegend: 6, legendx: 6,
   };
   if (profile.levelName) {
     const tier = levelTiers[profile.levelName.toLowerCase()];
@@ -177,18 +226,31 @@ function parseCurriculumDetails(
   levelNames: string[],
   baseUrl: string
 ): CurriculumData {
-  // Fortune & Average Profit — from label/value spans
+  // Fortune & Average Profit — the value span opens inside the label div
+  // (:128-133, :135-140). Both go through FormatValue, so both can be negative:
+  // anchoring the old patterns on `$` dropped the leading `-` (audit B-20).
   let fortune = profile.budget;
   let averageProfit = '';
-  const fortuneMatch = /Personal\s+Fortune:\s*(?:<[^>]*>\s*)*\$([^<]+)/i.exec(html);
-  if (fortuneMatch) fortune = fortuneMatch[1].trim().replace(/,/g, '');
-  const profitMatch = /Average\s+Profit[^:]*:\s*(?:<[^>]*>\s*)*\$([^<]+)/i.exec(html);
-  if (profitMatch) averageProfit = '$' + profitMatch[1].trim();
+  const fortuneMatch = /Personal\s+Fortune\s*:\s*(?:<[^>]*>\s*)*([^<]+)/i.exec(html);
+  if (fortuneMatch) {
+    const money = parseAspMoney(fortuneMatch[1]);
+    if (money !== null) fortune = money;
+  }
+  const profitMatch = /Average\s+Profit[^:]*:\s*(?:<[^>]*>\s*)*([^<]+)/i.exec(html);
+  if (profitMatch && ASP_MONEY.test(profitMatch[1])) {
+    // :138 renders `<%= FormatValue(...) %>/h` — the `/h` is part of what the
+    // reference client shows, so it is kept verbatim; only the sign was lost.
+    averageProfit = profitMatch[1].trim().replace(/\s+/g, ' ');
+  }
 
-  // Current level description — the <div class=label> text after the level image section
+  // Current level description — `<div class=label>` holding Obj.LevelDesc
+  // (:242-244), the first one inside the current-level `<td>` (:218).
   let currentLevelDescription = '';
-  // Find the first level description block (after first level image, in the first td)
-  const levelDescMatch = /<td[^>]*valign="top"[^>]*align="left"[^>]*width=190>[\s\S]*?<div\s+class=label>\s*([\s\S]*?)\s*<\/div>\s*(?:<div|$)/i.exec(html);
+  // The pattern used to demand `<div` or end-of-input right after the closing
+  // `</div>`. When neither LevelCond (:245), the upgrade box (:250) nor
+  // LevelReqStatus (:262) is rendered the next token is `</td>`, so the engine
+  // backtracked to a later label div and returned the WRONG description.
+  const levelDescMatch = /<td[^>]*valign="top"[^>]*align="left"[^>]*width=190>[\s\S]*?<div\s+class=label>\s*([\s\S]*?)\s*<\/div>/i.exec(html);
   if (levelDescMatch) {
     // Clean HTML: remove tags, normalize whitespace
     currentLevelDescription = levelDescMatch[1]
@@ -228,10 +290,16 @@ function parseCurriculumDetails(
     }
   }
 
-  // Can upgrade — presence of onAdvanceClick checkbox
-  const canUpgrade = /onAdvanceClick/i.test(html);
-  // Is upgrade requested — checkbox is checked
-  const isUpgradeRequested = canUpgrade && /type="checkbox"[^>]*checked/i.test(html);
+  // Can upgrade — the checkbox itself, not the handler name.
+  // `function onAdvanceClick()` is declared unconditionally in the <head>
+  // (:91), so testing for the identifier was ALWAYS true and the "level up"
+  // control was offered to players with no next level, without FullAccess, or
+  // on a DEMO account (audit B-9). The checkbox at :257 is rendered exactly
+  // under `FullAccess and (NextLevelName <> "") and Demo <> 1` (:250-260).
+  const advanceBox = /<input[^>]*\btype="checkbox"[^>]*\bonClick="onAdvanceClick\(\)"[^>]*>/i.exec(html);
+  const canUpgrade = advanceBox !== null;
+  // :257 emits `checked` inside that same input when Obj.AdvanceToNextLevel.
+  const isUpgradeRequested = advanceBox !== null && /\bchecked\b/i.test(advanceBox[0]);
 
   // Rankings — 3-column grid: <td class=label>Category</td><td ... class=value>N</td>
   const rankings: Array<{ category: string; rank: number | null }> = [];
@@ -357,7 +425,14 @@ function parseBankAccountHtml(ctx: SessionContext, html: string, baseUrl: string
     maxTransfer = maxTransferMatch[1].replace(/,/g, '');
   }
 
-  // Parse loan rows — actual HTML format: <tr id="r0" lid="0">
+  // Parse loan rows — <tr id="r0" lid="0" onClick="onRowClick()"> (:550).
+  // Cells are read by their own id (`r<i>Bank`, `…Date`, `…Amount`, `…Int`,
+  // `…Term`, `…Slice`, :551-566) rather than by position: the old positional
+  // walk dropped empty cells (`if (val) cellValues.push(val)`), so an empty
+  // Obj.LoanBankName(i) shifted all six fields one column left and the loan was
+  // shown with the date under "bank", the rate under "amount"… (audit B-16).
+  // Those ids are the reference client's own handles — onRowClick() addresses
+  // `document.all[rid + "Bank"]` … `+ "Slice"` (:260-265).
   const loans: LoanInfo[] = [];
   const loanRowRegex = /<tr[^>]*\bid\s*=\s*"?r(\d+)"?[^>]*\blid\s*=\s*"?(\d+)"?/gi;
   let loanMatch;
@@ -368,39 +443,57 @@ function parseBankAccountHtml(ctx: SessionContext, html: string, baseUrl: string
     if (nextRowIdx === -1) continue;
     const rowHtml = html.substring(rowStart, nextRowIdx);
 
-    // Extract TD values in order: Bank, Date, Amount, Interest, Term, Next payment
-    const cellValues: string[] = [];
-    const cellRegex = /<td[^>]*>\s*(?:<[^>]*>\s*)*([^<]*)/gi;
+    const cells = new Map<string, string>();
+    // Each cell is read between its own `<td …>` and `</td>` — a tag-skipping
+    // group would run past an empty cell into the next one, which is the very
+    // shift this replaces. :551 has no space before `class`, hence `[^>]*`:
+    //   `<td id="r0Bank"class=value style="…">`
+    const cellRegex = /<td[^>]*\bid="r\d+(Bank|Date|Amount|Int|Term|Slice)"[^>]*>([\s\S]*?)<\/td>/gi;
     let cellMatch;
     while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
-      const val = cellMatch[1].trim();
-      if (val) cellValues.push(val);
+      cells.set(cellMatch[1], cellMatch[2].replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
     }
 
-    if (cellValues.length >= 6) {
+    const bank = cells.get('Bank');
+    const date = cells.get('Date');
+    const amount = cells.get('Amount');
+    const interest = cells.get('Int');
+    const term = cells.get('Term');
+    const slice = cells.get('Slice');
+    if (bank !== undefined && date !== undefined && amount !== undefined
+      && interest !== undefined && term !== undefined && slice !== undefined) {
       loans.push({
-        bank: cellValues[0],
-        date: cellValues[1],
-        amount: cellValues[2].replace(/[$,\s]/g, ''),
-        interest: parseFloat(cellValues[3].replace('%', '')) || 0,
-        term: parseInt(cellValues[4], 10) || 0,
-        slice: cellValues[5].replace(/[$,\s]/g, ''),
+        bank,
+        date,
+        amount: parseAspMoney(amount) ?? '0',           // :558 FormatValue(LoanAmount(i))
+        interest: parseFloat(interest.replace('%', '')) || 0, // :561 `<%= LoanInterest(i) %>%`
+        term: parseInt(term, 10) || 0,                  // :564 `<%= LoanTerm(i) %> years`
+        slice: parseAspMoney(slice) ?? '0',             // :568 FormatValue(Payment)
         loanIndex,
       });
     }
   }
 
-  // Total next payment — sum of all loan slices
-  const totalNextPayment = String(
-    loans.reduce((sum, l) => sum + (parseFloat(l.slice) || 0), 0)
-  );
+  // Total next payment — the page publishes it (:573-581): five empty cells,
+  // then FormatValue(TotalPayment). Reading the server total instead of
+  // re-adding the slices removes any rounding divergence from the reference
+  // display (audit B-17). The sum stays as the fallback for a page that has no
+  // total row at all — LoanCount = 0 skips the whole table (:525, :611-619).
+  const publishedTotal = /(?:<td>\s*<\/td>\s*){5}<td[^>]*\bclass=value[^>]*>\s*([^<]*)/i.exec(html);
+  const totalNextPayment = (publishedTotal && parseAspMoney(publishedTotal[1]))
+    || String(loans.reduce((sum, l) => sum + (parseFloat(l.slice) || 0), 0));
 
-  // Compute interest/term defaults using server-provided totalLoans
+  // Interest / term defaults. These reproduce computeLoanInfo (:216-238), which
+  // onLoad() runs with `round(Obj.IFELLoanEstimated)` whenever FullAccess is
+  // true (:246-251) — so the numbers the reference client SHOWS are the
+  // computed ones, overwriting the server spans of :354-355. The order matters:
+  // the ASP clamps the raw term at 5 and rounds AFTERWARDS (:227-232), we
+  // rounded first and clamped after — one year apart on every `.5` fraction.
   const existingLoanTotal = parseFloat(totalLoans) || 0;
   const defaultMaxLoan = parseFloat(maxLoan) || 0;
   const defaultInterest = Math.round((existingLoanTotal + defaultMaxLoan) / 100_000_000);
-  let defaultTerm = 200 - Math.round((existingLoanTotal + defaultMaxLoan) / 10_000_000);
-  if (defaultTerm < 5) defaultTerm = 5;
+  const rawTerm = 200 - (existingLoanTotal + defaultMaxLoan) / 10_000_000;
+  const defaultTerm = Math.round(rawTerm < 5 ? 5 : rawTerm);
 
   // Extract and cache action URLs from ASP HTML (forms, JS handlers)
   if (baseUrl) {
@@ -430,6 +523,26 @@ function parseBankAccountHtml(ctx: SessionContext, html: string, baseUrl: string
 /**
  * Execute a bank action (borrow, send, payoff) via TycoonBankAccount.asp.
  * The legacy Voyager client performs these as GET requests with Action params.
+ *
+ * **The verdict is a state change, not the absence of a refusal.** The 298 ASP
+ * pages carry no `Response.Status` at all, so a refused transaction, a failed
+ * `BindTo` and a wrong password all answer HTTP 200. Worse, on this page:
+ *
+ *   - PAYOFF computes `payoff_error` (:111) and **never renders it** — there is
+ *     no `select case payoff_error` anywhere, unlike `loan_error` (:330-343) and
+ *     `send_error` (:403-423). No error marker exists on that path at all
+ *     (audit B-1 / A-11).
+ *   - a wrong password leaves `FullAccess` false (:95), so the `select case
+ *     Action` (:97-114) skips the transaction AND the whole `errorText` block
+ *     (:320) disappears: a completely normal page, no marker.
+ *
+ * So the response — which IS the page re-rendered from a cache re-read right
+ * after the transaction (:102, :107, :112) — is parsed again and compared with
+ * the state read just before. That is also what the reference client shows the
+ * player: the refreshed list, no confirmation message.
+ *
+ * Cost: one extra GET of the page before the mutation. If that read fails we
+ * refuse the action rather than move money we cannot verify.
  */
 export async function executeBankAction(
   ctx: SessionContext,
@@ -469,6 +582,9 @@ export async function executeBankAction(
     }
     if (action === 'payoff') extraParams.set('LID', String(loanIndex));
 
+    // The state BEFORE the mutation — the only oracle this page allows.
+    const before = await fetchBankAccount(ctx);
+
     // 1. Try cached form action URL from last fetchBankAccount() ASP parse
     const cached = ctx.getAspActionCache('NewTycoon/TycoonBankAccount.asp');
     const formAction = cached?.get('TycoonBankAccount.asp');
@@ -499,16 +615,55 @@ export async function executeBankAction(
     const response = await fetch(url, { redirect: 'follow' });
     const html = await response.text();
 
-    // Check for error messages in response HTML
+    // The HTML markers below are the ONLY evidence this function used to consult.
+    // An error page carrying neither `class=errorText` nor `var budget` therefore
+    // reported `success: true` — on borrow, send AND payoff — while the balance
+    // shown to the player stayed stale, because setAccountMoney only fires on a
+    // budget match. A money mutation must never be reported from the body alone.
+    // Same guard as executeCurriculumAction (auto-connection-handler.ts:466).
+    if (!response.ok) {
+      return { success: false, message: `${action} failed: HTTP ${response.status}` };
+    }
+
+    // Explicit refusals, when the page does render one (LOAN :330-343, SEND :403-423)
     const errorMatch = /class=errorText[^>]*>\s*([^<]+)/i.exec(html);
     if (errorMatch) {
       return { success: false, message: errorMatch[1].trim() };
     }
 
-    // If the page reloaded successfully with updated budget, it worked
+    // The answer is the page re-rendered from the post-transaction cache read.
+    // `var budget` (:163) sits in the <head> script, outside every `if`: it is
+    // there whatever ObjValid and FullAccess say. An answer without it is not
+    // this page, so nothing can be concluded from it — and comparing the
+    // parser's own defaults against the previous state would read as a change.
     const budgetMatch = /var\s+budget\s*=\s*(-?\d+)\s*;/i.exec(html);
-    if (budgetMatch) {
-      ctx.setAccountMoney(budgetMatch[1]);
+    if (!budgetMatch) {
+      return { success: false, message: `${action} could not be confirmed: the answer is not TycoonBankAccount.asp` };
+    }
+    ctx.setAccountMoney(budgetMatch[1]);
+    const after = parseBankAccountHtml(ctx, html, '');
+
+    switch (action) {
+      case 'borrow':
+        // RDOAskLoan / RDOPayLoan (:21, :23) move the balance and the debt.
+        if (after.balance === before.balance && after.totalLoans === before.totalLoans) {
+          return { success: false, message: 'borrow was not applied: the server still reports the same balance and the same debt' };
+        }
+        break;
+      case 'send':
+        // RDOSendMoney (:45) debits the sender.
+        if (after.balance === before.balance) {
+          return { success: false, message: 'send was not applied: the server still reports the same balance' };
+        }
+        break;
+      case 'payoff':
+        // RDOPayOff (:65) drops the loan; the table is rebuilt over the
+        // remaining `Obj.LoanCount` rows (:525, :549-572), so a successful
+        // payoff shows exactly one row fewer.
+        if (after.loans.length !== before.loans.length - 1) {
+          return { success: false, message: 'payoff was not applied: the loan is still listed' };
+        }
+        break;
     }
 
     return { success: true, message: `${action} completed successfully` };
@@ -536,9 +691,25 @@ export async function fetchProfitLoss(ctx: SessionContext): Promise<ProfitLossDa
 
 /**
  * Parse TycoonProfitAndLoses.asp HTML response.
- * Each row: `<div class=labelAccountLevel{N}>` label, then `$<amount>` in sibling div.
- * Chart data: `ChartInfo=<count>,<values...>` in href attributes.
- * Builds hierarchical ProfitLossNode tree by nesting levels.
+ *
+ * One `<tr>` per account (:109-195). The label div is
+ * `<div class=labelAccountLevel<N> style="margin-left: <30·N>px; margin-right: 5px">`
+ * (:119) and the value follows in the next `<td>` (:131-146) — except for
+ * level 2, whose value is NOT rendered in its own row: it is stashed in
+ * `PrevValue` (:159) and flushed later, in a row of its own, as
+ * `<div class=labelAccountLevel2 style="color: …">` (:94-105 between blocks,
+ * :206-224 after the last one). That `style="margin-left:` is therefore the
+ * discriminator between a real account row and a flush row — without it the
+ * flush rows were parsed as accounts of their own, labelled with their amount.
+ *
+ * Three corrections here, all on this markup:
+ *   - the sign: `FormatValue` renders a loss as `-$1,234`, and matching on `$`
+ *     alone reported every loss as a gain (audit B-7) — the page colours those
+ *     lines #ff7700 (:135-136) precisely because they are negative;
+ *   - the flushed level-2 total is now attached to its header instead of being
+ *     dropped (the node used to read `$0`);
+ *   - `ChartInfo` (:151-153) is looked up inside the row, not in a 500-character
+ *     window forward, which used to attribute the NEXT row's chart to this one.
  */
 function parseProfitLossHtml(html: string): ProfitLossData {
   const root: ProfitLossNode = {
@@ -548,37 +719,73 @@ function parseProfitLossHtml(html: string): ProfitLossData {
     children: [],
   };
 
-  // Parse all P&L rows in sequence
-  // Pattern: <div class=labelAccountLevelN> ... label text ... </div> followed by amount
-  const rowRegex = /<div\s+class=labelAccountLevel(\d)[^>]*>[\s\S]*?<nobr>([\s\S]*?)<\/nobr>[\s\S]*?<\/td>\s*<td[^>]*>[\s\S]*?(?:\$([0-9,.-]+)|<\/nobr>)/gi;
+  /** `ChartInfo=<count>,<values…>` inside this row only (up to its `</tr>`). */
+  function chartOf(fromIdx: number): number[] | undefined {
+    const rowEnd = html.indexOf('</tr>', fromIdx);
+    const scope = html.substring(fromIdx, rowEnd === -1 ? html.length : rowEnd);
+    const chartMatch = /ChartInfo=(\d+),([-\d,]+)/i.exec(scope);
+    return chartMatch ? chartMatch[2].split(',').map(v => parseInt(v, 10)) : undefined;
+  }
+
+  // Account rows. The value alternative also accepts `</nobr>`, which is what
+  // closes an unrendered level-2 value cell (:164-165).
+  const rowRegex = new RegExp(
+    String.raw`<div\s+class=labelAccountLevel(\d)\s+style="margin-left:[^>]*>\s*<nobr>([\s\S]*?)<\/nobr>`
+    + String.raw`[\s\S]*?<\/td>\s*<td[^>]*>[\s\S]*?(?:(` + ASP_MONEY_SOURCE + String.raw`)|<\/nobr>)`,
+    'gi',
+  );
+  // Flush rows carrying a level-2 total: `style="color: white"` / `"color: #ff7700"`.
+  const flushRegex = new RegExp(
+    String.raw`<div\s+class=labelAccountLevel2\s+style="color:[^>]*>\s*(?:<[^>]*>\s*)*?(` + ASP_MONEY_SOURCE + `)`,
+    'gi',
+  );
+
+  type Token =
+    | { kind: 'row'; index: number; level: number; label: string; money: string | undefined }
+    | { kind: 'flush'; index: number; money: string };
+  const tokens: Token[] = [];
+
   let match;
-  const nodes: ProfitLossNode[] = [];
-
   while ((match = rowRegex.exec(html)) !== null) {
-    const level = parseInt(match[1], 10);
-    // Clean label: strip HTML tags and img elements
-    const label = match[2].replace(/<[^>]*>/g, '').trim();
-    const amount = match[3] ? match[3].replace(/,/g, '') : '';
+    tokens.push({
+      kind: 'row',
+      index: match.index,
+      level: parseInt(match[1], 10),
+      // Clean label: strip HTML tags and img elements
+      label: match[2].replace(/<[^>]*>/g, '').trim(),
+      money: match[3],
+    });
+  }
+  while ((match = flushRegex.exec(html)) !== null) {
+    tokens.push({ kind: 'flush', index: match.index, money: match[1] });
+  }
+  tokens.sort((a, b) => a.index - b.index);
 
-    // Extract chart data if available nearby
-    const chartMatch = /ChartInfo=(\d+),([-\d,]+)/i.exec(html.substring(match.index, match.index + 500));
-    let chartData: number[] | undefined;
-    if (chartMatch) {
-      const values = chartMatch[2].split(',').map(v => parseInt(v, 10));
-      chartData = values;
+  const nodes: ProfitLossNode[] = [];
+  // The level-2 header still waiting for the total the page flushes after it.
+  let pendingLevel2: ProfitLossNode | null = null;
+
+  for (const token of tokens) {
+    if (token.kind === 'flush') {
+      if (pendingLevel2) {
+        pendingLevel2.amount = parseAspMoney(token.money) ?? '0';
+        pendingLevel2.chartData = chartOf(token.index);
+        pendingLevel2 = null;
+      }
+      continue;
     }
 
-    // Level 2 items with margin-top are sub-headers (e.g., "RESIDENTIALS")
-    const isHeader = level === 2 && !amount;
-
+    const amount = token.money ? parseAspMoney(token.money) : null;
     const node: ProfitLossNode = {
-      label: label || 'Unknown',
-      level,
-      amount: amount || '0',
-      chartData,
-      isHeader,
+      label: token.label || 'Unknown',
+      level: token.level,
+      amount: amount ?? '0',
+      chartData: chartOf(token.index),
+      // :121-124 renders every level-2 account as an upper-cased section header.
+      isHeader: token.level === 2,
       children: [],
     };
+    if (token.level === 2) pendingLevel2 = node;
 
     nodes.push(node);
   }
@@ -677,9 +884,17 @@ function parseCompaniesHtml(ctx: SessionContext, html: string): CompanyListItem[
     const facMatch = /(\d+)\s+Facilities/i.exec(section);
     const facilityCount = facMatch ? parseInt(facMatch[1], 10) : 0;
 
-    // Extract company type: "Private" or other text in <nobr>
-    const typeMatch = /<nobr>\s*(Private|Public|Mayor|Minister|President)\s*<\/nobr>/i.exec(section);
-    const companyType = typeMatch ? typeMatch[1] : 'Private';
+    // Company type — the first <nobr> of `<div class=data>` (chooseCompany.asp:193-197):
+    //   `if CompanyOwnerRole <> UserName then <nobr> CompanyOwnerRole </nobr>
+    //    else <nobr> strPrivate </nobr>`
+    // so it holds either "Private" (NewLogon.lng:7) or the FULL owner role —
+    // "Mayor of Rome", "Minister of Health". The old alternation demanded a bare
+    // keyword immediately followed by `</nobr>`, failed on every real role, and
+    // fell back to 'Private': every public or ministerial company was labelled
+    // private, an inversion of meaning (audit B-13). The second <nobr> of that
+    // div is the facility count (:198), so anchoring on the div matters.
+    const typeMatch = /<div\s+class=data[^>]*>\s*<nobr>\s*([^<]*?)\s*<\/nobr>/i.exec(section);
+    const companyType = typeMatch && typeMatch[1] ? typeMatch[1] : 'Private';
 
     companies.push({
       name,
