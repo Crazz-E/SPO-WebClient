@@ -255,25 +255,52 @@ frame or when the frame budget (400) is hit, and always logs off (`finally`).
 | `[server-logs] no Clients row` | fetched before the server wrote the disconnect row | raise `--server-logs-settle` |
 | Jest prints session DEBUG lines | `LOG_LEVEL` unset in that test file's process | the CLI sets `warn` via `quiet-log.ts`; tests tolerate the noise |
 
-## 11. The git gate — replay, then live, before any git sync
+## 11. The pre-push protocol check
 
-Developer rule (2026-08-16), replacing the earlier cadence statements (nightly / before release):
+Developer rule (2026-08-18), replacing the two-step git gate of 2026-08-16 and every earlier
+cadence statement (nightly / before release).
 
-1. **Step 1 — memory socket.** `npm run conformance -- --suite all --recording report/campaign/rec/<latest>.ndjson
-   --diff-baseline report/campaign/rec/<latest>-baseline.json`. Must exit 0 (no FAIL, no silence, no baseline drift).
-2. **Step 2 — live.** Only if step 1 reported no error: the canonical live command of §2 / §8 (reads only on the
-   shared server, `--server-logs`). Must exit 0, including a clean server-log verdict.
-3. **Git sync** (`git commit`, `git push`) is possible only once both are validated **on the current sources**.
+**A native `pre-push` hook replays the last recording against its baseline before every push.**
 
-Mechanism: every run that exits 0 writes its transport's entry into `.conformance-gate.json` at the repo root
-(gitignored, per machine): `{ replay: { finishedAt, exitCode, suites, world, target }, live: {…} }`. A run that
-fails leaves the file as it was and says so (`[gate] run failed …`). The PreToolUse hook
-`.claude/hooks/conformance-gate.sh` intercepts `git commit` / `git push` in any Bash command and runs
-`node .claude/hooks/conformance-gate-check.js`, which passes only when both entries exist with exit 0, live is
-not older than replay, and no file under `src/` has a modification time later than either run. Otherwise the
-tool call is blocked (exit 2) with the two commands to run. Check by hand any time:
-`node .claude/hooks/conformance-gate-check.js`.
+```bash
+npm run hooks:install     # writes .git/hooks/pre-push; .git/ is not versioned, so run it once per clone
+```
 
-Consequences to keep in mind: any edit under `src/` after the runs re-arms the gate (that is the point);
-docs-only commits are gated too (the rule says "sources", the hook does not try to be clever — run the two
-steps, they take ~1 min); the gate is local state, so a fresh clone starts blocked.
+It runs exactly this, from the repo root, and refuses the push on a non-zero exit:
+
+```bash
+npm run conformance -- --suite all --transport replay   --recording report/campaign/rec/planitia-2026-08-17.ndjson   --diff-baseline report/campaign/rec/planitia-2026-08-17-baseline.json
+```
+
+Offline, deterministic, ~40 s, no server and no credentials. Source of truth:
+[scripts/install-git-hooks.js](../scripts/install-git-hooks.js) — edit there, never in `.git/hooks/`.
+Bypass deliberately for a work-in-progress push with `git push --no-verify`.
+
+### What changed, and why
+
+| | before (2026-08-16) | now |
+|---|---|---|
+| trigger | `PreToolUse`, so only when Claude ran git | native hook — VS Code, terminal, any tool |
+| boundary | every `git commit` **and** `git push` | the push only |
+| live run | mandatory step 2 | **off the commit path entirely** |
+| state | `.conformance-gate.json` + surface-mtime bookkeeping | none |
+
+Three defects died with the old apparatus: a commit made outside Claude went completely ungated;
+docs-only commits paid the toll and the certification read as a tax rather than a signal; and the
+freshness check dated from the newest mtime anywhere under `src/`, so writing a `.md` there threw
+away a certification already paid for.
+
+**The live run is not a push concern.** It exercises the *server*, not our code, so it belongs
+before a deploy. Never run it merely to unblock a push — on the shared server that is a cost with
+no matching benefit.
+
+### The one gesture that accepts a drift
+
+Re-recording a baseline is the only step of this apparatus that accepts a divergence, so it stays
+a deliberate act: read the diff first, and name the cause in the code before accepting it.
+
+```bash
+npm run conformance -- --suite all --transport replay --recording <rec>.ndjson   --record-baseline <rec>-baseline.json
+```
+
+Then re-run with `--diff-baseline` to confirm `baseline: no divergence`.

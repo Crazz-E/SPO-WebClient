@@ -15,7 +15,6 @@ import { preflight, runConformance, PREFLIGHT_SOCKET } from './run';
 import type { RunDeps } from './run';
 import { recordBaseline } from './report';
 import type { Baseline } from './report';
-import type { Gate } from './run';
 import { HALT_PATH } from './halt';
 import type { HaltRecord, HaltStore } from './halt';
 
@@ -50,7 +49,6 @@ interface Captured {
   transport: () => ReplayTransport;
   logFetches: Array<{ base: string; loginAt: Date; logoffAt: Date }>;
   slept: number[];
-  gate: { value: Gate | null };
 }
 
 /** Server logs consistent with the capture: the ClientViewId the recording hands out. */
@@ -67,7 +65,7 @@ function fakeDayLogs(clientViewId: string, exitCode = 0) {
   };
 }
 
-function makeDeps(answers: RdoExchange[] = ANSWERS, files = new Map<string, string>(), logs = fakeDayLogs(CV), gate: { value: Gate | null } = { value: null }): Captured {
+function makeDeps(answers: RdoExchange[] = ANSWERS, files = new Map<string, string>(), logs = fakeDayLogs(CV)): Captured {
   const lines: string[] = [];
   const errors: string[] = [];
   const logFetches: Captured['logFetches'] = [];
@@ -92,10 +90,8 @@ function makeDeps(answers: RdoExchange[] = ANSWERS, files = new Map<string, stri
     sleep: async ms => { slept.push(ms); },
     fetchServerLogs: async (base, facts) => { logFetches.push({ base, ...facts }); return logs; },
     loadBuildingTemplates: async () => undefined,
-    readGate: () => gate.value,
-    writeGate: g => { gate.value = g; },
   };
-  return { deps, files, lines, errors, transport: () => transport!, logFetches, slept, gate };
+  return { deps, files, lines, errors, transport: () => transport!, logFetches, slept };
 }
 
 const options = (extra: string[] = []): ConformanceOptions =>
@@ -355,71 +351,6 @@ describe('run — offline conformance run over the login capture', () => {
     expect(written.session.clientViewId).toBe(CV);
   }, 20000);
 
-  /**
-   * The baseline comparison is what makes step 1 worth anything, so the gate
-   * only counts a replay that performed one. Before 2026-08-18 this test ran
-   * WITHOUT `--diff-baseline` and still expected a validated gate — it pinned
-   * exactly the hole that let a green-but-uncompared replay through.
-   */
-  it('git gate: a green replay run WITH a baseline diff validates step 1', async () => {
-    const seed = makeDeps();
-    const { report } = await runConformance(options(), seed.deps);
-    const files = new Map<string, string>([['base.json', JSON.stringify(recordBaseline(report))]]);
-
-    const c = makeDeps(ANSWERS, files);
-    const { exitCode } = await runConformance(options(['--diff-baseline', 'base.json']), c.deps);
-    expect(exitCode).toBe(0);
-    expect(c.gate.value?.replay).toMatchObject({ exitCode: 0, world: 'planitia', target: 'shared', baselineDiffed: true });
-    expect(c.gate.value?.live).toBeUndefined();
-    expect(c.lines).toContain('[gate] step 1 (replay) validated — step 2 is the live run');
-  }, 30000);
-
-  it('git gate: a green replay WITHOUT a baseline diff does NOT validate step 1', async () => {
-    const c = makeDeps();
-    const { exitCode } = await runConformance(options(), c.deps);
-    expect(exitCode).toBe(0);                      // the run itself is fine
-    expect(c.gate.value).toBeNull();               // …and it certifies nothing
-    expect(c.lines.some(l => /WITHOUT --diff-baseline/.test(l))).toBe(true);
-    expect(c.lines.some(l => /--record-baseline first, if the drift is intended/.test(l))).toBe(true);
-  }, 20000);
-
-  it('git gate: an uncompared replay never overwrites a previously validated entry', async () => {
-    const seed = makeDeps();
-    const { report } = await runConformance(options(), seed.deps);
-    const files = new Map<string, string>([['base.json', JSON.stringify(recordBaseline(report))]]);
-
-    // Earn a real entry, then run again without a baseline: the good one stands.
-    const gate: { value: Gate | null } = { value: null };
-    await runConformance(options(['--diff-baseline', 'base.json']), makeDeps(ANSWERS, files, fakeDayLogs(CV), gate).deps);
-    const earned = gate.value?.replay?.finishedAt;
-    expect(earned).toBeTruthy();
-
-    await runConformance(options(), makeDeps(ANSWERS, files, fakeDayLogs(CV), gate).deps);
-    expect(gate.value?.replay?.finishedAt).toBe(earned);
-    expect(gate.value?.replay?.baselineDiffed).toBe(true);
-  }, 40000);
-
-  it('git gate: a failed run leaves the gate untouched', async () => {
-    const c = makeDeps();
-    const { exitCode } = await runConformance(options(['--frame-budget', '1']), c.deps);
-    expect(exitCode).toBe(1);
-    expect(c.gate.value).toBeNull();
-    expect(c.lines.some(l => /\[gate\] run failed \(exit 1\)/.test(l))).toBe(true);
-  }, 20000);
-
-  it('git gate: an unwritable gate file is reported, not fatal', async () => {
-    const seed = makeDeps();
-    const { report } = await runConformance(options(), seed.deps);
-    const files = new Map<string, string>([['base.json', JSON.stringify(recordBaseline(report))]]);
-
-    // Needs the baseline diff to reach the write at all, since 2026-08-18.
-    const c = makeDeps(ANSWERS, files);
-    c.deps.writeGate = () => { throw new Error('EACCES'); };
-    const { exitCode } = await runConformance(options(['--diff-baseline', 'base.json']), c.deps);
-    expect(exitCode).toBe(0);
-    expect(c.lines.some(l => /\[gate\] could not write/.test(l))).toBe(true);
-  }, 30000);
-
   it('an unknown world aborts before any suite frame, and still logs off cleanly', async () => {
     const c = makeDeps();
     await expect(runConformance({ ...options(), world: 'atlantis' }, c.deps)).rejects.toThrow(/"atlantis" not in the directory listing/);
@@ -493,7 +424,7 @@ describe('run — the connection floor is a precondition, not a verdict', () => 
    * (`login-handler.ts:616`), so a run that selects no company stays in
    * `WORLD_CONNECTING` legitimately and for ever. Demanding WORLD_CONNECTED
    * unconditionally would refuse every `--no-company` run and every replay run
-   * — including the one the git gate replays at each commit.
+   * — including the one the `pre-push` hook replays before every push.
    */
   it('does not demand WORLD_CONNECTED from a run that selects no company', async () => {
     const c = makeDeps();

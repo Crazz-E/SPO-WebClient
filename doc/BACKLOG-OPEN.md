@@ -151,7 +151,7 @@ Three journey "impossibilities" turned out to be correct behaviour. Recorded so 
 
 ## Decided 2026-08-18 — dismantle the conformance gate
 
-### 🟡 OB-15 · The gate apparatus is superseded and should be deleted
+### ✅ OB-15 · RESOLVED — the gate apparatus is deleted
 
 **Developer's requirement, restated plainly on 2026-08-18:**
 
@@ -167,16 +167,21 @@ push — which for a solo developer is a feature.
 
 The `PreToolUse` declaration was removed from `.claude/settings.json`.
 
-**What remains to delete** — left in place deliberately, at the end of a long session, because removing
-it means rewriting three test suites and touching `run.ts`:
+**Deleted 2026-08-18**, in its own session as planned:
 
 - `.claude/hooks/conformance-gate.sh`, `conformance-gate-check.js`, `rdo-surface.js`, `rdo-surface.json`
 - `src/tools/conformance/rdo-surface.test.ts` (26 tests)
-- In `run.ts`: `updateGate`, `GateEntry`, `Gate`, `GATE_FILE`, `readGate`/`writeGate` in `RunDeps`,
-  and the `baselineDiffed` flag added earlier the same day
-- The gate tests in `run.test.ts` and `run-deps.test.ts`
-- `.conformance-gate.json` (gitignored, local state)
-- The **Git** section of `CLAUDE.md`, which documents the two-step replay-then-live rule
+- In `run.ts`: `updateGate`, `GateEntry`, `Gate`, `GATE_FILE`, `isGate`, `readGate`/`writeGate` in
+  `RunDeps` and in `defaultDeps`, and the `baselineDiffed` flag — 110 lines, and `TargetKind` with them
+- The gate tests: 5 in `run.test.ts`, 3 in `run-deps.test.ts`
+- `.conformance-gate.json`, its `.gitignore` entry, and the `.rdo-live/` rationale that cited the
+  surface-mtime rule
+- The **Git** section of `CLAUDE.md` and §11 of `doc/rdo-conformance-suite.md`, both rewritten around
+  the native `pre-push` hook rather than simply removed — the rule in force still needs to be written down
+
+Verified: typecheck clean; **6318 tests pass, 0 fail** — exactly 34 fewer, which is the count of the
+tests removed and nothing else; coverage **58.53 %**, unchanged; and a replay run still exits 0 with
+`baseline: no divergence` and not one `[gate]` line.
 
 ⚠ **Why the surface detection can go too:** it existed to avoid paying for a *live* run. The replay is
 offline and costs ~40 s, so running it unconditionally is both simpler and stronger than deciding

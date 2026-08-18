@@ -28,7 +28,7 @@ import type { DayLogs, ServerLogVerdict } from './server-logs';
 import { defaultHaltStore, formatHaltNotice, readExistingHalt } from './halt';
 import type { HaltStore } from './halt';
 import { CONNECTION_STATE } from './types';
-import type { RunReport, SessionFacts, SuiteReport, TargetKind } from './types';
+import type { RunReport, SessionFacts, SuiteReport } from './types';
 
 /** Everything with a side effect, injectable for tests. */
 export interface RunDeps {
@@ -48,49 +48,12 @@ export interface RunDeps {
    * without it every building falls back to the generic template.
    */
   loadBuildingTemplates(): Promise<void>;
-  /** Read the git gate file (`.conformance-gate.json`), or null when absent/unreadable. */
-  readGate(): Gate | null;
-  /** Persist the git gate file. */
-  writeGate(gate: Gate): void;
   /**
    * Where `.rdo-live/HALT` is read from. Optional so a plain conformance run
    * needs no extra wiring; defaults to the real filesystem.
    */
   haltStore?: HaltStore;
 }
-
-/**
- * The git gate (developer rule, 2026-08-16): sources go to git only after a
- * replay run and then a live run both exited 0 on the current sources. Every
- * run that exits 0 records itself here, per transport; the PreToolUse hook
- * `.claude/hooks/conformance-gate.sh` reads it before any `git commit` / `git push`.
- */
-export interface GateEntry {
-  finishedAt: string;
-  exitCode: number;
-  suites: string;
-  world: string;
-  target: TargetKind;
-  /**
-   * Replay entries only: a baseline was actually compared, byte for byte.
-   *
-   * Added 2026-08-18 to close a real hole. `--diff-baseline` was optional, so a
-   * replay run without it exited 0 — there is no divergence to find when nothing
-   * is compared — and validated the gate. The gate then reported a green step 1
-   * whose entire point, the byte comparison, had been skipped, and it could not
-   * even tell: the entry recorded no trace of it.
-   *
-   * Entries written before that date lack the field, which reads as `false` and
-   * correctly invalidates them.
-   */
-  baselineDiffed?: boolean;
-}
-export interface Gate {
-  tool: 'rdo-conformance-gate';
-  replay?: GateEntry;
-  live?: GateEntry;
-}
-export const GATE_FILE = '.conformance-gate.json';
 
 export const defaultDeps: RunDeps = {
   createSession: () => new StarpeaceSession(),
@@ -105,68 +68,8 @@ export const defaultDeps: RunDeps = {
   sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
   fetchServerLogs: (base, facts) => fetchDayLogs(base, facts),
   loadBuildingTemplates: () => new BuildingDataService().initialize(),
-  readGate: () => {
-    try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(GATE_FILE, 'utf-8'));
-      return isGate(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  },
-  writeGate: gate => fs.writeFileSync(GATE_FILE, JSON.stringify(gate, null, 2) + '\n', { encoding: 'utf-8' }),
   haltStore: defaultHaltStore,
 };
-
-export function isGate(value: unknown): value is Gate {
-  return typeof value === 'object' && value !== null && (value as { tool?: unknown }).tool === 'rdo-conformance-gate';
-}
-
-/**
- * Record this run in the gate. A run that exits 0 validates its step; a live
- * run without a prior replay entry is recorded but flagged — the rule is
- * replay first, then live. Never throws: the gate is bookkeeping, the run is
- * the product.
- */
-export function updateGate(
-  deps: RunDeps,
-  report: RunReport,
-  exitCode: number,
-  log: (line: string) => void,
-  baselineDiffed = false,
-): void {
-  const gate: Gate = deps.readGate() ?? { tool: 'rdo-conformance-gate' };
-  const entry: GateEntry = {
-    finishedAt: report.finishedAt, exitCode,
-    suites: report.suites.map(s => s.name).join(','), world: report.world, target: report.target,
-  };
-  if (report.transport === 'replay') entry.baselineDiffed = baselineDiffed;
-  if (exitCode !== 0) {
-    log(`[gate] run failed (exit ${exitCode}) — ${report.transport} step NOT validated; the gate file is left as it was`);
-    return;
-  }
-  // The replay step exists to compare bytes. A run that skipped the comparison is
-  // not a weaker validation, it is a different thing — so it does not count, and
-  // the previous entry is left alone rather than overwritten by a lesser one.
-  if (report.transport === 'replay' && !baselineDiffed) {
-    log('[gate] replay ran green but WITHOUT --diff-baseline — step 1 NOT validated; the byte comparison is the point of this step');
-    log('[gate] re-run with --diff-baseline <baseline.json> (or --record-baseline first, if the drift is intended and accepted)');
-    return;
-  }
-  gate[report.transport] = entry;
-  try {
-    deps.writeGate(gate);
-  } catch (err: unknown) {
-    log(`[gate] could not write ${GATE_FILE}: ${toErrorMessage(err)}`);
-    return;
-  }
-  if (report.transport === 'live' && !gate.replay) {
-    log('[gate] live step validated, but step 1 (replay) has no validated run yet — git sync stays blocked until it does');
-  } else if (report.transport === 'live') {
-    log(`[gate] both steps validated (replay ${gate.replay!.finishedAt}, live ${entry.finishedAt}) — git sync allowed on these sources`);
-  } else {
-    log('[gate] step 1 (replay) validated — step 2 is the live run');
-  }
-}
 
 /** Socket the pre-flight probe opens and destroys; never used for anything else. */
 export const PREFLIGHT_SOCKET = 'preflight';
@@ -483,16 +386,12 @@ export async function runConformance(options: ConformanceOptions, deps: RunDeps 
     deps.writeFile(options.recordBaseline, JSON.stringify(recordBaseline(report), null, 2) + '\n');
     deps.log(`[conformance] baseline written: ${options.recordBaseline}`);
   }
-  let baselineDiffed = false;
   if (options.diffBaseline) {
     const parsed: unknown = JSON.parse(deps.readFile(options.diffBaseline));
     if (!isBaseline(parsed)) throw new Error(`${options.diffBaseline} is not an rdo-conformance baseline.`);
     const diff = diffBaseline(report, parsed);
     deps.log(formatBaselineDiff(diff));
     if (baselineDiverges(diff)) exitCode = 1;
-    // Set only once the comparison has actually happened: a malformed baseline
-    // throws above, and must not be recorded as a comparison.
-    baselineDiffed = true;
   }
   if (options.reportTo) {
     deps.writeFile(options.reportTo, JSON.stringify(report, null, 2) + '\n');
@@ -501,8 +400,6 @@ export async function runConformance(options: ConformanceOptions, deps: RunDeps 
 
   if (options.json) deps.log(JSON.stringify(report, null, 2));
   else deps.log(formatSummary(report));
-
-  updateGate(deps, report, exitCode, options.json ? deps.error : deps.log, baselineDiffed);
 
   return { report, exitCode };
 }

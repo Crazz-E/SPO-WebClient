@@ -111,7 +111,9 @@ npm run conformance -- --help   # RDO conformance suite (doc/rdo-conformance-sui
 | `context-router.sh` | UserPromptSubmit | Points at the relevant docs/skills before planning |
 | `typecheck-guard.sh` | PostToolUse (Edit\|Write) | Flags the tree dirty on `.ts`/`.tsx` writes — no work, ~0 ms |
 | `sanctuarize.sh` | Stop | Runs `npm run typecheck` once per turn if dirty; blocks the turn on failure |
-| `conformance-gate.sh` | PreToolUse (Bash `git commit`/`git push`) | Refuses the git sync until the replay run then the live run have validated the current sources (`.conformance-gate.json`) — see **Git** |
+
+The RDO protocol check is **not** a Claude Code hook — it is the native `.git/hooks/pre-push`,
+which fires whatever tool does the push. See **Git**.
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete
 (`code-guardian` §F).
@@ -199,19 +201,28 @@ TypeScript strict. camelCase vars/methods, PascalCase classes/interfaces. `unkno
 blocks + `toErrorMessage(err)` from `@/shared/error-utils`. JSDoc for public API only.
 Small, focused changes.
 
-## Git — the conformance gate (developer rule, 2026-08-16, replaces earlier cadence rules)
+## Git — the pre-push protocol check (developer rule, 2026-08-18)
 
-**Before any git sync (`git commit`, `git push`) the RDO conformance suite must have validated
-the current sources, in this order:**
+**A native `pre-push` hook replays the last recording against its baseline before every push.**
+Offline, deterministic, ~40 s, no server and no credentials. It is installed by
 
-1. **Memory socket** — `npm run conformance -- --suite all --recording report/campaign/rec/<latest>.ndjson --diff-baseline report/campaign/rec/<latest>-baseline.json` (offline replay of the last live recording, byte diff against the accepted baseline).
-2. **Live** — only if step 1 reported no error: `npm run conformance -- --suite <read suites> --transport live --live --company "SPO_test3 - Green" --server-logs …` (planitia, reads only on the shared server; mutations need the dedicated instance).
+```bash
+npm run hooks:install     # writes .git/hooks/pre-push; .git/ is not versioned, so run it once per clone
+```
 
-Every run that exits 0 records itself in `.conformance-gate.json` (gitignored). The PreToolUse hook
-`.claude/hooks/conformance-gate.sh` **refuses `git commit` / `git push`** until both entries exist,
-replay came before live, and no file under `src/` changed after either run. A step that fails
-leaves the gate as it was; a source edit after the runs re-arms it. Runbook and troubleshooting:
-[doc/rdo-conformance-suite.md](doc/rdo-conformance-suite.md) §8, §11.
+Source of truth: [scripts/install-git-hooks.js](scripts/install-git-hooks.js). Bypass deliberately
+for a work-in-progress push with `git push --no-verify`.
+
+Two consequences, both deliberate:
+
+- **Commits are not gated.** They are cheap and frequent; the push is the boundary that reaches
+  GitHub. A native hook also fires for VS Code and plain terminals, which the earlier `PreToolUse`
+  gate could not see.
+- **The live run is NOT on the commit path.** It tests the *server*, not our code, so it belongs
+  before a deploy. Never run it just to satisfy a push.
+
+When RDO code changes: run the tests, get a perfect score, and refuse the commit on any incident.
+Runbook: [doc/rdo-conformance-suite.md](doc/rdo-conformance-suite.md) §8, §11.
 
 Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description.
 Commits: `type: short summary` — `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`.
