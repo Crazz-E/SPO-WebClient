@@ -27,7 +27,7 @@ import type { BuildingPropertyValue, BuildingDetailsResponse, BuildingDetailsTab
 // ---------------------------------------------------------------------------
 
 const CAPITOL_TOWNS_DATA: BuildingPropertyValue[] = [
-  { name: 'ActualRuler', value: 'President Crazz' },
+  { name: 'ActualRuler', value: 'President SPO_test3' },
   { name: 'TownCount', value: '2' },
   { name: 'Town0', value: 'Shamba' },
   { name: 'TownPopulation0', value: '125000' },
@@ -48,7 +48,7 @@ const CAPITOL_TOWNS_DATA: BuildingPropertyValue[] = [
 ];
 
 const MINISTRIES_DATA: BuildingPropertyValue[] = [
-  { name: 'ActualRuler', value: 'President Crazz' },
+  { name: 'ActualRuler', value: 'President SPO_test3' },
   { name: 'MinisterCount', value: '2' },
   { name: 'MinistryId0', value: '0' },
   { name: 'Ministry0.0', value: 'Health' },
@@ -96,7 +96,7 @@ const RES_DATA: BuildingPropertyValue[] = [
 ];
 
 const VOTES_DATA: BuildingPropertyValue[] = [
-  { name: 'RulerName', value: 'President Crazz' },
+  { name: 'RulerName', value: 'President SPO_test3' },
   { name: 'RulerVotes', value: '15200' },
   { name: 'RulerCmpRat', value: '72' },
   { name: 'RulerCmpPnts', value: '8500' },
@@ -137,7 +137,7 @@ function makeDetails(groups: Record<string, BuildingPropertyValue[]>, tabs?: Bui
     visualClass: 'PGICapitolA',
     templateName: 'Capitol',
     buildingName: 'National Capitol',
-    ownerName: 'President Crazz',
+    ownerName: 'President SPO_test3',
     securityId: '1000',
     tabs: tabs ?? CAPITOL_TABS,
     groups,
@@ -148,7 +148,7 @@ function makeDetails(groups: Record<string, BuildingPropertyValue[]>, tabs?: Bui
 const MOCK_FOCUS = {
   buildingId: '130400300',
   buildingName: 'National Capitol',
-  ownerName: 'President Crazz',
+  ownerName: 'President SPO_test3',
   salesInfo: '',
   revenue: '',
   detailsText: '',
@@ -195,7 +195,7 @@ describe('CapitolPanel', () => {
 
   it('renders consolidated civic tabs (Overview, Administration, Demographics, Elections)', () => {
     setupCapitol({
-      capitolGeneral: [{ name: 'ActualRuler', value: 'President Crazz' }],
+      capitolGeneral: [{ name: 'ActualRuler', value: 'President SPO_test3' }],
       capitolTowns: CAPITOL_TOWNS_DATA,
       ministeries: MINISTRIES_DATA,
       townJobs: JOBS_DATA,
@@ -211,12 +211,12 @@ describe('CapitolPanel', () => {
 
   it('defaults to Overview tab showing ruler info', () => {
     setupCapitol({
-      capitolGeneral: [{ name: 'ActualRuler', value: 'President Crazz' }],
+      capitolGeneral: [{ name: 'ActualRuler', value: 'President SPO_test3' }],
       votes: VOTES_DATA,
     });
     renderWithProviders(<BuildingInspector hideHeader />);
     // Ruler name appears in banner + general properties
-    expect(screen.getAllByText('President Crazz').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('President SPO_test3').length).toBeGreaterThanOrEqual(1);
   });
 
   // ---- Administration tab (Towns + Ministries) ----
@@ -224,7 +224,7 @@ describe('CapitolPanel', () => {
   describe('Administration tab', () => {
     beforeEach(() => {
       setupCapitol({
-        capitolGeneral: [{ name: 'ActualRuler', value: 'President Crazz' }],
+        capitolGeneral: [{ name: 'ActualRuler', value: 'President SPO_test3' }],
         capitolTowns: CAPITOL_TOWNS_DATA,
         ministeries: MINISTRIES_DATA,
         votes: VOTES_DATA,
@@ -297,7 +297,7 @@ describe('CapitolPanel', () => {
   describe('Demographics tab', () => {
     beforeEach(() => {
       setupCapitol({
-        capitolGeneral: [{ name: 'ActualRuler', value: 'President Crazz' }],
+        capitolGeneral: [{ name: 'ActualRuler', value: 'President SPO_test3' }],
         capitolTowns: CAPITOL_TOWNS_DATA,
         townJobs: JOBS_DATA,
         townRes: RES_DATA,

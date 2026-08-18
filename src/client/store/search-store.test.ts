@@ -100,13 +100,13 @@ describe('Search Store — people search', () => {
 
     const mockResults: WsRespSearchMenuPeopleSearch = {
       type: WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH,
-      results: ['Alice', 'Bob', 'Crazz'],
+      results: ['Alice', 'Bob', 'SPO_test3'],
     };
 
     useSearchStore.getState().setPeopleData(mockResults);
 
     const state = useSearchStore.getState();
-    expect(state.peopleData?.results).toEqual(['Alice', 'Bob', 'Crazz']);
+    expect(state.peopleData?.results).toEqual(['Alice', 'Bob', 'SPO_test3']);
     expect(state.isLoading).toBe(false);
   });
 });

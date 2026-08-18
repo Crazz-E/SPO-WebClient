@@ -397,7 +397,7 @@ const MOCK_CAPITOL: MockBuilding = {
       { name: 'covValue3', value: '68', index: 3 },
     ],
     'capitolTowns': [
-      { name: 'ActualRuler', value: 'President Crazz' },
+      { name: 'ActualRuler', value: 'President SPO_test3' },
       { name: 'TownCount', value: '3' },
       { name: 'Town0', value: 'Shamba', index: 0 },
       { name: 'TownPopulation0', value: '125000', index: 0 },
@@ -425,7 +425,7 @@ const MOCK_CAPITOL: MockBuilding = {
       { name: 'HasMayor2', value: '0', index: 2 },
     ],
     'ministeries': [
-      { name: 'ActualRuler', value: 'President Crazz' },
+      { name: 'ActualRuler', value: 'President SPO_test3' },
       { name: 'MinisterCount', value: '3' },
       { name: 'MinistryId0', value: '0', index: 0 },
       { name: 'Ministry0.0', value: 'Health', index: 0 },
@@ -444,7 +444,7 @@ const MOCK_CAPITOL: MockBuilding = {
       { name: 'MinisterBudget2', value: '3000000', index: 2 },
     ],
     'votes': [
-      { name: 'RulerName', value: 'President Crazz' },
+      { name: 'RulerName', value: 'President SPO_test3' },
       { name: 'RulerVotes', value: '15200' },
       { name: 'RulerCmpRat', value: '72' },
       { name: 'RulerCmpPnts', value: '8500' },
@@ -662,7 +662,7 @@ const MOCK_MAUSOLEUM: MockBuilding = {
   groups: {
     'mausoleum': [
       { name: 'WordsOfWisdom', value: 'Build wisely, prosper greatly.' },
-      { name: 'OwnerName', value: 'Founder Crazz' },
+      { name: 'OwnerName', value: 'Founder SPO_test3' },
       { name: 'Transcended', value: '0' },
     ],
   },

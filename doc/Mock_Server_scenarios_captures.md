@@ -9,9 +9,9 @@ C 0 idof "DirectoryServer";
 A0 objid="39751288";
 C 1 sel 39751288 get RDOOpenSession;
 A1 RDOOpenSession="#142217260";
-C 2 sel 142217260 call RDOMapSegaUser "^" "%Crazz";
+C 2 sel 142217260 call RDOMapSegaUser "^" "%SPO_test3";
 A2 res="%";
-C 3 sel 142217260 call RDOLogonUser "^" "%Crazz","%Simcity99";
+C 3 sel 142217260 call RDOLogonUser "^" "%SPO_test3","%test3";
 A3 res="#0";
 C 4 sel 142217260 call RDOEndSession "*" ;
 A4 ;
@@ -189,21 +189,21 @@ Content-Length: 395
 
 </html>
 
-GET /Five/0/Visual/Voyager/NewLogon/logonComplete.asp?frame_Id=LogonView&frame_Class=HTMLView&frame_Align=client&ResultType=NORMAL&Logon=FALSE&frame_NoBorder=True&frame_NoScrollBars=true&ClientViewId=8161308&WorldName=Shamba&UserName=Crazz&DSAddr=dir.starpeaceonline.com&DSPort=1111&ISAddr=158.69.153.134&ISPort=8000&LangId=0
+GET /Five/0/Visual/Voyager/NewLogon/logonComplete.asp?frame_Id=LogonView&frame_Class=HTMLView&frame_Align=client&ResultType=NORMAL&Logon=FALSE&frame_NoBorder=True&frame_NoScrollBars=true&ClientViewId=8161308&WorldName=Shamba&UserName=SPO_test3&DSAddr=dir.starpeaceonline.com&DSPort=1111&ISAddr=158.69.153.134&ISPort=8000&LangId=0
 
 HTTP/1.1 302 Object moved
 Cache-Control: private
 Content-Type: text/html
-Location: chooseCompany.asp?ClientViewId=8161308&PA=&Ooopsy=0&WorldName=Shamba&UserName=Crazz&Logon=FALSE&ISAddr=158.69.153.134&ISPort=8000
+Location: chooseCompany.asp?ClientViewId=8161308&PA=&Ooopsy=0&WorldName=Shamba&UserName=SPO_test3&Logon=FALSE&ISAddr=158.69.153.134&ISPort=8000
 Server: Microsoft-IIS/8.5
 X-Powered-By: ASP.NET
 Date: Wed, 18 Feb 2026 21:21:31 GMT
 Content-Length: 278
 
 <head><title>Object moved</title></head>
-<body><h1>Object Moved</h1>This object may be found <a HREF="chooseCompany.asp?ClientViewId=8161308&amp;PA=&amp;Ooopsy=0&amp;WorldName=Shamba&amp;UserName=Crazz&amp;Logon=FALSE&amp;ISAddr=158.69.153.134&amp;ISPort=8000">here</a>.</body>
+<body><h1>Object Moved</h1>This object may be found <a HREF="chooseCompany.asp?ClientViewId=8161308&amp;PA=&amp;Ooopsy=0&amp;WorldName=Shamba&amp;UserName=SPO_test3&amp;Logon=FALSE&amp;ISAddr=158.69.153.134&amp;ISPort=8000">here</a>.</body>
 
-GET /Five/0/Visual/Voyager/NewLogon/chooseCompany.asp?ClientViewId=8161308&PA=&Ooopsy=0&WorldName=Shamba&UserName=Crazz&Logon=FALSE&ISAddr=158.69.153.134&ISPort=8000
+GET /Five/0/Visual/Voyager/NewLogon/chooseCompany.asp?ClientViewId=8161308&PA=&Ooopsy=0&WorldName=Shamba&UserName=SPO_test3&Logon=FALSE&ISAddr=158.69.153.134&ISPort=8000
 
 HTTP/1.1 200 OK
 Cache-Control: private
@@ -281,7 +281,7 @@ Content-Length: 4701
 						if (firstClick)
 						{
 							firstClick = false;
-							window.navigate( "NewCompWarning.asp?ClientViewId=8161308&WorldName=Shamba&UserName=Crazz&ISAddr=158.69.153.134&ISPort=8000&Logon=FALSE" );
+							window.navigate( "NewCompWarning.asp?ClientViewId=8161308&WorldName=Shamba&UserName=SPO_test3&ISAddr=158.69.153.134&ISPort=8000&Logon=FALSE" );
 						}
 						else
 						{
@@ -343,7 +343,7 @@ Content-Length: 4701
 						onMouseOver="onMouseOverFrame()"
 						onMouseOut="onMouseOutFrame()"
 						onClick="onCompClick()"
-						companyOwnerRole="Crazz"
+						companyOwnerRole="SPO_test3"
 						companyName="Yellow Inc."
 						companyId="28"
 						normColor="black"
@@ -354,7 +354,7 @@ Content-Length: 4701
 						<div class=header3>
 							Yellow Inc.
 						</div>
-						<a href="../NewTycoon/CompanyPage.asp?Company=Yellow Inc.&Tycoon=Crazz&WorldName=Shamba&DAAddr=&DAPort=&TycoonId=&Password=&CompanyCluster=PGI">more info</a>
+						<a href="../NewTycoon/CompanyPage.asp?Company=Yellow Inc.&Tycoon=SPO_test3&WorldName=Shamba&DAAddr=&DAPort=&TycoonId=&Password=&CompanyCluster=PGI">more info</a>
 						<div class=data>
 							
 							<nobr> Private </nobr><br>
@@ -522,7 +522,7 @@ table tr.alt td,table tr.alt th{}
 </html> 
 
 
-GET /Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&MailAccount=Crazz@Shamba.net&Company=Yellow%20Inc.&Tycoon=Crazz&Password=Simcity99&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&SecurityId=131655160&Visitor=0&ClientViewId=8161308&frame_Height=100&frame_Id=Toolbar&frame_Align=bottom&LangId=0 HTTP/1.1
+GET /Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&MailAccount=SPO_test3@Shamba.net&Company=Yellow%20Inc.&Tycoon=SPO_test3&Password=test3&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&SecurityId=131655160&Visitor=0&ClientViewId=8161308&frame_Height=100&frame_Id=Toolbar&frame_Align=bottom&LangId=0 HTTP/1.1
 Accept: */*
 Accept-Language: fr-FR
 Accept-Encoding: gzip, deflate
@@ -656,7 +656,7 @@ Content-Length: 9468
 				onMouseOut="onBtnMouseOut()"
 				onMouseDown="onBtnMouseDown()"
 				onMouseUp="onBtnMouseUp()"
-				btnhref="http://www.starpeaceonline.com?frame_Id=WebMainView&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=client&frame_NoBorder=Yes&frame_ToHistory=yes&InGame=YES&WorldName=Shamba&UserName=Crazz">
+				btnhref="http://www.starpeaceonline.com?frame_Id=WebMainView&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=client&frame_NoBorder=Yes&frame_ToHistory=yes&InGame=YES&WorldName=Shamba&UserName=SPO_test3">
 			
 			<img
 				class=toolImg
@@ -669,7 +669,7 @@ Content-Length: 9468
 				onMouseOut="onBtnMouseOut()"
 				onMouseDown="onBtnMouseDown()"
 				onMouseUp="onBtnMouseUp()"
-				btnhref="/five/0/visual/voyager/Build/Build.asp?Tycoon=Crazz&Company=Yellow Inc.&WorldName=Shamba&frame_Id=BuildView&frame_Visibility=switch&frame_Width=220&frame_KeepContent=yes&frame_ToHistory=yes">
+				btnhref="/five/0/visual/voyager/Build/Build.asp?Tycoon=SPO_test3&Company=Yellow Inc.&WorldName=Shamba&frame_Id=BuildView&frame_Visibility=switch&frame_Width=220&frame_KeepContent=yes&frame_ToHistory=yes">
 			
 			<img
 				class=toolImg
@@ -693,7 +693,7 @@ Content-Length: 9468
 				onMouseOut="onBtnMouseOut()"
 				onMouseDown="onBtnMouseDown()"
 				onMouseUp="onBtnMouseUp()"
-				btnhref="/five/0/visual/voyager/new directory/directory.asp?Tycoon=Crazz&Company=Yellow Inc.&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&frame_Id=DirectoryView&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=right&frame_Width=220&frame_NoBorder=Yes&frame_NoScrollBars=No&frame_KeepContent=yes&frame_ToHistory=yes">
+				btnhref="/five/0/visual/voyager/new directory/directory.asp?Tycoon=SPO_test3&Company=Yellow Inc.&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&frame_Id=DirectoryView&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=right&frame_Width=220&frame_NoBorder=Yes&frame_NoScrollBars=No&frame_KeepContent=yes&frame_ToHistory=yes">
 			
 			<img
 				class=toolImg
@@ -706,7 +706,7 @@ Content-Length: 9468
 				onMouseOut="onBtnMouseOut()"
 				onMouseDown="onBtnMouseDown()"
 				onMouseUp="onBtnMouseUp()"
-				btnhref="/five/0/visual/voyager/newtycoon/tycoonOptions.asp?Tycoon=Crazz&Password=Simcity99&Company=Yellow Inc.&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&frame_Id=TycoonOpt&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=left&frame_NoBorder=Yes&frame_ToHistory=yes&SecurityId=131655160&ClientViewId=8161308&frame_Width=170&frame_NoScrollBars=yes::http://local.asp?frame_Id=MapIsoView&frame_Align=client&frame_ToHistory=yes&frame_Visibility=switch">
+				btnhref="/five/0/visual/voyager/newtycoon/tycoonOptions.asp?Tycoon=SPO_test3&Password=test3&Company=Yellow Inc.&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&frame_Id=TycoonOpt&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=left&frame_NoBorder=Yes&frame_ToHistory=yes&SecurityId=131655160&ClientViewId=8161308&frame_Width=170&frame_NoScrollBars=yes::http://local.asp?frame_Id=MapIsoView&frame_Align=client&frame_ToHistory=yes&frame_Visibility=switch">
 			<!--img
 				class=toolImg
 				alt="User Profile"
@@ -718,7 +718,7 @@ Content-Length: 9468
 				onMouseOut="onBtnMouseOut()"
 				onMouseDown="onBtnMouseDown()"
 				onMouseUp="onBtnMouseUp()"
-				btnhref="http://local.asp?frame_Id=MapIsoView&frame_Align=client&frame_ToHistory=yes&frame_Visibility=switch::/five/0/visual/voyager/newtycoon/tycoonOptions.asp?Tycoon=Crazz&Password=Simcity99&Company=Yellow Inc.&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&frame_Id=TycoonOpt&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=left&frame_NoBorder=Yes&frame_ToHistory=yes&SecurityId=131655160&ClientViewId=8161308&frame_Width=170&frame_NoScrollBars=yes"-->
+				btnhref="http://local.asp?frame_Id=MapIsoView&frame_Align=client&frame_ToHistory=yes&frame_Visibility=switch::/five/0/visual/voyager/newtycoon/tycoonOptions.asp?Tycoon=SPO_test3&Password=test3&Company=Yellow Inc.&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&frame_Id=TycoonOpt&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=left&frame_NoBorder=Yes&frame_ToHistory=yes&SecurityId=131655160&ClientViewId=8161308&frame_Width=170&frame_NoScrollBars=yes"-->
 			
 			<img
 				class=toolImg
@@ -755,7 +755,7 @@ Content-Length: 9468
 				onMouseOut="onBtnMouseOut()"
 				onMouseDown="onBtnMouseDown()"
 				onMouseUp="onBtnMouseUp()"
-				btnhref="/five/0/visual/voyager/mail/MailFolder.asp?Folder=Inbox&WorldName=Shamba&Tycoon=Crazz&Account=Crazz@Shamba.net&Password=Simcity99&frame_Id=MailView&frame_Class=HTMLView&frame_Align=bottom&frame_Height=40%&frame_KeepContent=no&frame_ToHistory=yes">
+				btnhref="/five/0/visual/voyager/mail/MailFolder.asp?Folder=Inbox&WorldName=Shamba&Tycoon=SPO_test3&Account=SPO_test3@Shamba.net&Password=test3&frame_Id=MailView&frame_Class=HTMLView&frame_Align=bottom&frame_Height=40%&frame_KeepContent=no&frame_ToHistory=yes">
 			<img
 				class=toolImg
 				alt="Chat"
@@ -803,7 +803,7 @@ Content-Length: 9468
 				onMouseOut="onBtnMouseOut()"
 				onMouseDown="onBtnMouseDown()"
 				onMouseUp="onBtnMouseUp()"
-				btnhref="http://www.starpeaceonline.com/support.asp?frame_Id=WebMainView&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=client&frame_NoBorder=Yes&frame_ToHistory=yes&InGame=YES&WorldName=Shamba&UserName=Crazz">
+				btnhref="http://www.starpeaceonline.com/support.asp?frame_Id=WebMainView&frame_Class=HTMLView&frame_Visibility=switch&frame_Align=client&frame_NoBorder=Yes&frame_ToHistory=yes&InGame=YES&WorldName=Shamba&UserName=SPO_test3">
 			<!--img
 				class=toolImg
 				alt="Call GMs for Help"
@@ -943,7 +943,7 @@ table tr.alt td,table tr.alt th{}
 
 GET /Five/0/visual/voyager/toolbar/images/hibuild.gif HTTP/1.1
 Accept: */*
-Referer: http://158.69.153.134/Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&MailAccount=Crazz@Shamba.net&Company=Yellow%20Inc.&Tycoon=Crazz&Password=Simcity99&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&SecurityId=131655160&Visitor=0&ClientViewId=8161308&frame_Height=100&frame_Id=Toolbar&frame_Align=bottom&LangId=0
+Referer: http://158.69.153.134/Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&MailAccount=SPO_test3@Shamba.net&Company=Yellow%20Inc.&Tycoon=SPO_test3&Password=test3&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&SecurityId=131655160&Visitor=0&ClientViewId=8161308&frame_Height=100&frame_Id=Toolbar&frame_Align=bottom&LangId=0
 Accept-Language: fr-FR
 Accept-Encoding: gzip, deflate
 User-Agent: Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.2; WOW64; Trident/7.0; .NET4.0C; .NET4.0E)
@@ -1015,7 +1015,7 @@ A50 ServerBusy="#0";C sel 40133496 call RefreshTycoon "*" "%4666201923","%10359"
 C 51 sel 8161308 get ServerBusy;
 A51 ServerBusy="#0";
 C sel 8161308 call ClientAware "*" ;
-C sel 40133496 call ChatMsg "*" "%SYSTEM","%Crazz has entered Shamba";
+C sel 40133496 call ChatMsg "*" "%SYSTEM","%SPO_test3 has entered Shamba";
 C 52 sel 8161308 call GetTycoonCookie "^" "#22","%";C sel 8161308 call ClientAware "*" ;
 A52 res="%LastX.0=467
 LastY.0=395
@@ -1030,7 +1030,7 @@ A53 res="%";
 C 54 sel 8161308 get ServerBusy;
 A54 ServerBusy="#0";
 C sel 8161308 call SetViewedArea "*" "#426","#355","#81","#81";C sel 8161308 call MsgCompositionChanged "*" "#0";C sel 8161308 call SetViewedArea "*" "#426","#355","#81","#81";C 55 sel 8161308 call SegmentsInArea "^" "#1","#383","#383","#449","#449";
-C sel 40133496 call NotifyMsgCompositionState "*" "%Crazz","#0";A55 res="%448
+C sel 40133496 call NotifyMsgCompositionState "*" "%SPO_test3","#0";A55 res="%448
 384
 448
 391
@@ -2126,7 +2126,7 @@ A96 res="%65:65:0=65,:0=65,:0=65,:0=65,:0=65,:0=65,:0=65,:0=65,:0=65,:0=65,:0=65
 # 12. Build Menu + call NewFacility
 
 GET /Five/0/visual/voyager/toolbar/images/hibuild.gif
-Referer: http://158.69.153.134/Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&MailAccount=Crazz@Shamba.net&Company=Yellow%20Inc.&Tycoon=Crazz&Password=Simcity99&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&SecurityId=131655160&Visitor=0&ClientViewId=8161308&frame_Height=100&frame_Id=Toolbar&frame_Align=bottom&LangId=0
+Referer: http://158.69.153.134/Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&MailAccount=SPO_test3@Shamba.net&Company=Yellow%20Inc.&Tycoon=SPO_test3&Password=test3&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&SecurityId=131655160&Visitor=0&ClientViewId=8161308&frame_Height=100&frame_Id=Toolbar&frame_Align=bottom&LangId=0
 
 HTTP/1.1 200 OK
 Content-Type: image/gif
@@ -2147,7 +2147,7 @@ GIF89a'. ....{...........9B?X`](2/. .!..	....,....'. ....x...0.I..8.MK	....Hp..
 .7.@&...f....
 t...;
 
-GET /five/0/visual/voyager/Build/Build.asp?Tycoon=Crazz&Company=Yellow%20Inc.&WorldName=Shamba&frame_Id=BuildView&frame_Visibility=switch&frame_Width=220&frame_KeepContent=yes&frame_ToHistory=yes&LangId=0
+GET /five/0/visual/voyager/Build/Build.asp?Tycoon=SPO_test3&Company=Yellow%20Inc.&WorldName=Shamba&frame_Id=BuildView&frame_Visibility=switch&frame_Width=220&frame_KeepContent=yes&frame_ToHistory=yes&LangId=0
 HTTP/1.1 200 OK
 Cache-Control: private
 Content-Type: text/html
@@ -2170,12 +2170,12 @@ Content-Length: 481
 <!-- FrameSet -->
 
 <frameset framespacing="0" rows="95,*">>
-	<frame name="Top"  src="BuildTop.asp?Company=Yellow Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz" scrolling="no" noresize frameborder = "No" marginwidth="0" marginheight="0">
-	<frame name="Main" src="KindList.asp?Company=Yellow Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz" noresize frameborder = "No"  marginwidth="0" marginheight="0">
+	<frame name="Top"  src="BuildTop.asp?Company=Yellow Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3" scrolling="no" noresize frameborder = "No" marginwidth="0" marginheight="0">
+	<frame name="Main" src="KindList.asp?Company=Yellow Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3" noresize frameborder = "No"  marginwidth="0" marginheight="0">
 </frameset>
 
-GET /five/0/visual/voyager/Build/BuildTop.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/Build.asp?Tycoon=Crazz&Company=Yellow%20Inc.&WorldName=Shamba&frame_Id=BuildView&frame_Visibility=switch&frame_Width=220&frame_KeepContent=yes&frame_ToHistory=yes&LangId=0
+GET /five/0/visual/voyager/Build/BuildTop.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/Build.asp?Tycoon=SPO_test3&Company=Yellow%20Inc.&WorldName=Shamba&frame_Id=BuildView&frame_Visibility=switch&frame_Width=220&frame_KeepContent=yes&frame_ToHistory=yes&LangId=0
 
 HTTP/1.1 200 OK
 Cache-Control: private
@@ -2211,10 +2211,10 @@ Content-Length: 2323
 			switch (td.command)
 			{
 				case "back" :
-					window.parent.frames["Main"].navigate( "KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz" )
+					window.parent.frames["Main"].navigate( "KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3" )
 				break;
 				case "home" :
-					window.parent.frames["Main"].navigate( "KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz" )
+					window.parent.frames["Main"].navigate( "KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3" )
 				break;
 			}
 	}
@@ -2285,7 +2285,7 @@ Content-Length: 2323
 </body>
 
 GET /five/0/visual/voyager/voyager.css
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/BuildTop.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/BuildTop.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
 HTTP/1.1 200 OK
 Content-Type: text/css
 Last-Modified: Sat, 01 Mar 2003 20:00:16 GMT
@@ -2628,7 +2628,7 @@ A
 }
 
 GET /Five/0/visual/voyager/toolbar/images/hifav.gif
-Referer: http://158.69.153.134/Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&MailAccount=Crazz@Shamba.net&Company=Yellow%20Inc.&Tycoon=Crazz&Password=Simcity99&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&SecurityId=131655160&Visitor=0&ClientViewId=8161308&frame_Height=100&frame_Id=Toolbar&frame_Align=bottom&LangId=0
+Referer: http://158.69.153.134/Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&MailAccount=SPO_test3@Shamba.net&Company=Yellow%20Inc.&Tycoon=SPO_test3&Password=test3&DAAddr=158.69.153.134&DAPort=7001&ISAddr=158.69.153.134&ISPort=8000&SecurityId=131655160&Visitor=0&ClientViewId=8161308&frame_Height=100&frame_Id=Toolbar&frame_Align=bottom&LangId=0
 
 HTTP/1.1 200 OK
 Content-Type: image/gif
@@ -2648,7 +2648,7 @@ GIF89a.. ...................???TTTsss........................!..	....,...... ...
 
 
 GET /five/0/visual/voyager/includes/FrameButtons.js
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/BuildTop.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/BuildTop.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
 
 HTTP/1.1 200 OK
 Content-Type: application/javascript
@@ -2763,7 +2763,7 @@ function onMouseDown1(ev)
 }
 
 GET /five/0/visual/voyager/Build/images/BuildRoadDisabled.jpg
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
 HTTP/1.1 200 OK
 Content-Type: image/jpeg
 Last-Modified: Sat, 01 Mar 2003 20:00:16 GMT
@@ -2800,7 +2800,7 @@ Content-Length: 2514
 :......A..L.w2..<..p@.R.....r..I..0...........=..-xzY%.....\..WR........Il.d.8......w..b$2J.....'.~]...O8.u.^{%.D.h.'.dz.}*..E.....3._..h..].........5..i7.p...<..%.L......s...4M#............q....+..$r	c.T6z4.....
 
 GET /five/0/visual/voyager/Build/images/topgradient.jpg
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/BuildTop.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/BuildTop.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
 
 
 HTTP/1.1 200 OK
@@ -2826,7 +2826,7 @@ Content-Length: 733
 *........N...W=...........?.Es.R.....fs.....+......#.........i..)........e...3E.P0.....(.4P.E.P.E.P...
 
 GET /Five/Visual/Clusters/PGI/images/FacKind_PGIFarms.jpg
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
 
 HTTP/1.1 200 OK
 Content-Type: image/jpeg
@@ -2864,7 +2864,7 @@ h.E5.#. ....N..Ny<......iK.....e.../@.N.{...:X..PJ.w
 .U.s.....1.M...ao.Am-..P....,.......[..c.w:g.S....=}..CN.R....k.-......1...B...).^tb.....#>c6s..55.v.M.:...w~..../....r...".b..1L..
 
 GET /Five/Visual/Clusters/PGI/images/FacKind_PGIResidentialFacilities.jpg
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
 
 HTTP/1.1 200 OK
 Content-Type: image/jpeg
@@ -2906,7 +2906,7 @@ fy.I.F.....@`2&....*...K".pB....:.....O.W.....R....;C,h.....A@b..c}.......N....;
 ..6yQ.....W........B......e0..d<.b.@#..z..q8Xb.r.v;....d.l....W..nu.....6....m..-,.o..9~.$o....@....I.<9.=....S.........Y...:........A.7@.%..C.]..bP.o...cN.%....R..8.1$.."'.v..c.:t.....[..k....!U..._.aO..29....8.*S..m.z.m....S~....|...=....z59.tH...Xm..R...<...3klWR...G>Q....eg..J.......y.........b.Y.ieI...I;.v`.`..'..s.i6..$.....r7.&._b..n.s..<..e^$.Z...bH......PSa...&F'.@0...<=:sz_.I.'...:?..c5..u}N.Q..E...33..WoW;QN.<.:x...y..$fI.w&=.8.....j....%............z.\......p:.^."..{...
 
 GET /Five/Visual/Clusters/PGI/images/FacKind_PGIPublicFacilities.jpg
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
 
 HTTP/1.1 200 OK
 Content-Type: image/jpeg
@@ -2947,7 +2947,7 @@ R....>......~.^...4.i"...$}[W.u..E!..d*.!...*.......m....<a....s...>..m....p..7G
 w..38%.h&....e..0[....."...;.5.....-	..=.dL.n..'hQ....>1...".V.O...l..Yca.$..@...>.W...'...M.41H.$..`.2...$..6	.=....C.Jj.Z..9...?.B..U...f.!k..iq&....6P83L...[...9.&1_1.j...#H.,h#..."..G|..$.J+..8S.,U..b.....
 
 GET /Five/Visual/Clusters/PGI/images/FacKind_PGISpecial.jpg
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
 
 HTTP/1.1 200 OK
 Content-Type: image/jpeg
@@ -2990,7 +2990,7 @@ I......UE..........u.d.c.[.4..".Ib...H.2	.,z.
 5..m5....s.R.....c........(j1..g....s...F..r...8.X.R. .T.@.c....j.rLr..uP>O....
 
 GET /five/0/visual/voyager/Build/FacilityList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=PGI&Kind=PGIDirectionFacilities&KindName=Headquarters&Folder=00000024.PGIDirectionFacilities.five&TycoonLevel=0
-Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=Crazz
+Referer: http://158.69.153.134/five/0/visual/voyager/Build/KindList.asp?Company=Yellow%20Inc.&WorldName=Shamba&Cluster=&Tycoon=SPO_test3
 
 HTTP/1.1 200 OK
 Cache-Control: private
@@ -3553,7 +3553,7 @@ UI HTML :
 
 
 
-GET /five/0/visual/voyager/mail/MailFolder.asp?Folder=Inbox&WorldName=Shamba&Tycoon=Crazz&Account=Crazz@Shamba.net&Password=Simcity99&frame_Id=MailView&frame_Class=HTMLView&frame_Align=bottom&frame_Height=40%&frame_KeepContent=no&frame_ToHistory=yes&LangId=0
+GET /five/0/visual/voyager/mail/MailFolder.asp?Folder=Inbox&WorldName=Shamba&Tycoon=SPO_test3&Account=SPO_test3@Shamba.net&Password=test3&frame_Id=MailView&frame_Class=HTMLView&frame_Align=bottom&frame_Height=40%&frame_KeepContent=no&frame_ToHistory=yes&LangId=0
 
 
 HTTP/1.1 200 OK
@@ -3569,12 +3569,12 @@ Content-Length: 453
 
 <frameset rows="70,*" framespacing=0>
 	
-	<frame name="Top" src="MailFolderTop.asp?Folder=Inbox&WorldName=Shamba&Account=Crazz@Shamba.net&Password=Simcity99&TycoonName=Crazz" scrolling="no" noresize frameborder = "No"  marginwidth="0" marginheight="0">
+	<frame name="Top" src="MailFolderTop.asp?Folder=Inbox&WorldName=Shamba&Account=SPO_test3@Shamba.net&Password=test3&TycoonName=SPO_test3" scrolling="no" noresize frameborder = "No"  marginwidth="0" marginheight="0">
 	
-	<frame name="Main" src="MessageList.asp?Folder=Inbox&WorldName=Shamba&Account=Crazz@Shamba.net&MsgId=&Action=" noresize frameborder = "No"  marginwidth="0" marginheight="0">
+	<frame name="Main" src="MessageList.asp?Folder=Inbox&WorldName=Shamba&Account=SPO_test3@Shamba.net&MsgId=&Action=" noresize frameborder = "No"  marginwidth="0" marginheight="0">
 </frameset>
 
-GET /five/0/visual/voyager/mail/MailFolderTop.asp?Folder=Inbox&WorldName=Shamba&Account=Crazz@Shamba.net&Password=Simcity99&TycoonName=Crazz
+GET /five/0/visual/voyager/mail/MailFolderTop.asp?Folder=Inbox&WorldName=Shamba&Account=SPO_test3@Shamba.net&Password=test3&TycoonName=SPO_test3
 
 HTTP/1.1 200 OK
 Cache-Control: private
@@ -3631,10 +3631,10 @@ Content-Length: 6709
 				window.parent.navigate( "http://local?frame_Id=MsgComposer&frame_Class=MsgComposer&frame_Align=client&frame_Height=50%&frame_Action=forward&Folder=INBOX&MsgId=" + toolbar.currMsgId );
 				break;
 			case "read" :
-				window.parent.navigate( "MailMessage.asp?WorldName=Shamba&Account=Crazz@Shamba.net&Folder=INBOX&MsgId=" + toolbar.currMsgId + "&frame_Id=MsgView&frame_Class=HTMLView&frame_Align=client&frame_Height=50%&frame_NoBorder=True&frame_NoScrollBars=false" );
+				window.parent.navigate( "MailMessage.asp?WorldName=Shamba&Account=SPO_test3@Shamba.net&Folder=INBOX&MsgId=" + toolbar.currMsgId + "&frame_Id=MsgView&frame_Class=HTMLView&frame_Align=client&frame_Height=50%&frame_NoBorder=True&frame_NoScrollBars=false" );
 				break;
 			case "delete" :
-				url = "MailFolder.asp?WorldName=Shamba&Account=Crazz@Shamba.net&Password=Simcity99&Tycoon=Crazz&Folder=INBOX&MsgId="  + toolbar.currMsgId + "&Action=DELETE&frame_Id=MailView&frame_Class=HTMLView&frame_Align=bottom&frame_Height=40%&frame_KeepContent=no&frame_ToHistory=yes"
+				url = "MailFolder.asp?WorldName=Shamba&Account=SPO_test3@Shamba.net&Password=test3&Tycoon=SPO_test3&Folder=INBOX&MsgId="  + toolbar.currMsgId + "&Action=DELETE&frame_Id=MailView&frame_Class=HTMLView&frame_Align=bottom&frame_Height=40%&frame_KeepContent=no&frame_ToHistory=yes"
 				window.parent.navigate(url);
 				break;
 			case "open" :
@@ -3692,9 +3692,9 @@ Content-Length: 6709
 			<td align="left" style="background-image: url(images/tabsback.gif)">
 				<map name="links">
 				
-				<area shape=polygon coords="91,30 194,30 176,18 113,18" target="_top" href="MailFolder.asp?Folder=SENT&WorldName=Shamba&Account=Crazz@Shamba.net&Password=Simcity99&Tycoon=Crazz" alt=""></area>
+				<area shape=polygon coords="91,30 194,30 176,18 113,18" target="_top" href="MailFolder.asp?Folder=SENT&WorldName=Shamba&Account=SPO_test3@Shamba.net&Password=test3&Tycoon=SPO_test3" alt=""></area>
 				
-				<area shape=polygon coords="171,30 274,30 256,18 193,18" target="_top" href="MailFolder.asp?Folder=DRAFT&WorldName=Shamba&Account=Crazz@Shamba.net&Password=Simcity99&Tycoon=Crazz" alt=""></area>
+				<area shape=polygon coords="171,30 274,30 256,18 193,18" target="_top" href="MailFolder.asp?Folder=DRAFT&WorldName=Shamba&Account=SPO_test3@Shamba.net&Password=test3&Tycoon=SPO_test3" alt=""></area>
 				
 				</map>
 				
@@ -3769,7 +3769,7 @@ Content-Length: 6709
 					</tr>
 				</table>
 				<!--<img id=newBtn class=toolbarBtn src="images/NewBtn.jpg" onMouseDown="onBtnMouseDown()" onMouseUp="onBtnMouseUp()" onMouseOut="onBtnMouseUp()" command="new" state="">-->
-				<!--<a target="IFC" href="DeleteMessage.asp?WorldName=Shamba&Account=Crazz@Shamba.net&Folder=INBOX&MsgId=" + toolbar.currMsgId >-->
+				<!--<a target="IFC" href="DeleteMessage.asp?WorldName=Shamba&Account=SPO_test3@Shamba.net&Folder=INBOX&MsgId=" + toolbar.currMsgId >-->
 				<!--<img id=deleteBtn class=toolbarBtn border="0" src="images/DeleteBtnDisabled.jpg" onMouseDown="onBtnMouseDown()" onMouseUp="onBtnMouseUp()" onMouseOut="onBtnMouseUp()" command="delete" state="disabled">-->
 				<!--</a>-->
 			</td>
@@ -3866,7 +3866,7 @@ Content-Length: 1019
 
 </html>
 
-GET /five/0/visual/voyager/mail/MailFolder.asp?Folder=SENT&WorldName=Shamba&Account=Crazz@Shamba.net&Password=Simcity99&Tycoon=Crazz
+GET /five/0/visual/voyager/mail/MailFolder.asp?Folder=SENT&WorldName=Shamba&Account=SPO_test3@Shamba.net&Password=test3&Tycoon=SPO_test3
 HTTP/1.1 200 OK
 Cache-Control: private
 Content-Type: text/html
@@ -3880,14 +3880,14 @@ Content-Length: 451
 
 <frameset rows="70,*" framespacing=0>
 	
-	<frame name="Top" src="MailFolderTop.asp?Folder=SENT&WorldName=Shamba&Account=Crazz@Shamba.net&Password=Simcity99&TycoonName=Crazz" scrolling="no" noresize frameborder = "No"  marginwidth="0" marginheight="0">
+	<frame name="Top" src="MailFolderTop.asp?Folder=SENT&WorldName=Shamba&Account=SPO_test3@Shamba.net&Password=test3&TycoonName=SPO_test3" scrolling="no" noresize frameborder = "No"  marginwidth="0" marginheight="0">
 	
-	<frame name="Main" src="MessageList.asp?Folder=SENT&WorldName=Shamba&Account=Crazz@Shamba.net&MsgId=&Action=" noresize frameborder = "No"  marginwidth="0" marginheight="0">
+	<frame name="Main" src="MessageList.asp?Folder=SENT&WorldName=Shamba&Account=SPO_test3@Shamba.net&MsgId=&Action=" noresize frameborder = "No"  marginwidth="0" marginheight="0">
 </frameset>
 
 
 
-GET /five/0/visual/voyager/mail/MessageBody.asp?WorldName=Shamba&Account=Crazz@Shamba.net&Folder=SENT&MsgId=2691B06053334348R
+GET /five/0/visual/voyager/mail/MessageBody.asp?WorldName=Shamba&Account=SPO_test3@Shamba.net&Folder=SENT&MsgId=2691B06053334348R
 
 HTTP/1.1 200 OK
 Cache-Control: private
@@ -3956,7 +3956,7 @@ a
 }
 
 
-GET /five/0/visual/voyager/mail/MessageList.asp?Folder=SENT&WorldName=Shamba&Account=Crazz@Shamba.net&MsgId=&Action=
+GET /five/0/visual/voyager/mail/MessageList.asp?Folder=SENT&WorldName=Shamba&Account=SPO_test3@Shamba.net&MsgId=&Action=
 
 HTTP/1.1 200 OK
 Cache-Control: private
@@ -4049,7 +4049,7 @@ Content-Length: 5221
 		{
 			selectRow( row );
 			
-			window.parent.navigate( "MailMessage.asp?WorldName=Shamba&Account=Crazz@Shamba.net&Folder=SENT&MsgId=" + row.msgId + "&frame_Id=MsgView&frame_Class=HTMLView&frame_Align=client&frame_Height=40%&frame_NoBorder=True&frame_NoScrollBars=False" );
+			window.parent.navigate( "MailMessage.asp?WorldName=Shamba&Account=SPO_test3@Shamba.net&Folder=SENT&MsgId=" + row.msgId + "&frame_Id=MsgView&frame_Class=HTMLView&frame_Align=client&frame_Height=40%&frame_NoBorder=True&frame_NoScrollBars=False" );
 			
 		}
 		event.cancelBubble = true;
@@ -4059,7 +4059,7 @@ Content-Length: 5221
 	{
 		var row = getRow( event.srcElement );
 		if (row != null)
-			window.parent.navigate( "MailMessage.asp?WorldName=Shamba&Account=Crazz@Shamba.net&Folder=SENT&MsgId=" + row.msgId + "&frame_Id=MsgView&frame_Class=HTMLView&frame_Align=client&frame_Height=40%&frame_NoBorder=True&frame_NoScrollBars=False" );
+			window.parent.navigate( "MailMessage.asp?WorldName=Shamba&Account=SPO_test3@Shamba.net&Folder=SENT&MsgId=" + row.msgId + "&frame_Id=MsgView&frame_Class=HTMLView&frame_Align=client&frame_Height=40%&frame_NoBorder=True&frame_NoScrollBars=False" );
 
 	}
 

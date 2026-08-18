@@ -323,7 +323,7 @@ describe('asp-url-extractor', () => {
             "&WorldName=Shamba" +
             "&DAAddr=158.69.153.134" +
             "&DAPort=7001" +
-            "&Tycoon=Crazz";
+            "&Tycoon=SPO_test3";
           hiddenFrame.navigate( URL );
         }
       </script></head></html>`;
@@ -335,7 +335,7 @@ describe('asp-url-extractor', () => {
       expect(advance!.url).toContain('TycoonId=132445236');
       expect(advance!.url).toContain('Password=SIMCITY99');
       expect(advance!.url).toContain('DAPort=7001');
-      expect(advance!.url).toContain('Tycoon=Crazz');
+      expect(advance!.url).toContain('Tycoon=SPO_test3');
       // Value= is empty because event.srcElement.checked is a JS expression, not a string literal
       expect(advance!.url).toContain('Value=');
       expect(advance!.method).toBe('GET');
@@ -348,7 +348,7 @@ describe('asp-url-extractor', () => {
           switch (td.command)
           {
             case "reset" :
-              var URL = "resetTycoon.asp?Tycoon=Crazz&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&TycoonId=&Password=SIMCITY99";
+              var URL = "resetTycoon.asp?Tycoon=SPO_test3&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&TycoonId=&Password=SIMCITY99";
               window.navigate(URL);
               break;
           }
@@ -358,7 +358,7 @@ describe('asp-url-extractor', () => {
       const results = extractScriptNavigateUrls(html, BASE_URL);
       const reset = results.find(r => r.key === 'resetTycoon.asp');
       expect(reset).toBeDefined();
-      expect(reset!.url).toContain('Tycoon=Crazz');
+      expect(reset!.url).toContain('Tycoon=SPO_test3');
       expect(reset!.url).toContain('DAPort=7001');
     });
 
@@ -526,11 +526,11 @@ describe('asp-url-extractor', () => {
       switch (td.command)
       {
         case "reset" :
-          var URL = "resetTycoon.asp?Tycoon=Crazz&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&TycoonId=&Password=SIMCITY99";
+          var URL = "resetTycoon.asp?Tycoon=SPO_test3&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&TycoonId=&Password=SIMCITY99";
           window.navigate(URL);
           break;
         case "abandon" :
-          var URL = "abandonRole.asp?Tycoon=Crazz&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&TycoonId=&Password=SIMCITY99";
+          var URL = "abandonRole.asp?Tycoon=SPO_test3&WorldName=Shamba&DAAddr=158.69.153.134&DAPort=7001&TycoonId=&Password=SIMCITY99";
           window.navigate(URL);
           break;
       }
@@ -546,7 +546,7 @@ describe('asp-url-extractor', () => {
       "&WorldName=Shamba" +
       "&DAAddr=158.69.153.134" +
       "&DAPort=7001" +
-      "&Tycoon=Crazz";
+      "&Tycoon=SPO_test3";
     hiddenFrame.navigate( URL );
   }
 </script>

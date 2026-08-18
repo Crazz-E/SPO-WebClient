@@ -50,7 +50,7 @@ describe('isHtmlContent', () => {
     expect(isHtmlContent([
       '<HEAD>',
       '</HEAD>',
-      '<META HTTP-EQUIV="REFRESH" CONTENT="0; URL=http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=Crazz&Ministry=Defense&President=SPO_test3&WorldName=Shamba">',
+      '<META HTTP-EQUIV="REFRESH" CONTENT="0; URL=http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=SPO_test3&Ministry=Defense&President=SPO_test3&WorldName=Shamba">',
     ])).toBe(true);
   });
 });
@@ -65,10 +65,10 @@ describe('extractMetaRefreshUrl', () => {
     const html = [
       '<HEAD>',
       '</HEAD>',
-      '<META HTTP-EQUIV="REFRESH" CONTENT="0; URL=http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=Crazz&Ministry=Defense&President=SPO_test3&WorldName=Shamba">',
+      '<META HTTP-EQUIV="REFRESH" CONTENT="0; URL=http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=SPO_test3&Ministry=Defense&President=SPO_test3&WorldName=Shamba">',
     ].join('\n');
     expect(extractMetaRefreshUrl(html)).toBe(
-      'http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=Crazz&Ministry=Defense&President=SPO_test3&WorldName=Shamba',
+      'http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//NotifyMinister.asp?Minister=SPO_test3&Ministry=Defense&President=SPO_test3&WorldName=Shamba',
     );
   });
 

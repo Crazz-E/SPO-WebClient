@@ -71,7 +71,7 @@ describe('auth scenario', () => {
     const { rdo } = createAuthScenario({ username: 'TestPlayer' });
     const mapSegaUser = rdo.exchanges[2];
     expect(mapSegaUser.request).toContain('%TestPlayer');
-    expect(mapSegaUser.request).not.toContain('%Crazz');
+    expect(mapSegaUser.request).not.toContain('%SPO_test3');
   });
 });
 
@@ -141,7 +141,7 @@ describe('company-list scenario', () => {
   it('CAPTURED_COMPANY has correct name/id/ownerRole', () => {
     expect(CAPTURED_COMPANY.name).toBe('Yellow Inc.');
     expect(CAPTURED_COMPANY.id).toBe('28');
-    expect(CAPTURED_COMPANY.ownerRole).toBe('Crazz');
+    expect(CAPTURED_COMPANY.ownerRole).toBe('SPO_test3');
   });
 
   it('HTTP has 3 exchanges (pleasewait, logonComplete, chooseCompany)', () => {

@@ -343,8 +343,8 @@ All configurable values are defined in `ScenarioVariables` (`scenario-variables.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `username` | `'Crazz'` | Player login name |
-| `password` | `'Simcity99'` | Player password |
+| `username` | `'SPO_test3'` | Player login name |
+| `password` | `'test3'` | Player password |
 | `directoryServerId` | `'39751288'` | Directory server RDO object ID |
 | `directorySessionId` | `'142217260'` | Session ID from RDOOpenSession |
 | `worldName` | `'Shamba'` | Game world name |
@@ -354,13 +354,13 @@ All configurable values are defined in `ScenarioVariables` (`scenario-variables.
 | `worldUrl` | `'http://158.69.153.134/Five/'` | Base URL for game assets |
 | `companyName` | `'Yellow Inc.'` | Player's company |
 | `companyId` | `'28'` | Company ID |
-| `companyOwnerRole` | `'Crazz'` | Company owner tycoon name |
+| `companyOwnerRole` | `'SPO_test3'` | Company owner tycoon name |
 | `companyCluster` | `'PGI'` | Company cluster |
 | `clientViewId` | `'8161308'` | Client view RDO object ID |
 | `securityId` | `'131655160'` | Security token ID |
 | `daAddr` | `'158.69.153.134'` | DA server address |
 | `daPort` | `7001` | DA server port |
-| `mailAccount` | `'Crazz@Shamba.net'` | Mail account (auto-computed) |
+| `mailAccount` | `'SPO_test3@Shamba.net'` | Mail account (auto-computed) |
 | `mailServerId` | `'30437308'` | Mail server RDO object ID |
 | `tycoonProxyId` | `'40133496'` | Tycoon proxy RDO object ID |
 

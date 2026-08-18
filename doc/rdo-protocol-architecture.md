@@ -74,7 +74,7 @@ Server → Client (response — the member name is echoed, NOT "res="):
   A40 ServerBusy="#0";                                  [capture :993-994]
 
 Client → Server (method call with return):
-  C 3 sel 142217260 call RDOLogonUser "^" "%Crazz","%…";
+  C 3 sel 142217260 call RDOLogonUser "^" "%SPO_test3","%…";
 Server → Client (response):
   A3 res="#0";                                          [capture :14-15]
 
@@ -687,8 +687,8 @@ Immediately after login, the captured client sends: `set EnableEvents="#-1"` (ac
 ```
 C 0 idof "DirectoryServer";                               A0 objid="39751288";
 C 1 sel 39751288 get RDOOpenSession;                      A1 RDOOpenSession="#142217260";
-C 2 sel 142217260 call RDOMapSegaUser "^" "%Crazz";       A2 res="%";
-C 3 sel 142217260 call RDOLogonUser "^" "%Crazz","%…";    A3 res="#0";
+C 2 sel 142217260 call RDOMapSegaUser "^" "%SPO_test3";       A2 res="%";
+C 3 sel 142217260 call RDOLogonUser "^" "%SPO_test3","%…";    A3 res="#0";
 C 4 sel 142217260 call RDOEndSession "*" ;                A4 ;
 ```
 

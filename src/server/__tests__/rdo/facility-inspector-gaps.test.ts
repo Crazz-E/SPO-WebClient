@@ -453,7 +453,7 @@ describe('GAP-02: Votes Tab — GetPropertyList Exchange', () => {
     '0',                 // Trouble
     CAPITOL_BLOCK,       // CurrBlock
     '2',                 // CampaignCount
-    'President Crazz',   // RulerName
+    'President SPO_test3',   // RulerName
     '15200',             // RulerVotes
     '72',                // RulerCmpRat
     '8500',              // RulerCmpPnts
@@ -650,7 +650,7 @@ describe('GAP-02: Ministeries Tab — GetPropertyList Exchange', () => {
 
   it('should define initial query for MinisterCount', () => {
     const props = ['MinisterCount', 'SecurityId', 'ActualRuler', 'CurrBlock'];
-    const values = ['3', 'ownerTycoon123', 'President Crazz', CAPITOL_BLOCK];
+    const values = ['3', 'ownerTycoon123', 'President SPO_test3', CAPITOL_BLOCK];
 
     const exchange: RdoExchange = {
       id: 'gap-ministeries-count',

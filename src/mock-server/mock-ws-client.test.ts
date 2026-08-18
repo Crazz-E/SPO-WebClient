@@ -17,7 +17,7 @@ function buildConnectScenario(): WsCaptureScenario {
     {
       request: {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       },
       response: {
@@ -33,7 +33,7 @@ function buildMultiResponseScenario(): WsCaptureScenario {
     {
       request: {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       },
       response: {
@@ -69,7 +69,7 @@ describe('MockWebSocketClient', () => {
       const request: WsMessage = {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage;
 
@@ -93,7 +93,7 @@ describe('MockWebSocketClient', () => {
       const request: WsMessage = {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage;
 
@@ -111,7 +111,7 @@ describe('MockWebSocketClient', () => {
       const request: WsMessage = {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'my-unique-id',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage;
 
@@ -126,7 +126,7 @@ describe('MockWebSocketClient', () => {
       const request: WsMessage = {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage;
 
@@ -144,7 +144,7 @@ describe('MockWebSocketClient', () => {
       const request: WsMessage = {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage;
 
@@ -159,7 +159,7 @@ describe('MockWebSocketClient', () => {
       const request: WsMessage = {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage;
 
@@ -174,7 +174,7 @@ describe('MockWebSocketClient', () => {
       const request: WsMessage = {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage;
 
@@ -197,7 +197,7 @@ describe('MockWebSocketClient', () => {
       await multiClient.send({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage);
 
@@ -223,7 +223,7 @@ describe('MockWebSocketClient', () => {
       await multiClient.send({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage);
 
@@ -244,7 +244,7 @@ describe('MockWebSocketClient', () => {
       const firstResponse = await multiClient.send({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage);
 
@@ -347,7 +347,7 @@ describe('MockWebSocketClient', () => {
       await client.send({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage);
 
@@ -373,7 +373,7 @@ describe('MockWebSocketClient', () => {
       await freshClient.send({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'test-001',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage);
 

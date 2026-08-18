@@ -42,13 +42,13 @@ export interface ScenarioVariables {
 
 /**
  * Default values derived from the capture document.
- * NOTE: These match the Crazz account used during packet captures.
+ * NOTE: These match the SPO_test3 account used during packet captures.
  * E2E tests use SPO_test3/test3 (see doc/E2E-TESTING.md) — different from these.
  * Tests can override via mergeVariables({ username: 'SPO_test3', password: 'test3' }).
  */
 export const DEFAULT_VARIABLES: ScenarioVariables = {
-  username: 'Crazz',
-  password: 'Simcity99',
+  username: 'SPO_test3',
+  password: 'test3',
   directoryServerId: '39751288',
   directorySessionId: '142217260',
   worldName: 'Shamba',
@@ -58,13 +58,13 @@ export const DEFAULT_VARIABLES: ScenarioVariables = {
   worldUrl: 'http://158.69.153.134/Five/',
   companyName: 'Yellow Inc.',
   companyId: '28',
-  companyOwnerRole: 'Crazz',
+  companyOwnerRole: 'SPO_test3',
   companyCluster: 'PGI',
   clientViewId: '8161308',
   securityId: '131655160',
   daAddr: '158.69.153.134',
   daPort: 7001,
-  mailAccount: 'Crazz@Shamba.net',
+  mailAccount: 'SPO_test3@Shamba.net',
   mailServerId: '30437308',
   tycoonProxyId: '40133496',
 };

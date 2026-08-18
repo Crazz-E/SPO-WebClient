@@ -88,28 +88,28 @@ describe('Protocol Validation: checkAuth()', () => {
     });
 
     it('should send exactly 5 RDO commands', async () => {
-      await harness.session.checkAuth('Crazz', 'Simcity99');
+      await harness.session.checkAuth('SPO_test3', 'test3');
       const commands = harness.getCapturedCommands(0);
       expect(commands).toHaveLength(5);
     });
 
     it('should send idof DirectoryServer as first command', async () => {
-      await harness.session.checkAuth('Crazz', 'Simcity99');
+      await harness.session.checkAuth('SPO_test3', 'test3');
       const commands = harness.getCapturedCommands(0);
       expect(commands[0]).toMatch(/idof "DirectoryServer"/);
     });
 
     it('should send RDOLogonUser with username and password', async () => {
-      await harness.session.checkAuth('Crazz', 'Simcity99');
+      await harness.session.checkAuth('SPO_test3', 'test3');
       const commands = harness.getCapturedCommands(0);
       const logonCmd = commands.find(cmd => cmd.includes('RDOLogonUser'));
       expect(logonCmd).toBeDefined();
-      expect(logonCmd).toContain('%Crazz');
-      expect(logonCmd).toContain('%Simcity99');
+      expect(logonCmd).toContain('%SPO_test3');
+      expect(logonCmd).toContain('%test3');
     });
 
     it('should send RDOEndSession with void push separator', async () => {
-      await harness.session.checkAuth('Crazz', 'Simcity99');
+      await harness.session.checkAuth('SPO_test3', 'test3');
       const commands = harness.getCapturedCommands(0);
       const endCmd = commands.find(cmd => cmd.includes('RDOEndSession'));
       expect(endCmd).toBeDefined();
@@ -117,11 +117,11 @@ describe('Protocol Validation: checkAuth()', () => {
     });
 
     it('should resolve without error on success (code 0)', async () => {
-      await expect(harness.session.checkAuth('Crazz', 'Simcity99')).resolves.toBeUndefined();
+      await expect(harness.session.checkAuth('SPO_test3', 'test3')).resolves.toBeUndefined();
     });
 
     it('should close the socket after auth', async () => {
-      await harness.session.checkAuth('Crazz', 'Simcity99');
+      await harness.session.checkAuth('SPO_test3', 'test3');
       const sockets = harness.getSockets();
       expect(sockets[0].destroyed).toBe(true);
     });
@@ -137,7 +137,7 @@ describe('Protocol Validation: checkAuth()', () => {
       });
 
       try {
-        await harness.session.checkAuth('BadUser', 'Simcity99');
+        await harness.session.checkAuth('BadUser', 'test3');
         fail('Expected AuthError to be thrown');
       } catch (err) {
         expect(err).toBeInstanceOf(AuthError);
@@ -153,7 +153,7 @@ describe('Protocol Validation: checkAuth()', () => {
         ],
       });
 
-      await expect(harness.session.checkAuth('Crazz', 'WrongPass'))
+      await expect(harness.session.checkAuth('SPO_test3', 'WrongPass'))
         .rejects.toThrow(AuthError);
     });
 
@@ -165,7 +165,7 @@ describe('Protocol Validation: checkAuth()', () => {
         ],
       });
 
-      await expect(harness.session.checkAuth('Crazz', 'Simcity99'))
+      await expect(harness.session.checkAuth('SPO_test3', 'test3'))
         .rejects.toThrow(AuthError);
     });
 
@@ -177,7 +177,7 @@ describe('Protocol Validation: checkAuth()', () => {
         ],
       });
 
-      await expect(harness.session.checkAuth('Nobody', 'Simcity99'))
+      await expect(harness.session.checkAuth('Nobody', 'test3'))
         .rejects.toThrow(AuthError);
     });
   });

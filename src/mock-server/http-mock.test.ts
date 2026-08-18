@@ -110,10 +110,10 @@ describe('HttpMock', () => {
     it('matches when all query patterns present', () => {
       mock.addExchange(makeExchange({
         urlPattern: '/page',
-        queryPatterns: { WorldName: 'Shamba', UserName: 'Crazz' },
+        queryPatterns: { WorldName: 'Shamba', UserName: 'SPO_test3' },
       }));
 
-      const result = mock.match('GET', '/page?WorldName=Shamba&UserName=Crazz');
+      const result = mock.match('GET', '/page?WorldName=Shamba&UserName=SPO_test3');
 
       expect(result).not.toBeNull();
     });
@@ -121,7 +121,7 @@ describe('HttpMock', () => {
     it('rejects when required query param missing', () => {
       mock.addExchange(makeExchange({
         urlPattern: '/page',
-        queryPatterns: { WorldName: 'Shamba', UserName: 'Crazz' },
+        queryPatterns: { WorldName: 'Shamba', UserName: 'SPO_test3' },
       }));
 
       const result = mock.match('GET', '/page?WorldName=Shamba');
@@ -181,10 +181,10 @@ describe('HttpMock', () => {
         body: '<html>Profile for {{username}}</html>',
       }));
 
-      const result = mock.match('GET', '/profile/Crazz', { username: 'Crazz' });
+      const result = mock.match('GET', '/profile/SPO_test3', { username: 'SPO_test3' });
 
       expect(result).not.toBeNull();
-      expect(result!.body).toBe('<html>Profile for Crazz</html>');
+      expect(result!.body).toBe('<html>Profile for SPO_test3</html>');
     });
   });
 

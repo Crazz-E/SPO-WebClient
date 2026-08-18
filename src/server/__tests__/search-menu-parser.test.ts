@@ -111,8 +111,8 @@ describe('parseTycoonProfile', () => {
 
   it('should extract all profile fields from RenderTycoon.asp HTML', () => {
     const html = `<html><body>
-      <div class="header1">Crazz</div>
-      <img id="picture" src="/fivedata/userinfo/Shamba/Crazz/largephoto.jpg" width="150" height="200">
+      <div class="header1">SPO_test3</div>
+      <img id="picture" src="/fivedata/userinfo/Shamba/SPO_test3/largephoto.jpg" width="150" height="200">
       <table cellspacing="0" cellpadding="2">
         <tr><td class="label">Fortune:</td><td class="value">$8,198,554,338</td></tr>
         <tr><td class="label">This year:</td><td class="value">-$1,454,808</td></tr>
@@ -120,13 +120,13 @@ describe('parseTycoonProfile', () => {
         <tr><td class="label">Level:</td><td class="value">Apprentice.</td></tr>
         <tr><td class="label">Prestige:</td><td class="value">29 points.</td></tr>
       </table>
-      <a href="/five/0/visual/voyager/newtycoon/tycoon.asp?Tycoon=Crazz">Show Profile</a>
-      <a href="TycoonCompanies.asp?WorldName=Shamba&Tycoon=Crazz&RIWS=">Companies</a>
+      <a href="/five/0/visual/voyager/newtycoon/tycoon.asp?Tycoon=SPO_test3">Show Profile</a>
+      <a href="TycoonCompanies.asp?WorldName=Shamba&Tycoon=SPO_test3&RIWS=">Companies</a>
     </body></html>`;
 
     const profile = parseTycoonProfile(html, BASE);
 
-    expect(profile.name).toBe('Crazz');
+    expect(profile.name).toBe('SPO_test3');
     expect(profile.fortune).toBe(8198554338);
     expect(profile.thisYearProfit).toBe(-1454808);
     expect(profile.ntaRanking).toBe('3rd place.');
@@ -155,8 +155,8 @@ describe('parsePeopleSearchResults', () => {
   it('should extract tycoon names from foundtycoons.asp HTML', () => {
     const html = `<html><body>
       <table cellspacing="0">
-        <tr onMouseOver="onItemMouseOver()" dirHref="RenderTycoon.asp?WorldName=Shamba&Tycoon=Crazz&RIWS=" textId="text_1">
-          <td><div class="listItem">Crazz&nbsp;</div></td>
+        <tr onMouseOver="onItemMouseOver()" dirHref="RenderTycoon.asp?WorldName=Shamba&Tycoon=SPO_test3&RIWS=" textId="text_1">
+          <td><div class="listItem">SPO_test3&nbsp;</div></td>
         </tr>
         <tr><td height="2" background="images/itemgradient.jpg"></td></tr>
       </table>
@@ -165,7 +165,7 @@ describe('parsePeopleSearchResults', () => {
     const results = parsePeopleSearchResults(html);
 
     expect(results).toHaveLength(1);
-    expect(results[0]).toBe('Crazz');
+    expect(results[0]).toBe('SPO_test3');
   });
 
   it('should return multiple results', () => {

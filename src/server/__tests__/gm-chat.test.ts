@@ -62,10 +62,10 @@ describe('GM Chat Protocol', () => {
 
   it('should parse GM usernames from comma-separated string', () => {
     // Simulates the SPO_GM_USERS env var parsing logic
-    const envVar = 'admin, Crazz, moderator1';
+    const envVar = 'admin, SPO_test3, moderator1';
     const gmSet = new Set(envVar.split(',').map(s => s.trim()));
     expect(gmSet.has('admin')).toBe(true);
-    expect(gmSet.has('Crazz')).toBe(true);
+    expect(gmSet.has('SPO_test3')).toBe(true);
     expect(gmSet.has('moderator1')).toBe(true);
     expect(gmSet.has('player1')).toBe(false);
   });

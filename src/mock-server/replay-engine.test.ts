@@ -183,14 +183,14 @@ describe('ReplayEngine', () => {
         'ex-shamba',
         WsMessageType.REQ_LOGIN_WORLD,
         WsMessageType.RESP_LOGIN_SUCCESS,
-        { worldName: 'Shamba', username: 'Crazz', password: 'test' },
+        { worldName: 'Shamba', username: 'SPO_test3', password: 'test' },
         { tycoonId: '22' }
       );
       const other = makeExchange(
         'ex-other',
         WsMessageType.REQ_LOGIN_WORLD,
         WsMessageType.RESP_LOGIN_SUCCESS,
-        { worldName: 'OtherWorld', username: 'Crazz', password: 'test' },
+        { worldName: 'OtherWorld', username: 'SPO_test3', password: 'test' },
         { tycoonId: '33' }
       );
       store.addWsScenario(makeScenario('worlds', [shamba, other]));
@@ -199,7 +199,7 @@ describe('ReplayEngine', () => {
         type: WsMessageType.REQ_LOGIN_WORLD,
         wsRequestId: 'req-001',
         worldName: 'Shamba',
-        username: 'Crazz',
+        username: 'SPO_test3',
         password: 'test',
       } as WsMessage;
 
@@ -352,8 +352,8 @@ describe('ReplayEngine', () => {
       const request = {
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'req-001',
-        username: 'Crazz',
-        password: 'Simcity99',
+        username: 'SPO_test3',
+        password: 'test3',
         zonePath: 'Root/Areas/Asia/Worlds',
       } as WsMessage;
 
@@ -369,8 +369,8 @@ describe('ReplayEngine', () => {
       engine.match({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'req-001',
-        username: 'Crazz',
-        password: 'Simcity99',
+        username: 'SPO_test3',
+        password: 'test3',
       } as WsMessage);
 
       // Then login to world
@@ -379,8 +379,8 @@ describe('ReplayEngine', () => {
       engine.match({
         type: WsMessageType.REQ_LOGIN_WORLD,
         wsRequestId: 'req-002',
-        username: 'Crazz',
-        password: 'Simcity99',
+        username: 'SPO_test3',
+        password: 'test3',
         worldName: 'Shamba',
       } as WsMessage);
 
@@ -436,8 +436,8 @@ describe('ReplayEngine', () => {
       engine.match({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'req-001',
-        username: 'Crazz',
-        password: 'Simcity99',
+        username: 'SPO_test3',
+        password: 'test3',
       } as WsMessage);
       expect(engine.getState().phase).toBe(MockSessionPhase.DIRECTORY_CONNECTED);
 

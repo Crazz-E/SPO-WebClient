@@ -352,7 +352,7 @@ describe('P-M1 — RDOSearchKey pattern reaches the wire as OLEString', () => {
     session.setCurrentWorldInfo({ name: 'planitia' } as never);
     session.setCachedZonePath('Root/Areas/America/Worlds');
 
-    await session.searchPeople('Crazz');
+    await session.searchPeople('SPO_test3');
 
     const frames = new RdoFramer().ingest(Buffer.concat(writes));
     const search = frames.find((f) => RdoProtocol.parse(f).member === 'RDOSearchKey');
@@ -362,8 +362,8 @@ describe('P-M1 — RDOSearchKey pattern reaches the wire as OLEString', () => {
     // — Directory Server/DirectoryServer.pas:78. VoidId would decode the first
     // parameter to Unassigned (RDOUtils.pas:351-352) and destroy the pattern.
     expect(search!.replace(/^C \d+ /, 'C ')).toBe(
-      'C sel 142217260 call RDOSearchKey "^" "%*Crazz*","%"'
+      'C sel 142217260 call RDOSearchKey "^" "%*SPO_test3*","%"'
     );
-    expect(search).not.toContain('"*Crazz*"');
+    expect(search).not.toContain('"*SPO_test3*"');
   });
 });

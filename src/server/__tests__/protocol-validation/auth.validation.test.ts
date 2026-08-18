@@ -49,7 +49,7 @@ describe('Protocol Validation: connectDirectory()', () => {
 
   describe('Phase 1: Directory Authentication', () => {
     it('should send idof DirectoryServer as first command', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase1Commands = harness.getCapturedCommands(0);
       expect(phase1Commands.length).toBeGreaterThanOrEqual(1);
@@ -57,7 +57,7 @@ describe('Protocol Validation: connectDirectory()', () => {
     });
 
     it('should send RDOOpenSession GET to directory server ID', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase1Commands = harness.getCapturedCommands(0);
       const openSessionCmd = phase1Commands.find(cmd => cmd.includes('RDOOpenSession'));
@@ -67,26 +67,26 @@ describe('Protocol Validation: connectDirectory()', () => {
     });
 
     it('should send RDOMapSegaUser with username', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase1Commands = harness.getCapturedCommands(0);
       const mapSegaCmd = phase1Commands.find(cmd => cmd.includes('RDOMapSegaUser'));
       expect(mapSegaCmd).toBeDefined();
-      expect(mapSegaCmd).toContain('%Crazz');
+      expect(mapSegaCmd).toContain('%SPO_test3');
     });
 
     it('should send RDOLogonUser with username and password', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase1Commands = harness.getCapturedCommands(0);
       const logonCmd = phase1Commands.find(cmd => cmd.includes('RDOLogonUser'));
       expect(logonCmd).toBeDefined();
-      expect(logonCmd).toContain('%Crazz');
-      expect(logonCmd).toContain('%Simcity99');
+      expect(logonCmd).toContain('%SPO_test3');
+      expect(logonCmd).toContain('%test3');
     });
 
     it('should send RDOEndSession to close auth connection', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase1Commands = harness.getCapturedCommands(0);
       const endCmd = phase1Commands.find(cmd => cmd.includes('RDOEndSession'));
@@ -96,14 +96,14 @@ describe('Protocol Validation: connectDirectory()', () => {
     });
 
     it('should send exactly 5 commands in Phase 1', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase1Commands = harness.getCapturedCommands(0);
       expect(phase1Commands).toHaveLength(5);
     });
 
     it('should send Phase 1 commands with sequential RIDs', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase1Commands = harness.getCapturedCommands(0);
       const rids: number[] = [];
@@ -118,7 +118,7 @@ describe('Protocol Validation: connectDirectory()', () => {
     });
 
     it('should chain target IDs from previous responses', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase1Commands = harness.getCapturedCommands(0);
       // Command 0: idof DirectoryServer → response gives directoryServerId
@@ -137,14 +137,14 @@ describe('Protocol Validation: connectDirectory()', () => {
 
   describe('Phase 2: Directory Query', () => {
     it('should create a separate socket for directory query', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const sockets = harness.getSockets();
       expect(sockets.length).toBeGreaterThanOrEqual(2);
     });
 
     it('should send idof DirectoryServer on query socket', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase2Commands = harness.getCapturedCommands(1);
       expect(phase2Commands.length).toBeGreaterThanOrEqual(1);
@@ -152,7 +152,7 @@ describe('Protocol Validation: connectDirectory()', () => {
     });
 
     it('should send RDOQueryKey with correct zone path', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase2Commands = harness.getCapturedCommands(1);
       const queryCmd = phase2Commands.find(cmd => cmd.includes('RDOQueryKey'));
@@ -161,7 +161,7 @@ describe('Protocol Validation: connectDirectory()', () => {
     });
 
     it('should send RDOQueryKey with full query block (8 property categories)', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase2Commands = harness.getCapturedCommands(1);
       const queryCmd = phase2Commands.find(cmd => cmd.includes('RDOQueryKey'));
@@ -173,7 +173,7 @@ describe('Protocol Validation: connectDirectory()', () => {
     });
 
     it('should send RDOEndSession to close query connection', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase2Commands = harness.getCapturedCommands(1);
       const endCmd = phase2Commands.find(cmd => cmd.includes('RDOEndSession'));
@@ -181,7 +181,7 @@ describe('Protocol Validation: connectDirectory()', () => {
     });
 
     it('should send exactly 4 commands in Phase 2', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const phase2Commands = harness.getCapturedCommands(1);
       expect(phase2Commands).toHaveLength(4);
@@ -191,7 +191,7 @@ describe('Protocol Validation: connectDirectory()', () => {
   describe('Return value parsing', () => {
     it('should return WorldInfo array from directory query', async () => {
       const worlds = await harness.session.connectDirectory(
-        'Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds'
+        'SPO_test3', 'test3', 'Root/Areas/Asia/Worlds'
       );
 
       expect(worlds).toBeDefined();
@@ -201,7 +201,7 @@ describe('Protocol Validation: connectDirectory()', () => {
 
     it('should parse world names from response', async () => {
       const worlds = await harness.session.connectDirectory(
-        'Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds'
+        'SPO_test3', 'test3', 'Root/Areas/Asia/Worlds'
       );
 
       const worldNames = worlds.map(w => w.name);
@@ -211,7 +211,7 @@ describe('Protocol Validation: connectDirectory()', () => {
 
     it('should parse IP addresses from response', async () => {
       const worlds = await harness.session.connectDirectory(
-        'Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds'
+        'SPO_test3', 'test3', 'Root/Areas/Asia/Worlds'
       );
 
       // keyFieldMatch correctly selects Asia's RDOQueryKey via argsPattern
@@ -223,7 +223,7 @@ describe('Protocol Validation: connectDirectory()', () => {
 
     it('should skip worlds without port (port=0)', async () => {
       const worlds = await harness.session.connectDirectory(
-        'Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds'
+        'SPO_test3', 'test3', 'Root/Areas/Asia/Worlds'
       );
 
       // Worlds without IP/port (like basinia, leonia) should be excluded
@@ -234,14 +234,14 @@ describe('Protocol Validation: connectDirectory()', () => {
 
   describe('Full flow compliance', () => {
     it('should send exactly 9 commands total (5 auth + 4 query)', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const allCommands = harness.getAllCapturedCommands();
       expect(allCommands).toHaveLength(9);
     });
 
     it('should use RDO call format for method invocations', async () => {
-      await harness.session.connectDirectory('Crazz', 'Simcity99', 'Root/Areas/Asia/Worlds');
+      await harness.session.connectDirectory('SPO_test3', 'test3', 'Root/Areas/Asia/Worlds');
 
       const allCommands = harness.getAllCapturedCommands();
       const callCommands = allCommands.filter(cmd => cmd.includes(' call '));

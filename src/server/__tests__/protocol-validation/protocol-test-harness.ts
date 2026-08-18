@@ -365,7 +365,7 @@ export function buildWorldPropertyFallbacks(vars: {
     { member: 'WorldYSize', payload: `WorldYSize="#1024"` },
     { member: 'WorldSeason', payload: `WorldSeason="%Spring"` },
     // User properties after login
-    { member: 'MailAccount', payload: `MailAccount="%Crazz@Shamba.net"` },
+    { member: 'MailAccount', payload: `MailAccount="%SPO_test3@Shamba.net"` },
     { member: 'TycoonId', payload: `TycoonId="#22"` },
     { member: 'RDOCnntId', payload: `RDOCnntId="#12345678"` },
     { member: 'GetCompanyCount', payload: `GetCompanyCount="#1"` },

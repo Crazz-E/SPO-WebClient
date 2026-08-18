@@ -9,8 +9,8 @@ import { DEFAULT_VARIABLES, mergeVariables, substituteVariables } from './scenar
 // =============================================================================
 
 describe('DEFAULT_VARIABLES', () => {
-  it('has correct username "Crazz"', () => {
-    expect(DEFAULT_VARIABLES.username).toBe('Crazz');
+  it('has correct username "SPO_test3"', () => {
+    expect(DEFAULT_VARIABLES.username).toBe('SPO_test3');
   });
 
   it('has correct worldName "Shamba"', () => {
@@ -25,8 +25,8 @@ describe('DEFAULT_VARIABLES', () => {
     expect(DEFAULT_VARIABLES.worldIp).toBe('158.69.153.134');
   });
 
-  it('has computed mailAccount "Crazz@Shamba.net"', () => {
-    expect(DEFAULT_VARIABLES.mailAccount).toBe('Crazz@Shamba.net');
+  it('has computed mailAccount "SPO_test3@Shamba.net"', () => {
+    expect(DEFAULT_VARIABLES.mailAccount).toBe('SPO_test3@Shamba.net');
   });
 });
 
@@ -77,7 +77,7 @@ describe('substituteVariables', () => {
   it('replaces {{username}} placeholder', () => {
     const vars = mergeVariables();
     const result = substituteVariables('Hello {{username}}!', vars);
-    expect(result).toBe('Hello Crazz!');
+    expect(result).toBe('Hello SPO_test3!');
   });
 
   it('replaces multiple placeholders', () => {
@@ -86,7 +86,7 @@ describe('substituteVariables', () => {
       '{{username}} plays in {{worldName}} with {{companyName}}',
       vars
     );
-    expect(result).toBe('Crazz plays in Shamba with Yellow Inc.');
+    expect(result).toBe('SPO_test3 plays in Shamba with Yellow Inc.');
   });
 
   it('leaves unrecognized placeholders unchanged', () => {

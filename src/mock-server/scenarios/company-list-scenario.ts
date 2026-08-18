@@ -23,7 +23,7 @@ export interface CapturedCompanyData {
 const CAPTURED_COMPANY: CapturedCompanyData = {
   name: 'Yellow Inc.',
   id: '28',
-  ownerRole: 'Crazz',
+  ownerRole: 'SPO_test3',
   cluster: 'PGI',
   status: 'Private',
   facilityCount: 38,

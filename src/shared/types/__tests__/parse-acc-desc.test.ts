@@ -62,7 +62,7 @@ describe('parseAccDesc', () => {
       expect(result.modifiers & CHAT_MODIFIER_FLAGS.VETERAN).toBeTruthy();
     });
 
-    it('decodes Crazz (8388608) — Commoner + Veteran', () => {
+    it('decodes SPO_test3 (8388608) — Commoner + Veteran', () => {
       const result = parseAccDesc('8388608');
       // 8388608 & 0xFFFF = 0
       expect(result.nobilityPoints).toBe(0);

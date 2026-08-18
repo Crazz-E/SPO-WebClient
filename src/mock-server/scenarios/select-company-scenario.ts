@@ -4,7 +4,7 @@
  * RDO: EnableEvents, PickEvent, GetTycoonCookie, ServerBusy
  * WS: REQ_SELECT_COMPANY -> RESP triggers RDO commands
  * Push events: InitClient (immediate, modeled as EVENT_TYCOON_UPDATE),
- *   ChatMsg "Crazz has entered Shamba"
+ *   ChatMsg "SPO_test3 has entered Shamba"
  *
  * Per original server (InterfaceServer.pas): RegisterEventsById calls
  * SendClientData() which fires InitClient(Date, Money, FailureLevel, TycoonId)

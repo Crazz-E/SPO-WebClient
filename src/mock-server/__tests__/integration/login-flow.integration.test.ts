@@ -31,8 +31,8 @@ describe('Login Flow Integration', () => {
       const response = await client.send({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'auth-001',
-        username: 'Crazz',
-        password: 'Simcity99',
+        username: 'SPO_test3',
+        password: 'test3',
         zonePath: 'Root/Areas/Asia/Worlds',
       } as WsMessage);
 
@@ -51,8 +51,8 @@ describe('Login Flow Integration', () => {
       const response = await client.send({
         type: WsMessageType.REQ_LOGIN_WORLD,
         wsRequestId: 'cl-001',
-        username: 'Crazz',
-        password: 'Simcity99',
+        username: 'SPO_test3',
+        password: 'test3',
         worldName: 'Shamba',
       } as WsMessage);
 
@@ -91,8 +91,8 @@ describe('Login Flow Integration', () => {
       await client.send({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'auth-001',
-        username: 'Crazz',
-        password: 'Simcity99',
+        username: 'SPO_test3',
+        password: 'test3',
         zonePath: 'Root/Areas/Asia/Worlds',
       } as WsMessage);
 
@@ -141,7 +141,7 @@ describe('Login Flow Integration', () => {
 
       const result = httpMock.match(
         'GET',
-        '/Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&Tycoon=Crazz'
+        '/Five/0/visual/voyager/toolbar/toolbar.asp?WorldName=Shamba&Tycoon=SPO_test3'
       );
       expect(result).not.toBeNull();
       expect(result!.body).toContain('Yellow Inc.');
@@ -154,7 +154,7 @@ describe('Login Flow Integration', () => {
 
       const result = httpMock.match(
         'GET',
-        '/Five/0/Visual/Voyager/NewLogon/chooseCompany.asp?WorldName=Shamba&UserName=Crazz'
+        '/Five/0/Visual/Voyager/NewLogon/chooseCompany.asp?WorldName=Shamba&UserName=SPO_test3'
       );
       expect(result).not.toBeNull();
       expect(result!.body).toContain('Yellow Inc.');

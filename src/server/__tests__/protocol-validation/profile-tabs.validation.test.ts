@@ -526,8 +526,8 @@ describe('Protocol Validation: Profile Tab Commands', () => {
 
   describe('RDO value types for profile methods', () => {
     it('should use string prefix (%) for tycoon names', () => {
-      const val = RdoValue.string('Crazz').toString();
-      expect(val).toBe('"%Crazz"');
+      const val = RdoValue.string('SPO_test3').toString();
+      expect(val).toBe('"%SPO_test3"');
     });
 
     it('should use string prefix (%) for amounts', () => {

@@ -59,8 +59,8 @@ describe('User Journey Integration', () => {
       const authResp = await h.ws.send({
         type: WsMessageType.REQ_CONNECT_DIRECTORY,
         wsRequestId: 'auth-001',
-        username: 'Crazz',
-        password: 'Simcity99',
+        username: 'SPO_test3',
+        password: 'test3',
         zonePath: 'Root/Areas/Asia/Worlds',
       } as WsMessage);
 
@@ -73,8 +73,8 @@ describe('User Journey Integration', () => {
       const worldResp = await h.ws.send({
         type: WsMessageType.REQ_LOGIN_WORLD,
         wsRequestId: 'cl-001',
-        username: 'Crazz',
-        password: 'Simcity99',
+        username: 'SPO_test3',
+        password: 'test3',
         worldName: 'Shamba',
       } as WsMessage);
 
@@ -100,7 +100,7 @@ describe('User Journey Integration', () => {
   describe('tycoon stats update', () => {
     beforeEach(() => {
       h = createTestHarness(['auth']);
-      h.ctx.storedUsername = 'Crazz';
+      h.ctx.storedUsername = 'SPO_test3';
     });
 
     it('updates game store when tycoon stats push arrives', () => {
