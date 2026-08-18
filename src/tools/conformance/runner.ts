@@ -29,13 +29,13 @@ import { RDO_CONSTANTS, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { toErrorMessage } from '../../shared/error-utils';
 import { evaluate } from './oracle';
-import type { HaltRecord } from './halt';
 import { assertNotSessionLifecycleMember } from '../../server/session/rdo-request-guards';
 import { assertPacketSafe } from './suites';
 import { Recorder } from './transport';
 import { WireView } from './wire-view';
 import type {
-  SessionDriver, Step, StepContext, StepOutcome, StepPacket, StepReport, StepTarget, Suite, SuiteReport, TargetKind,
+  HaltRecord, SessionDriver, Step, StepContext, StepOutcome, StepPacket, StepReport, StepTarget, Suite, SuiteReport,
+  TargetKind,
 } from './types';
 import { StepSkip, hasRisk, isImperativeStep } from './types';
 

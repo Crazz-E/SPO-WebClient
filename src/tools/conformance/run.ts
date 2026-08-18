@@ -25,8 +25,6 @@ import {
 } from './report';
 import { correlateSession, fetchDayLogs, formatServerLogVerdict } from './server-logs';
 import type { DayLogs, ServerLogVerdict } from './server-logs';
-import { defaultHaltStore, formatHaltNotice, readExistingHalt } from './halt';
-import type { HaltStore } from './halt';
 import { CONNECTION_STATE } from './types';
 import type { RunReport, SessionFacts, SuiteReport } from './types';
 
@@ -48,11 +46,6 @@ export interface RunDeps {
    * without it every building falls back to the generic template.
    */
   loadBuildingTemplates(): Promise<void>;
-  /**
-   * Where `.rdo-live/HALT` is read from. Optional so a plain conformance run
-   * needs no extra wiring; defaults to the real filesystem.
-   */
-  haltStore?: HaltStore;
 }
 
 export const defaultDeps: RunDeps = {
@@ -68,7 +61,6 @@ export const defaultDeps: RunDeps = {
   sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
   fetchServerLogs: (base, facts) => fetchDayLogs(base, facts),
   loadBuildingTemplates: () => new BuildingDataService().initialize(),
-  haltStore: defaultHaltStore,
 };
 
 /** Socket the pre-flight probe opens and destroys; never used for anything else. */
@@ -135,19 +127,6 @@ export interface RunResult {
  */
 export async function runConformance(options: ConformanceOptions, deps: RunDeps = defaultDeps): Promise<RunResult> {
   const startedAt = deps.now();
-
-  // Protocol rule R3 — HALT is read before any live action, without exception.
-  // A replay run touches no server, so it is not gated: the point of the stop is
-  // to keep frames off a server that may be frozen.
-  if (options.transport === 'live') {
-    const stopped = readExistingHalt(deps.haltStore ?? defaultHaltStore);
-    if (stopped) {
-      deps.error(formatHaltNotice(stopped));
-      throw new Error(
-        'Campaign halted: .rdo-live/HALT is present. No live frame is emitted until the developer clears it.'
-      );
-    }
-  }
 
   const transport = deps.createTransport(options);
   const session = deps.createSession();

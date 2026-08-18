@@ -16,8 +16,35 @@
 import type { RdoAction, RdoVerb } from '../../shared/types';
 import type { TimeoutCategory } from '../../shared/timeout-categories';
 import type { StarpeaceSession } from '../../server/spo_session';
-import type { HaltRecord } from './halt';
 import type { WireView } from './wire-view';
+
+// ── Stop attribution ───────────────────────────────────────────────────────
+
+/**
+ * Why a run stopped, in the shape a human would have written by hand.
+ *
+ * Produced by `attributeSilence` and `attributeDegradation` (`runner.ts`) and
+ * printed by `formatSilenceAttribution` (`report.ts`). Every field but `at` is
+ * optional because a stop is described with whatever the run actually knew.
+ *
+ * It used to live in `halt.ts` and to serve two unrelated readers: this one, and
+ * the manual `.rdo-live/HALT` brake. The brake was retired on 2026-08-18 (the
+ * developer's ruling: the concept is obsolete) and the type moved here with the
+ * only meaning it still has. `wave` went with the brake — the attribution never
+ * set it, because a stop is attributed to a frame, not to a campaign wave.
+ */
+export interface HaltRecord {
+  /** UTC, ISO 8601. Server logs are read as UTC; a local stamp has already cost one investigation. */
+  at: string;
+  reason?: string;
+  /** The frame that went unanswered, QueryId elided. */
+  lastFrame?: string | null;
+  member?: string | null;
+  socket?: string | null;
+  clientViewId?: string | null;
+  /** Where in the suite it happened (`suite/step`). */
+  where?: string | null;
+}
 
 // ── Oracle ─────────────────────────────────────────────────────────────────
 
@@ -354,12 +381,12 @@ export interface SuiteReport {
    * `runSuite` breaks at the FIRST unanswered frame, so the last frame emitted
    * IS the suspect; there is nothing to reconstruct afterwards and no 47-minute
    * `ISCnx` window to wait for. The record carries the frame, the member, the
-   * ClientViewId and the `suite/step`, in the shape a human would have written
-   * by hand into `.rdo-live/HALT`.
+   * ClientViewId and the `suite/step`.
    *
-   * **It is a record, not a brake.** Nothing here writes `.rdo-live/HALT`: that
-   * file stays manual by developer rule (`halt.ts`, 2026-08-18). This only makes
-   * the freeze self-attributing in the run report.
+   * **It is a record, not a brake.** It stops nothing and arms nothing — it makes
+   * the freeze self-attributing in the run report, and that is all. The manual
+   * brake it was once named after was retired on 2026-08-18 (OB-16); the field
+   * keeps its name because it is what a reader looks for in an existing report.
    */
   halt?: HaltRecord;
 }

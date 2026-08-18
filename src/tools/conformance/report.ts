@@ -5,8 +5,7 @@
  * All pure. The CLI is a thin shell around these.
  */
 
-import type { HaltRecord } from './halt';
-import type { RunReport, SessionFacts, StepReport, SuiteReport, TargetKind, TransportKind, VerdictKind } from './types';
+import type { HaltRecord, RunReport, SessionFacts, StepReport, SuiteReport, TargetKind, TransportKind, VerdictKind } from './types';
 
 // ── Run report ─────────────────────────────────────────────────────────────
 
@@ -74,15 +73,7 @@ export function formatStepLine(step: StepReport): string {
 }
 
 /**
- * The attribution of a stop, in the four lines a human acts on.
- *
- * Deliberately NOT `formatHaltNotice` (`halt.ts`): that one says "someone
- * stopped this campaign on purpose" and names the file to clear. This is the
- * opposite situation — the server went quiet on a frame we can name, and no
- * brake has been armed. Same record type, two different readers.
- */
-/**
- * Attribution of a stop, in the shape a human would have written by hand.
+ * Attribution of a stop, in the four lines a human acts on.
  *
  * The tag distinguishes the two stop conditions, and the last line with it: on
  * SILENCE the run broke at the first unanswered frame, so that frame IS the

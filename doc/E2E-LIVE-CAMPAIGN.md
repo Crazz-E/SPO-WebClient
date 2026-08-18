@@ -240,12 +240,11 @@ Those remain open work; the original specification is kept here for whoever pick
 | `report/campaign/coverage-matrix.md` | §8 matrix with per-row status (`todo / nominal-pass / adversarial-pass / blocked / bug-filed`) | Single source of campaign progress |
 | `report/campaign/placed-registry.json` | Every object we ever placed: `{world, coords, class, placedAt, sessionRef, status: active\|demolished\|orphan}` — **keyed on coordinates, not on a facility id** | The placement response cannot supply an id (defect D-A: the handler greps `/sel (\d+)/` in an answer that never contains `sel`), so the object id is re-resolved by focusing the tile, every session. **Never** trust remembered coordinates either — re-verify against the live map on each run; register the placement in the same breath as the ack; reconcile orphans (placed but unconfirmed) first thing next session |
 | `report/campaign/session-<date>-<n>.md` | Per-session report: actions, oracle results, anomalies, server-log excerpts | One per run |
-| `.rdo-live/` (repo root, gitignored) | The inter-agent bus: `HALT`, `inventory.ndjson`, `verdicts.ndjson`, `blocked.ndjson`, `runs/<batch>/` | Contract in `.rdo-live/README.md` — **read it before acting**. Deliberately outside `src/`: a write under `src/` re-arms the conformance git gate and costs a live run |
+| `.rdo-live/` (repo root, gitignored) | The inter-agent bus: `inventory.ndjson`, `verdicts.ndjson`, `blocked.ndjson`, `runs/<batch>/` | Contract in `.rdo-live/README.md` — **read it before acting**. Deliberately outside `src/`: it is campaign evidence, not source, and it must survive a session and stay inspectable |
 
 ### 5.2 Session script
 
 ```
-0. Read `.rdo-live/HALT`. If it exists, STOP — report and hand back  [rule R3]
 1. Start gateway in capture mode (fresh LOG_FILE)          [§2.1]
 2. Baseline: fetch today's server logs (pre-run snapshot)
 3. Login via the locked procedure (E2E-TESTING.md) — SPO_test3 / Free Space / planitia / SPO_test3 - Green
@@ -287,11 +286,19 @@ Per matrix row, four escalation stages — later stages only after nominal passe
 
 **Abort conditions — stop the session immediately, report, do not retry:**
 
-1. **`HALT` (campaign-wide, automatic).** The first RDO rejection at the longest accepted delay —
-   `IS_PROXY_TIMEOUT_MS` = 180 000 ms (`shared/timeout-categories.ts:43`, legacy `ISProxyTimeOut`,
-   `ServerCnxHandler.pas:329`). The breaker writes `.rdo-live/HALT`, and **every agent of the
-   campaign stops**, not just this session. No retry, no "let me check if it works again": capture
-   the server logs at once and hand back. Protocol in `.rdo-live/README.md`.
+1. **Global degradation — the server answers, but stops succeeding.** Five consecutive failures
+   to succeed, whatever the error code (`MAX_CONSECUTIVE_ERRORS`, `runner.ts`): the conformance
+   runner stops the whole run by itself and prints the attribution as `[degraded]`. In a hand-driven
+   session, apply the same rule by hand. Capture the server logs at once and hand back — no retry,
+   no "let me check if it works again". The 2026-08-18 incident is the reference shape: `error 1` to
+   every query, on every connection, for 3 h 42 min, on a process that never crashed.
+
+   > There was once a `.rdo-live/HALT` file here — a campaign-wide brake, automatic and then manual.
+   > Both are retired (2026-08-18, OB-15/OB-16). The automatic trigger was blind to the login phase
+   > and to fire-and-forget frames, and fired only after the damaging frame had left; the manual file
+   > was never written by anyone. Prevention lives in the emission guard (separator + arity +
+   > parameter types adjudicated per member), detection in the degradation counter above, the
+   > `<ISCnx>` oracle and the pre-flight liveness probe. **Do not propose a successor.**
 2. Any `<ISCnx>` event covering our window (§3.3) — the freeze signature.
 3. Our `LOGON SUCCESS` has **no matching `Clients` row** after a completed logoff.
 4. MS `Survival` heartbeat gap > 60 s, or a `WORLD LOADED` we did not expect — *world* distress.

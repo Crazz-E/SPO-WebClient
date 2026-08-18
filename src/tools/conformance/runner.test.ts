@@ -220,7 +220,7 @@ describe('runner — ConformanceRunner', () => {
     const send = jest.fn()
       .mockReturnValueOnce(reply('A="#1"'))
       .mockRejectedValueOnce(new Error('Request timeout'));
-    const halts: import('./halt').HaltRecord[] = [];
+    const halts: import('./types').HaltRecord[] = [];
     const runner = new ConformanceRunner(fakeSession(send), policy(), { onHalt: r => halts.push(r) });
 
     const report = await runner.runSuite(suite);
@@ -470,7 +470,7 @@ describe('runner — degradation', () => {
    */
   it('attributes the stop honestly: last SYMPTOM, not cause', async () => {
     const send = jest.fn().mockReturnValue(reply('error 1', 1));
-    const halts: import('./halt').HaltRecord[] = [];
+    const halts: import('./types').HaltRecord[] = [];
     const runner = new ConformanceRunner(fakeSession(send), policy(), { onHalt: r => halts.push(r) });
 
     const report = await runner.runSuite(failing(MAX_CONSECUTIVE_ERRORS));

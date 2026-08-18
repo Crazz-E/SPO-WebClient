@@ -15,8 +15,6 @@ import { preflight, runConformance, PREFLIGHT_SOCKET } from './run';
 import type { RunDeps } from './run';
 import { recordBaseline } from './report';
 import type { Baseline } from './report';
-import { HALT_PATH } from './halt';
-import type { HaltRecord, HaltStore } from './halt';
 
 jest.mock('node-fetch', () => ({
   __esModule: true,
@@ -96,25 +94,6 @@ function makeDeps(answers: RdoExchange[] = ANSWERS, files = new Map<string, stri
 
 const options = (extra: string[] = []): ConformanceOptions =>
   parseConformanceArgs(['--suite', 'types,separators,errors,mutations', '--recording', 'in.ndjson', '--only', ONLY.join(','), ...extra], {});
-
-/**
- * An in-memory store already holding a HALT — as if a human had stopped the
- * campaign. The transport stays the replay one: the point is that the run
- * refuses BEFORE it opens anything.
- */
-function haltedStore(): HaltStore {
-  const record: HaltRecord = {
-    at: '2026-08-14T21:29:22.000Z',
-    reason: 'developer stopped the campaign',
-    lastFrame: 'C sel 6944144 call SayThis "^" "%dest","%msg";',
-    member: 'SayThis', socket: 'world', clientViewId: '7272232', wave: 'w1', where: 'chat/say',
-  };
-  const files = new Map([[HALT_PATH, JSON.stringify(record)]]);
-  return {
-    exists: p => files.has(p),
-    read: p => files.get(p) ?? '',
-  };
-}
 
 describe('run — offline conformance run over the login capture', () => {
   it('logs in, runs the selected steps, judges them, logs off, exit 0', async () => {
@@ -292,46 +271,16 @@ describe('run — offline conformance run over the login capture', () => {
     expect(c.logFetches[0].base).toBe('http://logs.example/');
   }, 20000);
 
-  // Campaign protocol rule R3 — HALT is read before any live action, without
-  // exception. The refusal happens before the transport is created, so a halted
-  // campaign puts nothing on the wire at all.
-  it('refuses a live run outright when .rdo-live/HALT exists', async () => {
-    const c = makeDeps();
-    c.deps.haltStore = haltedStore();
-    await expect(runConformance(options(['--transport', 'live', '--live']), c.deps))
-      .rejects.toThrow(/Campaign halted: \.rdo-live\/HALT is present/);
-    expect(c.errors.some(l => l.includes('[HALT] campaign stopped'))).toBe(true);
-    expect(c.errors.some(l => l.includes('manual brake'))).toBe(true);
-  }, 20000);
-
-  // A replay run reaches no server, so a HALT has nothing to protect it from —
-  // and gating it would make a stopped campaign impossible to re-validate offline.
-  it('lets a replay run proceed even with HALT present', async () => {
-    const c = makeDeps();
-    c.deps.haltStore = haltedStore();
-    const { exitCode } = await runConformance(options(), c.deps);
-    expect(exitCode).toBe(0);
-    expect(c.errors.some(l => l.includes('[HALT]'))).toBe(false);
-  }, 20000);
-
-  // The automatic trigger was withdrawn on 2026-08-18 (plan §6.0): nothing in a
-  // run writes HALT any more, so no run can stop itself on a delay. Edition 7
-  // did NOT reopen this — it produces the `HaltRecord` as attribution inside the
-  // report and prints it, and arms no brake. The brake stays a human's decision.
-  it('never writes HALT itself, whatever the run does', async () => {
+  // What is left of the four HALT tests once the brake is gone (OB-16, 2026-08-18).
+  // Two of them asserted a mechanism that no longer exists — the live refusal and
+  // the replay exemption. The other two asserted that no run ever writes HALT,
+  // which is now vacuous: there is nothing to write. The single claim of theirs
+  // that still says something is the one kept here.
+  it('a plain run fetches no server logs: capture happens only under --server-logs', async () => {
     const c = makeDeps();
     const { exitCode } = await runConformance(options(), c.deps);
     expect(exitCode).toBe(0);
-    expect([...c.files.keys()].some(p => p.includes('HALT'))).toBe(false);
-    // And no log fetch is forced: capture happens only under --server-logs.
     expect(c.logFetches).toHaveLength(0);
-  }, 20000);
-
-  it('a run that stops on silence still writes no HALT — the brake stays manual', async () => {
-    const c = makeDeps();
-    const { report } = await runConformance(options(['--frame-budget', '1']), c.deps);
-    expect(report.suites[0].halt).toBeDefined();
-    expect([...c.files.keys()].some(p => p.includes('HALT'))).toBe(false);
   }, 20000);
 
   it('--server-logs: a fetch failure is reported, not fatal', async () => {

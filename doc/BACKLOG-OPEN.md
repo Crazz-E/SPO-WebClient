@@ -193,7 +193,7 @@ the goal is to protect against regressions in the WebClient code, not the server
 
 - **Source:** session of 2026-08-18, closing discussion.
 
-### 🟡 OB-16 · The HALT emergency brake is a retired concept, still wired
+### ✅ OB-16 · RESOLVED — the HALT brake is unwired and deleted
 
 **Developer's ruling, 2026-08-18:** *"Il n'y a plus de système HALT, c'est périmé comme concept."*
 
@@ -204,16 +204,30 @@ that nothing writes — a brake nobody pulls. Prevention now lives in the emissi
 arity + parameter types adjudicated per member) and detection in the `ISCnx` oracle and the pre-flight
 liveness probe.
 
-`src/tools/conformance/halt.ts` is flagged `@deprecated` in place, and left **wired but frozen**
-rather than removed, for the same reason as OB-15: unwiring it means touching `run.ts` and rewriting
-tests, which is a change with its own coverage, not a side effect of a note.
+**Deleted 2026-08-18**, in the same session as OB-15:
 
-**What remains to delete:**
+- `src/tools/conformance/halt.ts` and `halt.test.ts` (22 tests: 10 `it` + 12 `it.each` cases)
+- In `run.ts`: the `readExistingHalt` / `formatHaltNotice` / `defaultHaltStore` refusal path and
+  `haltStore` in `RunDeps` and `defaultDeps`
+- In `run.test.ts`: the `haltedStore` helper and 4 tests — the live refusal, the replay exemption,
+  "a run never writes HALT" and "a stop still writes no HALT". The first two asserted a mechanism
+  that no longer exists; the other two became vacuous. One replacement test keeps the single claim
+  of theirs that still says something: a plain run fetches no server logs without `--server-logs`.
+- The `.rdo-live/HALT` protocol in `doc/E2E-LIVE-CAMPAIGN.md` (rule R3 of the session script and
+  abort condition 1, now the degradation counter) and rule R3 + §2 of `.rdo-live/README.md`
 
-- `src/tools/conformance/halt.ts` and `halt.test.ts`
-- In `run.ts`: the `readExistingHalt` / `formatHaltNotice` / `defaultHaltStore` call path and `HaltStore` in `RunDeps`
-- `HaltRecord` in `types.ts`, `report.ts` and `runner.ts`, and the halt tests in `run.test.ts`
-- The `.rdo-live/` HALT paragraph wherever the campaign docs still describe it
+⚠ **The one thing that had to be kept, and OB-16 got wrong when it was written.** `HaltRecord`
+served **two unrelated mechanisms** under one name: the brake, and the *stop attribution* produced
+by `attributeSilence` / `attributeDegradation` and printed as `[silence]` / `[degraded]` — that is
+guard R2.1, delivered the day before and very much alive. Deleting `HaltRecord` with the brake would
+have removed the degradation detector. The type therefore **moved to `types.ts`**, minus `wave`
+(a campaign field the attribution never set), with a comment stating which of the two meanings
+survives. `SuiteReport.halt` keeps its name: it is what a reader looks for in an existing report,
+and renaming it would change the shape of every `--report` file already written.
+
+Verified: typecheck clean; **6293 tests pass, 0 fail** — 25 fewer, which is exactly 22 + 4 − 1 and
+nothing else; coverage **58.49 %** (from 58.53); a replay run still exits 0 with
+`baseline: no divergence`.
 
 ⚠ The `.rdo-live/` directory itself stays — it holds `inventory.ndjson`, `raw/` and `runs/`, which are
 campaign evidence and unrelated to the brake.
