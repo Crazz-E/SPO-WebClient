@@ -1,6 +1,10 @@
 # Project Backlog - Complete Details
 
-> Complete history of features and implementations
+> Complete history of features and implementations — **what is DONE**.
+>
+> **Open defects and gaps live in [BACKLOG-OPEN.md](BACKLOG-OPEN.md).** Every live journey capture
+> and every investigation files its findings there; a finding that only lives in a session report is
+> lost.
 
 ---
 

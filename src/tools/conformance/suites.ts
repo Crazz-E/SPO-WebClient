@@ -21,15 +21,21 @@
 
 import { RdoAction, RdoVerb } from '../../shared/types';
 import { RdoValue } from '../../shared/rdo-types';
-import { VOID_MEMBERS } from '../../server/session/rdo-request-guards';
+import { VOID_MEMBERS, assertMemberNotForbidden } from '../../server/session/rdo-request-guards';
 import type { ImperativeStep, RdoStep, Step, StepPacket, Suite } from './types';
-import { isImperativeStep } from './types';
+import { hasRisk, isImperativeStep } from './types';
 import { SCENARIO_SUITES } from './scenario-suites';
+import { CONNECTION_SUITE } from './connection-suite';
 
 // ── Static safety table ────────────────────────────────────────────────────
 
 export interface ProcedureDeclaration {
-  /** Number of declared parameters — decides where the hidden result pointer lands. */
+  /**
+   * Number of parameters the Pascal declaration carries. Documentation and the
+   * shape a well-formed call takes — NOT the axis the guard measures. What
+   * decides where the hidden result pointer lands is the number of arguments
+   * actually emitted (`RDOObjectServer.pas:214-218`); see {@link assertPacketSafe}.
+   */
   paramCount: number;
   /** `procedure Name( … ) — File.pas:Line`. Mandatory. */
   declaration: string;
@@ -39,11 +45,12 @@ export interface ProcedureDeclaration {
  * Delphi `procedure`s reachable from the client, with their arity.
  *
  * `"^"` on any of them makes the server pass a hidden result pointer
- * (`RDOQueryServer.pas:422-424`). With 0 parameters it stays in a register and
- * the server answers `error 9` (live 2026-08-16, `ClientAware`). From the
- * point where `RegsUsed` reaches `MaxRegs = 3` it is pushed on the stack
- * (`RDOObjectServer.pas:292`) and a `register`-convention procedure never
- * pops it — the 2026-08-15 freeze (`SayThis`, 2 widestrings).
+ * (`RDOQueryServer.pas:422-424`). Below two EMITTED arguments it stays in a
+ * register and the server answers `error 9` (live 2026-08-16, `ClientAware` at
+ * 0; capture, `CloseMessage` at 1). From the second emitted register argument
+ * `RegsUsed` reaches `MaxRegs = 3` and the pointer is pushed on the stack
+ * (`RDOObjectServer.pas:292`), which a `register`-convention procedure never
+ * pops — the 2026-08-14 freeze (`SayThis`, 2 widestrings).
  *
  * The five {@link VOID_MEMBERS} are folded in from the production guard so
  * the two tables cannot disagree. Add here only with the declaration cited.
@@ -83,29 +90,82 @@ export function emitsVariantId(packet: StepPacket): boolean {
  */
 export function assertSuitesSafe(suites: Suite[]): void {
   for (const suite of suites) {
-    const carriesMutation = suite.steps.some(s => s.risk === 'mutation');
+    const carriesMutation = suite.steps.some(s => hasRisk(s, 'mutation'));
     if (carriesMutation && !suite.reset) {
       throw new Error(`Suite "${suite.name}" carries a mutation step but documents no reset.`);
     }
     for (const step of suite.steps) {
       if (isImperativeStep(step)) continue;
-      assertPacketSafe(step.packet, `${suite.name}/${step.id}`, step.risk === 'variant-on-procedure');
+      assertPacketSafe(step.packet, `${suite.name}/${step.id}`, hasRisk(step, 'variant-on-procedure'));
     }
   }
 }
 
-/** The same check for one packet — the runner applies it to imperative emits too. */
+/**
+ * The same check for one packet — the runner applies it to imperative emits too.
+ *
+ * ## The axis is the arguments EMITTED, not the arity DECLARED (fixed 2026-08-18)
+ *
+ * The dispatcher reads `ParamCount` from the variant array it received
+ * (`RDOObjectServer.pas:214-218`), never from the Pascal declaration. The first
+ * argument goes to `EDX`, the second to `ECX`; `RegsUsed` only reaches
+ * `MaxRegs = 3` — the point where the hidden result pointer is pushed on the
+ * stack (`:281-292`) — at the **second** register argument.
+ *
+ * So `call M "^"` with 0 or 1 argument cannot freeze, whatever `M` declares.
+ * Both edges are live-proven, and the capture outranks the source:
+ *
+ * - `ClientAware`, 0 args  → `error 9` in 91 ms (probe U1-a, 2026-08-16)
+ * - `CloseMessage`, 1 arg  → `error 9`, no freeze
+ *   (`mock-server/scenarios/captured/mail-read-captured.scenario.ts:1011-1012`)
+ * - `SayThis`, 2 args      → **froze the shared server**, 12 h 41 (2026-08-14)
+ *
+ * A known procedure below the danger band still has to declare
+ * `risk: 'variant-on-procedure'`: harmless, but the intent stays on the record.
+ *
+ * ## The unconditional refusal comes first
+ *
+ * {@link assertMemberNotForbidden} is checked before anything else and outside
+ * every branch: the seven members of the developer's exclusion list are refused
+ * whatever the verb, the separator, the argument count and the flags. It is not
+ * a risk class to be unlocked, it is a prohibition, so it cannot be conditioned
+ * on the step knowing what it is addressing.
+ */
 export function assertPacketSafe(packet: StepPacket, where: string, allowZeroParam: boolean): void {
+  try {
+    assertMemberNotForbidden(packet);
+  } catch (err: unknown) {
+    throw new Error(`${where}: ${err instanceof Error ? err.message : String(err)}`);
+  }
   if (!emitsVariantId(packet)) return;
+  const emitted = packet.args?.length ?? 0;
   const proc = KNOWN_PROCEDURES.get(packet.member);
-  if (!proc) return;
-  if (proc.paramCount === 0 && allowZeroParam) return;
-  throw new Error(
-    `${where}: refusing "^" on procedure ${packet.member} (${proc.declaration}). ` +
-    (proc.paramCount === 0
-      ? 'Zero-parameter procedures answer error 9; the step must declare risk "variant-on-procedure".'
-      : `With ${proc.paramCount} parameter(s) the hidden result pointer goes on the stack — this froze the shared server on 2026-08-15.`)
-  );
+
+  if (emitted >= 2) {
+    // Danger band. A member we cannot name still passes here — the polarity is
+    // OPEN, deliberately. Closing it (refuse unless proven a `function`) needs
+    // the list of proven functions, and nothing has ever produced it: the
+    // certification sweep that was supposed to is dead (plan rev. 4 §1, the
+    // classification was circular). Under rev. 4 no step addresses an
+    // unadjudicated member at all — every frame comes from a session method the
+    // client already emits in production — so the open edge is unreachable in
+    // practice rather than closed on paper. Do not flip it without the list.
+    if (!proc) return;
+    throw new Error(
+      `${where}: refusing "^" on procedure ${packet.member} (${proc.declaration}) with ${emitted} ` +
+      'emitted argument(s) — from the second the hidden result pointer goes on the stack ' +
+      '(RDOObjectServer.pas:292) and a register-convention procedure never pops it. ' +
+      'This froze the shared server on 2026-08-14.'
+    );
+  }
+
+  if (proc && !allowZeroParam) {
+    throw new Error(
+      `${where}: "^" on procedure ${packet.member} (${proc.declaration}) with ${emitted} emitted ` +
+      'argument(s) answers error 9 and does NOT freeze — but the step must say so: ' +
+      'declare risk "variant-on-procedure".'
+    );
+  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -321,8 +381,21 @@ export const MUTATIONS_SUITE: Suite = {
   ],
 };
 
-/** Frame suites first (one frame, one oracle), then the scenario suites (session methods), mutations last. */
+/**
+ * The connection floor first, then the frame suites (one frame, one oracle),
+ * then the scenario suites (session methods), and the mutations last.
+ *
+ * `CONNECTION_SUITE` leads because it judges the sequence every other suite
+ * depends on: they all address objects the login resolved, so a catalogue that
+ * reported them before reporting that sequence would read backwards. It costs
+ * nothing to put first — it emits no frame at all (`connection-suite.ts`).
+ *
+ * The mutations go last for the same reason a suite stops at its first silence:
+ * `runAll` ends the run at the suite that stopped, so everything whose verdict
+ * is already pinned by a capture runs while the server is known to be answering.
+ */
 export const SUITES: readonly Suite[] = [
+  CONNECTION_SUITE,
   TYPES_SUITE, SEPARATORS_SUITE, ERRORS_SUITE, LIFECYCLE_SUITE, READS_SUITE,
   ...SCENARIO_SUITES,
   MUTATIONS_SUITE,

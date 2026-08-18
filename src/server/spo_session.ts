@@ -104,7 +104,7 @@ import * as researchHandler from './session/research-handler';
 import type { SessionContext } from './session/session-context';
 import { dispatchPush } from './session/push-dispatcher';
 import * as loginHandler from './session/login-handler';
-import { assertNotVoidPush, assertNotVariantOnVoidMember, canBufferRequest, isConnectionBoundMember } from './session/rdo-request-guards';
+import { assertMemberNotForbidden, assertNotVoidPush, assertNotVariantOnVoidMember, canBufferRequest, isConnectionBoundMember } from './session/rdo-request-guards';
 import { classifyRdoError, ErrorRecovery } from './session/rdo-error-classifier';
 import { handleRdoErrorResponse } from './session/rdo-error-contract';
 import { RdoConnectionPool, PooledConnection } from './session/rdo-connection-pool';
@@ -2342,16 +2342,33 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
   }
 
   try {
-    // GUARD (project convention, one form per intent): sendRdoRequest always
-    // adds a rid, so void pushes must never go through here — they use
-    // writeRdoFrame() directly (no rid, no response). Void+QueryId is wire-legal
-    // (server acks `A<id> ;`, capture-proven) — the guard protects consistency,
-    // not the server, and exempts VOID_MEMBERS, for which it is the only safe form.
+    // GUARD 0 — the developer's exclusion list, unconditional. Refused whatever
+    // the verb, the separator, the argument count or any flag: deleting the
+    // account, deleting a company, regressing a level. Wired here on
+    // 2026-08-18 with the developer's authorisation — the refusal already
+    // existed in rdo-request-guards.ts and was branched on the conformance tool
+    // ALONE, so the gateway, the only code that reaches TWorld in production,
+    // was the one path it did not cover.
+    assertMemberNotForbidden(packetData);
+
+    // GUARD 1 — SAFETY, reclassified 2026-08-18, live-proven. `"*"` + QueryId is
+    // safe on a `procedure` — the reference client's own form, capture-proven
+    // (`A<id> ;`) — and is an ARBITRARY MEMORY WRITE on a `function`: the
+    // dispatcher passes no hidden result pointer (RDOObjectServer.pas:281-283)
+    // and the function writes its OleVariant through a register nobody set. One
+    // such frame (`call GetUserList "*"`) left the shared Interface Server
+    // answering errMalformedQuery to every query, on every connection — for over
+    // 3 h, the process still alive, never restarted (verified in the server log:
+    // no startup banner after the incident). Worse than a crash, which at least
+    // self-heals. VOID_MEMBERS is the whitelist, each entry carrying the Pascal
+    // declaration that proves the member is a procedure; there is no opt-in.
+    // (This comment used to read "the guard protects consistency, not the
+    // server" — that framing was retired on 2026-08-18.)
     assertNotVoidPush(packetData);
 
-    // The guard that protects the server rather than our style: "^" on a Delphi
-    // `procedure` leaves an unpopped result pointer on the stack, and a SINGLE
-    // such frame froze the shared Interface Server (live probe, 2026-08-15).
+    // GUARD 2 — the exact mirror: "^" on a Delphi `procedure` leaves an
+    // unpopped result pointer on the stack, and a SINGLE such frame froze the
+    // shared Interface Server (live probe, 2026-08-15).
     assertNotVariantOnVoidMember(packetData);
   } catch (guardError: unknown) {
     releaseAcquiredSlot();

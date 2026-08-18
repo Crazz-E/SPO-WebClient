@@ -1,6 +1,6 @@
 import {
-  baselineDiverges, buildRunReport, diffBaseline, exitCodeFor, formatBaselineDiff, formatStepLine, formatSummary,
-  isBaseline, recordBaseline, summarize,
+  baselineDiverges, buildRunReport, diffBaseline, exitCodeFor, formatBaselineDiff, formatSilenceAttribution,
+  formatStepLine, formatSummary, isBaseline, recordBaseline, summarize,
 } from './report';
 import type { Baseline } from './report';
 import type { RunReport, StepReport, SuiteReport } from './types';
@@ -49,6 +49,29 @@ describe('report — human log', () => {
     expect(text).toContain('replay/shared planitia: 1 pass, 0 fail, 0 unknown, 1 skipped');
     expect(text).toContain('STOPPED ON SILENCE in: a');
     expect(formatSummary(run([]))).not.toContain('SILENCE');
+  });
+
+  // Edition 7. The record answers "which frame" without an ISCnx window, and
+  // the summary carries it so a `--report` file is enough to attribute a stop.
+  it('the summary prints the attribution when the suite carries one', () => {
+    const halt = {
+      at: '2026-08-18T09:00:00.000Z', reason: 'no answer at a/1',
+      lastFrame: 'C sel 1 call SayThis "^" "%d","%m"', member: 'SayThis',
+      socket: 'world', clientViewId: '32000416', where: 'a/1',
+    };
+    const text = formatSummary(run([suiteReport('a', [step('a', '1', 'FAIL', null)], { stoppedOnSilence: true, halt })]));
+    expect(text).toContain('[silence] no answer at a/1');
+    expect(text).toContain('[silence] last frame out: C sel 1 call SayThis "^" "%d","%m"');
+    expect(text).toContain('member SayThis · ClientViewId 32000416');
+  });
+
+  it('formatSilenceAttribution renders a bare record without printing undefined', () => {
+    const text = formatSilenceAttribution({ at: '2026-08-18T09:00:00.000Z' });
+    expect(text).not.toMatch(/undefined/);
+    expect(text).toContain('(not recorded)');
+    expect(text).toContain('(imperative step)');
+    // NOT the manual-brake wording: nothing has been stopped on purpose here.
+    expect(text).not.toMatch(/manual brake|on purpose/);
   });
 });
 

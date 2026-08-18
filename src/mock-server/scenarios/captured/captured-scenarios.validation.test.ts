@@ -20,6 +20,11 @@ import { chatCapturedScenario } from './chat-captured.scenario';
 import { mailReadCapturedScenario } from './mail-read-captured.scenario';
 import { panelsTourCapturedScenario } from './panels-tour-captured.scenario';
 import { roadBuildRejectedCapturedScenario } from './road-build-rejected-captured.scenario';
+import { construireCapturedScenario } from './construire-captured.scenario';
+import { parcoursEnchaineCapturedScenario } from './parcours-enchaine-captured.scenario';
+import { communicationCapturedScenario } from './communication-captured.scenario';
+import { servicePublicCapturedScenario } from './service-public-captured.scenario';
+import { derniersMembresCapturedScenario } from './derniers-membres-captured.scenario';
 
 const CAPTURED: RdoScenario[] = [
   loginFullCapturedScenario,
@@ -27,6 +32,11 @@ const CAPTURED: RdoScenario[] = [
   mailReadCapturedScenario,
   panelsTourCapturedScenario,
   roadBuildRejectedCapturedScenario,
+  construireCapturedScenario,
+  parcoursEnchaineCapturedScenario,
+  communicationCapturedScenario,
+  servicePublicCapturedScenario,
+  derniersMembresCapturedScenario,
 ];
 
 describe.each(CAPTURED.map(s => [s.name, s] as const))(

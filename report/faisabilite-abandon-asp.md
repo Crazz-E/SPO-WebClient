@@ -22,6 +22,12 @@ utilisés : **[À SONDER]** pour ce qui exige une sonde live avant de s'engager,
 
 Aucune sonde live n'a été lancée pour produire ce document.
 
+> **Addendum du 2026-08-17 — voir [§12](#12-addendum-2026-08-17--laccès-distant-est-établi).** La
+> question de faisabilité la plus structurante (« ces commandes sont-elles émissibles depuis
+> l'extérieur du serveur ? ») a depuis été tranchée, et elle l'est au **niveau supérieur de la
+> hiérarchie** : par capture live. Le §12 remplace sur ce point les verdicts *établis par source*
+> du corps du document.
+
 ---
 
 ## 1. Les pages ASP ne sont pas un mécanisme, mais deux
@@ -353,3 +359,115 @@ Fichiers déterminants :
 - `SPO-Original/Kernel/Accounts.pas:275-301`, `Kernel/Languages.pas:243-249` — clés du P&L (§3)
 - `SPO-Original/Kernel/KernelCache.pas:783-800`, `:875-893`, `:960-975` — clés tycoon et prêts (§3)
 - `SPO-Original/Mail/MailBrowserAuto.pas:79-155`, `Mail Server/MailServer.pas:97-113` — l'exception mail (§6a)
+
+---
+
+## 12. Addendum 2026-08-17 — l'accès distant est établi
+
+**Question posée par le développeur :** les commandes RDO peuvent-elles être émises depuis
+l'extérieur du serveur, ou faut-il être sur la même machine ?
+
+**Réponse : depuis l'extérieur, sans restriction — et ce n'est pas une capacité à acquérir, c'est
+une capacité déjà en production.** Contrairement au reste du document, ce verdict n'est pas
+*établi par source* : il est **établi par capture live**, donc au sommet de la hiérarchie du §0.
+
+### 12.1 Preuve de niveau 1 — capture live
+
+Trames extraites de `report/campaign/rec/planitia-2026-08-17.ndjson`, l'enregistrement du run de
+conformité qui a armé le gate. Elles sont parties de notre passerelle et ont traversé le réseau
+jusqu'à planitia :
+
+```
+C 1057 idof "WSObjectCacher";
+C 1066 sel 81232292 call SetPath "^" "%Tycoons\SPO_test3.five\";
+C 1067 sel 81232292 call GetPropertyList "^" "%IsMayor<TAB>Town<TAB>IsCapitalMayor<TAB>IsPresident<TAB>IsMinister<TAB>Ministry<TAB>";
+```
+
+13 occurrences le 2026-08-17, 22 le 2026-08-16. **Ce sont exactement les trames de la bascule
+décrite au §4**, chemin `Tycoons\<nom>.five\` compris. Le préfixe `%` confirme au passage
+l'encodage OLEString des arguments.
+
+### 12.2 Preuve de niveau 2 — notre propre code
+
+[spo_session.ts:966-976](../src/server/spo_session.ts#L966-L976) :
+
+```ts
+await this.createSocket('map', this.currentWorldInfo?.ip || '127.0.0.1', RDO_PORTS.MAP_SERVICE);
+// puis : idof "WSObjectCacher"
+```
+
+`RDO_PORTS.MAP_SERVICE = 6000` (`src/shared/types/protocol-types.ts:11`). L'adresse est l'IP du
+monde fournie par le Directory, donc **distante** ; le `127.0.0.1` n'est qu'un repli.
+
+### 12.3 Preuve de niveau 3 — source Delphi
+
+| Fait | Citation |
+|---|---|
+| L'écouteur ne pose **que** le port sur un `TServerSocket` et n'assigne **jamais** `Address` — donc `INADDR_ANY`, toutes interfaces | `Rdo.IS/Server/WinSockRDOConnectionsServer.pas:501-514` |
+| Le Cache Server est créé exactement ainsi | `Cache Server/CacheServerReportForm.pas:367-369` |
+| **Voyager, qui tourne sur la machine du joueur**, ouvre une `TWinSockRDOConnection('Cache Server')` vers une adresse distante puis `BindTo(WSObjectCacherName)` | `Voyager/URLHandlers/ObjectInspectorHandleViewer.pas:244-247`, `:503` |
+| Cette adresse est **servie au client distant par l'Interface Server** via `IClientView.getCacheAddr` / `getCachePort` | `Voyager/VoyagerServerInterfaces.pas:222-223` |
+| La surface publiée annoncée au §2 est confirmée mot pour mot | `Cache Server/CachedObjectWrap.pas:18-39` |
+
+L'accès distant n'est donc pas toléré : **il est publié par le serveur lui-même**. La localité des
+pages ASP était un artefact d'hébergement — IIS colocalisé avec les serveurs de jeu — et non une
+contrainte de protocole. Aucun blocage de topologie ne pèse sur la bascule.
+
+### 12.4 Trois `procedure` dans la surface publiée — corrigé le 2026-08-17 (lot L0)
+
+`Cache Server/CachedObjectWrap.pas:18-39` expose **18 `function`, 3 `procedure`** (plus 2 propriétés
+publiées) :
+
+| Membre | Ligne | Séparateur correct |
+|---|---|---|
+| `RDODestroy` | `:35` | `"*"` |
+| `KeepAlive` | `:36` | `"*"` |
+| `Refresh` | `:37` | `"*"` |
+
+Aucun des trois n'était dans `VOID_MEMBERS`
+([rdo-request-guards.ts](../src/server/session/rdo-request-guards.ts)) ; le lot L0 les y a ajoutés,
+chacun avec sa citation Pascal vérifiée.
+
+> **⚠ Correction — la première rédaction de ce §12.4 surestimait le risque.** Elle affirmait que
+> « ce sont précisément les membres sur lesquels `"^"` gèle l'Interface Server » et faisait de leur
+> ajout « un préalable strict » au lot 1. **C'est faux, et le mécanisme le dit.**
+>
+> Le gel exige que `RegsUsed` atteigne `MaxRegs = 3` pour que le pointeur de résultat parte sur la
+> **pile** (`cmp RegsUsed, MaxRegs` / `jz @PushResParam` / `push edi`,
+> `RDOObjectServer.pas:292`). Ces trois membres sont des `procedure` **sans aucun paramètre** : le
+> pointeur reste en **registre**, la pile reste équilibrée, et le serveur répond `error 9`. C'est
+> exactement le résultat de la sonde **U1-a** (`ClientAware`, 0 paramètre → `A<rid> error 9;` en
+> 91 ms). **Le gel du 2026-08-14 ne pouvait pas venir de ces trois-là** — `SayThis` porte
+> 2 widestrings, d'où `RegsUsed = 3`.
+>
+> Ce que l'ajout apporte réellement : une **correction de conformité et de cohérence**. Un `"^"` sur
+> ces membres ne gèlerait pas le serveur, mais laisserait le site d'appel incapable de savoir si la
+> procédure a tourné. À faire avant de câbler `KeepAlive` et `RDODestroy` (§8.3) — pas parce que
+> c'est dangereux, parce que c'est juste.
+
+**La leçon générale, elle, tient :** le nombre de paramètres décide autant que le mot-clé
+`procedure`. Un audit de séparateur qui ne regarde que `function` vs `procedure` sans compter les
+paramètres classe mal le risque — dans les deux sens.
+
+Le reste de la surface (`SetPath`, `GetPropertyList`, `GetIterator`, `SetClass`, `SetObject`,
+`GetSubObjectProps`…) est en `function` : `"^"` y est légal, et c'est déjà ce que nous émettons.
+
+### 12.5 Note de sécurité — le Cache Server n'authentifie pas
+
+`Cache Server/CacheServerReportForm.pas:368` : `//ServerConn.AuthenticationMode := amSecure;`
+— **commentée**. Aucune barrière d'identification sur la surface de cache.
+
+Ce n'est pas un obstacle à la bascule : nous n'utiliserions que ce que Voyager utilise déjà, par
+le chemin que le serveur publie. C'est en revanche un constat à consigner — un port 6000 ouvert
+sur Internet expose l'arbre de cache en lecture à quiconque, indépendamment de nous.
+
+### 12.6 Effet sur le document
+
+Le §10 (« ce que cette étude n'a pas fait ») disait *aucune sonde live*. C'est désormais faux sur
+ce point précis, et **seulement** sur celui-là : les trois **[À SONDER]** du §10 — portée de
+`GetIterator` sur l'arbre mail, présence de `Technology`/`Uniqueness`/`RequiredLevel` dans le
+cache compagnie, format de `AccountHistory<i>` — **restent ouverts**.
+
+**Méthode.** Lecture directe des deux corpus plus des enregistrements live ; aucune skill invoquée.
+`rdo-conformity` et `delphi-archaeologist` restent requises avant la première ligne de code, comme
+le pose le §11.

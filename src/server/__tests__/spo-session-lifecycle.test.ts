@@ -30,6 +30,7 @@ import { RdoAction, RdoVerb, SessionPhase, WsMessageType } from '../../shared/ty
 import type { RdoPacket, WorldInfo } from '../../shared/types';
 import { TimeoutCategory, IS_PROXY_TIMEOUT_MS } from '../../shared/timeout-categories';
 import type { RdoScenario } from '../../mock-server/types/rdo-exchange-types';
+import { FORBIDDEN_MEMBERS } from '../session/rdo-request-guards';
 import { setActiveInspectorForTest, releaseInspector } from '../session/building-details-handler';
 import type { ActiveInspector } from '../session/building-details-handler';
 import type { SessionContext } from '../session/session-context';
@@ -974,13 +975,60 @@ describe('sendRdoRequest — refusals', () => {
       .rejects.toThrow('Socket mail not active');
   });
 
+  /**
+   * The developer's exclusion list, on the PRODUCTION path — wired 2026-08-18.
+   *
+   * `FORBIDDEN_MEMBERS` and `assertMemberNotForbidden` had lived in the guard
+   * module since the campaign, but only the conformance tool called them. The
+   * gateway is the code that actually reaches `TWorld` in production
+   * (`deleteFacility` opens the construction socket and resolves it by
+   * `idof World`, building-management-handler.ts:332-345), and `TWorld` is the
+   * class that publishes all seven. The refusal existed everywhere except where
+   * it mattered.
+   *
+   * The assertion that counts is the NEGATIVE one: nothing reached the socket.
+   * A refusal that fires after the bytes are gone is a log line, not a guard.
+   */
+  it('refuses the seven FORBIDDEN_MEMBERS before a single byte reaches the socket', async () => {
+    await connectWorld();
+    const before = harness.getCapturedCommands(0).length;
+
+    for (const member of FORBIDDEN_MEMBERS.keys()) {
+      await expect(harness.session.sendRdoRequest('world', {
+        verb: RdoVerb.SEL, targetId: CONTEXT_ID, action: RdoAction.CALL,
+        member, args: ['"%SPO_test3"'],
+      }, undefined, TimeoutCategory.NORMAL)).rejects.toThrow(/refused unconditionally/);
+    }
+
+    expect(FORBIDDEN_MEMBERS.size).toBe(7);
+    expect(harness.getCapturedCommands(0).length).toBe(before);
+  });
+
+  it('the refusal takes no flag and survives a change of case — the lot-A inventory writes rdoResetTycoon', async () => {
+    await connectWorld();
+
+    await expect(harness.session.sendRdoRequest('world', {
+      verb: RdoVerb.SEL, targetId: CONTEXT_ID, action: RdoAction.CALL,
+      member: 'rdoResetTycoon', args: ['"%SPO_test3"'],
+    }, undefined, TimeoutCategory.NORMAL)).rejects.toThrow(/refused unconditionally/);
+
+    // `get` and `set` are refused too: the guard is on the member, not the verb.
+    await expect(harness.session.sendRdoRequest('world', {
+      verb: RdoVerb.SEL, targetId: CONTEXT_ID, action: RdoAction.GET, member: 'RDODelCompany',
+    }, undefined, TimeoutCategory.NORMAL)).rejects.toThrow(/refused unconditionally/);
+  });
+
   it('refuses the void separator on a member that is not a Delphi procedure', async () => {
     await connectWorld();
 
-    // Project convention, one form per intent: fire-and-forget uses writeRdoFrame.
+    // Safety, since 2026-08-18: under VoidId the dispatcher passes no hidden
+    // result pointer (RDOObjectServer.pas:281-283) and a compiled `function`
+    // writes one anyway, through a register nobody set. `ClientAware` IS a
+    // procedure, but it is not in VOID_MEMBERS, and the guard whitelists rather
+    // than guesses — that is what keeps a function out.
     await expect(harness.session.sendRdoRequest('world', {
       ...GET_TYCOON, action: RdoAction.CALL, member: 'ClientAware', separator: '"*"',
-    }, undefined, TimeoutCategory.FAST)).rejects.toThrow(/Void push separator/);
+    }, undefined, TimeoutCategory.FAST)).rejects.toThrow(/not a proven Delphi procedure/);
   });
 
   it('refuses the variant separator on a void member — the frame that froze the server', async () => {
@@ -1259,6 +1307,21 @@ describe('world socket routing', () => {
     expect(harness.getPoolCapturedCommands()).toHaveLength(0);
   });
 
+  it('gives a pool slot back when the forbidden-member guard refuses the frame', async () => {
+    await connectWorld();
+    await populatePool();
+    const release = jest.spyOn(harness.session.getWorldPool()!, 'releaseSlot');
+
+    // The refusal must go through the same `catch (guardError)` as the other
+    // two, or it trades a destroyed account for a strangled pool.
+    await expect(harness.session.sendRdoRequest('world', {
+      verb: RdoVerb.SEL, targetId: CONTEXT_ID, action: RdoAction.CALL,
+      member: 'RDODelTycoon', args: ['"%SPO_test3"', '"%test3"'],
+    }, undefined, TimeoutCategory.NORMAL)).rejects.toThrow(/refused unconditionally/);
+
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
   it('gives a pool slot back when a guard refuses the frame', async () => {
     await connectWorld();
     await populatePool();
@@ -1269,7 +1332,7 @@ describe('world socket routing', () => {
     await expect(harness.session.sendRdoRequest('world', {
       verb: RdoVerb.SEL, targetId: CONTEXT_ID, action: RdoAction.CALL,
       member: 'ClientAware', separator: '"*"',
-    }, undefined, TimeoutCategory.NORMAL)).rejects.toThrow(/Void push separator/);
+    }, undefined, TimeoutCategory.NORMAL)).rejects.toThrow(/not a proven Delphi procedure/);
 
     expect(release).toHaveBeenCalledTimes(1);
   });

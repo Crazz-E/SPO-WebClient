@@ -166,11 +166,171 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Lines that read like trouble. Surfaced, not judged — a human triages them. */
-const TROUBLE = /error|exception|access violation|fail|timeout|survival|renewing/i;
+/**
+ * Lines that read like trouble. Surfaced, not judged — a human triages them.
+ *
+ * `malformed query` was ADDED on 2026-08-18, and its absence was a real hole,
+ * not a detail: the plan asked to "promote the malformed-query signature from
+ * displayed to fatal", and it turned out never to have been displayed at all.
+ * The line carries none of the words this pattern looked for — no `error`, no
+ * `exception`, no `fail` — so `Malformed query in TRDOQueryServer.ExecQuery`,
+ * the line the shared Interface Server wrote on every connection for 75
+ * minutes, went straight past. Promoting it from `anomalies` would have been a
+ * no-op.
+ */
+const TROUBLE = /error|exception|access violation|malformed query|fail|timeout|survival|renewing/i;
 
 export function troubleLines(lines: SurvivalLine[]): SurvivalLine[] {
   return lines.filter(l => TROUBLE.test(l.text) && !/^LOGON|^CheckUserAccount|^Account validation/i.test(l.text));
+}
+
+/**
+ * The two signatures that are not "trouble" but PROOF — promoted from displayed
+ * to fatal on 2026-08-18.
+ *
+ * Every other pattern in {@link TROUBLE} is ambiguous by design: `timeout`,
+ * `renewing` and `fail` appear on a healthy busy server, so they are surfaced
+ * for a human and never judged. These two are different in kind — they are what
+ * a Delphi server writes when it has ALREADY been corrupted, and a run that
+ * produced one has no business exiting 0:
+ *
+ *  - `Malformed query in TRDOQueryServer.ExecQuery` — the query dispatcher can
+ *    no longer parse what it is given. On 2026-08-18 this line repeated on
+ *    every connection, including the Model Server's own `RefreshArea` pushes,
+ *    from the frame that corrupted the process onward
+ *    (`FIVEINTERFACESERVER/Survival 26-08-18.log:136`).
+ *  - `Access violation` — the process read or wrote memory it does not own. It
+ *    is the direct symptom of the `"*"`-on-a-function mechanism: a result
+ *    written through a register the dispatcher never set.
+ *
+ * They are matched inside OUR session bracket only. A pathology outside it is
+ * someone else's, and attributing it to this run is the exact mistake the
+ * pre-flight probe exists to avoid.
+ */
+export const FATAL_SIGNATURES: ReadonlyArray<{ pattern: RegExp; why: string }> = [
+  {
+    pattern: /Malformed query in TRDOQueryServer\.ExecQuery/i,
+    why: 'the query dispatcher can no longer parse its input — the 2026-08-18 signature, which persisted on every connection',
+  },
+  {
+    pattern: /Access violation/i,
+    why: 'the process touched memory it does not own — the direct symptom of a result written through an unset register',
+  },
+];
+
+/**
+ * The lines that are proof rather than noise, with the reason each is fatal.
+ *
+ * Fed the bracket's RAW lines, deliberately — never the already-filtered
+ * `anomalies`. Chaining the two would make this detector depend on
+ * {@link TROUBLE} matching first, which is exactly how the malformed-query
+ * signature stayed invisible until 2026-08-18. A fatal signature must be its
+ * own oracle.
+ */
+export function fatalAnomalies(lines: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const line of lines) {
+    for (const { pattern, why } of FATAL_SIGNATURES) {
+      if (pattern.test(line)) {
+        out.push(`IS Survival, inside our session bracket: "${line.trim()}" — ${why}`);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+// ── ISCnx — the only channel that sees an Interface Server freeze ──────────
+
+/**
+ * A hard freeze of the Interface Server writes **nothing**: no exception, no
+ * `Start Disconnecting`, and — decisively — **no `Clients` row at all**. The
+ * 2026-08-14 freeze ended `IS/Survival` on `LOGON SUCCESS: ClientViewId=7272232`
+ * and the file simply stopped. `Clients exit code 0` therefore detects a freeze
+ * only by the row's *absence*, never by its value.
+ *
+ * The one positive witness is **external**: the Model Server pushes
+ * `ModelStatusChanged` to the IS twice per binary-backup cycle and logs each
+ * unanswered push on its `<ISCnx>` channel. Those lines are the freeze detector.
+ *
+ * Three shapes, all in `MS/Survival`, and all carrying a **full date** — unlike
+ * every other line of the file, which has only a clock. `parseSurvival` leaves
+ * them with `at: null` for that reason, which is why they need their own parser.
+ *
+ *   2026-08-14 9:29:58 PM <ISCnx> (10)- Query timed out sel 6944144 call ModelStatusChanged "*" "#1"; Time: 10000
+ *   2026-08-15 10:10:09 AM ISCnx Error writing to socket
+ *   Start disconnecting: (ISCnx) 2026-08-15 10:10:09 AM
+ *
+ * Measured on the preserved corpus (`report/campaign/logs-cache/2026-08-17-preserve/MS`):
+ *
+ *   - **Specificity: 0 false positives.** 08-10, 08-11, 08-12, 08-13 and 08-16
+ *     carry **0** ISCnx lines across ~151 probe cycles. 08-11 includes a 3 h
+ *     *world* suspension with a continuous integrator counter and still logs
+ *     zero — the channel reports IS liveness, not model health, so a simulation
+ *     tick cannot trip it. 08-14 carries 8, 08-15 carries 29, 08-17 carries 4:
+ *     every ISCnx line in the corpus belongs to a freeze.
+ *   - **Sensitivity is delayed.** The probe is the backup cycle, whose observed
+ *     interval is 2763–2798 s (median 2771, n=30 on 08-16), plus the 10 s query
+ *     timeout the line itself reports (`Time: 10000`).
+ *
+ * So the oracle concludes only after ~47 min. A campaign wave lasting minutes
+ * normally contains **zero** probes: silence at the end of a wave is not
+ * evidence of health, only absence of evidence. `livenessConclusiveAt` says when
+ * it becomes evidence.
+ */
+export const ISCNX_PROBE_INTERVAL_SEC = 2798;
+export const ISCNX_QUERY_TIMEOUT_SEC = 10;
+export const ISCNX_CONCLUSION_WINDOW_SEC = ISCNX_PROBE_INTERVAL_SEC + ISCNX_QUERY_TIMEOUT_SEC;
+
+export type IsCnxKind = 'query-timeout' | 'write-error' | 'disconnect';
+
+export interface IsCnxEvent {
+  /** Seconds since server-local midnight, or null when the line carries no clock. */
+  at: number | null;
+  /** `YYYY-MM-DD` as the line itself states it — these lines are the only dated ones. */
+  date: string | null;
+  kind: IsCnxKind;
+  raw: string;
+}
+
+const ISCNX_DATED = /^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}:\d{2}\s*(?:AM|PM))\s+(.*)$/i;
+const ISCNX_DISCONNECT = /^(?:Start|End) disconnecting:\s*\(ISCnx\)\s*(?:(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2}:\d{2}\s*(?:AM|PM)))?/i;
+
+/** Every `<ISCnx>` event in an MS Survival file, in file order. */
+export function parseIsCnxEvents(text: string): IsCnxEvent[] {
+  const events: IsCnxEvent[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line.includes('ISCnx')) continue;
+
+    const disconnect = ISCNX_DISCONNECT.exec(line);
+    if (disconnect) {
+      events.push({
+        at: disconnect[2] ? parseClock(disconnect[2]) : null,
+        date: disconnect[1] ?? null,
+        kind: 'disconnect',
+        raw: line,
+      });
+      continue;
+    }
+
+    const dated = ISCNX_DATED.exec(line);
+    if (!dated) continue;
+    const body = dated[3];
+    const kind: IsCnxKind = /Query timed out/i.test(body) ? 'query-timeout'
+      : /Error writing to socket/i.test(body) ? 'write-error'
+      : 'query-timeout';
+    events.push({ at: parseClock(dated[2]), date: dated[1], kind, raw: line });
+  }
+  return events;
+}
+
+/** The last clock seen in a Survival file — how far the log we read actually extends. */
+export function lastStampOf(lines: SurvivalLine[]): number | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].at !== null) return lines[i].at;
+  }
+  return null;
 }
 
 /** Heartbeat gaps in MS Survival strictly inside [from, to] (server seconds). */
@@ -209,9 +369,26 @@ export interface ServerLogVerdict {
   /** IS Survival lines inside our bracket that read like trouble. */
   anomalies: string[];
   heartbeatGaps: Array<{ from: string; to: string; gapSec: number }>;
+  /**
+   * `<ISCnx>` events in MS Survival covering our bracket and the conclusion
+   * window after it. Non-empty means the Interface Server stopped answering the
+   * Model Server — the freeze signature (O5).
+   */
+  isCnxEvents: Array<{ at: string | null; date: string | null; kind: IsCnxKind; raw: string }>;
+  /**
+   * Server clock at which the ISCnx oracle becomes conclusive for this session
+   * (session end + one probe interval + the query timeout).
+   */
+  livenessConclusiveAt: string | null;
+  /**
+   * True only when the MS log we read already extends past
+   * `livenessConclusiveAt`. False means "no freeze seen **yet**" — re-read the
+   * log after that time before calling the session clean.
+   */
+  livenessConclusive: boolean;
   /** Other LOGON blocks of the same user that day (context: how many runs today). */
   otherSessionsToday: number;
-  /** Non-empty when a hard pathology was found: exit code ≠ 0, missing bracket, heartbeat gap. */
+  /** Non-empty when a hard pathology was found: exit code ≠ 0, missing bracket, heartbeat gap, ISCnx event. */
   failures: string[];
 }
 
@@ -237,6 +414,9 @@ export function correlateSession(facts: SessionFacts, logs: DayLogs): ServerLogV
     clientsRow: null,
     anomalies: [],
     heartbeatGaps: [],
+    isCnxEvents: [],
+    livenessConclusiveAt: null,
+    livenessConclusive: false,
     otherSessionsToday: blocks.filter(b => b !== ours).length,
     failures,
   };
@@ -253,6 +433,9 @@ export function correlateSession(facts: SessionFacts, logs: DayLogs): ServerLogV
   const to = ours.disconnectAt ?? (utcSecondsOfDay(facts.logoffAt) + (verdict.clockOffsetSec ?? 0));
 
   verdict.anomalies = troubleLines(ours.lines).map(l => l.raw);
+  // Two signatures are proof, not noise: they fail the run (2026-08-18). Read
+  // off the bracket's own lines, not off `anomalies` — see fatalAnomalies.
+  failures.push(...fatalAnomalies(ours.lines.map(l => l.raw)));
 
   // The Clients row is written at logout; match on tycoon + login time (±2 s).
   const rows = parseClients(logs.isClients).filter(r => r.tycoon.toLowerCase() === facts.username.toLowerCase());
@@ -266,6 +449,36 @@ export function correlateSession(facts: SessionFacts, logs: DayLogs): ServerLogV
 
   verdict.heartbeatGaps = heartbeatGaps(ms, from, to).map(g => ({ from: formatClock(g.from), to: formatClock(g.to), gapSec: g.gapSec }));
   if (verdict.heartbeatGaps.length) failures.push(`MS Survival heartbeat gap(s) during our session: ${verdict.heartbeatGaps.map(g => `${g.gapSec}s at ${g.from}`).join(', ')}`);
+
+  // O5 — the freeze oracle. An MS heartbeat gap is NOT it: the Model Server
+  // keeps ticking happily while the Interface Server is frozen (2026-08-14, 34
+  // unanswered pushes over 12 h with a nominal MS heartbeat throughout). Only
+  // ISCnx sees the silence.
+  const conclusiveAt = to + ISCNX_CONCLUSION_WINDOW_SEC;
+  verdict.livenessConclusiveAt = formatClock(conclusiveAt);
+  const lastMs = lastStampOf(ms);
+  verdict.livenessConclusive = lastMs !== null && lastMs >= conclusiveAt;
+
+  // Events are attributed from the session start (a freeze can only be caused by
+  // a frame we already sent) to the end of the conclusion window.
+  verdict.isCnxEvents = parseIsCnxEvents(logs.msSurvival)
+    .filter(e => e.at === null || (e.at >= from && e.at <= conclusiveAt))
+    .map(e => ({ at: e.at !== null ? formatClock(e.at) : null, date: e.date, kind: e.kind, raw: e.raw }));
+
+  if (verdict.isCnxEvents.length) {
+    failures.push(
+      `MS <ISCnx> event(s) covering our session — the Interface Server stopped answering the Model ` +
+      `Server, which is the freeze signature: ${verdict.isCnxEvents.map(e => `${e.kind} at ${e.at ?? '?'}`).join(', ')}`
+    );
+  }
+
+  // `livenessConclusive: false` is deliberately NOT a failure. A run correlates
+  // its logs seconds after logoff, so the probe that would reveal a freeze has
+  // not fired yet — every live run would fail, and the git gate would never
+  // open. It is an OPEN MEASUREMENT, not a verdict: reported loudly here and in
+  // the report JSON, and re-read after `livenessConclusiveAt` by whoever closes
+  // the wave. What the old O5 got wrong was calling that state "clean"; calling
+  // it "failed" would be the mirror error.
 
   return verdict;
 }
@@ -292,6 +505,9 @@ export function formatServerLogVerdict(v: ServerLogVerdict): string {
     `[server-logs] clock offset (server − ours): ${v.clockOffsetSec ?? '?'} s · other ${v.otherSessionsToday} session(s) of this user today`,
     `[server-logs] Clients row: ${v.clientsRow ? `${v.clientsRow.login} → ${v.clientsRow.logout}, exit code ${v.clientsRow.exitCode}` : 'none'}`,
     `[server-logs] MS heartbeat gaps in bracket: ${v.heartbeatGaps.length}`,
+    `[server-logs] O5 ISCnx (freeze oracle): ${v.isCnxEvents.length} event(s) · ` +
+      `${v.livenessConclusive ? `conclusive (window closed ${v.livenessConclusiveAt})` : `INCONCLUSIVE until ${v.livenessConclusiveAt ?? '?'}`}` +
+      `${v.isCnxEvents.length ? '\n' + v.isCnxEvents.map(e => `    ${e.raw}`).join('\n') : ''}`,
     `[server-logs] IS anomalies in bracket: ${v.anomalies.length}${v.anomalies.length ? '\n' + v.anomalies.map(a => `    ${a}`).join('\n') : ''}`,
   ];
   if (v.failures.length) lines.push(`[server-logs] FAILURES:\n${v.failures.map(f => `    ${f}`).join('\n')}`);

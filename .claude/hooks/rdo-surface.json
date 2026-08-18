@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "note": "The RDO surface — the files whose change can alter a frame on the wire. The conformance gate requires a fresh certification ONLY when a commit touches one of these. Everything else (docs, client, reports, tests of unrelated modules) commits freely. Edit this file rather than the gate logic.",
+
+  "tier1": [
+    { "path": "src/shared/rdo-types.ts", "why": "builds every frame — a change here alters every byte on the wire" },
+    { "path": "src/shared/cp1252.ts", "why": "Latin-1 encoder — silently reshapes any accented payload" },
+    { "path": "src/server/rdo.ts", "why": "wire framing and parsing" },
+    { "path": "src/server/rdo-helpers.ts", "why": "writeRdoFrame — the fire-and-forget emission path" },
+    { "path": "src/server/spo_session.ts", "why": "sendRdoRequest — the synchronous emission path" },
+    { "path": "src/server/session/rdo-request-guards.ts", "why": "the separator guards; a change moves what may be emitted" },
+    { "path": "src/shared/timeout-categories.ts", "why": "deadlines carried by every request" }
+  ],
+
+  "tier2": [
+    { "prefix": "src/server/session/", "why": "handlers that build and emit frames" },
+    { "prefix": "src/tools/conformance/", "why": "the suite catalogue and the runner — the certification itself" },
+    { "prefix": "src/mock-server/", "why": "scenarios the replay leg answers from" },
+    { "prefix": "src/shared/types/protocol-types.ts", "why": "verbs, actions, ports, type prefixes" },
+    { "prefix": "src/shared/error-codes.ts", "why": "the error contract asserted by the suites" }
+  ],
+
+  "exclude": [
+    { "suffix": ".test.ts", "why": "a unit test cannot change a frame the gateway emits" },
+    { "suffix": ".test.tsx", "why": "a component test cannot change a frame either" },
+    { "suffix": ".md", "why": "documentation" },
+    { "prefix": "src/mock-server/scenarios/captured/", "why": "generated from captures, never hand-edited" }
+  ]
+}

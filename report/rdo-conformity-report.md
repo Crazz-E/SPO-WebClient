@@ -1,5 +1,27 @@
 # SPO WebClient ↔ Serveur legacy Delphi — Rapport de conformité RDO
 
+> ## ⚠ CORRECTION 2026-08-18 — une affirmation de ce rapport est RÉFUTÉE
+>
+> Ce document affirme que `"*"` + QueryId (void push) **« ne fait pas crasher le serveur »** et que
+> `assertNotVoidPush` est **« une convention de projet »**. Ce cadrage, posé le 2026-07-02, est
+> **faux pour les `function`** et a été retiré le 2026-08-18.
+>
+> Le retrait de 2026-07-02 avait **sur-généralisé** : toutes les captures derrière lui portaient sur
+> des `procedure` ou des propriétés (`AddLine`, `CloseMessage`, `RDOEndSession`,
+> `set EnableEvents`), **aucune sur une `function`**.
+>
+> Le 2026-08-18, cinq `function` appelées sous `"*"` ont provoqué une **écriture mémoire arbitraire**
+> dans l'Interface Server partagé, qui a ensuite répondu `errMalformedQuery` à **toute** requête de
+> **toute** connexion pendant **3 h 42**, sans crasher et sans redémarrer.
+>
+> Lecture corrigée : `"*"` + QueryId est **sûr sur une `procedure`** et une **écriture mémoire
+> arbitraire sur une `function`**. `assertNotVoidPush` est une **garde de sûreté**, sans opt-in.
+>
+> Référence : `doc/rdo-protocol-architecture.md` §8.5 · `CLAUDE.md` · la skill `rdo-conformity`.
+> Le reste de ce rapport n'est pas invalidé.
+
+
+
 > **Statut : INTÉGRÉ (2026-07-03)** — instantané daté, conservé comme piste d'audit. Les faits durables
 > (vérité fil §2, corrections Tier 1-3, timings de session) sont canoniques dans
 > [doc/rdo-protocol-architecture.md](../doc/rdo-protocol-architecture.md) et

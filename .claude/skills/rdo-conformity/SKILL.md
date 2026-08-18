@@ -72,13 +72,36 @@ Two independent axes. QueryId decides *whether the server replies*; the separato
 | Form | Wire-legal | Server behaviour | Project policy |
 |------|-----------|------------------|----------------|
 | QueryId + `"^"` | yes | `A<id> res="…"` | ✅ `sendRdoRequest()` — canonical synchronous form |
-| QueryId + `"*"` / `set` | yes | empty ack `A<id> ;` | ⛔ Forbidden **by convention** (`assertNotVoidPush`) — one form per intent. Not a crash risk. |
+| QueryId + `"*"` / `set` on a **`procedure`** | yes | empty ack `A<id> ;` | ✅ **REQUIRED** for void members — the reference client's own form. `VOID_MEMBERS` is the whitelist, each entry with its Pascal declaration. |
+| QueryId + `"*"` on a **`function`** | parses, but | **ARBITRARY MEMORY WRITE** in the server | 🚫 **MUST NOT — live-proven 2026-08-18.** Blocked by `assertNotVoidPush`, a **safety guard** since that date, which takes **no opt-in**. |
 | no QueryId + `"*"` | yes | silence | ✅ `writeRdoFrame(socket, cmd)` — canonical fire-and-forget |
 | no QueryId + `"^"` | **NO** | reply built with no destination — **crashes the server** | 🚫 MUST NOT. No capture contains it. |
 
-**The only real crash risk is row 4.** Row 2 is a consistency guard, not a safety one — an
-earlier revision of the docs claimed it crashed the server; that claim was **retired
-2026-07-02** and disproved by capture. Do not reintroduce it.
+**There are three crash risks, not one — and two of them are the same mistake mirrored.**
+
+| Mistake | Mechanism | Proven |
+|---|---|---|
+| `"^"` on a **`procedure`**, 2 register args | hidden result pointer pushed on the stack (`RDOObjectServer.pas:292`), never popped → **freeze** | 2026-08-14, `SayThis` |
+| `"*"` on a **`function`** | **no** hidden result pointer passed — `@ResParam` sees `Res.VType = varEmpty` and jumps straight to `@DoCall` (`RDOObjectServer.pas:281-283`) — but the compiled function writes its `OleVariant` through the register its own ABI reserves (`EDX`), left holding whatever was there → **16-byte write to an arbitrary address** | 2026-08-18, `GetUserList` |
+| no QueryId + `"^"` | reply built with no destination | live incident |
+
+> **⚠ CORRECTION 2026-08-18 — read this before trusting any older revision of this file.**
+> This section used to say *"the only real crash risk is row 4"*, that `assertNotVoidPush` was a
+> consistency guard rather than a safety one, and that the 2026-07-02 retirement had disproved the
+> danger. **All three statements were wrong**, and the last one instructed readers not to revisit it.
+>
+> The 2026-07-02 retirement **over-generalised**: every capture behind it shows `"*"` on a
+> `procedure` or a property — `AddLine`, `CloseMessage`, `RDOEndSession`, `set EnableEvents`. **None
+> shows `"*"` on a `function`**, which is the case the original claim described. On 2026-08-18 a
+> certification sweep emitted five of them; the shared production Interface Server then answered
+> `errMalformedQuery` to **every** query on **every** connection — including the Model Server's own
+> `RefreshArea` pushes — for over three hours, without crashing and without restarting.
+>
+> Corrected reading: `"*"` + QueryId is **safe on a `procedure`** and an **arbitrary memory write on
+> a `function`**. Full account: `doc/rdo-protocol-architecture.md` §8.5.
+
+> **There is therefore no safe frame for a member whose declaration nobody has.** Its kind comes from
+> the Pascal source, never from probing the server to see what happens.
 
 Gateway decision (settled 2026-07-02): the WebClient uses QueryId + response for **every**
 request, reads and mutations alike, where the legacy client fired many mutations blind.

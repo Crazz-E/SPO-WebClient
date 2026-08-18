@@ -1,0 +1,442 @@
+{"ts":"2026-08-18T10:22:44.549Z","msg":"RDO>> directory_auth","meta":{"rid":1000,"raw":"C 1000 idof \"DirectoryServer\";"}}
+{"ts":"2026-08-18T10:22:44.553Z","msg":"RDO>> directory_query","meta":{"rid":1001,"raw":"C 1001 idof \"DirectoryServer\";"}}
+{"ts":"2026-08-18T10:22:44.645Z","msg":"RDO<< directory_auth","meta":{"rid":1000,"raw":"A1000 objid=\"39423540\""}}
+{"ts":"2026-08-18T10:22:44.649Z","msg":"RDO>> directory_auth","meta":{"rid":1002,"raw":"C 1002 sel 39423540 get RDOOpenSession;"}}
+{"ts":"2026-08-18T10:22:44.649Z","msg":"RDO<< directory_query","meta":{"rid":1001,"raw":"A1001 objid=\"39423540\""}}
+{"ts":"2026-08-18T10:22:44.650Z","msg":"RDO>> directory_query","meta":{"rid":1003,"raw":"C 1003 sel 39423540 get RDOOpenSession;"}}
+{"ts":"2026-08-18T10:22:44.743Z","msg":"RDO<< directory_auth","meta":{"rid":1002,"raw":"A1002 RDOOpenSession=\"#107061704\""}}
+{"ts":"2026-08-18T10:22:44.745Z","msg":"RDO>> directory_auth","meta":{"rid":1004,"raw":"C 1004 sel 107061704 call RDOMapSegaUser \"^\" \"%SPO_test3\";"}}
+{"ts":"2026-08-18T10:22:44.746Z","msg":"RDO<< directory_query","meta":{"rid":1003,"raw":"A1003 RDOOpenSession=\"#107061936\""}}
+{"ts":"2026-08-18T10:22:44.746Z","msg":"RDO>> directory_query","meta":{"rid":1005,"raw":"C 1005 sel 107061936 call RDOQueryKey \"^\" \"%Root/Areas/America/Worlds\",\"%General/Population\nGeneral/Investors\nGeneral/Online\nGeneral/Date\nInterface/IP\nInterface/Port\nInterface/URL\nInterface/Running\";"}}
+{"ts":"2026-08-18T10:22:44.835Z","msg":"RDO<< directory_auth","meta":{"rid":1004,"raw":"A1004 res=\"%\""}}
+{"ts":"2026-08-18T10:22:44.836Z","msg":"RDO>> directory_auth","meta":{"rid":1006,"raw":"C 1006 sel 107061704 call RDOLogonUser \"^\" \"%SPO_test3\",\"%[REDACTED]\";"}}
+{"ts":"2026-08-18T10:22:44.843Z","msg":"RDO<< directory_query","meta":{"rid":1005,"raw":"A1005 res=\"%Count=4\r\nKey0=planitia\r\ngeneral/date0=2541\r\ngeneral/investors0=19\r\ngeneral/online0=0\r\ngeneral/population0=127748004\r\ninterface/ip0=158.69.153.134\r\ninterface/port0=8000\r\ninterface/running0=true\r\ninterface/url0=http://158.69.153.134/Five/\r\nKey1=shamba\r\ngeneral/date1=2652\r\ngeneral/investors1=17\r\ngeneral/online1=0\r\ngeneral/population1=56244052\r\ninterface/ip1=142.44.158.91\r\ninterface/port1=8000\r\ninterface/running1=true\r\ninterface/url1=http://142.44.158.91/Five/\r\nKey2=trinity\r\ngeneral/date2=3412\r\ngeneral/investors2=26\r\ngeneral/online2=1\r\ngeneral/population2=47890344\r\nKey3=zorcon\r\ngeneral/date3=2145\r\ngeneral/investors3=16\r\ngeneral/online3=1\r\ngeneral/population3=8471221\r\ninterface/ip3=142.4.193.58\r\ninterface/port3=8000\r\ninterface/running3=true\r\ninterface/url3=http://142.4.193.58/Five/\r\n\""}}
+{"ts":"2026-08-18T10:22:44.847Z","msg":"RDO>* directory_query","meta":{"raw":"C sel 107061936 call RDOEndSession \"*\";"}}
+{"ts":"2026-08-18T10:22:46.974Z","msg":"RDO<< directory_auth","meta":{"rid":1006,"raw":"A1006 res=\"#0\""}}
+{"ts":"2026-08-18T10:22:46.975Z","msg":"RDO>* directory_auth","meta":{"raw":"C sel 107061704 call RDOEndSession \"*\";"}}
+{"ts":"2026-08-18T10:22:47.075Z","msg":"RDO>> world","meta":{"rid":1007,"raw":"C 1007 idof \"InterfaceServer\";"}}
+{"ts":"2026-08-18T10:22:47.164Z","msg":"RDO<< world","meta":{"rid":1007,"raw":"A1007 objid=\"29570088\""}}
+{"ts":"2026-08-18T10:22:47.165Z","msg":"RDO>> world","meta":{"rid":1008,"raw":"C 1008 sel 29570088 get WorldName;"}}
+{"ts":"2026-08-18T10:22:47.255Z","msg":"RDO<< world","meta":{"rid":1008,"raw":"A1008 WorldName=\"$Planitia\""}}
+{"ts":"2026-08-18T10:22:47.255Z","msg":"RDO>> world","meta":{"rid":1009,"raw":"C 1009 sel 29570088 get WorldURL;"}}
+{"ts":"2026-08-18T10:22:47.346Z","msg":"RDO<< world","meta":{"rid":1009,"raw":"A1009 WorldURL=\"$http://158.69.153.134/Five/\""}}
+{"ts":"2026-08-18T10:22:47.347Z","msg":"RDO>> world","meta":{"rid":1010,"raw":"C 1010 sel 29570088 get DAAddr;"}}
+{"ts":"2026-08-18T10:22:47.438Z","msg":"RDO<< world","meta":{"rid":1010,"raw":"A1010 DAAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-18T10:22:47.438Z","msg":"RDO>> world","meta":{"rid":1011,"raw":"C 1011 sel 29570088 get DAPort;"}}
+{"ts":"2026-08-18T10:22:47.529Z","msg":"RDO<< world","meta":{"rid":1011,"raw":"A1011 DAPort=\"#7000\""}}
+{"ts":"2026-08-18T10:22:47.529Z","msg":"RDO>> world","meta":{"rid":1012,"raw":"C 1012 sel 29570088 get DALockPort;"}}
+{"ts":"2026-08-18T10:22:47.618Z","msg":"RDO<< world","meta":{"rid":1012,"raw":"A1012 DALockPort=\"#7001\""}}
+{"ts":"2026-08-18T10:22:47.619Z","msg":"RDO>> world","meta":{"rid":1013,"raw":"C 1013 sel 29570088 get MailAddr;"}}
+{"ts":"2026-08-18T10:22:47.708Z","msg":"RDO<< world","meta":{"rid":1013,"raw":"A1013 MailAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-18T10:22:47.709Z","msg":"RDO>> world","meta":{"rid":1014,"raw":"C 1014 sel 29570088 get MailPort;"}}
+{"ts":"2026-08-18T10:22:47.801Z","msg":"RDO<< world","meta":{"rid":1014,"raw":"A1014 MailPort=\"#10000\""}}
+{"ts":"2026-08-18T10:22:47.802Z","msg":"RDO>> world","meta":{"rid":1015,"raw":"C 1015 sel 29570088 get WorldXSize;"}}
+{"ts":"2026-08-18T10:22:47.893Z","msg":"RDO<< world","meta":{"rid":1015,"raw":"A1015 WorldXSize=\"#2000\""}}
+{"ts":"2026-08-18T10:22:47.894Z","msg":"RDO>> world","meta":{"rid":1016,"raw":"C 1016 sel 29570088 get WorldYSize;"}}
+{"ts":"2026-08-18T10:22:47.992Z","msg":"RDO<< world","meta":{"rid":1016,"raw":"A1016 WorldYSize=\"#2000\""}}
+{"ts":"2026-08-18T10:22:47.993Z","msg":"RDO>> world","meta":{"rid":1017,"raw":"C 1017 sel 29570088 get WorldSeason;"}}
+{"ts":"2026-08-18T10:22:48.094Z","msg":"RDO<< world","meta":{"rid":1017,"raw":"A1017 WorldSeason=\"#1\""}}
+{"ts":"2026-08-18T10:22:48.095Z","msg":"RDO>> world","meta":{"rid":1018,"raw":"C 1018 sel 29570088 call AccountStatus \"^\" \"%SPO_test3\",\"%[REDACTED]\";"}}
+{"ts":"2026-08-18T10:22:48.193Z","msg":"RDO<< world","meta":{"rid":1018,"raw":"A1018 res=\"#0\""}}
+{"ts":"2026-08-18T10:22:48.193Z","msg":"RDO>> world","meta":{"rid":1019,"raw":"C 1019 sel 29570088 call Logon \"^\" \"%SPO_test3\",\"%[REDACTED]\";"}}
+{"ts":"2026-08-18T10:22:50.704Z","msg":"RDO<< world","meta":{"rid":1019,"raw":"A1019 res=\"#29983712\""}}
+{"ts":"2026-08-18T10:22:50.704Z","msg":"RDO>> world","meta":{"rid":1020,"raw":"C 1020 sel 29983712 get MailAccount;"}}
+{"ts":"2026-08-18T10:22:50.794Z","msg":"RDO<< world","meta":{"rid":1020,"raw":"A1020 MailAccount=\"$SPO_test3@Planitia.net\""}}
+{"ts":"2026-08-18T10:22:50.795Z","msg":"RDO>> world","meta":{"rid":1021,"raw":"C 1021 sel 29983712 get TycoonId;"}}
+{"ts":"2026-08-18T10:22:50.892Z","msg":"RDO<< world","meta":{"rid":1021,"raw":"A1021 TycoonId=\"#37\""}}
+{"ts":"2026-08-18T10:22:50.893Z","msg":"RDO>> world","meta":{"rid":1022,"raw":"C 1022 sel 29983712 get RDOCnntId;"}}
+{"ts":"2026-08-18T10:22:50.992Z","msg":"RDO<< world","meta":{"rid":1022,"raw":"A1022 RDOCnntId=\"$29911816\""}}
+{"ts":"2026-08-18T10:22:50.993Z","msg":"RDO>> world","meta":{"rid":1023,"raw":"C 1023 sel 29983712 call RegisterEventsById \"^\" \"#29911816\";"}}
+{"ts":"2026-08-18T10:22:51.092Z","msg":"RDO<< world","meta":{"raw":"C 20 idof \"InterfaceEvents\""}}
+{"ts":"2026-08-18T10:22:51.092Z","msg":"RDO>* world","meta":{"raw":"A20 objid=\"41178596\";"}}
+{"ts":"2026-08-18T10:22:51.196Z","msg":"RDO<< world","meta":{"raw":"C sel 41178596 call InitClient \"*\" \"@234277\",\"%1903331154229\",\"#0\",\"#287038816\""}}
+{"ts":"2026-08-18T10:22:51.197Z","msg":"RDO>* world","meta":{"raw":"C sel 29983712 call SetLanguage \"*\" \"%0\";"}}
+{"ts":"2026-08-18T10:22:51.197Z","msg":"RDO>> world","meta":{"rid":1024,"raw":"C 1024 sel 29983712 get GetCompanyCount;"}}
+{"ts":"2026-08-18T10:22:51.291Z","msg":"RDO<< world","meta":{"raw":"C sel 41178596 call NewMail \"*\" \"#2\""}}
+{"ts":"2026-08-18T10:22:51.291Z","msg":"RDO<< world","meta":{"rid":1023,"raw":"A1023 res=\"#0\""}}
+{"ts":"2026-08-18T10:22:51.455Z","msg":"RDO<< world","meta":{"rid":1024,"raw":"A1024 GetCompanyCount=\"#4\""}}
+{"ts":"2026-08-18T10:22:52.536Z","msg":"RDO>> world","meta":{"rid":1025,"raw":"C 1025 sel 29983712 set EnableEvents=\"#-1\";"}}
+{"ts":"2026-08-18T10:22:52.626Z","msg":"RDO<< world","meta":{"rid":1025,"raw":"A1025"}}
+{"ts":"2026-08-18T10:22:52.627Z","msg":"RDO>> world","meta":{"rid":1026,"raw":"C 1026 sel 29983712 call PickEvent \"^\" \"#37\";"}}
+{"ts":"2026-08-18T10:22:52.718Z","msg":"RDO<< world","meta":{"rid":1026,"raw":"A1026 res=\"%Date=2539-05-13\r\nKind=1\r\nURL=http://local.asp?frame_Id=MapIsoView&frame_Action=SELECT&x=776&y=997\r\nText0=SPO_test3 built 1 Dump near Helartia.\r\nText1=SPO_test3 comenzó 1 Dump cerca de Helartia.\r\nText2=SPO_test3 a construit 1 Décharge près de Helartia.\r\nText3=SPO_test3 baute 1 Mülldeponie nahe bei Helartia.\r\nText4=SPO_test3 ha costruito 1 Discarica vicino Helartia.\r\nText5=SPO_test3 construiu 1 Descarga perto de Helartia.\r\n\""}}
+{"ts":"2026-08-18T10:22:52.719Z","msg":"RDO>> world","meta":{"rid":1027,"raw":"C 1027 sel 29983712 call GetTycoonCookie \"^\" \"#37\",\"%LastY.0\";"}}
+{"ts":"2026-08-18T10:22:52.823Z","msg":"RDO<< world","meta":{"rid":1027,"raw":"A1027 res=\"%994.875\""}}
+{"ts":"2026-08-18T10:22:52.823Z","msg":"RDO>> world","meta":{"rid":1028,"raw":"C 1028 sel 29983712 call GetTycoonCookie \"^\" \"#37\",\"%LastX.0\";"}}
+{"ts":"2026-08-18T10:22:53.840Z","msg":"RDO<< world","meta":{"rid":1028,"raw":"A1028 res=\"%920\""}}
+{"ts":"2026-08-18T10:22:53.841Z","msg":"RDO>> world","meta":{"rid":1029,"raw":"C 1029 sel 29983712 call GetTycoonCookie \"^\" \"#37\",\"%\";"}}
+{"ts":"2026-08-18T10:22:53.995Z","msg":"RDO<< world","meta":{"rid":1029,"raw":"A1029 res=\"%LastX.0=920\r\nLastY.0=994.875\r\nLastTimeOnline=2026-08-17\r\n\""}}
+{"ts":"2026-08-18T10:22:53.995Z","msg":"RDO>* world","meta":{"raw":"C sel 29983712 call ClientAware \"*\";"}}
+{"ts":"2026-08-18T10:22:53.995Z","msg":"RDO>> world","meta":{"rid":1030,"raw":"C 1030 sel 29983712 call PickEvent \"^\" \"#37\";"}}
+{"ts":"2026-08-18T10:22:54.086Z","msg":"RDO<< world","meta":{"raw":"C sel 41178596 call ChatMsg \"*\" \"%SYSTEM\",\"%SPO_test3 has entered Planitia\""}}
+{"ts":"2026-08-18T10:22:54.230Z","msg":"RDO<< world","meta":{"rid":1030,"raw":"A1030 res=\"%Date=2539-05-13\r\nKind=1\r\nURL=http://local.asp?frame_Id=MapIsoView&frame_Action=SELECT&x=781&y=994\r\nText0=SPO_test3 built 1 Jail near Helartia.\r\nText1=SPO_test3 comenzó 1 Jail cerca de Helartia.\r\nText2=SPO_test3 a construit 1 Prison près de Helartia.\r\nText3=SPO_test3 baute 1 Gefängnis nahe bei Helartia.\r\nText4=SPO_test3 ha costruito 1 Prigione vicino Helartia.\r\nText5=SPO_test3 construiu 1 Cadeia perto de Helartia.\r\n\""}}
+{"ts":"2026-08-18T10:22:54.230Z","msg":"RDO>* world","meta":{"raw":"C sel 29983712 call ClientAware \"*\";"}}
+{"ts":"2026-08-18T10:22:54.232Z","msg":"RDO>> world","meta":{"rid":1031,"raw":"C 1031 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:22:54.321Z","msg":"RDO<< world","meta":{"rid":1031,"raw":"A1031 UserName=\"$SPO_test3\""}}
+{"ts":"2026-08-18T10:22:54.322Z","msg":"RDO>> world","meta":{"rid":1032,"raw":"C 1032 sel 29983712 call RDOFavoritesGetSubItems \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:22:54.420Z","msg":"RDO<< world","meta":{"rid":1032,"raw":"A1032 res=\"%12\u00011\u0001Company Headquarters\u0001Company Headquarters,968,1000,1\u00010\u0001\u000213\u00011\u0001Balloon House\u0001Balloon House,985,976,1\u00010\u0001\u000214\u00011\u0001The Mushrooms\u0001The Mushrooms,942,1055,1\u00010\u0001\u000215\u00011\u0001The Barracks\u0001The Barracks,879,1018,1\u00010\u0001\u000216\u00011\u0001Book Store 1\u0001Book Store 1,948,1044,1\u00010\u0001\u000221\u00011\u0001Furniture Store 1\u0001Furniture Store 1,947,1042,1\u00010\u0001\u000222\u00011\u0001Company Headquarters\u0001Company Headquarters,964,1000,1\u00010\u0001\u000223\u00011\u0001Company Headquarters\u0001Company Headquarters,964,996,1\u00010\u0001\u000224\u00011\u0001Company Headquarters\u0001Company Headquarters,968,996,1\u00010\u0001\u000225\u00011\u0001Gas Station 1\u0001Gas Station 1,884,1018,1\u00010\u0001\u000226\u00011\u0001Gas Station 2\u0001Gas Station 2,944,1046,1\u00010\u0001\u000227\u00011\u0001Gas Station 3\u0001Gas Station 3,982,986,1\u00010\u0001\u000228\u00011\u0001Gas Station 4\u0001Gas Station 4,962,1000,1\u00010\u0001\u000229\u00011\u0001Car Store 1\u0001Car Store 1,884,1016,1\u00010\u0001\u000230\u00011\u0001Car Store 2\u0001Car Store 2,944,1044,1\u00010\u0001\u000231\u00011\u0001Car Store 3\u0001Car Store 3,984,986,1\u00010\u0001\u000232\u00011\u0001Car Store 4\u0001Car Store 4,962,997,1\u00010\u0001\u000233\u00011\u0001Mart 1\u0001Mart 1,886,1018,1\u00010\u0001\u000234\u00011\u0001Mart 2\u0001Mart 2,942,1046,1\u00010\u0001\u000235\u00011\u0001Mart 3\u0001Mart 3,982,988,1\u00010\u0001\u000236\u00011\u0001Mart 4\u0001Mart 4,960,997,1\u00010\u0001\u000237\u00011\u0001Hospital\u0001Hospital,935,997,1\u00010\u0001\u000238\u00011\u0001School\u0001School,937,997,1\u00010\u0001\u000239\u00011\u0001Fire Station\u0001Fire Station,939,997,1\u00010\u0001\u000240\u00011\u0001Park\u0001Park,982,979,1\u00010\u0001\u000241\u00011\u0001Park\u0001Park,941,1049,1\u00010\u0001\u000242\u00011\u0001Park\u0001Park,878,1021,1\u00010\u0001\u000243\u00011\u0001Tennis courts\u0001Tennis courts,987,979,1\u00010\u0001\u000244\u00011\u0001Tennis courts\u0001Tennis courts,987,982,1\u00010\u0001\u000245\u00011\u0001College\u0001College,924,1005,1\u00010\u0001\u000248\u00011\u0001Drug Store 1\u0001Drug Store 1,886,1016,1\u00010\u0001\u000249\u00011\u0001Drug Store 2\u0001Drug Store 2,942,1044,1\u00010\u0001\u000250\u00011\u0001Drug Store 3\u0001Drug Store 3,984,988,1\u00010\u0001\u000257\u00011\u0001Drug Store 4\u0001Drug Store 4,960,1000,1\u00010\u0001\u000258\u00011\u0001Furniture Store 2\u0001Furniture Store 2,986,986,1\u00010\u0001\u000259\u00011\u0001Furniture Store 3\u0001Furniture Store 3,963,1002,1\u00010\u0001\u000260\u00011\u0001Furniture Store 4\u0001Furniture Store 4,884,1015,1\u00010\u0001\u000261\u00011\u0001Book Store 2\u0001Book Store 2,884,1014,1\u00010\u0001\u000262\u00011\u0001Book Store 3\u0001Book Store 3,987,986,1\u00010\u0001\u000263\u00011\u0001Book Store 4\u0001Book Store 4,962,1002,1\u00010\u0001\u000264\u00011\u0001Toy Store 1\u0001Toy Store 1,947,1044,1\u00010\u0001\u000265\u00011\u0001Toy Store 2\u0001Toy Store 2,884,1013,1\u00010\u0001\u000266\u00011\u0001Toy Store 3\u0001Toy Store 3,961,1002,1\u00010\u0001\u000267\u00011\u0001Toy Store 4\u0001Toy Store 4,988,986,1\u00010\u0001\u000268\u00011\u0001CD Store 1\u0001CD Store 1,885,1015,1\u00010\u0001\u000269\u00011\u0001CD Store 2\u0001CD Store 2,947,1043,1\u00010\u0001\u000270\u00011\u0001CD Store 3\u0001CD Store 3,960,1002,1\u00010\u0001\u000271\u00011\u0001CD Store 4\u0001CD Store 4,989,986,1\u00010\u0001\u000272\u00011\u0001Police Station\u0001Police Station,881,1018,1\u00010\u0001\u000273\u00011\u0001Police Station\u0001Police Station,947,1049,1\u00010\u0001\u000274\u00011\u0001Police Station\u0001Police Station,979,986,1\u00010\u0001\u000276\u00011\u0001Dump\u0001Dump,776,997,1\u00010\u0001\u000277\u00011\u0001Jail\u0001Jail,781,994,1\u00010\u0001\u000278\u00011\u0001Import Storage 3\u0001Import Storage 3,781,1000,1\u00010\u0001\u000279\u00011\u0001Export Storage 3\u0001Export Storage 3,785,1000,1\u00010\u0001\u000280\u00011\u0001Farm 2\u0001Farm 2,789,1000,1\u00010\u0001\u000281\u00011\u0001Museum\u0001Museum,933,1008,1\u00010\u0001\u0002\""}}
+{"ts":"2026-08-18T10:22:54.421Z","msg":"RDO>> world","meta":{"rid":1033,"raw":"C 1033 sel 29983712 call SwitchFocusEx \"^\" \"#0\",\"#968\",\"#1000\";"}}
+{"ts":"2026-08-18T10:22:54.509Z","msg":"RDO<< world","meta":{"raw":"C sel 41178596 call RefreshTycoon \"*\" \"%1903331037207\",\"%-20480\",\"#13\",\"#47\",\"#200\""}}
+{"ts":"2026-08-18T10:22:54.646Z","msg":"RDO<< world","meta":{"rid":1033,"raw":"A1033 res=\"%283869292\r\nCompany Headquarters\n\rSPO_test3 - Green\n\r(-$927/h):-:Company supported at 200%. Research Implementation: $0.:-:Hint: Go to \"\"INSPECT\"\" to carry out new researchs.:-:\""}}
+{"ts":"2026-08-18T10:22:54.648Z","msg":"RDO>> world","meta":{"rid":1034,"raw":"C 1034 sel 29983712 get CompositeName;"}}
+{"ts":"2026-08-18T10:22:54.737Z","msg":"RDO<< world","meta":{"rid":1034,"raw":"A1034 CompositeName=\"$SPO_test3\""}}
+{"ts":"2026-08-18T10:22:54.737Z","msg":"RDO>> world","meta":{"rid":1035,"raw":"C 1035 sel 29570088 get DAAddr;"}}
+{"ts":"2026-08-18T10:22:54.827Z","msg":"RDO<< world","meta":{"rid":1035,"raw":"A1035 DAAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-18T10:22:54.827Z","msg":"RDO>> world","meta":{"rid":1036,"raw":"C 1036 sel 29570088 get DALockPort;"}}
+{"ts":"2026-08-18T10:22:54.917Z","msg":"RDO<< world","meta":{"rid":1036,"raw":"A1036 DALockPort=\"#7001\""}}
+{"ts":"2026-08-18T10:22:54.918Z","msg":"RDO>> world","meta":{"rid":1037,"raw":"C 1037 sel 29570088 get DAPort;"}}
+{"ts":"2026-08-18T10:22:55.008Z","msg":"RDO<< world","meta":{"rid":1037,"raw":"A1037 DAPort=\"#7000\""}}
+{"ts":"2026-08-18T10:22:55.009Z","msg":"RDO>> world","meta":{"rid":1038,"raw":"C 1038 sel 29983712 get EnableEvents;"}}
+{"ts":"2026-08-18T10:22:55.099Z","msg":"RDO<< world","meta":{"rid":1038,"raw":"A1038 EnableEvents=\"#255\""}}
+{"ts":"2026-08-18T10:22:55.099Z","msg":"RDO>> world","meta":{"rid":1039,"raw":"C 1039 sel 283869292 get HoursOnAir;"}}
+{"ts":"2026-08-18T10:22:55.193Z","msg":"RDO<< world","meta":{"rid":1039,"raw":"A1039 error 2 getting HoursOnAir"}}
+{"ts":"2026-08-18T10:22:55.194Z","msg":"RDO>> world","meta":{"rid":1040,"raw":"C 1040 sel 283869292 get Interest;"}}
+{"ts":"2026-08-18T10:22:55.292Z","msg":"RDO<< world","meta":{"rid":1040,"raw":"A1040 error 2 getting Interest"}}
+{"ts":"2026-08-18T10:22:55.293Z","msg":"RDO>> world","meta":{"rid":1041,"raw":"C 1041 sel 29983712 get MailAccount;"}}
+{"ts":"2026-08-18T10:22:55.381Z","msg":"RDO<< world","meta":{"rid":1041,"raw":"A1041 MailAccount=\"$SPO_test3@Planitia.net\""}}
+{"ts":"2026-08-18T10:22:55.382Z","msg":"RDO>> world","meta":{"rid":1042,"raw":"C 1042 sel 29570088 get MailAddr;"}}
+{"ts":"2026-08-18T10:22:55.472Z","msg":"RDO<< world","meta":{"rid":1042,"raw":"A1042 MailAddr=\"$158.69.153.134\""}}
+{"ts":"2026-08-18T10:22:55.472Z","msg":"RDO>> world","meta":{"rid":1043,"raw":"C 1043 sel 29570088 get MailPort;"}}
+{"ts":"2026-08-18T10:22:55.561Z","msg":"RDO<< world","meta":{"rid":1043,"raw":"A1043 MailPort=\"#10000\""}}
+{"ts":"2026-08-18T10:22:55.562Z","msg":"RDO>> world","meta":{"rid":1044,"raw":"C 1044 sel 283869292 get Maintenance;"}}
+{"ts":"2026-08-18T10:22:55.652Z","msg":"RDO<< world","meta":{"rid":1044,"raw":"A1044 error 2 getting Maintenance"}}
+{"ts":"2026-08-18T10:22:55.653Z","msg":"RDO>> world","meta":{"rid":1045,"raw":"C 1045 sel 283869292 get Name;"}}
+{"ts":"2026-08-18T10:22:55.743Z","msg":"RDO<< world","meta":{"rid":1045,"raw":"A1045 error 2 getting Name"}}
+{"ts":"2026-08-18T10:22:55.743Z","msg":"RDO>> world","meta":{"rid":1046,"raw":"C 1046 sel 283869292 get RDOAcceptCloning;"}}
+{"ts":"2026-08-18T10:22:55.833Z","msg":"RDO<< world","meta":{"rid":1046,"raw":"A1046 error 2 getting RDOAcceptCloning"}}
+{"ts":"2026-08-18T10:22:55.834Z","msg":"RDO>> world","meta":{"rid":1047,"raw":"C 1047 sel 283869292 get Rent;"}}
+{"ts":"2026-08-18T10:22:55.924Z","msg":"RDO<< world","meta":{"rid":1047,"raw":"A1047 error 2 getting Rent"}}
+{"ts":"2026-08-18T10:22:55.924Z","msg":"RDO>> world","meta":{"rid":1048,"raw":"C 1048 sel 29983712 get ServerBusy;"}}
+{"ts":"2026-08-18T10:22:56.014Z","msg":"RDO<< world","meta":{"rid":1048,"raw":"A1048 ServerBusy=\"#0\""}}
+{"ts":"2026-08-18T10:22:56.014Z","msg":"RDO>> world","meta":{"rid":1049,"raw":"C 1049 sel 283869292 get Stopped;"}}
+{"ts":"2026-08-18T10:22:56.106Z","msg":"RDO<< world","meta":{"rid":1049,"raw":"A1049 error 2 getting Stopped"}}
+{"ts":"2026-08-18T10:22:56.106Z","msg":"RDO>> world","meta":{"rid":1050,"raw":"C 1050 sel 283869292 get Term;"}}
+{"ts":"2026-08-18T10:22:56.196Z","msg":"RDO<< world","meta":{"rid":1050,"raw":"A1050 error 2 getting Term"}}
+{"ts":"2026-08-18T10:22:56.197Z","msg":"RDO>> world","meta":{"rid":1051,"raw":"C 1051 sel 29983712 get TycoonId;"}}
+{"ts":"2026-08-18T10:22:56.292Z","msg":"RDO<< world","meta":{"rid":1051,"raw":"A1051 TycoonId=\"#37\""}}
+{"ts":"2026-08-18T10:22:56.293Z","msg":"RDO>> world","meta":{"rid":1052,"raw":"C 1052 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:22:56.382Z","msg":"RDO<< world","meta":{"rid":1052,"raw":"A1052 UserName=\"$SPO_test3\""}}
+{"ts":"2026-08-18T10:22:56.382Z","msg":"RDO>> world","meta":{"rid":1053,"raw":"C 1053 sel 29570088 get WorldName;"}}
+{"ts":"2026-08-18T10:22:56.472Z","msg":"RDO<< world","meta":{"rid":1053,"raw":"A1053 WorldName=\"$Planitia\""}}
+{"ts":"2026-08-18T10:22:56.473Z","msg":"RDO>> world","meta":{"rid":1054,"raw":"C 1054 sel 29570088 get WorldSeason;"}}
+{"ts":"2026-08-18T10:22:56.564Z","msg":"RDO<< world","meta":{"rid":1054,"raw":"A1054 WorldSeason=\"#1\""}}
+{"ts":"2026-08-18T10:22:56.564Z","msg":"RDO>> world","meta":{"rid":1055,"raw":"C 1055 sel 29570088 get WorldXSize;"}}
+{"ts":"2026-08-18T10:22:56.654Z","msg":"RDO<< world","meta":{"rid":1055,"raw":"A1055 WorldXSize=\"#2000\""}}
+{"ts":"2026-08-18T10:22:56.654Z","msg":"RDO>> world","meta":{"rid":1056,"raw":"C 1056 sel 29570088 get WorldYSize;"}}
+{"ts":"2026-08-18T10:22:56.743Z","msg":"RDO<< world","meta":{"rid":1056,"raw":"A1056 WorldYSize=\"#2000\""}}
+{"ts":"2026-08-18T10:22:56.743Z","msg":"RDO>> world","meta":{"rid":1057,"raw":"C 1057 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:22:56.832Z","msg":"RDO<< world","meta":{"rid":1057,"raw":"A1057 UserName=\"$SPO_test3\""}}
+{"ts":"2026-08-18T10:22:56.833Z","msg":"RDO>> world","meta":{"rid":1058,"raw":"C 1058 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:22:56.922Z","msg":"RDO<< world","meta":{"rid":1058,"raw":"A1058 UserName=\"$SPO_test3\""}}
+{"ts":"2026-08-18T10:22:56.922Z","msg":"RDO>> world","meta":{"rid":1059,"raw":"C 1059 sel 29983712 call ClientAware \"*\";"}}
+{"ts":"2026-08-18T10:22:57.012Z","msg":"RDO<< world","meta":{"rid":1059,"raw":"A1059"}}
+{"ts":"2026-08-18T10:22:57.013Z","msg":"RDO>> world","meta":{"rid":1060,"raw":"C 1060 sel 29983712 call GetCompanyCount \"*\";"}}
+{"ts":"2026-08-18T10:22:57.103Z","msg":"RDO<< world","meta":{"rid":1060,"raw":"A1060"}}
+{"ts":"2026-08-18T10:22:57.104Z","msg":"RDO>> world","meta":{"rid":1061,"raw":"C 1061 sel 29983712 call GetUserName \"*\";"}}
+{"ts":"2026-08-18T10:22:57.195Z","msg":"RDO<< world","meta":{"rid":1061,"raw":"A1061"}}
+{"ts":"2026-08-18T10:22:57.195Z","msg":"RDO>> world","meta":{"rid":1062,"raw":"C 1062 sel 283869292 call RDOCacncelTransc \"*\";"}}
+{"ts":"2026-08-18T10:22:57.293Z","msg":"RDO<< world","meta":{"rid":1062,"raw":"A1062 error 2"}}
+{"ts":"2026-08-18T10:22:57.294Z","msg":"RDO>> world","meta":{"rid":1063,"raw":"C 1063 sel 283869292 call RDODowngrade \"*\";"}}
+{"ts":"2026-08-18T10:22:57.384Z","msg":"RDO<< world","meta":{"rid":1063,"raw":"A1063 error 2"}}
+{"ts":"2026-08-18T10:22:57.384Z","msg":"RDO>> world","meta":{"rid":1064,"raw":"C 1064 sel 283869292 call RDOStopUpgrade \"*\";"}}
+{"ts":"2026-08-18T10:22:57.474Z","msg":"RDO<< world","meta":{"rid":1064,"raw":"A1064 error 2"}}
+{"ts":"2026-08-18T10:22:57.474Z","msg":"RDO>> world","meta":{"rid":1065,"raw":"C 1065 sel 283869292 call Comercials \"*\";"}}
+{"ts":"2026-08-18T10:22:57.564Z","msg":"RDO<< world","meta":{"rid":1065,"raw":"A1065 error 2"}}
+{"ts":"2026-08-18T10:22:57.565Z","msg":"RDO>> world","meta":{"rid":1066,"raw":"C 1066 sel 29983712 call GetChannelInfo \"*\";"}}
+{"ts":"2026-08-18T10:22:57.655Z","msg":"RDO<< world","meta":{"rid":1066,"raw":"A1066"}}
+{"ts":"2026-08-18T10:22:57.655Z","msg":"RDO>> world","meta":{"rid":1067,"raw":"C 1067 sel 29983712 call GetChannelList \"*\";"}}
+{"ts":"2026-08-18T10:22:57.745Z","msg":"RDO<< world","meta":{"rid":1067,"raw":"A1067"}}
+{"ts":"2026-08-18T10:22:57.745Z","msg":"RDO>> world","meta":{"rid":1068,"raw":"C 1068 sel 29983712 call GetUserList \"*\";"}}
+{"ts":"2026-08-18T10:22:57.836Z","msg":"RDO<< world","meta":{"rid":1068,"raw":"A1068 error 1"}}
+{"ts":"2026-08-18T10:22:57.836Z","msg":"RDO>> world","meta":{"rid":1069,"raw":"C 1069 sel 283869292 call RDOAskLoan \"*\";"}}
+{"ts":"2026-08-18T10:22:57.927Z","msg":"RDO<< world","meta":{"rid":1069,"raw":"A1069 error 1"}}
+{"ts":"2026-08-18T10:22:57.927Z","msg":"RDO>> world","meta":{"rid":1070,"raw":"C 1070 sel 29983712 call RDOCnntId \"*\";"}}
+{"ts":"2026-08-18T10:22:58.017Z","msg":"RDO<< world","meta":{"rid":1070,"raw":"A1070 error 1"}}
+{"ts":"2026-08-18T10:22:58.017Z","msg":"RDO>> world","meta":{"rid":1071,"raw":"C 1071 sel 29983712 call RDOModifyProject \"*\";"}}
+{"ts":"2026-08-18T10:22:58.107Z","msg":"RDO<< world","meta":{"rid":1071,"raw":"A1071 error 1"}}
+{"ts":"2026-08-18T10:22:58.108Z","msg":"RDO>> world","meta":{"rid":1072,"raw":"C 1072 sel 29983712 call RDOModifyRating \"*\";"}}
+{"ts":"2026-08-18T10:22:58.200Z","msg":"RDO<< world","meta":{"rid":1072,"raw":"A1072 error 1"}}
+{"ts":"2026-08-18T10:22:58.200Z","msg":"RDO>> world","meta":{"rid":1073,"raw":"C 1073 sel 283869292 call RDOSetBuyingStatus \"*\";"}}
+{"ts":"2026-08-18T10:22:58.296Z","msg":"RDO<< world","meta":{"rid":1073,"raw":"A1073 error 1"}}
+{"ts":"2026-08-18T10:22:58.296Z","msg":"RDO>> world","meta":{"rid":1074,"raw":"C 1074 sel 29570088 call AccountStatus \"*\";"}}
+{"ts":"2026-08-18T10:22:58.386Z","msg":"RDO<< world","meta":{"rid":1074,"raw":"A1074 error 1"}}
+{"ts":"2026-08-18T10:22:58.386Z","msg":"RDO>> world","meta":{"rid":1075,"raw":"C 1075 sel 29983712 call BreakCircuitAt \"*\";"}}
+{"ts":"2026-08-18T10:22:58.497Z","msg":"RDO<< world","meta":{"rid":1075,"raw":"A1075 error 1"}}
+{"ts":"2026-08-18T10:22:58.498Z","msg":"RDO>> world","meta":{"rid":1076,"raw":"C 1076 sel 29983712 call CloneFacility \"*\";"}}
+{"ts":"2026-08-18T10:22:58.593Z","msg":"RDO<< world","meta":{"rid":1076,"raw":"A1076 error 1"}}
+{"ts":"2026-08-18T10:22:58.593Z","msg":"RDO>> world","meta":{"rid":1077,"raw":"C 1077 sel 29983712 call ConnectFacilities \"*\";"}}
+{"ts":"2026-08-18T10:22:58.686Z","msg":"RDO<< world","meta":{"rid":1077,"raw":"A1077 error 1"}}
+{"ts":"2026-08-18T10:22:58.686Z","msg":"RDO>> world","meta":{"rid":1078,"raw":"C 1078 sel 29983712 call CreateCircuitSeg \"*\";"}}
+{"ts":"2026-08-18T10:22:58.793Z","msg":"RDO<< world","meta":{"rid":1078,"raw":"A1078 error 1"}}
+{"ts":"2026-08-18T10:22:58.794Z","msg":"RDO>> world","meta":{"rid":1079,"raw":"C 1079 sel 29983712 call DefineZone \"*\";"}}
+{"ts":"2026-08-18T10:22:58.895Z","msg":"RDO<< world","meta":{"rid":1079,"raw":"A1079 error 1"}}
+{"ts":"2026-08-18T10:22:58.895Z","msg":"RDO>> world","meta":{"rid":1080,"raw":"C 1080 sel 29570088 call GetClientView \"*\";"}}
+{"ts":"2026-08-18T10:22:58.985Z","msg":"RDO<< world","meta":{"rid":1080,"raw":"A1080 error 1"}}
+{"ts":"2026-08-18T10:22:58.985Z","msg":"RDO>> world","meta":{"rid":1081,"raw":"C 1081 sel 29983712 call GetCompanyCluster \"*\";"}}
+{"ts":"2026-08-18T10:22:59.081Z","msg":"RDO<< world","meta":{"rid":1081,"raw":"A1081 error 1"}}
+{"ts":"2026-08-18T10:22:59.082Z","msg":"RDO>> world","meta":{"rid":1082,"raw":"C 1082 sel 29983712 call GetCompanyFacilityCount \"*\";"}}
+{"ts":"2026-08-18T10:22:59.172Z","msg":"RDO<< world","meta":{"rid":1082,"raw":"A1082 error 1"}}
+{"ts":"2026-08-18T10:22:59.172Z","msg":"RDO>> world","meta":{"rid":1083,"raw":"C 1083 sel 29983712 call GetCompanyId \"*\";"}}
+{"ts":"2026-08-18T10:22:59.263Z","msg":"RDO<< world","meta":{"rid":1083,"raw":"A1083 error 1"}}
+{"ts":"2026-08-18T10:22:59.263Z","msg":"RDO>> world","meta":{"rid":1084,"raw":"C 1084 sel 29983712 call GetCompanyName \"*\";"}}
+{"ts":"2026-08-18T10:22:59.353Z","msg":"RDO<< world","meta":{"rid":1084,"raw":"A1084 error 1"}}
+{"ts":"2026-08-18T10:22:59.353Z","msg":"RDO>> world","meta":{"rid":1085,"raw":"C 1085 sel 29983712 call GetCompanyOwnerRole \"*\";"}}
+{"ts":"2026-08-18T10:22:59.443Z","msg":"RDO<< world","meta":{"rid":1085,"raw":"A1085 error 1"}}
+{"ts":"2026-08-18T10:22:59.443Z","msg":"RDO>> world","meta":{"rid":1086,"raw":"C 1086 sel 29983712 call GetSurface \"*\";"}}
+{"ts":"2026-08-18T10:22:59.555Z","msg":"RDO<< world","meta":{"rid":1086,"raw":"A1086 error 1"}}
+{"ts":"2026-08-18T10:22:59.556Z","msg":"RDO>> world","meta":{"rid":1087,"raw":"C 1087 sel 29983712 call GetTycoonCookie \"*\";"}}
+{"ts":"2026-08-18T10:22:59.645Z","msg":"RDO<< world","meta":{"rid":1087,"raw":"A1087 error 1"}}
+{"ts":"2026-08-18T10:22:59.646Z","msg":"RDO>> world","meta":{"rid":1088,"raw":"C 1088 sel 29983712 call JoinChannel \"*\";"}}
+{"ts":"2026-08-18T10:22:59.737Z","msg":"RDO<< world","meta":{"rid":1088,"raw":"A1088 error 1"}}
+{"ts":"2026-08-18T10:22:59.737Z","msg":"RDO>> world","meta":{"rid":1089,"raw":"C 1089 sel 29570088 call Logon \"*\";"}}
+{"ts":"2026-08-18T10:22:59.826Z","msg":"RDO<< world","meta":{"rid":1089,"raw":"A1089 error 1"}}
+{"ts":"2026-08-18T10:22:59.827Z","msg":"RDO>> world","meta":{"rid":1090,"raw":"C 1090 sel 29983712 call MsgCompositionChanged \"*\";"}}
+{"ts":"2026-08-18T10:22:59.917Z","msg":"RDO<< world","meta":{"rid":1090,"raw":"A1090 error 1"}}
+{"ts":"2026-08-18T10:22:59.917Z","msg":"RDO>> world","meta":{"rid":1091,"raw":"C 1091 sel 29983712 call NewCompany \"*\";"}}
+{"ts":"2026-08-18T10:23:00.008Z","msg":"RDO<< world","meta":{"rid":1091,"raw":"A1091 error 1"}}
+{"ts":"2026-08-18T10:23:00.009Z","msg":"RDO>> world","meta":{"rid":1092,"raw":"C 1092 sel 29983712 call NewFacility \"*\";"}}
+{"ts":"2026-08-18T10:23:00.099Z","msg":"RDO<< world","meta":{"rid":1092,"raw":"A1092 error 1"}}
+{"ts":"2026-08-18T10:23:00.099Z","msg":"RDO>> world","meta":{"rid":1093,"raw":"C 1093 sel 29983712 call ObjectAt \"*\";"}}
+{"ts":"2026-08-18T10:23:00.189Z","msg":"RDO<< world","meta":{"rid":1093,"raw":"A1093 error 1"}}
+{"ts":"2026-08-18T10:23:00.189Z","msg":"RDO>> world","meta":{"rid":1094,"raw":"C 1094 sel 29983712 call ObjectsInArea \"*\";"}}
+{"ts":"2026-08-18T10:23:00.293Z","msg":"RDO<< world","meta":{"rid":1094,"raw":"A1094 error 1"}}
+{"ts":"2026-08-18T10:23:00.293Z","msg":"RDO>> world","meta":{"rid":1095,"raw":"C 1095 sel 29983712 call PickEvent \"*\";"}}
+{"ts":"2026-08-18T10:23:00.382Z","msg":"RDO<< world","meta":{"rid":1095,"raw":"A1095 error 1"}}
+{"ts":"2026-08-18T10:23:00.382Z","msg":"RDO>> world","meta":{"rid":1096,"raw":"C 1096 sel 29983712 call RDOAddAutoConnection \"*\";"}}
+{"ts":"2026-08-18T10:23:00.472Z","msg":"RDO<< world","meta":{"rid":1096,"raw":"A1096 error 1"}}
+{"ts":"2026-08-18T10:23:00.472Z","msg":"RDO>> world","meta":{"rid":1097,"raw":"C 1097 sel 283869292 call RDOAutoProduce \"*\";"}}
+{"ts":"2026-08-18T10:23:00.565Z","msg":"RDO<< world","meta":{"rid":1097,"raw":"A1097 error 1"}}
+{"ts":"2026-08-18T10:23:00.565Z","msg":"RDO>> world","meta":{"rid":1098,"raw":"C 1098 sel 283869292 call RDOBanMinister \"*\";"}}
+{"ts":"2026-08-18T10:23:00.655Z","msg":"RDO<< world","meta":{"rid":1098,"raw":"A1098 error 1"}}
+{"ts":"2026-08-18T10:23:00.656Z","msg":"RDO>> world","meta":{"rid":1099,"raw":"C 1099 sel 283869292 call RDOCancelCampaign \"*\";"}}
+{"ts":"2026-08-18T10:23:00.746Z","msg":"RDO<< world","meta":{"rid":1099,"raw":"A1099 error 1"}}
+{"ts":"2026-08-18T10:23:00.746Z","msg":"RDO>> world","meta":{"rid":1100,"raw":"C 1100 sel 283869292 call RDOCancelMovie \"*\";"}}
+{"ts":"2026-08-18T10:23:00.836Z","msg":"RDO<< world","meta":{"rid":1100,"raw":"A1100 error 1"}}
+{"ts":"2026-08-18T10:23:00.836Z","msg":"RDO>> world","meta":{"rid":1101,"raw":"C 1101 sel 283869292 call RDOCancelResearch \"*\";"}}
+{"ts":"2026-08-18T10:23:00.926Z","msg":"RDO<< world","meta":{"rid":1101,"raw":"A1101 error 1"}}
+{"ts":"2026-08-18T10:23:00.926Z","msg":"RDO>> world","meta":{"rid":1102,"raw":"C 1102 sel 283869292 call RDOConnectInput \"*\";"}}
+{"ts":"2026-08-18T10:23:01.017Z","msg":"RDO<< world","meta":{"rid":1102,"raw":"A1102 error 1"}}
+{"ts":"2026-08-18T10:23:01.017Z","msg":"RDO>> world","meta":{"rid":1103,"raw":"C 1103 sel 283869292 call RDOConnectOutput \"*\";"}}
+{"ts":"2026-08-18T10:23:01.107Z","msg":"RDO<< world","meta":{"rid":1103,"raw":"A1103 error 1"}}
+{"ts":"2026-08-18T10:23:01.107Z","msg":"RDO>> world","meta":{"rid":1104,"raw":"C 1104 sel 283869292 call RDOConnectToTycoon \"*\";"}}
+{"ts":"2026-08-18T10:23:01.198Z","msg":"RDO<< world","meta":{"rid":1104,"raw":"A1104 error 1"}}
+{"ts":"2026-08-18T10:23:01.199Z","msg":"RDO>> world","meta":{"rid":1105,"raw":"C 1105 sel 29983712 call RDODelAutoConnection \"*\";"}}
+{"ts":"2026-08-18T10:23:01.288Z","msg":"RDO<< world","meta":{"rid":1105,"raw":"A1105 error 1"}}
+{"ts":"2026-08-18T10:23:01.288Z","msg":"RDO>> world","meta":{"rid":1106,"raw":"C 1106 sel 283869292 call RDODisconnectInput \"*\";"}}
+{"ts":"2026-08-18T10:23:01.378Z","msg":"RDO<< world","meta":{"rid":1106,"raw":"A1106 error 1"}}
+{"ts":"2026-08-18T10:23:01.378Z","msg":"RDO>> world","meta":{"rid":1107,"raw":"C 1107 sel 283869292 call RDODisconnectOutput \"*\";"}}
+{"ts":"2026-08-18T10:23:01.469Z","msg":"RDO<< world","meta":{"rid":1107,"raw":"A1107 error 1"}}
+{"ts":"2026-08-18T10:23:01.470Z","msg":"RDO>> world","meta":{"rid":1108,"raw":"C 1108 sel 29983712 call RDODontHireOnlyFromWarehouse \"*\";"}}
+{"ts":"2026-08-18T10:23:01.582Z","msg":"RDO<< world","meta":{"rid":1108,"raw":"A1108 error 1"}}
+{"ts":"2026-08-18T10:23:01.583Z","msg":"RDO>> world","meta":{"rid":1109,"raw":"C 1109 sel 29983712 call RDODontHireTradeCenter \"*\";"}}
+{"ts":"2026-08-18T10:23:01.694Z","msg":"RDO<< world","meta":{"rid":1109,"raw":"A1109 error 1"}}
+{"ts":"2026-08-18T10:23:01.695Z","msg":"RDO>> world","meta":{"rid":1110,"raw":"C 1110 sel 29983712 call RDOFavoritesGetSubItems \"*\";"}}
+{"ts":"2026-08-18T10:23:01.796Z","msg":"RDO<< world","meta":{"rid":1110,"raw":"A1110 error 1"}}
+{"ts":"2026-08-18T10:23:01.796Z","msg":"RDO>> world","meta":{"rid":1111,"raw":"C 1111 sel 283869292 call RDOGetInvDescEx \"*\";"}}
+{"ts":"2026-08-18T10:23:01.892Z","msg":"RDO<< world","meta":{"rid":1111,"raw":"A1111 error 1"}}
+{"ts":"2026-08-18T10:23:01.893Z","msg":"RDO>> world","meta":{"rid":1112,"raw":"C 1112 sel 283869292 call RDOGetInvPropsByLang \"*\";"}}
+{"ts":"2026-08-18T10:23:01.983Z","msg":"RDO<< world","meta":{"rid":1112,"raw":"A1112 error 1"}}
+{"ts":"2026-08-18T10:23:01.983Z","msg":"RDO>> world","meta":{"rid":1113,"raw":"C 1113 sel 29983712 call RDOHireOnlyFromWarehouse \"*\";"}}
+{"ts":"2026-08-18T10:23:02.073Z","msg":"RDO<< world","meta":{"rid":1113,"raw":"A1113 error 1"}}
+{"ts":"2026-08-18T10:23:02.073Z","msg":"RDO>> world","meta":{"rid":1114,"raw":"C 1114 sel 29983712 call RDOHireTradeCenter \"*\";"}}
+{"ts":"2026-08-18T10:23:02.163Z","msg":"RDO<< world","meta":{"rid":1114,"raw":"A1114 error 1"}}
+{"ts":"2026-08-18T10:23:02.164Z","msg":"RDO>> world","meta":{"rid":1115,"raw":"C 1115 sel 283869292 call RDOLaunchCampaign \"*\";"}}
+{"ts":"2026-08-18T10:23:02.253Z","msg":"RDO<< world","meta":{"rid":1115,"raw":"A1115 error 1"}}
+{"ts":"2026-08-18T10:23:02.254Z","msg":"RDO>> world","meta":{"rid":1116,"raw":"C 1116 sel 283869292 call RDOLaunchMovie \"*\";"}}
+{"ts":"2026-08-18T10:23:02.343Z","msg":"RDO<< world","meta":{"rid":1116,"raw":"A1116 error 1"}}
+{"ts":"2026-08-18T10:23:02.344Z","msg":"RDO>> world","meta":{"rid":1117,"raw":"C 1117 sel 29983712 call RDOPayLoan \"*\";"}}
+{"ts":"2026-08-18T10:23:02.435Z","msg":"RDO<< world","meta":{"rid":1117,"raw":"A1117 error 1"}}
+{"ts":"2026-08-18T10:23:02.435Z","msg":"RDO>> world","meta":{"rid":1118,"raw":"C 1118 sel 29983712 call RDOPayOff \"*\";"}}
+{"ts":"2026-08-18T10:23:02.526Z","msg":"RDO<< world","meta":{"rid":1118,"raw":"A1118 error 1"}}
+{"ts":"2026-08-18T10:23:02.526Z","msg":"RDO>> world","meta":{"rid":1119,"raw":"C 1119 sel 283869292 call RDOQueueResearch \"*\";"}}
+{"ts":"2026-08-18T10:23:02.616Z","msg":"RDO<< world","meta":{"rid":1119,"raw":"A1119 error 1"}}
+{"ts":"2026-08-18T10:23:02.616Z","msg":"RDO>> world","meta":{"rid":1120,"raw":"C 1120 sel 283869292 call RDOReleaseMovie \"*\";"}}
+{"ts":"2026-08-18T10:23:02.821Z","msg":"RDO<< world","meta":{"rid":1120,"raw":"A1120 error 1"}}
+{"ts":"2026-08-18T10:23:02.822Z","msg":"RDO>> world","meta":{"rid":1121,"raw":"C 1121 sel 283869292 call RdoRepair \"*\";"}}
+{"ts":"2026-08-18T10:23:02.912Z","msg":"RDO<< world","meta":{"rid":1121,"raw":"A1121 error 1"}}
+{"ts":"2026-08-18T10:23:02.912Z","msg":"RDO>> world","meta":{"rid":1122,"raw":"C 1122 sel 283869292 call RDOSelectWare \"*\";"}}
+{"ts":"2026-08-18T10:23:03.001Z","msg":"RDO<< world","meta":{"rid":1122,"raw":"A1122 error 1"}}
+{"ts":"2026-08-18T10:23:03.002Z","msg":"RDO>> world","meta":{"rid":1123,"raw":"C 1123 sel 283869292 call RDOSelSelected \"*\";"}}
+{"ts":"2026-08-18T10:23:03.091Z","msg":"RDO<< world","meta":{"rid":1123,"raw":"A1123 error 1"}}
+{"ts":"2026-08-18T10:23:03.092Z","msg":"RDO>> world","meta":{"rid":1124,"raw":"C 1124 sel 29983712 call RDOSendMoney \"*\";"}}
+{"ts":"2026-08-18T10:23:03.192Z","msg":"RDO<< world","meta":{"rid":1124,"raw":"A1124 error 1"}}
+{"ts":"2026-08-18T10:23:03.193Z","msg":"RDO>> world","meta":{"rid":1125,"raw":"C 1125 sel 29983712 call RDOSetAdvanceToNextLevel \"*\";"}}
+{"ts":"2026-08-18T10:23:03.294Z","msg":"RDO<< world","meta":{"rid":1125,"raw":"A1125 error 1"}}
+{"ts":"2026-08-18T10:23:03.294Z","msg":"RDO>> world","meta":{"rid":1126,"raw":"C 1126 sel 283869292 call RDOSetCompanyInputDemand \"*\";"}}
+{"ts":"2026-08-18T10:23:03.385Z","msg":"RDO<< world","meta":{"rid":1126,"raw":"A1126 error 1"}}
+{"ts":"2026-08-18T10:23:03.385Z","msg":"RDO>> world","meta":{"rid":1127,"raw":"C 1127 sel 283869292 call RDOSetInputFluidPerc \"*\";"}}
+{"ts":"2026-08-18T10:23:03.475Z","msg":"RDO<< world","meta":{"rid":1127,"raw":"A1127 error 1"}}
+{"ts":"2026-08-18T10:23:03.476Z","msg":"RDO>> world","meta":{"rid":1128,"raw":"C 1128 sel 283869292 call RDOSetInputMaxPrice \"*\";"}}
+{"ts":"2026-08-18T10:23:03.566Z","msg":"RDO<< world","meta":{"rid":1128,"raw":"A1128 error 1"}}
+{"ts":"2026-08-18T10:23:03.566Z","msg":"RDO>> world","meta":{"rid":1129,"raw":"C 1129 sel 283869292 call RDOSetInputMinK \"*\";"}}
+{"ts":"2026-08-18T10:23:03.656Z","msg":"RDO<< world","meta":{"rid":1129,"raw":"A1129 error 1"}}
+{"ts":"2026-08-18T10:23:03.656Z","msg":"RDO>> world","meta":{"rid":1130,"raw":"C 1130 sel 283869292 call RDOSetInputOverPrice \"*\";"}}
+{"ts":"2026-08-18T10:23:03.746Z","msg":"RDO<< world","meta":{"rid":1130,"raw":"A1130 error 1"}}
+{"ts":"2026-08-18T10:23:03.747Z","msg":"RDO>> world","meta":{"rid":1131,"raw":"C 1131 sel 283869292 call RDOSetInputSortMode \"*\";"}}
+{"ts":"2026-08-18T10:23:03.839Z","msg":"RDO<< world","meta":{"rid":1131,"raw":"A1131 error 1"}}
+{"ts":"2026-08-18T10:23:03.839Z","msg":"RDO>> world","meta":{"rid":1132,"raw":"C 1132 sel 283869292 call RDOSetLoanPerc \"*\";"}}
+{"ts":"2026-08-18T10:23:03.929Z","msg":"RDO<< world","meta":{"rid":1132,"raw":"A1132 error 1"}}
+{"ts":"2026-08-18T10:23:03.929Z","msg":"RDO>> world","meta":{"rid":1133,"raw":"C 1133 sel 283869292 call RDOSetMinistryBudget \"*\";"}}
+{"ts":"2026-08-18T10:23:04.019Z","msg":"RDO<< world","meta":{"rid":1133,"raw":"A1133 error 1"}}
+{"ts":"2026-08-18T10:23:04.019Z","msg":"RDO>> world","meta":{"rid":1134,"raw":"C 1134 sel 283869292 call RDOSetMinSalaryValue \"*\";"}}
+{"ts":"2026-08-18T10:23:04.109Z","msg":"RDO<< world","meta":{"rid":1134,"raw":"A1134 error 1"}}
+{"ts":"2026-08-18T10:23:04.110Z","msg":"RDO>> world","meta":{"rid":1135,"raw":"C 1135 sel 283869292 call RDOSetOutputPrice \"*\";"}}
+{"ts":"2026-08-18T10:23:04.199Z","msg":"RDO<< world","meta":{"rid":1135,"raw":"A1135 error 1"}}
+{"ts":"2026-08-18T10:23:04.199Z","msg":"RDO>> world","meta":{"rid":1136,"raw":"C 1136 sel 29983712 call RDOSetPolicyStatus \"*\";"}}
+{"ts":"2026-08-18T10:23:04.289Z","msg":"RDO<< world","meta":{"rid":1136,"raw":"A1136 error 1"}}
+{"ts":"2026-08-18T10:23:04.290Z","msg":"RDO>> world","meta":{"rid":1137,"raw":"C 1137 sel 283869292 call RDOSetPrice \"*\";"}}
+{"ts":"2026-08-18T10:23:04.380Z","msg":"RDO<< world","meta":{"rid":1137,"raw":"A1137 error 1"}}
+{"ts":"2026-08-18T10:23:04.381Z","msg":"RDO>> world","meta":{"rid":1138,"raw":"C 1138 sel 283869292 call RDOSetRole \"*\";"}}
+{"ts":"2026-08-18T10:23:04.471Z","msg":"RDO<< world","meta":{"rid":1138,"raw":"A1138 error 1"}}
+{"ts":"2026-08-18T10:23:04.471Z","msg":"RDO>> world","meta":{"rid":1139,"raw":"C 1139 sel 283869292 call RDOSetSalaries \"*\";"}}
+{"ts":"2026-08-18T10:23:04.561Z","msg":"RDO<< world","meta":{"rid":1139,"raw":"A1139 error 1"}}
+{"ts":"2026-08-18T10:23:04.562Z","msg":"RDO>> world","meta":{"rid":1140,"raw":"C 1140 sel 283869292 call RDOSetTaxValue \"*\";"}}
+{"ts":"2026-08-18T10:23:04.652Z","msg":"RDO<< world","meta":{"rid":1140,"raw":"A1140 error 1"}}
+{"ts":"2026-08-18T10:23:04.653Z","msg":"RDO>> world","meta":{"rid":1141,"raw":"C 1141 sel 283869292 call RDOSetTownTaxes \"*\";"}}
+{"ts":"2026-08-18T10:23:04.742Z","msg":"RDO<< world","meta":{"rid":1141,"raw":"A1141 error 1"}}
+{"ts":"2026-08-18T10:23:04.743Z","msg":"RDO>> world","meta":{"rid":1142,"raw":"C 1142 sel 283869292 call RDOSetTradeLevel \"*\";"}}
+{"ts":"2026-08-18T10:23:04.836Z","msg":"RDO<< world","meta":{"rid":1142,"raw":"A1142 error 1"}}
+{"ts":"2026-08-18T10:23:04.836Z","msg":"RDO>> world","meta":{"rid":1143,"raw":"C 1143 sel 283869292 call RDOSetWordsOfWisdom \"*\";"}}
+{"ts":"2026-08-18T10:23:04.926Z","msg":"RDO<< world","meta":{"rid":1143,"raw":"A1143 error 1"}}
+{"ts":"2026-08-18T10:23:04.927Z","msg":"RDO>> world","meta":{"rid":1144,"raw":"C 1144 sel 283869292 call RDOSitMayor \"*\";"}}
+{"ts":"2026-08-18T10:23:05.016Z","msg":"RDO<< world","meta":{"rid":1144,"raw":"A1144 error 1"}}
+{"ts":"2026-08-18T10:23:05.017Z","msg":"RDO>> world","meta":{"rid":1145,"raw":"C 1145 sel 283869292 call RDOSitMinister \"*\";"}}
+{"ts":"2026-08-18T10:23:05.106Z","msg":"RDO<< world","meta":{"rid":1145,"raw":"A1145 error 1"}}
+{"ts":"2026-08-18T10:23:05.106Z","msg":"RDO>> world","meta":{"rid":1146,"raw":"C 1146 sel 283869292 call RDOStartUpgrades \"*\";"}}
+{"ts":"2026-08-18T10:23:05.197Z","msg":"RDO<< world","meta":{"rid":1146,"raw":"A1146 error 1"}}
+{"ts":"2026-08-18T10:23:05.198Z","msg":"RDO>> world","meta":{"rid":1147,"raw":"C 1147 sel 283869292 call RdoStopRepair \"*\";"}}
+{"ts":"2026-08-18T10:23:05.287Z","msg":"RDO<< world","meta":{"rid":1147,"raw":"A1147 error 1"}}
+{"ts":"2026-08-18T10:23:05.288Z","msg":"RDO>> world","meta":{"rid":1148,"raw":"C 1148 sel 283869292 call RDOVote \"*\";"}}
+{"ts":"2026-08-18T10:23:05.378Z","msg":"RDO<< world","meta":{"rid":1148,"raw":"A1148 error 1"}}
+{"ts":"2026-08-18T10:23:05.378Z","msg":"RDO>> world","meta":{"rid":1149,"raw":"C 1149 sel 283869292 call RDOVoteOf \"*\";"}}
+{"ts":"2026-08-18T10:23:05.468Z","msg":"RDO<< world","meta":{"rid":1149,"raw":"A1149 error 1"}}
+{"ts":"2026-08-18T10:23:05.468Z","msg":"RDO>> world","meta":{"rid":1150,"raw":"C 1150 sel 29983712 call SayThis \"*\";"}}
+{"ts":"2026-08-18T10:23:05.559Z","msg":"RDO<< world","meta":{"rid":1150,"raw":"A1150 error 1"}}
+{"ts":"2026-08-18T10:23:05.559Z","msg":"RDO>> world","meta":{"rid":1151,"raw":"C 1151 sel 29983712 call SegmentsInArea \"*\";"}}
+{"ts":"2026-08-18T10:23:05.649Z","msg":"RDO<< world","meta":{"rid":1151,"raw":"A1151 error 1"}}
+{"ts":"2026-08-18T10:23:05.649Z","msg":"RDO>> world","meta":{"rid":1152,"raw":"C 1152 sel 29983712 call SetLanguage \"*\";"}}
+{"ts":"2026-08-18T10:23:05.739Z","msg":"RDO<< world","meta":{"rid":1152,"raw":"A1152 error 1"}}
+{"ts":"2026-08-18T10:23:05.740Z","msg":"RDO>> world","meta":{"rid":1153,"raw":"C 1153 sel 29983712 call SetTycoonCookie \"*\";"}}
+{"ts":"2026-08-18T10:23:05.829Z","msg":"RDO<< world","meta":{"rid":1153,"raw":"A1153 error 1"}}
+{"ts":"2026-08-18T10:23:05.829Z","msg":"RDO>> world","meta":{"rid":1154,"raw":"C 1154 sel 29983712 call SetViewedArea \"*\";"}}
+{"ts":"2026-08-18T10:23:05.919Z","msg":"RDO<< world","meta":{"rid":1154,"raw":"A1154 error 1"}}
+{"ts":"2026-08-18T10:23:05.919Z","msg":"RDO>> world","meta":{"rid":1155,"raw":"C 1155 sel 29983712 call SwitchFocusEx \"*\";"}}
+{"ts":"2026-08-18T10:23:06.010Z","msg":"RDO<< world","meta":{"rid":1155,"raw":"A1155 error 1"}}
+{"ts":"2026-08-18T10:23:06.010Z","msg":"RDO>> world","meta":{"rid":1156,"raw":"C 1156 sel 29983712 call WipeCircuit \"*\";"}}
+{"ts":"2026-08-18T10:23:06.101Z","msg":"RDO<< world","meta":{"rid":1156,"raw":"A1156 error 1"}}
+{"ts":"2026-08-18T10:23:06.101Z","msg":"RDO>> world","meta":{"rid":1157,"raw":"C 1157 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:23:06.191Z","msg":"RDO<< world","meta":{"rid":1157,"raw":"A1157 error 1"}}
+{"ts":"2026-08-18T10:23:06.192Z","msg":"RDO>> world","meta":{"rid":1158,"raw":"C 1158 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:23:06.281Z","msg":"RDO<< world","meta":{"rid":1158,"raw":"A1158 error 1"}}
+{"ts":"2026-08-18T10:23:06.282Z","msg":"RDO>> world","meta":{"rid":1159,"raw":"C 1159 sel 29983712 call ClientAware \"^\";"}}
+{"ts":"2026-08-18T10:23:06.372Z","msg":"RDO<< world","meta":{"rid":1159,"raw":"A1159 error 1"}}
+{"ts":"2026-08-18T10:23:06.373Z","msg":"RDO>> world","meta":{"rid":1160,"raw":"C 1160 sel 29983712 call GetCompanyCount \"^\";"}}
+{"ts":"2026-08-18T10:23:06.462Z","msg":"RDO<< world","meta":{"rid":1160,"raw":"A1160 error 1"}}
+{"ts":"2026-08-18T10:23:06.462Z","msg":"RDO>> world","meta":{"rid":1161,"raw":"C 1161 sel 29983712 call GetUserName \"^\";"}}
+{"ts":"2026-08-18T10:23:06.553Z","msg":"RDO<< world","meta":{"rid":1161,"raw":"A1161 error 1"}}
+{"ts":"2026-08-18T10:23:06.553Z","msg":"RDO>> world","meta":{"rid":1162,"raw":"C 1162 sel 29983712 call GetChannelInfo \"^\";"}}
+{"ts":"2026-08-18T10:23:06.644Z","msg":"RDO<< world","meta":{"rid":1162,"raw":"A1162 error 1"}}
+{"ts":"2026-08-18T10:23:06.644Z","msg":"RDO>> world","meta":{"rid":1163,"raw":"C 1163 sel 29983712 call GetChannelList \"^\";"}}
+{"ts":"2026-08-18T10:23:06.734Z","msg":"RDO<< world","meta":{"rid":1163,"raw":"A1163 error 1"}}
+{"ts":"2026-08-18T10:23:06.734Z","msg":"RDO>> world","meta":{"rid":1164,"raw":"C 1164 sel 29983712 call GetUserList \"^\";"}}
+{"ts":"2026-08-18T10:23:06.825Z","msg":"RDO<< world","meta":{"rid":1164,"raw":"A1164 error 1"}}
+{"ts":"2026-08-18T10:23:06.825Z","msg":"RDO>> world","meta":{"rid":1165,"raw":"C 1165 sel 283869292 call RDOAskLoan \"^\";"}}
+{"ts":"2026-08-18T10:23:06.914Z","msg":"RDO<< world","meta":{"rid":1165,"raw":"A1165 error 1"}}
+{"ts":"2026-08-18T10:23:06.914Z","msg":"RDO>> world","meta":{"rid":1166,"raw":"C 1166 sel 29983712 call RDOCnntId \"^\";"}}
+{"ts":"2026-08-18T10:23:07.005Z","msg":"RDO<< world","meta":{"rid":1166,"raw":"A1166 error 1"}}
+{"ts":"2026-08-18T10:23:07.006Z","msg":"RDO>> world","meta":{"rid":1167,"raw":"C 1167 sel 29983712 call RDOModifyProject \"^\";"}}
+{"ts":"2026-08-18T10:23:07.096Z","msg":"RDO<< world","meta":{"rid":1167,"raw":"A1167 error 1"}}
+{"ts":"2026-08-18T10:23:07.096Z","msg":"RDO>> world","meta":{"rid":1168,"raw":"C 1168 sel 29983712 call RDOModifyRating \"^\";"}}
+{"ts":"2026-08-18T10:23:07.185Z","msg":"RDO<< world","meta":{"rid":1168,"raw":"A1168 error 1"}}
+{"ts":"2026-08-18T10:23:07.186Z","msg":"RDO>> world","meta":{"rid":1169,"raw":"C 1169 sel 283869292 call RDOSetBuyingStatus \"^\";"}}
+{"ts":"2026-08-18T10:23:07.276Z","msg":"RDO<< world","meta":{"rid":1169,"raw":"A1169 error 1"}}
+{"ts":"2026-08-18T10:23:07.276Z","msg":"RDO>> world","meta":{"rid":1170,"raw":"C 1170 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:23:07.365Z","msg":"RDO<< world","meta":{"rid":1170,"raw":"A1170 error 1"}}
+{"ts":"2026-08-18T10:23:07.366Z","msg":"RDO>> world","meta":{"rid":1171,"raw":"C 1171 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:23:07.456Z","msg":"RDO<< world","meta":{"rid":1171,"raw":"A1171 error 1"}}
+{"ts":"2026-08-18T10:23:07.458Z","msg":"RDO>> world","meta":{"rid":1172,"raw":"C 1172 sel 29570088 call GetClientView \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:07.548Z","msg":"RDO<< world","meta":{"rid":1172,"raw":"A1172 error 1"}}
+{"ts":"2026-08-18T10:23:07.548Z","msg":"RDO>> world","meta":{"rid":1173,"raw":"C 1173 sel 29983712 call GetCompanyCluster \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:07.659Z","msg":"RDO<< world","meta":{"rid":1173,"raw":"A1173 error 1"}}
+{"ts":"2026-08-18T10:23:07.659Z","msg":"RDO>> world","meta":{"rid":1174,"raw":"C 1174 sel 29983712 call GetCompanyFacilityCount \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:07.749Z","msg":"RDO<< world","meta":{"rid":1174,"raw":"A1174 error 1"}}
+{"ts":"2026-08-18T10:23:07.750Z","msg":"RDO>> world","meta":{"rid":1175,"raw":"C 1175 sel 29983712 call GetCompanyId \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:07.839Z","msg":"RDO<< world","meta":{"rid":1175,"raw":"A1175 error 1"}}
+{"ts":"2026-08-18T10:23:07.840Z","msg":"RDO>> world","meta":{"rid":1176,"raw":"C 1176 sel 29983712 call GetCompanyName \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:07.929Z","msg":"RDO<< world","meta":{"rid":1176,"raw":"A1176 error 1"}}
+{"ts":"2026-08-18T10:23:07.930Z","msg":"RDO>> world","meta":{"rid":1177,"raw":"C 1177 sel 29983712 call GetCompanyOwnerRole \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:08.020Z","msg":"RDO<< world","meta":{"rid":1177,"raw":"A1177 error 1"}}
+{"ts":"2026-08-18T10:23:08.020Z","msg":"RDO>> world","meta":{"rid":1178,"raw":"C 1178 sel 29983712 call MsgCompositionChanged \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:08.111Z","msg":"RDO<< world","meta":{"rid":1178,"raw":"A1178 error 1"}}
+{"ts":"2026-08-18T10:23:08.111Z","msg":"RDO>> world","meta":{"rid":1179,"raw":"C 1179 sel 29983712 call PickEvent \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:08.203Z","msg":"RDO<< world","meta":{"rid":1179,"raw":"A1179 error 1"}}
+{"ts":"2026-08-18T10:23:08.203Z","msg":"RDO>> world","meta":{"rid":1180,"raw":"C 1180 sel 283869292 call RDOAutoProduce \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:08.293Z","msg":"RDO<< world","meta":{"rid":1180,"raw":"A1180 error 1"}}
+{"ts":"2026-08-18T10:23:08.294Z","msg":"RDO>> world","meta":{"rid":1181,"raw":"C 1181 sel 283869292 call RDOBanMinister \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:08.387Z","msg":"RDO<< world","meta":{"rid":1181,"raw":"A1181 error 1"}}
+{"ts":"2026-08-18T10:23:08.388Z","msg":"RDO>> world","meta":{"rid":1182,"raw":"C 1182 sel 283869292 call RDOCancelCampaign \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:08.494Z","msg":"RDO<< world","meta":{"rid":1182,"raw":"A1182 error 1"}}
+{"ts":"2026-08-18T10:23:08.495Z","msg":"RDO>> world","meta":{"rid":1183,"raw":"C 1183 sel 283869292 call RDOCancelMovie \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:08.591Z","msg":"RDO<< world","meta":{"rid":1183,"raw":"A1183 error 1"}}
+{"ts":"2026-08-18T10:23:08.591Z","msg":"RDO>> world","meta":{"rid":1184,"raw":"C 1184 sel 283869292 call RDOCancelResearch \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:08.691Z","msg":"RDO<< world","meta":{"rid":1184,"raw":"A1184 error 1"}}
+{"ts":"2026-08-18T10:23:08.692Z","msg":"RDO>> world","meta":{"rid":1185,"raw":"C 1185 sel 29983712 call RDODontHireOnlyFromWarehouse \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:08.791Z","msg":"RDO<< world","meta":{"rid":1185,"raw":"A1185 error 1"}}
+{"ts":"2026-08-18T10:23:08.792Z","msg":"RDO>> world","meta":{"rid":1186,"raw":"C 1186 sel 29983712 call RDODontHireTradeCenter \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:08.894Z","msg":"RDO<< world","meta":{"rid":1186,"raw":"A1186 error 1"}}
+{"ts":"2026-08-18T10:23:08.895Z","msg":"RDO>> world","meta":{"rid":1187,"raw":"C 1187 sel 29983712 call RDOFavoritesGetSubItems \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:08.992Z","msg":"RDO<< world","meta":{"rid":1187,"raw":"A1187 error 1"}}
+{"ts":"2026-08-18T10:23:08.992Z","msg":"RDO>> world","meta":{"rid":1188,"raw":"C 1188 sel 29983712 call RDOHireOnlyFromWarehouse \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:09.082Z","msg":"RDO<< world","meta":{"rid":1188,"raw":"A1188 error 1"}}
+{"ts":"2026-08-18T10:23:09.082Z","msg":"RDO>> world","meta":{"rid":1189,"raw":"C 1189 sel 29983712 call RDOHireTradeCenter \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:09.173Z","msg":"RDO<< world","meta":{"rid":1189,"raw":"A1189 error 1"}}
+{"ts":"2026-08-18T10:23:09.173Z","msg":"RDO>> world","meta":{"rid":1190,"raw":"C 1190 sel 283869292 call RDOLaunchCampaign \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:09.273Z","msg":"RDO<< world","meta":{"rid":1190,"raw":"A1190 error 1"}}
+{"ts":"2026-08-18T10:23:09.277Z","msg":"RDO>> world","meta":{"rid":1191,"raw":"C 1191 sel 29983712 call RDOPayLoan \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:09.367Z","msg":"RDO<< world","meta":{"rid":1191,"raw":"A1191 error 1"}}
+{"ts":"2026-08-18T10:23:09.368Z","msg":"RDO>> world","meta":{"rid":1192,"raw":"C 1192 sel 29983712 call RDOPayOff \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:09.460Z","msg":"RDO<< world","meta":{"rid":1192,"raw":"A1192 error 1"}}
+{"ts":"2026-08-18T10:23:09.460Z","msg":"RDO>> world","meta":{"rid":1193,"raw":"C 1193 sel 283869292 call RDOReleaseMovie \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:09.550Z","msg":"RDO<< world","meta":{"rid":1193,"raw":"A1193 error 1"}}
+{"ts":"2026-08-18T10:23:09.551Z","msg":"RDO>> world","meta":{"rid":1194,"raw":"C 1194 sel 283869292 call RdoRepair \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:09.640Z","msg":"RDO<< world","meta":{"rid":1194,"raw":"A1194 error 1"}}
+{"ts":"2026-08-18T10:23:09.640Z","msg":"RDO>> world","meta":{"rid":1195,"raw":"C 1195 sel 283869292 call RDOSelSelected \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:09.731Z","msg":"RDO<< world","meta":{"rid":1195,"raw":"A1195 error 1"}}
+{"ts":"2026-08-18T10:23:09.731Z","msg":"RDO>> world","meta":{"rid":1196,"raw":"C 1196 sel 29983712 call RDOSetAdvanceToNextLevel \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:09.822Z","msg":"RDO<< world","meta":{"rid":1196,"raw":"A1196 error 1"}}
+{"ts":"2026-08-18T10:23:09.823Z","msg":"RDO>> world","meta":{"rid":1197,"raw":"C 1197 sel 283869292 call RDOSetInputFluidPerc \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:09.914Z","msg":"RDO<< world","meta":{"rid":1197,"raw":"A1197 error 1"}}
+{"ts":"2026-08-18T10:23:09.914Z","msg":"RDO>> world","meta":{"rid":1198,"raw":"C 1198 sel 283869292 call RDOSetLoanPerc \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:10.004Z","msg":"RDO<< world","meta":{"rid":1198,"raw":"A1198 error 1"}}
+{"ts":"2026-08-18T10:23:10.004Z","msg":"RDO>> world","meta":{"rid":1199,"raw":"C 1199 sel 283869292 call RDOSetRole \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:10.094Z","msg":"RDO<< world","meta":{"rid":1199,"raw":"A1199 error 1"}}
+{"ts":"2026-08-18T10:23:10.094Z","msg":"RDO>> world","meta":{"rid":1200,"raw":"C 1200 sel 283869292 call RDOSetTradeLevel \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:10.193Z","msg":"RDO<< world","meta":{"rid":1200,"raw":"A1200 error 1"}}
+{"ts":"2026-08-18T10:23:10.194Z","msg":"RDO>> world","meta":{"rid":1201,"raw":"C 1201 sel 283869292 call RDOSetWordsOfWisdom \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:10.292Z","msg":"RDO<< world","meta":{"rid":1201,"raw":"A1201 error 1"}}
+{"ts":"2026-08-18T10:23:10.293Z","msg":"RDO>> world","meta":{"rid":1202,"raw":"C 1202 sel 283869292 call RDOStartUpgrades \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:10.382Z","msg":"RDO<< world","meta":{"rid":1202,"raw":"A1202 error 1"}}
+{"ts":"2026-08-18T10:23:10.383Z","msg":"RDO>> world","meta":{"rid":1203,"raw":"C 1203 sel 283869292 call RdoStopRepair \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:10.475Z","msg":"RDO<< world","meta":{"rid":1203,"raw":"A1203 error 1"}}
+{"ts":"2026-08-18T10:23:10.476Z","msg":"RDO>> world","meta":{"rid":1204,"raw":"C 1204 sel 283869292 call RDOVoteOf \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:10.572Z","msg":"RDO<< world","meta":{"rid":1204,"raw":"A1204 error 1"}}
+{"ts":"2026-08-18T10:23:10.573Z","msg":"RDO>> world","meta":{"rid":1205,"raw":"C 1205 sel 29983712 call SetLanguage \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:10.663Z","msg":"RDO<< world","meta":{"rid":1205,"raw":"A1205 error 1"}}
+{"ts":"2026-08-18T10:23:10.663Z","msg":"RDO>> world","meta":{"rid":1206,"raw":"C 1206 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:23:10.754Z","msg":"RDO<< world","meta":{"rid":1206,"raw":"A1206 error 1"}}
+{"ts":"2026-08-18T10:23:10.755Z","msg":"RDO>> world","meta":{"rid":1207,"raw":"C 1207 sel 29983712 call RDOFavoritesGetSubItems \"^\" \"%\";"}}
+{"ts":"2026-08-18T10:23:10.851Z","msg":"RDO<< world","meta":{"rid":1207,"raw":"A1207 error 1"}}
+{"ts":"2026-08-18T10:23:10.853Z","msg":"RDO>> world","meta":{"rid":1208,"raw":"C 1208 sel 29983712 get UserName;"}}
+{"ts":"2026-08-18T10:23:10.943Z","msg":"RDO<< world","meta":{"rid":1208,"raw":"A1208 error 1"}}
+{"ts":"2026-08-18T10:23:10.943Z","msg":"RDO>> world","meta":{"rid":1209,"raw":"C 1209 sel 29983712 call ClientNotAware \"^\";"}}
+{"ts":"2026-08-18T10:23:11.033Z","msg":"RDO<< world","meta":{"rid":1209,"raw":"A1209 error 1"}}
+{"ts":"2026-08-18T10:23:11.033Z","msg":"RDO>> world","meta":{"rid":1210,"raw":"C 1210 sel 29983712 call UnfocusObject \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:11.122Z","msg":"RDO<< world","meta":{"rid":1210,"raw":"A1210 error 1"}}
+{"ts":"2026-08-18T10:23:11.123Z","msg":"RDO>> world","meta":{"rid":1211,"raw":"C 1211 sel 29983712 call RegisterEventsById \"^\" \"#0\";"}}
+{"ts":"2026-08-18T10:23:11.213Z","msg":"RDO<< world","meta":{"rid":1211,"raw":"A1211 error 1"}}
+{"ts":"2026-08-18T10:23:11.213Z","msg":"RDO>> world","meta":{"rid":1212,"raw":"C 1212 sel 29983712 call Logoff \"^\";"}}
+{"ts":"2026-08-18T10:23:11.303Z","msg":"RDO<< world","meta":{"rid":1212,"raw":"A1212 error 1"}}
+{"ts":"2026-08-18T10:23:11.304Z","msg":"RDO>* world","meta":{"raw":"C sel 29983712 call SetTycoonCookie \"*\" \"#37\",\"%LastX.0\",\"%920\";"}}
+{"ts":"2026-08-18T10:23:11.304Z","msg":"RDO>* world","meta":{"raw":"C sel 29983712 call SetTycoonCookie \"*\" \"#37\",\"%LastY.0\",\"%994\";"}}
+{"ts":"2026-08-18T10:23:11.304Z","msg":"RDO>* world","meta":{"raw":"C sel 29983712 call ClientNotAware \"*\";"}}
+{"ts":"2026-08-18T10:23:11.304Z","msg":"RDO>> world","meta":{"rid":1213,"raw":"C 1213 sel 29983712 get Logoff;"}}
+{"ts":"2026-08-18T10:23:11.395Z","msg":"RDO<< world","meta":{"rid":1213,"raw":"A1213 error 1"}}

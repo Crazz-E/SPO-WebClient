@@ -8,10 +8,14 @@
 #   git commit / git push cannot happen until both are validated on the
 #   CURRENT sources.
 #
+# Scope (2026-08-18): the gate fires ONLY when the operation touches the RDO
+# surface declared in `rdo-surface.json`. A commit of docs, client code or
+# unrelated tests goes through with no conformance run at all.
+#
 # The CLI writes `.conformance-gate.json` at the repo root after every run that
-# exits 0 (one entry per transport, with the run's end time). This hook lets a
-# `git commit` / `git push` through only when both entries exist, replay came
-# before live, and no file under src/ changed after either run.
+# exits 0 (one entry per transport, with the run's end time). When RDO IS
+# touched, this hook lets the sync through only when both entries exist, replay
+# came before live, and no RDO-surface file changed after either run.
 #
 # Exit 2 blocks the tool call and feeds the reason back to Claude.
 
@@ -25,8 +29,13 @@ CMD=$(node -e "
 # Only git commit / git push are gated (any position in a compound command).
 echo "$CMD" | grep -Eq '(^|[;&|[:space:]])git[[:space:]]+(commit|push)([[:space:]]|$)' || exit 0
 
+# Which verb: a push is judged on what the upstream does not have yet, a
+# commit on what is not yet committed. The checker needs to know which.
+MODE=commit
+echo "$CMD" | grep -Eq '(^|[;&|[:space:]])git[[:space:]]+push([[:space:]]|$)' && MODE=push
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-node "$ROOT/.claude/hooks/conformance-gate-check.js" "$ROOT"
+node "$ROOT/.claude/hooks/conformance-gate-check.js" "$ROOT" "$MODE"
 STATUS=$?
 if [ $STATUS -ne 0 ]; then
   echo "" >&2

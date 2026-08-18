@@ -398,12 +398,26 @@ compte.
 
 ---
 
-## 5. Ce que les journaux disent de l'urgence de déployer `main`
+## 5. Ce que les journaux disent de l'urgence de déployer `main` — ✅ **CLOS le 2026-08-17**
 
 **L'Interface Server de production s'est gelé deux fois en quatre jours — le 2026-08-14 à 21:29 UTC
 pour 12 h 41, et le 2026-08-17 à 14:54 UTC pour 23 min — le second sans aucune sonde de notre part,
 sur le build `63d9eb0b` qui émet encore `"^"` sur trois `procedure` ; la cause du second n'est pas
 établie, mais sa signature est celle du premier.**
+
+> **Résolu le 2026-08-17 : la production a été redéployée sur `e46ccd6b`, état `healthy`.** Le build
+> `63d9eb0b` ne tourne plus.
+>
+> **Vérification par le contenu, pas par le hash** — et la nuance compte. L'historique a été réécrit
+> entre les deux, si bien que `836d0bdf` et `d63d8ca0` **ne sont pas des ancêtres** de `e46ccd6b` :
+> un contrôle par `git merge-base --is-ancestor` conclurait à tort que les correctifs sont absents.
+> Le contrôle valide est celui du contenu — `e46ccd6b:src/server/session/rdo-request-guards.ts`
+> porte bien `VOID_MEMBERS` avec `SayThis`, `AddLine` et `RDOConnectOutput`.
+>
+> Conséquence : **la passerelle déployée ne peut plus geler le serveur partagé.** Ce que ce rapport
+> établit sur le *mécanisme* et sur la *signature d'un gel* reste entièrement valide — seule
+> l'urgence opérationnelle disparaît. En particulier, l'oracle **O5 reste à réécrire** : un gel ne
+> laisse toujours aucune trace dans `Clients`, et la campagne live à venir en dépend.
 
 ---
 

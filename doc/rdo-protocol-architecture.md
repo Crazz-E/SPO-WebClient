@@ -196,6 +196,13 @@ hidden result pointer lands**, and that follows from the parameter count — not
 > A **second, identical freeze** followed on 2026-08-17 at 14:54 UTC, from the production gateway's
 > IP — 22 min 56 s of silence, no `Clients` line, `ISCnx timeout` from the Model Server.
 >
+> **✅ RESOLVED 2026-08-17 — production redeployed on `e46ccd6b`, reported healthy.** The offending
+> `63d9eb0b` build is no longer running. Verified **by content, not by hash**: the history was
+> rewritten between the two, so `836d0bdf`/`d63d8ca0` are not ancestors of `e46ccd6b` — but
+> `e46ccd6b:src/server/session/rdo-request-guards.ts` **does** carry `VOID_MEMBERS` with `SayThis`,
+> `AddLine` and `RDOConnectOutput`, i.e. the anti-freeze guard is live. The window in which the
+> deployed gateway could freeze the shared server is closed.
+>
 > **The mechanism below is unchanged and now better evidenced**: two production incidents instead of
 > one probe. Every guard, test and `VOID_MEMBERS` entry stands. `U2` stays cancelled — on the
 > mechanism, not on the incident.
@@ -864,7 +871,43 @@ Two independent axes: **QueryId present or absent** (decides whether the server 
 
 **Capture-proven:** the legacy client routinely sends void `"*"` calls WITH a QueryId and receives `A<id> ;` — `RDOEndSession` → `A4 ;` [capture :16-17], `AddLine` → `A2174 ;` [:3542-3543], `CloseMessage` → `A2177 ;` [:3548-3549], and `set EnableEvents="#-1"` → `A34 ;` [:978-979]. Mechanism: the client's `Invoke` uses `SendReceive` whenever `WaitForAnswer=true`, even for void members [RDOObjectProxy.pas:441-443].
 
-> **Retired claim (2026-07-02):** earlier revisions of this document asserted that `"*"` + QueryId "crashes the Delphi server's FIVE layer" and corrupts all subsequent queries. The live captures disprove this, and `RDOQueryServer.pas:174-178` shows why (void result → empty body → `A<id> ;`). The claim is retired; do not reintroduce it.
+> **Un-retired, and narrowed to its true scope (2026-08-18) — the claim was right about the mechanism.**
+>
+> Earlier revisions asserted that `"*"` + QueryId "crashes the Delphi server's FIVE layer" and corrupts
+> all subsequent queries. On 2026-07-02 it was retired as disproved by the captures. That retirement
+> **over-generalised**: every capture behind it shows `"*"` on a `procedure` or a property —
+> `AddLine`, `CloseMessage`, `RDOEndSession`, `set EnableEvents`. None shows `"*"` on a **`function`**,
+> and that is the case the original claim describes.
+>
+> On 2026-08-18 the certification sweep emitted one:
+>
+> ```
+> C 1068 sel 29983712 call GetUserList "*";
+> function TClientView.GetUserList : OleVariant   — Interface Server/InterfaceServer.pas:191
+> ```
+>
+> From that frame on the shared production Interface Server answered `error 1` (`errMalformedQuery`,
+> the outer `except` of `ExecQuery` [RDOQueryServer.pas:162-164]) to **every** query, on **every**
+> connection, including the Model Server's own `RefreshArea` / `RefreshTycoons` pushes — and it was
+> still doing so **3 h 10 later**, verified in the log at 13:32 UTC: 11 894 `Malformed query` lines out
+> of 12 042, and only 13 non-malformed lines after the first one — our own logoff. **The process never
+> crashed and was never restarted**: no startup banner anywhere after the incident. That is worse than
+> a crash, which at least self-heals on restart. (An earlier revision of this paragraph said the
+> process crashed; that came from a verbal report, not from the log, and the log refutes it.)
+> `FIVEINTERFACESERVER/Survival 26-08-18.log:136` is the first entry;
+> our own `get UserName`, which had answered normally three frames earlier, answered `error 1` from
+> then on. Run record: `report/campaign/rec/planitia-2026-08-18-sweep.ndjson`.
+>
+> **Mechanism, and it is the exact mirror of the `"^"`-on-a-procedure freeze.** Under `"*"` the
+> dispatcher passes **no hidden result pointer**: `@ResParam` finds `Res.VType = varEmpty` and jumps
+> straight to `@DoCall` [RDOObjectServer.pas:281-283]. The callee does not know that — a compiled
+> `function` writes its `OleVariant` result through the register its own ABI reserves (`EDX` at zero
+> declared parameters), which the dispatcher left holding whatever was there. An arbitrary 16-byte
+> write inside the server process.
+>
+> So the corrected reading is: `"*"` + QueryId is safe **on a `procedure`** — capture-proven, and the
+> reference client's own form — and is an arbitrary memory write **on a `function`**. The retirement
+> stands for the first half and is withdrawn for the second.
 
 **The separator must match the member's Delphi declaration.** This is the axis the matrix below
 turns on, and getting it wrong on a `procedure` is the most damaging thing this gateway can do.
@@ -873,7 +916,8 @@ turns on, and getting it wrong on a `procedure` is the most damaging thing this 
 |------|-------------|-----------------|------------------|
 | QueryId + `"^"` on a **`function`** | YES | `A<id> res="…"` | `sendRdoRequest()` — canonical synchronous form. Capture-proven: `GetTycoonCookie` → `A36 res="%395";` [capture :982-983] |
 | QueryId + `"^"` on a **`procedure`** | parses, but | **FREEZES THE SERVER** | **MUST NOT — live-proven twice in production, 2026-08-14 and 2026-08-17** (attribution corrected 2026-08-17: the deployed `63d9eb0b` build, not our probe — see §above). Blocked by `assertNotVariantOnVoidMember`. |
-| QueryId + `"*"` (or `set`) | YES | empty ack `A<id> ;` | **REQUIRED for void members** — the reference client's own form [capture :3542-3543, :3548-3549]. For every other member, still avoided by project convention (`assertNotVoidPush`, one form per intent); `VOID_MEMBERS` in `session/rdo-request-guards.ts` carries the exemptions, each with its Pascal declaration. |
+| QueryId + `"*"` on a **`procedure`** | YES | empty ack `A<id> ;` | **REQUIRED** — the reference client's own form [capture :3542-3543, :3548-3549]. `VOID_MEMBERS` in `session/rdo-request-guards.ts` is the whitelist, each entry with its Pascal declaration. |
+| QueryId + `"*"` on a **`function`** | parses, but | **ARBITRARY MEMORY WRITE**, then the server refuses every query, on every connection, until restarted | **MUST NOT — live-proven 2026-08-18** (`GetUserList`, one frame, and the shared IS answered `errMalformedQuery` to everything afterwards). No hidden result pointer is passed [RDOObjectServer.pas:281-283] and the function writes one anyway. Blocked by `assertNotVoidPush`, which is a SAFETY guard since that date, not a convention, and takes no opt-in. |
 | no QueryId + `"*"` | YES | silence | `writeRdoFrame(socket, cmd)` — canonical fire-and-forget; matches legacy `Send()` usage (`ClientAware`, `SetViewedArea`, `MsgCompositionChanged` [capture :1017, :1032]) |
 | no QueryId + `"^"` | **NO** | reply is built then has no destination; reported to crash the server (live incident) | **MUST NOT.** The legacy client cannot produce this form — wanting a result implies `SendReceive` + QueryId. No capture contains it. |
 

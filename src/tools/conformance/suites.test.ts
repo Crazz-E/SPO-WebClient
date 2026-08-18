@@ -5,12 +5,12 @@
  */
 
 import { RdoAction, RdoVerb } from '../../shared/types';
-import { VOID_MEMBERS } from '../../server/session/rdo-request-guards';
+import { FORBIDDEN_MEMBERS, VOID_MEMBERS } from '../../server/session/rdo-request-guards';
 import {
   KNOWN_PROCEDURES, SUITES, TYPES_SUITE, SEPARATORS_SUITE, ERRORS_SUITE, LIFECYCLE_SUITE, READS_SUITE, MUTATIONS_SUITE,
   allStepIds, assertPacketSafe, assertSuitesSafe, countParams, emitsVariantId, suiteByName,
 } from './suites';
-import { isImperativeStep } from './types';
+import { hasRisk, isImperativeStep } from './types';
 import type { RdoStep, Suite } from './types';
 
 describe('suites — static safety table', () => {
@@ -46,12 +46,24 @@ describe('suites — static safety table', () => {
 });
 
 describe('suites — assertPacketSafe / assertSuitesSafe', () => {
-  const call = (member: string, separator?: string) => ({ verb: RdoVerb.SEL, action: RdoAction.CALL, member, separator });
+  const call = (member: string, separator?: string, args?: string[]) =>
+    ({ verb: RdoVerb.SEL, action: RdoAction.CALL, member, separator, args });
 
-  it('refuses "^" on a procedure with parameters, naming the freeze', () => {
-    expect(() => assertPacketSafe(call('SayThis'), 't', true)).toThrow(/SayThis.*2 parameter.*froze/s);
-    expect(() => assertPacketSafe(call('SetTycoonCookie'), 't', true)).toThrow(/3 parameter/);
-    expect(() => assertPacketSafe(call('AddLine'), 't', false)).toThrow(/1 parameter/);
+  it('refuses "^" from the second emitted argument — the proven freeze', () => {
+    expect(() => assertPacketSafe(call('SayThis', undefined, ['%a', '%b']), 't', true))
+      .toThrow(/SayThis.*2 emitted argument.*froze/s);
+    expect(() => assertPacketSafe(call('SetTycoonCookie', undefined, ['#1', '%c', '%v']), 't', true))
+      .toThrow(/3 emitted argument/);
+  });
+
+  it('allows "^" at one emitted argument — capture-proven harmless', () => {
+    expect(() => assertPacketSafe(call('CloseMessage', undefined, ['#42']), 't', true)).not.toThrow();
+    expect(() => assertPacketSafe(call('AddLine', undefined, ['%line']), 't', true)).not.toThrow();
+  });
+
+  it('still makes a known procedure declare its intent inside the safe band', () => {
+    expect(() => assertPacketSafe(call('AddLine', undefined, ['%line']), 't', false))
+      .toThrow(/does NOT freeze.*variant-on-procedure/s);
   });
 
   it('refuses "^" on a 0-parameter procedure unless the step declares the risk', () => {
@@ -60,14 +72,54 @@ describe('suites — assertPacketSafe / assertSuitesSafe', () => {
   });
 
   it('lets "*" and unknown functions through', () => {
-    expect(() => assertPacketSafe(call('SayThis', '"*"'), 't', false)).not.toThrow();
+    expect(() => assertPacketSafe(call('SayThis', '"*"', ['%a', '%b']), 't', false)).not.toThrow();
     expect(() => assertPacketSafe(call('GetTycoonCookie'), 't', false)).not.toThrow();
   });
 
-  it('a suite with "^" on SayThis cannot exist', () => {
+  // Edition 1 of lot S4. The developer's three exclusions are a PROHIBITION,
+  // not a risk class to be unlocked, so the check sits before every branch:
+  // before the separator is looked at, before the argument count, and outside
+  // the `allowZeroParam` flag entirely.
+  it('refuses a forbidden member whatever the verb, the separator, the arity or the flag', () => {
+    for (const member of FORBIDDEN_MEMBERS.keys()) {
+      expect(() => assertPacketSafe(call(member), 'w', true)).toThrow(/refused unconditionally/);
+      expect(() => assertPacketSafe(call(member), 'w', false)).toThrow(/refused unconditionally/);
+      expect(() => assertPacketSafe(call(member, '"*"'), 'w', true)).toThrow(/refused unconditionally/);
+      expect(() => assertPacketSafe(call(member, undefined, ['%x']), 'w', true)).toThrow(/refused unconditionally/);
+      expect(() => assertPacketSafe(
+        { verb: RdoVerb.SEL, action: RdoAction.GET, member }, 'w', true,
+      )).toThrow(/refused unconditionally/);
+    }
+  });
+
+  it('names the step in the refusal, so the report says where it came from', () => {
+    expect(() => assertPacketSafe(call('RDODelCompany'), 'sweep-variant/RDODelCompany', true))
+      .toThrow(/^sweep-variant\/RDODelCompany: Member "RDODelCompany" is refused unconditionally/);
+  });
+
+  it('a suite carrying a forbidden member cannot load', () => {
     const bad: Suite = {
       name: 'bad', description: '',
-      steps: [{ id: 's', intent: '', target: 'clientView', packet: call('SayThis') }],
+      steps: [{ id: 's', intent: 'x', target: 'clientView', packet: call('RDOAssignLevel', '"*"') }],
+    };
+    expect(() => assertSuitesSafe([bad])).toThrow(/bad\/s: Member "RDOAssignLevel" is refused unconditionally/);
+  });
+
+  // This is the sweep: `call M "^"` at 0 arguments on a member nobody has
+  // adjudicated. It cannot freeze (RDOObjectServer.pas:214-218 reads ParamCount
+  // off the received array), and the reply classifies the member. The polarity
+  // stays open until S5 has the list of proven functions.
+  it('lets an unknown member through at 0 and at 1 emitted argument — the sweep', () => {
+    expect(() => assertPacketSafe(call('RdoConfNeverSeen'), 't', false)).not.toThrow();
+    expect(() => assertPacketSafe(call('RdoConfNeverSeen', undefined, ['#1']), 't', false)).not.toThrow();
+    // …and still through in the danger band, deliberately: closing that is S5.
+    expect(() => assertPacketSafe(call('RdoConfNeverSeen', undefined, ['#1', '#2']), 't', false)).not.toThrow();
+  });
+
+  it('a suite with "^" on SayThis with its two arguments cannot exist', () => {
+    const bad: Suite = {
+      name: 'bad', description: '',
+      steps: [{ id: 's', intent: '', target: 'clientView', packet: call('SayThis', undefined, ['%d', '%m']) }],
     };
     expect(() => assertSuitesSafe([bad])).toThrow(/bad\/s: refusing/);
   });
@@ -87,12 +139,21 @@ describe('suites — assertPacketSafe / assertSuitesSafe', () => {
 });
 
 describe('suites — catalogue shape', () => {
-  it('is grouped by property, not by investigation', () => {
+  it('is grouped by property, not by investigation, and the mutations come last', () => {
     expect(SUITES.map(s => s.name)).toEqual([
+      // The connection floor leads: every suite after it addresses objects the
+      // login resolved, and it costs nothing to put first — it emits no frame.
+      'connexion',
       'types', 'separators', 'errors', 'lifecycle', 'reads',
       'map', 'focus', 'inspector', 'chat', 'mail', 'politics', 'research',
+      // The mutations run after everything a capture already pins: `runAll`
+      // stops at the suite that stopped on silence, so the suites whose verdict
+      // is known go first, while the server is known to be answering.
       'mutations',
     ]);
+    // The certification sweep was removed on 2026-08-18 (plan rev. 4 section 7);
+    // it must not come back through the catalogue.
+    expect(SUITES.filter(s => s.name.startsWith('sweep'))).toEqual([]);
     expect(suiteByName('u6')).toBeUndefined();
     expect(suiteByName('types')).toBe(TYPES_SUITE);
   });
@@ -106,33 +167,47 @@ describe('suites — catalogue shape', () => {
     expect(allStepIds()).toContain('separators/variant-on-zero-param-procedure');
   });
 
-  it('every step has an intent and an oracle — the only observation is the push cadence', () => {
+  // A step WITHOUT an expectation is observed, not judged (types.ts): its
+  // verdict is UNKNOWN. Under plan rev. 4 that shape has no home left in the
+  // catalogue — every step addresses a member the client already emits in
+  // production, so a capture or the Pascal always says what to expect. The one
+  // exception observes a PUSH, which by definition has no reply to judge.
+  it('every step has an intent, and only observation steps go without an oracle', () => {
     const OBSERVATION_ONLY = new Set(['map/pushes-after-viewport']);
     for (const suite of SUITES) {
       for (const step of suite.steps) {
         expect(step.intent.length).toBeGreaterThan(10);
-        if (!OBSERVATION_ONLY.has(`${suite.name}/${step.id}`)) expect(step.expect).toBeDefined();
+        if (OBSERVATION_ONLY.has(`${suite.name}/${step.id}`)) continue;
+        expect(step.expect).toBeDefined();
       }
     }
   });
 
-  it('only the mutations suite carries mutation steps, and it self-cleans', () => {
-    for (const suite of SUITES) {
-      const hasMutation = suite.steps.some(s => s.risk === 'mutation');
-      expect(hasMutation).toBe(suite.name === 'mutations');
-    }
+  it('every suite carrying a mutation documents a reset', () => {
+    const mutating = SUITES.filter(s => s.steps.some(st => hasRisk(st, 'mutation'))).map(s => s.name);
+    expect(mutating).toEqual(['mutations']);
+    for (const name of mutating) expect(suiteByName(name)!.reset).toBeTruthy();
     expect(MUTATIONS_SUITE.reset).toMatch(/SetTycoonCookie/);
     expect(MUTATIONS_SUITE.steps[MUTATIONS_SUITE.steps.length - 1].id).toBe('cookie-reset');
   });
 
-  it('exactly one step emits "^" on a procedure, and it is the 0-parameter one', () => {
-    const risky = SUITES.flatMap(s => s.steps.filter(st => st.risk === 'variant-on-procedure').map(st => ({ suite: s.name, step: st })));
+  // The bound that keeps `"^"`-on-a-procedure off the freeze: never two emitted
+  // arguments, because from the second register argument the hidden result
+  // pointer goes on the stack (RDOObjectServer.pas:292). Since the sweep was
+  // removed (2026-08-18) exactly ONE such step is left — `ClientAware`, settled
+  // by live capture on 2026-08-16 — and the invariant is back to naming it.
+  it('exactly one step emits "^" on a procedure, it emits no argument, and it is behind the flag', () => {
+    const risky = SUITES.flatMap(s => s.steps.filter(st => hasRisk(st, 'variant-on-procedure')).map(st => ({ suite: s.name, step: st })));
     expect(risky).toHaveLength(1);
-    const step = risky[0].step as RdoStep;
     expect(risky[0].suite).toBe('separators');
-    expect(step.packet.member).toBe('ClientAware');
-    expect(step.packet.args).toBeUndefined();
-    expect(step.expect).toEqual({ kind: 'errorCode', value: 9, payload: /^error 9$/ });
+    for (const { step } of risky) {
+      if (isImperativeStep(step)) continue;
+      expect((step.packet.args ?? []).length).toBeLessThanOrEqual(1);
+    }
+    const settled = risky[0].step as RdoStep;
+    expect(settled.packet.member).toBe('ClientAware');
+    expect(settled.packet.args).toBeUndefined();
+    expect(settled.expect).toEqual({ kind: 'errorCode', value: 9, payload: /^error 9$/ });
   });
 
   it('the literal-parser steps target a property that must NOT exist, control first', () => {
@@ -150,6 +225,78 @@ describe('suites — catalogue shape', () => {
         expect(step.packet.separator).toBeUndefined();
       }
     }
+  });
+
+  /**
+   * THE REGRESSION LOCK OF 2026-08-18. Do not delete it as cosmetic.
+   *
+   * On 2026-08-18 one frame — `C 1068 sel 29983712 call GetUserList "*";` on
+   * `function TClientView.GetUserList : OleVariant`
+   * (Interface Server/InterfaceServer.pas:191) — left the shared production
+   * Interface Server answering `errMalformedQuery` to every query, on every
+   * connection, for 3 h 42 — the process still alive and never restarted, which
+   * is worse than a crash since a crash self-heals. Under `"*"` the dispatcher
+   * passes NO hidden result pointer (RDOObjectServer.pas:281-283); a compiled
+   * `function` writes its OleVariant result anyway, through a register nobody
+   * set. That is an arbitrary 16-byte write inside the server process.
+   *
+   * `VOID_MEMBERS` is the whitelist and the only one: every entry carries the
+   * Pascal declaration that proves the member is a `procedure`.
+   *
+   * This replaces `sweep.test.ts:220`, `has no sweep-void suite`, which named
+   * the one suite that had already gone wrong. Naming a suite protects against
+   * that suite; walking the WHOLE catalogue and stating the rule positively
+   * covers a new suite the day it is written rather than the day it breaks
+   * something. `assertNotVoidPush` is the same rule on the production path
+   * (`rdo-request-guards.ts`) and takes no opt-in — an opt-in existed for a few
+   * hours for the certification sweep, and it is what let the frame out.
+   */
+  function voidSeparatorOffenders(suites: readonly Suite[]): string[] {
+    const offenders: string[] = [];
+    for (const suite of suites) {
+      for (const step of suite.steps) {
+        if (isImperativeStep(step)) continue;
+        const separator = step.packet.separator;
+        if (separator === undefined || !separator.includes('*')) continue;
+        if (VOID_MEMBERS.has(step.packet.member)) continue;
+        offenders.push(`${suite.name}/${step.id} -> call ${step.packet.member} ${separator}`);
+      }
+    }
+    return offenders;
+  }
+
+  it('no declarative step in the catalogue emits "*" on a member absent from VOID_MEMBERS', () => {
+    expect(voidSeparatorOffenders(SUITES)).toEqual([]);
+    // The walk must actually be walking: a catalogue this test never inspects
+    // would also report zero offenders.
+    expect(SUITES.flatMap(s => s.steps).length).toBeGreaterThan(20);
+  });
+
+  // The lock is only worth its comment if it BITES. Same function, same rule,
+  // fed a catalogue built to violate it — so a refactor that quietly stops
+  // inspecting (a wrong `continue`, an emptied SUITES) fails here.
+  it('that rule names the exact frame of the 2026-08-18 incident, and lets a proven procedure through', () => {
+    const faulty: Suite = {
+      name: 'faulty',
+      description: 'a suite carrying the frame that broke the shared server on 2026-08-18',
+      steps: [{
+        id: 'void-on-function',
+        intent: 'call GetUserList "*" — function TClientView.GetUserList : OleVariant, InterfaceServer.pas:191',
+        target: 'clientView',
+        packet: { verb: RdoVerb.SEL, action: RdoAction.CALL, member: 'GetUserList', separator: '"*"' },
+      }],
+    };
+    expect(voidSeparatorOffenders([faulty])).toEqual(['faulty/void-on-function -> call GetUserList "*"']);
+
+    // …and a member VOID_MEMBERS proves to be a procedure walks through, so the
+    // lock encodes the rule rather than banning the separator outright.
+    const legitimate: Suite = {
+      ...faulty,
+      name: 'legitimate',
+      steps: [{ ...(faulty.steps[0] as RdoStep), id: 'void-on-procedure', packet: { ...(faulty.steps[0] as RdoStep).packet, member: 'SayThis' } }],
+    };
+    expect(VOID_MEMBERS.has('SayThis')).toBe(true);
+    expect(voidSeparatorOffenders([legitimate])).toEqual([]);
   });
 
   it('shared-target suites never touch VOID_MEMBERS or SetTycoonCookie', () => {

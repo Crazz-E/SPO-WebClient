@@ -71,3 +71,9 @@ report/campaign/logs-cache/
 
 # RDO conformance git gate — per machine, written by `npm run conformance`
 .conformance-gate.json
+
+# Live RDO campaign — inter-agent exchange bus (report/plan-campagne-live-rdo.md §2).
+# Deliberately at the repo root and NOT under src/: the conformance gate compares the
+# newest mtime under src/ to the last replay+live runs, so an agent writing here would
+# otherwise re-arm the gate and cost a live run on planitia for nothing.
+.rdo-live/

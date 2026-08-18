@@ -34,6 +34,7 @@ const PROJECT_SKILLS = new Set([
   'rdo-conformity',
   'rdo-network-resilience',
   'spo-testing',
+  'starpeace-server-logs',
   'web-games',
   'zustand-store-ts',
 ]);

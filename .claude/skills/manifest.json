@@ -1,12 +1,12 @@
 {
   "version": "1.1.0",
   "installedAt": "2026-03-15T23:33:13.262Z",
-  "generatedAt": "2026-08-14T13:15:02.496Z",
+  "generatedAt": "2026-08-18T14:16:21.844Z",
   "source": "skillsmp.com",
   "generator": ".claude/generate-skills-manifest.js",
   "counts": {
-    "total": 23,
-    "project": 10,
+    "total": 24,
+    "project": 11,
     "community": 13,
     "withRecordedProvenance": 10
   },
@@ -163,6 +163,13 @@
       "skillName": "spo-testing",
       "origin": "project",
       "path": ".claude/skills/spo-testing",
+      "hasSkillMd": true
+    },
+    {
+      "name": "starpeace-server-logs",
+      "skillName": "starpeace-server-logs",
+      "origin": "project",
+      "path": ".claude/skills/starpeace-server-logs",
       "hasSkillMd": true
     },
     {

@@ -14,7 +14,9 @@
  */
 
 import type { RdoAction, RdoVerb } from '../../shared/types';
+import type { TimeoutCategory } from '../../shared/timeout-categories';
 import type { StarpeaceSession } from '../../server/spo_session';
+import type { HaltRecord } from './halt';
 import type { WireView } from './wire-view';
 
 // ── Oracle ─────────────────────────────────────────────────────────────────
@@ -46,6 +48,35 @@ export interface Verdict {
   detail: string;
 }
 
+/**
+ * Keys under which the connection floor publishes what it learned, for the
+ * `connexion` suite to judge. Written by `run.ts`, read by `connection-suite.ts`.
+ *
+ * It lives in `types.ts` and not in `runner.ts` for one mechanical reason:
+ * `connection-suite.ts` needs it, `suites.ts` imports the connexion suite, and
+ * `runner.ts` imports `suites.ts`. Declaring it beside the runner closed that
+ * loop and the catalogue asserted itself into `undefined` at load time. This
+ * module imports nothing of its own, so it cannot participate in a cycle.
+ */
+export const CONNECTION_STATE = {
+  /** string[] — every world the directory listed. */
+  worlds: 'connexion:worlds',
+  /** string — the world `--world` asked for. */
+  requestedWorld: 'connexion:requestedWorld',
+  /** { clientViewId, interfaceServerId, tycoonId } — what loginWorld returned. */
+  login: 'connexion:login',
+  /** string[] — every company the world login produced. */
+  companies: 'connexion:companies',
+  /** string — the company `--company` asked for. */
+  requestedCompany: 'connexion:requestedCompany',
+  /** { id, name } — the company actually selected. */
+  selectedCompany: 'connexion:selectedCompany',
+  /** string — why no company was selected, when that is declared rather than a failure. */
+  companySkipped: 'connexion:companySkipped',
+  /** SessionPhase — the phase reached before exploration started. */
+  phase: 'connexion:phase',
+} as const;
+
 // ── Steps ──────────────────────────────────────────────────────────────────
 
 /** Which server object a declarative step addresses. Resolved by the runner. */
@@ -69,12 +100,46 @@ export type StepTarget =
  */
 export type StepRisk = 'read' | 'mutation' | 'variant-on-procedure';
 
+/**
+ * A step may carry SEVERAL risk classes, and since 2026-08-18 it has to.
+ *
+ * The classes are independent axes, not a ladder: `mutation` says the step
+ * changes server state, `variant-on-procedure` says it emits `"^"` on a member
+ * that may be a Delphi `procedure`. Wave 2 of the certification sweep is both —
+ * `"^"` on unadjudicated members, and the server runs the method body
+ * (`RDOObjectServer.pas:294`), so it mutates a live account. Declaring only the
+ * second would let it through without `--allow-mutations`, which is the
+ * relabelling the plan refuses (rev. 3 §5.1): it would falsify the very
+ * bookkeeping the suite exists to produce.
+ */
+export type StepRisks = StepRisk | readonly StepRisk[];
+
+/** Every risk class a step declares, as a list. */
+export function stepRisks(step: { risk?: StepRisks }): readonly StepRisk[] {
+  if (step.risk === undefined) return [];
+  return typeof step.risk === 'string' ? [step.risk] : step.risk;
+}
+
+/** Does this step declare `risk`? */
+export function hasRisk(step: { risk?: StepRisks }, risk: StepRisk): boolean {
+  return stepRisks(step).includes(risk);
+}
+
 export interface StepPacket {
   verb: RdoVerb;
   action: RdoAction;
   member: string;
   args?: string[];
-  /** Explicit separator. Omit for the default (`"^"` on call). `"*"` only for VOID_MEMBERS. */
+  /**
+   * Explicit separator. Omit for the default (`"^"` on call).
+   *
+   * `"*"` is legal ONLY on a member `VOID_MEMBERS` proves to be a Delphi
+   * `procedure`. There used to be a `probe` field here that opted a packet out
+   * of that guard for the certification sweep; on 2026-08-18 the one frame it
+   * let out — `call GetUserList "*"` on a `function` — left the shared Interface
+   * Server answering `errMalformedQuery` to every query. The field is gone and
+   * must not come back: see `assertNotVoidPush`.
+   */
   separator?: string;
 }
 
@@ -86,15 +151,23 @@ export interface RdoStep {
   target: StepTarget;
   packet: StepPacket;
   expect?: Expectation;
-  risk?: StepRisk;
+  risk?: StepRisks;
   /** True when the reply legitimately differs between runs (counts, timings, HTTP): kept out of the baseline. */
   volatile?: true;
 }
 
 /**
- * The slice of the session a scenario step may drive. Read methods only —
- * every one of them is what the browser client calls in normal play. Widen it
- * with care: a method added here is a method the suite can put on the wire.
+ * The slice of the session a scenario step may drive.
+ *
+ * It used to be read methods only. Since 2026-08-18 it also carries the
+ * mutations of the live campaign (plan rev. 3 §4): a mutation reaches the wire
+ * only when its step declares `risk: 'mutation'` AND the run carries
+ * `--target dedicated` or `--allow-mutations` — the risk class is the gate, not
+ * the width of this type. Widen it member by member, never in bulk: a method
+ * added here is a method the suite can put on the wire.
+ *
+ * Every entry below was checked against `src/server/spo_session.ts` at the line
+ * quoted; a name that no longer resolves is a compile error, which is the point.
  */
 export type SessionDriver = Pick<StarpeaceSession,
   | 'sendRdoRequest' | 'getSocket'
@@ -105,11 +178,46 @@ export type SessionDriver = Pick<StarpeaceSession,
   | 'getChatUserList' | 'getChatChannelList' | 'getChatChannelInfo' | 'joinChatChannel'
   | 'connectMailService' | 'getMailUnreadCount' | 'getMailFolder' | 'readMailMessage' | 'getMailAccount'
   | 'fetchOwnedFacilities' | 'getPoliticsData' | 'getResearchInventory'
+
+  // ── Reads that are PRECONDITIONS of a mutation sequence ──────────────────
+  // Without these nothing downstream is reachable: `connectConstructionService`
+  // (:983) opens the socket `placeBuilding` needs, the category/facility reads
+  // produce the class name it takes, and `executeRdo` (:1559) is the only way to
+  // address a socket other than `world` (map, mail).
+  | 'connectConstructionService' | 'fetchBuildingCategories' | 'fetchBuildingFacilities'
+  | 'fetchClusterInfo' | 'fetchClusterFacilities' | 'getRoadCostEstimate'
+  | 'ensureMailConnection' | 'searchConnections' | 'fetchAutoConnections' | 'fetchPolicy'
+  | 'fetchBankAccount' | 'fetchCompanies' | 'fetchTycoonProfile' | 'fetchProfitLoss' | 'fetchCurriculumData'
+  | 'getResearchDetails' | 'executeRdo'
+
+  // ── RDO mutations (world state) ──────────────────────────────────────────
+  | 'cloneFacility' | 'manageConstruction' | 'upgradeBuildingAction' | 'renameFacility' | 'deleteFacility'
+  | 'buildRoad' | 'demolishRoad' | 'wipeCircuit'
+  | 'defineZone' | 'placeBuilding' | 'placeCapitol' | 'setBuildingProperty'
+  | 'savePlayerPosition' | 'connectFacilitiesByCoords'
+  | 'sendChatMessage' | 'setChatTypingStatus'
+
+  // ── Cache Server scratch objects — a reversible mutative sequence ─────────
+  // Create → set → read → close, all on an object the run owns. The safest
+  // mutation shape available on the shared server.
+  | 'cacherCreateObject' | 'cacherSetObject' | 'cacherSetPath' | 'cacherGetPropertyList'
+  | 'cacherCloseObject' | 'getObjectRdoId'
+
+  // ── Mail and ASP mutations ───────────────────────────────────────────────
+  | 'composeMail' | 'saveDraft' | 'deleteMailMessage'
+  | 'executeBankAction' | 'executeAutoConnectionAction' | 'setPolicyStatus' | 'executeCurriculumAction'
+  | 'politicsVote' | 'politicsLaunchCampaign' | 'politicsCancelCampaign'
 > & {
   worldContextId: string | null;
   interfaceServerId: string | null;
   tycoonId?: string | null;
   currentWorldInfo?: { name: string; ip: string } | null;
+  /**
+   * The company selected after login (`spo_session.ts:291`). The build
+   * catalogue is per company (`KindList.asp?Company=…`), so the facility
+   * sequence cannot resolve the class it has to rebuild with without it.
+   */
+  currentCompany?: { id: string; name: string } | null;
 };
 
 /**
@@ -126,8 +234,16 @@ export class StepSkip extends Error {
 
 /** What an imperative step can reach. */
 export interface StepContext {
-  /** Emit a request (QueryId, awaits the reply) at `target` through the real session. */
-  emit(target: StepTarget, packet: StepPacket): Promise<StepOutcome>;
+  /**
+   * Emit a request (QueryId, awaits the reply) at `target` through the real session.
+   *
+   * `category` defaults to `FAST` (60 s, legacy `DefTimeOut`) — right for a
+   * property read, wrong for a mutation: a build or an upgrade legitimately
+   * stalls past a simulation tick, and a step declared `fail` on a 60 s
+   * expiration is a false negative, not a finding. Name `NORMAL`/`SLOW`
+   * (180 s, `ISProxyTimeOut`) when the step drives one.
+   */
+  emit(target: StepTarget, packet: StepPacket, category?: TimeoutCategory): Promise<StepOutcome>;
   /**
    * Fire-and-forget push (`"*"`, no QueryId) through `writeRdoFrame` — the only
    * form for a Delphi `procedure` with parameters. Resolves once written.
@@ -157,7 +273,7 @@ export interface StepContext {
 export interface ImperativeStep {
   id: string;
   intent: string;
-  risk?: StepRisk;
+  risk?: StepRisks;
   expect?: Expectation;
   /** True when the reply legitimately differs between runs (counts, timings, HTTP): kept out of the baseline. */
   volatile?: true;
@@ -222,6 +338,30 @@ export interface SuiteReport {
   skipped: Array<{ id: string; reason: string }>;
   /** True when the suite was cut short by an unanswered frame. */
   stoppedOnSilence: boolean;
+  /**
+   * True when the suite was cut short by N consecutive `error N` replies.
+   *
+   * A separate axis from {@link stoppedOnSilence}, and the one that was missing
+   * on 2026-08-18: an `error 1` reply is an ANSWER — `response` is non-null — so
+   * it produces a FAIL per step and interrupts nothing. That morning the shared
+   * Interface Server answered `error 1` to everything for 75 minutes and the
+   * harness kept emitting into it.
+   */
+  stoppedOnDegradation?: boolean;
+  /**
+   * Written whenever `stoppedOnSilence` is true — the attribution of the stop.
+   *
+   * `runSuite` breaks at the FIRST unanswered frame, so the last frame emitted
+   * IS the suspect; there is nothing to reconstruct afterwards and no 47-minute
+   * `ISCnx` window to wait for. The record carries the frame, the member, the
+   * ClientViewId and the `suite/step`, in the shape a human would have written
+   * by hand into `.rdo-live/HALT`.
+   *
+   * **It is a record, not a brake.** Nothing here writes `.rdo-live/HALT`: that
+   * file stays manual by developer rule (`halt.ts`, 2026-08-18). This only makes
+   * the freeze self-attributing in the run report.
+   */
+  halt?: HaltRecord;
 }
 
 export type TargetKind = 'shared' | 'dedicated';

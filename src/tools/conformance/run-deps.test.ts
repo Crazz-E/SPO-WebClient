@@ -70,9 +70,27 @@ describe('run — defaultDeps', () => {
     }) as unknown as import('./types').RunReport;
     updateGate(deps, report('live'), 0, l => lines.push(l));
     expect(lines.pop()).toMatch(/git sync stays blocked/);
-    updateGate(deps, report('replay'), 0, l => lines.push(l));
+    // 5th argument = a baseline was actually compared. Without it the replay step
+    // does not count (2026-08-18), and the pair would never complete.
+    updateGate(deps, report('replay'), 0, l => lines.push(l), true);
     updateGate(deps, report('live'), 0, l => lines.push(l));
     expect(lines.pop()).toMatch(/both steps validated .* git sync allowed/);
+  });
+
+  it('gate: a replay with no baseline comparison is refused, and the live step stays orphaned', () => {
+    const lines: string[] = [];
+    const store: { g: ReturnType<RunDeps['readGate']> } = { g: null };
+    const deps = { ...defaultDeps, readGate: () => store.g, writeGate: (g: NonNullable<typeof store.g>) => { store.g = g; } } as RunDeps;
+    const report = (transport: 'replay' | 'live') => ({
+      transport, finishedAt: '2026-08-16T20:00:00.000Z', world: 'planitia', target: 'shared', suites: [{ name: 'types' }],
+    }) as unknown as import('./types').RunReport;
+
+    updateGate(deps, report('replay'), 0, l => lines.push(l));          // no 5th argument
+    expect(lines.some(l => /WITHOUT --diff-baseline/.test(l))).toBe(true);
+    expect(store.g).toBeNull();
+
+    updateGate(deps, report('live'), 0, l => lines.push(l));
+    expect(lines.pop()).toMatch(/git sync stays blocked/);
   });
 
   it('log / error go to the console', () => {

@@ -23,7 +23,10 @@ instance" rule for this campaign. **What it does NOT lift, and cannot:**
 `"^"` on a Delphi `procedure` **freezes** the Interface Server — a proven property of the server,
 not a precaution, and no authorization changes it. **Observed twice in production, 2026-08-14
 21:29:22 UTC and 2026-08-17 14:54 UTC**, both caused by the deployed `63d9eb0b` build (attribution
-corrected 2026-08-17 — it was never our probe). The U2 probe stays **cancelled for good**, on the
+corrected 2026-08-17 — it was never our probe). Production was redeployed on `e46ccd6b` later that
+day and now carries the guard, so the *deployed gateway* can no longer trigger this — **but that
+changes nothing for us**: the freeze is a property of the server, and a campaign frame that gets the
+separator wrong freezes it exactly the same way. The U2 probe stays **cancelled for good**, on the
 mechanism rather than on the incident. Malformed-frame and fuzzing work remains L2-only. Every mutation still
 documents and executes its reset (`assertSuitesSafe` enforces it), and adversarial *timing*
 variants (V4 race) are out of scope for a shared server.
@@ -63,7 +66,7 @@ In-browser, `window.__spoDebug` provides `sent/received/errors`, `history` (last
 | `FIVEINTERFACESERVER` | `Survival` | Step-by-step **LOGON traces**: `LOGON ATTEMPT: User=<tycoon>`, `TycoonProxyId=<id>`, `LOGON SUCCESS: ClientViewId=<id>`, `<tycoon>.IP = <ip>`, numbered disconnect traces | **Session bracketing + clock calibration.** `ClientViewId` is the very object id our gateway receives from `Logon` — a direct join key with the wire log |
 | `FIVEINTERFACESERVER` | `Clients` | TSV per session: `tycoon ⇥ IP ⇥ login ⇥ logout ⇥ exit-code` (0 = clean; non-zero observed on abnormal end) | Post-run session audit: our sessions must all close with code 0 |
 | `FIVEINTERFACESERVER` | `Chat` | Chat lines | Chat-send correlation |
-| `FIVEMODELSERVER` | `Survival` | Simulation heartbeat every ~15 s (`Check roads`, integrator counters `N>`/`<N+1`, `SIM-*` phases, `Period(day)` + **game date**) | **Server-health oracle**: a heartbeat gap or missing SIM phase during our window = distress signal → abort |
+| `FIVEMODELSERVER` | `Survival` | Simulation heartbeat every ~15 s (`Check roads`, integrator counters `N>`/`<N+1`, `SIM-*` phases, `Period(day)` + **game date**) — **and** the `<ISCnx>` channel, which is a different thing entirely (§3.3) | **World-health oracle**: a heartbeat gap or missing SIM phase = the *world* is in distress → abort. **It says nothing about the Interface Server** — the MS heartbeat stayed nominal through the entire 12 h 41 m IS freeze. IS liveness is `<ISCnx>` only. |
 | `FIVEMODELSERVER` | `Demolition` | `H:MM:SS AM/PM - T<DelphiClass>` per demolished object (e.g. `TCircuit` road segments; class only, no actor/coords) | Demolition correlation by time window + class |
 | `FIVEMODELSERVER` | `Money` | `Sending money: <from> to <to>, $<amount>` (rare) | Money-transfer correlation, amount as signature |
 | `FIVEMODELSERVER` | `EOY` / `Population` / `Office` | Daily economic summaries (`CITY_OVERLOADED`, growth blocks…) | Background context only |
@@ -86,8 +89,8 @@ In-browser, `window.__spoDebug` provides `sent/received/errors`, `history` (last
 >    **external**: the Model Server logged 34 unanswered `ModelStatusChanged` pushes until
 >    `ISCnx Error writing to socket`. Outage: **12 h 41 min 25 s**.
 >    → **`Clients exit code 0` does not detect a freeze.** Every "logs propres" verdict recorded so
->    far is weaker than it reads. **Oracle O5 must be rewritten** around the Model Server's
->    `ISCnx` channel, which is the only one that sees the silence.
+>    far is weaker than it reads. **Oracle O5 was rewritten** around the Model Server's `ISCnx`
+>    channel, which is the only one that sees the silence — see **§3.3** (done 2026-08-17, lot L0).
 > 3. **`SPO_test3` is NOT used by us alone.** On 2026-08-17 at 14:54 UTC a `LOGON SUCCESS` for
 >    `SPO_test3` came from **IP 82.165.165.224** — not ours — and produced the freeze signature
 >    above (22 min 56 s of silence, no `Clients` line, `ISCnx timeout` at 15:06). The correlation
@@ -115,14 +118,96 @@ In-browser, `window.__spoDebug` provides `sent/received/errors`, `history` (last
 | O2 | State round-trip | Re-read the value/object (inspector re-open, area re-read) in-session | Silent no-op mutations, wrong-field writes, encoding corruption |
 | O3 | Push receipt | `RefreshArea`/`RefreshObject`/`RefreshTycoon` after the mutation | Broken push filtering, missing viewport refresh |
 | O4 | Server log line | Category line inside the calibrated window (§2.2) | Server-side effect happened (or pathologically didn't) |
-| O5 | No pathology | IS/MS `Survival` clean, no heartbeat gap, no `TimeWarp`, `Clients` exit code 0, no gateway disconnect/timeout | Crashes, stalls, session corruption we caused |
+| O5 | Interface Server liveness | **MS `Survival` `<ISCnx>` channel** — see §3.3. Zero `Query timed out` / `Error writing to socket` / `Start disconnecting: (ISCnx)` covering our window, **plus** a `Clients` row for every `LOGON SUCCESS` of ours | A freeze we caused — the one thing the campaign must not do |
 | O6 | Persistence | Next-session login sees the state (registry diff) | Lost writes, model/persistence divergence |
 
 **O1 is not universally available — this shapes the whole campaign.** Fire-and-forget mutations (`writeRdoFrame`, `"*"`, no QueryId) have **no response frame by design**, and that is roughly 30 of the 78 rows. For those, O2 is the only in-session oracle. Worse, the gateway's own read-back cannot serve as O2: `setBuildingProperty` returns `success: true` unconditionally and falls back to echoing the *requested* value when the read comes back empty (`building-property-handler.ts:184-188`). **The campaign must perform its own independent re-read and compare against what it asked for.** Full per-transport availability table: [coverage-matrix.md §2](../report/campaign/coverage-matrix.md).
 
-### 3.3 The correlator tool (to build — first implementation task after §10)
+### 3.3 O5 — detecting an absence, not a message (rewritten 2026-08-17, lot L0)
 
-`src/tools/correlate-server-logs.ts` (bundled like `capture-cli.ts`):
+**The retired formulation.** O5 used to read *"IS/MS `Survival` clean, no heartbeat gap, no
+`TimeWarp`, `Clients` exit code 0, no gateway disconnect/timeout"*. Every clause of it is blind to
+the event it exists to catch, and the 2026-08-14 freeze proves each one:
+
+| Retired clause | Why it saw nothing |
+|---|---|
+| `Clients` exit code 0 | A frozen session has **no `Clients` row at all**. The table records sessions that *end*; a frozen one is invisible, not marked. Reading "exit code 0" off the rows that *are* there says nothing about the session that vanished. |
+| IS `Survival` clean | A hard freeze writes **nothing** — no exception, no `Start Disconnecting`. `IS/Survival` ended mid-session on `LOGON SUCCESS: ClientViewId=7272232` and simply stopped. A "clean" IS log is *compatible with* a freeze. |
+| No MS heartbeat gap | **The Model Server kept a nominal heartbeat for the entire 12 h 41 m outage.** Heartbeat gaps detect a sick *world*, never a frozen *Interface Server* — two different processes. |
+| No `TimeWarp` | No `TimeWarp` entry exists anywhere in the corpus outside 2026-07-03. It cannot discriminate. |
+
+**The replacement.** The only positive witness is external to the IS: the Model Server pushes
+`ModelStatusChanged` to it twice per binary-backup cycle and logs every unanswered push on its
+`<ISCnx>` channel. Three line shapes, all in `MS/Survival`, and the **only dated lines in the file**:
+
+```
+2026-08-14 9:29:58 PM <ISCnx> (10)- Query timed out sel 6944144 call ModelStatusChanged "*" "#1"; Time: 10000
+2026-08-15 10:10:09 AM ISCnx Error writing to socket
+Start disconnecting: (ISCnx) 2026-08-15 10:10:09 AM
+```
+
+**Healthy looks like silence.** There is no positive `ISCnx` line when the IS answers — the channel
+logs only failure. So the oracle is *"zero ISCnx events covering our window"*, which is why it is a
+detection of an **absence** and needs a window to be meaningful.
+
+**False-positive rate: zero, measured.** Across `report/campaign/logs-cache/2026-08-17-preserve/MS`:
+
+| Day | ISCnx lines | Note |
+|---|---:|---|
+| 08-10, 08-12, 08-13, 08-16 | **0** | ordinary days |
+| 08-11 | **0** | includes a **3 h world suspension** (integrator counter continuous) — a simulation stall does **not** trip it |
+| 08-14 | 8 | the 12 h 41 m freeze |
+| 08-15 | 29 | same freeze, plus the socket death |
+| 08-17 | 4 | the 22 m 56 s freeze |
+
+~151 probe cycles over five clean days produced **not one** event. The concern that "the server
+legitimately stalls during simulation ticks" (`shared/timeout-categories.ts:6-13`) is real for *our*
+RDO deadlines but does **not** reach this channel: 08-11 is the direct counter-example.
+
+**Conclusion window: ~47 minutes, and this is the oracle's real cost.** The probe is the backup
+cycle. Measured interval on a clean day: **2763–2798 s, median 2771 (n = 30, 08-16)**, plus the 10 s
+query timeout the line itself reports (`Time: 10000`). So:
+
+```
+conclusive at = session end + 2798 s + 10 s  ≈  session end + 46 min 48 s
+```
+
+**A campaign wave lasting minutes normally contains zero probes.** Silence at the end of a wave is
+therefore *absence of evidence*, not evidence of health. O5 splits in two:
+
+- **O5-a — immediate, per wave.** The circuit breaker
+  ([`src/tools/conformance/halt.ts`](../src/tools/conformance/halt.ts), protocol in
+  `.rdo-live/README.md`): the first RDO rejection at the 180 s ceiling **is** the freeze signal,
+  seen from our side. Plus the structural check the correlator already makes — our `LOGON SUCCESS`
+  must have a matching `Clients` row after our logoff.
+- **O5-b — deferred, conclusive.** Zero ISCnx events in `[wave start, wave end + 2808 s]`. Re-read
+  `MS/Survival` after that time. **A wave is not closed until O5-b has been evaluated.**
+
+**Implemented** in [`src/tools/conformance/server-logs.ts`](../src/tools/conformance/server-logs.ts):
+`parseIsCnxEvents`, `ISCNX_CONCLUSION_WINDOW_SEC`, and the `isCnxEvents` / `livenessConclusive` /
+`livenessConclusiveAt` fields of `ServerLogVerdict`. An ISCnx event is a **failure** (exit 1); an
+open window is **not** — it is reported as `INCONCLUSIVE` and left for the wave to close. Failing on
+an open window would fail every live run, since a run correlates its logs seconds after logoff.
+
+> **Limit to keep in view.** These are the only dated lines in the file, but the surrounding verdict
+> still works in seconds-since-midnight, so a session crossing midnight compares stamps from two
+> days. Same pre-existing limitation as `heartbeatGaps`. Campaign waves do not run at midnight.
+
+### 3.4 The correlator — it exists, under another name
+
+The tool this section originally specified (`src/tools/correlate-server-logs.ts`, "to build") was
+**never built**, and nothing should wait for it. Its correlation half shipped inside the conformance
+suite as **[`src/tools/conformance/server-logs.ts`](../src/tools/conformance/server-logs.ts)**, run
+by `npm run conformance -- … --server-logs`. That is "the correlator" in every later mention.
+
+What it does today: fetches IS `Survival`, IS `Clients` and MS `Survival` for the day (both days
+across midnight), brackets our session by `ClientViewId` (exact join, not time-based), measures the
+clock offset from the `LOGON SUCCESS` line, and evaluates the `Clients` row, IS trouble lines, MS
+heartbeat gaps and — since 2026-08-17 — the **ISCnx freeze oracle** of §3.3.
+
+What it does **not** do, and what a campaign agent must still do by hand: per-mutation O4 matching
+against the `Demolition` / `Money` / `Chat` / `favorites` categories, and the campaign journal below.
+Those remain open work; the original specification is kept here for whoever picks them up:
 
 - **Inputs:** campaign journal (below), gateway NDJSON log, date range.
 - **Fetch:** downloads the day's (and, around midnight, the adjacent day's) logs for all four servers into `report/campaign/logs-cache/<date>/` (curl, plain HTTP, cache immutable).
@@ -155,10 +240,12 @@ In-browser, `window.__spoDebug` provides `sent/received/errors`, `history` (last
 | `report/campaign/coverage-matrix.md` | §8 matrix with per-row status (`todo / nominal-pass / adversarial-pass / blocked / bug-filed`) | Single source of campaign progress |
 | `report/campaign/placed-registry.json` | Every object we ever placed: `{world, coords, class, placedAt, sessionRef, status: active\|demolished\|orphan}` — **keyed on coordinates, not on a facility id** | The placement response cannot supply an id (defect D-A: the handler greps `/sel (\d+)/` in an answer that never contains `sel`), so the object id is re-resolved by focusing the tile, every session. **Never** trust remembered coordinates either — re-verify against the live map on each run; register the placement in the same breath as the ack; reconcile orphans (placed but unconfirmed) first thing next session |
 | `report/campaign/session-<date>-<n>.md` | Per-session report: actions, oracle results, anomalies, server-log excerpts | One per run |
+| `.rdo-live/` (repo root, gitignored) | The inter-agent bus: `HALT`, `inventory.ndjson`, `verdicts.ndjson`, `blocked.ndjson`, `runs/<batch>/` | Contract in `.rdo-live/README.md` — **read it before acting**. Deliberately outside `src/`: a write under `src/` re-arms the conformance git gate and costs a live run |
 
 ### 5.2 Session script
 
 ```
+0. Read `.rdo-live/HALT`. If it exists, STOP — report and hand back  [rule R3]
 1. Start gateway in capture mode (fresh LOG_FILE)          [§2.1]
 2. Baseline: fetch today's server logs (pre-run snapshot)
 3. Login via the locked procedure (E2E-TESTING.md) — SPO_test3 / Free Space / planitia / SPO_test3 - Green
@@ -170,8 +257,10 @@ In-browser, `window.__spoDebug` provides `sent/received/errors`, `history` (last
    — placements registered immediately with coords + returned id
 6. In-session verification (O1–O3), including one inspector re-open per mutated facility
 7. Clean logoff (Switch Server / page close → gateway ClientNotAware + get Logoff), stop gateway
-8. Fetch server logs (post-run), run the correlator, evaluate O4–O5
-9. Next session opens with O6 (persistence) checks of the previous session's mutations
+8. Fetch server logs (post-run), run the correlator (§3.4), evaluate O4 and **O5-a**
+9. Re-read `MS/Survival` after `livenessConclusiveAt` (≈ 47 min) to close **O5-b** — a wave stays
+   open until it is evaluated (§3.3)
+10. Next session opens with O6 (persistence) checks of the previous session's mutations
 10. Update matrix + registry; write the session report; file bugs (§9)
 ```
 
@@ -196,7 +285,19 @@ Per matrix row, four escalation stages — later stages only after nominal passe
 
 **Absolute interdictions (live):** no hand-built or fuzzed frames (`REQ_RDO_DIRECT` stays unused — risk C9); no protocol malformation (L2 mock only); no mutations targeting other players' property; no demolition of anything absent from our registry; no login storms (bounded reconnect stays as shipped); no sustained bursts — default pacing ≤ 1 mutation per 2 s except where a race IS the test and Q7 allows it.
 
-**Abort conditions — stop the session immediately, report, do not retry:** MS `Survival` heartbeat gap > 60 s; `TimeWarp` entry appearing in-window; `ModelStatusChanged` busy push; ServerBusy poll failures reaching the stop threshold; any `Clients` exit-code ≠ 0 for a session of ours we believed clean; repeated `errQueryTimedOut` on mutations.
+**Abort conditions — stop the session immediately, report, do not retry:**
+
+1. **`HALT` (campaign-wide, automatic).** The first RDO rejection at the longest accepted delay —
+   `IS_PROXY_TIMEOUT_MS` = 180 000 ms (`shared/timeout-categories.ts:43`, legacy `ISProxyTimeOut`,
+   `ServerCnxHandler.pas:329`). The breaker writes `.rdo-live/HALT`, and **every agent of the
+   campaign stops**, not just this session. No retry, no "let me check if it works again": capture
+   the server logs at once and hand back. Protocol in `.rdo-live/README.md`.
+2. Any `<ISCnx>` event covering our window (§3.3) — the freeze signature.
+3. Our `LOGON SUCCESS` has **no matching `Clients` row** after a completed logoff.
+4. MS `Survival` heartbeat gap > 60 s, or a `WORLD LOADED` we did not expect — *world* distress.
+5. `TimeWarp` entry appearing in-window; `ModelStatusChanged` busy push; ServerBusy poll failures
+   reaching the stop threshold; any `Clients` exit-code ≠ 0 for a session of ours we believed clean;
+   repeated `errQueryTimedOut` on mutations.
 
 ---
 

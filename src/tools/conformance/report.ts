@@ -5,6 +5,7 @@
  * All pure. The CLI is a thin shell around these.
  */
 
+import type { HaltRecord } from './halt';
 import type { RunReport, SessionFacts, StepReport, SuiteReport, TargetKind, TransportKind, VerdictKind } from './types';
 
 // ── Run report ─────────────────────────────────────────────────────────────
@@ -72,14 +73,47 @@ export function formatStepLine(step: StepReport): string {
     `     ${step.verdict.detail}`;
 }
 
+/**
+ * The attribution of a stop, in the four lines a human acts on.
+ *
+ * Deliberately NOT `formatHaltNotice` (`halt.ts`): that one says "someone
+ * stopped this campaign on purpose" and names the file to clear. This is the
+ * opposite situation — the server went quiet on a frame we can name, and no
+ * brake has been armed. Same record type, two different readers.
+ */
+/**
+ * Attribution of a stop, in the shape a human would have written by hand.
+ *
+ * The tag distinguishes the two stop conditions, and the last line with it: on
+ * SILENCE the run broke at the first unanswered frame, so that frame IS the
+ * suspect; on DEGRADATION the server is still answering and the last frame is
+ * only the last symptom. Printing the silence sentence over a degradation stop
+ * would point a confident finger at an innocent frame.
+ */
+export function formatSilenceAttribution(record: HaltRecord): string {
+  const degradation = /consecutive error replies/.test(record.reason ?? '');
+  const tag = degradation ? '[degraded]' : '[silence]';
+  const closing = degradation
+    ? `${tag} the server is answering but no longer succeeding: the last frame is the last SYMPTOM, not the cause.`
+    : `${tag} runSuite breaks at the first unanswered frame, so that frame IS the suspect.`;
+  return [
+    `${tag} ${record.reason ?? 'no answer'}`,
+    `${tag} at ${record.at} · ${record.where ?? 'unknown step'} · socket ${record.socket ?? '?'}`,
+    `${tag} last frame out: ${record.lastFrame ?? '(not recorded)'}`,
+    `${tag} member ${record.member ?? '(imperative step)'} · ClientViewId ${record.clientViewId ?? '?'}`,
+    closing,
+  ].join('\n');
+}
+
 export function formatSummary(report: RunReport): string {
   const s = report.summary;
   const skipped = report.suites.reduce((n, suite) => n + suite.skipped.length, 0);
-  const silence = report.suites.filter(suite => suite.stoppedOnSilence).map(suite => suite.name);
+  const stopped = report.suites.filter(suite => suite.stoppedOnSilence || suite.stoppedOnDegradation);
   return [
     `[conformance] ${report.transport}/${report.target} ${report.world}: ` +
       `${s.pass} pass, ${s.fail} fail, ${s.unknown} unknown, ${skipped} skipped`,
-    ...(silence.length ? [`[conformance] STOPPED ON SILENCE in: ${silence.join(', ')} — do not replay blindly.`] : []),
+    ...(stopped.length ? [`[conformance] STOPPED ON SILENCE in: ${stopped.map(suite => suite.name).join(', ')} — do not replay blindly.`] : []),
+    ...stopped.flatMap(suite => (suite.halt ? [formatSilenceAttribution(suite.halt)] : [])),
   ].join('\n');
 }
 

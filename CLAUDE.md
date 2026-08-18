@@ -23,11 +23,22 @@ not. Treat RDO work as the highest-stakes work in the repo.
 - Add a UI element without wiring its action — no dead buttons (`code-guardian` §E)
 - Use `"^"` (VariantId) without a RID — **crashes the shared Delphi server**.
   Fire-and-forget MUST use `"*"` (VoidId). Ref: `RDOQueryServer.pas:419-424` + live capture.
+- Emit a frame whose **argument count differs from the member's Pascal declaration**, or
+  whose separator does not match its kind. Both guards are live-proven on the shared server:
 
-**`sendRdoRequest()` + `"*"` is forbidden by project convention**, not by safety.
-Void + QueryId is wire-legal (server acks `A<id> ;`, capture-proven). The project
-standardises one form per intent, enforced by `assertNotVoidPush`. The real crash risk is
-the rule above. Full matrix: [rdo-protocol-architecture.md §8.5](doc/rdo-protocol-architecture.md).
+  | form | consequence | proven |
+  |------|-------------|--------|
+  | `"^"` on a **procedure** with 2 register args | result pointer pushed, never popped → **freeze** | 2026-08-14, `SayThis` |
+  | `"*"` on a **function** | no result pointer passed, the function writes one anyway → **arbitrary memory write**; the IS then answers `error 1` to every query, on every connection — **for over 3 h, the process still alive and still refusing everything** | 2026-08-18, `GetUserList` |
+
+  **There is therefore no safe frame for a member whose declaration nobody has.** Its kind
+  comes from the Pascal (`extract-rdo-arity.js`), never from a probe.
+
+**`sendRdoRequest()` + `"*"` is a SAFETY guard, not a convention** — reclassified 2026-08-18.
+It is wire-legal and capture-proven on a `procedure`, which is why `VOID_MEMBERS` exempts
+those and only those, each with its declaration cited. `assertNotVoidPush` takes **no opt-in**:
+one existed for a few hours for the certification sweep, and it is what let the 2026-08-18
+frame out. Full matrix: [rdo-protocol-architecture.md §8.5](doc/rdo-protocol-architecture.md).
 
 ## RDO work — mandatory sequence
 
@@ -117,7 +128,7 @@ higher per directory). Thresholds only go UP. Details: **`spo-testing`** skill.
 Seven custom RDO matchers: `toContainRdoCommand`, `toMatchRdoFormat`, `toMatchRdoCallFormat`,
 `toMatchRdoSetFormat`, `toHaveRdoTypePrefix`, `toMatchRdoResponse`, `toPassStrictRdoValidation`.
 
-## Skills — 23 installed (10 project, 13 community)
+## Skills — 24 installed (11 project, 13 community)
 
 Inventory: [manifest.json](.claude/skills/manifest.json). Regenerate after adding or
 removing one:
@@ -134,6 +145,7 @@ node .claude/generate-skills-manifest.js --check  # CI: fail if stale
 | `rdo-conformity` | Any RDO work — checklist, verb choice, separator matrix, evidence hierarchy |
 | `delphi-archaeologist` | Reverse-engineering `../SPO-Original`, tracing RDO handlers |
 | `spo-testing` | Tests, coverage, fixtures, mock server, RDO matchers |
+| `starpeace-server-logs` | Reading the Delphi server logs — UTC trap, size rule, freeze vs corruption, incident method |
 | `dependencies` | Vulnerability audit, licences, package updates |
 | `e2e-test` | Live Playwright E2E (user-invoked only) |
 

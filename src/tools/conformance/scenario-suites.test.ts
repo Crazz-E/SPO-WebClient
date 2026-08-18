@@ -113,7 +113,10 @@ function fakeDriver(rec: Recorder, opts: { buildings?: number; inbox?: number; o
   return driver as unknown as SessionDriver;
 }
 
-const policy = (): RunPolicy => ({ target: 'shared', allowVariantOnProcedure: false, frameBudget: DEFAULT_FRAME_BUDGET, username: 'SPO_test3' });
+const policy = (): RunPolicy => ({
+  target: 'shared', allowMutations: false, allowVariantOnProcedure: false,
+  frameBudget: DEFAULT_FRAME_BUDGET, username: 'SPO_test3',
+});
 
 async function runAll(rec: Recorder, driver: SessionDriver, suites = SCENARIO_SUITES) {
   const runner = new ConformanceRunner(driver, policy(), {}, rec);

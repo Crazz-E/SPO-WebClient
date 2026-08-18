@@ -10,31 +10,38 @@ import { assertNotVoidPush, canBufferRequest } from '../rdo-request-guards';
 
 describe('Request Guards', () => {
   describe('assertNotVoidPush', () => {
-    it('rejects void push "*" separator (project convention guard)', () => {
-      // PROJECT CONVENTION, not a crash fact: void+QueryId is wire-legal
-      // (the server acks "A<id> ;", capture-proven — doc/rdo-protocol-architecture.md §8.5).
-      // The guard enforces one wire form per intent.
+    // SAFETY guard since 2026-08-18, not a convention. Under "*" the dispatcher
+    // passes no hidden result pointer (RDOObjectServer.pas:281-283) and a
+    // compiled `function` writes its OleVariant result anyway, through a
+    // register nobody set. One such frame — `call GetUserList "*"` — left the
+    // shared Interface Server answering errMalformedQuery to every query.
+    it('rejects "*" on a member not proven to be a Delphi procedure', () => {
       expect(() =>
         assertNotVoidPush({ member: 'RDOEndSession', separator: '*' })
-      ).toThrow('Void push separator "*" must not be used with sendRdoRequest()');
+      ).toThrow('is not a proven Delphi procedure');
     });
 
-    it('includes the command name in the error message', () => {
+    it('includes the member name in the error message', () => {
       expect(() =>
         assertNotVoidPush({ member: 'RDOSomeCommand', separator: '*' })
-      ).toThrow('Command: RDOSomeCommand');
+      ).toThrow('"RDOSomeCommand"');
     });
 
     it('uses "unknown" when member is not provided', () => {
       expect(() =>
         assertNotVoidPush({ separator: '*' })
-      ).toThrow('Command: unknown');
+      ).toThrow('"unknown"');
     });
 
     it('rejects separator containing "*" among other characters', () => {
       expect(() =>
         assertNotVoidPush({ member: 'RDOTest', separator: 'x*y' })
-      ).toThrow('must not be used with sendRdoRequest');
+      ).toThrow('is not a proven Delphi procedure');
+    });
+
+    it('exempts the members VOID_MEMBERS proves to be procedures', () => {
+      expect(() => assertNotVoidPush({ member: 'AddLine', separator: '*' })).not.toThrow();
+      expect(() => assertNotVoidPush({ member: 'CloseMessage', separator: '*' })).not.toThrow();
     });
 
     it('allows synchronous "^" separator (normal RDO call)', () => {
