@@ -10,6 +10,21 @@ import { ProductsPanel } from '../ProductsGroup';
 import { SuppliesPanel } from '../SuppliesGroup';
 import type { CompInputData, BuildingProductData, BuildingSupplyData, BuildingConnectionData } from '@/shared/types';
 import { fireEvent, screen } from '@testing-library/react';
+import { useBuildingStore, gateKey } from '../../../store/building-store';
+
+/**
+ * Mark a gate's connection rows as already read.
+ *
+ * The panels load a gate's rows when it is expanded, so an empty `connections`
+ * on a gate nobody has read yet means "not read yet", not "none" — the panel
+ * says so, and that is a different message from the ones below. These cases are
+ * about what a gate reads like AFTER its rows came back, so they say so.
+ */
+function markGateLoaded(tabId: 'supplies' | 'products', path: string): void {
+  useBuildingStore.setState((state) => ({
+    gateLoadingStates: { ...state.gateLoadingStates, [gateKey(tabId, path)]: 'loaded' },
+  }));
+}
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -262,6 +277,7 @@ describe('ProductsPanel', () => {
 
   it('shows "No buyers connected" when expanded with no connections', () => {
     const product = makeProduct({ connections: [], connectionCount: 0 });
+    markGateLoaded('products', product.path);
     const { container } = renderWithProviders(
       <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
     );
@@ -275,6 +291,7 @@ describe('ProductsPanel', () => {
     // When that read returns nothing the two disagree, and "No buyers connected"
     // is the one thing we know to be false.
     const product = makeProduct({ connections: [], connectionCount: 2 });
+    markGateLoaded('products', product.path);
     const { container } = renderWithProviders(
       <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
     );
@@ -461,6 +478,7 @@ describe('SuppliesPanel', () => {
 
   it('shows "No suppliers connected" when no connections', () => {
     const supply = makeSupply({ connections: [], connectionCount: 0 });
+    markGateLoaded('supplies', supply.path);
     const { container } = renderWithProviders(
       <SuppliesPanel supplies={[supply]} canEdit={true} buildingX={100} buildingY={200} />,
     );
@@ -490,6 +508,7 @@ describe('SuppliesPanel', () => {
     // The reported contradiction, pinned: header "1 supplier", body "No
     // suppliers connected". Whatever else is wrong, the panel must not say both.
     const supply = makeSupply({ connections: [], connectionCount: 1 });
+    markGateLoaded('supplies', supply.path);
     const { container } = renderWithProviders(
       <SuppliesPanel supplies={[supply]} canEdit={true} buildingX={100} buildingY={200} />,
     );

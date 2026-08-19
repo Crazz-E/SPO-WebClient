@@ -163,6 +163,15 @@ export interface ClientCallbacks {
   /** Lightweight refresh: re-read the properties of the focused building only. */
   onRefreshBuildingProperties: (x: number, y: number) => void;
   onRequestTabData: (x: number, y: number, tabId: string, visualClass: string) => void;
+  /** Read one gate's connection rows, on expand. See requestGateConnections. */
+  onRequestGateConnections: (
+    x: number,
+    y: number,
+    tabId: 'supplies' | 'products',
+    path: string,
+    name: string,
+    visualClass: string,
+  ) => void;
   onRenameBuilding: (x: number, y: number, newName: string) => void;
   onDeleteBuilding: (x: number, y: number) => void;
   onNavigateToBuilding: (x: number, y: number) => void;

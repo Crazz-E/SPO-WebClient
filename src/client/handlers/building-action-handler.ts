@@ -13,6 +13,8 @@ import {
   WsRespBuildingDetails,
   WsReqBuildingTabData,
   WsRespBuildingTabData,
+  WsReqBuildingGateConnections,
+  WsRespBuildingGateConnections,
   WsReqBuildingRefreshProperties,
   WsRespBuildingRefreshProperties,
   WsReqBuildingSetProperty,
@@ -32,7 +34,8 @@ import {
 import { toErrorMessage } from '../../shared/error-utils';
 import { showToast, dismissToast } from '../components/common/Toast';
 import { ClientBridge } from '../bridge/client-bridge';
-import { useBuildingStore } from '../store/building-store';
+import { useBuildingStore, gateKey } from '../store/building-store';
+import type { GateTabId } from '../store/building-store';
 import { useGameStore } from '../store/game-store';
 import { useUiStore } from '../store/ui-store';
 import type { ClientHandlerContext } from './client-context';
@@ -182,6 +185,73 @@ export async function requestTabData(
     useBuildingStore.setState((s) => ({
       tabLoadingStates: { ...s.tabLoadingStates, [tabId]: 'error' },
     }));
+  }
+}
+
+// ── Gate Connections (Lazy, one gate at a time) ─────────────────────────────
+
+/**
+ * Read one gate's connection rows.
+ *
+ * `requestTabData` above returns the Supplies/Products gates with their headers
+ * and empty connection lists — enough for the collapsed accordion. This fills a
+ * single gate in when the user opens it, which is the point of the split: a
+ * 30-gate warehouse costs 30 SetPath + 30 GetPropertyList to open the tab
+ * instead of that plus one GetSubObjectProps per connection of every gate,
+ * almost all of it for rows nobody looks at.
+ *
+ * The reference client does the same one-gate-at-a-time read and memoises it
+ * (`if reload or not Info.Loaded`, Voyager/ProdSheetForm.pas:464); here the memo
+ * is `gateLoadingStates` and the early return below.
+ */
+export async function requestGateConnections(
+  ctx: ClientHandlerContext,
+  x: number,
+  y: number,
+  tabId: GateTabId,
+  path: string,
+  name: string,
+  visualClass: string,
+): Promise<void> {
+  // Don't send requests when disconnected
+  if (useGameStore.getState().status !== 'connected') return;
+
+  const store = useBuildingStore.getState();
+
+  // Already loaded or loading — skip
+  const state = store.gateLoadingStates[gateKey(tabId, path)];
+  if (state === 'loaded' || state === 'loading') return;
+
+  ClientBridge.log('Building', `Requesting gate connections: ${tabId} '${path}' at (${x},${y})`);
+  store.setGateLoading(tabId, path);
+
+  try {
+    const req: WsReqBuildingGateConnections = {
+      type: WsMessageType.REQ_BUILDING_GATE_CONNECTIONS,
+      x,
+      y,
+      tabId,
+      path,
+      name,
+      visualClass,
+    };
+
+    const response = await ctx.sendRequest(req) as WsRespBuildingGateConnections;
+    const gate = tabId === 'supplies' ? response.supply : response.product;
+    if (!gate) {
+      // SetPath failed server-side: the gate is gone, or the shared temp object
+      // was pointed somewhere else. Nothing to merge, and retrying on every
+      // render would hammer it — mark it errored like the tab path does.
+      ClientBridge.log('Error', `Gate ${tabId} '${path}' returned no data`);
+      useBuildingStore.getState().setGateError(tabId, path);
+      return;
+    }
+    useBuildingStore.getState().mergeGateData(tabId, path, gate, x, y);
+    ClientBridge.log('Building', `Gate connections received: ${tabId} '${path}' (${gate.connections.length} rows)`);
+  } catch (err: unknown) {
+    ClientBridge.log('Error', `Failed to get gate ${tabId} '${path}': ${toErrorMessage(err)}`);
+    // Mark as error (not idle) to prevent a useEffect retry loop.
+    useBuildingStore.getState().setGateError(tabId, path);
   }
 }
 

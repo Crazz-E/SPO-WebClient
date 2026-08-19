@@ -10,6 +10,7 @@ import type { BuildingProductData } from '@/shared/types';
 import { formatCurrency } from '@/shared/building-details';
 import { useClient } from '../../context';
 import { PriceSliderWithMarker } from './PropertyTables';
+import { useGateConnections } from './useGateConnections';
 import styles from './PropertyGroup.module.css';
 
 // =============================================================================
@@ -68,7 +69,11 @@ const ProductCard = memo(function ProductCard({
   onPropertyChange: (propertyName: string, value: number, params?: Record<string, string>) => void;
 }) {
   const client = useClient();
-  const [expanded, setExpanded] = useState(false);
+  // Expansion and this gate's connection rows are one mechanism, shared with
+  // SupplyCard: opening the gate is what reads its rows.
+  const { expanded, toggle, loaded, failed } = useGateConnections(
+    'products', product.path, product.name || product.metaFluid, buildingX, buildingY,
+  );
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const quality = parseFloat(product.quality) || 0;
@@ -102,7 +107,7 @@ const ProductCard = memo(function ProductCard({
       {/* Line 1: Name + inline badges + buyer count + chevron */}
       <button
         className={styles.productHeader}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={toggle}
         title={product.lastFluid ? `Last produced: ${product.lastFluid}` : undefined}
       >
         <span className={styles.productName}>{product.name || product.metaFluid}</span>
@@ -190,12 +195,18 @@ const ProductCard = memo(function ProductCard({
             </table>
           ) : (
             <div className={styles.noConnections}>
-              {/* Same contradiction as SuppliesGroup: a non-zero cnxCount with no
-                  rows means the sub-object read came back empty, not that the
-                  building has no buyers. */}
-              {product.connectionCount > 0
-                ? `${product.connectionCount} buyer${product.connectionCount !== 1 ? 's' : ''} connected — details unavailable`
-                : 'No buyers connected'}
+              {/* Same three states as SuppliesGroup, and for the same reasons:
+                  the rows are read when the gate opens, so an empty list before
+                  that means "not read yet"; and a non-zero cnxCount with no rows
+                  after it means the sub-object read came back empty, not that
+                  the building has no buyers. */}
+              {failed
+                ? 'Could not read the buyers \u2014 close and re-open to retry'
+                : !loaded
+                  ? 'Loading buyers\u2026'
+                  : product.connectionCount > 0
+                    ? `${product.connectionCount} buyer${product.connectionCount !== 1 ? 's' : ''} connected — details unavailable`
+                    : 'No buyers connected'}
             </div>
           )}
 

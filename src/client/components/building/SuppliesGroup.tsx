@@ -10,6 +10,7 @@ import { memo, useState, useCallback, useRef } from 'react';
 import type { BuildingSupplyData, BuildingConnectionData } from '@/shared/types';
 import { formatCurrency, formatNumber } from '@/shared/building-details';
 import { useClient } from '../../context';
+import { useGateConnections } from './useGateConnections';
 import styles from './PropertyGroup.module.css';
 
 // =============================================================================
@@ -115,7 +116,11 @@ const SupplyCard = memo(function SupplyCard({
   buildingY: number;
 }) {
   const client = useClient();
-  const [expanded, setExpanded] = useState(false);
+  // Expansion and this gate's connection rows are one mechanism, shared with
+  // ProductCard: opening the gate is what reads its rows.
+  const { expanded, toggle, loaded, failed } = useGateConnections(
+    'supplies', supply.path, supply.name, buildingX, buildingY,
+  );
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [overpayTarget, setOverpayTarget] = useState<number | null>(null);
   const maxPriceTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -175,7 +180,7 @@ const SupplyCard = memo(function SupplyCard({
 
   return (
     <div className={styles.supplyCard}>
-      <button className={styles.supplyHeader} onClick={() => setExpanded((v) => !v)}>
+      <button className={styles.supplyHeader} onClick={toggle}>
         <span className={styles.supplyName}>{supply.name || supply.metaFluid}</span>
         <span className={styles.supplyCount}>
           {supply.connectionCount} supplier{supply.connectionCount !== 1 ? 's' : ''}
@@ -290,13 +295,20 @@ const SupplyCard = memo(function SupplyCard({
             </table>
           ) : (
             <div className={styles.noConnections}>
-              {supply.connectionCount > 0
-                // The server counted connections it could not describe: cnxCount
-                // comes off the gate, the rows come from a separate sub-object
-                // read that returned nothing. Claiming "no suppliers" here is
-                // the contradiction the user hit — say what is actually known.
-                ? `${supply.connectionCount} supplier${supply.connectionCount !== 1 ? 's' : ''} connected — details unavailable`
-                : 'No suppliers connected'}
+              {failed
+                ? 'Could not read the suppliers \u2014 close and re-open to retry'
+                : !loaded
+                  // Opening the gate is what reads its rows; until that lands an
+                  // empty list means "not read yet", not "none".
+                  ? 'Loading suppliers\u2026'
+                  : supply.connectionCount > 0
+                    // The server counted connections it could not describe:
+                    // cnxCount comes off the gate, the rows come from a separate
+                    // sub-object read that returned nothing. Claiming "no
+                    // suppliers" here is the contradiction the user hit — say
+                    // what is actually known.
+                    ? `${supply.connectionCount} supplier${supply.connectionCount !== 1 ? 's' : ''} connected — details unavailable`
+                    : 'No suppliers connected'}
             </div>
           )}
 
