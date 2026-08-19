@@ -1642,22 +1642,69 @@ describe('getBuildingTabData', () => {
     expect(supplies?.[0].connections).toEqual([]);
   });
 
-  it('falls back to whitespace splitting when the reply carries no tabs', async () => {
+  it('does not guess columns from a tab-less reply', async () => {
+    // This used to split on whitespace. The cache server writes one value + TAB
+    // per requested name and nothing else (Cache Server/CachedObjectWrap.pas:
+    // 225-230), so a tab-less reply is malformed, not an alternative encoding --
+    // and guessing is worse than refusing: real facility names contain spaces
+    // ("Import Storage 4", "Toy Store 3", live capture), so the guess silently
+    // shifts every column and reports a supplier that does not exist.
     const fake = makeDetailsCtx();
     setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
     cacheValues(fake, { MetaFluid: 'Cars', cnxCount: '1' });
     fake.respond((packet) => {
       if (packet.member === 'GetOutputNames') return 'res="%Gate0::\nCars"';
       if (packet.member === 'SetPath') return 'res="#-1"';
-      return 'res="%FarmA YellowInc 900 1 $12 40 50"';
+      return 'res="%Import Storage 4 YellowInc 900 1 $12 40 50"';
     });
 
     const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
 
-    expect(products?.[0].connections).toEqual([{
-      facilityName: 'FarmA', companyName: 'YellowInc', createdBy: '', price: '', overprice: '',
-      lastValue: '900', cost: '$12', quality: '', connected: true, x: 40, y: 50,
-    }]);
+    expect(products?.[0].connections).toEqual([]);
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Failing sub-index(es): 0'),
+    );
+  });
+
+  it('keeps a connection row whose columns are all empty', async () => {
+    // The live defect behind "cnxCount says 1" above an empty list. A stale
+    // sub-object cache answers with seven empty columns, and cleanPayload ends
+    // in .trim() (rdo-helpers.ts:106), so the row -- being nothing but tabs --
+    // was reduced to '' and dropped. The count and the list then disagreed with
+    // nothing said. The row must survive, blank.
+    const fake = makeDetailsCtx();
+    setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
+    cacheValues(fake, { MetaFluid: 'Cars', cnxCount: '1' });
+    fake.respond((packet) => {
+      if (packet.member === 'GetOutputNames') return 'res="%Gate0::\nCars"';
+      if (packet.member === 'SetPath') return 'res="#-1"';
+      return 'res="%\t\t\t\t\t\t\t"';
+    });
+
+    const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
+
+    expect(products?.[0].connectionCount).toBe(1);
+    expect(products?.[0].connections).toHaveLength(1);
+    expect(products?.[0].connections[0].facilityName).toBe('');
+    expect(fake.log.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('returned an empty GetSubObjectProps payload'),
+    );
+  });
+
+  it('keeps a supply row whose columns are all empty', async () => {
+    const fake = makeDetailsCtx();
+    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
+    cacheValues(fake, { MetaFluid: 'Books', cnxCount: '1' });
+    fake.respond((packet) => {
+      if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
+      if (packet.member === 'SetPath') return 'res="#-1"';
+      return 'res="%\t\t\t\t\t\t\t\t\t\t\t"';
+    });
+
+    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
+
+    expect(supplies?.[0].connectionCount).toBe(1);
+    expect(supplies?.[0].connections).toHaveLength(1);
   });
 
   it('returns no connections when the sub-object read fails', async () => {

@@ -1560,11 +1560,41 @@ async function fetchSubObjectProperties(
       'GetSubObjectProps', tempObjectId, RdoValue.int(subIndex), RdoValue.string(query),
     ).packet, undefined, TimeoutCategory.NORMAL);
 
-    const raw = cleanPayloadHelper(packet.payload || '');
-    if (raw.includes('\t')) {
-      return raw.split('\t').map(v => v.trim());
+    // Parse WITHOUT `cleanPayload`, for the reason `cacherGetPropertyList`
+    // already documents (spo_session.ts:1412-1415): cleanPayload ends in
+    // `.trim()` (rdo-helpers.ts:106), and a connection row whose columns are all
+    // empty is nothing but tabs — `res="%\t\t\t\t\t\t\t"` — so the trim reduced
+    // it to `''`, the tab test below failed, the whitespace fallback filtered
+    // everything out, and the caller's arity guard dropped the row.
+    //
+    // That is the live "cnxCount says 1, list empty" contradiction: the cache
+    // answered, we destroyed the answer. Positional alignment is the whole
+    // contract here — the Delphi server writes one value + TAB per requested
+    // name whether or not the property exists (Cache Server/
+    // CachedObjectWrap.pas:225-230), so an empty column must survive as an
+    // empty string, not disappear.
+    const rawPayload = packet.payload || '';
+    let raw: string;
+    const resMatch = rawPayload.match(/^res="((?:[^"]|"")*)"$/);
+    if (resMatch) {
+      raw = resMatch[1].replace(/""/g, '"');
+      // Strip the type prefix, never the whitespace.
+      if (raw.length > 0 && ['#', '%', '@', '$', '^', '!', '*'].includes(raw[0])) {
+        raw = raw.substring(1);
+      }
+    } else {
+      raw = cleanPayloadHelper(rawPayload);
     }
-    return raw.split(/\s+/).map(v => v.trim()).filter(v => v.length > 0);
+
+    if (raw === '') return [];
+
+    // Trim each value (spaces, not tabs) and drop the trailing empty the final
+    // TAB produces — same shape as cacherGetPropertyList.
+    const values = raw.split('\t').map(v => v.trim());
+    if (values.length > 0 && values[values.length - 1] === '') {
+      values.pop();
+    }
+    return values;
   } catch (e: unknown) {
     ctx.log.warn(`[BuildingDetails] Error fetching sub-object ${subIndex}:`, e);
     return [];

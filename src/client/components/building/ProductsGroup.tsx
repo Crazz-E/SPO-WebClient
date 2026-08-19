@@ -167,7 +167,7 @@ const ProductCard = memo(function ProductCard({
               <tbody>
                 {product.connections.map((conn, j) => (
                   <tr
-                    key={`${conn.x},${conn.y}`}
+                    key={`${j}:${conn.x},${conn.y}`}
                     className={`${styles.productTableRow}${selectedIdx === j ? ` ${styles.productTableRowSelected}` : ''}`}
                     onClick={() => handleRowClick(j)}
                     title={conn.companyName || undefined}

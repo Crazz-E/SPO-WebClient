@@ -265,7 +265,7 @@ const SupplyCard = memo(function SupplyCard({
               <tbody>
                 {supply.connections.map((conn, j) => (
                   <tr
-                    key={`${conn.x},${conn.y}`}
+                    key={`${j}:${conn.x},${conn.y}`}
                     className={`${styles.supplyTableRow}${selectedIdx === j ? ` ${styles.supplyTableRowSelected}` : ''}`}
                     onClick={() => handleRowClick(j)}
                     onContextMenu={(e) => canEdit && handleRowContextMenu(e, j)}
