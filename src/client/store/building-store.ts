@@ -6,6 +6,8 @@ import { create } from 'zustand';
 import type {
   BuildingFocusInfo,
   BuildingDetailsResponse,
+  BuildingSupplyData,
+  BuildingProductData,
   ConnectionSearchResult,
   ResearchCategoryData,
   ResearchInventionDetails,
@@ -49,6 +51,18 @@ interface ConfirmedUpdate {
 /** Loading state for lazy tab data. */
 type TabLoadState = 'idle' | 'loading' | 'loaded' | 'error';
 
+/** The two tabs whose rows are gates loaded one at a time. */
+export type GateTabId = 'supplies' | 'products';
+
+/**
+ * Key for the per-gate maps below. A gate is identified by its tab and its
+ * Delphi path; the path is what the server needs to SetPath onto it, and it is
+ * stable across a tab reload, which the array index is not.
+ */
+export function gateKey(tabId: GateTabId, path: string): string {
+  return `${tabId}:${path}`;
+}
+
 interface BuildingState {
   // Focus
   focusedBuilding: BuildingFocusInfo | null;
@@ -64,6 +78,25 @@ interface BuildingState {
 
   // Lazy tab loading states (keyed by tab special id: 'supplies', 'products', etc.)
   tabLoadingStates: Record<string, TabLoadState>;
+
+  /**
+   * Per-gate connection-row loading states, keyed by {@link gateKey}.
+   *
+   * Opening the Supplies or Products tab loads gate HEADERS only; the rows of
+   * one gate are read when the user expands it. This map is the memo that stops
+   * a second expand from re-reading them, mirroring `Info.Loaded` in the
+   * reference client (Voyager/ProdSheetForm.pas:464).
+   */
+  gateLoadingStates: Record<string, TabLoadState>;
+
+  /**
+   * Which gates the user has open, keyed by {@link gateKey}.
+   *
+   * Lives here rather than in the card because the card unmounts whenever the
+   * tab data is replaced — an auto-refresh would otherwise silently collapse
+   * every open gate and throw away the rows just fetched for it.
+   */
+  expandedGates: Set<string>;
 
   // Ownership context (set by client.ts when showing panel)
   currentCompanyName: string;
@@ -111,6 +144,19 @@ interface BuildingState {
   setTabLoading: (tabId: string) => void;
   mergeTabData: (tabId: string, data: Partial<BuildingDetailsResponse>, forX: number, forY: number) => void;
   resetTabLoadingStates: () => void;
+  invalidateTabs: (tabIds: readonly string[]) => void;
+
+  // Lazy gate loading actions
+  setGateLoading: (tabId: GateTabId, path: string) => void;
+  setGateError: (tabId: GateTabId, path: string) => void;
+  mergeGateData: (
+    tabId: GateTabId,
+    path: string,
+    gate: BuildingSupplyData | BuildingProductData,
+    forX: number,
+    forY: number,
+  ) => void;
+  toggleGateExpanded: (tabId: GateTabId, path: string) => void;
 
   // Optimistic SET actions
   setPending: (key: string, value: string) => void;
@@ -158,6 +204,8 @@ export const useBuildingStore = create<BuildingState>((set) => ({
 
   // Lazy tab loading
   tabLoadingStates: {},
+  gateLoadingStates: {},
+  expandedGates: new Set<string>(),
 
   // Optimistic SET feedback
   pendingUpdates: new Map(),
@@ -274,6 +322,8 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       isOwner: false,
       research: null,
       tabLoadingStates: {},
+      gateLoadingStates: {},
+      expandedGates: new Set<string>(),
       pendingUpdates: new Map(),
       failedUpdates: new Map(),
       confirmedUpdates: new Map(),
@@ -290,6 +340,8 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       isOwner: false,
       research: null,
       tabLoadingStates: {},
+      gateLoadingStates: {},
+      expandedGates: new Set<string>(),
       pendingUpdates: new Map(),
       failedUpdates: new Map(),
       confirmedUpdates: new Map(),
@@ -336,8 +388,37 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       };
     }),
 
+  // Mark specific lazy tabs as needing a re-fetch, without wiping their current
+  // data. `resetTabLoadingStates` is the big hammer for an explicit refresh: it
+  // blanks every lazy tab, which is right when the whole panel reloads and wrong
+  // after a targeted mutation, where blanking makes the panel flash empty before
+  // the same data comes back. Here the stale rows stay on screen until
+  // `mergeTabData` replaces them.
+  //
+  // Clearing the load state is the whole point: `requestTabData` returns early
+  // for a tab already marked 'loaded' (building-action-handler.ts:161), so
+  // without this a connection change can never be re-read.
+  invalidateTabs: (tabIds) =>
+    set((state) => {
+      const next = { ...state.tabLoadingStates };
+      for (const id of tabIds) delete next[id];
+
+      // The per-gate memo has to go with it. Its whole job is to stop a second
+      // read of rows already held, and after a connection change those rows are
+      // exactly what is wrong — leaving the memo would freeze an open gate on
+      // the list it had before the mutation.
+      const nextGates: Record<string, TabLoadState> = {};
+      for (const [key, value] of Object.entries(state.gateLoadingStates)) {
+        if (!tabIds.some((id) => key.startsWith(`${id}:`))) nextGates[key] = value;
+      }
+      return { tabLoadingStates: next, gateLoadingStates: nextGates };
+    }),
+
   resetTabLoadingStates: () => set((state) => ({
     tabLoadingStates: {},
+    // Gate rows go with the tab data they belong to. `expandedGates` does not:
+    // the gates the user opened survive the refresh and re-read themselves.
+    gateLoadingStates: {},
     // Wipe lazy tab data so stale values aren't carried forward by setDetails
     // after an explicit refresh. The lazy useEffect will re-fetch from scratch.
     details: state.details ? {
@@ -348,6 +429,76 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       warehouseWares: undefined,
     } : null,
   })),
+
+  setGateLoading: (tabId, path) =>
+    set((state) => ({
+      gateLoadingStates: {
+        ...state.gateLoadingStates,
+        [gateKey(tabId, path)]: 'loading' as TabLoadState,
+      },
+    })),
+
+  setGateError: (tabId, path) =>
+    set((state) => ({
+      gateLoadingStates: {
+        ...state.gateLoadingStates,
+        [gateKey(tabId, path)]: 'error' as TabLoadState,
+      },
+    })),
+
+  // Replace one gate in place. Same staleness guard as `mergeTabData`: a gate
+  // read can land after the user moved to another building, and the shared
+  // Delphi temp object means the answer may even describe the new one.
+  //
+  // A gate whose path is no longer in the list is dropped rather than appended
+  // — that means the tab reloaded under the request (a warehouse ware was
+  // switched off, say), and the reply describes a gate the panel no longer has.
+  mergeGateData: (tabId, path, gate, forX, forY) =>
+    set((state) => {
+      if (!state.details) return state;
+      if (state.details.x !== forX || state.details.y !== forY) return state;
+
+      const key = gateKey(tabId, path);
+      const list = tabId === 'supplies' ? state.details.supplies : state.details.products;
+      const index = list?.findIndex((g) => g.path === path) ?? -1;
+      if (!list || index === -1) {
+        return { gateLoadingStates: { ...state.gateLoadingStates, [key]: 'loaded' as TabLoadState } };
+      }
+
+      const next = list.slice();
+      next[index] = gate as (typeof next)[number];
+
+      return {
+        details: {
+          ...state.details,
+          ...(tabId === 'supplies'
+            ? { supplies: next as BuildingSupplyData[] }
+            : { products: next as BuildingProductData[] }),
+        },
+        gateLoadingStates: { ...state.gateLoadingStates, [key]: 'loaded' as TabLoadState },
+      };
+    }),
+
+  // Collapsing does NOT drop the rows or the 'loaded' mark: re-opening the same
+  // gate should cost nothing, which is the whole point of the memo.
+  //
+  // Re-opening a gate whose read FAILED does clear the mark, and that is the
+  // retry: the loader treats 'error' as terminal so a broken gate cannot spin
+  // on every render, which leaves closing and re-opening as the way back.
+  toggleGateExpanded: (tabId, path) =>
+    set((state) => {
+      const key = gateKey(tabId, path);
+      const next = new Set(state.expandedGates);
+      const opening = !next.delete(key);
+      if (opening) next.add(key);
+
+      if (opening && state.gateLoadingStates[key] === 'error') {
+        const nextGates = { ...state.gateLoadingStates };
+        delete nextGates[key];
+        return { expandedGates: next, gateLoadingStates: nextGates };
+      }
+      return { expandedGates: next };
+    }),
 
   // Optimistic SET actions
   setPending: (key, value) =>

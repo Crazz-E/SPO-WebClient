@@ -10,6 +10,21 @@ import { ProductsPanel } from '../ProductsGroup';
 import { SuppliesPanel } from '../SuppliesGroup';
 import type { CompInputData, BuildingProductData, BuildingSupplyData, BuildingConnectionData } from '@/shared/types';
 import { fireEvent, screen } from '@testing-library/react';
+import { useBuildingStore, gateKey } from '../../../store/building-store';
+
+/**
+ * Mark a gate's connection rows as already read.
+ *
+ * The panels load a gate's rows when it is expanded, so an empty `connections`
+ * on a gate nobody has read yet means "not read yet", not "none" — the panel
+ * says so, and that is a different message from the ones below. These cases are
+ * about what a gate reads like AFTER its rows came back, so they say so.
+ */
+function markGateLoaded(tabId: 'supplies' | 'products', path: string): void {
+  useBuildingStore.setState((state) => ({
+    gateLoadingStates: { ...state.gateLoadingStates, [gateKey(tabId, path)]: 'loaded' },
+  }));
+}
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -262,12 +277,28 @@ describe('ProductsPanel', () => {
 
   it('shows "No buyers connected" when expanded with no connections', () => {
     const product = makeProduct({ connections: [], connectionCount: 0 });
+    markGateLoaded('products', product.path);
     const { container } = renderWithProviders(
       <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
     );
 
     fireEvent.click(container.querySelector('button') as HTMLButtonElement);
     expect(container.textContent).toContain('No buyers connected');
+  });
+
+  it('does not claim "No buyers" when the server counted some it could not describe', () => {
+    // cnxCount comes off the gate, the rows come from a separate sub-object read.
+    // When that read returns nothing the two disagree, and "No buyers connected"
+    // is the one thing we know to be false.
+    const product = makeProduct({ connections: [], connectionCount: 2 });
+    markGateLoaded('products', product.path);
+    const { container } = renderWithProviders(
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
+    );
+
+    fireEvent.click(container.querySelector('button') as HTMLButtonElement);
+    expect(container.textContent).toContain('2 buyers connected — details unavailable');
+    expect(container.textContent).not.toContain('No buyers connected');
   });
 
   it('shows Hire and Remove buttons when canEdit', () => {
@@ -447,12 +478,44 @@ describe('SuppliesPanel', () => {
 
   it('shows "No suppliers connected" when no connections', () => {
     const supply = makeSupply({ connections: [], connectionCount: 0 });
+    markGateLoaded('supplies', supply.path);
     const { container } = renderWithProviders(
       <SuppliesPanel supplies={[supply]} canEdit={true} buildingX={100} buildingY={200} />,
     );
 
     fireEvent.click(container.querySelector('button') as HTMLButtonElement);
     expect(container.textContent).toContain('No suppliers connected');
+  });
+
+  it('labels a connection the server counts but cannot name', () => {
+    // The live case: cnxCount says 1, the cached sub-object carries no facility
+    // name, so every column comes back empty. The row must stay and must read as
+    // "no data" rather than as a blank the user mistakes for a rendering bug.
+    const supply = makeSupply({
+      connectionCount: 1,
+      connections: [makeConnection({ facilityName: '', companyName: '' })],
+    });
+    const { container } = renderWithProviders(
+      <SuppliesPanel supplies={[supply]} canEdit={true} buildingX={100} buildingY={200} />,
+    );
+
+    fireEvent.click(container.querySelector('button') as HTMLButtonElement);
+    expect(container.querySelector('table')).toBeTruthy();
+    expect(container.textContent).toContain('no data');
+  });
+
+  it('does not claim "No suppliers" when the header counts one', () => {
+    // The reported contradiction, pinned: header "1 supplier", body "No
+    // suppliers connected". Whatever else is wrong, the panel must not say both.
+    const supply = makeSupply({ connections: [], connectionCount: 1 });
+    markGateLoaded('supplies', supply.path);
+    const { container } = renderWithProviders(
+      <SuppliesPanel supplies={[supply]} canEdit={true} buildingX={100} buildingY={200} />,
+    );
+
+    fireEvent.click(container.querySelector('button') as HTMLButtonElement);
+    expect(container.textContent).toContain('1 supplier connected — details unavailable');
+    expect(container.textContent).not.toContain('No suppliers connected');
   });
 
   it('shows Hire, Modify, Fire buttons when canEdit', () => {

@@ -1867,3 +1867,11 @@
   padding: 1px 8px;
   font-size: 10px;
 }
+
+/* A connection the server counts but cannot describe: its cached sub-object
+   carries no facility name. The row must stay — the count says it exists — but
+   it has to read as "no data", not as a rendering glitch. */
+.unnamedConnection {
+  color: var(--text-disabled);
+  font-style: italic;
+}

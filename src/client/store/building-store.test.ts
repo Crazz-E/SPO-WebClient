@@ -768,4 +768,56 @@ describe('Building Store — Lazy tab data preservation', () => {
     useBuildingStore.getState().setDetails(refreshed);
     expect(useBuildingStore.getState().details!.products).toBeUndefined();
   });
+
+  it('invalidateTabs clears the load state so requestTabData will run again', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().mergeTabData(
+      'supplies', { supplies: mockSupplies as never }, 100, 200,
+    );
+    expect(useBuildingStore.getState().tabLoadingStates['supplies']).toBe('loaded');
+
+    useBuildingStore.getState().invalidateTabs(['supplies']);
+
+    // 'loaded' is exactly what makes requestTabData return early
+    // (building-action-handler.ts:161), so clearing the key is the whole point.
+    expect(useBuildingStore.getState().tabLoadingStates['supplies']).toBeUndefined();
+  });
+
+  it('invalidateTabs keeps the current rows on screen, unlike resetTabLoadingStates', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().mergeTabData(
+      'supplies', { supplies: mockSupplies as never }, 100, 200,
+    );
+
+    useBuildingStore.getState().invalidateTabs(['supplies']);
+
+    // The distinction that justifies a second action: after a targeted mutation
+    // the panel must not flash empty while the same data comes back.
+    expect(useBuildingStore.getState().details!.supplies).toBe(mockSupplies);
+  });
+
+  it('invalidateTabs leaves tabs it was not given alone', () => {
+    const details = makeBuildingDetails(100, 200);
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().mergeTabData(
+      'products', { products: mockProducts as never }, 100, 200,
+    );
+    useBuildingStore.getState().mergeTabData(
+      'compInputs', { compInputs: [{ name: 'x' }] as never }, 100, 200,
+    );
+
+    useBuildingStore.getState().invalidateTabs(['products']);
+
+    expect(useBuildingStore.getState().tabLoadingStates['products']).toBeUndefined();
+    expect(useBuildingStore.getState().tabLoadingStates['compInputs']).toBe('loaded');
+  });
+
+  it('invalidateTabs is a no-op for a tab that was never loaded', () => {
+    useBuildingStore.getState().setDetails(makeBuildingDetails(100, 200));
+
+    expect(() => useBuildingStore.getState().invalidateTabs(['supplies', 'products'])).not.toThrow();
+    expect(useBuildingStore.getState().tabLoadingStates).toEqual({});
+  });
 });

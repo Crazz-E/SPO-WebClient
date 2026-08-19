@@ -269,7 +269,27 @@ export class StarpeaceSession extends EventEmitter {
   private virtualDate: number | null = null; // Server virtual date (Double)
   public accountMoney: string | null = null; // Account money (can be very large)
   public failureLevel: number | null = null; // Company status (0 = nominal, >0 = in debt)
-  public fTycoonProxyId: number | null = null; // Tycoon proxy ID (IS-local handle, NOT valid on World server)
+  /**
+   * The model server's pointer to our TTycoon, pushed by InitClient.
+   *
+   * This is the id every model-server member that dereferences a tycoon wants —
+   * `RDOGetTycoon` returns `integer(Tycoon)` (Kernel/World.pas:3827), the
+   * Interface Server keeps it as fTycoonProxyId (InterfaceServer.pas:3225) and
+   * pushes it as InitClient's 4th argument (:1835), and Voyager hands it
+   * straight back through `getTycoonId` (ServerCnxHandler.pas:2419-2421).
+   *
+   * Do not confuse it with {@link tycoonId}, which is the persistent
+   * `TTycoon.Id` read off the Interface Server's ClientView
+   * (InterfaceServer.pas:128,3237). That one belongs to the Interface Server
+   * members that take a tycoon id by value (GetTycoonCookie, SetTycoonCookie,
+   * CloneFacility, PickEvent); using it where a pointer is expected costs a
+   * silent no-op, because the resulting access violation is swallowed
+   * server-side (e.g. Kernel/Kernel.pas:4576-4578).
+   *
+   * The previous note here claimed the opposite — "IS-local handle, NOT valid on
+   * World server" — and it is what put the wrong id on RDOConnectToTycoon.
+   */
+  public fTycoonProxyId: number | null = null;
 
   // RefreshTycoon push data (updated periodically by server)
   public lastRanking: number = 0;
@@ -2927,6 +2947,25 @@ private handlePush(socketName: string, packet: RdoPacket) {
     warehouseWares?: import('../shared/types').WarehouseWareData[];
   }> {
     return buildingDetailsHandler.getBuildingTabData(this, x, y, tabId, visualClass);
+  }
+
+  /**
+   * One gate's connection rows, read on demand when the user opens it.
+   * The tab request above deliberately returns gates with empty connection
+   * lists; this is the other half.
+   */
+  public async getBuildingGateConnections(
+    x: number,
+    y: number,
+    tabId: 'supplies' | 'products',
+    path: string,
+    name: string,
+    visualClass?: string,
+  ): Promise<{
+    supply?: import('../shared/types').BuildingSupplyData;
+    product?: import('../shared/types').BuildingProductData;
+  }> {
+    return buildingDetailsHandler.getBuildingGateConnections(this, x, y, tabId, path, name, visualClass);
   }
 
   public async refreshBuildingProperties(x: number, y: number, visualClass: string, activeTabId?: string): Promise<BuildingDetailsResponse> {

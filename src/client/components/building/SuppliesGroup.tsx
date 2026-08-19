@@ -10,6 +10,7 @@ import { memo, useState, useCallback, useRef } from 'react';
 import type { BuildingSupplyData, BuildingConnectionData } from '@/shared/types';
 import { formatCurrency, formatNumber } from '@/shared/building-details';
 import { useClient } from '../../context';
+import { useGateConnections } from './useGateConnections';
 import styles from './PropertyGroup.module.css';
 
 // =============================================================================
@@ -32,8 +33,11 @@ export function SuppliesPanel({
   }
   return (
     <div className={styles.supplyList}>
-      {supplies.map((supply, i) => (
-        <SupplyCard key={supply.metaFluid || i} supply={supply} canEdit={canEdit} buildingX={buildingX} buildingY={buildingY} />
+      {/* Keyed by path, not metaFluid: the fluid id lives in the gate header,
+          which is not read until the gate is opened. The path comes from
+          GetInputNames and is there from the start. */}
+      {supplies.map((supply) => (
+        <SupplyCard key={supply.path} supply={supply} canEdit={canEdit} buildingX={buildingX} buildingY={buildingY} />
       ))}
     </div>
   );
@@ -58,9 +62,16 @@ function OverpaymentPopover({
   const initialOverprice = parseInt(conn.overprice || '0', 10);
   const [overprice, setOverprice] = useState(isNaN(initialOverprice) ? 0 : initialOverprice);
 
+  // The fluid id comes off the gate header, which is only read once the gate is
+  // opened — and this popover only exists inside an opened gate. The guard is
+  // what keeps a malformed SET (fluidId: undefined) off the wire if that ever
+  // stops being true.
+  const fluidId = supply.metaFluid;
+
   const handleOk = () => {
+    if (!fluidId) return;
     client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetInputOverPrice', String(overprice), {
-      fluidId: supply.metaFluid,
+      fluidId,
       index: String(connIndex),
     });
     client.onRefreshBuilding(buildingX, buildingY);
@@ -68,7 +79,8 @@ function OverpaymentPopover({
   };
 
   const handleDelete = () => {
-    client.onDisconnectConnection(buildingX, buildingY, supply.metaFluid, 'input', conn.x, conn.y);
+    if (!fluidId) return;
+    client.onDisconnectConnection(buildingX, buildingY, fluidId, 'input', conn.x, conn.y);
     onClose();
   };
 
@@ -115,7 +127,11 @@ const SupplyCard = memo(function SupplyCard({
   buildingY: number;
 }) {
   const client = useClient();
-  const [expanded, setExpanded] = useState(false);
+  // Expansion and this gate's connection rows are one mechanism, shared with
+  // ProductCard: opening the gate is what reads its rows.
+  const { expanded, toggle, loaded, failed } = useGateConnections(
+    'supplies', supply.path, supply.name, buildingX, buildingY,
+  );
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [overpayTarget, setOverpayTarget] = useState<number | null>(null);
   const maxPriceTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -126,30 +142,39 @@ const SupplyCard = memo(function SupplyCard({
   const [localMaxPrice, setLocalMaxPrice] = useState(isNaN(currentMaxPrice) ? 200 : currentMaxPrice);
   const [localMinK, setLocalMinK] = useState(isNaN(currentMinK) ? 0 : currentMinK);
 
+  // Every mutation below addresses the gate by its fluid id, and that id is a
+  // header property — unknown until this gate has been opened and read. The
+  // controls that use it are rendered only once it is known; the guards are the
+  // second line.
+  const fluidId = supply.metaFluid;
+
   const handleMaxPriceChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
     setLocalMaxPrice(val);
     if (maxPriceTimeoutRef.current) clearTimeout(maxPriceTimeoutRef.current);
     maxPriceTimeoutRef.current = setTimeout(() => {
+      if (!fluidId) return;
       client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetInputMaxPrice', String(val), {
-        fluidId: supply.metaFluid,
+        fluidId,
       });
     }, 300);
-  }, [client, buildingX, buildingY, supply.metaFluid]);
+  }, [client, buildingX, buildingY, fluidId]);
 
   const handleMinKChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
     setLocalMinK(val);
     if (minKTimeoutRef.current) clearTimeout(minKTimeoutRef.current);
     minKTimeoutRef.current = setTimeout(() => {
+      if (!fluidId) return;
       client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetInputMinK', String(val), {
-        fluidId: supply.metaFluid,
+        fluidId,
       });
     }, 300);
-  }, [client, buildingX, buildingY, supply.metaFluid]);
+  }, [client, buildingX, buildingY, fluidId]);
 
   const handleHire = () => {
-    client.onSearchConnections(buildingX, buildingY, supply.metaFluid, supply.name, 'input');
+    if (!fluidId) return;
+    client.onSearchConnections(buildingX, buildingY, fluidId, supply.name, 'input');
   };
 
   const handleModify = () => {
@@ -157,10 +182,10 @@ const SupplyCard = memo(function SupplyCard({
   };
 
   const handleFire = () => {
-    if (selectedIdx === null) return;
+    if (selectedIdx === null || !fluidId) return;
     const conn = supply.connections[selectedIdx];
     if (!conn) return;
-    client.onDisconnectConnection(buildingX, buildingY, supply.metaFluid, 'input', conn.x, conn.y);
+    client.onDisconnectConnection(buildingX, buildingY, fluidId, 'input', conn.x, conn.y);
     setSelectedIdx(null);
   };
 
@@ -175,11 +200,16 @@ const SupplyCard = memo(function SupplyCard({
 
   return (
     <div className={styles.supplyCard}>
-      <button className={styles.supplyHeader} onClick={() => setExpanded((v) => !v)}>
+      <button className={styles.supplyHeader} onClick={toggle}>
         <span className={styles.supplyName}>{supply.name || supply.metaFluid}</span>
-        <span className={styles.supplyCount}>
-          {supply.connectionCount} supplier{supply.connectionCount !== 1 ? 's' : ''}
-        </span>
+        {/* The supplier count is a header property. Reading it for every gate
+            cost a round-trip per collapsed row; it now appears once the gate has
+            been opened. Absent is honest — `0 suppliers` would not be. */}
+        {supply.connectionCount !== undefined && (
+          <span className={styles.supplyCount}>
+            {supply.connectionCount} supplier{supply.connectionCount !== 1 ? 's' : ''}
+          </span>
+        )}
         <span className={styles.supplyChevron}>{expanded ? '\u25B2' : '\u25BC'}</span>
       </button>
 
@@ -265,7 +295,7 @@ const SupplyCard = memo(function SupplyCard({
               <tbody>
                 {supply.connections.map((conn, j) => (
                   <tr
-                    key={`${conn.x},${conn.y}`}
+                    key={`${j}:${conn.x},${conn.y}`}
                     className={`${styles.supplyTableRow}${selectedIdx === j ? ` ${styles.supplyTableRowSelected}` : ''}`}
                     onClick={() => handleRowClick(j)}
                     onContextMenu={(e) => canEdit && handleRowContextMenu(e, j)}
@@ -273,7 +303,11 @@ const SupplyCard = memo(function SupplyCard({
                     <td>
                       {conn.connected && <span className={styles.supplyConnectedIcon}>&#10003;</span>}
                     </td>
-                    <td>{conn.facilityName}</td>
+                    <td>
+                      {conn.facilityName || (
+                        <span className={styles.unnamedConnection}>no data</span>
+                      )}
+                    </td>
                     <td>{conn.companyName}</td>
                     <td>${conn.price}</td>
                     <td>{conn.overprice}%</td>
@@ -285,7 +319,22 @@ const SupplyCard = memo(function SupplyCard({
               </tbody>
             </table>
           ) : (
-            <div className={styles.noConnections}>No suppliers connected</div>
+            <div className={styles.noConnections}>
+              {failed
+                ? 'Could not read the suppliers \u2014 close and re-open to retry'
+                : !loaded
+                  // Opening the gate is what reads it; until that lands an empty
+                  // list means "not read yet", not "none".
+                  ? 'Loading suppliers\u2026'
+                  : (supply.connectionCount ?? 0) > 0
+                    // The server counted connections it could not describe:
+                    // cnxCount comes off the gate, the rows come from a separate
+                    // sub-object read that returned nothing. Claiming "no
+                    // suppliers" here is the contradiction the user hit — say
+                    // what is actually known.
+                    ? `${supply.connectionCount} supplier${supply.connectionCount !== 1 ? 's' : ''} connected — details unavailable`
+                    : 'No suppliers connected'}
+            </div>
           )}
 
           {/* Overpayment popover */}
@@ -303,7 +352,7 @@ const SupplyCard = memo(function SupplyCard({
           {/* Action buttons */}
           {canEdit && (
             <div className={styles.supplyActions}>
-              <button className={styles.hireBtn} onClick={handleHire}>Hire</button>
+              <button className={styles.hireBtn} onClick={handleHire} disabled={!fluidId}>Hire</button>
               <button
                 className={styles.modifyBtn}
                 onClick={handleModify}

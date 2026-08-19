@@ -22,8 +22,6 @@
 
 import { describe, it, expect } from '@jest/globals';
 import {
-  Semaphore,
-  computeWorkerCount,
   releaseInspector,
   getActiveInspector,
   getActiveInspectorTempObjectId,
@@ -32,6 +30,7 @@ import {
   getBuildingDetails,
   getBuildingBasicDetails,
   getBuildingTabData,
+  getBuildingGateConnections,
   refreshBuildingProperties,
 } from './building-details-handler';
 import type { ActiveInspector } from './building-details-handler';
@@ -178,109 +177,6 @@ afterEach(() => {
   delete HANDLER_TO_GROUP['probeIndexed'];
   delete HANDLER_TO_GROUP['probeBlock'];
   jest.restoreAllMocks();
-});
-
-// ===========================================================================
-// computeWorkerCount / Semaphore — pure units, exported for exactly this
-// ===========================================================================
-
-describe('computeWorkerCount', () => {
-  it('returns 1 for 1-3 slots', () => {
-    expect(computeWorkerCount(1)).toBe(1);
-    expect(computeWorkerCount(2)).toBe(1);
-    expect(computeWorkerCount(3)).toBe(1);
-  });
-
-  it('returns 2 for 4-10 slots', () => {
-    expect(computeWorkerCount(4)).toBe(2);
-    expect(computeWorkerCount(7)).toBe(2);
-    expect(computeWorkerCount(10)).toBe(2);
-  });
-
-  it('returns 3 for 11+ slots', () => {
-    expect(computeWorkerCount(11)).toBe(3);
-    expect(computeWorkerCount(20)).toBe(3);
-    expect(computeWorkerCount(50)).toBe(3);
-  });
-});
-
-describe('Semaphore', () => {
-  it('allows up to N concurrent acquisitions', async () => {
-    const sem = new Semaphore(3);
-    const log: string[] = [];
-
-    // Acquire 3 permits immediately (should not block)
-    await sem.acquire(); log.push('a1');
-    await sem.acquire(); log.push('a2');
-    await sem.acquire(); log.push('a3');
-
-    expect(log).toEqual(['a1', 'a2', 'a3']);
-  });
-
-  it('blocks the 4th acquisition until a release', async () => {
-    const sem = new Semaphore(2);
-
-    await sem.acquire();
-    await sem.acquire();
-
-    // 3rd acquire should block
-    let thirdResolved = false;
-    const thirdPromise = sem.acquire().then(() => { thirdResolved = true; });
-
-    // Flush microtasks
-    await Promise.resolve();
-    expect(thirdResolved).toBe(false);
-
-    // Release one permit — 3rd should now resolve
-    sem.release();
-    await thirdPromise;
-    expect(thirdResolved).toBe(true);
-  });
-
-  it('processes waiting queue in FIFO order', async () => {
-    const sem = new Semaphore(1);
-    const log: string[] = [];
-
-    await sem.acquire();
-
-    // Queue up 3 waiters
-    const p1 = sem.acquire().then(() => log.push('w1'));
-    const p2 = sem.acquire().then(() => log.push('w2'));
-    const p3 = sem.acquire().then(() => log.push('w3'));
-
-    // Release one at a time
-    sem.release();
-    await p1;
-    sem.release();
-    await p2;
-    sem.release();
-    await p3;
-
-    expect(log).toEqual(['w1', 'w2', 'w3']);
-  });
-
-  it('correctly recycles permits after release with no waiters', async () => {
-    const sem = new Semaphore(2);
-
-    await sem.acquire();
-    await sem.acquire();
-    sem.release();
-    sem.release();
-
-    // Should be able to acquire 2 more
-    await sem.acquire();
-    await sem.acquire();
-
-    // 5th total should block
-    let blocked = true;
-    const p = sem.acquire().then(() => { blocked = false; });
-    await Promise.resolve();
-    expect(blocked).toBe(true);
-
-    sem.release();
-    await p;
-    expect(blocked).toBe(false);
-  });
 });
 
 // ===========================================================================
@@ -1252,17 +1148,17 @@ describe('getBuildingDetails', () => {
       switch (packet.member) {
         case 'GetInputNames': return 'res="%Segment0::\nBooks"';
         case 'GetOutputNames': return 'res="%Gate0::\nCars"';
-        case 'SetPath': return 'res="#-1"';
         default: return '';
       }
     });
 
     const details = await getBuildingDetails(fake.ctx, X, Y, '9012');
 
-    expect(details.supplies).toHaveLength(1);
-    expect(details.supplies?.[0]).toMatchObject({ path: 'Segment0', name: 'Books', metaFluid: 'Books' });
-    expect(details.products).toHaveLength(1);
-    expect(details.products?.[0]).toMatchObject({ path: 'Gate0', name: 'Cars', lastFluid: '80' });
+    // The gates are listed, not read: the header properties the cache would
+    // happily answer above are never asked for, so they arrive undefined.
+    expect(details.supplies).toEqual([{ path: 'Segment0', name: 'Books', connections: [] }]);
+    expect(details.products).toEqual([{ path: 'Gate0', name: 'Cars', connections: [] }]);
+    expect(fake.sent.filter(f => f.packet.member === 'SetPath')).toHaveLength(0);
     expect(details.compInputs).toEqual([{
       name: 'Advertising', supplied: 12.5, demanded: 20, ratio: 62,
       maxDemand: 100, editable: true, units: 'units',
@@ -1298,25 +1194,6 @@ describe('getBuildingDetails', () => {
     expect(details.warehouseWares).toEqual([{ name: 'Books', enabled: false, index: 0 }]);
   });
 
-  it('drops the gates whose SetPath was refused on the legacy path too', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    registerTabs('9024', ['Supplies', 'Products']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return 'res="%A::\nBooks"';
-      if (packet.member === 'GetOutputNames') return 'res="%B::\nCars"';
-      if (packet.member === 'SetPath') return 'res="#0"'; // WordBool FALSE
-      return '';
-    });
-
-    const details = await getBuildingDetails(fake.ctx, X, Y, '9024');
-
-    expect(details.supplies).toEqual([]);
-    expect(details.products).toEqual([]);
-  });
-
   it('leaves the lazy fields undefined when the template declares no such tab', async () => {
     const fake = makeDetailsCtx();
     withInFlightMap(fake);
@@ -1332,53 +1209,6 @@ describe('getBuildingDetails', () => {
     expect(details.warehouseWares).toBeUndefined();
   });
 
-  it('keeps the supplies it could read when one gate fails', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    registerTabs('9013', ['Supplies']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, { MetaFluid: 'Books', cnxCount: '0' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return 'res="%A::\nBooks\r\nB::\nCars"';
-      if (packet.member === 'SetPath') {
-        return packet.args?.[0] === RdoValue.string('B').format()
-          ? new Error('Request timeout: SetPath')
-          : 'res="#-1"';
-      }
-      return '';
-    });
-
-    const details = await getBuildingDetails(fake.ctx, X, Y, '9013');
-
-    expect(details.supplies?.map(s => s.path)).toEqual(['A']);
-    expect(fake.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Error fetching supply B'), expect.anything()
-    );
-  });
-
-  it('keeps the products it could read when one gate fails', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    registerTabs('9014', ['Products']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, { MetaFluid: 'Cars', cnxCount: '0' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetOutputNames') return 'res="%A::\nCars\r\nB::\nToys"';
-      if (packet.member === 'SetPath') {
-        return packet.args?.[0] === RdoValue.string('B').format()
-          ? new Error('Request timeout: SetPath')
-          : 'res="#-1"';
-      }
-      return '';
-    });
-
-    const details = await getBuildingDetails(fake.ctx, X, Y, '9014');
-
-    expect(details.products?.map(p => p.path)).toEqual(['A']);
-    expect(fake.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Error fetching product B'), expect.anything()
-    );
-  });
 });
 
 // ===========================================================================
@@ -1511,9 +1341,10 @@ describe('getBuildingTabData', () => {
     expect(await getBuildingTabData(fake.ctx, X, Y, 'supplies')).toEqual({});
   });
 
-  it('reads a supply gate and its connections through one temp object', async () => {
+  it('lists a supply gate and reads nothing whatsoever about it', async () => {
     const fake = makeDetailsCtx();
     setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
+    // The cache would answer every header property. Nothing asks it to.
     cacheValues(fake, {
       MetaFluid: 'Fresh Food', FluidValue: '1200', LastCostPerc: '85', minK: '30',
       MaxPrice: '150', QPSorted: '1', SortMode: '0', cnxCount: '1', ObjectId: '40133999',
@@ -1521,161 +1352,18 @@ describe('getBuildingTabData', () => {
     fake.respond((packet) => {
       if (packet.member === 'GetInputNames') return 'res="%Seg0::\nFresh Food"';
       if (packet.member === 'SetPath') return 'res="#-1"';
-      if (packet.member === 'GetSubObjectProps') {
-        return 'res="%Farm A\tSPO_test3\tYellow Inc.\t100\t10\t900\t$12\t95%\t1\t40\t50\t"';
-      }
       return '';
     });
 
     const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
 
-    expect(supplies).toHaveLength(1);
-    expect(supplies?.[0]).toEqual({
-      path: 'Seg0',
-      name: 'Fresh Food',
-      metaFluid: 'Fresh Food',
-      fluidValue: '1200',
-      lastCostPerc: '85',
-      minK: '30',
-      maxPrice: '150',
-      qpSorted: '1',
-      sortMode: '0',
-      connectionCount: 1,
-      connections: [{
-        facilityName: 'Farm A', createdBy: 'SPO_test3', companyName: 'Yellow Inc.',
-        price: '100', overprice: '10', lastValue: '900', cost: '$12', quality: '95%',
-        connected: true, x: 40, y: 50,
-      }],
-    });
-    // SetPath goes to the SAME object the inspector owns — §4bis.
-    const setPath = fake.sent.find(s => s.packet.member === 'SetPath');
-    expect(setPath?.packet.targetId).toBe(FIRST_TEMP);
-    expect(setPath?.packet.args).toEqual([RdoValue.string('Seg0').format()]);
-    expect(setPath?.category).toBe(TimeoutCategory.SLOW);
-  });
-
-  it('skips a gate whose SetPath was refused', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
-      if (packet.member === 'SetPath') return 'res="#0"'; // Delphi WordBool FALSE
-      return '';
-    });
-
-    expect((await getBuildingTabData(fake.ctx, X, Y, 'supplies')).supplies).toEqual([]);
-  });
-
-  it('keeps the supply gates it could read when one fails, single-worker path', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return 'res="%A::\nBooks\r\nB::\nCars"';
-      if (packet.member === 'SetPath') {
-        return packet.args?.[0] === RdoValue.string('B').format()
-          ? new Error('Request timeout: SetPath')
-          : 'res="#-1"';
-      }
-      return '';
-    });
-
-    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-    expect(supplies?.map(s => s.path)).toEqual(['A']);
-    expect(fake.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Error fetching supply B'), expect.anything()
-    );
-  });
-
-  it('keeps the product gates it could read when one fails, single-worker path', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
-    cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetOutputNames') return 'res="%A::\nCars\r\nB::\nToys"';
-      if (packet.member === 'SetPath') {
-        return packet.args?.[0] === RdoValue.string('B').format()
-          ? new Error('Request timeout: SetPath')
-          : 'res="#-1"';
-      }
-      return '';
-    });
-
-    const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
-
-    expect(products?.map(p => p.path)).toEqual(['A']);
-    expect(fake.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Error fetching product B'), expect.anything()
-    );
-  });
-
-  it('caps the connection sweep at 20 however many the gate claims', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    cacheValues(fake, { MetaFluid: 'Books', cnxCount: '75' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
-      if (packet.member === 'SetPath') return 'res="#-1"';
-      return 'res="%a\tb\tc\td\te\tf\tg\th\t1\t0\t0\t"';
-    });
-
-    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-    expect(supplies?.[0].connectionCount).toBe(75); // reported as the server said
-    expect(supplies?.[0].connections).toHaveLength(20); // but only 20 were read
-    expect(fake.sent.filter(s => s.packet.member === 'GetSubObjectProps')).toHaveLength(20);
-  });
-
-  it('drops a connection row the server answered short', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    cacheValues(fake, { MetaFluid: 'Books', cnxCount: '1' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
-      if (packet.member === 'SetPath') return 'res="#-1"';
-      return 'res="%only\ttwo\t"'; // fewer than the 11 columns a supply needs
-    });
-
-    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-    expect(supplies?.[0].connections).toEqual([]);
-  });
-
-  it('falls back to whitespace splitting when the reply carries no tabs', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
-    cacheValues(fake, { MetaFluid: 'Cars', cnxCount: '1' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetOutputNames') return 'res="%Gate0::\nCars"';
-      if (packet.member === 'SetPath') return 'res="#-1"';
-      return 'res="%FarmA YellowInc 900 1 $12 40 50"';
-    });
-
-    const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
-
-    expect(products?.[0].connections).toEqual([{
-      facilityName: 'FarmA', companyName: 'YellowInc', createdBy: '', price: '', overprice: '',
-      lastValue: '900', cost: '$12', quality: '', connected: true, x: 40, y: 50,
-    }]);
-  });
-
-  it('returns no connections when the sub-object read fails', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    cacheValues(fake, { MetaFluid: 'Books', cnxCount: '1' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
-      if (packet.member === 'SetPath') return 'res="#-1"';
-      return new Error('Request timeout: GetSubObjectProps');
-    });
-
-    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-    expect(supplies?.[0].connections).toEqual([]);
-    expect(fake.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Error fetching sub-object 0'), expect.anything()
-    );
+    // path and name come from GetInputNames; everything else is undefined,
+    // which the panel renders as "not read yet" rather than as a zero.
+    expect(supplies).toEqual([{ path: 'Seg0', name: 'Fresh Food', connections: [] }]);
+    expect(supplies?.[0].connectionCount).toBeUndefined();
+    expect(supplies?.[0].metaFluid).toBeUndefined();
+    expect(fake.sent.filter(f => f.packet.member === 'SetPath')).toHaveLength(0);
+    expect(fake.cacher.getPropertyList).not.toHaveBeenCalled();
   });
 
   // A packet with no payload at all is what a truncated or dropped frame
@@ -1699,127 +1387,9 @@ describe('getBuildingTabData', () => {
       expect((await getBuildingTabData(fake.ctx, X, Y, 'products')).products).toEqual([]);
     });
 
-    it('treats a payload-less SetPath as a refusal, on both gate kinds', async () => {
-      for (const tab of ['supplies', 'products'] as const) {
-        const fake = makeDetailsCtx();
-        setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true, hasProducts: true }));
-        fake.respond((packet) => {
-          if (packet.member === 'GetInputNames' || packet.member === 'GetOutputNames') {
-            return 'res="%Seg0::\nBooks"';
-          }
-          return NO_PAYLOAD; // SetPath
-        });
-
-        const data = await getBuildingTabData(fake.ctx, X, Y, tab);
-
-        expect(data.supplies ?? data.products).toEqual([]);
-      }
-    });
-
-    it('reads no connections from a payload-less GetSubObjectProps', async () => {
-      const fake = makeDetailsCtx();
-      setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-      cacheValues(fake, { MetaFluid: 'Books', cnxCount: '1' });
-      fake.respond((packet) => {
-        if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
-        if (packet.member === 'SetPath') return 'res="#-1"';
-        return NO_PAYLOAD;
-      });
-
-      const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-      expect(supplies?.[0].connections).toEqual([]);
-    });
-
-    it('reads a gate with no cnxCount as having no connections', async () => {
-      const fake = makeDetailsCtx();
-      setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-      cacheValues(fake, {}); // MetaFluid and cnxCount both answer empty
-      fake.respond((packet) => {
-        if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
-        if (packet.member === 'SetPath') return 'res="#-1"';
-        return '';
-      });
-
-      const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-      expect(supplies?.[0].connectionCount).toBe(0);
-      expect(supplies?.[0].metaFluid).toBe('');
-      expect(supplies?.[0].maxPrice).toBeUndefined(); // empty reads as absent
-    });
-
-    it('reads a product gate with no cnxCount as having no connections', async () => {
-      const fake = makeDetailsCtx();
-      setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
-      cacheValues(fake, {});
-      fake.respond((packet) => {
-        if (packet.member === 'GetOutputNames') return 'res="%Gate0::\nCars"';
-        if (packet.member === 'SetPath') return 'res="#-1"';
-        return '';
-      });
-
-      const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
-
-      expect(products?.[0].connectionCount).toBe(0);
-      expect(products?.[0].metaFluid).toBe('');
-    });
   });
 
-  describe('connection rows with empty columns', () => {
-    it('substitutes the documented defaults for every blank supply column', async () => {
-      const fake = makeDetailsCtx();
-      setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-      cacheValues(fake, { MetaFluid: 'Books', cnxCount: '1' });
-      fake.respond((packet) => {
-        if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
-        if (packet.member === 'SetPath') return 'res="#-1"';
-        // 12 columns: only the first and last carry text, so columns 1-10 blank.
-        return `res="%head${'\t'.repeat(11)}tail"`;
-      });
-
-      const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-      expect(supplies?.[0].connections).toEqual([{
-        facilityName: 'head', createdBy: '', companyName: '', price: '0', overprice: '0',
-        lastValue: '', cost: '$0', quality: '0%', connected: false, x: 0, y: 0,
-      }]);
-    });
-
-    it('substitutes the documented defaults for every blank product column', async () => {
-      const fake = makeDetailsCtx();
-      setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
-      cacheValues(fake, { MetaFluid: 'Cars', cnxCount: '1' });
-      fake.respond((packet) => {
-        if (packet.member === 'GetOutputNames') return 'res="%Gate0::\nCars"';
-        if (packet.member === 'SetPath') return 'res="#-1"';
-        return `res="%head${'\t'.repeat(7)}tail"`;
-      });
-
-      const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
-
-      expect(products?.[0].connections).toEqual([{
-        facilityName: 'head', companyName: '', createdBy: '', price: '', overprice: '',
-        lastValue: '', cost: '', quality: '', connected: false, x: 0, y: 0,
-      }]);
-    });
-
-    it('drops a product connection row the server answered short', async () => {
-      const fake = makeDetailsCtx();
-      setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
-      cacheValues(fake, { MetaFluid: 'Cars', cnxCount: '1' });
-      fake.respond((packet) => {
-        if (packet.member === 'GetOutputNames') return 'res="%Gate0::\nCars"';
-        if (packet.member === 'SetPath') return 'res="#-1"';
-        return 'res="%only\ttwo\t"'; // fewer than the 7 columns a product needs
-      });
-
-      const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
-
-      expect(products?.[0].connections).toEqual([]);
-    });
-  });
-
-  it('reads a product gate with its own column set', async () => {
+  it('lists a product gate the same way, through GetOutputNames alone', async () => {
     const fake = makeDetailsCtx();
     setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
     cacheValues(fake, {
@@ -1828,28 +1398,13 @@ describe('getBuildingTabData', () => {
     });
     fake.respond((packet) => {
       if (packet.member === 'GetOutputNames') return 'res="%Gate0::\nCars"';
-      if (packet.member === 'SetPath') return 'res="#-1"';
       return '';
     });
 
     const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
 
-    expect(products?.[0]).toEqual({
-      path: 'Gate0', name: 'Cars', metaFluid: 'Cars', lastFluid: '80', quality: '90%',
-      pricePc: '110', avgPrice: '$4', marketPrice: '$5', connectionCount: 0, connections: [],
-    });
-  });
-
-  it('skips a product gate whose SetPath was refused', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
-    fake.respond((packet) => {
-      if (packet.member === 'GetOutputNames') return 'res="%Gate0::\nCars"';
-      if (packet.member === 'SetPath') return 'res="#0"';
-      return '';
-    });
-
-    expect((await getBuildingTabData(fake.ctx, X, Y, 'products')).products).toEqual([]);
+    expect(products).toEqual([{ path: 'Gate0', name: 'Cars', connections: [] }]);
+    expect(fake.cacher.getPropertyList).not.toHaveBeenCalled();
   });
 
   describe('warehouse gates', () => {
@@ -2126,186 +1681,494 @@ describe('getBuildingTabData', () => {
     // SetObject and its GetInputNames — that is the SetPath race it exists for.
     expect(order).toEqual(['GetInputNames', 'GetOutputNames']);
   });
+  /**
+   * THE OPTIMISATION, stated as a budget.
+   *
+   * Opening the tab used to cost, per gate, a SetPath, a GetPropertyList AND one
+   * GetSubObjectProps per connection — on a live 30-gate warehouse (Export
+   * Storage 4 at 924/820) that measured 162 round-trips in 32.4 s. Deferring the
+   * connection rows removed 91 of them; deferring the headers removes the other
+   * 60, because the accordion draws every gate COLLAPSED and a collapsed row has
+   * nothing to say that a header would fill in.
+   *
+   * What is left is the one call that names the gates —
+   * `UpdateFingersToList` does exactly this and no more
+   * (Voyager/ProdSheetForm.pas:274-297) — and everything else waits for a click.
+   */
+  describe('the tab read is one call', () => {
+    const THIRTY = Array.from({ length: 30 }, (_, i) => `Seg${i}::\nWare${i}`).join('\r\n');
+
+    function warehouseCtx(kind: 'supplies' | 'products'): FakeSessionCtx {
+      const fake = makeDetailsCtx();
+      setActiveInspectorForTest(fake.ctx, makeInspector({
+        hasSupplies: kind === 'supplies', hasProducts: kind === 'products',
+      }));
+      // Every gate would answer a header and claim connections. Nothing asks.
+      cacheValues(fake, { MetaFluid: 'Ware', cnxCount: '3' });
+      fake.respond((packet) => {
+        if (packet.member === 'GetInputNames' || packet.member === 'GetOutputNames') {
+          return `res="%${THIRTY}"`;
+        }
+        if (packet.member === 'SetPath') return 'res="#-1"';
+        return '';
+      });
+      return fake;
+    }
+
+    it.each(['supplies', 'products'] as const)(
+      'touches no gate at all when opening %s',
+      async (kind) => {
+        const fake = warehouseCtx(kind);
+
+        const data = await getBuildingTabData(fake.ctx, X, Y, kind);
+        const gates = data.supplies ?? data.products ?? [];
+
+        expect(gates).toHaveLength(30);
+        expect(fake.sent.filter(s => s.packet.member === 'SetPath')).toHaveLength(0);
+        expect(fake.sent.filter(s => s.packet.member === 'GetSubObjectProps')).toHaveLength(0);
+        expect(fake.cacher.getPropertyList).not.toHaveBeenCalled();
+        // Undefined, not zero: nothing was read, and the panel says so.
+        expect(gates.every(g => g.connectionCount === undefined)).toBe(true);
+        expect(gates.every(g => g.connections.length === 0)).toBe(true);
+      },
+    );
+
+    it.each(['supplies', 'products'] as const)(
+      'spends exactly one round-trip on %s, whatever the gate count',
+      async (kind) => {
+        const fake = warehouseCtx(kind);
+
+        await getBuildingTabData(fake.ctx, X, Y, kind);
+
+        const listCalls = fake.sent.filter(
+          s => s.packet.member === 'GetInputNames' || s.packet.member === 'GetOutputNames',
+        );
+        expect(listCalls).toHaveLength(1);
+        // One call for 30 gates, where the first cut spent 61 and the original
+        // shape spent 61 + one per connection.
+        expect(fake.sent.length + fake.cacher.getPropertyList.mock.calls.length).toBe(1);
+      },
+    );
+  });
+
 });
 
 // ===========================================================================
-// WORKER POOL — parallel gate reads
+// getBuildingGateConnections — the rows behind a click
+//
+// The tab read above stops at the gate headers. Everything a connection row is
+// made of lives here, on the one-gate-at-a-time path the reference client uses
+// (`LoadFingerInfo`, Voyager/SupplySheetForm.pas:440-506).
 // ===========================================================================
 
-describe('the worker pool', () => {
-  /** N gate entries, so `computeWorkerCount` picks the intended worker count. */
-  function gates(n: number): string {
-    return Array.from({ length: n }, (_, i) => `Seg${i}::\nWare${i}`).join('\r\n');
+describe('getBuildingGateConnections', () => {
+  /** Answer as a healthy gate would, with `rows` as the GetSubObjectProps reply. */
+  function gateCtx(
+    kind: 'supplies' | 'products',
+    props: Record<string, string>,
+    rows: string | Error | RdoPacket,
+  ): FakeSessionCtx {
+    const fake = makeDetailsCtx();
+    setActiveInspectorForTest(fake.ctx, makeInspector({
+      hasSupplies: kind === 'supplies', hasProducts: kind === 'products',
+    }));
+    cacheValues(fake, props);
+    fake.respond((packet) => {
+      if (packet.member === 'SetPath') return 'res="#-1"';
+      if (packet.member === 'GetSubObjectProps') return rows;
+      return '';
+    });
+    return fake;
   }
 
-  it('stays on the inspector object while a single worker suffices', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return `res="%${gates(3)}"`;
-      if (packet.member === 'SetPath') return 'res="#-1"';
-      return '';
-    });
+  it("reads one gate on the inspector's own object: SetPath, header, then rows", async () => {
+    const fake = gateCtx('supplies', {
+      MetaFluid: 'Fresh Food', FluidValue: '1200', LastCostPerc: '85', minK: '30',
+      MaxPrice: '150', QPSorted: '1', SortMode: '0', cnxCount: '1', ObjectId: '40133999',
+    }, 'res="%Farm A\tSPO_test3\tYellow Inc.\t100\t10\t900\t$12\t95%\t1\t40\t50\t"');
 
-    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-    expect(supplies).toHaveLength(3);
-    expect(fake.cacher.createObject).not.toHaveBeenCalled(); // no pool at all
-    expect(fake.sent.filter(s => s.packet.member === 'SetPath')
-      .every(s => s.packet.targetId === FIRST_TEMP)).toBe(true);
-  });
-
-  it('opens one temp object per worker and closes them all afterwards', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return `res="%${gates(12)}"`;
-      if (packet.member === 'SetPath') return 'res="#-1"';
-      return '';
-    });
-
-    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-    expect(supplies).toHaveLength(12);
-    expect(fake.cacher.createObject).toHaveBeenCalledTimes(3); // computeWorkerCount(12)
-    expect(fake.cacher.closeObject.mock.calls.map(c => c[0])).toEqual(['900001', '900002', '900003']);
-    // Every worker points at the same building…
-    for (const call of fake.cacher.setObject.mock.calls) expect(call.slice(1)).toEqual([X, Y]);
-    // …and no SetPath is ever issued on the inspector's own object.
-    const pathTargets = new Set(
-      fake.sent.filter(s => s.packet.member === 'SetPath').map(s => s.packet.targetId)
+    const { supply } = await getBuildingGateConnections(
+      fake.ctx, X, Y, 'supplies', 'Seg0', 'Fresh Food',
     );
-    expect([...pathTargets].sort()).toEqual(['900001', '900002', '900003']);
+
+    expect(supply).toEqual({
+      path: 'Seg0',
+      name: 'Fresh Food',
+      metaFluid: 'Fresh Food',
+      fluidValue: '1200',
+      lastCostPerc: '85',
+      minK: '30',
+      maxPrice: '150',
+      qpSorted: '1',
+      sortMode: '0',
+      connectionCount: 1,
+      connections: [{
+        facilityName: 'Farm A', createdBy: 'SPO_test3', companyName: 'Yellow Inc.',
+        price: '100', overprice: '10', lastValue: '900', cost: '$12', quality: '95%',
+        connected: true, x: 40, y: 50,
+      }],
+    });
+    // SetPath goes to the SAME object the inspector owns — §4bis.
+    const setPath = fake.sent.find(s => s.packet.member === 'SetPath');
+    expect(setPath?.packet.targetId).toBe(FIRST_TEMP);
+    expect(setPath?.packet.args).toEqual([RdoValue.string('Seg0').format()]);
+    expect(setPath?.category).toBe(TimeoutCategory.SLOW);
   });
 
-  it('degrades to the workers it managed to create', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
-    cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
-    let created = 0;
-    fake.cacher.createObject.mockImplementation(async () => {
-      created++;
-      if (created > 1) throw new Error('error 12'); // Delphi object pool exhausted
-      return '900001';
+  it('reads a product gate with its own column set', async () => {
+    const fake = gateCtx('products', {
+      MetaFluid: 'Cars', LastFluid: '80', FluidQuality: '90%', PricePc: '110',
+      AvgPrice: '$4', MarketPrice: '$5', cnxCount: '1',
+    }, 'res="%Toy Store 3\tYellow Inc.\t900\t1\t$12\t40\t50\t"');
+
+    const { product } = await getBuildingGateConnections(
+      fake.ctx, X, Y, 'products', 'Gate0', 'Cars',
+    );
+
+    expect(product).toEqual({
+      path: 'Gate0', name: 'Cars', metaFluid: 'Cars', lastFluid: '80', quality: '90%',
+      pricePc: '110', avgPrice: '$4', marketPrice: '$5', connectionCount: 1,
+      connections: [{
+        facilityName: 'Toy Store 3', companyName: 'Yellow Inc.', createdBy: '',
+        price: '', overprice: '', lastValue: '900', cost: '$12', quality: '',
+        connected: true, x: 40, y: 50,
+      }],
     });
+  });
+
+  it('does not reset the object to the building root first', async () => {
+    // SetPath resolves through the world spool and releases whatever the object
+    // held (Cache Server/CachedObjectWrap.pas:156-168), so the reset the tab
+    // read needs for GetInputNames buys nothing here — and it would be one more
+    // round-trip on the click path, which is the path being made cheap.
+    const fake = gateCtx('supplies', { cnxCount: '0' }, '');
+
+    await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    expect(fake.cacher.setObject).not.toHaveBeenCalled();
+  });
+
+  it('opens an inspector on the fly when none is armed', async () => {
+    const fake = makeDetailsCtx();
+    registerTabs('9013', ['Supplies']);
+    focusReturns(fake, '40133602');
+    cacheValues(fake, { cnxCount: '0' });
+    fake.respond((packet) => (packet.member === 'SetPath' ? 'res="#-1"' : ''));
+
+    const { supply } = await getBuildingGateConnections(
+      fake.ctx, X, Y, 'supplies', 'Seg0', 'Books', '9013',
+    );
+
+    expect(supply?.path).toBe('Seg0');
+    expect(getActiveInspector(fake.ctx, X, Y)).toBeDefined();
+  });
+
+  it('returns nothing when SetPath is refused', async () => {
+    const fake = makeDetailsCtx();
+    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
+    fake.respond(() => 'res="#0"');
+
+    expect(await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books')).toEqual({});
+    expect(await getBuildingGateConnections(fake.ctx, X, Y, 'products', 'Gate0', 'Cars')).toEqual({});
+  });
+
+  it('caps the connection sweep at 20 however many the gate claims', async () => {
+    const fake = gateCtx('supplies', { MetaFluid: 'Books', cnxCount: '75' },
+      'res="%a\tb\tc\td\te\tf\tg\th\t1\t0\t0\t"');
+
+    const { supply } = await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    expect(supply?.connectionCount).toBe(75); // reported as the server said
+    expect(supply?.connections).toHaveLength(20); // but only 20 were read
+    expect(fake.sent.filter(s => s.packet.member === 'GetSubObjectProps')).toHaveLength(20);
+  });
+
+  it('suffixes every requested property name with the sub-index', async () => {
+    // Voyager/SupplySheetForm.pas:474-491 builds the query the same way; the
+    // index is part of each NAME, not a separate argument.
+    const fake = gateCtx('supplies', { MetaFluid: 'Books', cnxCount: '2' },
+      'res="%a\tb\tc\td\te\tf\tg\th\t1\t0\t0\t"');
+
+    await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    const queries = fake.sent
+      .filter(s => s.packet.member === 'GetSubObjectProps')
+      .map(s => s.packet.args?.[1] ?? '');
+    expect(queries.some(q => q.includes('cnxFacilityName0') && q.includes('cnxYPos0'))).toBe(true);
+    expect(queries.some(q => q.includes('cnxFacilityName1') && q.includes('cnxYPos1'))).toBe(true);
+  });
+
+  it('drops a connection row the server answered short', async () => {
+    const fake = gateCtx('supplies', { MetaFluid: 'Books', cnxCount: '1' },
+      'res="%only\ttwo\t"'); // fewer than the 11 columns a supply needs
+
+    const { supply } = await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    expect(supply?.connections).toEqual([]);
+  });
+
+  it('drops a product connection row the server answered short', async () => {
+    const fake = gateCtx('products', { MetaFluid: 'Cars', cnxCount: '1' },
+      'res="%only\ttwo\t"'); // fewer than the 7 columns a product needs
+
+    const { product } = await getBuildingGateConnections(fake.ctx, X, Y, 'products', 'Gate0', 'Cars');
+
+    expect(product?.connections).toEqual([]);
+  });
+
+  it('does not guess columns from a tab-less reply', async () => {
+    // This used to split on whitespace. The cache server writes one value + TAB
+    // per requested name and nothing else (Cache Server/CachedObjectWrap.pas:
+    // 225-230), so a tab-less reply is malformed, not an alternative encoding --
+    // and guessing is worse than refusing: real facility names contain spaces
+    // ("Import Storage 4", "Toy Store 3", live capture), so the guess silently
+    // shifts every column and reports a supplier that does not exist.
+    const fake = gateCtx('products', { MetaFluid: 'Cars', cnxCount: '1' },
+      'res="%Import Storage 4 YellowInc 900 1 $12 40 50"');
+
+    const { product } = await getBuildingGateConnections(fake.ctx, X, Y, 'products', 'Gate0', 'Cars');
+
+    expect(product?.connections).toEqual([]);
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Failing sub-index(es): 0'),
+    );
+  });
+
+  it('keeps a connection row whose columns are all empty', async () => {
+    // The live defect behind "cnxCount says 1" above an empty list. A stale
+    // sub-object cache answers with seven empty columns, and cleanPayload ends
+    // in .trim() (rdo-helpers.ts:106), so the row -- being nothing but tabs --
+    // was reduced to '' and dropped. The count and the list then disagreed with
+    // nothing said. The row must survive, blank.
+    const fake = gateCtx('products', { MetaFluid: 'Cars', cnxCount: '1' },
+      'res="%\t\t\t\t\t\t\t"');
+
+    const { product } = await getBuildingGateConnections(fake.ctx, X, Y, 'products', 'Gate0', 'Cars');
+
+    expect(product?.connectionCount).toBe(1);
+    expect(product?.connections).toHaveLength(1);
+    expect(product?.connections[0].facilityName).toBe('');
+    expect(fake.log.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('returned an empty GetSubObjectProps payload'),
+    );
+  });
+
+  it('keeps a supply row whose columns are all empty', async () => {
+    const fake = gateCtx('supplies', { MetaFluid: 'Books', cnxCount: '1' },
+      'res="%\t\t\t\t\t\t\t\t\t\t\t"');
+
+    const { supply } = await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    expect(supply?.connectionCount).toBe(1);
+    expect(supply?.connections).toHaveLength(1);
+  });
+
+  it('substitutes the documented defaults for every blank supply column', async () => {
+    // 12 columns: only the first and last carry text, so columns 1-10 blank.
+    const fake = gateCtx('supplies', { MetaFluid: 'Books', cnxCount: '1' },
+      `res="%head${'\t'.repeat(11)}tail"`);
+
+    const { supply } = await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    expect(supply?.connections).toEqual([{
+      facilityName: 'head', createdBy: '', companyName: '', price: '0', overprice: '0',
+      lastValue: '', cost: '$0', quality: '0%', connected: false, x: 0, y: 0,
+    }]);
+  });
+
+  it('substitutes the documented defaults for every blank product column', async () => {
+    const fake = gateCtx('products', { MetaFluid: 'Cars', cnxCount: '1' },
+      `res="%head${'\t'.repeat(7)}tail"`);
+
+    const { product } = await getBuildingGateConnections(fake.ctx, X, Y, 'products', 'Gate0', 'Cars');
+
+    expect(product?.connections).toEqual([{
+      facilityName: 'head', companyName: '', createdBy: '', price: '', overprice: '',
+      lastValue: '', cost: '', quality: '', connected: false, x: 0, y: 0,
+    }]);
+  });
+
+  it('returns no connections when the sub-object read fails', async () => {
+    const fake = gateCtx('supplies', { MetaFluid: 'Books', cnxCount: '1' },
+      new Error('Request timeout: GetSubObjectProps'));
+
+    const { supply } = await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    expect(supply?.connections).toEqual([]);
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Error fetching sub-object 0'), expect.anything()
+    );
+  });
+
+  it('reads no connections from a payload-less GetSubObjectProps', async () => {
+    const fake = gateCtx('supplies', { MetaFluid: 'Books', cnxCount: '1' },
+      { raw: '', type: 'RESPONSE', rid: 1 });
+
+    const { supply } = await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    expect(supply?.connections).toEqual([]);
+  });
+
+  it('says so when cnxCount and the rows disagree, instead of dropping the row silently', async () => {
+    // The live symptom: a warehouse showing "1 supplier" above an empty list.
+    // The count comes off the gate, the rows come from GetSubObjectProps, and
+    // an empty payload used to remove the row with nothing said. The
+    // discrepancy still reaches the client -- that is deliberate, the UI
+    // reports it -- but it must be traceable in the log too.
+    const fake = gateCtx('supplies', { MetaFluid: 'Books', cnxCount: '1' },
+      { raw: '', type: 'RESPONSE', rid: 1 });
+
+    const { supply } = await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    expect(supply?.connectionCount).toBe(1);
+    expect(supply?.connections).toHaveLength(0);
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('cnxCount says 1 but 1 connection(s) returned an empty'),
+    );
+    // The index is the one datum that makes a partial gate read reproducible:
+    // with 12 suppliers, #7 failing must not look like #0 failing.
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Failing sub-index(es): 0'),
+    );
+  });
+
+  it('says so on the clients list too', async () => {
+    const fake = gateCtx('products', { MetaFluid: 'Cars', cnxCount: '2' },
+      { raw: '', type: 'RESPONSE', rid: 1 });
+
+    const { product } = await getBuildingGateConnections(fake.ctx, X, Y, 'products', 'Gate0', 'Cars');
+
+    expect(product?.connectionCount).toBe(2);
+    expect(product?.connections).toHaveLength(0);
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('cnxCount says 2 but 2 client connection(s) returned an empty'),
+    );
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Failing sub-index(es): 0, 1'),
+    );
+  });
+
+  it('stays quiet when every row came back', async () => {
+    // The warning has to be absent on the happy path, or it is noise nobody
+    // reads when it does fire.
+    const fake = gateCtx('supplies', { MetaFluid: 'Books', cnxCount: '1' },
+      'res="%Farm\tBob\tBobCorp\t10\t0\t5\t$1\t90%\t1\t12\t34\t"');
+
+    const { supply } = await getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books');
+
+    expect(supply?.connections).toHaveLength(1);
+    expect(fake.log.warn).not.toHaveBeenCalledWith(
+      expect.stringContaining('returned an empty GetSubObjectProps payload'),
+    );
+  });
+
+  it('serialises against a tab read on the same inspector', async () => {
+    // Both take the inspector's mutex, and they must: the temp object is shared
+    // and SetPath repositions it, so an interleaved GetInputNames would read
+    // from a gate instead of the building.
+    const fake = makeDetailsCtx();
+    const inspector = makeInspector({ hasSupplies: true });
+    setActiveInspectorForTest(fake.ctx, inspector);
+    cacheValues(fake, { MetaFluid: 'Books', cnxCount: '0' });
+
+    const order: string[] = [];
     fake.respond((packet) => {
-      if (packet.member === 'GetOutputNames') return `res="%${gates(6)}"`;
+      order.push(packet.member ?? '');
+      if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
       if (packet.member === 'SetPath') return 'res="#-1"';
       return '';
     });
+
+    await Promise.all([
+      getBuildingTabData(fake.ctx, X, Y, 'supplies'),
+      getBuildingGateConnections(fake.ctx, X, Y, 'supplies', 'Seg0', 'Books'),
+    ]);
+
+    // The tab read's GetInputNames must not fall between the gate read's
+    // SetPath and its header — i.e. the two runs do not interleave.
+    const gateStart = order.lastIndexOf('SetPath');
+    expect(order.indexOf('GetInputNames')).toBeLessThan(gateStart);
+  });
+});
+
+// ===========================================================================
+// THE MEASUREMENT — Export Storage 4 (924/820), 30 output gates
+//
+// Reproduces the shape that was measured live: a warehouse with 30 enabled
+// gates carrying 91 connections between them. The old code read every one of
+// those connections while opening the tab, for an accordion that draws every
+// gate COLLAPSED; the numbers below are the whole point of the split.
+// ===========================================================================
+
+describe('the Export Storage 4 budget', () => {
+  /** 91 connections over 30 gates: 3 each, one gate carrying the extra. */
+  const CNX_PER_GATE = (i: number): number => (i === 0 ? 4 : 3);
+  const TOTAL_CNX = Array.from({ length: 30 }, (_, i) => CNX_PER_GATE(i)).reduce((a, b) => a + b, 0);
+
+  function storageCtx(over: { isWarehouse?: boolean } = {}): FakeSessionCtx {
+    const fake = makeDetailsCtx();
+    const gateMap = '1'.repeat(30);
+    setActiveInspectorForTest(fake.ctx, makeInspector({
+      hasProducts: true, isWarehouse: over.isWarehouse ?? true, gateMap,
+    }));
+    let currentGate = 0;
+    fake.cacher.getPropertyList.mockImplementation(async (_id: string, names: string[]) => {
+      if (names[0] === 'InputCount') return ['30'];
+      if (names[0]?.startsWith('Input')) return names.map((_, i) => `Ware${i}`);
+      return names.map(n => (n === 'cnxCount' ? String(CNX_PER_GATE(currentGate)) : 'x'));
+    });
+    fake.respond((packet) => {
+      if (packet.member === 'GetOutputNames') {
+        return `res="%${Array.from({ length: 30 }, (_, i) => `Seg${i}::\nWare${i}`).join('\r\n')}"`;
+      }
+      if (packet.member === 'SetPath') {
+        const arg = packet.args?.[0] ?? '';
+        const m = /Seg(\d+)/.exec(arg);
+        if (m) currentGate = parseInt(m[1], 10);
+        return 'res="#-1"';
+      }
+      return 'res="%a\tb\tc\td\te\tf\tg\t"';
+    });
+    return fake;
+  }
+
+  const roundTrips = (fake: FakeSessionCtx): number =>
+    fake.sent.length + fake.cacher.getPropertyList.mock.calls.length;
+
+  it('opens the tab for 3 round-trips instead of 154', async () => {
+    const fake = storageCtx();
 
     const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
 
-    expect(products).toHaveLength(6); // still complete, just slower
-    expect(fake.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Worker 1 creation failed'), expect.anything()
-    );
+    expect(products).toHaveLength(30);
+    // 1 GetOutputNames + the warehouse ware names (InputCount, then the
+    // Input{i}.0 batch — 2 GetPropertyList). Nothing per gate.
+    expect(roundTrips(fake)).toBe(3);
+    expect(fake.sent.filter(s => s.packet.member === 'SetPath')).toHaveLength(0);
+    expect(fake.sent.filter(s => s.packet.member === 'GetSubObjectProps')).toHaveLength(0);
+    // 60 header round-trips and 91 connection reads, for a screen showing 30
+    // collapsed rows. That is what 154 was made of.
+    expect(TOTAL_CNX).toBe(91);
   });
 
-  it('gives up when not a single worker object can be created', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    fake.cacher.createObject.mockRejectedValue(new Error('error 12'));
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return `res="%${gates(12)}"`;
-      return '';
-    });
+  it('is 1 round-trip on a non-warehouse, where there are no ware names to read', async () => {
+    const fake = storageCtx({ isWarehouse: false });
 
-    await expect(getBuildingTabData(fake.ctx, X, Y, 'supplies')).rejects.toThrow(
-      'Failed to create any worker temp objects'
-    );
+    const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
+
+    expect(products).toHaveLength(30);
+    expect(roundTrips(fake)).toBe(1);
   });
 
-  it('keeps the gates it could read when one worker task throws', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return `res="%${gates(12)}"`;
-      if (packet.member === 'SetPath') {
-        return packet.args?.[0] === RdoValue.string('Seg7').format()
-          ? new Error('Request timeout: SetPath')
-          : 'res="#-1"';
-      }
-      return '';
-    });
+  it('spends 2 + n round-trips on the gate the user actually opens', async () => {
+    const fake = storageCtx();
+    await getBuildingTabData(fake.ctx, X, Y, 'products');
+    const afterTab = roundTrips(fake);
 
-    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
+    await getBuildingGateConnections(fake.ctx, X, Y, 'products', 'Seg1', 'Ware1');
 
-    expect(supplies).toHaveLength(11);
-    expect(supplies?.some(s => s.path === 'Seg7')).toBe(false);
-    expect(fake.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('Error fetching path Seg7'), expect.anything()
-    );
-  });
-
-  it('drops the gates whose SetPath the server refused, keeping the rest', async () => {
-    const fake = makeDetailsCtx();
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-    cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
-    fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return `res="%${gates(12)}"`;
-      if (packet.member === 'SetPath') {
-        return packet.args?.[0] === RdoValue.string('Seg3').format() ? 'res="#0"' : 'res="#-1"';
-      }
-      return '';
-    });
-
-    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-    // fetchPathsWithPool filters the nulls out — 11 of 12 survive.
-    expect(supplies).toHaveLength(11);
-  });
-
-  /**
-   * BUG connu (nouveau, lot 3) — building-details-handler.ts:1492-1496.
-   *
-   * The comment claims the per-slot connection reads "are gated by the same
-   * semaphore to respect Delphi MAX_BUFFER_SIZE". They are not: the semaphore
-   * is acquired ONCE around the whole slot fetch (:1505), while
-   * `batchedParallel` then issues up to MAX_CONCURRENT_CONNECTIONS = 3
-   * concurrent GetSubObjectProps inside it. With 3 workers that is up to 9
-   * simultaneous requests on the map socket, against a declared cap of
-   * MAX_GLOBAL_CONCURRENT_RDO = 4 and a Delphi MAX_BUFFER_SIZE of 5.
-   */
-  it('exceeds its own concurrency cap: slot permits do not gate connection reads', async () => {
-    let inFlight = 0;
-    let peak = 0;
-    const enter = async (): Promise<void> => {
-      inFlight++;
-      peak = Math.max(peak, inFlight);
-      await new Promise<void>(resolve => setImmediate(resolve));
-      inFlight--;
-    };
-
-    const fake = makeDetailsCtx({
-      sendRdoRequest: jest.fn(async (_s: string, packet: Partial<RdoPacket>): Promise<RdoPacket> => {
-        await enter();
-        let payload = '';
-        if (packet.member === 'GetInputNames') {
-          payload = `res="%${Array.from({ length: 12 }, (_, i) => `Seg${i}::\nW${i}`).join('\r\n')}"`;
-        } else if (packet.member === 'SetPath') {
-          payload = 'res="#-1"';
-        } else {
-          payload = 'res="%a\tb\tc\td\te\tf\tg\th\t1\t0\t0\t"';
-        }
-        return { raw: '', type: 'RESPONSE', rid: 1, payload };
-      }),
-    });
-    // Set after the factory: `makeDetailsCtx` installs its own default here.
-    fake.cacher.getPropertyList.mockImplementation(async (_id: string, names: string[]) => {
-      await enter();
-      return names.map(n => (n === 'cnxCount' ? '3' : 'x'));
-    });
-    setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
-
-    const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
-
-    expect(supplies).toHaveLength(12);
-    // 3 workers x (1 slot + up to 3 connection reads). The documented ceiling is 4.
-    expect(peak).toBeGreaterThan(4);
+    // SetPath + the header + one GetSubObjectProps per connection of THIS gate.
+    expect(roundTrips(fake) - afterTab).toBe(2 + CNX_PER_GATE(1));
   });
 });
 

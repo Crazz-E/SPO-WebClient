@@ -76,15 +76,18 @@ function makeConstructionCtx(options: {
   objectId?: string | null;
   readBack?: string[];
   sockets?: string[];
+  /** `null` reproduces a session where the InitClient push has not landed yet. */
+  fTycoonProxyId?: number | null;
 } = {}): FakeSessionCtx {
   const {
     currBlock = CURR_BLOCK,
     objectId = OBJECT_ID,
     readBack = [READ_BACK],
     sockets = ['construction'],
+    fTycoonProxyId = FAKE_CONTEXT_IDS.tycoonProxyId,
   } = options;
 
-  const fake = makeSessionCtx({ sockets });
+  const fake = makeSessionCtx({ sockets, fTycoonProxyId });
   fake.cacher.createObject.mockResolvedValue(TEMP_OBJECT_ID);
   fake.cacher.getPropertyList.mockImplementation(async (_id: string, props: string[]) => {
     if (props[0] === 'CurrBlock') {
@@ -143,8 +146,12 @@ interface MatrixEntry {
   verb: 'call' | 'set';
   /** `frame` = fire-and-forget, no QueryId. `request` = synchronous, QueryId. */
   channel: 'frame' | 'request';
-  /** Property `mapRdoCommandToPropertyName` (:668) asks for on the read-back. */
-  readBack: string;
+  /**
+   * Property `mapRdoCommandToPropertyName` asks for on the read-back, or `null`
+   * when the command has no witness and the handler must skip verification
+   * entirely rather than manufacture a verdict.
+   */
+  readBack: string | null;
 }
 
 const MATRIX: readonly MatrixEntry[] = [
@@ -289,20 +296,29 @@ const MATRIX: readonly MatrixEntry[] = [
     target: 'objectId', verb: 'call', channel: 'frame', readBack: 'OverPriceCnxInfo',
   },
   {
-    // tycoonId is auto-injected from the session when the client omits it —
-    // asserting FAKE_CONTEXT_IDS.tycoonId here is the point of the row.
+    // The first argument is the MODEL SERVER POINTER (fTycoonProxyId), never the
+    // persistent tycoonId: the handler dereferences it — `TTycoon(pointer(...))`
+    // (Kernel/Kernel.pas:4534) — and swallows the resulting AV (:4576-4578), so
+    // the wrong id costs a silent no-op. Asserting the proxy id here is the
+    // point of the row. `readBack: null` because no property witnesses the
+    // outcome; see mapRdoCommandToPropertyName.
     command: 'RDOConnectToTycoon', value: '0', params: { kind: '2' },
     args: [
-      RdoValue.int(parseInt(FAKE_CONTEXT_IDS.tycoonId, 10)),
+      RdoValue.int(FAKE_CONTEXT_IDS.tycoonProxyId),
       RdoValue.int(2),
       RdoValue.int(-1),
     ],
-    target: 'objectId', verb: 'call', channel: 'frame', readBack: 'TradeRole',
+    target: 'objectId', verb: 'call', channel: 'frame', readBack: null,
   },
   {
-    command: 'RDODisconnectFromTycoon', value: '0', params: { tycoonId: '4666209999', kind: '1' },
-    args: [RdoValue.int(4666209999), RdoValue.int(1), RdoValue.int(-1)],
-    target: 'objectId', verb: 'call', channel: 'frame', readBack: 'TradeRole',
+    // No browser-supplied tycoonId override: the session is the only source.
+    command: 'RDODisconnectFromTycoon', value: '0', params: { kind: '1' },
+    args: [
+      RdoValue.int(FAKE_CONTEXT_IDS.tycoonProxyId),
+      RdoValue.int(1),
+      RdoValue.int(-1),
+    ],
+    target: 'objectId', verb: 'call', channel: 'frame', readBack: null,
   },
 
   // ── Supply chain — CurrBlock side ────────────────────────────────────────
@@ -458,10 +474,20 @@ describe('setBuildingProperty — command matrix', () => {
     // Read-back: the property name is the observable side of
     // mapRdoCommandToPropertyName.
     const listCalls = fake.cacher.getPropertyList.mock.calls;
-    expect(listCalls[listCalls.length - 1][1]).toEqual([entry.readBack]);
-    expect(result.success).toBe(true);
-    expect(result.newValue).toBe(READ_BACK);
-    expect(result.confirmed).toBe(true);
+    if (entry.readBack === null) {
+      // No witness: the handler must not open a verify object at all, and must
+      // report `confirmed: undefined` — "nothing contradicts the write" — rather
+      // than the `true` a meaningless read-back used to manufacture.
+      expect(listCalls[listCalls.length - 1][1]).toEqual(['CurrBlock', 'ObjectId']);
+      expect(result.success).toBe(true);
+      expect(result.newValue).toBe('');
+      expect(result.confirmed).toBeUndefined();
+    } else {
+      expect(listCalls[listCalls.length - 1][1]).toEqual([entry.readBack]);
+      expect(result.success).toBe(true);
+      expect(result.newValue).toBe(READ_BACK);
+      expect(result.confirmed).toBe(true);
+    }
 
     // Every cacher object opened is closed, including the verify one.
     expect(fake.cacher.closeObject).toHaveBeenCalledTimes(fake.cacher.createObject.mock.calls.length);
@@ -726,12 +752,36 @@ describe('argument construction', () => {
     );
   });
 
-  it('uses the session tycoon id when the client sends none', async () => {
-    const fake = makeConstructionCtx();
+  it.each(['RDOConnectToTycoon', 'RDODisconnectFromTycoon'] as const)(
+    '%s sends the tycoon PROXY id, never the persistent tycoon id',
+    async (command) => {
+      // The regression this guards is a silent one. `TFacility.RDOConnectToTycoon`
+      // does `Tycoon := TTycoon(pointer(TycoonId))` (Kernel/Kernel.pas:4534) and
+      // wraps the whole body in `try..except` (:4576-4578): handed the persistent
+      // id, the server raises, swallows it, and answers nothing. The button looks
+      // dead and no log on our side says why — so the only place this can be
+      // caught is here.
+      const fake = makeConstructionCtx();
 
-    await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOConnectToTycoon', '0', { kind: '2' }));
+      await settle(setBuildingProperty(fake.ctx, X, Y, command, '0', { kind: '2' }));
 
-    expect(onlyFrame(fake)).toContain(RdoValue.int(parseInt(FAKE_CONTEXT_IDS.tycoonId, 10)).format());
+      const frame = onlyFrame(fake);
+      expect(frame).toContain(RdoValue.int(FAKE_CONTEXT_IDS.tycoonProxyId).format());
+      expect(frame).not.toContain(RdoValue.int(parseInt(FAKE_CONTEXT_IDS.tycoonId, 10)).format());
+    },
+  );
+
+  it('refuses to send a tycoon connect before InitClient supplied the proxy id', async () => {
+    // Guessing is not an option: there is no id to fall back on that the server
+    // would accept, and sending the wrong one is indistinguishable from success.
+    const fake = makeConstructionCtx({ fTycoonProxyId: null });
+
+    const result = await settle(
+      setBuildingProperty(fake.ctx, X, Y, 'RDOConnectToTycoon', '0', { kind: '2' }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(fake.frames.construction).toEqual([]);
   });
 
   it('composes the movie bitmask from the two auto flags', async () => {

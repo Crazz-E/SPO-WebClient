@@ -379,38 +379,14 @@ export async function getBuildingTabData(
 
     ctx.log.debug(`[BuildingDetails] Tab data for (${x},${y}), tab=${tabId}`);
 
+    // Supplies and Products are the same read with a different gate spec: list
+    // the gates, and stop. Nothing about a gate — not its header, not its
+    // connection rows — is read until the user opens it, and then both arrive
+    // together through `getBuildingGateConnections`.
     if (tabId === 'supplies' && inspector.hasSupplies) {
-      let supplyPaths = await getSupplyPaths(ctx, tempObjectId);
-      // Warehouses: skip disabled gates (GateMap bit = '0') to avoid unnecessary RDO calls
-      if (inspector.isWarehouse && gateMap) {
-        supplyPaths = supplyPaths.filter((_, i) => i < gateMap.length && gateMap[i] === '1');
-      }
-      const workerCount = computeWorkerCount(supplyPaths.length);
-      const semaphore = new Semaphore(MAX_GLOBAL_CONCURRENT_RDO);
-      let supplies: BuildingSupplyData[];
-
-      if (workerCount <= 1) {
-        // Single worker: use the inspector's own temp object (no pool overhead)
-        supplies = [];
-        for (const { path, name } of supplyPaths) {
-          try {
-            const detail = await fetchSupplyDetails(ctx, tempObjectId, path, name);
-            if (detail) supplies.push(detail);
-          } catch (e: unknown) {
-            ctx.log.warn(`[BuildingDetails] Error fetching supply ${path}:`, toErrorMessage(e));
-          }
-        }
-      } else {
-        // Multiple workers: create fresh temp objects for parallel fetching
-        ctx.log.debug(`[BuildingDetails] Using ${workerCount} workers for ${supplyPaths.length} supply paths`);
-        const workers = await createWorkerPool(ctx, x, y, workerCount);
-        try {
-          supplies = await fetchPathsWithPool(ctx, workers, supplyPaths, semaphore, fetchSupplyDetailsPooled);
-        } finally {
-          closeWorkerPool(ctx, workers);
-        }
-      }
-
+      const supplies = await listGates(
+        ctx, tempObjectId, gateMap, inspector.isWarehouse, SUPPLY_GATES,
+      );
       // For warehouses, also return warehouseWares so the client can filter
       // supplies by GateMap (only show enabled wares).
       if (inspector.isWarehouse) {
@@ -421,37 +397,9 @@ export async function getBuildingTabData(
     }
 
     if (tabId === 'products' && inspector.hasProducts) {
-      let productPaths = await getProductPaths(ctx, tempObjectId);
-      // Warehouses: skip disabled gates (GateMap bit = '0') to avoid unnecessary RDO calls
-      if (inspector.isWarehouse && gateMap) {
-        productPaths = productPaths.filter((_, i) => i < gateMap.length && gateMap[i] === '1');
-      }
-      const workerCount = computeWorkerCount(productPaths.length);
-      const semaphore = new Semaphore(MAX_GLOBAL_CONCURRENT_RDO);
-      let products: BuildingProductData[];
-
-      if (workerCount <= 1) {
-        // Single worker: use the inspector's own temp object (no pool overhead)
-        products = [];
-        for (const { path, name } of productPaths) {
-          try {
-            const detail = await fetchProductDetails(ctx, tempObjectId, path, name);
-            if (detail) products.push(detail);
-          } catch (e: unknown) {
-            ctx.log.warn(`[BuildingDetails] Error fetching product ${path}:`, toErrorMessage(e));
-          }
-        }
-      } else {
-        // Multiple workers: create fresh temp objects for parallel fetching
-        ctx.log.debug(`[BuildingDetails] Using ${workerCount} workers for ${productPaths.length} product paths`);
-        const workers = await createWorkerPool(ctx, x, y, workerCount);
-        try {
-          products = await fetchPathsWithPool(ctx, workers, productPaths, semaphore, fetchProductDetailsPooled);
-        } finally {
-          closeWorkerPool(ctx, workers);
-        }
-      }
-
+      const products = await listGates(
+        ctx, tempObjectId, gateMap, inspector.isWarehouse, PRODUCT_GATES,
+      );
       // For warehouses, also return warehouseWares so the client can filter
       // products by GateMap (only show enabled wares).
       if (inspector.isWarehouse) {
@@ -643,45 +591,30 @@ async function getBuildingDetailsImpl(
     // Enrich votes tab
     await enrichVotesTab(ctx, groups, allValues);
 
-    // Phase 3: Collect supply/product paths while object still points at building.
+    // Phase 3: reads that need the object on the building root, first — the
+    // gate reads below can leave it on a gate.
     const suppliesGroup = template.groups.find(g => g.special === 'supplies');
     const productsGroup = template.groups.find(g => g.special === 'products');
     const compInputsGroup = template.groups.find(g => g.special === 'compInputs');
     const isWarehouse = template.groups.some(g => g.id === 'whGeneral');
+    const gateMap = allValues.get('GateMap') || '';
 
-    const supplyPaths = suppliesGroup ? await getSupplyPaths(ctx, tempObjectId) : [];
-    const productPaths = productsGroup ? await getProductPaths(ctx, tempObjectId) : [];
     const compInputs = compInputsGroup ? await fetchCompInputData(ctx, tempObjectId) : undefined;
     const warehouseWares = isWarehouse
-      ? await getWarehouseWareNames(ctx, tempObjectId, allValues.get('GateMap') || '')
+      ? await getWarehouseWareNames(ctx, tempObjectId, gateMap)
       : undefined;
 
-    // Phase 4: Iterate supply/product paths using SetPath on the SAME object.
-    let supplies: BuildingSupplyData[] | undefined;
-    if (supplyPaths.length > 0) {
-      supplies = [];
-      for (const { path, name } of supplyPaths) {
-        try {
-          const detail = await fetchSupplyDetails(ctx, tempObjectId, path, name);
-          if (detail) supplies.push(detail);
-        } catch (e: unknown) {
-          ctx.log.warn(`[BuildingDetails] Error fetching supply ${path}:`, e);
-        }
-      }
-    }
-
-    let products: BuildingProductData[] | undefined;
-    if (productPaths.length > 0) {
-      products = [];
-      for (const { path, name } of productPaths) {
-        try {
-          const detail = await fetchProductDetails(ctx, tempObjectId, path, name);
-          if (detail) products.push(detail);
-        } catch (e: unknown) {
-          ctx.log.warn(`[BuildingDetails] Error fetching product ${path}:`, e);
-        }
-      }
-    }
+    // Phase 4: the gate lists. Same split as the lazy path — names here,
+    // everything else on click via `getBuildingGateConnections` — so both entry
+    // points feed the client the same shape and the accordion behaves
+    // identically whichever one filled it. Neither call moves the object off
+    // the building root, so the two can follow each other directly.
+    const supplies = suppliesGroup
+      ? await listGates(ctx, tempObjectId, gateMap, isWarehouse, SUPPLY_GATES)
+      : undefined;
+    const products = productsGroup
+      ? await listGates(ctx, tempObjectId, gateMap, isWarehouse, PRODUCT_GATES)
+      : undefined;
 
     return {
       buildingId: buildingId || allValues.get('ObjectId') || allValues.get('CurrBlock') || '',
@@ -968,45 +901,6 @@ function parseMoneyGraph(graphInfo: string): number[] {
 }
 
 /**
- * Collect supply/input paths from GetInputNames (requires object pointed at building).
- * Returns parsed entries without creating new objects.
- */
-async function getSupplyPaths(
-  ctx: SessionContext,
-  tempObjectId: string
-): Promise<Array<{ path: string; name: string }>> {
-  // useless: integer, lang: widestring
-  const inputNamesPacket = await ctx.sendRdoRequest('map', rdoCall(
-    'GetInputNames', tempObjectId, RdoValue.int(0), RdoValue.string('0'),
-  ).packet, undefined, TimeoutCategory.NORMAL);
-
-  const inputNamesRaw = cleanPayloadHelper(inputNamesPacket.payload || '');
-  if (!inputNamesRaw || inputNamesRaw === '0' || inputNamesRaw === '-1') {
-    return [];
-  }
-
-  // Parse input names (format: "path::\nname\r\n" separated entries)
-  // split('\r') then trim() strips leading '\n' from entries 2+ (CRLF separators)
-  const entries = inputNamesRaw.split('\r').map(e => e.trim()).filter(Boolean);
-  const result: Array<{ path: string; name: string }> = [];
-
-  for (const entry of entries) {
-    const sepIdx = entry.indexOf('::');
-    if (sepIdx === -1) continue;
-
-    const path = entry.substring(0, sepIdx);
-    // Skip '::' separator (2 chars), trim any residual \n
-    let name = entry.substring(sepIdx + 2).replace(/^\n/, '');
-    const nullIdx = name.indexOf('\0');
-    if (nullIdx !== -1) {
-      name = name.substring(0, nullIdx);
-    }
-    result.push({ path, name });
-  }
-  return result;
-}
-
-/**
  * Fetch warehouse ware names via InputCount + Input{i}.0 indexed properties.
  * These cached properties contain the MLS fluid name for each warehouse gate.
  * Combined with GateMap binary string to produce WarehouseWareData[].
@@ -1056,6 +950,375 @@ async function getWarehouseWareNames(
   }
 }
 
+// =========================================================================
+// GATES — one description per lazy gate tab, one code path for both
+// =========================================================================
+
+/**
+ * The two tabs whose rows are Delphi *gates*: an input gate per supplied ware
+ * (Supplies) and an output gate per produced ware (Products).
+ */
+export type GateTabId = 'supplies' | 'products';
+
+/** A gate as listed by GetInputNames / GetOutputNames. */
+export interface GatePath {
+  path: string;
+  name: string;
+}
+
+/**
+ * Everything that differs between the Supplies and the Products tab.
+ *
+ * Both tabs read the same three things off the same shared temp object — the
+ * gate list, one header per gate, then one sub-object row per connection — and
+ * used to do it through two near-identical copies of that sequence. The copies
+ * drifted: different clamp comments, different warning wording, and a cnxCount
+ * index hard-coded separately in each. Here the sequence exists once, in
+ * {@link fetchGateDetails}, and a spec supplies the parts that genuinely differ.
+ *
+ * `headerProps` MUST contain `cnxCount` — {@link gateCnxCountIndex} reads the
+ * connection count out of the header by position.
+ */
+interface GateSpec<T> {
+  readonly tabId: GateTabId;
+  /** RDO member that lists this kind of gate. Both are catalogued functions. */
+  readonly listMember: 'GetInputNames' | 'GetOutputNames';
+  /** Properties read on the gate itself, after SetPath. */
+  readonly headerProps: readonly string[];
+  /**
+   * Per-connection property names WITHOUT their index suffix. The sub-index is
+   * appended to each name before the GetSubObjectProps query is built, exactly
+   * as the reference client does (Voyager/SupplySheetForm.pas:474-491).
+   */
+  readonly connectionProps: readonly string[];
+  /** How one gate is named in a log line ("supply" / "product"). */
+  readonly gateLabel: string;
+  /** What one unreadable connection row is called in the warning. */
+  readonly rowLabel: string;
+  /** A gate as the listing knows it: a path and a name, nothing read yet. */
+  buildStub(path: string, name: string): T;
+  buildGate(
+    path: string,
+    name: string,
+    header: readonly string[],
+    connectionCount: number,
+    connections: BuildingConnectionData[],
+  ): T;
+  buildConnection(values: readonly string[]): BuildingConnectionData;
+}
+
+/**
+ * Upper bound on connection rows read for one gate. Unchanged from the two
+ * copies this replaces; a gate reporting more is not truncated silently — the
+ * caller reports connectionCount alongside the short list.
+ */
+const MAX_CONNECTIONS_PER_GATE = 20;
+
+const SUPPLY_GATES: GateSpec<BuildingSupplyData> = {
+  tabId: 'supplies',
+  listMember: 'GetInputNames',
+  // Same list, same order, as Voyager/SupplySheetForm.pas:460.
+  headerProps: [
+    'MetaFluid', 'FluidValue', 'LastCostPerc', 'minK', 'MaxPrice',
+    'QPSorted', 'SortMode', 'cnxCount', 'ObjectId',
+  ],
+  // Same list, same order, as Voyager/SupplySheetForm.pas:480-490.
+  connectionProps: [
+    'cnxFacilityName', 'cnxCreatedBy', 'cnxCompanyName', 'cnxNfPrice',
+    'OverPriceCnxInfo', 'LastValueCnxInfo', 'tCostCnxInfo', 'cnxQuality',
+    'ConnectedCnxInfo', 'cnxXPos', 'cnxYPos',
+  ],
+  gateLabel: 'supply',
+  rowLabel: 'connection',
+  buildStub: (path, name) => ({ path, name, connections: [] }),
+  buildGate: (path, name, header, connectionCount, connections) => ({
+    path,
+    name,
+    metaFluid: header[0] || '',
+    fluidValue: header[1] || '',
+    lastCostPerc: header[2] || undefined,
+    minK: header[3] || undefined,
+    maxPrice: header[4] || undefined,
+    qpSorted: header[5] || undefined,
+    sortMode: header[6] || undefined,
+    connectionCount,
+    connections,
+  }),
+  buildConnection: (v) => ({
+    facilityName: v[0] || '',
+    createdBy: v[1] || '',
+    companyName: v[2] || '',
+    price: v[3] || '0',
+    overprice: v[4] || '0',
+    lastValue: v[5] || '',
+    cost: v[6] || '$0',
+    quality: v[7] || '0%',
+    connected: v[8] === '1',
+    x: parseInt(v[9] || '0', 10),
+    y: parseInt(v[10] || '0', 10),
+  }),
+};
+
+const PRODUCT_GATES: GateSpec<BuildingProductData> = {
+  tabId: 'products',
+  listMember: 'GetOutputNames',
+  // Same list, same order, as Voyager/ProdSheetForm.pas:387.
+  headerProps: [
+    'MetaFluid', 'LastFluid', 'FluidQuality', 'PricePc',
+    'AvgPrice', 'MarketPrice', 'cnxCount',
+  ],
+  connectionProps: [
+    'cnxFacilityName', 'cnxCompanyName', 'LastValueCnxInfo',
+    'ConnectedCnxInfo', 'tCostCnxInfo', 'cnxXPos', 'cnxYPos',
+  ],
+  gateLabel: 'product',
+  rowLabel: 'client connection',
+  buildStub: (path, name) => ({ path, name, connections: [] }),
+  buildGate: (path, name, header, connectionCount, connections) => ({
+    path,
+    name,
+    metaFluid: header[0] || '',
+    lastFluid: header[1] || '',
+    quality: header[2] || '',
+    pricePc: header[3] || '',
+    avgPrice: header[4] || '',
+    marketPrice: header[5] || '',
+    connectionCount,
+    connections,
+  }),
+  buildConnection: (v) => ({
+    facilityName: v[0] || '',
+    companyName: v[1] || '',
+    createdBy: '',
+    price: '',
+    overprice: '',
+    lastValue: v[2] || '',
+    cost: v[4] || '',
+    quality: '',
+    connected: v[3] === '1',
+    x: parseInt(v[5] || '0', 10),
+    y: parseInt(v[6] || '0', 10),
+  }),
+};
+
+function gateCnxCountIndex(spec: GateSpec<unknown>): number {
+  const i = spec.headerProps.indexOf('cnxCount');
+  if (i === -1) throw new Error(`GateSpec ${spec.tabId} has no cnxCount in headerProps`);
+  return i;
+}
+
+/**
+ * List a building's gates. Requires the temp object to point at the building
+ * root, not at a gate — hence the cacherSetObject reset in the callers.
+ *
+ * Wire format is identical for inputs and outputs: "path::\nname\r\n" entries.
+ */
+async function getGatePaths(
+  ctx: SessionContext,
+  tempObjectId: string,
+  spec: GateSpec<unknown>,
+): Promise<GatePath[]> {
+  // useless: integer, lang: widestring
+  const packet = await ctx.sendRdoRequest('map', rdoCall(
+    spec.listMember, tempObjectId, RdoValue.int(0), RdoValue.string('0'),
+  ).packet, undefined, TimeoutCategory.NORMAL);
+
+  const raw = cleanPayloadHelper(packet.payload || '');
+  if (!raw || raw === '0' || raw === '-1') {
+    return [];
+  }
+
+  // split('\r') then trim() strips leading '\n' from entries 2+ (CRLF separators)
+  const entries = raw.split('\r').map(e => e.trim()).filter(Boolean);
+  const result: GatePath[] = [];
+
+  for (const entry of entries) {
+    const sepIdx = entry.indexOf('::');
+    if (sepIdx === -1) continue;
+
+    const path = entry.substring(0, sepIdx);
+    // Skip '::' separator (2 chars), trim any residual \n
+    let name = entry.substring(sepIdx + 2).replace(/^\n/, '');
+    const nullIdx = name.indexOf('\0');
+    if (nullIdx !== -1) {
+      name = name.substring(0, nullIdx);
+    }
+    result.push({ path, name });
+  }
+  return result;
+}
+
+/**
+ * Read one gate in full: SetPath, its header, then one GetSubObjectProps per
+ * connection.
+ *
+ * This runs for ONE gate — the one the user opened — and never as part of
+ * listing a tab. That is `LoadFingerInfo` (Voyager/SupplySheetForm.pas:440-506,
+ * Voyager/ProdSheetForm.pas:369-436): the reference client reads a gate's
+ * header and rows together, for `CurrentFinger` alone, and remembers the result
+ * (`if reload or not Info.Loaded`, Voyager/ProdSheetForm.pas:464).
+ *
+ * SetPath resolves through the world spool and releases whatever the object
+ * held (Cache Server/CachedObjectWrap.pas:156-168), so it needs no reset first,
+ * and it leaves the object on the gate afterwards.
+ */
+async function fetchGateDetails<T>(
+  ctx: SessionContext,
+  tempObjectId: string,
+  path: string,
+  name: string,
+  spec: GateSpec<T>,
+): Promise<T | null> {
+  const setPathPacket = await ctx.sendRdoRequest('map', rdoCall(
+    'SetPath', tempObjectId, RdoValue.string(path),
+  ).packet, undefined, TimeoutCategory.SLOW);
+  const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
+
+  ctx.log.debug(`[BuildingDetails] ${spec.gateLabel} SetPath('${path}') result: "${setPathResult}"`);
+  if (setPathResult !== '-1') return null;
+
+  // Successfully navigated (-1 = Delphi WordBool TRUE), now read the gate header
+  const header = await ctx.cacherGetPropertyList(tempObjectId, [...spec.headerProps]);
+  const connectionCount = parseInt(header[gateCnxCountIndex(spec)] || '0', 10);
+
+  const connections = await fetchGateConnections(ctx, tempObjectId, path, spec, connectionCount);
+
+  return spec.buildGate(path, name, header, connectionCount, connections);
+}
+
+/**
+ * Read the connection rows of the gate the temp object currently points at.
+ *
+ * A short row means GetSubObjectProps returned an empty payload, which it only
+ * does when OpenSubObject failed server-side (Cache Server/
+ * CachedObjectWrap.pas:469,474,477) — the cache never yields a partial row,
+ * because GetPropertyList writes one value + #9 per requested name whether or
+ * not the property exists (:225-230).
+ *
+ * Dropping such a row silently is what made a live warehouse report "1
+ * supplier" above an empty list: the count comes from cnxCount on the gate, the
+ * rows come from here, and the two stopped agreeing with nothing to say so. Say
+ * so — the discrepancy travels to the client in connectionCount vs
+ * connections.length, and the warning names the sub-index(es) that failed,
+ * which is what makes a partial gate read reproducible.
+ */
+async function fetchGateConnections<T>(
+  ctx: SessionContext,
+  tempObjectId: string,
+  path: string,
+  spec: GateSpec<T>,
+  connectionCount: number,
+): Promise<BuildingConnectionData[]> {
+  const clampedCount = Math.min(connectionCount, MAX_CONNECTIONS_PER_GATE);
+
+  // Conservative parallelism: max 3 concurrent
+  const cnxResults = await batchedParallel(clampedCount, (i) =>
+    fetchSubObjectProperties(ctx, tempObjectId, i, spec.connectionProps.map(n => `${n}${i}`)),
+  );
+
+  const connections: BuildingConnectionData[] = [];
+  const unreadable: number[] = [];
+  for (const [i, cnxProps] of cnxResults.entries()) {
+    if (cnxProps.length < spec.connectionProps.length) {
+      unreadable.push(i);
+      continue;
+    }
+    connections.push(spec.buildConnection(cnxProps));
+  }
+  if (unreadable.length > 0) {
+    ctx.log.warn(
+      `[BuildingDetails] ${path}: cnxCount says ${connectionCount} but ${unreadable.length} ` +
+      `${spec.rowLabel}(s) returned an empty GetSubObjectProps payload — the sub-object ` +
+      `cache did not resolve. Failing sub-index(es): ${unreadable.join(', ')}. ` +
+      `The list will be short by that many rows.`
+    );
+  }
+  return connections;
+}
+
+/**
+ * List a tab's gates. ONE RDO call, whatever the building.
+ *
+ * This is the whole tab read. Nothing per-gate happens here — no SetPath, no
+ * GetPropertyList — because nothing per-gate is known until the user opens a
+ * gate, and the accordion says so rather than inventing a zero.
+ *
+ * It is what the reference client does on focus: `UpdateFingersToList` calls
+ * `GetOutputNames` and fills the finger strip with names
+ * (Voyager/ProdSheetForm.pas:274-297), and `LoadFingerInfo` — the SetPath, the
+ * header, the rows — waits for a finger to be selected
+ * (Voyager/ProdSheetForm.pas:449-480). Voyager can afford that because its
+ * gates are tabs, one visible at a time; ours are accordion rows, all visible,
+ * all collapsed. Reading 30 headers to decorate 30 collapsed rows cost 60
+ * round-trips before a single one was opened.
+ *
+ * Callers must have pointed `tempObjectId` at the building root already:
+ * GetInputNames/GetOutputNames read the current object.
+ */
+async function listGates<T>(
+  ctx: SessionContext,
+  tempObjectId: string,
+  gateMap: string,
+  isWarehouse: boolean,
+  spec: GateSpec<T>,
+): Promise<T[]> {
+  let paths = await getGatePaths(ctx, tempObjectId, spec);
+  // Warehouses: skip disabled gates (GateMap bit = '0') — they have no gate to open
+  if (isWarehouse && gateMap) {
+    paths = paths.filter((_, i) => i < gateMap.length && gateMap[i] === '1');
+  }
+
+  ctx.log.debug(`[BuildingDetails] Listed ${paths.length} ${spec.tabId} gates, headers deferred`);
+  return paths.map(({ path, name }) => spec.buildStub(path, name));
+}
+
+/**
+ * Read one gate's connections on demand — the click-time half of the split
+ * {@link fetchGateDetails} performs.
+ *
+ * Mirrors `LoadFingerInfo` (Voyager/SupplySheetForm.pas:440-506): SetPath, the
+ * header, then the rows, all on one object under the inspector's mutex. The
+ * header is re-read rather than trusted from the tab load, exactly as the
+ * reference client does (:460), so a gate the user opens shows current numbers.
+ */
+export async function getBuildingGateConnections(
+  ctx: SessionContext,
+  x: number,
+  y: number,
+  tabId: GateTabId,
+  path: string,
+  name: string,
+  visualClass?: string,
+): Promise<{ supply?: BuildingSupplyData; product?: BuildingProductData }> {
+  let inspector = getActiveInspector(ctx, x, y);
+
+  if (!inspector) {
+    ctx.log.debug(`[BuildingDetails] Creating on-demand inspector for (${x},${y}), gate=${path}`);
+    inspector = await createInspectorForBuilding(ctx, x, y, visualClass || '0');
+  }
+
+  const { tempObjectId, mutex } = inspector;
+  const release = await mutex.acquire();
+
+  try {
+    ctx.log.debug(`[BuildingDetails] Gate connections for (${x},${y}), ${tabId} '${path}'`);
+
+    // No cacherSetObject reset here: unlike GetInputNames/GetOutputNames, which
+    // read whatever the object currently points at, SetPath resolves its
+    // argument through the world spool and releases the previous object first
+    // (Cache Server/CachedObjectWrap.pas:156-168). One round-trip saved per
+    // click, and the next tab load resets the object itself.
+    if (tabId === 'supplies') {
+      const supply = await fetchGateDetails(ctx, tempObjectId, path, name, SUPPLY_GATES);
+      return supply ? { supply } : {};
+    }
+    const product = await fetchGateDetails(ctx, tempObjectId, path, name, PRODUCT_GATES);
+    return product ? { product } : {};
+  } finally {
+    release();
+  }
+}
+
 /**
  * Run async tasks with bounded concurrency.
  * Delphi server has a global critical section + MAX_BUFFER_SIZE=5,
@@ -1086,209 +1349,6 @@ async function batchedParallel<T>(
   const workerCount = Math.min(MAX_CONCURRENT_CONNECTIONS, count);
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
   return results;
-}
-
-// =========================================================================
-// COUNTING SEMAPHORE — limits total concurrent RDO requests across workers
-// =========================================================================
-
-/** @internal Exported for testing only. */
-export class Semaphore {
-  private permits: number;
-  private waiting: Array<() => void> = [];
-
-  constructor(permits: number) {
-    this.permits = permits;
-  }
-
-  async acquire(): Promise<void> {
-    if (this.permits > 0) {
-      this.permits--;
-      return;
-    }
-    return new Promise<void>((resolve) => {
-      this.waiting.push(resolve);
-    });
-  }
-
-  release(): void {
-    const next = this.waiting.shift();
-    if (next) {
-      next();
-    } else {
-      this.permits++;
-    }
-  }
-}
-
-// =========================================================================
-// WORKER POOL — parallel supply/product fetching with fresh temp objects
-// =========================================================================
-
-/** Max concurrent RDO requests globally across all workers on the map socket. */
-const MAX_GLOBAL_CONCURRENT_RDO = 4;
-
-interface WorkerObject {
-  tempObjectId: string;
-}
-
-/**
- * Determine optimal worker count based on slot count.
- * More workers = more parallelism, but each uses a Delphi temp object.
- */
-/** @internal Exported for testing only. */
-export function computeWorkerCount(slotCount: number): number {
-  if (slotCount <= 3) return 1;
-  if (slotCount <= 10) return 2;
-  return 3; // max — respect Delphi buffer limits
-}
-
-/**
- * Create fresh temp objects pointing at the same building.
- * Each worker gets its own independent Delphi TCachedObjectWrap.
- * Degrades gracefully if CreateObject fails for additional workers.
- */
-async function createWorkerPool(
-  ctx: SessionContext,
-  x: number,
-  y: number,
-  desiredCount: number,
-): Promise<WorkerObject[]> {
-  const workers: WorkerObject[] = [];
-
-  for (let i = 0; i < desiredCount; i++) {
-    try {
-      const tempObjectId = await ctx.cacherCreateObject();
-      await ctx.cacherSetObject(tempObjectId, x, y);
-      workers.push({ tempObjectId });
-    } catch (e: unknown) {
-      ctx.log.warn(`[BuildingDetails] Worker ${i} creation failed, continuing with ${workers.length} workers:`, toErrorMessage(e));
-      break; // Degrade gracefully — use however many were created
-    }
-  }
-
-  if (workers.length === 0) {
-    throw new Error('Failed to create any worker temp objects');
-  }
-  return workers;
-}
-
-/** Close all worker temp objects (fire-and-forget). */
-function closeWorkerPool(ctx: SessionContext, workers: WorkerObject[]): void {
-  for (const w of workers) {
-    ctx.cacherCloseObject(w.tempObjectId);
-  }
-}
-
-/**
- * Distribute supply/product paths across worker pool with shared semaphore.
- * Each worker runs SetPath + GetPropertyList on its own temp object.
- * The semaphore caps total concurrent RDO requests to avoid Delphi buffer overflow.
- */
-async function fetchPathsWithPool<T>(
-  ctx: SessionContext,
-  workers: WorkerObject[],
-  paths: Array<{ path: string; name: string }>,
-  semaphore: Semaphore,
-  fetchFn: (ctx: SessionContext, tempObjectId: string, path: string, name: string, semaphore: Semaphore) => Promise<T | null>,
-): Promise<T[]> {
-  const results: (T | null)[] = new Array(paths.length).fill(null);
-  let nextIndex = 0;
-
-  async function workerLoop(workerObj: WorkerObject): Promise<void> {
-    while (nextIndex < paths.length) {
-      const i = nextIndex++;
-      const { path, name } = paths[i];
-      try {
-        results[i] = await fetchFn(ctx, workerObj.tempObjectId, path, name, semaphore);
-      } catch (e: unknown) {
-        ctx.log.warn(`[BuildingDetails] Error fetching path ${path}:`, toErrorMessage(e));
-      }
-    }
-  }
-
-  await Promise.all(workers.map((w) => workerLoop(w)));
-  return results.filter((r): r is T => r !== null);
-}
-
-/**
- * Fetch details for a single supply path.
- * Reuses the caller's tempObjectId via SetPath (no CreateObject/CloseObject).
- * SetPath fully resets TCachedObjectWrap internal state on the Delphi server.
- */
-async function fetchSupplyDetails(
-  ctx: SessionContext,
-  tempObjectId: string,
-  path: string,
-  name: string
-): Promise<BuildingSupplyData | null> {
-  // Navigate to supply path (reuses existing object — SetPath resets TCachedObjectWrap state)
-  const setPathPacket = await ctx.sendRdoRequest('map', rdoCall(
-    'SetPath', tempObjectId, RdoValue.string(path),
-  ).packet, undefined, TimeoutCategory.SLOW);
-  const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
-
-  ctx.log.debug(`[BuildingDetails] SetPath('${path}') result: "${setPathResult}"`);
-  if (setPathResult !== '-1') return null;
-
-  // Successfully navigated (-1 = Delphi WordBool TRUE), now get properties
-  const supplyProps = await ctx.cacherGetPropertyList(tempObjectId, [
-    'MetaFluid', 'FluidValue', 'LastCostPerc', 'minK', 'MaxPrice',
-    'QPSorted', 'SortMode', 'cnxCount', 'ObjectId'
-  ]);
-
-  const connectionCount = parseInt(supplyProps[7] || '0', 10);
-  const clampedCount = Math.min(connectionCount, 20);
-
-  // Fetch connection details (conservative parallelism: max 3 concurrent)
-  const cnxResults = await batchedParallel(clampedCount, (i) =>
-    fetchSubObjectProperties(ctx, tempObjectId, i, [
-      `cnxFacilityName${i}`,
-      `cnxCreatedBy${i}`,
-      `cnxCompanyName${i}`,
-      `cnxNfPrice${i}`,
-      `OverPriceCnxInfo${i}`,
-      `LastValueCnxInfo${i}`,
-      `tCostCnxInfo${i}`,
-      `cnxQuality${i}`,
-      `ConnectedCnxInfo${i}`,
-      `cnxXPos${i}`,
-      `cnxYPos${i}`,
-    ])
-  );
-
-  const connections: BuildingConnectionData[] = [];
-  for (const cnxProps of cnxResults) {
-    if (cnxProps.length >= 11) {
-      connections.push({
-        facilityName: cnxProps[0] || '',
-        createdBy: cnxProps[1] || '',
-        companyName: cnxProps[2] || '',
-        price: cnxProps[3] || '0',
-        overprice: cnxProps[4] || '0',
-        lastValue: cnxProps[5] || '',
-        cost: cnxProps[6] || '$0',
-        quality: cnxProps[7] || '0%',
-        connected: cnxProps[8] === '1',
-        x: parseInt(cnxProps[9] || '0', 10),
-        y: parseInt(cnxProps[10] || '0', 10),
-      });
-    }
-  }
-
-  return {
-    path,
-    name,
-    metaFluid: supplyProps[0] || '',
-    fluidValue: supplyProps[1] || '',
-    lastCostPerc: supplyProps[2] || undefined,
-    minK: supplyProps[3] || undefined,
-    maxPrice: supplyProps[4] || undefined,
-    qpSorted: supplyProps[5] || undefined,
-    sortMode: supplyProps[6] || undefined,
-    connectionCount,
-    connections,
-  };
 }
 
 /**
@@ -1353,161 +1413,6 @@ async function fetchCompInputData(ctx: SessionContext, tempObjectId: string): Pr
 }
 
 /**
- * Collect product/output paths from GetOutputNames (requires object pointed at building).
- * Returns parsed entries without creating new objects.
- */
-async function getProductPaths(
-  ctx: SessionContext,
-  tempObjectId: string
-): Promise<Array<{ path: string; name: string }>> {
-  // useless: integer, lang: widestring
-  const outputNamesPacket = await ctx.sendRdoRequest('map', rdoCall(
-    'GetOutputNames', tempObjectId, RdoValue.int(0), RdoValue.string('0'),
-  ).packet, undefined, TimeoutCategory.NORMAL);
-
-  const outputNamesRaw = cleanPayloadHelper(outputNamesPacket.payload || '');
-  if (!outputNamesRaw || outputNamesRaw === '0' || outputNamesRaw === '-1') {
-    return [];
-  }
-
-  // Parse output names (format: "path::\nname\r\n" separated entries — same as inputs)
-  // split('\r') then trim() strips leading '\n' from entries 2+ (CRLF separators)
-  const entries = outputNamesRaw.split('\r').map(e => e.trim()).filter(Boolean);
-  const result: Array<{ path: string; name: string }> = [];
-
-  for (const entry of entries) {
-    const sepIdx = entry.indexOf('::');
-    if (sepIdx === -1) continue;
-
-    const path = entry.substring(0, sepIdx);
-    // Skip '::' separator (2 chars), trim any residual \n
-    let name = entry.substring(sepIdx + 2).replace(/^\n/, '');
-    const nullIdx = name.indexOf('\0');
-    if (nullIdx !== -1) {
-      name = name.substring(0, nullIdx);
-    }
-    result.push({ path, name });
-  }
-  return result;
-}
-
-/**
- * Fetch details for a single product/output path.
- * Reuses the caller's tempObjectId via SetPath (no CreateObject/CloseObject).
- * SetPath fully resets TCachedObjectWrap internal state on the Delphi server.
- */
-async function fetchProductDetails(
-  ctx: SessionContext,
-  tempObjectId: string,
-  path: string,
-  name: string
-): Promise<BuildingProductData | null> {
-  // Navigate to output path (reuses existing object — SetPath resets TCachedObjectWrap state)
-  const setPathPacket = await ctx.sendRdoRequest('map', rdoCall(
-    'SetPath', tempObjectId, RdoValue.string(path),
-  ).packet, undefined, TimeoutCategory.SLOW);
-
-  const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
-  ctx.log.debug(`[BuildingDetails] Product SetPath('${path}') result: "${setPathResult}"`);
-  if (setPathResult !== '-1') return null;
-
-  // Successfully navigated (-1 = Delphi WordBool TRUE) — fetch output gate properties
-  const outputProps = await ctx.cacherGetPropertyList(tempObjectId, [
-    'MetaFluid', 'LastFluid', 'FluidQuality', 'PricePc',
-    'AvgPrice', 'MarketPrice', 'cnxCount'
-  ]);
-
-  const connectionCount = parseInt(outputProps[6] || '0', 10);
-  const clampedCount = Math.min(connectionCount, 20);
-
-  // Fetch connection details (conservative parallelism: max 3 concurrent)
-  const cnxResults = await batchedParallel(clampedCount, (i) =>
-    fetchSubObjectProperties(ctx, tempObjectId, i, [
-      `cnxFacilityName${i}`,
-      `cnxCompanyName${i}`,
-      `LastValueCnxInfo${i}`,
-      `ConnectedCnxInfo${i}`,
-      `tCostCnxInfo${i}`,
-      `cnxXPos${i}`,
-      `cnxYPos${i}`,
-    ])
-  );
-
-  const connections: BuildingConnectionData[] = [];
-  for (const cnxProps of cnxResults) {
-    if (cnxProps.length >= 7) {
-      connections.push({
-        facilityName: cnxProps[0] || '',
-        companyName: cnxProps[1] || '',
-        createdBy: '',
-        price: '',
-        overprice: '',
-        lastValue: cnxProps[2] || '',
-        cost: cnxProps[4] || '',
-        quality: '',
-        connected: cnxProps[3] === '1',
-        x: parseInt(cnxProps[5] || '0', 10),
-        y: parseInt(cnxProps[6] || '0', 10),
-      });
-    }
-  }
-
-  return {
-    path,
-    name,
-    metaFluid: outputProps[0] || '',
-    lastFluid: outputProps[1] || '',
-    quality: outputProps[2] || '',
-    pricePc: outputProps[3] || '',
-    avgPrice: outputProps[4] || '',
-    marketPrice: outputProps[5] || '',
-    connectionCount,
-    connections,
-  };
-}
-
-// =========================================================================
-// POOLED WRAPPERS — gate RDO calls through shared semaphore
-// =========================================================================
-
-/**
- * Semaphore-gated supply fetch for worker pool.
- * Acquires the semaphore before SetPath + GetPropertyList, releases after.
- * Connection details within the slot still use batchedParallel(3) but are
- * gated by the same semaphore to respect Delphi MAX_BUFFER_SIZE.
- */
-async function fetchSupplyDetailsPooled(
-  ctx: SessionContext,
-  tempObjectId: string,
-  path: string,
-  name: string,
-  semaphore: Semaphore,
-): Promise<BuildingSupplyData | null> {
-  await semaphore.acquire();
-  try {
-    return await fetchSupplyDetails(ctx, tempObjectId, path, name);
-  } finally {
-    semaphore.release();
-  }
-}
-
-/** Semaphore-gated product fetch for worker pool. */
-async function fetchProductDetailsPooled(
-  ctx: SessionContext,
-  tempObjectId: string,
-  path: string,
-  name: string,
-  semaphore: Semaphore,
-): Promise<BuildingProductData | null> {
-  await semaphore.acquire();
-  try {
-    return await fetchProductDetails(ctx, tempObjectId, path, name);
-  } finally {
-    semaphore.release();
-  }
-}
-
-/**
  * Fetch sub-object properties (for indexed connections).
  */
 async function fetchSubObjectProperties(
@@ -1523,11 +1428,41 @@ async function fetchSubObjectProperties(
       'GetSubObjectProps', tempObjectId, RdoValue.int(subIndex), RdoValue.string(query),
     ).packet, undefined, TimeoutCategory.NORMAL);
 
-    const raw = cleanPayloadHelper(packet.payload || '');
-    if (raw.includes('\t')) {
-      return raw.split('\t').map(v => v.trim());
+    // Parse WITHOUT `cleanPayload`, for the reason `cacherGetPropertyList`
+    // already documents (spo_session.ts:1412-1415): cleanPayload ends in
+    // `.trim()` (rdo-helpers.ts:106), and a connection row whose columns are all
+    // empty is nothing but tabs — `res="%\t\t\t\t\t\t\t"` — so the trim reduced
+    // it to `''`, the tab test below failed, the whitespace fallback filtered
+    // everything out, and the caller's arity guard dropped the row.
+    //
+    // That is the live "cnxCount says 1, list empty" contradiction: the cache
+    // answered, we destroyed the answer. Positional alignment is the whole
+    // contract here — the Delphi server writes one value + TAB per requested
+    // name whether or not the property exists (Cache Server/
+    // CachedObjectWrap.pas:225-230), so an empty column must survive as an
+    // empty string, not disappear.
+    const rawPayload = packet.payload || '';
+    let raw: string;
+    const resMatch = rawPayload.match(/^res="((?:[^"]|"")*)"$/);
+    if (resMatch) {
+      raw = resMatch[1].replace(/""/g, '"');
+      // Strip the type prefix, never the whitespace.
+      if (raw.length > 0 && ['#', '%', '@', '$', '^', '!', '*'].includes(raw[0])) {
+        raw = raw.substring(1);
+      }
+    } else {
+      raw = cleanPayloadHelper(rawPayload);
     }
-    return raw.split(/\s+/).map(v => v.trim()).filter(v => v.length > 0);
+
+    if (raw === '') return [];
+
+    // Trim each value (spaces, not tabs) and drop the trailing empty the final
+    // TAB produces — same shape as cacherGetPropertyList.
+    const values = raw.split('\t').map(v => v.trim());
+    if (values.length > 0 && values[values.length - 1] === '') {
+      values.pop();
+    }
+    return values;
   } catch (e: unknown) {
     ctx.log.warn(`[BuildingDetails] Error fetching sub-object ${subIndex}:`, e);
     return [];

@@ -10,6 +10,7 @@ import type { BuildingProductData } from '@/shared/types';
 import { formatCurrency } from '@/shared/building-details';
 import { useClient } from '../../context';
 import { PriceSliderWithMarker } from './PropertyTables';
+import { useGateConnections } from './useGateConnections';
 import styles from './PropertyGroup.module.css';
 
 // =============================================================================
@@ -34,9 +35,12 @@ export function ProductsPanel({
   }
   return (
     <div className={styles.productList}>
-      {products.map((product, i) => (
+      {/* Keyed by path, not metaFluid: the fluid id lives in the gate header,
+          which is not read until the gate is opened. The path comes from
+          GetOutputNames and is there from the start. */}
+      {products.map((product) => (
         <ProductCard
-          key={product.metaFluid || i}
+          key={product.path}
           product={product}
           canEdit={canEdit}
           buildingX={buildingX}
@@ -68,33 +72,44 @@ const ProductCard = memo(function ProductCard({
   onPropertyChange: (propertyName: string, value: number, params?: Record<string, string>) => void;
 }) {
   const client = useClient();
-  const [expanded, setExpanded] = useState(false);
+  // Expansion and this gate's connection rows are one mechanism, shared with
+  // SupplyCard: opening the gate is what reads its rows.
+  const { expanded, toggle, loaded, failed } = useGateConnections(
+    'products', product.path, product.name, buildingX, buildingY,
+  );
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
-  const quality = parseFloat(product.quality) || 0;
-  const pricePc = parseFloat(product.pricePc) || 0;
-  const avgPrice = parseFloat(product.avgPrice) || 0;
-  const marketPrice = parseFloat(product.marketPrice) || 0;
+  // Quality, price and market price are header properties: unknown until this
+  // gate has been opened. `hasHeader` is what separates "not read yet" from a
+  // genuine zero, and it gates every control that depends on one.
+  const hasHeader = product.pricePc !== undefined;
+  const quality = parseFloat(product.quality ?? '') || 0;
+  const pricePc = parseFloat(product.pricePc ?? '') || 0;
+  const avgPrice = parseFloat(product.avgPrice ?? '') || 0;
+  const marketPrice = parseFloat(product.marketPrice ?? '') || 0;
   const dollarPrice = marketPrice > 0 ? (pricePc / 100) * marketPrice : 0;
+  const fluidId = product.metaFluid;
 
   const handleRowClick = (idx: number) => {
     setSelectedIdx(selectedIdx === idx ? null : idx);
   };
 
   const handleHire = () => {
-    client.onSearchConnections(buildingX, buildingY, product.metaFluid, product.name || product.metaFluid, 'output');
+    if (!fluidId) return;
+    client.onSearchConnections(buildingX, buildingY, fluidId, product.name || fluidId, 'output');
   };
 
   const handleFire = () => {
-    if (selectedIdx === null) return;
+    if (selectedIdx === null || !fluidId) return;
     const conn = product.connections[selectedIdx];
     if (!conn) return;
-    client.onDisconnectConnection(buildingX, buildingY, product.metaFluid, 'output', conn.x, conn.y);
+    client.onDisconnectConnection(buildingX, buildingY, fluidId, 'output', conn.x, conn.y);
     setSelectedIdx(null);
   };
 
   const handlePriceChange = (rdoName: string, value: number) => {
-    onPropertyChange(rdoName, value, { fluidId: product.metaFluid });
+    if (!fluidId) return;
+    onPropertyChange(rdoName, value, { fluidId });
   };
 
   return (
@@ -102,10 +117,13 @@ const ProductCard = memo(function ProductCard({
       {/* Line 1: Name + inline badges + buyer count + chevron */}
       <button
         className={styles.productHeader}
-        onClick={() => setExpanded((v) => !v)}
+        onClick={toggle}
         title={product.lastFluid ? `Last produced: ${product.lastFluid}` : undefined}
       >
         <span className={styles.productName}>{product.name || product.metaFluid}</span>
+        {/* Quality, price and buyer count are all header properties. Reading
+            them for every gate cost a round-trip per collapsed row; they now
+            appear once the gate has been opened. */}
         {quality > 0 && (
           <span className={`${styles.inlineBadge} ${getQualityVariant(quality)}`}>
             Q:{quality}%
@@ -114,39 +132,44 @@ const ProductCard = memo(function ProductCard({
         {!canEdit && pricePc > 0 && (
           <span className={styles.inlineBadge}>P:{pricePc}%</span>
         )}
-        <span className={styles.productBuyerCount}>
-          {product.connectionCount}{product.connectionCount !== 1 ? '>' : '>'}
-        </span>
+        {product.connectionCount !== undefined && (
+          <span className={styles.productBuyerCount}>
+            {product.connectionCount}{product.connectionCount !== 1 ? '>' : '>'}
+          </span>
+        )}
         <span className={styles.productChevron}>{expanded ? '\u25B2' : '\u25BC'}</span>
       </button>
 
-      {/* Line 2: Price slider (always visible for owners) or read-only price */}
-      {canEdit ? (
-        <div className={styles.productPriceRow}>
-          <PriceSliderWithMarker
-            value={pricePc}
-            avgPrice={avgPrice}
-            max={300}
-            step={5}
-            canEdit={canEdit}
-            rdoName="PricePc"
-            onPropertyChange={handlePriceChange}
-          />
-          {dollarPrice > 0 && (
-            <span className={styles.productDollarPrice}>{formatCurrency(dollarPrice)}</span>
-          )}
-        </div>
-      ) : (
-        pricePc > 0 && dollarPrice > 0 && (
-          <div className={styles.productPriceReadonly}>
-            {formatCurrency(dollarPrice)} ({pricePc}%)
-          </div>
-        )
-      )}
-
-      {/* Expanded: connections table + actions */}
+      {/* Expanded: price, then connections table + actions.
+          The price row used to sit here, outside the body and always visible —
+          it cannot, now that PricePc, AvgPrice and MarketPrice arrive with the
+          gate. That is also where the reference client puts it: the PricePc
+          control acts on `ftProducts.CurrentFinger` alone
+          (Voyager/ProdSheetForm.pas:684). */}
       {expanded && (
         <div className={styles.productBody}>
+          {hasHeader && (canEdit ? (
+            <div className={styles.productPriceRow}>
+              <PriceSliderWithMarker
+                value={pricePc}
+                avgPrice={avgPrice}
+                max={300}
+                step={5}
+                canEdit={canEdit}
+                rdoName="PricePc"
+                onPropertyChange={handlePriceChange}
+              />
+              {dollarPrice > 0 && (
+                <span className={styles.productDollarPrice}>{formatCurrency(dollarPrice)}</span>
+              )}
+            </div>
+          ) : (
+            pricePc > 0 && dollarPrice > 0 && (
+              <div className={styles.productPriceReadonly}>
+                {formatCurrency(dollarPrice)} ({pricePc}%)
+              </div>
+            )
+          ))}
           {product.connections.length > 0 ? (
             <table
               className={styles.productTable}
@@ -167,13 +190,17 @@ const ProductCard = memo(function ProductCard({
               <tbody>
                 {product.connections.map((conn, j) => (
                   <tr
-                    key={`${conn.x},${conn.y}`}
+                    key={`${j}:${conn.x},${conn.y}`}
                     className={`${styles.productTableRow}${selectedIdx === j ? ` ${styles.productTableRowSelected}` : ''}`}
                     onClick={() => handleRowClick(j)}
                     title={conn.companyName || undefined}
                   >
                     <td className={styles.productFacilityCell}>
-                      <span className={styles.productFacilityName}>{conn.facilityName}</span>
+                      <span className={styles.productFacilityName}>
+                        {conn.facilityName || (
+                          <span className={styles.unnamedConnection}>no data</span>
+                        )}
+                      </span>
                       {conn.companyName && (
                         <span className={styles.productOwnerDot}> · {conn.companyName}</span>
                       )}
@@ -185,12 +212,25 @@ const ProductCard = memo(function ProductCard({
               </tbody>
             </table>
           ) : (
-            <div className={styles.noConnections}>No buyers connected</div>
+            <div className={styles.noConnections}>
+              {/* Same three states as SuppliesGroup, and for the same reasons:
+                  the rows are read when the gate opens, so an empty list before
+                  that means "not read yet"; and a non-zero cnxCount with no rows
+                  after it means the sub-object read came back empty, not that
+                  the building has no buyers. */}
+              {failed
+                ? 'Could not read the buyers \u2014 close and re-open to retry'
+                : !loaded
+                  ? 'Loading buyers\u2026'
+                  : (product.connectionCount ?? 0) > 0
+                    ? `${product.connectionCount} buyer${product.connectionCount !== 1 ? 's' : ''} connected — details unavailable`
+                    : 'No buyers connected'}
+            </div>
           )}
 
           {canEdit && (
             <div className={styles.productActions}>
-              <button className={styles.hireBtn} onClick={handleHire}>Hire</button>
+              <button className={styles.hireBtn} onClick={handleHire} disabled={!fluidId}>Hire</button>
               <button
                 className={styles.fireBtn}
                 onClick={handleFire}
