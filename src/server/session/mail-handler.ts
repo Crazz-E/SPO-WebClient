@@ -18,19 +18,21 @@
 import type { SessionContext } from './session-context';
 import type { MailMessageHeader, MailMessageFull, MailAttachment } from '../../shared/types';
 import type { MailFolder } from '../../shared/types/domain-types';
-import { RdoVerb, RdoAction } from '../../shared/types';
+
 import { TimeoutCategory } from '../../shared/timeout-categories';
-import { RdoValue, RdoCommand } from '../../shared/rdo-types';
+import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall } from '../../shared/rdo-frame';
+import type { RdoMemberName } from '../../shared/rdo-members';
 import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 import { parseMessageListHtml } from '../mail-list-parser';
 import { toErrorMessage } from '../../shared/error-utils';
 import fetch from 'node-fetch';
 
 // ── Fire-and-forget helper for void mail procedures ──────────────────────
-function mailFireAndForget(ctx: SessionContext, targetId: string, method: string, ...args: RdoValue[]): void {
+function mailFireAndForget(ctx: SessionContext, targetId: string, method: RdoMemberName, ...args: RdoValue[]): void {
   const socket = ctx.getSocket('mail');
   if (!socket) throw new Error('Mail socket unavailable');
-  const cmd = RdoCommand.sel(targetId).call(method).push().args(...args).build();
+  const cmd = rdoCall(method, targetId, ...args).toFrame();
   writeRdoFrame(socket, cmd);
   ctx.log.debug(`[Mail] Sent: ${cmd}`);
 }
@@ -107,17 +109,12 @@ export async function composeMail(
   const worldName = ctx.currentWorldInfo?.name || '';
 
   // 1. Create in-memory message
-  const newMailPacket = await ctx.sendRdoRequest('mail', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.mailServerId,
-    action: RdoAction.CALL,
-    member: 'NewMail',
-    args: [
-      RdoValue.string(ctx.mailAccount).toString(),
-      RdoValue.string(to).toString(),
-      RdoValue.string(subject).toString()
-    ]
-  }, undefined, TimeoutCategory.NORMAL);
+  const newMailPacket = await ctx.sendRdoRequest('mail', rdoCall(
+    'NewMail', ctx.mailServerId,
+    RdoValue.string(ctx.mailAccount),
+    RdoValue.string(to),
+    RdoValue.string(subject),
+  ).packet, undefined, TimeoutCategory.NORMAL);
   const msgId = parsePropertyResponseHelper(newMailPacket.payload!, 'NewMail');
   ctx.log.debug(`[Mail] Created message, msgId: ${msgId}`);
 
@@ -134,24 +131,18 @@ export async function composeMail(
 
   // 2b. Add body lines (synchronous — Delphi sets WaitForAnswer:=true before AddLine loop)
   for (const line of bodyLines) {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: msgId,
-      action: RdoAction.CALL,
-      member: 'AddLine',
-      separator: '"*"',
-      args: [RdoValue.string(line).format()]
-    }, undefined, TimeoutCategory.NORMAL);
+    await ctx.sendRdoRequest('mail', rdoCall(
+      'AddLine', msgId,
+      RdoValue.string(line),
+    ).packet, undefined, TimeoutCategory.NORMAL);
   }
 
   // 3. Post (send) the message
-  const postPacket = await ctx.sendRdoRequest('mail', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.mailServerId,
-    action: RdoAction.CALL,
-    member: 'Post',
-    args: [RdoValue.string(worldName).toString(), RdoValue.int(parseInt(msgId, 10)).toString()]
-  }, undefined, TimeoutCategory.SLOW);
+  const postPacket = await ctx.sendRdoRequest('mail', rdoCall(
+    'Post', ctx.mailServerId,
+    RdoValue.string(worldName),
+    RdoValue.int(parseInt(msgId, 10)),
+  ).packet, undefined, TimeoutCategory.SLOW);
   // Post returns wordbool: #-1 = true (success), #0 = false (failure)
   const resultStr = parsePropertyResponseHelper(postPacket.payload!, 'Post');
   const success = resultStr === '-1';
@@ -160,14 +151,10 @@ export async function composeMail(
   // 4. Close message to release server memory (MsgComposerHandler.pas:331)
   // Synchronous — Delphi WaitForAnswer still true from AddLine setting.
   try {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.mailServerId,
-      action: RdoAction.CALL,
-      member: 'CloseMessage',
-      separator: '"*"',
-      args: [RdoValue.int(parseInt(msgId, 10)).format()]
-    }, undefined, TimeoutCategory.NORMAL);
+    await ctx.sendRdoRequest('mail', rdoCall(
+      'CloseMessage', ctx.mailServerId,
+      RdoValue.int(parseInt(msgId, 10)),
+    ).packet, undefined, TimeoutCategory.NORMAL);
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after post:', e);
   }
@@ -201,17 +188,12 @@ export async function saveDraft(
   }
 
   // 1. Create in-memory message
-  const newMailPacket = await ctx.sendRdoRequest('mail', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.mailServerId,
-    action: RdoAction.CALL,
-    member: 'NewMail',
-    args: [
-      RdoValue.string(ctx.mailAccount).toString(),
-      RdoValue.string(to).toString(),
-      RdoValue.string(subject).toString()
-    ]
-  }, undefined, TimeoutCategory.NORMAL);
+  const newMailPacket = await ctx.sendRdoRequest('mail', rdoCall(
+    'NewMail', ctx.mailServerId,
+    RdoValue.string(ctx.mailAccount),
+    RdoValue.string(to),
+    RdoValue.string(subject),
+  ).packet, undefined, TimeoutCategory.NORMAL);
   const msgId = parsePropertyResponseHelper(newMailPacket.payload!, 'NewMail');
 
   if (!msgId || msgId === '0') {
@@ -227,24 +209,18 @@ export async function saveDraft(
 
   // 3. Add body lines (synchronous — Delphi sets WaitForAnswer:=true before AddLine loop)
   for (const line of bodyLines) {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: msgId,
-      action: RdoAction.CALL,
-      member: 'AddLine',
-      separator: '"*"',
-      args: [RdoValue.string(line).format()]
-    }, undefined, TimeoutCategory.NORMAL);
+    await ctx.sendRdoRequest('mail', rdoCall(
+      'AddLine', msgId,
+      RdoValue.string(line),
+    ).packet, undefined, TimeoutCategory.NORMAL);
   }
 
   // 4. Save to Draft folder (not Post/send)
-  const savePacket = await ctx.sendRdoRequest('mail', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.mailServerId,
-    action: RdoAction.CALL,
-    member: 'Save',
-    args: [RdoValue.string(worldName).toString(), RdoValue.int(parseInt(msgId, 10)).toString()]
-  }, undefined, TimeoutCategory.SLOW);
+  const savePacket = await ctx.sendRdoRequest('mail', rdoCall(
+    'Save', ctx.mailServerId,
+    RdoValue.string(worldName),
+    RdoValue.int(parseInt(msgId, 10)),
+  ).packet, undefined, TimeoutCategory.SLOW);
   // Save returns wordbool: #-1 = true (success), #0 = false (failure)
   const resultStr = parsePropertyResponseHelper(savePacket.payload!, 'Save');
   const success = resultStr === '-1';
@@ -253,14 +229,10 @@ export async function saveDraft(
   // 5. Close message to release server memory
   // Synchronous — Delphi WaitForAnswer still true from AddLine setting.
   try {
-    await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.mailServerId,
-      action: RdoAction.CALL,
-      member: 'CloseMessage',
-      separator: '"*"',
-      args: [RdoValue.int(parseInt(msgId, 10)).format()]
-    }, undefined, TimeoutCategory.NORMAL);
+    await ctx.sendRdoRequest('mail', rdoCall(
+      'CloseMessage', ctx.mailServerId,
+      RdoValue.int(parseInt(msgId, 10)),
+    ).packet, undefined, TimeoutCategory.NORMAL);
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Failed to close message after save:', e);
   }
@@ -286,62 +258,45 @@ export async function readMailMessage(
   const worldName = ctx.currentWorldInfo?.name || '';
 
   // 1. Open message (loads from disk into server memory)
-  const openPacket = await ctx.sendRdoRequest('mail', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.mailServerId,
-    action: RdoAction.CALL,
-    member: 'OpenMessage',
-    args: [
-      RdoValue.string(worldName).toString(),
-      RdoValue.string(ctx.mailAccount).toString(),
-      RdoValue.string(folder).toString(),
-      RdoValue.string(messageId).toString()
-    ]
-  }, undefined, TimeoutCategory.NORMAL);
+  const openPacket = await ctx.sendRdoRequest('mail', rdoCall(
+    'OpenMessage', ctx.mailServerId,
+    RdoValue.string(worldName),
+    RdoValue.string(ctx.mailAccount),
+    RdoValue.string(folder),
+    RdoValue.string(messageId),
+  ).packet, undefined, TimeoutCategory.NORMAL);
   const msgId = parsePropertyResponseHelper(openPacket.payload!, 'OpenMessage');
   ctx.log.debug(`[Mail] Opened message, msgId: ${msgId}`);
 
   try {
     // 2. Get headers (ini-style key=value text)
-    const headersPacket = await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: msgId,
-      action: RdoAction.CALL,
-      member: 'GetHeaders',
-      args: [RdoValue.int(0).toString()]
-    }, undefined, TimeoutCategory.NORMAL);
+    const headersPacket = await ctx.sendRdoRequest('mail', rdoCall(
+      'GetHeaders', msgId,
+      RdoValue.int(0),
+    ).packet, undefined, TimeoutCategory.NORMAL);
     const headersText = parsePropertyResponseHelper(headersPacket.payload || '', 'res');
 
     // 3. Get body lines
-    const linesPacket = await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: msgId,
-      action: RdoAction.CALL,
-      member: 'GetLines',
-      args: [RdoValue.int(0).toString()]
-    }, undefined, TimeoutCategory.NORMAL);
+    const linesPacket = await ctx.sendRdoRequest('mail', rdoCall(
+      'GetLines', msgId,
+      RdoValue.int(0),
+    ).packet, undefined, TimeoutCategory.NORMAL);
     const bodyText = parsePropertyResponseHelper(linesPacket.payload || '', 'res');
 
     // 4. Get attachments
-    const attachCountPacket = await ctx.sendRdoRequest('mail', {
-      verb: RdoVerb.SEL,
-      targetId: msgId,
-      action: RdoAction.CALL,
-      member: 'GetAttachmentCount',
-      args: [RdoValue.int(0).toString()]
-    }, undefined, TimeoutCategory.NORMAL);
+    const attachCountPacket = await ctx.sendRdoRequest('mail', rdoCall(
+      'GetAttachmentCount', msgId,
+      RdoValue.int(0),
+    ).packet, undefined, TimeoutCategory.NORMAL);
     const attachCountStr = parsePropertyResponseHelper(attachCountPacket.payload!, 'GetAttachmentCount');
     const attachCount = parseInt(attachCountStr, 10) || 0;
 
     const attachments: MailAttachment[] = [];
     for (let i = 0; i < attachCount; i++) {
-      const attachPacket = await ctx.sendRdoRequest('mail', {
-        verb: RdoVerb.SEL,
-        targetId: msgId,
-        action: RdoAction.CALL,
-        member: 'GetAttachment',
-        args: [RdoValue.int(i).toString()]
-      }, undefined, TimeoutCategory.NORMAL);
+      const attachPacket = await ctx.sendRdoRequest('mail', rdoCall(
+        'GetAttachment', msgId,
+        RdoValue.int(i),
+      ).packet, undefined, TimeoutCategory.NORMAL);
       const attachText = attachPacket.payload || '';
       attachments.push(parseMailAttachment(attachText));
     }
@@ -359,14 +314,10 @@ export async function readMailMessage(
     // 5. Always close message to release server memory
     // Synchronous — Delphi WaitForAnswer still true from AddLine setting.
     try {
-      await ctx.sendRdoRequest('mail', {
-        verb: RdoVerb.SEL,
-        targetId: ctx.mailServerId,
-        action: RdoAction.CALL,
-        member: 'CloseMessage',
-        separator: '"*"',
-        args: [RdoValue.int(parseInt(msgId, 10)).format()]
-      }, undefined, TimeoutCategory.NORMAL);
+      await ctx.sendRdoRequest('mail', rdoCall(
+        'CloseMessage', ctx.mailServerId,
+        RdoValue.int(parseInt(msgId, 10)),
+      ).packet, undefined, TimeoutCategory.NORMAL);
     } catch (e: unknown) {
       ctx.log.warn('[Mail] Failed to close message:', e);
     }
@@ -413,13 +364,11 @@ export async function getMailUnreadCount(ctx: SessionContext): Promise<number> {
     return 0;
   }
 
-  const packet = await ctx.sendRdoRequest('mail', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.mailServerId,
-    action: RdoAction.CALL,
-    member: 'CheckNewMail',
-    args: [RdoValue.int(parseInt(ctx.mailIntServerId, 10)).toString(), RdoValue.string(ctx.mailAccount).toString()]
-  }, undefined, TimeoutCategory.NORMAL);
+  const packet = await ctx.sendRdoRequest('mail', rdoCall(
+    'CheckNewMail', ctx.mailServerId,
+    RdoValue.int(parseInt(ctx.mailIntServerId, 10)),
+    RdoValue.string(ctx.mailAccount),
+  ).packet, undefined, TimeoutCategory.NORMAL);
   const countStr = parsePropertyResponseHelper(packet.payload!, 'res');
   const count = parseInt(countStr, 10);
   // The server returns -1 on internal failure — surface that as "no unread"

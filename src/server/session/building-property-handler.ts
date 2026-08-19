@@ -6,8 +6,10 @@
  */
 
 import type { SessionContext } from './session-context';
-import { RdoValue, RdoCommand } from '../../shared/rdo-types';
-import { RdoVerb, RdoAction } from '../../shared/types';
+import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall, rdoSet } from '../../shared/rdo-frame';
+import { isCataloguedRdoMember } from '../../shared/rdo-members';
+import type { RdoMemberName } from '../../shared/rdo-members';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { toErrorMessage } from '../../shared/error-utils';
 import { writeRdoFrame } from '../rdo-helpers';
@@ -34,9 +36,50 @@ export const KNOWN_RDO_COMMANDS: ReadonlySet<string> = new Set([
   'RDOSetInputSortMode', 'RDOSetLoanPerc', 'RDOSetMinSalaryValue',
   'RDOSetMinistryBudget', 'RDOSetOutputPrice', 'RDOSetPrice', 'RDOSetRole',
   'RDOSetSalaries', 'RDOSetTaxValue', 'RDOSetTownTaxes', 'RDOSetTradeLevel',
-  'RDOSetWordsOfWisdom', 'RDOSitMayor', 'RDOSitMinister', 'RDOVote', 'RDOVoteOf',
+  'RDOSetWordsOfWisdom', 'RDOSitMayor', 'RDOSitMinister', 'RDOVote',
   'RdoRepair', 'RdoStopRepair',
 ]);
+// `RDOVoteOf` is deliberately NOT here: it is a `function`
+// (Kernel/TownPolitics.pas:47), and every command on this list is emitted with
+// the `"*"` separator, which on a function is the arbitrary-write form. Its one
+// legitimate use is the `"^"` read in building-details-handler.ts:938.
+
+/**
+ * Narrow a runtime-chosen name to a catalogued member.
+ *
+ * `isCataloguedRdoMember` is a type guard, so this is what lets the emitter keep
+ * an `RdoMemberName` parameter without a cast at the two sites that choose their
+ * member at run time. The name still comes from the browser; nothing here
+ * assumes otherwise.
+ */
+function assertCallable(name: string): asserts name is RdoMemberName {
+  if (!isCataloguedRdoMember(name)) {
+    throw new Error(`Unknown building property command "${name}" — not in RDO_MEMBERS.`);
+  }
+}
+
+function assertSettable(name: string): asserts name is RdoMemberName {
+  if (!isCataloguedRdoMember(name)) {
+    throw new Error(`Unknown settable building property "${name}" — not in RDO_MEMBERS.`);
+  }
+}
+
+/**
+ * A property assignment takes exactly one value.
+ *
+ * `RdoCommand.set().args(a, b)` used to throw for the same reason (rdo-types.ts,
+ * P-L5); `rdoSet` takes a single `RdoValue`, so the check moves here rather than
+ * disappearing.
+ */
+function onlyArg(member: string, args: RdoValue[]): RdoValue {
+  if (args.length !== 1) {
+    throw new Error(
+      `RDO set ${member} needs exactly one value, got ${args.length}; the grammar ` +
+      `has room for one and the rest would be dropped silently.`
+    );
+  }
+  return args[0];
+}
 
 // =========================================================================
 // PUBLIC — setBuildingProperty
@@ -179,26 +222,34 @@ async function setBuildingPropertyImpl(
     };
 
     if (propertyName === 'property' && additionalParams?.propertyName) {
-      // Direct property set: use SET verb
+      // Direct property set: use SET verb.
+      //
+      // The member name is chosen at runtime, but the set of names it can take
+      // is closed: `resolveRdoCommand` (property-utils.ts:32) is its only
+      // producer, and it draws from the hand-written `rdoCommands` tables of
+      // template-groups.ts. CLASSES.BIN picks WHICH of those groups a building
+      // shows (property-templates.ts:55-121); it never adds a name. The eight
+      // reachable names are catalogued in shared/rdo-members.ts, which carries
+      // the full reasoning.
+      //
+      // The guard is what narrows `string` to `RdoMemberName`, so the runtime
+      // check and the compiler's check are the same check — no cast.
       const actualPropName = additionalParams.propertyName;
-      fireAndForget(RdoCommand.sel(currBlock).set(actualPropName).args(...rdoArgs).build());
+      assertSettable(actualPropName);
+      fireAndForget(rdoSet(actualPropName, currBlock, onlyArg(actualPropName, rdoArgs)).toFrame());
       await new Promise(resolve => setTimeout(resolve, 200));
     } else if (RDO_SET_PROPERTIES.has(propertyName)) {
       // Published property: use SET verb (not CALL)
-      fireAndForget(RdoCommand.sel(currBlock).set(propertyName).args(...rdoArgs).build());
+      assertSettable(propertyName);
+      fireAndForget(rdoSet(propertyName, currBlock, onlyArg(propertyName, rdoArgs)).toFrame());
       await new Promise(resolve => setTimeout(resolve, 200));
     } else if (SYNCHRONOUS_RDO_COMMANDS.has(propertyName)) {
       // Synchronous — wait for server response (matches Delphi WaitForAnswer:=true)
       const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
-      const formattedArgs = rdoArgs.map(arg => arg.format());
-      await ctx.sendRdoRequest('construction', {
-        verb: RdoVerb.SEL,
-        targetId: target,
-        action: RdoAction.CALL,
-        member: propertyName,
-        separator: '"*"',
-        args: formattedArgs,
-      }, undefined, TimeoutCategory.SLOW);
+      assertCallable(propertyName);
+      await ctx.sendRdoRequest('construction', rdoCall(
+        propertyName, target, ...rdoArgs,
+      ).packet, undefined, TimeoutCategory.SLOW);
       ctx.log.debug(`[BuildingDetails] Synchronous ${propertyName} completed`);
     } else {
       // M-D: this branch used to accept ANY propertyName and put it on the wire
@@ -220,7 +271,8 @@ async function setBuildingPropertyImpl(
       // Fire-and-forget RDO method call — no RID, no response expected.
       // Always use "*" (VoidId) — "^" without RID crashes the Delphi server.
       const target = RDO_OBJECTID_COMMANDS.has(propertyName) ? objectId : currBlock;
-      fireAndForget(RdoCommand.sel(target).call(propertyName).push().args(...rdoArgs).build());
+      assertCallable(propertyName);
+      fireAndForget(rdoCall(propertyName, target, ...rdoArgs).toFrame());
       await new Promise(resolve => setTimeout(resolve, 200));
     }
 
@@ -601,13 +653,6 @@ function buildRdoCommandArgs(
       break;
     }
 
-    case 'RDOVoteOf': {
-      // Args: voterName (widestring)
-      // Voyager: VotesSheet.pas — Proxy.RDOVoteOf(voterName)
-      args.push(RdoValue.string(value));
-      break;
-    }
-
     case 'RDOSetTownTaxes': {
       // Args: index (integer), value (integer)
       // Voyager: CapitolTownsSheet.pas — Proxy.RDOSetTownTaxes(index, value)
@@ -778,7 +823,6 @@ function mapRdoCommandToPropertyName(
       return 'Transcended';
 
     case 'RDOVote':
-    case 'RDOVoteOf':
       return 'RulerVotes';
 
     case 'RDOSetTownTaxes': {

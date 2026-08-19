@@ -22,21 +22,10 @@ PROMPT=$(node -e "
 OUT=""
 add() { OUT="${OUT}$1"$'\n'; }
 
-# --- RDO protocol: the project's critical path -------------------------------
-case "$PROMPT" in
-  *rdo*|*protocol*|*protocole*|*wire*|*rdocommand*|*rdovalue*|*sendrdorequest*|*probe*|*sonde*|*balayage*|*separator*|*separateur*|*séparateur*)
-    add "RDO — the separator must match the member's Pascal kind, and only ../SPO-Original states it."
-    add "  '^' passes a hidden result pointer, '*' passes none. Wrong pairing: freeze on a procedure, arbitrary memory write on a function. Both have hit production."
-    add "  No declaration, no frame. Never probe the live server to find out — that IS the mistake."
-    add "  A 'function' can NEVER be fire-and-forget: it needs '^' WITH a rid, i.e. sendRdoRequest."
-    add "  Guards: VOID_MEMBERS / assertNotVoidPush — but they run ONLY inside sendRdoRequest. The 25 direct writeRdoFrame() sites are unguarded; on that path the Pascal lookup is the only check."
-    add "  Argument count must match the declaration too: under-emit and the callee reads a register the dispatcher never set; over-emit past 2 register args and it never pops them. Build with RdoValue/RdoCommand, never by hand."
-    ;;
-esac
 
 case "$PROMPT" in
   *session*|*reconnect*|*reconnexion*|*timeout*|*keepalive*|*keep-alive*|*serverbusy*|*logon*|*login*|*logoff*)
-    add "SESSION / LIFECYCLE — skill: rdo-network-resilience. Verify any sequence change against ../SPO-Original."
+    add "SESSION / LIFECYCLE — verify any sequence change against ../SPO-Original before editing."
     ;;
 esac
 

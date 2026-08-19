@@ -9,8 +9,8 @@
 import type { SessionContext } from './session-context';
 import type { PoliticalRoleInfo } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
-import { RdoVerb, RdoAction } from '../../shared/types';
-import { RdoValue, RdoCommand } from '../../shared/rdo-types';
+import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall, rdoGet, rdoSet } from '../../shared/rdo-frame';
 import { parsePropertyResponse as parsePropertyResponseHelper, parseResultCode, writeRdoFrame } from '../rdo-helpers';
 import { toErrorMessage } from '../../shared/error-utils';
 import { serialiseConstruction } from './construction-lock';
@@ -111,12 +111,9 @@ async function manageConstructionImpl(
     ctx.log.debug(`[Construction] Building found: Block=${currBlock}, ObjectId=${targetId}`);
 
     // Step 2: Check RDOAcceptCloning (must be available: 1=existing building, 255=empty zone)
-    const initialCloning = await ctx.sendRdoRequest('construction', {
-      verb: RdoVerb.SEL,
-      targetId: currBlock,
-      action: RdoAction.GET,
-      member: 'RDOAcceptCloning'
-    }, undefined, TimeoutCategory.SLOW);
+    const initialCloning = await ctx.sendRdoRequest('construction', rdoGet(
+      'RDOAcceptCloning', currBlock,
+    ).packet, undefined, TimeoutCategory.SLOW);
     const cloningValue = parsePropertyResponseHelper(initialCloning.payload || '', 'RDOAcceptCloning');
     const cloningInt = parseInt(cloningValue, 10);
     ctx.log.debug(`[Construction] RDOAcceptCloning initial value: ${cloningInt}`);
@@ -132,15 +129,11 @@ async function manageConstructionImpl(
 
     // Step 3: Lock the block (set RDOAcceptCloning = -1)
     ctx.log.debug(`[Construction] Locking block ${currBlock}...`);
-    await ctx.sendRdoRequest('construction', {
-      verb: RdoVerb.SEL,
-      targetId: currBlock,
-      action: RdoAction.SET,
-      member: 'RDOAcceptCloning',
-      // Explicit RdoValue.int — was leaning on implicit SET numeric auto-typing
-      // (O-L7). Bytes unchanged: "#-1" (Delphi wordbool TRUE).
-      args: [RdoValue.int(-1).format()]
-    }, undefined, TimeoutCategory.SLOW);
+    // Explicit RdoValue.int — was leaning on implicit SET numeric auto-typing
+    // (O-L7). Bytes unchanged: "#-1" (Delphi wordbool TRUE).
+    await ctx.sendRdoRequest('construction', rdoSet(
+      'RDOAcceptCloning', currBlock, RdoValue.int(-1),
+    ).packet, undefined, TimeoutCategory.SLOW);
 
     // Step 4: Execute construction action (no request ID - push command)
     const socket = ctx.getSocket('construction');
@@ -151,25 +144,15 @@ async function manageConstructionImpl(
     let actionCmd = '';
     switch (action) {
       case 'START':
-        actionCmd = RdoCommand.sel(targetId)
-          .call('RDOStartUpgrades')
-          .push()
-          .args(RdoValue.int(count))
-          .build();
+        actionCmd = rdoCall('RDOStartUpgrades', targetId, RdoValue.int(count)).toFrame();
         ctx.log.debug(`[Construction] Starting ${count} upgrade(s)...`);
         break;
       case 'STOP':
-        actionCmd = RdoCommand.sel(targetId)
-          .call('RDOStopUpgrade')
-          .push()
-          .build();
+        actionCmd = rdoCall('RDOStopUpgrade', targetId).toFrame();
         ctx.log.debug(`[Construction] Stopping upgrade...`);
         break;
       case 'DOWN':
-        actionCmd = RdoCommand.sel(targetId)
-          .call('RDODowngrade')
-          .push()
-          .build();
+        actionCmd = rdoCall('RDODowngrade', targetId).toFrame();
         ctx.log.debug(`[Construction] Downgrading building...`);
         break;
       default:
@@ -183,12 +166,9 @@ async function manageConstructionImpl(
     await new Promise(resolve => setTimeout(resolve, 200));
 
     // Step 6: Verify unlock (RDOAcceptCloning should return to 255)
-    const finalCloning = await ctx.sendRdoRequest('construction', {
-      verb: RdoVerb.SEL,
-      targetId: currBlock,
-      action: RdoAction.GET,
-      member: 'RDOAcceptCloning'
-    }, undefined, TimeoutCategory.SLOW);
+    const finalCloning = await ctx.sendRdoRequest('construction', rdoGet(
+      'RDOAcceptCloning', currBlock,
+    ).packet, undefined, TimeoutCategory.SLOW);
     const finalValue = parsePropertyResponseHelper(finalCloning.payload || '', 'RDOAcceptCloning');
     ctx.log.debug(`[Construction] RDOAcceptCloning final value: ${finalValue}`);
 
@@ -291,13 +271,9 @@ async function renameFacilityImpl(
 
     // Send RDO SET command to Construction server (port 7001)
     // Format: C sel <CurrBlock> set Name="%<newName>";
-    await ctx.sendRdoRequest('construction', {
-      verb: RdoVerb.SEL,
-      targetId: buildingId,
-      action: RdoAction.SET,
-      member: 'Name',
-      args: [RdoValue.string(newName).format()]
-    }, undefined, TimeoutCategory.SLOW);
+    await ctx.sendRdoRequest('construction', rdoSet(
+      'Name', buildingId, RdoValue.string(newName),
+    ).packet, undefined, TimeoutCategory.SLOW);
 
     ctx.log.debug(`[Session] Building renamed successfully`);
     return { success: true, message: 'Building renamed successfully' };
@@ -342,14 +318,10 @@ async function deleteFacilityImpl(
     // Send RDO CALL command to Construction server (port 7001)
     // Format: C sel <World ID> call RDODelFacility "^" "#<x>","#<y>";
     // Note: sel must use worldId (from idof World), NOT buildingId (CurrBlock)
-    const result = await ctx.sendRdoRequest('construction', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.worldId,  // Use World ID, not building CurrBlock ID
-      action: RdoAction.CALL,
-      member: 'RDODelFacility',
-      separator: '"^"',  // Variant return type
-      args: [RdoValue.int(x).format(), RdoValue.int(y).format()]
-    }, undefined, TimeoutCategory.SLOW);
+    const result = await ctx.sendRdoRequest('construction', rdoCall(
+      'RDODelFacility', ctx.worldId,  // Use World ID, not building CurrBlock ID
+      RdoValue.int(x), RdoValue.int(y),
+    ).packet, undefined, TimeoutCategory.SLOW);
 
     // M-B: this used to log `result` and return success unconditionally, so a
     // demolition the server refused was indistinguishable from one it applied.

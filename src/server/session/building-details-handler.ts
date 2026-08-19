@@ -20,7 +20,6 @@ import type {
   CompInputData,
   WarehouseWareData,
 } from '../../shared/types';
-import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import {
   getTemplateForVisualClass,
@@ -30,6 +29,7 @@ import {
 import type { CollectedPropertyNames } from '../../shared/building-details';
 import { cleanPayload as cleanPayloadHelper, parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
 import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall } from '../../shared/rdo-frame';
 import { toErrorMessage } from '../../shared/error-utils';
 
 // =========================================================================
@@ -935,14 +935,9 @@ async function enrichVotesTab(
     if (!ctx.getSocket('construction')) {
       await ctx.connectConstructionService();
     }
-    const voteOfPacket = await ctx.sendRdoRequest('construction', {
-      verb: RdoVerb.SEL,
-      targetId: currBlock,
-      action: RdoAction.CALL,
-      member: 'RDOVoteOf',
-      separator: '"^"',
-      args: [RdoValue.string(username).format()],
-    }, undefined, TimeoutCategory.NORMAL);
+    const voteOfPacket = await ctx.sendRdoRequest('construction', rdoCall(
+      'RDOVoteOf', currBlock, RdoValue.string(username),
+    ).packet, undefined, TimeoutCategory.NORMAL);
     const votedFor = parsePropertyResponseHelper(voteOfPacket.payload || '', 'res');
     if (votedFor) {
       groups['votes'].push({ name: 'VoteOf', value: votedFor });
@@ -980,13 +975,10 @@ async function getSupplyPaths(
   ctx: SessionContext,
   tempObjectId: string
 ): Promise<Array<{ path: string; name: string }>> {
-  const inputNamesPacket = await ctx.sendRdoRequest('map', {
-    verb: RdoVerb.SEL,
-    targetId: tempObjectId,
-    action: RdoAction.CALL,
-    member: 'GetInputNames',
-    args: [RdoValue.int(0).format(), RdoValue.string('0').format()], // useless: integer, lang: widestring
-  }, undefined, TimeoutCategory.NORMAL);
+  // useless: integer, lang: widestring
+  const inputNamesPacket = await ctx.sendRdoRequest('map', rdoCall(
+    'GetInputNames', tempObjectId, RdoValue.int(0), RdoValue.string('0'),
+  ).packet, undefined, TimeoutCategory.NORMAL);
 
   const inputNamesRaw = cleanPayloadHelper(inputNamesPacket.payload || '');
   if (!inputNamesRaw || inputNamesRaw === '0' || inputNamesRaw === '-1') {
@@ -1231,13 +1223,9 @@ async function fetchSupplyDetails(
   name: string
 ): Promise<BuildingSupplyData | null> {
   // Navigate to supply path (reuses existing object — SetPath resets TCachedObjectWrap state)
-  const setPathPacket = await ctx.sendRdoRequest('map', {
-    verb: RdoVerb.SEL,
-    targetId: tempObjectId,
-    action: RdoAction.CALL,
-    member: 'SetPath',
-    args: [RdoValue.string(path).format()],
-  }, undefined, TimeoutCategory.SLOW);
+  const setPathPacket = await ctx.sendRdoRequest('map', rdoCall(
+    'SetPath', tempObjectId, RdoValue.string(path),
+  ).packet, undefined, TimeoutCategory.SLOW);
   const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
 
   ctx.log.debug(`[BuildingDetails] SetPath('${path}') result: "${setPathResult}"`);
@@ -1372,13 +1360,10 @@ async function getProductPaths(
   ctx: SessionContext,
   tempObjectId: string
 ): Promise<Array<{ path: string; name: string }>> {
-  const outputNamesPacket = await ctx.sendRdoRequest('map', {
-    verb: RdoVerb.SEL,
-    targetId: tempObjectId,
-    action: RdoAction.CALL,
-    member: 'GetOutputNames',
-    args: [RdoValue.int(0).format(), RdoValue.string('0').format()], // useless: integer, lang: widestring
-  }, undefined, TimeoutCategory.NORMAL);
+  // useless: integer, lang: widestring
+  const outputNamesPacket = await ctx.sendRdoRequest('map', rdoCall(
+    'GetOutputNames', tempObjectId, RdoValue.int(0), RdoValue.string('0'),
+  ).packet, undefined, TimeoutCategory.NORMAL);
 
   const outputNamesRaw = cleanPayloadHelper(outputNamesPacket.payload || '');
   if (!outputNamesRaw || outputNamesRaw === '0' || outputNamesRaw === '-1') {
@@ -1418,13 +1403,9 @@ async function fetchProductDetails(
   name: string
 ): Promise<BuildingProductData | null> {
   // Navigate to output path (reuses existing object — SetPath resets TCachedObjectWrap state)
-  const setPathPacket = await ctx.sendRdoRequest('map', {
-    verb: RdoVerb.SEL,
-    targetId: tempObjectId,
-    action: RdoAction.CALL,
-    member: 'SetPath',
-    args: [RdoValue.string(path).format()],
-  }, undefined, TimeoutCategory.SLOW);
+  const setPathPacket = await ctx.sendRdoRequest('map', rdoCall(
+    'SetPath', tempObjectId, RdoValue.string(path),
+  ).packet, undefined, TimeoutCategory.SLOW);
 
   const setPathResult = cleanPayloadHelper(setPathPacket.payload || '');
   ctx.log.debug(`[BuildingDetails] Product SetPath('${path}') result: "${setPathResult}"`);
@@ -1537,13 +1518,10 @@ async function fetchSubObjectProperties(
 ): Promise<string[]> {
   try {
     const query = propertyNames.join('\t') + '\t';
-    const packet = await ctx.sendRdoRequest('map', {
-      verb: RdoVerb.SEL,
-      targetId: tempObjectId,
-      action: RdoAction.CALL,
-      member: 'GetSubObjectProps',
-      args: [RdoValue.int(subIndex).format(), RdoValue.string(query).format()], // index: integer, names: WideString
-    }, undefined, TimeoutCategory.NORMAL);
+    // index: integer, names: WideString
+    const packet = await ctx.sendRdoRequest('map', rdoCall(
+      'GetSubObjectProps', tempObjectId, RdoValue.int(subIndex), RdoValue.string(query),
+    ).packet, undefined, TimeoutCategory.NORMAL);
 
     const raw = cleanPayloadHelper(packet.payload || '');
     if (raw.includes('\t')) {

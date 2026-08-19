@@ -311,7 +311,14 @@ export const TV_GENERAL_GROUP: PropertyGroup = {
   ],
   rdoCommands: {
     'HoursOnAir': { command: 'property' },
-    'Comercials': { command: 'property' },
+    // Read key and write name differ, and only here. Voyager stores the value
+    // under the cache key `Comercials` (one m, `tidComercials`,
+    // TVGeneralSheet.pas:15) but writes the published property `Commercials`
+    // (two m, StdBlocks/Broadcast.pas:53) — `Proxy.Commercials := …`,
+    // TVGeneralSheet.pas:322. `params.propertyName` overrides the read key on
+    // the write side (property-utils.ts:32); without it the RTTI lookup misses
+    // and the slider silently never lands.
+    'Comercials': { command: 'property', params: { propertyName: 'Commercials' } },
     'Stopped': { command: 'property' },
   },
 };
@@ -682,8 +689,9 @@ export const VOTES_GROUP: PropertyGroup = {
     },
   ],
   rdoCommands: {
+    // No 'RDOVoteOf' entry: it is a read (`function`, Kernel/TownPolitics.pas:47),
+    // served by enrichVotesTab, not a mutation the property path may emit.
     'RDOVote': { command: 'RDOVote' },
-    'RDOVoteOf': { command: 'RDOVoteOf' },
     'voteCandidate': { command: 'RDOVote' },
   },
 };

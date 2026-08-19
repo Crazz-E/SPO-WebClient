@@ -16,7 +16,9 @@
 | `^` | VARIANT | Variant type (used in synchronous calls) |
 | `*` | VOID | Void/no return (fire-and-forget) |
 
-Always use the `RdoValue` fluent API (`RdoValue.int()`, `RdoValue.string()`, etc.) and `RdoCommand.build()`. Never construct RDO protocol strings manually.
+Always build frames with `rdo-frame.ts` (`rdoCall` / `rdoGet` / `rdoSet` / `rdoIdOf`) and pass
+`RdoValue` objects as arguments — never call `.format()` at a call site, and never construct RDO
+protocol strings manually. The separator comes from the member's `kind` in `rdo-members.ts`.
 
 **Booleans:** emit `#-1` (true) / `#0` (false) — byte-identical to the legacy client; when parsing, accept any non-zero ordinal as true. Never normalize `#-1` to `#1`.
 

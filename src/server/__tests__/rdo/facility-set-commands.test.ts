@@ -135,10 +135,6 @@ function buildRdoCommandArgs(
       args.push(RdoValue.string(voterName), RdoValue.string(value));
       break;
     }
-    case 'RDOVoteOf': {
-      args.push(RdoValue.string(value));
-      break;
-    }
     case 'RDOSetTownTaxes': {
       const index = parseInt(params.index || '0', 10);
       args.push(RdoValue.int(index), RdoValue.int(parseInt(value, 10)));
@@ -189,7 +185,7 @@ function mapRdoCommandToPropertyName(
     case 'RDOSelectWare': return 'GateMap';
     case 'RDOSetWordsOfWisdom': return 'WordsOfWisdom';
     case 'RDOCacncelTransc': return 'Transcended';
-    case 'RDOVote': case 'RDOVoteOf': return 'RulerVotes';
+    case 'RDOVote': return 'RulerVotes';
     case 'RDOSetTownTaxes': return `TownTax${params.index || '0'}`;
     case 'RDOSitMayor': return `HasMayor${params.index || '0'}`;
     case 'RDOSetInputFluidPerc': return 'nfActualMaxFluidValue';
@@ -488,13 +484,6 @@ describe('Facility SET Command Format (buildRdoCommandArgs)', () => {
     });
   });
 
-  describe('RDOVoteOf', () => {
-    it('should format voterName as string', () => {
-      const result = buildRdoCommandArgs('RDOVoteOf', 'VoterX');
-      expect(result).toBe('"%VoterX"');
-    });
-  });
-
   describe('RDOSetTownTaxes', () => {
     it('should format index and value as integers', () => {
       const result = buildRdoCommandArgs('RDOSetTownTaxes', '15', { index: '2' });
@@ -652,9 +641,8 @@ describe('mapRdoCommandToPropertyName', () => {
     expect(mapRdoCommandToPropertyName('RDOCacncelTransc')).toBe('Transcended');
   });
 
-  it('should map RDOVote/RDOVoteOf to RulerVotes', () => {
+  it('should map RDOVote to RulerVotes', () => {
     expect(mapRdoCommandToPropertyName('RDOVote')).toBe('RulerVotes');
-    expect(mapRdoCommandToPropertyName('RDOVoteOf')).toBe('RulerVotes');
   });
 
   it('should map RDOSetTownTaxes to TownTax{index}', () => {

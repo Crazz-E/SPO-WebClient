@@ -2,12 +2,24 @@
 
 ## RDO Socket Rule
 
-- **Synchronous call** (expects response): `sendRdoRequest(socketName, packet, timeout?, category?)` -- adds a QueryId, uses `"^"` (VariantId) separator. Returns `Promise<RdoPacket>`.
-- **Fire-and-forget** (void push): `writeRdoFrame(socket, RdoCommand.build())` -- uses `"*"` (VoidId) separator. No QueryId.
-- **ALL RDO socket writes go through `writeRdoFrame()`** (`rdo-helpers.ts`) -- it encodes Latin-1 (ANSI) to match the Delphi wire. Never call `socket.write(string)` on an RDO socket: Node defaults to UTF-8 and corrupts accented characters.
-- **NEVER emit `"^"` on a Delphi `procedure`.** A SINGLE such frame froze the shared production Interface Server (live-proven 2026-08-15): `"^"` makes the server push a hidden result pointer that a `register`-convention procedure never pops (`RDOQueryServer.pas:422-424` -> `RDOObjectServer.pas:292`). **Check the Pascal declaration before choosing a separator.** Void members use `"*"` WITH a QueryId -- the reference client's form, acked `A<id> ;`. Enforced by `assertNotVariantOnVoidMember`; declarations listed in `VOID_MEMBERS` (`session/rdo-request-guards.ts`).
-- **NEVER** combine `sendRdoRequest()` with the `"*"` separator on anything that is not a proven Delphi `procedure` listed in `VOID_MEMBERS`. `assertNotVoidPush` is a **SAFETY guard since 2026-08-18**, not a convention: under `"*"` the dispatcher passes no hidden result pointer, a compiled `function` writes its `OleVariant` through an unset register, and one such frame (`call GetUserList "*"`) left the shared production Interface Server answering `errMalformedQuery` to every query on every connection for over three hours. For a `procedure`, `"*"` + QueryId is the only safe form. The mirror crash risk is `"^"` on a `procedure`; the third is `"^"` WITHOUT a QueryId. The whitelist of proven procedures is `VOID_MEMBERS` in `session/rdo-request-guards.ts`, each entry carrying its Pascal declaration.
-- Session/timer work (login, logoff, reconnect, KeepAlive, ServerBusy): verify the sequence against `../SPO-Original` before changing it — the `delphi-archaeologist` skill and the `rdo-network-resilience` skill cover this ground.
+- **Build every frame with `rdoCall` / `rdoGet` / `rdoSet` / `rdoIdOf`** (`shared/rdo-frame.ts`).
+  The separator is derived from the member's kind in `shared/rdo-members.ts` — it is never
+  written at a call site, and there is no way to pass one.
+- **Synchronous call** (expects a response): `sendRdoRequest(socketName, rdoCall(...).packet, timeout, category)`.
+  It allocates the QueryId. Returns `Promise<RdoPacket>`.
+- **Fire-and-forget** (void push): `writeRdoFrame(socket, rdoCall(...).toFrame())`. No QueryId.
+- **ALL RDO socket writes go through `writeRdoFrame()`** (`rdo-helpers.ts`) -- it encodes Latin-1
+  (ANSI) to match the Delphi wire. Never call `socket.write(string)` on an RDO socket: Node
+  defaults to UTF-8 and corrupts accented characters.
+- **Adding a member to the catalogue is the one moment the Pascal matters.** `"^"` on a
+  `procedure` freezes the shared server (live-proven 2026-08-15, `RDOQueryServer.pas:422-424` ->
+  `RDOObjectServer.pas:292`); `"*"` on a `function` is an arbitrary memory write that does not
+  self-recover (live-proven 2026-08-18, `call GetUserList "*"`). Read the server-side declaration
+  with `delphi-archaeologist` and cite it. Once catalogued, neither mistake is expressible.
+- `session/rdo-request-guards.ts` still guards what the catalogue does not describe: forbidden
+  members, session-lifecycle members, connection-bound members, buffer depth.
+- Session/timer work (login, logoff, reconnect, KeepAlive, ServerBusy): verify the sequence
+  against `../SPO-Original` before changing it.
 
 ## Session Lifecycle
 

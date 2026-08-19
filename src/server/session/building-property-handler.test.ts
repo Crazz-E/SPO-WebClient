@@ -390,11 +390,8 @@ const MATRIX: readonly MatrixEntry[] = [
     args: [RdoValue.string('innos'), RdoValue.string('Frédéric')],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'RulerVotes',
   },
-  {
-    command: 'RDOVoteOf', value: 'Frédéric',
-    args: [RdoValue.string('Frédéric')],
-    target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'RulerVotes',
-  },
+  // No RDOVoteOf row: it is a `function` and this path emits `"*"`. See the
+  // regression test in 'error paths'.
 
   // ── Repair (IndustryGeneralSheet.pas) — no read-back mapping ─────────────
   {
@@ -961,9 +958,12 @@ describe('direct property set', () => {
   });
 
   it('never targets ObjectId, even for a warehouse', async () => {
+    // Was `AcceptCloning`, a name this path cannot receive: template-groups.ts:540
+    // maps it to `command: 'RDOAcceptCloning'`, not to `'property'`. Now that the
+    // settable set is closed, the test has to use a name the UI actually produces.
     const fake = makeConstructionCtx();
 
-    await settle(setBuildingProperty(fake.ctx, X, Y, 'property', '1', { propertyName: 'AcceptCloning' }));
+    await settle(setBuildingProperty(fake.ctx, X, Y, 'property', '1', { propertyName: 'Interest' }));
 
     expect(onlyFrame(fake)).toContain(`sel ${CURR_BLOCK} `);
   });
@@ -990,7 +990,13 @@ describe('direct property set', () => {
   it('rejects a property name that is not a Delphi identifier', async () => {
     // P-H3: `ReadIdent` stops at the first invalid character and hands the rest
     // back to the sub-command loop, so `Foo" call Evil "*" "` would execute
-    // `Evil`. RdoCommand.set() refuses it before it is framed.
+    // `Evil`.
+    //
+    // Since lot C the catalogue rejects it first — an injection payload is not a
+    // catalogued member — so the message names RDO_MEMBERS rather than the
+    // identifier grammar. The grammar check still runs, inside `rdoSet`; it is
+    // simply no longer the first line. What matters is unchanged and asserted
+    // below: nothing reaches the wire.
     const fake = makeConstructionCtx();
 
     const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'property', '1', {
@@ -999,7 +1005,7 @@ describe('direct property set', () => {
 
     expect(fake.frames.construction).toEqual([]);
     expect(result).toEqual({ success: false, newValue: '' });
-    expect(fake.log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid RDO identifier'));
+    expect(fake.log.error).toHaveBeenCalledWith(expect.stringContaining('not in RDO_MEMBERS'));
   });
 
   // BUG connu (A-2).
@@ -1009,25 +1015,19 @@ describe('direct property set', () => {
   // and Voyager writes it correctly (TVGeneralSheet.pas:322). We took the typo
   // to the write side too, so the RTTI lookup fails server-side and the setting
   // never lands. `it.failing` = this is what SHOULD happen and does not.
-  it.failing('should write the published Commercials, not the cache key Comercials', async () => {
+  it('writes the published Commercials, whatever name the table carries', async () => {
     const fake = makeConstructionCtx();
 
-    await settle(setBuildingProperty(fake.ctx, X, Y, 'property', '50', { propertyName: 'Comercials' }));
+    await settle(setBuildingProperty(fake.ctx, X, Y, 'property', '50', { propertyName: 'Commercials' }));
 
     expect(onlyFrame(fake)).toEqual(
       RdoCommand.sel(CURR_BLOCK).set('Commercials').args(RdoValue.int(50)).build(),
     );
   });
 
-  it('sends Comercials verbatim today — the observable form of that gap', async () => {
-    const fake = makeConstructionCtx();
-
-    await settle(setBuildingProperty(fake.ctx, X, Y, 'property', '50', { propertyName: 'Comercials' }));
-
-    expect(onlyFrame(fake)).toEqual(
-      RdoCommand.sel(CURR_BLOCK).set('Comercials').args(RdoValue.int(50)).build(),
-    );
-  });
+  // The table-side half of this fix — that `Comercials` resolves to a write on
+  // `Commercials` — is asserted in
+  // client/components/building/__tests__/resolve-rdo-command.test.ts.
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1120,6 +1120,24 @@ describe('error paths', () => {
     expect(fake.log.error).toHaveBeenCalledWith(
       expect.stringContaining('Unknown building property command "RDOSetGravity"'),
     );
+  });
+
+  it('never puts RDOVoteOf on this path — it is a function, and this path emits "*"', async () => {
+    // `function RDOVoteOf(tycoonName: widestring): OleVariant`
+    // (Kernel/TownPolitics.pas:47, impl :418; same on TPresidentialHall,
+    // Kernel/WorldPolitics.pas:268). Every command reaching this handler is
+    // emitted with `"*"`, which on a function passes no result pointer while
+    // the callee writes one anyway through the register its ABI reserves.
+    //
+    // It used to be in KNOWN_RDO_COMMANDS with a `case` in buildRdoCommandArgs,
+    // reachable from the browser through VOTES_GROUP.rdoCommands. The only
+    // legitimate emission is the `"^"` read in building-details-handler.ts:938.
+    const fake = makeConstructionCtx();
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOVoteOf', 'Frédéric'));
+
+    expect(fake.frames.construction).toEqual([]);
+    expect(result.success).toBe(false);
   });
 
   it('builds arguments before it checks the command is known', async () => {

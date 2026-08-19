@@ -6,8 +6,9 @@
  */
 
 import type { SessionContext } from './session-context';
-import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
+import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall } from '../../shared/rdo-frame';
 import { toErrorMessage } from '../../shared/error-utils';
 import { parseResultCode } from '../rdo-helpers';
 
@@ -179,24 +180,16 @@ export async function buildRoad(
 
       ctx.log.debug(`[RoadBuilding] Segment ${i + 1}/${segments.length}: (${seg.sx},${seg.sy}) to (${seg.ex},${seg.ey}), tiles=${segTiles}, cost=${segCost}`);
 
-      const args = [
-        `#${circuitId}`,
-        `#${ownerId}`,
-        `#${seg.sx}`,
-        `#${seg.sy}`,
-        `#${seg.ex}`,
-        `#${seg.ey}`,
-        `#${segCost}`
-      ];
-
-      const result = await ctx.sendRdoRequest('world', {
-        verb: RdoVerb.SEL,
-        targetId: ctx.worldContextId!,
-        action: RdoAction.CALL,
-        member: 'CreateCircuitSeg',
-        separator: '"^"',
-        args
-      }, undefined, TimeoutCategory.SLOW);
+      const result = await ctx.sendRdoRequest('world', rdoCall(
+        'CreateCircuitSeg', ctx.worldContextId!,
+        RdoValue.int(circuitId),
+        RdoValue.int(ownerId),
+        RdoValue.int(seg.sx),
+        RdoValue.int(seg.sy),
+        RdoValue.int(seg.ex),
+        RdoValue.int(seg.ey),
+        RdoValue.int(segCost),
+      ).packet, undefined, TimeoutCategory.SLOW);
 
       // Parse response
       const resultCode = parseResultCode(result.payload);
@@ -330,19 +323,13 @@ export async function demolishRoad(
   const ownerId = ctx.fTycoonProxyId;
 
   try {
-    const result = await ctx.sendRdoRequest('world', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.worldContextId,
-      action: RdoAction.CALL,
-      member: 'BreakCircuitAt',
-      separator: '"^"',
-      args: [
-        `#${circuitId}`,
-        `#${ownerId}`,
-        `#${x}`,
-        `#${y}`
-      ]
-    }, undefined, TimeoutCategory.SLOW);
+    const result = await ctx.sendRdoRequest('world', rdoCall(
+      'BreakCircuitAt', ctx.worldContextId,
+      RdoValue.int(circuitId),
+      RdoValue.int(ownerId),
+      RdoValue.int(x),
+      RdoValue.int(y),
+    ).packet, undefined, TimeoutCategory.SLOW);
 
     const resultCode = parseResultCode(result.payload);
 
@@ -402,21 +389,15 @@ export async function wipeCircuit(
   const ny2 = Math.max(y1, y2);
 
   try {
-    const result = await ctx.sendRdoRequest('world', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.worldContextId,
-      action: RdoAction.CALL,
-      member: 'WipeCircuit',
-      separator: '"^"',
-      args: [
-        `#${circuitId}`,
-        `#${ownerId}`,
-        `#${nx1}`,
-        `#${ny1}`,
-        `#${nx2}`,
-        `#${ny2}`
-      ]
-    }, undefined, TimeoutCategory.SLOW);
+    const result = await ctx.sendRdoRequest('world', rdoCall(
+      'WipeCircuit', ctx.worldContextId,
+      RdoValue.int(circuitId),
+      RdoValue.int(ownerId),
+      RdoValue.int(nx1),
+      RdoValue.int(ny1),
+      RdoValue.int(nx2),
+      RdoValue.int(ny2),
+    ).packet, undefined, TimeoutCategory.SLOW);
 
     const resultCode = parseResultCode(result.payload);
 

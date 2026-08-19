@@ -64,9 +64,8 @@ import { RdoFramer, RdoProtocol } from './rdo';
 import {
   RdoValue,
   RdoParser,
-  RdoCommand,
-  rdoArgs
 } from '../shared/rdo-types';
+import { rdoCall, rdoGet, rdoIdOf } from '../shared/rdo-frame';
 import { config } from '../shared/config';
 import { createLogger, generateSessionId } from '../shared/logger';
 import { toProxyUrl, isProxyUrl } from '../shared/proxy-utils';
@@ -104,7 +103,7 @@ import * as researchHandler from './session/research-handler';
 import type { SessionContext } from './session/session-context';
 import { dispatchPush } from './session/push-dispatcher';
 import * as loginHandler from './session/login-handler';
-import { assertMemberNotForbidden, assertNotVoidPush, assertNotVariantOnVoidMember, canBufferRequest, isConnectionBoundMember } from './session/rdo-request-guards';
+import { canBufferRequest, isConnectionBoundMember } from './session/request-routing';
 import { classifyRdoError, ErrorRecovery } from './session/rdo-error-classifier';
 import { handleRdoErrorResponse } from './session/rdo-error-contract';
 import { RdoConnectionPool, PooledConnection } from './session/rdo-connection-pool';
@@ -688,14 +687,12 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 	  // Get previous building ID (stored WITHOUT any prefix)
 	  const previousBuildingId = this.currentFocusedBuildingId || '0';
 
-	  const packet = await this.sendRdoRequest('world', {
-		verb: RdoVerb.SEL,
-		targetId: this.worldContextId!,
-		action: RdoAction.CALL,
-		member: 'SwitchFocusEx',
-		separator: '"^"',
-		args: [RdoValue.int(parseInt(previousBuildingId, 10)).format(), RdoValue.int(x).format(), RdoValue.int(y).format()]
-	  }, undefined, TimeoutCategory.NORMAL);
+	  const packet = await this.sendRdoRequest('world', rdoCall(
+	    'SwitchFocusEx', this.worldContextId!,
+	    RdoValue.int(parseInt(previousBuildingId, 10)),
+	    RdoValue.int(x),
+	    RdoValue.int(y),
+	  ).packet, undefined, TimeoutCategory.NORMAL);
 
 	  // CRITICAL: Extract the 'res' property first (format is res="%...")
 	  const responseData = parsePropertyResponseHelper(packet.payload || '', 'res');
@@ -731,11 +728,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 
 	  const socket = this.sockets.get('world');
 	  if (socket) {
-		const unfocusCmd = RdoCommand.sel(this.worldContextId!)
-		  .call('UnfocusObject')
-		  .push()
-		  .args(RdoValue.int(parseInt(this.currentFocusedBuildingId)))
-		  .build();
+		const unfocusCmd = rdoCall('UnfocusObject', this.worldContextId!, RdoValue.int(parseInt(this.currentFocusedBuildingId))).toFrame();
 		writeRdoFrame(socket, unfocusCmd);
 		this.log.debug('[Session] Sent UnfocusObject push command');
 	  }
@@ -758,14 +751,11 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
   private async objectAt(x: number, y: number): Promise<string> {
     if (!this.worldContextId) throw new Error('Not logged into world');
 
-    const packet = await this.sendRdoRequest('world', {
-      verb: RdoVerb.SEL,
-      targetId: this.worldContextId,
-      action: RdoAction.CALL,
-      member: 'ObjectAt',
-      separator: '"^"',
-      args: [RdoValue.int(x).format(), RdoValue.int(y).format()],
-    }, undefined, TimeoutCategory.NORMAL);
+    const packet = await this.sendRdoRequest('world', rdoCall(
+      'ObjectAt', this.worldContextId,
+      RdoValue.int(x),
+      RdoValue.int(y),
+    ).packet, undefined, TimeoutCategory.NORMAL);
 
     const objectId = parsePropertyResponseHelper(packet.payload || '', 'res');
     if (!objectId) throw new Error(`No object found at (${x}, ${y})`);
@@ -792,14 +782,11 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     this.log.debug(`[Session] ConnectFacilities: sourceId=${sourceObjectId} targetId=${targetObjectId}`);
 
     // Call ConnectFacilities(sourceId, targetId) on worldContextId
-    const packet = await this.sendRdoRequest('world', {
-      verb: RdoVerb.SEL,
-      targetId: this.worldContextId,
-      action: RdoAction.CALL,
-      member: 'ConnectFacilities',
-      separator: '"^"',
-      args: [RdoValue.int(parseInt(sourceObjectId, 10)).format(), RdoValue.int(parseInt(targetObjectId, 10)).format()],
-    }, undefined, TimeoutCategory.SLOW);
+    const packet = await this.sendRdoRequest('world', rdoCall(
+      'ConnectFacilities', this.worldContextId,
+      RdoValue.int(parseInt(sourceObjectId, 10)),
+      RdoValue.int(parseInt(targetObjectId, 10)),
+    ).packet, undefined, TimeoutCategory.SLOW);
 
     const resultMessage = parsePropertyResponseHelper(packet.payload || '', 'res') || '';
     this.log.debug(`[Session] ConnectFacilities result: ${resultMessage}`);
@@ -967,10 +954,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     if (this.sockets.has('map')) return;
     this.log.debug('[Session] Connecting to Map Service...');
     await this.createSocket('map', this.currentWorldInfo?.ip || '127.0.0.1', RDO_PORTS.MAP_SERVICE);
-    const idPacket = await this.sendRdoRequest('map', {
-      verb: RdoVerb.IDOF,
-      targetId: 'WSObjectCacher'
-    }, undefined, TimeoutCategory.FAST);
+    const idPacket = await this.sendRdoRequest('map', rdoIdOf('WSObjectCacher').packet, undefined, TimeoutCategory.FAST);
     this.cacherId = parseIdOfResponseHelper(idPacket.payload);
     this.log.debug(`[Session] Map Service Ready. CacherID: ${this.cacherId}`);
     this.startCacherKeepAlive();
@@ -1001,24 +985,14 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     );
 
     // Resolve World object
-    const idPacket = await this.sendRdoRequest('construction', {
-      verb: RdoVerb.IDOF,
-      targetId: 'World'
-    }, undefined, TimeoutCategory.FAST);
+    const idPacket = await this.sendRdoRequest('construction', rdoIdOf('World').packet, undefined, TimeoutCategory.FAST);
     this.worldId = parseIdOfResponseHelper(idPacket.payload);
     this.log.debug(`[Construction] World ID: ${this.worldId}`);
 
     // Logon to World (no request ID - push command with separator "*")
     const socket = this.sockets.get('construction');
     if (socket && this.worldId) {
-      const logonCmd = RdoCommand.sel(this.worldId)
-        .call('RDOLogonClient')
-        .push()
-        .args(
-          RdoValue.string(loginUser),
-          RdoValue.string(this.cachedPassword!)
-        )
-        .build();
+      const logonCmd = rdoCall('RDOLogonClient', this.worldId, RdoValue.string(loginUser), RdoValue.string(this.cachedPassword!)).toFrame();
       writeRdoFrame(socket, logonCmd);
       this.log.debug(`[Construction] Sent RDOLogonClient as "${loginUser}"`);
       // Small delay to let server process logon
@@ -1051,10 +1025,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     await this.createSocket('mail', this.mailAddr, this.mailPort);
 
     // Resolve MailServer hook
-    const idPacket = await this.sendRdoRequest('mail', {
-      verb: RdoVerb.IDOF,
-      targetId: 'MailServer'
-    }, undefined, TimeoutCategory.FAST);
+    const idPacket = await this.sendRdoRequest('mail', rdoIdOf('MailServer').packet, undefined, TimeoutCategory.FAST);
     this.mailServerId = parseIdOfResponseHelper(idPacket.payload);
     this.log.debug(`[Mail] Mail Server Ready. ServerId: ${this.mailServerId}`);
 
@@ -1065,13 +1036,10 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     // made the call always return -1.
     try {
       const worldName = this.currentWorldInfo?.name || '';
-      const logOnPacket = await this.sendRdoRequest('mail', {
-        verb: RdoVerb.SEL,
-        targetId: this.mailServerId!,
-        action: RdoAction.CALL,
-        member: 'LogServerOn',
-        args: [RdoValue.string(worldName).format()],
-      }, undefined, TimeoutCategory.NORMAL);
+      const logOnPacket = await this.sendRdoRequest('mail', rdoCall(
+        'LogServerOn', this.mailServerId!,
+        RdoValue.string(worldName),
+      ).packet, undefined, TimeoutCategory.NORMAL);
       const serverId = parsePropertyResponseHelper(logOnPacket.payload!, 'res');
       this.mailIntServerId = serverId && serverId !== '0' ? serverId : null;
       this.log.debug(`[Mail] LogServerOn → mail session id ${this.mailIntServerId}`);
@@ -1225,19 +1193,13 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
 
         // ObjectsInArea(x, y, dx, dy: integer) — InterfaceServer.pas
         // Args MUST use RdoValue.int() — autoTypeNumeric is disabled for CALL args
-        const objectsRequest: Partial<RdoPacket> = {
-            verb: RdoVerb.SEL,
-            targetId: worldCtxId,
-            action: RdoAction.CALL,
-            member: 'ObjectsInArea',
-            separator: '"^"',
-            args: [
-                RdoValue.int(targetX).format(),
-                RdoValue.int(targetY).format(),
-                RdoValue.int(w).format(),
-                RdoValue.int(h).format(),
-            ]
-        };
+        const objectsRequest: Partial<RdoPacket> = rdoCall(
+          'ObjectsInArea', worldCtxId,
+          RdoValue.int(targetX),
+          RdoValue.int(targetY),
+          RdoValue.int(w),
+          RdoValue.int(h),
+        ).packet;
 
         // SegmentsInArea(CircuitId, x1, y1, x2, y2: integer) — InterfaceServer.pas
         const modeOrLayer = 1;
@@ -1246,19 +1208,14 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
         const x2 = targetX + w;
         const y2 = targetY + h;
 
-        const segmentsRequest: Partial<RdoPacket> = {
-            verb: RdoVerb.SEL,
-            targetId: worldCtxId,
-            action: RdoAction.CALL,
-            member: 'SegmentsInArea',
-            args: [
-                RdoValue.int(modeOrLayer).format(),
-                RdoValue.int(x1).format(),
-                RdoValue.int(y1).format(),
-                RdoValue.int(x2).format(),
-                RdoValue.int(y2).format(),
-            ]
-        };
+        const segmentsRequest: Partial<RdoPacket> = rdoCall(
+          'SegmentsInArea', worldCtxId,
+          RdoValue.int(modeOrLayer),
+          RdoValue.int(x1),
+          RdoValue.int(y1),
+          RdoValue.int(x2),
+          RdoValue.int(y2),
+        ).packet;
 
         // Both are independent read-only queries on the world context. With the
         // flag on they go out concurrently over the world pool (1 RTT instead
@@ -1333,11 +1290,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     if (dx <= 0 || dy <= 0) return; // Skip degenerate viewports
     const socket = this.sockets.get('world');
     if (!socket) return;
-    const cmd = RdoCommand.sel(this.worldContextId)
-      .call('SetViewedArea')
-      .push()  // "*" separator, no RID — fire-and-forget (Delphi: procedure, not function)
-      .args(RdoValue.int(x), RdoValue.int(y), RdoValue.int(dx), RdoValue.int(dy))
-      .build();
+    const cmd = rdoCall('SetViewedArea', this.worldContextId, RdoValue.int(x), RdoValue.int(y), RdoValue.int(dx), RdoValue.int(dy)).toFrame();
     writeRdoFrame(socket, cmd);
   }
 
@@ -1358,17 +1311,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     if (!socket) {
       throw new Error('World socket not available');
     }
-    const cmd = RdoCommand.sel(this.worldContextId)
-      .call('CloneFacility')
-      .push()  // "*" separator — void procedure, fire-and-forget
-      .args(
-        RdoValue.int(x),
-        RdoValue.int(y),
-        RdoValue.int(options),
-        RdoValue.int(0),  // useless param (always 0 in Delphi client)
-        RdoValue.int(parseInt(this.tycoonId, 10))
-      )
-      .build();
+    const cmd = rdoCall('CloneFacility', this.worldContextId, RdoValue.int(x), RdoValue.int(y), RdoValue.int(options), RdoValue.int(0), RdoValue.int(parseInt(this.tycoonId, 10))).toFrame();
     writeRdoFrame(socket, cmd);
     this.log.debug(`[CloneFacility] Sent: ${cmd}`);
   }
@@ -1411,13 +1354,10 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
   public async cacherCreateObject(): Promise<string> {
     if (!this.cacherId) throw new Error('Missing cacherId');
     if (!this.currentWorldInfo?.name) throw new Error('Missing world name for CreateObject');
-    const packet = await this.sendRdoRequest('map', {
-      verb: RdoVerb.SEL,
-      targetId: this.cacherId,
-      action: RdoAction.CALL,
-      member: 'CreateObject',
-      args: [RdoValue.string(this.currentWorldInfo.name).format()]
-    }, undefined, TimeoutCategory.SLOW);
+    const packet = await this.sendRdoRequest('map', rdoCall(
+      'CreateObject', this.cacherId,
+      RdoValue.string(this.currentWorldInfo.name),
+    ).packet, undefined, TimeoutCategory.SLOW);
     return cleanPayloadHelper(packet.payload || '');
   }
 
@@ -1426,39 +1366,29 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
    * This method MUST be called before GetPropertyList to populate server cache
    */
   public async cacherSetObject(tempObjectId: string, x: number, y: number): Promise<void> {
-    await this.sendRdoRequest('map', {
-      verb: RdoVerb.SEL,
-      targetId: tempObjectId,
-      action: RdoAction.CALL,
-      member: 'SetObject',
-      args: [RdoValue.int(x).format(), RdoValue.int(y).format()]
-    }, undefined, TimeoutCategory.SLOW);
+    await this.sendRdoRequest('map', rdoCall(
+      'SetObject', tempObjectId,
+      RdoValue.int(x),
+      RdoValue.int(y),
+    ).packet, undefined, TimeoutCategory.SLOW);
     // Brief delay for server to populate cache (reduced from 100ms)
     await new Promise(resolve => setTimeout(resolve, 30));
   }
 
   public async cacherSetPath(tempObjectId: string, path: string): Promise<void> {
-    await this.sendRdoRequest('map', {
-      verb: RdoVerb.SEL,
-      targetId: tempObjectId,
-      action: RdoAction.CALL,
-      member: 'SetPath',
-      // Explicit OLEString (P-M2): `path` interpolates a tycoon name supplied by
-      // the browser — `Tycoons\<name>.five\` (building-management-handler.ts:45).
-      args: [RdoValue.string(path).format()]
-    }, undefined, TimeoutCategory.SLOW);
+    await this.sendRdoRequest('map', rdoCall(
+      'SetPath', tempObjectId,
+      RdoValue.string(path),
+    ).packet, undefined, TimeoutCategory.SLOW);
     // No delay needed — Delphi SetPath is synchronous (loads file inline before responding)
   }
 
   public async cacherGetPropertyList(tempObjectId: string, propertyNames: string[]): Promise<string[]> {
     const query = propertyNames.join('\t') + '\t';
-    const packet = await this.sendRdoRequest('map', {
-      verb: RdoVerb.SEL,
-      targetId: tempObjectId,
-      action: RdoAction.CALL,
-      member: 'GetPropertyList',
-      args: [RdoValue.string(query).format()]
-    }, undefined, TimeoutCategory.NORMAL);
+    const packet = await this.sendRdoRequest('map', rdoCall(
+      'GetPropertyList', tempObjectId,
+      RdoValue.string(query),
+    ).packet, undefined, TimeoutCategory.NORMAL);
     // Extract tab-delimited values WITHOUT trimming — cleanPayload's .trim()
     // strips leading/trailing tabs, destroying empty values at the boundaries.
     // The Delphi cache server always returns one value per requested property
@@ -1501,11 +1431,7 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     // CloseObject is a Delphi procedure (void) — fire-and-forget, no QueryId.
     // Delphi: procedure CloseObject(Obj: integer)
     try {
-      const cmd = RdoCommand.sel(this.cacherId)
-        .call('CloseObject')
-        .push() // "*" separator — void procedure
-        .args(RdoValue.int(parseInt(tempObjectId, 10)))
-        .build();
+      const cmd = rdoCall('CloseObject', this.cacherId, RdoValue.int(parseInt(tempObjectId, 10))).toFrame();
       writeRdoFrame(socket, cmd);
     } catch (e: unknown) {
       this.log.warn('[cacherCloseObject] Failed:', toErrorMessage(e));
@@ -1928,12 +1854,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         // counted as failed after 1 s.
         const response = await this.sendRdoRequest(
           'world',
-          {
-            verb: RdoVerb.SEL,
-            targetId: this.worldContextId,
-            action: RdoAction.GET,
-            member: 'ServerBusy',
-          },
+          rdoGet('ServerBusy', this.worldContextId).packet,
           IS_PROXY_TIMEOUT_MS,
           TimeoutCategory.NORMAL,
           { bypassBusyGate: true, forcePrimarySocket: true },
@@ -2023,10 +1944,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
       const tempObjectId = buildingDetailsHandler.getActiveInspectorTempObjectId(this);
       if (!tempObjectId) return;
       try {
-        const cmd = RdoCommand.sel(tempObjectId)
-          .call('KeepAlive')
-          .push()
-          .build();
+        const cmd = rdoCall('KeepAlive', tempObjectId).toFrame();
         writeRdoFrame(socket, cmd);
         this.log.debug(`[KeepAlive] Sent to inspector temp object ${tempObjectId}`);
       } catch (e: unknown) {
@@ -2343,39 +2261,6 @@ private async executeRdoRequest(socketName: string, packetData: Partial<RdoPacke
     throw new Error(`Socket ${socketName} not active`);
   }
 
-  try {
-    // GUARD 0 — the developer's exclusion list, unconditional. Refused whatever
-    // the verb, the separator, the argument count or any flag: deleting the
-    // account, deleting a company, regressing a level. Wired here on
-    // 2026-08-18 with the developer's authorisation — the refusal already
-    // existed in rdo-request-guards.ts and was branched on the conformance tool
-    // ALONE, so the gateway, the only code that reaches TWorld in production,
-    // was the one path it did not cover.
-    assertMemberNotForbidden(packetData);
-
-    // GUARD 1 — SAFETY, reclassified 2026-08-18, live-proven. `"*"` + QueryId is
-    // safe on a `procedure` — the reference client's own form, capture-proven
-    // (`A<id> ;`) — and is an ARBITRARY MEMORY WRITE on a `function`: the
-    // dispatcher passes no hidden result pointer (RDOObjectServer.pas:281-283)
-    // and the function writes its OleVariant through a register nobody set. One
-    // such frame (`call GetUserList "*"`) left the shared Interface Server
-    // answering errMalformedQuery to every query, on every connection — for over
-    // 3 h, the process still alive, never restarted (verified in the server log:
-    // no startup banner after the incident). Worse than a crash, which at least
-    // self-heals. VOID_MEMBERS is the whitelist, each entry carrying the Pascal
-    // declaration that proves the member is a procedure; there is no opt-in.
-    // (This comment used to read "the guard protects consistency, not the
-    // server" — that framing was retired on 2026-08-18.)
-    assertNotVoidPush(packetData);
-
-    // GUARD 2 — the exact mirror: "^" on a Delphi `procedure` leaves an
-    // unpopped result pointer on the stack, and a SINGLE such frame froze the
-    // shared Interface Server (live probe, 2026-08-15).
-    assertNotVariantOnVoidMember(packetData);
-  } catch (guardError: unknown) {
-    releaseAcquiredSlot();
-    throw guardError;
-  }
 
   // Capture pool connection for slot release on completion
   const capturedPoolConn = poolConn;
@@ -2716,16 +2601,10 @@ private handlePush(socketName: string, packet: RdoPacket) {
       if (!socket || socket.destroyed) return;
 
       // SetTycoonCookie(TycoonId, CookieName, CookieValue) — void push
-      const cmdX = RdoCommand.sel(this.worldContextId)
-        .call('SetTycoonCookie').push()
-        .args(RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastX.0'), RdoValue.string(String(this.lastPlayerX)))
-        .build();
+      const cmdX = rdoCall('SetTycoonCookie', this.worldContextId, RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastX.0'), RdoValue.string(String(this.lastPlayerX))).toFrame();
       writeRdoFrame(socket, cmdX);
 
-      const cmdY = RdoCommand.sel(this.worldContextId)
-        .call('SetTycoonCookie').push()
-        .args(RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastY.0'), RdoValue.string(String(this.lastPlayerY)))
-        .build();
+      const cmdY = rdoCall('SetTycoonCookie', this.worldContextId, RdoValue.int(parseInt(this.tycoonId, 10)), RdoValue.string('LastY.0'), RdoValue.string(String(this.lastPlayerY))).toFrame();
       writeRdoFrame(socket, cmdY);
 
       this.log.debug('[Session] Player position saved');
@@ -2887,17 +2766,12 @@ private handlePush(socketName: string, packet: RdoPacket) {
     if (socket && !socket.destroyed) {
       try {
         // 1. ClientNotAware — legacy statement call (fire-and-forget)
-        writeRdoFrame(socket, RdoCommand.sel(this.worldContextId).call('ClientNotAware').push().build());
+        writeRdoFrame(socket, rdoCall('ClientNotAware', this.worldContextId).toFrame());
 
         // 2. Logoff — skip when the server is busy (a buffered request could
         //    hang logout); the socket close alone triggers full server cleanup.
         if (!this.isServerBusy) {
-          await this.sendRdoRequest('world', {
-            verb: RdoVerb.SEL,
-            targetId: this.worldContextId,
-            action: RdoAction.GET,
-            member: 'Logoff',
-          }, StarpeaceSession.LOGOFF_TIMEOUT_MS, TimeoutCategory.NORMAL);
+          await this.sendRdoRequest('world', rdoGet('Logoff', this.worldContextId).packet, StarpeaceSession.LOGOFF_TIMEOUT_MS, TimeoutCategory.NORMAL);
           this.log.debug('[Session] Logoff acknowledged by InterfaceServer');
         }
       } catch (err: unknown) {

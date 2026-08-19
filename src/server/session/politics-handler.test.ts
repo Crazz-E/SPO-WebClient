@@ -562,7 +562,7 @@ describe('getDefaultPoliticsData', () => {
 // fetchOwnedFacilities — RDOFavoritesGetSubItems("")
 // =============================================================================
 describe('fetchOwnedFacilities', () => {
-  it('calls RDOFavoritesGetSubItems on the world context with an empty OLEString, no explicit separator', async () => {
+  it('calls RDOFavoritesGetSubItems on the world context with an empty OLEString', async () => {
     const fake = makeSessionCtx();
     fake.respond(() => 'res="%"');
 
@@ -576,6 +576,10 @@ describe('fetchOwnedFacilities', () => {
       targetId: FAKE_CONTEXT_IDS.worldContextId,
       action: RdoAction.CALL,
       member: 'RDOFavoritesGetSubItems',
+      // Now explicit: rdoCall derives it from the catalogued kind instead of
+      // letting format() default it from the QueryId. Same bytes either way —
+      // proven in src/server/rdo.test.ts.
+      separator: '"^"',
       args: [RdoValue.string('').format()],
     });
   });
@@ -1041,6 +1045,7 @@ describe('searchConnections', () => {
       targetId: FAKE_CONTEXT_IDS.cacherId,
       action: RdoAction.CALL,
       member: 'FindSuppliers',
+      separator: '"^"',
       args: [
         RdoValue.string('Plastics').format(), RdoValue.string('Shamba').format(),
         RdoValue.string('Rio').format(), RdoValue.string('ACME').format(),

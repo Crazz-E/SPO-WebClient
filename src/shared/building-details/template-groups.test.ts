@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
+import { RDO_MEMBERS, isCataloguedRdoMember } from '../rdo-members';
 import { PropertyType } from './property-definitions';
 import {
   HANDLER_TO_GROUP,
@@ -941,5 +942,63 @@ describe('collectTemplatePropertyNamesForGroups (R1 tab-scoped refresh)', () => 
     // CapitolTowns has TownCount as a count property
     expect(scoped.countProperties).toContain('TownCount');
     expect(scoped.indexedByCount.has('TownCount')).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// The dynamic `set` path — its name set must stay closed and catalogued
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('every property-set mapping names a catalogued RDO member', () => {
+  /**
+   * `rdoCommands` entries with `command: 'property'` are the only source of
+   * member names for the runtime-named `set` in
+   * server/session/building-property-handler.ts:188. The name that reaches the
+   * wire is `params.propertyName` when the mapping supplies one, otherwise the
+   * table key — property-utils.ts:32 spreads `mapping.params` after the key.
+   *
+   * This is the ratchet that would have caught A-2: the TV slider carried the
+   * cache key `Comercials` (one m, TVGeneralSheet.pas:15) into the write, where
+   * the published property is `Commercials` (StdBlocks/Broadcast.pas:53). The
+   * RTTI lookup missed and the setting silently never landed.
+   */
+  function emittedSetNames(): Array<{ key: string; emitted: string; groupId: string }> {
+    return Object.values(GROUP_BY_ID).flatMap(group =>
+      Object.entries(group.rdoCommands ?? {})
+        .filter(([, mapping]) => mapping.command === 'property')
+        .map(([key, mapping]) => ({
+          key,
+          emitted: mapping.params?.propertyName ?? key,
+          groupId: group.id,
+        })),
+    );
+  }
+
+  it('emits only names RDO_MEMBERS declares settable', () => {
+    const offenders = emittedSetNames().filter(({ emitted }) => {
+      if (!isCataloguedRdoMember(emitted)) return true;
+      const spec = RDO_MEMBERS[emitted];
+      // `as const` makes each `access` a literal tuple, so the union's
+      // `includes` parameter collapses to `never`. Widen to read it.
+      return spec.kind !== 'accessor' || !(spec.access as readonly string[]).includes('set');
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('resolves the TV advertising slider to the published Commercials', () => {
+    // The read key stays `Comercials` — that is what the cacher returns — and
+    // only the write is overridden.
+    expect(TV_GENERAL_GROUP.rdoCommands!['Comercials']).toEqual({
+      command: 'property',
+      params: { propertyName: 'Commercials' },
+    });
+  });
+
+  it('finds property-set mappings at all — the ratchet must have teeth', () => {
+    const names = emittedSetNames();
+
+    expect(names.length).toBeGreaterThanOrEqual(17);
+    expect(new Set(names.map(n => n.emitted)).size).toBe(8);
   });
 });

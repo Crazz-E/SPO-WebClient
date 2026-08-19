@@ -1,12 +1,12 @@
 {
   "version": "1.1.0",
   "installedAt": "2026-03-15T23:33:13.262Z",
-  "generatedAt": "2026-08-18T23:30:58.304Z",
+  "generatedAt": "2026-08-19T10:33:15.811Z",
   "source": "skillsmp.com",
   "generator": ".claude/generate-skills-manifest.js",
   "counts": {
-    "total": 21,
-    "project": 8,
+    "total": 20,
+    "project": 7,
     "community": 13,
     "withRecordedProvenance": 10
   },
@@ -109,13 +109,6 @@
       "stars": 80,
       "githubUrl": "https://github.com/NeverSight/learn-skills.dev/tree/main/data/skills-md/curiositech/some_claude_skills/pwa-expert",
       "upstreamName": "pwa-expert"
-    },
-    {
-      "name": "rdo-network-resilience",
-      "skillName": "rdo-network-resilience",
-      "origin": "project",
-      "path": ".claude/skills/rdo-network-resilience",
-      "hasSkillMd": true
     },
     {
       "name": "react-best-practices",

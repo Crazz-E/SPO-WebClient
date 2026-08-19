@@ -7,8 +7,8 @@
 
 import type { SessionContext } from './session-context';
 import type { SurfaceData, SurfaceType } from '../../shared/types';
-import { RdoVerb, RdoAction } from '../../shared/types';
 import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall } from '../../shared/rdo-frame';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 
 // =========================================================================
@@ -38,21 +38,15 @@ export async function defineZone(
 
   ctx.log.debug(`[Zone] Defining zone ${zoneId} from (${nx1},${ny1}) to (${nx2},${ny2})`);
 
-  const packet = await ctx.sendRdoRequest('world', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.worldContextId,
-    action: RdoAction.CALL,
-    member: 'DefineZone',
-    separator: '"^"',
-    args: [
-      RdoValue.int(parseInt(ctx.tycoonId, 10)).format(),
-      RdoValue.int(zoneId).format(),
-      RdoValue.int(nx1).format(),
-      RdoValue.int(ny1).format(),
-      RdoValue.int(nx2).format(),
-      RdoValue.int(ny2).format(),
-    ]
-  }, undefined, TimeoutCategory.SLOW);
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'DefineZone', ctx.worldContextId,
+    RdoValue.int(parseInt(ctx.tycoonId, 10)),
+    RdoValue.int(zoneId),
+    RdoValue.int(nx1),
+    RdoValue.int(ny1),
+    RdoValue.int(nx2),
+    RdoValue.int(ny2),
+  ).packet, undefined, TimeoutCategory.SLOW);
 
   const result = packet.payload || '';
   ctx.log.debug(`[Zone] DefineZone response: ${result}`);
@@ -82,14 +76,11 @@ export async function getSurfaceData(
 
   ctx.log.debug(`[Surface] Requesting ${surfaceType} data for area (${x1},${y1}) to (${x2},${y2})`);
 
-  const packet = await ctx.sendRdoRequest('world', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.worldContextId,
-    action: RdoAction.CALL,
-    member: 'GetSurface',
-    separator: '"^"',
-    args: [RdoValue.string(surfaceType).format(), RdoValue.int(x1).format(), RdoValue.int(y1).format(), RdoValue.int(x2).format(), RdoValue.int(y2).format()]
-  }, undefined, TimeoutCategory.NORMAL);
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'GetSurface', ctx.worldContextId,
+    RdoValue.string(surfaceType),
+    RdoValue.int(x1), RdoValue.int(y1), RdoValue.int(x2), RdoValue.int(y2),
+  ).packet, undefined, TimeoutCategory.NORMAL);
 
   return parseRLEResponse(ctx, packet.payload || '');
 }

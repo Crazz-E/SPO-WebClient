@@ -30,7 +30,6 @@ const PROJECT_SKILLS = new Set([
   'dependencies',
   'e2e-test',
   'mobile-ux-optimizer',
-  'rdo-network-resilience',
   'spo-testing',
   'web-games',
   'zustand-store-ts',

@@ -15,9 +15,9 @@ import type {
   PoliticsRatingEntry,
   ConnectionSearchResult,
 } from '../../shared/types';
-import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
-import { RdoValue, RdoCommand } from '../../shared/rdo-types';
+import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall } from '../../shared/rdo-frame';
 import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 import { splitMultilinePayload as splitMultilinePayloadHelper } from '../rdo-helpers';
 import { parseFavoritesResponse } from './session-utils';
@@ -366,13 +366,10 @@ export async function fetchOwnedFacilities(ctx: SessionContext): Promise<Favorit
     throw new Error('Not logged in — no worldContextId');
   }
 
-  const packet = await ctx.sendRdoRequest('world', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.worldContextId,
-    action: RdoAction.CALL,
-    member: 'RDOFavoritesGetSubItems',
-    args: [RdoValue.string('').format()],
-  }, undefined, TimeoutCategory.NORMAL);
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'RDOFavoritesGetSubItems', ctx.worldContextId,
+    RdoValue.string(''),
+  ).packet, undefined, TimeoutCategory.NORMAL);
 
   const raw = parsePropertyResponseHelper(packet.payload!, 'res');
   return parseFavoritesResponse(raw);
@@ -479,11 +476,10 @@ export async function politicsVote(
     if (!socket) throw new Error('Construction socket unavailable');
 
     const voterName = ctx.activeUsername || ctx.cachedUsername || '';
-    const cmd = RdoCommand
-      .sel(parseInt(currBlock))
-      .call('RDOVote').push()
-      .args(RdoValue.string(voterName), RdoValue.string(candidateName))
-      .build();
+    const cmd = rdoCall(
+      'RDOVote', parseInt(currBlock),
+      RdoValue.string(voterName), RdoValue.string(candidateName),
+    ).toFrame();
 
     ctx.log.debug(`[Politics] Voting: ${voterName} → ${candidateName}`);
     writeRdoFrame(socket, cmd);
@@ -589,29 +585,22 @@ export async function searchConnections(
     const method = direction === 'input' ? 'FindSuppliers' : 'FindClients';
     ctx.log.debug(`[Connections] ${method} for ${fluidId} at (${buildingX}, ${buildingY})`);
 
-    const packet = await ctx.sendRdoRequest('map', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.cacherId,
-      action: RdoAction.CALL,
-      member: method,
-      // Delphi: FindSuppliers/FindClients(Output, World, Town, Name: widestring;
-      //         Count, X, Y, SortMode, Role: integer) — CacheServerReportForm.pas:108-109
-      // Explicit OLEString on every widestring parameter (P-M2): the town and
-      // company filters are free text typed by the player.
-      args: [
-        RdoValue.string(fluidId).format(),                  // Output (widestring)
-        RdoValue.string(worldName).format(),                // World (widestring)
-        RdoValue.string(filters?.town || '').format(),      // Town filter (empty = all)
-        RdoValue.string(filters?.company || '').format(),   // Name/company filter (empty = all)
-        RdoValue.int(filters?.maxResults || 20).format(),   // Count
-        RdoValue.int(buildingX).format(),                   // X
-        RdoValue.int(buildingY).format(),                   // Y
-        RdoValue.int(1).format(),                           // SortMode (1=quality)
-        RdoValue.int(filters?.roles || 31).format(),        // Role bitmask (31 = all 5 roles)
-      ],
-      // Cache Server supply-chain search across the whole world — the member is
-      // chosen at runtime (FindSuppliers / FindClients), so no literal to key on.
-    }, undefined, TimeoutCategory.SLOW);
+    // Delphi: FindSuppliers/FindClients(Output, World, Town, Name: widestring;
+    //         Count, X, Y, SortMode, Role: integer) — CacheServerReportForm.pas:108-109
+    // Explicit OLEString on every widestring parameter (P-M2): the town and
+    // company filters are free text typed by the player.
+    const packet = await ctx.sendRdoRequest('map', rdoCall(
+      method, ctx.cacherId,
+      RdoValue.string(fluidId),                  // Output (widestring)
+      RdoValue.string(worldName),                // World (widestring)
+      RdoValue.string(filters?.town || ''),      // Town filter (empty = all)
+      RdoValue.string(filters?.company || ''),   // Name/company filter (empty = all)
+      RdoValue.int(filters?.maxResults || 20),   // Count
+      RdoValue.int(buildingX),                   // X
+      RdoValue.int(buildingY),                   // Y
+      RdoValue.int(1),                           // SortMode (1=quality)
+      RdoValue.int(filters?.roles || 31),        // Role bitmask (31 = all 5 roles)
+    ).packet, undefined, TimeoutCategory.SLOW);
 
     const results = parseRdoConnectionResults(packet.payload || '', direction);
     ctx.log.debug(`[Connections] ${method} returned ${results.length} results`);

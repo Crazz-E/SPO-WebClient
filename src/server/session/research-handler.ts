@@ -7,9 +7,9 @@
 
 import type { SessionContext } from './session-context';
 import type { ResearchCategoryData, ResearchInventionDetails } from '../../shared/types';
-import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall } from '../../shared/rdo-frame';
 import { parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
 import { parseResearchItems } from './session-utils';
 
@@ -116,26 +116,16 @@ export async function getResearchDetails(
 
   ctx.log.debug(`[Research] Getting details for "${inventionId}" on block ${currBlock}`);
 
-  // Call RDOGetInvPropsByLang — function (olevariant return), "^" separator
-  const propsPacket = await ctx.sendRdoRequest('construction', {
-    verb: RdoVerb.SEL,
-    targetId: currBlock,
-    action: RdoAction.CALL,
-    member: 'RDOGetInvPropsByLang',
-    separator: '"^"',
-    args: [RdoValue.string(inventionId).format(), RdoValue.string('0').format()],
-  }, undefined, TimeoutCategory.NORMAL);
+  const propsPacket = await ctx.sendRdoRequest('construction', rdoCall(
+    'RDOGetInvPropsByLang', currBlock,
+    RdoValue.string(inventionId), RdoValue.string('0'),
+  ).packet, undefined, TimeoutCategory.NORMAL);
   const properties = parsePropertyResponseHelper(propsPacket.payload || '', 'res') || '';
 
-  // Call RDOGetInvDescEx — function (olevariant return), "^" separator
-  const descPacket = await ctx.sendRdoRequest('construction', {
-    verb: RdoVerb.SEL,
-    targetId: currBlock,
-    action: RdoAction.CALL,
-    member: 'RDOGetInvDescEx',
-    separator: '"^"',
-    args: [RdoValue.string(inventionId).format(), RdoValue.string('0').format()],
-  }, undefined, TimeoutCategory.NORMAL);
+  const descPacket = await ctx.sendRdoRequest('construction', rdoCall(
+    'RDOGetInvDescEx', currBlock,
+    RdoValue.string(inventionId), RdoValue.string('0'),
+  ).packet, undefined, TimeoutCategory.NORMAL);
   const description = parsePropertyResponseHelper(descPacket.payload || '', 'res') || '';
 
   ctx.log.debug(`[Research] Details for "${inventionId}": props=${properties.length} chars, desc=${description.length} chars`);

@@ -8,9 +8,10 @@
 
 import type { SessionContext } from './session-context';
 import type { ChatUser } from '../../shared/types';
-import { RdoVerb, RdoAction, parseAccDesc } from '../../shared/types';
+import { parseAccDesc } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
-import { RdoValue, RdoCommand } from '../../shared/rdo-types';
+import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall } from '../../shared/rdo-frame';
 import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 
 // =========================================================================
@@ -74,13 +75,9 @@ export async function getChatUserList(ctx: SessionContext): Promise<ChatUser[]> 
 
   ctx.log.debug('[Chat] Getting user list...');
 
-  const packet = await ctx.sendRdoRequest('world', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.worldContextId,
-    action: RdoAction.CALL,
-    member: 'GetUserList',
-    separator: '"^"'
-  }, undefined, TimeoutCategory.NORMAL);
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'GetUserList', ctx.worldContextId,
+  ).packet, undefined, TimeoutCategory.NORMAL);
 
   const rawUsers = parsePropertyResponseHelper(packet.payload || '', 'res');
   return parseChatUserList(ctx, rawUsers);
@@ -91,14 +88,9 @@ export async function getChatChannelList(ctx: SessionContext): Promise<string[]>
 
   ctx.log.debug('[Chat] Getting channel list...');
 
-  const packet = await ctx.sendRdoRequest('world', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.worldContextId,
-    action: RdoAction.CALL,
-    member: 'GetChannelList',
-    args: [RdoValue.string('ROOT').format()],
-    separator: '"^"'
-  }, undefined, TimeoutCategory.NORMAL);
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'GetChannelList', ctx.worldContextId, RdoValue.string('ROOT'),
+  ).packet, undefined, TimeoutCategory.NORMAL);
 
   const rawChannels = parsePropertyResponseHelper(packet.payload || '', 'res');
   return parseChatChannelList(ctx, rawChannels);
@@ -109,21 +101,18 @@ export async function getChatChannelInfo(ctx: SessionContext, channelName: strin
 
   ctx.log.debug(`[Chat] Getting info for channel: ${channelName}`);
 
-  const packet = await ctx.sendRdoRequest('world', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.worldContextId,
-    action: RdoAction.CALL,
-    member: 'GetChannelInfo',
-    // Explicit OLEString (P-M2): channelName is browser-supplied. Raw, a name
-    // starting with an RDO prefix was re-read as a typed literal, and one
-    // containing a `"` escaped its own literal into a second sub-command of the
-    // same `sel` (RDOQueryServer.pas:133-160). Bytes unchanged for real names.
-    args: [RdoValue.string(channelName).format()],
-    // WARN: unquoted '^' — should be '"^"' per protocol convention.
-    // No issue observed as of 2026-04-02 (RdoProtocol.format() auto-quotes),
-    // but inconsistent with the rest of the codebase. Fix if chat breaks.
-    separator: '^'
-  }, undefined, TimeoutCategory.NORMAL);
+  // Explicit OLEString (P-M2): channelName is browser-supplied. Raw, a name
+  // starting with an RDO prefix was re-read as a typed literal, and one
+  // containing a `"` escaped its own literal into a second sub-command of the
+  // same `sel` (RDOQueryServer.pas:133-160). Bytes unchanged for real names.
+  //
+  // This site used to write `separator: '^'` unquoted, with a note about the
+  // inconsistency. The separator is now derived and the spelling question is
+  // gone; format() quoted all three spellings identically anyway
+  // (src/server/rdo.test.ts).
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'GetChannelInfo', ctx.worldContextId, RdoValue.string(channelName),
+  ).packet, undefined, TimeoutCategory.NORMAL);
 
   return parsePropertyResponseHelper(packet.payload || '', 'res');
 }
@@ -134,18 +123,12 @@ export async function joinChatChannel(ctx: SessionContext, channelName: string):
   const displayName = channelName || 'Lobby';
   ctx.log.debug(`[Chat] Joining channel: ${displayName}`);
 
-  const packet = await ctx.sendRdoRequest('world', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.worldContextId,
-    action: RdoAction.CALL,
-    member: 'JoinChannel',
-    // Explicit OLEString (P-M2) — see getChatChannelInfo.
-    args: [RdoValue.string(channelName).format(), RdoValue.string('').format()],
-    // WARN: unquoted '^' — should be '"^"' per protocol convention.
-    // No issue observed as of 2026-04-02 (RdoProtocol.format() auto-quotes),
-    // but inconsistent with the rest of the codebase. Fix if chat breaks.
-    separator: '^'
-  }, undefined, TimeoutCategory.NORMAL);
+  // Explicit OLEString (P-M2) — see getChatChannelInfo. Same note on the
+  // formerly unquoted separator.
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'JoinChannel', ctx.worldContextId,
+    RdoValue.string(channelName), RdoValue.string(''),
+  ).packet, undefined, TimeoutCategory.NORMAL);
 
   const result = parsePropertyResponseHelper(packet.payload || '', 'res');
   if (result !== '0') {
@@ -173,15 +156,14 @@ export async function sendChatMessage(ctx: SessionContext, message: string): Pro
   // procedure never pops (RDOQueryServer.pas:422-424 → RDOObjectServer.pas:292),
   // and a SINGLE such frame froze the shared Interface Server (live probe,
   // 2026-08-15). Every chat message a player sent carried this form.
-  // assertNotVariantOnVoidMember now makes reintroducing it impossible.
-  await ctx.sendRdoRequest('world', {
-    verb: RdoVerb.SEL,
-    targetId: ctx.worldContextId,
-    action: RdoAction.CALL,
-    member: 'SayThis',
-    separator: '"*"',
-    args: [RdoValue.string('').format(), RdoValue.string(message).format()]
-  }, undefined, TimeoutCategory.NORMAL);
+  //
+  // The separator is no longer written here at all: SayThis is catalogued as a
+  // `procedure`, so "*" is derived. Reintroducing "^" would mean editing the
+  // catalogue, which is not something a chat change touches.
+  await ctx.sendRdoRequest('world', rdoCall(
+    'SayThis', ctx.worldContextId,
+    RdoValue.string(''), RdoValue.string(message),
+  ).packet, undefined, TimeoutCategory.NORMAL);
 }
 
 export async function setChatTypingStatus(ctx: SessionContext, isTyping: boolean): Promise<void> {
@@ -192,12 +174,9 @@ export async function setChatTypingStatus(ctx: SessionContext, isTyping: boolean
   // Send as push command (no await needed)
   const socket = ctx.getSocket('world');
   if (socket) {
-    const cmd = RdoCommand.sel(ctx.worldContextId!)
-      .call('MsgCompositionChanged')
-      .push()
-      .args(RdoValue.int(status))
-      .build();
-    writeRdoFrame(socket, cmd);
+    writeRdoFrame(socket, rdoCall(
+      'MsgCompositionChanged', ctx.worldContextId!, RdoValue.int(status),
+    ).toFrame());
   }
 }
 

@@ -14,10 +14,11 @@
  * already driven through this handler down to the bytes by
  * `__tests__/rdo/rdo-frame-injection.test.ts` — not repeated here.
  *
- * `getChatChannelInfo` / `joinChatChannel` carry an unquoted `'^'` separator
- * (chat-handler.ts:125,147, flagged WARN in the source). The tests pin the
- * CURRENT form so a silent change either way is visible; `RdoProtocol.format()`
- * quotes it on the wire, so no byte differs today.
+ * `getChatChannelInfo` / `joinChatChannel` used to carry an unquoted `'^'`
+ * separator, flagged WARN in the source. Since the lot C migration the
+ * separator is derived from the member's catalogued kind and the spelling
+ * question is gone; `RdoProtocol.format()` quoted all three spellings
+ * identically anyway (src/server/rdo.test.ts).
  */
 
 import {
@@ -58,6 +59,7 @@ describe('getChatUserList', () => {
       action: RdoAction.CALL,
       member: 'GetUserList',
       separator: '"^"',
+      args: [],
     });
   });
 
@@ -168,7 +170,7 @@ describe('getChatChannelList', () => {
 // ===========================================================================
 
 describe('getChatChannelInfo', () => {
-  it('calls GetChannelInfo with the channel name as an explicit OLEString and the (unquoted) ^ separator', async () => {
+  it('calls GetChannelInfo with the channel name as an explicit OLEString', async () => {
     const fake = makeSessionCtx();
     fake.respond(() => 'res="%12 users"');
 
@@ -182,7 +184,7 @@ describe('getChatChannelInfo', () => {
       action: RdoAction.CALL,
       member: 'GetChannelInfo',
       args: [RdoValue.string('Café').format()],
-      separator: '^',
+      separator: '"^"',
     });
     expect(info).toBe('12 users');
   });
@@ -218,7 +220,7 @@ describe('joinChatChannel', () => {
       action: RdoAction.CALL,
       member: 'JoinChannel',
       args: [RdoValue.string('Traders').format(), RdoValue.string('').format()],
-      separator: '^',
+      separator: '"^"',
     });
     expect(fake.ctx.setCurrentChannel).toHaveBeenCalledWith('Traders');
   });

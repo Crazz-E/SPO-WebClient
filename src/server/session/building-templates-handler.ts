@@ -14,9 +14,9 @@ import type {
   BuildingCategory,
   BuildingInfo,
 } from '../../shared/types';
-import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
+import { rdoCall } from '../../shared/rdo-frame';
 import { deriveResidenceClass } from './session-utils';
 import fetch from 'node-fetch';
 import { parseResultCode } from '../rdo-helpers';
@@ -629,14 +629,10 @@ export async function placeBuilding(
   ctx.log.debug(`[BuildConstruction] Placing ${facilityClass} at (${x}, ${y}) for company ${companyId}`);
 
   try {
-    const packet = await ctx.sendRdoRequest('world', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.worldContextId,
-      action: RdoAction.CALL,
-      member: 'NewFacility',
-      separator: '"^"',
-      args: [RdoValue.string(facilityClass).format(), RdoValue.int(companyId).format(), RdoValue.int(x).format(), RdoValue.int(y).format()]
-    }, undefined, TimeoutCategory.NORMAL);
+    const packet = await ctx.sendRdoRequest('world', rdoCall(
+      'NewFacility', ctx.worldContextId,
+      RdoValue.string(facilityClass), RdoValue.int(companyId), RdoValue.int(x), RdoValue.int(y),
+    ).packet, undefined, TimeoutCategory.NORMAL);
 
     // Parse response for result code
     const resultCode = parseResultCode(packet.payload);
@@ -681,19 +677,10 @@ export async function placeCapitol(
   ctx.log.debug(`[Capitol] Placing Capitol at (${x}, ${y})`);
 
   try {
-    const packet = await ctx.sendRdoRequest('world', {
-      verb: RdoVerb.SEL,
-      targetId: ctx.worldContextId,
-      action: RdoAction.CALL,
-      member: 'NewFacility',
-      separator: '"^"',
-      args: [
-        RdoValue.string('Capitol').format(),
-        RdoValue.int(1).format(),
-        RdoValue.int(x).format(),
-        RdoValue.int(y).format(),
-      ]
-    }, undefined, TimeoutCategory.NORMAL);
+    const packet = await ctx.sendRdoRequest('world', rdoCall(
+      'NewFacility', ctx.worldContextId,
+      RdoValue.string('Capitol'), RdoValue.int(1), RdoValue.int(x), RdoValue.int(y),
+    ).packet, undefined, TimeoutCategory.NORMAL);
 
     const resultCode = parseResultCode(packet.payload);
 

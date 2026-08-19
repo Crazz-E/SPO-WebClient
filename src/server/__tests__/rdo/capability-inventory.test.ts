@@ -17,8 +17,10 @@
  * Controls:
  *   1. No orphan capability      — every REQ_* is routed and emitted, or exempt.
  *   2. No untested RDO member    — every emitted member is named by an assertion.
- *   3. Separator / socket rules  — VOID_MEMBERS never take `"^"`;
- *                                  CONNECTION_BOUND_MEMBERS never leave the primary socket.
+ *   3. Separator / socket rules  — no emitter writes a separator (it is derived
+ *                                  from RDO_MEMBERS), every emitted member is
+ *                                  catalogued, and CONNECTION_BOUND_MEMBERS
+ *                                  never leave the primary socket.
  *   4. Pushes accounted for      — links to the TISEvents inventory, does not copy it.
  *   5. Template demand vs supply — a tab may only read what some template collects.
  */
@@ -27,7 +29,8 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { VOID_MEMBERS, CONNECTION_BOUND_MEMBERS } from '../../session/rdo-request-guards';
+import { CONNECTION_BOUND_MEMBERS } from '../../session/request-routing';
+import { RDO_MEMBERS, isCataloguedRdoMember } from '../../../shared/rdo-members';
 import { HANDLER_TO_GROUP } from '../../../shared/building-details/template-groups';
 import {
   registerInspectorTabs,
@@ -218,17 +221,20 @@ describe('capability inventory — no orphan REQ_* type', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * The four literal shapes by which `src/server/session/` and `spo_session.ts`
+ * The three literal shapes by which `src/server/session/` and `spo_session.ts`
  * put a member name on the wire. A member emitted through none of them is
  * invisible to this control — the teeth test below is what keeps that honest.
  *
- *   S1  `member: 'X'`                     — sendRdoRequest packet literal
- *   S2  `RdoCommand….call/set/get/idof('X')` — writeRdoFrame chain
- *   S3  `…FireAndForget(ctx, id, 'X', …)` — mail-handler's named indirection
- *   S4  `KNOWN_RDO_COMMANDS`              — building-property-handler's dynamic
+ *   S1  `rdoCall/rdoGet/rdoSet('X', …)`   — the emitter, every literal site
+ *   S2  `…FireAndForget(ctx, id, 'X', …)` — mail-handler's named indirection
+ *   S3  `KNOWN_RDO_COMMANDS`              — building-property-handler's dynamic
  *                                           dispatch allowlist; the member is a
  *                                           runtime string, so the allowlist is
  *                                           the only place it appears literally.
+ *
+ * Lot C collapsed the previous four shapes into these: the hand-built
+ * `member: 'X'` packet literal and the `RdoCommand` chain are both gone, so one
+ * regex now covers every literal site.
  */
 function emittedRdoMembers(): Map<string, Set<string>> {
   const files = [
@@ -248,22 +254,15 @@ function emittedRdoMembers(): Map<string, Set<string>> {
     const source = fs.readFileSync(file, 'utf8');
 
     // S1
-    for (const m of source.matchAll(/member:\s*'([A-Za-z_]\w*)'/g)) add(m[1], file);
+    for (const m of source.matchAll(/\brdo(?:Call|Get|Set)\(\s*'([A-Za-z_]\w*)'/g)) add(m[1], file);
 
-    // S2 — `RdoCommand` may be followed by a newline before `.sel(…)`.
-    for (const chain of source.matchAll(/RdoCommand\s*\.[\s\S]{0,800}?\.build\(\)/g)) {
-      for (const m of chain[0].matchAll(/\.(?:call|set|get|idof)\('([A-Za-z_]\w*)'\)/g)) {
-        add(m[1], file);
-      }
-    }
-
-    // S3
+    // S2
     for (const call of source.matchAll(/\b\w*FireAndForget\(([\s\S]{0,300}?)\)/g)) {
       for (const m of call[1].matchAll(/'([A-Z]\w*)'/g)) add(m[1], file);
     }
   }
 
-  // S4
+  // S3
   const bp = fs.readFileSync(path.join(SESSION, 'building-property-handler.ts'), 'utf8');
   const known = /KNOWN_RDO_COMMANDS[^=]*=\s*new Set\(\[([\s\S]*?)\]\)/.exec(bp);
   if (known) {
@@ -348,15 +347,15 @@ describe('capability inventory — no emitted RDO member without a test', () => 
     expect(UNTESTED_MEMBERS.filter(e => !emitted.has(e.member)).map(e => e.member)).toEqual([]);
   });
 
-  it('extracts members through all four literal shapes — the ratchet must have teeth', () => {
+  it('extracts members through all three literal shapes — the ratchet must have teeth', () => {
     const emitted = emittedRdoMembers();
 
     // One anchor per source: a regex that stops matching drops its anchor.
     expect([...emitted.keys()]).toEqual(expect.arrayContaining([
-      'RDOCnntId',      // S1 — packet literal (login-handler.ts)
-      'CreateCircuitSeg', // S2 — RdoCommand chain (road-handler.ts)
-      'DeleteMessage',  // S3 — mailFireAndForget (mail-handler.ts)
-      'RDOSetPrice',    // S4 — KNOWN_RDO_COMMANDS (building-property-handler.ts)
+      'RDOCnntId',        // S1 — rdoGet (login-handler.ts)
+      'CreateCircuitSeg', // S1 — rdoCall (road-handler.ts)
+      'DeleteMessage',    // S2 — mailFireAndForget (mail-handler.ts)
+      'RDOSetPrice',      // S3 — KNOWN_RDO_COMMANDS (building-property-handler.ts)
     ]));
     expect(emitted.size).toBeGreaterThanOrEqual(110);
   });
@@ -382,36 +381,41 @@ interface EmissionSite {
 }
 
 /**
- * Literal emission sites across `src/server/`. A site is either an inline
- * `sendRdoRequest` packet or an `RdoCommand` chain; `.variant()` is `^` and
- * `.push()` is `*` on a chain.
+ * Literal emission sites across `src/server/`.
+ *
+ * Since lot C a site is one `rdoCall` / `rdoGet` / `rdoSet` call, and the
+ * separator is no longer written anywhere in `src/server/` — it is derived from
+ * the member's catalogued kind. So the separator is read the same way the
+ * emitter reads it, from `RDO_MEMBERS`, rather than scraped out of the source.
+ *
+ * That is a narrowing of what this control can catch, and deliberately so: the
+ * failure it used to hunt for — a hand-typed separator contradicting the
+ * member — is no longer expressible. What it still catches is a member emitted
+ * with no catalogue entry, and the socket rule below.
  */
 function emissionSites(): EmissionSite[] {
   const sites: EmissionSite[] = [];
 
+  const separatorOf = (member: string): string => {
+    if (!isCataloguedRdoMember(member)) return '(uncatalogued)';
+    const spec = RDO_MEMBERS[member];
+    return spec.kind === 'function' ? '"^"' : spec.kind === 'procedure' ? '"*"' : '(none)';
+  };
+
   for (const file of productionFiles(SERVER)) {
     const source = fs.readFileSync(file, 'utf8');
 
-    for (const m of source.matchAll(/sendRdoRequest\(\s*'(\w+)'\s*,\s*\{([\s\S]{0,900}?)\}/g)) {
-      const member = /member:\s*'(\w+)'/.exec(m[2]);
-      if (!member) continue;
-      const sep = /separator:\s*'([^']*)'/.exec(m[2]);
-      sites.push({ file: rel(file), member: member[1], separator: sep ? sep[1] : '(default)', socket: m[1] });
+    // Sites whose socket is visible: `sendRdoRequest('<socket>', rdoX('M', …`
+    const withSocket = new Set<string>();
+    for (const m of source.matchAll(/sendRdoRequest\(\s*'(\w+)'\s*,\s*rdo(?:Call|Get|Set)\(\s*'(\w+)'/g)) {
+      withSocket.add(`${m[2]}@${m.index}`);
+      sites.push({ file: rel(file), member: m[2], separator: separatorOf(m[2]), socket: m[1] });
     }
 
-    // Packets built outside an inline sendRdoRequest call.
-    for (const m of source.matchAll(/\{[^{}]*member:\s*'(\w+)'[^{}]*\}/g)) {
-      const sep = /separator:\s*'([^']*)'/.exec(m[0]);
-      sites.push({ file: rel(file), member: m[1], separator: sep ? sep[1] : '(default)' });
-    }
-
-    for (const chain of source.matchAll(/RdoCommand\s*\.[\s\S]{0,800}?\.build\(\)/g)) {
-      const m = /\.(?:call|set|get|idof)\('(\w+)'\)/.exec(chain[0]);
-      if (!m) continue;
-      const separator = /\.variant\(\)/.test(chain[0]) ? '^'
-        : /\.push\(\)/.test(chain[0]) ? '*'
-        : '(default)';
-      sites.push({ file: rel(file), member: m[1], separator });
+    // Every remaining literal site, socket unknown (fire-and-forget, or the
+    // packet is threaded through a variable).
+    for (const m of source.matchAll(/(?<!sendRdoRequest\(\s*'\w+'\s*,\s*)\brdo(?:Call|Get|Set)\(\s*'(\w+)'/g)) {
+      sites.push({ file: rel(file), member: m[1], separator: separatorOf(m[1]) });
     }
   }
 
@@ -456,50 +460,33 @@ function fireAndForgetHelperBodies(): Array<{ file: string; body: string }> {
 const VARIANT_SEPARATOR = /^"?\^"?$/;
 
 describe('capability inventory — separator and socket rules', () => {
-  it('never puts the VariantId separator on a void member', () => {
-    // The one rule in this repo whose violation is proven to freeze the shared
-    // production server (2026-08-15; RDOQueryServer.pas:422-424 →
-    // RDOObjectServer.pas:292). VOID_MEMBERS is imported, not copied.
-    const offenders = emissionSites()
-      .filter(s => VOID_MEMBERS.has(s.member) && VARIANT_SEPARATOR.test(s.separator))
-      .map(s => `${s.file}: ${s.member} separator=${s.separator}`);
-
-    expect(offenders).toEqual([]);
-  });
-
-  it('keeps the VariantId separator out of the allowlist dispatch path', () => {
+  it('states no separator anywhere in the emitters', () => {
+    // This replaces the three controls that used to hunt for `"^"` on a void
+    // member and `"*"` on a function. Those failures are no longer expressible:
+    // the separator is derived from the member's kind in shared/rdo-members.ts,
+    // and `rdoCall` is the only thing that writes one.
+    //
+    // So the invariant worth policing is upstream of them — that no emitter
+    // reintroduces a hand-written separator, which is the only way the old
+    // failure could come back.
     const offenders: string[] = [];
-    for (const file of allowlistDispatchFiles()) {
-      const lines = fs.readFileSync(path.join(SRC, file), 'utf8').split('\n');
-      lines.forEach((line, i) => {
-        if (/^\s*(\/\/|\*)/.test(line)) return;              // prose, not code
-        if (/separator:\s*'"?\^"?'/.test(line) || /\.variant\(\)/.test(line)) {
-          offenders.push(`${file}:${i + 1}: ${line.trim()}`);
-        }
+    for (const file of productionFiles(SERVER)) {
+      if (rel(file) === 'server/rdo.ts') continue;         // the engine itself
+      fs.readFileSync(file, 'utf8').split('\n').forEach((l, i) => {
+        if (/^\s*(\/\/|\*)/.test(l)) return;                  // prose, not code
+        if (/separator:\s*'/.test(l)) offenders.push(`${rel(file)}:${i + 1}: ${l.trim()}`);
       });
     }
 
     expect(offenders).toEqual([]);
   });
 
-  it('builds every fire-and-forget helper frame with the VoidId separator', () => {
-    // `mailFireAndForget(ctx, id, method, …)` takes the member as a parameter,
-    // and two of the members it is called with (AddLine, CloseMessage) are
-    // VOID_MEMBERS. The helper body is the only place the separator is decided.
-    const offenders = fireAndForgetHelperBodies()
-      .filter(h => /RdoCommand/.test(h.body))
-      .filter(h => !/\.push\(\)/.test(h.body) || /\.variant\(\)/.test(h.body))
-      .map(h => h.file);
+  it('emits only catalogued members — an unknown one has no derivable separator', () => {
+    const offenders = emissionSites()
+      .filter(s => s.separator === '(uncatalogued)')
+      .map(s => `${s.file}: ${s.member}`);
 
     expect(offenders).toEqual([]);
-  });
-
-  it('drives every void member from at least one test', () => {
-    // Crossed with control 2: a void member nobody exercises is a separator
-    // decision nothing protects.
-    const named = memberNamesUnderTest();
-
-    expect([...VOID_MEMBERS.keys()].filter(m => !named.has(m))).toEqual([]);
   });
 
   it('reads connection-bound members only off the primary world socket', () => {
@@ -529,16 +516,9 @@ describe('capability inventory — separator and socket rules', () => {
     const sites = emissionSites();
 
     expect(sites.length).toBeGreaterThanOrEqual(90);
-    // Every void member that has a literal site must be seen with `"*"`.
-    const voidSites = sites.filter(s => VOID_MEMBERS.has(s.member));
-    expect(voidSites.length).toBeGreaterThanOrEqual(5);
-    expect(voidSites.every(s => /^"?\*"?$/.test(s.separator))).toBe(true);
-    expect(allowlistDispatchFiles()).toEqual(
-      expect.arrayContaining(['server/session/building-property-handler.ts']),
-    );
-    expect(fireAndForgetHelperBodies().map(h => h.file)).toEqual(
-      expect.arrayContaining(['server/session/mail-handler.ts']),
-    );
+    // Both separators must still be represented, or the derivation is stuck.
+    expect(sites.some(s => s.separator === '"^"')).toBe(true);
+    expect(sites.some(s => s.separator === '"*"')).toBe(true);
   });
 });
 

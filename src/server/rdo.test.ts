@@ -983,3 +983,58 @@ describe('RdoProtocol.format — incomplete packets', () => {
     })).toBe('C sel 8161308 set Name="%"');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Lot C — the equivalence every migrated call site rests on
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('an omitted separator and an explicit "^" are the same frame', () => {
+  /**
+   * Roughly forty call sites used to omit `separator` on a CALL and let
+   * `format()` default it from the presence of a QueryId (`rdo.ts:425`). The
+   * migration makes it explicit, because `rdoCall` derives it from the member's
+   * catalogued kind rather than from the transport.
+   *
+   * That changes the intermediate object, so tests that compare packets by
+   * deep equality see a new key. It does not change the wire, and this is where
+   * that is established once instead of at every migrated site.
+   */
+  const base = {
+    raw: '', type: 'REQUEST' as const, rid: 7,
+    verb: RdoVerb.SEL, targetId: '8161308', action: RdoAction.CALL,
+    member: 'ObjectAt', args: ['"#120"', '"#64"'],
+  };
+
+  it('produces byte-identical output with and without the explicit separator', () => {
+    const implicit = RdoProtocol.format(base);
+    const explicit = RdoProtocol.format({ ...base, separator: '"^"' });
+
+    expect(explicit).toBe(implicit);
+    expect(explicit).toBe('C 7 sel 8161308 call ObjectAt "^" "#120","#64"');
+  });
+
+  it('accepts the bare "^" two chat sites used, and quotes it the same way', () => {
+    // chat-handler wrote `separator: '^'` on GetChannelInfo and JoinChannel,
+    // with a comment noting the inconsistency. format() strips and re-quotes
+    // (`rdo.ts:437-444`), so all three spellings are one frame.
+    expect(RdoProtocol.format({ ...base, separator: '^' }))
+      .toBe(RdoProtocol.format({ ...base, separator: '"^"' }));
+  });
+
+  it('treats an empty args array and an absent one as the same frame', () => {
+    // `rdoCall` always sets `args`, so a zero-argument member now carries `[]`
+    // where the hand-built packet omitted the key. format() guards on
+    // `args.length > 0` (`rdo.ts:447`), so both take the same branch.
+    const zeroArg = { ...base, member: 'GetUserList', args: undefined as string[] | undefined };
+    delete zeroArg.args;
+
+    expect(RdoProtocol.format({ ...zeroArg, args: [] })).toBe(RdoProtocol.format(zeroArg));
+    expect(RdoProtocol.format({ ...zeroArg, args: [] })).toBe('C 7 sel 8161308 call GetUserList "^"');
+  });
+
+  it('still defaults to "*" when there is no QueryId — the push path', () => {
+    const { rid, ...noRid } = base;
+
+    expect(RdoProtocol.format(noRid)).toBe('C sel 8161308 call ObjectAt "*" "#120","#64"');
+  });
+});

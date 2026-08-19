@@ -13,7 +13,8 @@ not. Treat RDO work as the highest-stakes work in the repo.
 
 ## Never do these
 
-- Construct RDO protocol strings manually — always `RdoValue`/`RdoCommand` from `@/shared/rdo-types`
+- Construct RDO protocol strings manually — always `rdoCall` / `rdoGet` / `rdoSet` from
+  `@/shared/rdo-frame`, with `RdoValue` arguments
 - Use `any` — `unknown` in catch blocks, typed interfaces for data
 - Modify a file without reading it first
 - Ship code without tests — new/modified lines must reach ≥ 93 % coverage
@@ -21,59 +22,52 @@ not. Treat RDO work as the highest-stakes work in the repo.
   `src/__fixtures__/*`, `jest.config.js` (thresholds only go UP)
 - Load screenshots into the main context during debug/E2E — delegate to a sub-agent
 - Add a UI element without wiring its action — no dead buttons
-- Emit a frame whose **separator does not match the member's Pascal kind**, or whose **argument
-  count differs from its declaration**. Three failure modes, all mechanical:
 
-  | form | mechanism | consequence |
-  |------|-----------|-------------|
-  | `"^"` **without a RID** | reply built with no destination | **crash** (`RDOQueryServer.pas:419-424`) |
-  | `"^"` on a **procedure**, ≥ 2 register args | result pointer pushed, never popped | **freeze** |
-  | `"*"` on a **function** | no result pointer passed, the function writes one anyway through the register its ABI reserves | **arbitrary memory write**; the server then refuses every query on every connection, still looking alive, and does **not** recover on its own |
+## RDO — one catalogue, one emitter
 
-  Arity follows the same register file: `ParamCount` comes from the **received** variant array
-  (`RDOObjectServer.pas:218`), args land `EDX` → `ECX` → stack (`:266-277`). Under-emit and the
-  callee reads a slot the dispatcher never set — a garbage pointer for a `widestring`. Over-emit
-  past two register args and it leaves words a `register` callee never pops — the freeze again.
+**The separator is not a decision.** It follows from the member's kind, and the emitter derives
+it. Nothing else in the codebase writes one.
 
-  **There is therefore no safe frame for a member whose declaration nobody has.** Kind *and*
-  arity come from the Pascal in `../SPO-Original`, never from probing the live server.
+| file | role |
+|------|------|
+| `src/shared/rdo-members.ts` | the catalogue — one entry per member actually emitted, with its `kind` (`function` / `procedure` / `accessor`) and `arity` |
+| `src/shared/rdo-frame.ts` | the emitter — `rdoCall` / `rdoGet` / `rdoSet` / `rdoIdOf`, and the five frame forms |
 
-  Corollary: **a `function` can never be fire-and-forget.** It needs `"^"` with a rid, i.e.
-  `sendRdoRequest`. Fire-and-forget (`writeRdoFrame`, `"*"`, no rid) is for `procedure`s only.
+```ts
+rdoCall('ObjectAt', targetId, RdoValue.int(x), RdoValue.int(y))   // -> "^", 2 args, checked
+rdoGet('WorldName', targetId)
+rdoSet('Stopped', targetId, RdoValue.int(-1))
+```
 
-**`assertNotVoidPush` is a SAFETY guard, not a convention**, and takes **no opt-in** — the one
-that briefly existed is what let the fatal frame out. `VOID_MEMBERS` exempts proven `procedure`s
-only, each with its declaration cited (`src/server/session/rdo-request-guards.ts`).
-⚠ **The guard runs only inside `sendRdoRequest`.** The ~25 direct `writeRdoFrame()` call sites
-bypass it; there the Pascal lookup is the *only* check, and `KNOWN_RDO_COMMANDS`
-(`building-property-handler.ts`) is a second whitelist that cites no declarations.
+`.packet` feeds `sendRdoRequest`; `.toFrame()` feeds `writeRdoFrame`.
 
-## RDO work — mandatory sequence
+### Adding or changing a member
 
-> **There is no written reference for the wire protocol itself.** The authorities are the Delphi
-> source and the guards in the code. Do not reconstruct rules from memory, and do not probe the
-> live server.
+The catalogue is a census of what the client emits, not a copy of the Pascal. To add an entry
+you need the member's **kind** and **arity**, and the only authority for those is the server-side
+declaration in `../SPO-Original` — read it with **`delphi-archaeologist`**, cite `File.pas:Line`,
+and never probe the live server.
 
-Before writing or modifying **any** RDO code (new calls, changed calls, push handlers,
-anything touching `sendRdoRequest()` or `RdoCommand`):
+Why it matters, mechanically: `"^"` on a `procedure` leaves a result pointer nobody pops
+(**freeze**); `"*"` on a `function` makes it write through a register nobody set (**arbitrary
+memory write**, no self-recovery); `"^"` with no rid builds a reply with no destination
+(**crash**). Arity follows the same register file — `ParamCount` comes from the *received* array
+(`RDOObjectServer.pas:218`), args land `EDX` → `ECX` → stack (`:266-277`).
 
-1. Read the member's Pascal **declaration** in `../SPO-Original` with **`delphi-archaeologist`** —
-   its **kind** decides the separator, its **parameter list** decides the argument count. Read the
-   server-side declaration, not a client call site: late-bound client calls have already caused a
-   member to be misclassified as a `function`, which is the mistake that froze production.
-2. Check it against the guards in `src/server/session/rdo-request-guards.ts` (`VOID_MEMBERS`,
-   `assertNotVoidPush`) — remembering they do not cover the `writeRdoFrame` path
-3. Choose the **verb** the reference client used, not the one the declaration suggests. `get` on a
-   0-arg `function` is correct and is what Voyager emits (`GetProperty` falls through to
-   `CallMethod`, `RDOObjectServer.pas:112-116`); the conformity bug is inventing `call` frames the
-   client never produced. `set` has **no** fallthrough — a non-existent property returns
+The type system now carries all three: an uncatalogued member does not compile, a wrong argument
+count throws, and the separator cannot be written by hand.
+
+### Two rules the catalogue does not encode
+
+1. **Verb follows the reference client, not the declaration.** `get` on a 0-arg `function` is
+   correct and is what Voyager emits (`GetProperty` falls through to `CallMethod`,
+   `RDOObjectServer.pas:112-116`). `set` has no fallthrough — a missing property returns
    `errUnexistentProperty` (`:176`).
-4. Sessions, timers, timeouts or reconnection? Use the **`rdo-network-resilience`** skill
-5. Build the frame with `RdoValue`/`RdoCommand` — never a hand-written string
+2. **A form the reference client demonstrably emitted wins over what the declaration suggests.**
+   Explain why it works, then follow it; never silently "fix" a working call.
 
-**On conflict, a form the reference client demonstrably emitted wins over what the Delphi
-declaration suggests.** Explain *why* the observed form works, then follow it — never silently
-"fix" a working call to match the source. Live-observed forms are cited in the code comments.
+`src/server/session/rdo-request-guards.ts` still guards what the catalogue says nothing about:
+forbidden members, session-lifecycle members, connection-bound members, buffer depth.
 
 ## Legacy Delphi source
 
@@ -150,7 +144,7 @@ higher per directory). Thresholds only go UP. Details: **`spo-testing`** skill.
 Seven custom RDO matchers: `toContainRdoCommand`, `toMatchRdoFormat`, `toMatchRdoCallFormat`,
 `toMatchRdoSetFormat`, `toHaveRdoTypePrefix`, `toMatchRdoResponse`, `toPassStrictRdoValidation`.
 
-## Skills — 21 installed (8 project, 13 community)
+## Skills — 20 installed (7 project, 13 community)
 
 Inventory: [manifest.json](.claude/skills/manifest.json). Regenerate after adding or
 removing one:
@@ -169,9 +163,9 @@ node .claude/generate-skills-manifest.js --check  # CI: fail if stale
 | `dependencies` | Vulnerability audit, licences, package updates |
 | `e2e-test` | Live Playwright E2E (user-invoked only) |
 
-**Auto-load only** (not slash-invokable): `rdo-network-resilience` (reconnect, timeouts,
-ServerBusy), `web-games` (Canvas 2D renderer, frame budget), `zustand-store-ts` (stores,
-selector stability), `mobile-ux-optimizer` (MobileShell/BottomNav/BottomSheet).
+**Auto-load only** (not slash-invokable): `web-games` (Canvas 2D renderer, frame budget),
+`zustand-store-ts` (stores, selector stability), `mobile-ux-optimizer`
+(MobileShell/BottomNav/BottomSheet).
 
 **Community (13):** canvas-api, claude-md-improver, css-modules-vite, debugging,
 docs-codebase, git-workflow, pwa-expert, react-best-practices, reviewing-code,
