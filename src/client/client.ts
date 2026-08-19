@@ -313,12 +313,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       // waiting up to 8s for EVENT_BUILDING_REFRESH would show a value the
       // server does not hold.
       onRefreshBuildingProperties: (x, y) => {
-        const activeTabId = useBuildingStore.getState().currentTab;
-        buildingActionHandler.requestBuildingRefreshProperties(
-          this, x, y, this.currentFocusedVisualClass || '0', activeTabId,
-        ).then(details => {
-          if (details) ClientBridge.updateBuildingDetails(details);
-        }).catch((err: unknown) => {
+        buildingActionHandler.refreshBuildingPropertiesInto(this, x, y).catch((err: unknown) => {
           ClientBridge.log('Error', `Failed to refresh properties: ${toErrorMessage(err)}`);
         });
       },
@@ -362,12 +357,10 @@ export class StarpeaceClient implements ClientHandlerContext {
           fluidId, connectionList: `${x},${y},`,  // trailing comma required by Delphi ParseGateList
         }).then(success => {
           if (success) {
-            this.showNotification('Supplier disconnected', 'success');
-            // Lightweight refresh — building already focused, skip SwitchFocusEx
-            const visualClass = this.currentFocusedVisualClass || '0';
-            buildingActionHandler.requestBuildingRefreshProperties(this, buildingX, buildingY, visualClass).then(details => {
-              if (details) ClientBridge.updateBuildingDetails(details);
-            });
+            this.showNotification(direction === 'input' ? 'Supplier disconnected' : 'Client disconnected', 'success');
+            // Re-reads the connection lists too. A plain refreshProperties leaves
+            // the lazy tabs carried forward, so the removed row stayed on screen.
+            return buildingActionHandler.refreshAfterConnectionChange(this, buildingX, buildingY);
           }
         }).catch((err: unknown) => {
           this.showNotification(`Failed to disconnect: ${toErrorMessage(err)}`, 'error');

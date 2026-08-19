@@ -1257,23 +1257,44 @@ async function fetchSupplyDetails(
     ])
   );
 
+  // A short row means GetSubObjectProps returned an empty payload, which it only
+  // does when OpenSubObject failed server-side (Cache Server/
+  // CachedObjectWrap.pas:469,474,477) — the cache never yields a partial row,
+  // because GetPropertyList writes one value + #9 per requested name whether or
+  // not the property exists (:225-230).
+  //
+  // Dropping such a row silently is what made a live warehouse report "1
+  // supplier" above an empty list: the count comes from cnxCount on the gate,
+  // the rows come from here, and the two stopped agreeing with nothing to say
+  // so. Say so — the discrepancy travels to the client in connectionCount vs
+  // connections.length, and this warning names the index that failed.
   const connections: BuildingConnectionData[] = [];
+  let unreadable = 0;
   for (const cnxProps of cnxResults) {
-    if (cnxProps.length >= 11) {
-      connections.push({
-        facilityName: cnxProps[0] || '',
-        createdBy: cnxProps[1] || '',
-        companyName: cnxProps[2] || '',
-        price: cnxProps[3] || '0',
-        overprice: cnxProps[4] || '0',
-        lastValue: cnxProps[5] || '',
-        cost: cnxProps[6] || '$0',
-        quality: cnxProps[7] || '0%',
-        connected: cnxProps[8] === '1',
-        x: parseInt(cnxProps[9] || '0', 10),
-        y: parseInt(cnxProps[10] || '0', 10),
-      });
+    if (cnxProps.length < 11) {
+      unreadable++;
+      continue;
     }
+    connections.push({
+      facilityName: cnxProps[0] || '',
+      createdBy: cnxProps[1] || '',
+      companyName: cnxProps[2] || '',
+      price: cnxProps[3] || '0',
+      overprice: cnxProps[4] || '0',
+      lastValue: cnxProps[5] || '',
+      cost: cnxProps[6] || '$0',
+      quality: cnxProps[7] || '0%',
+      connected: cnxProps[8] === '1',
+      x: parseInt(cnxProps[9] || '0', 10),
+      y: parseInt(cnxProps[10] || '0', 10),
+    });
+  }
+  if (unreadable > 0) {
+    ctx.log.warn(
+      `[BuildingDetails] ${path}: cnxCount says ${connectionCount} but ${unreadable} ` +
+      `connection(s) returned an empty GetSubObjectProps payload — the sub-object ` +
+      `cache did not resolve. The list will be short by that many rows.`
+    );
   }
 
   return {
@@ -1433,23 +1454,36 @@ async function fetchProductDetails(
     ])
   );
 
+  // Same contract as the input gate above: a short row means an empty
+  // GetSubObjectProps payload, never a partial one. Report it instead of
+  // silently shortening the clients list under an unchanged cnxCount.
   const connections: BuildingConnectionData[] = [];
+  let unreadable = 0;
   for (const cnxProps of cnxResults) {
-    if (cnxProps.length >= 7) {
-      connections.push({
-        facilityName: cnxProps[0] || '',
-        companyName: cnxProps[1] || '',
-        createdBy: '',
-        price: '',
-        overprice: '',
-        lastValue: cnxProps[2] || '',
-        cost: cnxProps[4] || '',
-        quality: '',
-        connected: cnxProps[3] === '1',
-        x: parseInt(cnxProps[5] || '0', 10),
-        y: parseInt(cnxProps[6] || '0', 10),
-      });
+    if (cnxProps.length < 7) {
+      unreadable++;
+      continue;
     }
+    connections.push({
+      facilityName: cnxProps[0] || '',
+      companyName: cnxProps[1] || '',
+      createdBy: '',
+      price: '',
+      overprice: '',
+      lastValue: cnxProps[2] || '',
+      cost: cnxProps[4] || '',
+      quality: '',
+      connected: cnxProps[3] === '1',
+      x: parseInt(cnxProps[5] || '0', 10),
+      y: parseInt(cnxProps[6] || '0', 10),
+    });
+  }
+  if (unreadable > 0) {
+    ctx.log.warn(
+      `[BuildingDetails] ${path}: cnxCount says ${connectionCount} but ${unreadable} ` +
+      `client connection(s) returned an empty GetSubObjectProps payload — the ` +
+      `sub-object cache did not resolve. The list will be short by that many rows.`
+    );
   }
 
   return {

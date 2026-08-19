@@ -185,7 +185,14 @@ const ProductCard = memo(function ProductCard({
               </tbody>
             </table>
           ) : (
-            <div className={styles.noConnections}>No buyers connected</div>
+            <div className={styles.noConnections}>
+              {/* Same contradiction as SuppliesGroup: a non-zero cnxCount with no
+                  rows means the sub-object read came back empty, not that the
+                  building has no buyers. */}
+              {product.connectionCount > 0
+                ? `${product.connectionCount} buyer${product.connectionCount !== 1 ? 's' : ''} connected — details unavailable`
+                : 'No buyers connected'}
+            </div>
           )}
 
           {canEdit && (

@@ -285,7 +285,15 @@ const SupplyCard = memo(function SupplyCard({
               </tbody>
             </table>
           ) : (
-            <div className={styles.noConnections}>No suppliers connected</div>
+            <div className={styles.noConnections}>
+              {supply.connectionCount > 0
+                // The server counted connections it could not describe: cnxCount
+                // comes off the gate, the rows come from a separate sub-object
+                // read that returned nothing. Claiming "no suppliers" here is
+                // the contradiction the user hit — say what is actually known.
+                ? `${supply.connectionCount} supplier${supply.connectionCount !== 1 ? 's' : ''} connected — details unavailable`
+                : 'No suppliers connected'}
+            </div>
           )}
 
           {/* Overpayment popover */}

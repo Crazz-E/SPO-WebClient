@@ -78,7 +78,19 @@ const EMPTY_RESPONDER: Responder = () => '';
 export const FAKE_CONTEXT_IDS = {
   worldContextId: '8161308',
   interfaceServerId: '44917624',
+  /**
+   * The persistent `TTycoon.Id` off the Interface Server's ClientView
+   * (Interface Server/InterfaceServer.pas:128,3237). Deliberately unrelated to
+   * {@link tycoonProxyId} so a test that confuses the two fails loudly.
+   */
   tycoonId: '4666201923',
+  /**
+   * The model server's pointer to the TTycoon, pushed by InitClient
+   * (InterfaceServer.pas:1835) and originally `integer(Tycoon)`
+   * (Kernel/World.pas:3827). This is what a member that dereferences a tycoon
+   * must receive.
+   */
+  tycoonProxyId: 30440112,
   cacherId: '40133496',
   worldId: '30430748',
   mailServerId: '51002448',
@@ -248,7 +260,7 @@ export function makeSessionCtx(overrides: FakeSessionOptions = {}): FakeSessionC
     mailAccount: null,
     worldXSize: null,
     worldYSize: null,
-    fTycoonProxyId: null,
+    fTycoonProxyId: FAKE_CONTEXT_IDS.tycoonProxyId as number | null,
     accountMoney: null,
     failureLevel: null,
     lastRanking: 0,

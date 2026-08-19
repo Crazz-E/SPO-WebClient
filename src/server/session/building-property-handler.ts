@@ -276,13 +276,21 @@ async function setBuildingPropertyImpl(
       await new Promise(resolve => setTimeout(resolve, 200));
     }
 
+    // Extract property name from RDO command for verification. `null` means the
+    // command has no witness property — reading one anyway would invent a
+    // verdict, so skip the round-trip entirely and report `confirmed:
+    // undefined`, which the client reads as "nothing contradicts the write".
+    const propertyToRead = mapRdoCommandToPropertyName(ctx, propertyName, additionalParams);
+    if (propertyToRead === null) {
+      ctx.log.debug(`[BuildingDetails] ${propertyName} has no read-back property — reporting unconfirmed`);
+      return { success: true, newValue: '', confirmed: undefined };
+    }
+
     // Read back the new value via map service to confirm the change
     const verifyObjectId = await ctx.cacherCreateObject();
     try {
       await ctx.cacherSetObject(verifyObjectId, x, y);
 
-      // Extract property name from RDO command for verification
-      const propertyToRead = mapRdoCommandToPropertyName(ctx, propertyName, additionalParams);
       const readValues = await ctx.cacherGetPropertyList(verifyObjectId, [propertyToRead]);
 
       // M-E: this used to be `readValues[0] || value` — when the read-back came
@@ -513,14 +521,46 @@ function buildRdoCommandArgs(
     case 'RDOConnectToTycoon':
     case 'RDODisconnectFromTycoon': {
       // Args: tycoonId (integer), kind (integer), flag (wordbool = true)
-      // Voyager: IndustryGeneralSheet.pas line 345/357
-      // tycoonId auto-injected from session if not provided by client
-      const tycoonId = params.tycoonId || ctx.tycoonId;
+      // Voyager: WHGeneralSheet.pas:393 / IndustryGeneralSheet.pas:345,357
+      //
+      // The first argument is the MODEL SERVER POINTER to the TTycoon, not the
+      // persistent tycoon id. The handler dereferences it on the spot —
+      // `Tycoon := TTycoon(pointer(TycoonId))` (Kernel/Kernel.pas:4535) — so the
+      // two ids are NOT interchangeable, and the wrong one is not an error the
+      // server reports. It raises an access violation that the handler's own
+      // `try..except` swallows (Kernel.pas:4579-4581): the call becomes a silent
+      // no-op, the client is told nothing, and the button appears dead.
+      //
+      // Which id the reference client sends, end to end:
+      //   Voyager passes `GetClientView.getTycoonId` (WHGeneralSheet.pas:393)
+      //   -> returns fTycoonId (ServerCnxHandler.pas:2419-2421)
+      //   -> set from the InitClient push (ServerCnxHandler.pas:516), whose 4th
+      //      argument is fTycoonProxyId (InterfaceServer.pas:1835,1910,2310)
+      //   -> assigned from RDOGetTycoon (InterfaceServer.pas:3196,3225)
+      //   -> which returns `integer(Tycoon)` (Kernel/World.pas:3827). A pointer.
+      //
+      // `ctx.tycoonId` is the OTHER id and must not be used here: it is
+      // ClientView.TycoonId (InterfaceServer.pas:128) = `fTycoonProxy.Id`
+      // (:3237), i.e. the persistent TTycoon.Id. It is the right id for the
+      // Interface Server calls that take one (GetTycoonCookie, SetTycoonCookie,
+      // CloneFacility, PickEvent), and the wrong one for every model-server
+      // member that dereferences. Compare road-handler.ts:164,323,384, which
+      // already sends fTycoonProxyId for the same reason.
+      //
+      // No browser-supplied override here: nothing produces one today, and the
+      // whole point of this argument is that only the session knows it.
+      const tycoonProxyId = ctx.fTycoonProxyId;
       const kind = params.kind;
-      if (!tycoonId || !kind) {
-        throw new Error(`${rdoCommand} requires kind parameter (and tycoonId must be available)`);
+      if (tycoonProxyId === null) {
+        throw new Error(
+          `${rdoCommand} requires the tycoon proxy id from the InitClient push, ` +
+          `which has not arrived on this session yet`
+        );
       }
-      args.push(RdoValue.int(parseInt(tycoonId, 10)), RdoValue.int(parseInt(kind, 10)), RdoValue.int(-1));
+      if (!kind) {
+        throw new Error(`${rdoCommand} requires kind parameter`);
+      }
+      args.push(RdoValue.int(tycoonProxyId), RdoValue.int(parseInt(kind, 10)), RdoValue.int(-1));
       break;
     }
 
@@ -713,7 +753,7 @@ function mapRdoCommandToPropertyName(
   ctx: SessionContext,
   rdoCommand: string,
   additionalParams?: Record<string, string>
-): string {
+): string | null {
   const params = additionalParams || {};
 
   switch (rdoCommand) {
@@ -788,7 +828,18 @@ function mapRdoCommandToPropertyName(
 
     case 'RDOConnectToTycoon':
     case 'RDODisconnectFromTycoon':
-      return 'TradeRole';
+      // No witness exists for these two. `TradeRole` used to be read back here,
+      // and it is not a witness: it describes what the facility IS, so it reads
+      // non-empty whether or not a single trade route was created. That turned
+      // every call into `confirmed: true` — the manufactured success the user
+      // reported seeing on a button that had done nothing.
+      //
+      // There is no property that answers "did this connect anything": the
+      // handler walks the tycoon's facilities and connects the ones that match
+      // (Kernel/Kernel.pas:4536-4556), and connecting zero of them is a
+      // legitimate outcome. `null` means "no read-back", which the caller turns
+      // into `confirmed: undefined` — the honest value.
+      return null;
 
     case 'RDOAcceptCloning':
       return 'AcceptCloning';

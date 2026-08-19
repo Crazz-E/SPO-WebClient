@@ -111,6 +111,7 @@ interface BuildingState {
   setTabLoading: (tabId: string) => void;
   mergeTabData: (tabId: string, data: Partial<BuildingDetailsResponse>, forX: number, forY: number) => void;
   resetTabLoadingStates: () => void;
+  invalidateTabs: (tabIds: readonly string[]) => void;
 
   // Optimistic SET actions
   setPending: (key: string, value: string) => void;
@@ -334,6 +335,23 @@ export const useBuildingStore = create<BuildingState>((set) => ({
         },
         tabLoadingStates: { ...state.tabLoadingStates, [tabId]: 'loaded' as TabLoadState },
       };
+    }),
+
+  // Mark specific lazy tabs as needing a re-fetch, without wiping their current
+  // data. `resetTabLoadingStates` is the big hammer for an explicit refresh: it
+  // blanks every lazy tab, which is right when the whole panel reloads and wrong
+  // after a targeted mutation, where blanking makes the panel flash empty before
+  // the same data comes back. Here the stale rows stay on screen until
+  // `mergeTabData` replaces them.
+  //
+  // Clearing the load state is the whole point: `requestTabData` returns early
+  // for a tab already marked 'loaded' (building-action-handler.ts:161), so
+  // without this a connection change can never be re-read.
+  invalidateTabs: (tabIds) =>
+    set((state) => {
+      const next = { ...state.tabLoadingStates };
+      for (const id of tabIds) delete next[id];
+      return { tabLoadingStates: next };
     }),
 
   resetTabLoadingStates: () => set((state) => ({

@@ -270,6 +270,20 @@ describe('ProductsPanel', () => {
     expect(container.textContent).toContain('No buyers connected');
   });
 
+  it('does not claim "No buyers" when the server counted some it could not describe', () => {
+    // cnxCount comes off the gate, the rows come from a separate sub-object read.
+    // When that read returns nothing the two disagree, and "No buyers connected"
+    // is the one thing we know to be false.
+    const product = makeProduct({ connections: [], connectionCount: 2 });
+    const { container } = renderWithProviders(
+      <ProductsPanel onPropertyChange={() => {}} products={[product]} canEdit={true} buildingX={100} buildingY={200} />,
+    );
+
+    fireEvent.click(container.querySelector('button') as HTMLButtonElement);
+    expect(container.textContent).toContain('2 buyers connected — details unavailable');
+    expect(container.textContent).not.toContain('No buyers connected');
+  });
+
   it('shows Hire and Remove buttons when canEdit', () => {
     const product = makeProduct();
     const { container } = renderWithProviders(
@@ -453,6 +467,19 @@ describe('SuppliesPanel', () => {
 
     fireEvent.click(container.querySelector('button') as HTMLButtonElement);
     expect(container.textContent).toContain('No suppliers connected');
+  });
+
+  it('does not claim "No suppliers" when the header counts one', () => {
+    // The reported contradiction, pinned: header "1 supplier", body "No
+    // suppliers connected". Whatever else is wrong, the panel must not say both.
+    const supply = makeSupply({ connections: [], connectionCount: 1 });
+    const { container } = renderWithProviders(
+      <SuppliesPanel supplies={[supply]} canEdit={true} buildingX={100} buildingY={200} />,
+    );
+
+    fireEvent.click(container.querySelector('button') as HTMLButtonElement);
+    expect(container.textContent).toContain('1 supplier connected — details unavailable');
+    expect(container.textContent).not.toContain('No suppliers connected');
   });
 
   it('shows Hire, Modify, Fire buttons when canEdit', () => {

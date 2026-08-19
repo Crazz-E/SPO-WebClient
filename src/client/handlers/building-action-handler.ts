@@ -401,6 +401,71 @@ export function handleBuildingAction(ctx: ClientHandlerContext, actionId: string
   }
 }
 
+// ── Connection-change refresh ───────────────────────────────────────────────
+
+/**
+ * The two lazy tabs that render connection lists, keyed by their `special` id —
+ * the same key `BuildingInspector` uses when it resolves a tab to a lazy fetch.
+ */
+const CONNECTION_TABS = ['supplies', 'products'] as const;
+
+/**
+ * Lightweight re-read of a building's properties, straight into the store.
+ *
+ * Reuses the Delphi temp object the inspector already holds instead of
+ * re-focusing the building, and scopes the read to the tab on screen. This is
+ * the shared core of the two refresh paths that follow a mutation — the
+ * `onRefreshBuildingProperties` callback, used after a SET the server may have
+ * corrected, and {@link refreshAfterConnectionChange} below. They differ only
+ * in what they do about the lazy tabs, so only that difference lives apart.
+ */
+export async function refreshBuildingPropertiesInto(
+  ctx: ClientHandlerContext,
+  x: number,
+  y: number,
+): Promise<BuildingDetailsResponse | null> {
+  const activeTabId = useBuildingStore.getState().currentTab;
+  const details = await requestBuildingRefreshProperties(
+    ctx, x, y, ctx.currentFocusedVisualClass || '0', activeTabId,
+  );
+  if (details) ClientBridge.updateBuildingDetails(details);
+  return details;
+}
+
+/**
+ * Re-read a building after its connections changed.
+ *
+ * A property refresh alone cannot show the change. It returns every lazy tab as
+ * `undefined` on purpose (building-details-handler.ts:575-579) and the store
+ * carries the previous values forward (building-store.ts:213-216), so the
+ * connection lists keep rendering what they held before the mutation. Passing
+ * `activeTabId` does not help either: the tab-scoped path explicitly excludes
+ * the lazy specials (building-details-handler.ts:520-525). Only `requestTabData`
+ * re-reads them.
+ *
+ * Both lists are invalidated because a single call can move either side.
+ * RDOConnectToTycoon wires the tycoon's facility INPUTS onto this building's
+ * OUTPUTS (Kernel/Kernel.pas:4550-4554), so the new row shows up in this
+ * building's clients or in its suppliers depending on which end is on screen.
+ *
+ * The fetch itself is left to the lazy effect in `BuildingInspector`, which
+ * already reacts to `tabLoadingStates` and knows how to map a tab to its lazy
+ * id: clearing the entry is what makes it fire for the visible tab, and the
+ * others re-fetch when the user switches to them.
+ */
+export async function refreshAfterConnectionChange(
+  ctx: ClientHandlerContext,
+  x: number,
+  y: number,
+): Promise<void> {
+  await refreshBuildingPropertiesInto(ctx, x, y);
+
+  // Must come after the refresh lands: setDetails re-marks a lazy tab 'loaded'
+  // whenever the carried-forward data is non-empty (building-store.ts:197-200),
+  // which would undo an earlier invalidation.
+  useBuildingStore.getState().invalidateTabs(CONNECTION_TABS);
+}
+
 // ── Trade Connect / Disconnect ──────────────────────────────────────────────
 
 async function tradeConnect(ctx: ClientHandlerContext, buildingDetails: BuildingDetailsResponse, kind: string): Promise<void> {
@@ -412,11 +477,14 @@ async function tradeConnect(ctx: ClientHandlerContext, buildingDetails: Building
     const success = await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDOConnectToTycoon', '0', { kind });
     dismissToast(pendingToastId);
     if (success) {
-      ctx.showNotification(`Connected all your ${kindLabel} to this building`, 'success');
-      // Lightweight refresh — building already focused, skip SwitchFocusEx
-      const vc = ctx.currentFocusedVisualClass || '0';
-      const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
-      if (details) ClientBridge.updateBuildingDetails(details);
+      // Deliberately not "Connected all your X": the server connects only the
+      // facilities whose input accepts a tradeable fluid this building outputs
+      // (Kernel/Kernel.pas:4536-4556), and connecting none of them is a normal
+      // outcome. Nothing on the wire reports how many were wired, so the
+      // notification claims only what we know — that the request went out. The
+      // refreshed list below is what actually answers the question.
+      ctx.showNotification(`Sent connect request for your ${kindLabel}`, 'success');
+      await refreshAfterConnectionChange(ctx, buildingDetails.x, buildingDetails.y);
     } else {
       ctx.showNotification(`Failed to connect ${kindLabel}`, 'error');
     }
@@ -437,11 +505,9 @@ async function tradeDisconnect(ctx: ClientHandlerContext, buildingDetails: Build
     const success = await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDODisconnectFromTycoon', '0', { kind });
     dismissToast(pendingToastId);
     if (success) {
-      ctx.showNotification(`Disconnected all your ${kindLabel} from this building`, 'success');
-      // Lightweight refresh — building already focused, skip SwitchFocusEx
-      const vc = ctx.currentFocusedVisualClass || '0';
-      const details = await requestBuildingRefreshProperties(ctx, buildingDetails.x, buildingDetails.y, vc);
-      if (details) ClientBridge.updateBuildingDetails(details);
+      // Same reservation as tradeConnect: the count is not observable.
+      ctx.showNotification(`Sent disconnect request for your ${kindLabel}`, 'success');
+      await refreshAfterConnectionChange(ctx, buildingDetails.x, buildingDetails.y);
     } else {
       ctx.showNotification(`Failed to disconnect ${kindLabel}`, 'error');
     }

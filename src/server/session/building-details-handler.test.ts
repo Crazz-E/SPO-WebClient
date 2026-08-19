@@ -1731,6 +1731,72 @@ describe('getBuildingTabData', () => {
       expect(supplies?.[0].connections).toEqual([]);
     });
 
+    it('says so when cnxCount and the rows disagree, instead of dropping the row silently', async () => {
+      // The live symptom: a warehouse showing "1 supplier" above an empty list.
+      // The count comes off the gate, the rows come from GetSubObjectProps, and
+      // an empty payload used to remove the row with nothing said. The
+      // discrepancy still reaches the client -- that is deliberate, the UI
+      // reports it -- but it must be traceable in the log too.
+      const fake = makeDetailsCtx();
+      setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
+      cacheValues(fake, { MetaFluid: 'Books', cnxCount: '1' });
+      fake.respond((packet) => {
+        if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
+        if (packet.member === 'SetPath') return 'res="#-1"';
+        return NO_PAYLOAD;
+      });
+
+      const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
+
+      expect(supplies?.[0].connectionCount).toBe(1);
+      expect(supplies?.[0].connections).toHaveLength(0);
+      expect(fake.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('cnxCount says 1 but 1 connection(s) returned an empty'),
+      );
+    });
+
+    it('says so on the clients list too', async () => {
+      const fake = makeDetailsCtx();
+      setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
+      cacheValues(fake, { MetaFluid: 'Cars', cnxCount: '2' });
+      fake.respond((packet) => {
+        if (packet.member === 'GetOutputNames') return 'res="%Gate0::\nCars"';
+        if (packet.member === 'SetPath') return 'res="#-1"';
+        return NO_PAYLOAD;
+      });
+
+      const { products } = await getBuildingTabData(fake.ctx, X, Y, 'products');
+
+      expect(products?.[0].connectionCount).toBe(2);
+      expect(products?.[0].connections).toHaveLength(0);
+      expect(fake.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('cnxCount says 2 but 2 client connection(s) returned an empty'),
+      );
+    });
+
+    it('stays quiet when every row came back', async () => {
+      // The warning has to be absent on the happy path, or it is noise nobody
+      // reads when it does fire.
+      const fake = makeDetailsCtx();
+      setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
+      cacheValues(fake, { MetaFluid: 'Books', cnxCount: '1' });
+      fake.respond((packet) => {
+        if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks"';
+        if (packet.member === 'SetPath') return 'res="#-1"';
+        if (packet.member === 'GetSubObjectProps') {
+          return 'res="%Farm\tBob\tBobCorp\t10\t0\t5\t$1\t90%\t1\t12\t34\t"';
+        }
+        return '';
+      });
+
+      const { supplies } = await getBuildingTabData(fake.ctx, X, Y, 'supplies');
+
+      expect(supplies?.[0].connections).toHaveLength(1);
+      expect(fake.log.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('returned an empty GetSubObjectProps payload'),
+      );
+    });
+
     it('reads a gate with no cnxCount as having no connections', async () => {
       const fake = makeDetailsCtx();
       setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));

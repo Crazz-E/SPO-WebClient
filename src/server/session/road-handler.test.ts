@@ -303,7 +303,9 @@ describe('buildRoad — preconditions', () => {
   });
 
   it('with no tycoon proxy id: asks to reconnect, nothing sent', async () => {
-    const fake = makeSessionCtx({ sockets: ['world'] });
+    // Explicit: the fake now carries a proxy id by default, because every
+    // model-server member that dereferences a tycoon needs one.
+    const fake = makeSessionCtx({ sockets: ['world'], fTycoonProxyId: null });
     const result = await buildRoad(fake.ctx, 0, 0, 1, 0);
     expect(result).toEqual({ success: false, cost: 0, tileCount: 0, message: 'Tycoon not initialized — reconnect', errorCode: 1 });
     expect(fake.sent).toHaveLength(0);
@@ -377,7 +379,7 @@ describe('demolishRoad', () => {
   });
 
   it('with no tycoon proxy id: nothing sent', async () => {
-    const fake = makeSessionCtx();
+    const fake = makeSessionCtx({ fTycoonProxyId: null });
     expect(await demolishRoad(fake.ctx, 1, 2)).toEqual({ success: false, message: 'Tycoon not initialized — reconnect', errorCode: 1 });
     expect(fake.sent).toHaveLength(0);
   });
@@ -434,7 +436,7 @@ describe('wipeCircuit', () => {
   });
 
   it('with no tycoon proxy id: nothing sent', async () => {
-    const fake = makeSessionCtx();
+    const fake = makeSessionCtx({ fTycoonProxyId: null });
     expect(await wipeCircuit(fake.ctx, 0, 0, 1, 1)).toEqual({ success: false, message: 'Tycoon not initialized — reconnect', errorCode: 1 });
     expect(fake.sent).toHaveLength(0);
   });
