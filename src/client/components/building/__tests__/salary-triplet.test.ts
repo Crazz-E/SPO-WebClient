@@ -1,4 +1,4 @@
-import { collectSalaryTriplet, resolveRdoCommand } from '../property-utils';
+import { buildSalaryParams, collectSalaryTriplet, pendingKeyFor, resolveRdoCommand } from '../property-utils';
 import type { BuildingPropertyValue } from '@/shared/types';
 import type { RdoCommandMapping } from '@/shared/building-details';
 
@@ -71,5 +71,41 @@ describe('collectSalaryTriplet', () => {
       salary1: '0',
       salary2: '0',
     });
+  });
+});
+
+describe('buildSalaryParams / pendingKeyFor', () => {
+  const current = props({ Salaries0: '100', Salaries1: '200', Salaries2: '300' });
+
+  it('carries the edited index alongside the full triplet', () => {
+    const resolved = resolveRdoCommand('Salaries1', WORKFORCE_COMMANDS);
+    expect(buildSalaryParams(current, resolved.params, 250)).toEqual({
+      index: '1',
+      salary0: '100',
+      salary1: '250',
+      salary2: '300',
+    });
+  });
+
+  it('defaults to index 0 when the mapping resolved no index', () => {
+    expect(buildSalaryParams(current, undefined, 150).salary0).toBe('150');
+  });
+
+  /**
+   * The workforce editor predicts this key to subscribe its save indicator;
+   * building-action-handler builds the real one the same way. The literal is
+   * the contract between them — key order included, since it goes through
+   * JSON.stringify.
+   */
+  it('produces the key building-action-handler registers', () => {
+    const resolved = resolveRdoCommand('Salaries1', WORKFORCE_COMMANDS);
+    const params = buildSalaryParams(current, resolved.params, 250);
+    expect(pendingKeyFor(resolved.command, params)).toBe(
+      'RDOSetSalaries:{"index":"1","salary0":"100","salary1":"250","salary2":"300"}',
+    );
+  });
+
+  it('leaves a parameterless command unsuffixed', () => {
+    expect(pendingKeyFor('RDOAutoProduce')).toBe('RDOAutoProduce');
   });
 });

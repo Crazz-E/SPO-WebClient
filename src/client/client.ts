@@ -307,6 +307,21 @@ export class StarpeaceClient implements ClientHandlerContext {
       onUpgradeBuilding: (x, y, action, count) =>
         buildingActionHandler.upgradeBuildingAction(this, x, y, action as 'DOWNGRADE' | 'START_UPGRADE' | 'STOP_UPGRADE', count),
       onRefreshBuilding: (x, y) => buildingActionHandler.refreshBuildingDetails(this, x, y),
+      // Lightweight refresh — reuses the existing Delphi temp object instead of
+      // re-focusing the building. Used after a SET whose applied value the
+      // server may have corrected (a salary below the town minimum wage), where
+      // waiting up to 8s for EVENT_BUILDING_REFRESH would show a value the
+      // server does not hold.
+      onRefreshBuildingProperties: (x, y) => {
+        const activeTabId = useBuildingStore.getState().currentTab;
+        buildingActionHandler.requestBuildingRefreshProperties(
+          this, x, y, this.currentFocusedVisualClass || '0', activeTabId,
+        ).then(details => {
+          if (details) ClientBridge.updateBuildingDetails(details);
+        }).catch((err: unknown) => {
+          ClientBridge.log('Error', `Failed to refresh properties: ${toErrorMessage(err)}`);
+        });
+      },
       onRequestTabData: (x, y, tabId, visualClass) => buildingActionHandler.requestTabData(this, x, y, tabId, visualClass),
       onRenameBuilding: (x, y, newName) => buildingActionHandler.renameFacility(this, x, y, newName),
       onDeleteBuilding: (x, y) => buildingActionHandler.deleteFacility(this, x, y).then(success => {

@@ -27,10 +27,11 @@ import { RevenueGraph } from './RevenueGraph';
 import { SuppliesPanel } from './SuppliesGroup';
 import { ProductsPanel } from './ProductsGroup';
 import { CompInputsPanel } from './InputsGroup';
-import { resolveRdoCommand, computePendingKey, checkIsMayor, getColorClass, collectSalaryTriplet } from './property-utils';
+import { resolveRdoCommand, computePendingKey, checkIsMayor, getColorClass, buildSalaryParams } from './property-utils';
 import { SliderInput, TextInput } from './PropertyInputs';
 import { RatioValue, BooleanValue, StopToggle } from './PropertyDisplays';
-import { WorkforceTable, DataTable, ServiceCardList, ProductSummaryCards } from './PropertyTables';
+import { DataTable, ServiceCardList, ProductSummaryCards } from './PropertyTables';
+import { WorkforceTable } from './WorkforceTable';
 import { UpgradeActions, RepairControl, TradeConnectButtons, ActionButton, CloneSettings, WarehouseWares } from './PropertyActions';
 import styles from './PropertyGroup.module.css';
 
@@ -197,7 +198,7 @@ function DefinedProperties({
       // triplet rather than defaulting the missing values, which is what used
       // to overwrite them silently (M-C).
       const params = resolved.command === 'RDOSetSalaries'
-        ? { ...resolved.params, ...collectSalaryTriplet(properties, resolved.params?.index ?? '0', value) }
+        ? buildSalaryParams(properties, resolved.params, value)
         : resolved.params;
 
       client.onSetBuildingProperty(
@@ -256,6 +257,9 @@ function DefinedProperties({
           key="workforce"
           properties={properties}
           canEdit={canEdit}
+          rdoCommands={rdoCommands}
+          buildingX={buildingX}
+          buildingY={buildingY}
           onPropertyChange={handlePropertyChange}
         />,
       );

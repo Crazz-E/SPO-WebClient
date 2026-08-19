@@ -1,7 +1,6 @@
 /**
  * PropertyTables — Table and card-list components for building property rendering.
  *
- * WorkforceTable + SalaryCell: workforce jobs/quality/salaries grid
  * DataTable + TableCellValue: generic multi-column indexed data table
  * ServiceCardList: card-per-service layout with price slider
  * ProductSummaryCards + ProductSaleCard + PriceSliderWithMarker: product cards on General tab
@@ -23,129 +22,6 @@ import {
 import { computePendingKey } from './property-utils';
 import { SliderInput, CurrencyInput } from './PropertyInputs';
 import styles from './PropertyGroup.module.css';
-
-// =============================================================================
-// WORKFORCE TABLE
-// =============================================================================
-
-export function WorkforceTable({
-  properties,
-  canEdit,
-  onPropertyChange,
-}: {
-  properties: BuildingPropertyValue[];
-  canEdit: boolean;
-  onPropertyChange: (name: string, value: number) => void;
-}) {
-  const vm = new Map<string, string>();
-  for (const p of properties) vm.set(p.name, p.value);
-
-  const getNum = (name: string) => parseFloat(vm.get(name) ?? '0') || 0;
-  const isActive = (i: number) => {
-    const cap = vm.has(`WorkersCap${i}`) ? getNum(`WorkersCap${i}`) : getNum(`WorkersMax${i}`);
-    return cap > 0;
-  };
-
-  const classes = ['Executives', 'Professionals', 'Workers'];
-
-  return (
-    <table className={styles.workforceTable}>
-      <thead>
-        <tr>
-          <th />
-          {classes.map((c) => (
-            <th key={c}>{c}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {/* Jobs row */}
-        <tr>
-          <td className={styles.wfLabel}>Jobs</td>
-          {[0, 1, 2].map((i) => (
-            <td key={i} className={styles.wfValue}>
-              {isActive(i) ? `${getNum(`Workers${i}`)}/${getNum(`WorkersMax${i}`)}` : ''}
-            </td>
-          ))}
-        </tr>
-        {/* Quality row */}
-        <tr>
-          <td className={styles.wfLabel}>Quality</td>
-          {[0, 1, 2].map((i) => (
-            <td key={i} className={styles.wfValue}>
-              {isActive(i) ? formatPercentage(getNum(`WorkersK${i}`)) : ''}
-            </td>
-          ))}
-        </tr>
-        {/* Salaries row */}
-        <tr>
-          <td className={styles.wfLabel}>Salaries</td>
-          {[0, 1, 2].map((i) => (
-            <td key={i} className={styles.wfValue}>
-              {isActive(i) && (
-                <SalaryCell
-                  index={i}
-                  price={getNum(`WorkForcePrice${i}`)}
-                  salary={getNum(`Salaries${i}`)}
-                  minSalary={getNum(`MinSalaries${i}`)}
-                  canEdit={canEdit}
-                  onPropertyChange={onPropertyChange}
-                />
-              )}
-            </td>
-          ))}
-        </tr>
-      </tbody>
-    </table>
-  );
-}
-
-function SalaryCell({
-  index,
-  price,
-  salary,
-  minSalary,
-  canEdit,
-  onPropertyChange,
-}: {
-  index: number;
-  price: number;
-  salary: number;
-  minSalary: number;
-  canEdit: boolean;
-  onPropertyChange: (name: string, value: number) => void;
-}) {
-  const [localVal, setLocalVal] = useState(salary);
-
-  const handleBlur = useCallback(() => {
-    let v = localVal;
-    if (v < minSalary) v = minSalary;
-    if (v > 250) v = 250;
-    setLocalVal(v);
-    onPropertyChange(`Salaries${index}`, v);
-  }, [localVal, minSalary, index, onPropertyChange]);
-
-  return (
-    <div className={styles.salaryCell}>
-      <span className={styles.salaryPrice}>{formatCurrency(price)}</span>
-      {canEdit && (
-        <div className={styles.salaryInput}>
-          <input
-            type="number"
-            className={styles.salaryField}
-            min={minSalary > 0 ? minSalary : 0}
-            max={250}
-            step={1}
-            value={localVal}
-            onChange={(e) => setLocalVal(parseInt(e.target.value, 10) || 0)}
-            onBlur={handleBlur}
-          />
-          <span className={styles.salaryPercent}>%</span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // =============================================================================
 // DATA TABLE (PropertyType.TABLE)

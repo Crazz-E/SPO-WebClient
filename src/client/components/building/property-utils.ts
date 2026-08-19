@@ -105,6 +105,36 @@ export function collectSalaryTriplet(
 }
 
 /**
+ * Build the exact `additionalParams` an `RDOSetSalaries` update travels with:
+ * the resolved mapping params (the edited index) plus the full triplet.
+ *
+ * The workforce editor and the emitter must produce the SAME object, key order
+ * included. `setBuildingProperty` derives its pending key from
+ * `JSON.stringify(additionalParams)`, so a triplet assembled differently is a
+ * different key, and the save indicator subscribed to it never lights up.
+ * One function, two callers, no drift.
+ */
+export function buildSalaryParams(
+  properties: BuildingPropertyValue[],
+  resolvedParams: Record<string, string> | undefined,
+  newValue: number,
+): Record<string, string> {
+  const index = resolvedParams?.index ?? '0';
+  return { ...resolvedParams, ...collectSalaryTriplet(properties, index, newValue) };
+}
+
+/**
+ * The pending-update key `setBuildingProperty` will register for this command,
+ * mirroring building-action-handler.ts: "command" or "command:{...params}".
+ */
+export function pendingKeyFor(
+  command: string,
+  params?: Record<string, string>,
+): string {
+  return params ? `${command}:${JSON.stringify(params)}` : command;
+}
+
+/**
  * Compute the pending-update key for a property, matching the key format
  * used in client.ts setBuildingProperty: "command" or "command:{"index":"0"}"
  */
@@ -113,7 +143,7 @@ export function computePendingKey(
   rdoCommands?: Record<string, RdoCommandMapping>,
 ): string {
   const { command, params } = resolveRdoCommand(rdoName, rdoCommands);
-  return params ? `${command}:${JSON.stringify(params)}` : command;
+  return pendingKeyFor(command, params);
 }
 
 /** Check if current player is mayor of this town (from ActualRuler property) */
