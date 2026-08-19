@@ -1267,12 +1267,13 @@ async function fetchSupplyDetails(
   // supplier" above an empty list: the count comes from cnxCount on the gate,
   // the rows come from here, and the two stopped agreeing with nothing to say
   // so. Say so — the discrepancy travels to the client in connectionCount vs
-  // connections.length, and this warning names the index that failed.
+  // connections.length, and the warning names the sub-index(es) that failed, which
+  // is what makes a partial gate read reproducible.
   const connections: BuildingConnectionData[] = [];
-  let unreadable = 0;
-  for (const cnxProps of cnxResults) {
+  const unreadable: number[] = [];
+  for (const [i, cnxProps] of cnxResults.entries()) {
     if (cnxProps.length < 11) {
-      unreadable++;
+      unreadable.push(i);
       continue;
     }
     connections.push({
@@ -1289,11 +1290,12 @@ async function fetchSupplyDetails(
       y: parseInt(cnxProps[10] || '0', 10),
     });
   }
-  if (unreadable > 0) {
+  if (unreadable.length > 0) {
     ctx.log.warn(
-      `[BuildingDetails] ${path}: cnxCount says ${connectionCount} but ${unreadable} ` +
+      `[BuildingDetails] ${path}: cnxCount says ${connectionCount} but ${unreadable.length} ` +
       `connection(s) returned an empty GetSubObjectProps payload — the sub-object ` +
-      `cache did not resolve. The list will be short by that many rows.`
+      `cache did not resolve. Failing sub-index(es): ${unreadable.join(', ')}. ` +
+      `The list will be short by that many rows.`
     );
   }
 
@@ -1458,10 +1460,10 @@ async function fetchProductDetails(
   // GetSubObjectProps payload, never a partial one. Report it instead of
   // silently shortening the clients list under an unchanged cnxCount.
   const connections: BuildingConnectionData[] = [];
-  let unreadable = 0;
-  for (const cnxProps of cnxResults) {
+  const unreadable: number[] = [];
+  for (const [i, cnxProps] of cnxResults.entries()) {
     if (cnxProps.length < 7) {
-      unreadable++;
+      unreadable.push(i);
       continue;
     }
     connections.push({
@@ -1478,11 +1480,12 @@ async function fetchProductDetails(
       y: parseInt(cnxProps[6] || '0', 10),
     });
   }
-  if (unreadable > 0) {
+  if (unreadable.length > 0) {
     ctx.log.warn(
-      `[BuildingDetails] ${path}: cnxCount says ${connectionCount} but ${unreadable} ` +
+      `[BuildingDetails] ${path}: cnxCount says ${connectionCount} but ${unreadable.length} ` +
       `client connection(s) returned an empty GetSubObjectProps payload — the ` +
-      `sub-object cache did not resolve. The list will be short by that many rows.`
+      `sub-object cache did not resolve. Failing sub-index(es): ${unreadable.join(', ')}. ` +
+      `The list will be short by that many rows.`
     );
   }
 

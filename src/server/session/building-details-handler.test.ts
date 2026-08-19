@@ -1753,6 +1753,11 @@ describe('getBuildingTabData', () => {
       expect(fake.log.warn).toHaveBeenCalledWith(
         expect.stringContaining('cnxCount says 1 but 1 connection(s) returned an empty'),
       );
+      // The index is the one datum that makes a partial gate read reproducible:
+      // with 12 suppliers, #7 failing must not look like #0 failing.
+      expect(fake.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failing sub-index(es): 0'),
+      );
     });
 
     it('says so on the clients list too', async () => {
@@ -1771,6 +1776,9 @@ describe('getBuildingTabData', () => {
       expect(products?.[0].connections).toHaveLength(0);
       expect(fake.log.warn).toHaveBeenCalledWith(
         expect.stringContaining('cnxCount says 2 but 2 client connection(s) returned an empty'),
+      );
+      expect(fake.log.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failing sub-index(es): 0, 1'),
       );
     });
 

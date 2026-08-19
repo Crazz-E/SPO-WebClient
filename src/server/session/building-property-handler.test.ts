@@ -298,7 +298,7 @@ const MATRIX: readonly MatrixEntry[] = [
   {
     // The first argument is the MODEL SERVER POINTER (fTycoonProxyId), never the
     // persistent tycoonId: the handler dereferences it — `TTycoon(pointer(...))`
-    // (Kernel/Kernel.pas:4535) — and swallows the resulting AV (:4579-4581), so
+    // (Kernel/Kernel.pas:4534) — and swallows the resulting AV (:4576-4578), so
     // the wrong id costs a silent no-op. Asserting the proxy id here is the
     // point of the row. `readBack: null` because no property witnesses the
     // outcome; see mapRdoCommandToPropertyName.
@@ -756,8 +756,8 @@ describe('argument construction', () => {
     '%s sends the tycoon PROXY id, never the persistent tycoon id',
     async (command) => {
       // The regression this guards is a silent one. `TFacility.RDOConnectToTycoon`
-      // does `Tycoon := TTycoon(pointer(TycoonId))` (Kernel/Kernel.pas:4535) and
-      // wraps the whole body in `try..except` (:4579-4581): handed the persistent
+      // does `Tycoon := TTycoon(pointer(TycoonId))` (Kernel/Kernel.pas:4534) and
+      // wraps the whole body in `try..except` (:4576-4578): handed the persistent
       // id, the server raises, swallows it, and answers nothing. The button looks
       // dead and no log on our side says why — so the only place this can be
       // caught is here.

@@ -284,7 +284,7 @@ export class StarpeaceSession extends EventEmitter {
    * members that take a tycoon id by value (GetTycoonCookie, SetTycoonCookie,
    * CloneFacility, PickEvent); using it where a pointer is expected costs a
    * silent no-op, because the resulting access violation is swallowed
-   * server-side (e.g. Kernel/Kernel.pas:4579-4581).
+   * server-side (e.g. Kernel/Kernel.pas:4576-4578).
    *
    * The previous note here claimed the opposite — "IS-local handle, NOT valid on
    * World server" — and it is what put the wrong id on RDOConnectToTycoon.

@@ -525,10 +525,10 @@ function buildRdoCommandArgs(
       //
       // The first argument is the MODEL SERVER POINTER to the TTycoon, not the
       // persistent tycoon id. The handler dereferences it on the spot —
-      // `Tycoon := TTycoon(pointer(TycoonId))` (Kernel/Kernel.pas:4535) — so the
+      // `Tycoon := TTycoon(pointer(TycoonId))` (Kernel/Kernel.pas:4534) — so the
       // two ids are NOT interchangeable, and the wrong one is not an error the
       // server reports. It raises an access violation that the handler's own
-      // `try..except` swallows (Kernel.pas:4579-4581): the call becomes a silent
+      // `try..except` swallows (Kernel.pas:4576-4578): the call becomes a silent
       // no-op, the client is told nothing, and the button appears dead.
       //
       // Which id the reference client sends, end to end:
@@ -836,7 +836,7 @@ function mapRdoCommandToPropertyName(
       //
       // There is no property that answers "did this connect anything": the
       // handler walks the tycoon's facilities and connects the ones that match
-      // (Kernel/Kernel.pas:4536-4556), and connecting zero of them is a
+      // (Kernel/Kernel.pas:4537-4554), and connecting zero of them is a
       // legitimate outcome. `null` means "no read-back", which the caller turns
       // into `confirmed: undefined` — the honest value.
       return null;

@@ -19,13 +19,24 @@ import type { BuildingDetailsResponse } from '../../shared/types';
 jest.mock('../bridge/client-bridge', () => ({
   ClientBridge: {
     log: jest.fn(),
-    // The real bridge funnels into setDetails, and setDetails is exactly what
-    // re-marks a lazy tab 'loaded' from carried-forward data
-    // (building-store.ts:197-200). Reproducing that is the point of the
-    // ordering test below — a mock that only records the call would pass even
-    // if the handler invalidated too early.
+    // Reproduces the ONE thing about the real bridge the ordering depends on:
+    // it carries the lazy fields forward BEFORE handing the result to setDetails
+    // (client-bridge.ts:486-489, then :492), and setDetails computes `preloaded`
+    // from the object it is given (building-store.ts:198-200). That is the round
+    // trip that re-marks a tab 'loaded' and would undo an early invalidation.
+    //
+    // Mocking this as a bare `setDetails(details)` makes the ordering test
+    // vacuous: the raw refresh response carries no `supplies` key, `preloaded`
+    // stays empty, and the assertion holds whichever order the handler used.
     updateBuildingDetails: jest.fn((details: BuildingDetailsResponse) => {
-      useBuildingStore.getState().setDetails(details);
+      const current = useBuildingStore.getState().details;
+      useBuildingStore.getState().setDetails({
+        ...details,
+        supplies: details.supplies ?? current?.supplies,
+        products: details.products ?? current?.products,
+        compInputs: details.compInputs ?? current?.compInputs,
+        warehouseWares: details.warehouseWares ?? current?.warehouseWares,
+      });
     }),
     // The optimistic-feedback trio the SET path drives on its way through.
     setPendingUpdate: jest.fn(),
@@ -189,7 +200,7 @@ describe('Quick Trade buttons', () => {
     ['tradeConnect:4', 'stores'],
   ])('%s reports only that the request went out', async (actionId, label) => {
     // Not "Connected all your X": the server connects the facilities that match
-    // and connecting none is a normal outcome (Kernel/Kernel.pas:4536-4556).
+    // and connecting none is a normal outcome (Kernel/Kernel.pas:4537-4554).
     // Nothing on the wire reports the count, so the toast must not imply one.
     const { ctx, details } = makeTradeCtx(true);
     seedLoadedPanel();

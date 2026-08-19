@@ -445,7 +445,7 @@ export async function refreshBuildingPropertiesInto(
  *
  * Both lists are invalidated because a single call can move either side.
  * RDOConnectToTycoon wires the tycoon's facility INPUTS onto this building's
- * OUTPUTS (Kernel/Kernel.pas:4550-4554), so the new row shows up in this
+ * OUTPUTS (Kernel/Kernel.pas:4547-4552), so the new row shows up in this
  * building's clients or in its suppliers depending on which end is on screen.
  *
  * The fetch itself is left to the lazy effect in `BuildingInspector`, which
@@ -479,7 +479,7 @@ async function tradeConnect(ctx: ClientHandlerContext, buildingDetails: Building
     if (success) {
       // Deliberately not "Connected all your X": the server connects only the
       // facilities whose input accepts a tradeable fluid this building outputs
-      // (Kernel/Kernel.pas:4536-4556), and connecting none of them is a normal
+      // (Kernel/Kernel.pas:4537-4554), and connecting none of them is a normal
       // outcome. Nothing on the wire reports how many were wired, so the
       // notification claims only what we know — that the request went out. The
       // refreshed list below is what actually answers the question.
