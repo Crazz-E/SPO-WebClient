@@ -39,7 +39,7 @@ esac
 # --- Renderer ----------------------------------------------------------------
 case "$PROMPT" in
   *render*|*texture*|*terrain*|*chunk*|*canvas*|*isometric*|*isom*|*sprite*|*tile*)
-    add "RENDERER — doc/texture-rendering-architecture.md (asset pipeline), doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md. Canvas 2D isometric engine, no WebGL/Three.js. Skill: web-games (frame budget)."
+    add "RENDERER — doc/texture-rendering-architecture.md (asset pipeline; its server half is historical — static terrain assets now come from the CDN). Canvas 2D isometric engine, no WebGL/Three.js. Skill: web-games (frame budget)."
     ;;
 esac
 
@@ -75,7 +75,7 @@ esac
 
 case "$PROMPT" in
   *mock*|*fixture*)
-    add "MOCK SERVER — src/mock-server/CLAUDE.md (API) + doc/mock-server-guide.md. Hand-written scenarios only."
+    add "MOCK SERVER — src/mock-server/CLAUDE.md (API, scenario authoring, strict validator). Hand-written scenarios only."
     ;;
 esac
 
@@ -88,7 +88,7 @@ esac
 # --- Server / deployment -----------------------------------------------------
 case "$PROMPT" in
   *deploy*|*docker*|*production*|*sécurité*|*securite*|*security*)
-    add "SERVER / DEPLOY — doc/architecture-overview.md, doc/deployment-security.md, doc/production-security-policy.md, doc/logging-system.md."
+    add "SERVER / DEPLOY — doc/architecture-overview.md, doc/production-security-policy.md, doc/logging-system.md, deploy/DEPLOY.md (procedure)."
     ;;
 esac
 

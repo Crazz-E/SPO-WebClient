@@ -573,7 +573,6 @@ class RailroadGridBuilder {
   - `Voyager/VoyagerServerInterfaces.pas` - RDO structures
 
 - **Project documentation:**
-  - [road_rendering.md](road_rendering.md) - Road rendering API & overview
   - [CLAUDE.md](../CLAUDE.md) - Project overview
 
 ---

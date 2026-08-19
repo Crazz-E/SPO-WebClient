@@ -284,7 +284,7 @@ npm test -- --testNamePattern="Performance"
 ## References
 
 - Chunk optimization commit: `ca4b034` (ground layer cache + frame-budget chunks)
-- Texture selection analysis: [doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md](../../doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md)
+- Rendering pipeline: [doc/texture-rendering-architecture.md](../../doc/texture-rendering-architecture.md)
 - Rendering architecture: [CLAUDE.md](../../CLAUDE.md) - Architecture section
 - Backlog performance tasks: [doc/BACKLOG.md](../../doc/BACKLOG.md)
 

@@ -15,8 +15,7 @@ Renderer modules (`src/client/renderer/`):
 `isometric-map-renderer.ts`, `isometric-terrain-renderer.ts`, `concrete-texture-system.ts`,
 `road-texture-system.ts`, `car-class-system.ts`, `vehicle-animation-system.ts`.
 
-Full pipeline: [doc/texture-rendering-architecture.md](../../../doc/texture-rendering-architecture.md),
-[doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md](../../../doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md).
+Full pipeline: [doc/texture-rendering-architecture.md](../../../doc/texture-rendering-architecture.md).
 
 ## SPO renderer traps
 

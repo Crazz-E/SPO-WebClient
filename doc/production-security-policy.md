@@ -1,6 +1,6 @@
 # Production Security & Readiness Policy
 
-**Status:** Adopted 2026-07-03 (v1.0) — first formal policy; previously guidance was advisory only (`deployment-security.md` checklist, `DEPLOY.md` Step 9).
+**Status:** Adopted 2026-07-03 (v1.0) — first formal policy; previously guidance was advisory only (`deployment-security.md` checklist — since removed as superseded — and `DEPLOY.md` Step 9).
 **Scope:** the SPO-WebClient gateway and its production deployment (nginx + Docker on the VPS). The legacy Delphi game servers are out of scope.
 **Enforcement:** every item marked *L4* is verified by the automated compliance suite defined in [E2E-STRATEGY.md §3/L4](E2E-STRATEGY.md); the L4 suite is a required CI job. Items marked *manual* are checked at deploy time per `deploy/DEPLOY.md`. Changing this policy requires updating the corresponding L4 tests in the same PR.
 

@@ -67,8 +67,8 @@ expect(frame).toPassStrictRdoValidation();
 ## Mock server, not hand-written frames
 
 Protocol tests replay real captured exchanges rather than invented strings. See
-`src/mock-server/CLAUDE.md` for the full API and `doc/mock-server-guide.md` for the
-step-by-step.
+`src/mock-server/CLAUDE.md` for the full API, the match hierarchy and the
+step-by-step for adding a scenario.
 
 ```ts
 const mock = new RdoMock();

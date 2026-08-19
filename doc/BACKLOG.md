@@ -237,7 +237,7 @@
 - **Implementation:**
   - Created [.gitignore](.gitignore) - Excludes build artifacts (dist/, node_modules/, public/client.js), logs, IDE configs, temporary files
   - Created [.gitattributes](.gitattributes) - Forces LF line endings for source code, marks binary files appropriately
-  - Created [README.md](README.md) - Professional documentation with features, tech stack, installation instructions, project structure
+  - Created [README.md](../README.md) - Professional documentation with features, tech stack, installation instructions, project structure
   - Updated [package.json](package.json) - Added proper metadata (description, keywords, repository URL, engines requirements)
   - Removed temporary files (nul, tmpclaude-3e1f-cwd)
   - **Git repository initialized:**
@@ -268,7 +268,7 @@
   - **Framework:** Jest 30.2.0 with ts-jest for TypeScript support
   - **Configuration:** [jest.config.js](jest.config.js) - CommonJS module system, 60% coverage thresholds
   - **Test Files:** Run `npm test` for current suite/test counts (numbers grow as features are added)
-  - **Test Documentation:** [TESTING.md](TESTING.md) - Comprehensive testing guide
+  - **Test Documentation:** `TESTING.md` (removed) - Comprehensive testing guide
   - **Coverage:**
     - ✅ RDO Type System ([src/shared/rdo-types.test.ts](src/shared/rdo-types.test.ts)) - 85/85 tests (100%)
     - ✅ RDO Protocol Parser ([src/server/rdo.test.ts](src/server/rdo.test.ts)) - 59/59 tests (100%)
@@ -292,7 +292,7 @@
     - `npm run test:verbose` - Detailed test output
   - **Test Fixtures:** [src/__fixtures__/](src/__fixtures__/) - Sample CSV, RDO packets, building templates
 - **RDO Protocol Testing Infrastructure (January 2026):**
-  - **Documentation:** [TODO-Unit-Test-RDO.md](TODO-Unit-Test-RDO.md) - Complete implementation plan
+  - **Documentation:** `TODO-Unit-Test-RDO.md` (removed) - Complete implementation plan
   - **MockRdoSession Class** ([src/server/__mocks__/mock-rdo-session.ts](src/server/__mocks__/mock-rdo-session.ts))
     - 13 simulation methods covering all RDO commands
     - Command history tracking with request ID management
@@ -338,7 +338,7 @@
 #### Codebase Audit & Refactoring
 - **Status:** ✅ COMPLETED (January 2026)
 - **Goal:** Comprehensive audit to identify and fix code issues, improve maintainability
-- **Documentation:** [AUDIT-TODO.md](AUDIT-TODO.md) - Full audit report with statistics
+- **Documentation:** `AUDIT-TODO.md` (removed) - Full audit report with statistics
 - **Phases Completed:**
   1. **Linux Compatibility** - Replaced Windows-specific tools with cross-platform NPM packages
   2. **Orphan Code Removal** - Deleted ~740 lines of unused code
@@ -465,8 +465,8 @@
     - Smart click behavior: category name navigates, row click toggles expansion
 - **API Endpoints:** REQ/RESP pairs for HOME, TOWNS, TYCOON_PROFILE, PEOPLE, PEOPLE_SEARCH, RANKINGS, RANKING_DETAIL, BANKS
 - **Documentation:**
-  - [SEARCH_MENU_SIMULATION.md](SEARCH_MENU_SIMULATION.md) - Complete URL patterns and testing guide
-  - [SEARCH_MENU_FIX.md](SEARCH_MENU_FIX.md) - DAAddr configuration fix details
+  - `SEARCH_MENU_SIMULATION.md` (removed) - Complete URL patterns and testing guide
+  - `SEARCH_MENU_FIX.md` (removed) - DAAddr configuration fix details
 - **Benefits:**
   - No RDO protocol needed (uses existing HTTP server)
   - Image caching via proxy reduces server load
@@ -878,7 +878,7 @@
 - **Status:** ✅ COMPLETED (January 2026)
 - **Goal:** Replace rectangular grid renderer with isometric view displaying real terrain textures from BMP map files
 - **Architecture:**
-  - **9-phase implementation plan** documented in [TERRAIN_RENDERING_STATUS.md](TERRAIN_RENDERING_STATUS.md)
+  - **9-phase implementation plan** documented in `TERRAIN_RENDERING_STATUS.md` (removed)
   - **Phases completed:** 1 (Infrastructure), 2 (Terrain Loading), 3 (Basic Rendering), 4 (Texture System), 5 (Layered Rendering)
   - **Remaining phases:** 6 (Rotation - optional), 7 (Polish), 8 (Testing), 9 (Deployment)
 - **Implementation:**
@@ -1041,7 +1041,7 @@
   - `GET /api/terrain-texture/:terrainType/:season/:paletteIndex` → Texture BMP (season: 0-3)
   - `GET /api/terrain-info/:terrainType` → Available seasons and default season for terrain type
 - **Documentation:**
-  - [TERRAIN_RENDERING_STATUS.md](TERRAIN_RENDERING_STATUS.md) - Complete implementation status (1,000+ lines)
+  - `TERRAIN_RENDERING_STATUS.md` (removed) - Complete implementation status (1,000+ lines)
   - Phase-by-phase progress tracking
   - Technical references (Lander.pas, IsometricMap.pas)
 - **Benefits:**

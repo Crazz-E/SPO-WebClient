@@ -344,7 +344,9 @@ npm run test:smoke                 # Component smoke tests only
 Detailed technical docs live in the [doc/](doc/) directory:
 
 **Protocol & Architecture**
-- [SPO-Original Reference](doc/spo-original-reference.md) — Delphi source analysis and patterns
+- [Architecture Overview](doc/architecture-overview.md) — Directory structure, API endpoints, services
+- [SPO-Original Reference](doc/spo-original-reference.md) — Delphi source index with `File.pas:Line` citations
+- [Logging System](doc/logging-system.md) — Structured NDJSON logging and session tracking
 
 **Building System**
 - [Facility Tabs Reference](doc/facility-tabs-reference.md) — Inspector tab configurations
@@ -352,25 +354,25 @@ Detailed technical docs live in the [doc/](doc/) directory:
 - [Research System Reference](doc/research-system-reference.md) — Research and technology tree
 
 **Rendering**
+- [Texture → Rendering Architecture](doc/texture-rendering-architecture.md) — Asset pipeline, zoom levels, gotchas
 - [Road Rendering](doc/road_rendering_reference.md) — Road topology and texture mapping
 - [Concrete Rendering](doc/concrete_rendering.md) — Concrete tile system
-- [Road Texture Mapping](doc/ROAD-TEXTURE-MAPPING.md) — Texture selection logic
-- [Canvas 2D Texture Analysis](doc/CANVAS2D-TEXTURE-SELECTION-ANALYSIS.md) — Texture pipeline
-- [Graphics Engine Proposal](doc/GRAPHICS-ENGINE-REFACTORING-PROPOSAL.md) — Renderer design
 
 **Voyager (Inspector)**
-- [Voyager Inspector Architecture](doc/voyager-inspector-architecture.md) — Architecture overview
-- [Voyager Profile Interface](doc/voyager-profile-interface.md) — Profile protocol
-
-**User Features**
-- [User Profile & Mail Service](doc/USER_PROFILE_AND_MAIL_SERVICE.md) — Profile and mail protocol
-- [Mail System Analysis](doc/MAIL_SYSTEM_ANALYSIS.md) — Mail RDO protocol
+- [Voyager Inspector Architecture](doc/voyager-inspector-architecture.md) — Container lifecycle and data binding
 
 **Testing & Development**
-- [E2E Testing](doc/E2E-TESTING.md) — End-to-end test procedure and credentials
-- [E2E Scenario](doc/E2E-SCENARIO.md) — Detailed scenario walkthrough
-- [Mock Server Guide](doc/mock-server-guide.md) — Mock server setup and RDO capture
+- [E2E Testing](doc/E2E-TESTING.md) — Canonical live procedure and locked credentials
+- [E2E Scenario](doc/E2E-SCENARIO.md) — The 8-phase L3 live smoke script
+- [E2E Strategy](doc/E2E-STRATEGY.md) — Test layers L0–L4 and target architecture
+- [Mock Server](src/mock-server/CLAUDE.md) — Mock server API, scenarios and strict validator
 - [CAB Asset Extraction](doc/CAB-EXTRACTION.md) — Extracting textures from game archives
+
+**Project & Operations**
+- [Backlog](doc/BACKLOG.md) — History of completed work
+- [Open Backlog](doc/BACKLOG-OPEN.md) — Known defects and gaps awaiting work
+- [Production Security Policy](doc/production-security-policy.md) — Normative SEC-* requirements
+- [Deployment Guide](deploy/DEPLOY.md) — VPS deployment procedure
 
 ## License
 

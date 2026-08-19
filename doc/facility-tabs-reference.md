@@ -844,7 +844,7 @@ Check `SecurityId` against current tycoon before showing edit controls.
 |-----------------|---------|
 | [spo-original-reference.md](spo-original-reference.md) | Index of the Delphi source, per class, with File.pas:Line citations |
 | [voyager-inspector-architecture.md](voyager-inspector-architecture.md) | Container lifecycle, xfer_* data binding, threading, the permission model in full |
-| [mock-server-guide.md](mock-server-guide.md) | Adding mock scenarios for new tab handlers |
+| [../src/mock-server/CLAUDE.md](../src/mock-server/CLAUDE.md) | Adding mock scenarios for new tab handlers |
 
 ---
 
