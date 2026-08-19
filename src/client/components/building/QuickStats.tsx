@@ -297,22 +297,30 @@ export function QuickStats({ focus }: QuickStatsProps) {
         focus.salesInfo && (() => {
           const lines = parseSalesLines(focus.salesInfo);
           if (lines.length > 0) {
+            // A warehouse posts one row per ware it sells — 30+ of them. The
+            // rows scroll inside a capped box so the tab bar and the tab
+            // content below keep their share of the inspector height.
             return (
               <div className={styles.salesList}>
-                <span className={styles.label}>Sales</span>
-                {lines.map((line, i) => (
-                  <div key={i} className={styles.salesRow}>
-                    <div className={styles.salesRowHeader}>
-                      <span className={styles.salesCategory}>{line.category}</span>
+                <div className={styles.salesListHeader}>
+                  <span className={styles.label}>Sales</span>
+                  <span className={styles.salesCount}>{lines.length}</span>
+                </div>
+                <div className={styles.salesScroll}>
+                  {lines.map((line, i) => (
+                    <div key={i} className={styles.salesRow}>
+                      <div className={styles.salesRowHeader}>
+                        <span className={styles.salesCategory}>{line.category}</span>
+                      </div>
+                      <MiniBar
+                        value={line.percent / 100}
+                        label={`${line.percent}%`}
+                        variant={line.percent >= 80 ? 'success' : line.percent >= 40 ? 'gold' : 'warning'}
+                        height={4}
+                      />
                     </div>
-                    <MiniBar
-                      value={line.percent / 100}
-                      label={`${line.percent}%`}
-                      variant={line.percent >= 80 ? 'success' : line.percent >= 40 ? 'gold' : 'warning'}
-                      height={4}
-                    />
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             );
           }

@@ -7,7 +7,15 @@
   padding: var(--space-3) var(--space-4);
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--surface-border);
-  flex-shrink: 0;
+  /* Shrinks before the tab content does, and never takes more than its share
+     of the inspector — a warehouse summary is 30+ rows tall otherwise. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 45%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-border) transparent;
   flex-wrap: wrap;
   box-shadow: inset 0 1px 0 var(--surface-border);
 }
@@ -121,7 +129,36 @@
   flex-direction: column;
   gap: var(--space-1);
   min-width: 120px;
+  min-height: 0;
   flex: 1;
+}
+
+/* Header stays put while the rows below scroll */
+.salesListHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.salesCount {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scroll box — warehouses post one row per ware (30+); cap the list so the
+   tab bar and the tab content underneath stay on screen. */
+.salesScroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: clamp(96px, 24vh, 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--space-1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-border) transparent;
 }
 
 .salesRow {

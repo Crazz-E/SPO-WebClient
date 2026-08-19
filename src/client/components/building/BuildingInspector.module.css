@@ -162,6 +162,7 @@
 /* Content — scrollable tab area */
 .content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: var(--space-3) var(--space-4);
   scrollbar-width: thin;

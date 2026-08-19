@@ -162,3 +162,81 @@ describe('BuildingInspector toolbar', () => {
     expect(screen.getByLabelText('Close')).toBeTruthy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Long product / service lists
+// ---------------------------------------------------------------------------
+// A warehouse sells (and stores) dozens of wares. The summary bar used to grow
+// one row per ware and push the tab bar and the tab content out of the panel;
+// each list now lives in its own bounded, scrollable box.
+
+/** salesInfo as a warehouse sends it — one "<ware> sales at N%" line per ware. */
+const manySalesInfo = Array.from(
+  { length: 30 },
+  (_, i) => `Ware ${i} sales at ${i * 3}%`,
+).join('\n');
+
+/** detailsText of a storage building — "N kg of <ware> at N% quality index." */
+const manyStoringText =
+  'Upgrade Level: 1  Storing: ' +
+  Array.from(
+    { length: 12 },
+    (_, i) => `${1000 + i} kg of Ware ${i} at ${30 + i}% quality index.`,
+  ).join('  ');
+
+/** detailsText of a farm — products separated by a double period. */
+const manyProducingText =
+  'Upgrade Level: 2  Producing: ' +
+  Array.from(
+    { length: 6 },
+    (_, i) => `${1000 + i} kg of Ware ${i} at ${60 + i}% quality index, 90% efficiency`,
+  ).join('..');
+
+describe('QuickStats — long sales lists stay scrollable', () => {
+  it('renders every sales row inside a single scroll box', () => {
+    const { container } = renderWithProviders(
+      <QuickStats focus={{ ...mockFocus, salesInfo: manySalesInfo }} />,
+    );
+    const scroll = container.querySelector('.salesScroll');
+    expect(scroll).toBeTruthy();
+    expect(scroll?.querySelectorAll('.salesRow')).toHaveLength(30);
+  });
+
+  it('keeps the Sales header and the row count outside the scroll box', () => {
+    const { container } = renderWithProviders(
+      <QuickStats focus={{ ...mockFocus, salesInfo: manySalesInfo }} />,
+    );
+    const header = container.querySelector('.salesListHeader');
+    expect(header?.textContent).toBe('Sales30');
+    expect(container.querySelector('.salesScroll')?.textContent).not.toContain('Sales');
+  });
+
+  it('uses the same scroll box for a short list', () => {
+    const { container } = renderWithProviders(
+      <QuickStats focus={{ ...mockFocus, salesInfo: 'Pharmaceutics sales at 80%' }} />,
+    );
+    expect(container.querySelector('.salesListHeader')?.textContent).toBe('Sales1');
+    expect(container.querySelectorAll('.salesScroll > .salesRow')).toHaveLength(1);
+  });
+});
+
+describe('QuickStats — long detail lists stay scrollable', () => {
+  it('wraps the Storing items in their own scroll box', () => {
+    const { container } = renderWithProviders(
+      <QuickStats focus={{ ...mockFocus, salesInfo: '', detailsText: manyStoringText }} />,
+    );
+    const items = container.querySelector('.sectionItems');
+    expect(items).toBeTruthy();
+    expect(items?.querySelectorAll('.productCard')).toHaveLength(12);
+    expect(screen.getByText('Storing')).toBeTruthy();
+  });
+
+  it('wraps the Producing items in their own scroll box', () => {
+    const { container } = renderWithProviders(
+      <QuickStats focus={{ ...mockFocus, salesInfo: '', detailsText: manyProducingText }} />,
+    );
+    const items = container.querySelector('.sectionItems');
+    expect(items?.querySelectorAll('.productCard')).toHaveLength(6);
+    expect(screen.getByText('Producing')).toBeTruthy();
+  });
+});

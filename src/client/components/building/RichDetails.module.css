@@ -51,6 +51,18 @@
   margin-top: var(--space-1);
 }
 
+/* Item list under a section header — same cap as the sales list, so a
+   warehouse holding a dozen wares does not push the tabs off the panel.
+   Only the inspector (RichDetailsView) uses it; StatusOverlay has its own. */
+.sectionItems {
+  max-height: clamp(96px, 24vh, 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--space-1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-border) transparent;
+}
+
 .sectionHeader {
   font-size: var(--text-2xs);
   color: var(--text-muted);

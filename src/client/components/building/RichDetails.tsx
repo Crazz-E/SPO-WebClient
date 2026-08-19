@@ -293,24 +293,26 @@ function renderFarm(details: RichDetails) {
       {details.producing && details.producing.length > 0 && (
         <div className={styles.section}>
           <div className={styles.sectionHeader}>Producing</div>
-          {details.producing.map((item, i) => (
-            <div key={i} className={styles.productCard}>
-              <span className={styles.productName}>{item.name}</span>
-              <div className={styles.chipRow}>
-                <span className={styles.chipVolume}>{item.volume}</span>
-                {item.quality && (
-                  <span className={`${styles.chip} ${colorClass(percentColor(item.quality))}`}>
-                    <PerfDot value={item.quality} />{item.quality} quality
-                  </span>
-                )}
-                {item.efficiency && (
-                  <span className={`${styles.chip} ${colorClass(percentColor(item.efficiency))}`}>
-                    <PerfDot value={item.efficiency} />{item.efficiency} eff.
-                  </span>
-                )}
+          <div className={styles.sectionItems}>
+            {details.producing.map((item, i) => (
+              <div key={i} className={styles.productCard}>
+                <span className={styles.productName}>{item.name}</span>
+                <div className={styles.chipRow}>
+                  <span className={styles.chipVolume}>{item.volume}</span>
+                  {item.quality && (
+                    <span className={`${styles.chip} ${colorClass(percentColor(item.quality))}`}>
+                      <PerfDot value={item.quality} />{item.quality} quality
+                    </span>
+                  )}
+                  {item.efficiency && (
+                    <span className={`${styles.chip} ${colorClass(percentColor(item.efficiency))}`}>
+                      <PerfDot value={item.efficiency} />{item.efficiency} eff.
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
       {details.metrics && details.metrics.length > 0 && (
@@ -333,19 +335,21 @@ function renderStorage(details: RichDetails) {
       {details.storing && details.storing.length > 0 && (
         <div className={styles.section}>
           <div className={styles.sectionHeader}>Storing</div>
-          {details.storing.map((item, i) => (
-            <div key={i} className={styles.productCard}>
-              <span className={styles.productName}>{item.name}</span>
-              <div className={styles.chipRow}>
-                <span className={styles.chipVolume}>{item.amount}</span>
-                {item.quality && (
-                  <span className={`${styles.chip} ${colorClass(percentColor(item.quality))}`}>
-                    <PerfDot value={item.quality} />{item.quality} quality
-                  </span>
-                )}
+          <div className={styles.sectionItems}>
+            {details.storing.map((item, i) => (
+              <div key={i} className={styles.productCard}>
+                <span className={styles.productName}>{item.name}</span>
+                <div className={styles.chipRow}>
+                  <span className={styles.chipVolume}>{item.amount}</span>
+                  {item.quality && (
+                    <span className={`${styles.chip} ${colorClass(percentColor(item.quality))}`}>
+                      <PerfDot value={item.quality} />{item.quality} quality
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </>
