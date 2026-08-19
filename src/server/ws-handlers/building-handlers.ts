@@ -15,6 +15,8 @@ import {
   type WsRespBuildingDetails,
   type WsReqBuildingTabData,
   type WsRespBuildingTabData,
+  type WsReqBuildingGateConnections,
+  type WsRespBuildingGateConnections,
   type WsReqBuildingRefreshProperties,
   type WsRespBuildingRefreshProperties,
   type WsReqBuildingSetProperty,
@@ -185,6 +187,27 @@ export async function handleBuildingTabData(ctx: WsHandlerContext, msg: WsMessag
       y: req.y,
       tabId: req.tabId,
       ...tabData,
+    };
+    sendResponse(ctx.ws, response);
+  });
+}
+
+export async function handleBuildingGateConnections(ctx: WsHandlerContext, msg: WsMessage): Promise<void> {
+  const req = msg as WsReqBuildingGateConnections;
+
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_FacilityNotFound, async () => {
+    const gate = await ctx.session.getBuildingGateConnections(
+      req.x, req.y, req.tabId, req.path, req.name, req.visualClass,
+    );
+
+    const response: WsRespBuildingGateConnections = {
+      type: WsMessageType.RESP_BUILDING_GATE_CONNECTIONS,
+      wsRequestId: msg.wsRequestId,
+      x: req.x,
+      y: req.y,
+      tabId: req.tabId,
+      path: req.path,
+      ...gate,
     };
     sendResponse(ctx.ws, response);
   });

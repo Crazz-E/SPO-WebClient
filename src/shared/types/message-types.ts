@@ -136,6 +136,8 @@ export enum WsMessageType {
   RESP_BUILDING_DETAILS = 'RESP_BUILDING_DETAILS',
   REQ_BUILDING_TAB_DATA = 'REQ_BUILDING_TAB_DATA',
   RESP_BUILDING_TAB_DATA = 'RESP_BUILDING_TAB_DATA',
+  REQ_BUILDING_GATE_CONNECTIONS = 'REQ_BUILDING_GATE_CONNECTIONS',
+  RESP_BUILDING_GATE_CONNECTIONS = 'RESP_BUILDING_GATE_CONNECTIONS',
   REQ_BUILDING_REFRESH_PROPERTIES = 'REQ_BUILDING_REFRESH_PROPERTIES',
   RESP_BUILDING_REFRESH_PROPERTIES = 'RESP_BUILDING_REFRESH_PROPERTIES',
   REQ_BUILDING_SET_PROPERTY = 'REQ_BUILDING_SET_PROPERTY',
@@ -720,6 +722,43 @@ export interface WsRespBuildingTabData extends WsMessage {
   products?: BuildingProductData[];
   compInputs?: CompInputData[];
   warehouseWares?: WarehouseWareData[];
+}
+
+/**
+ * One gate's connection rows, on demand.
+ *
+ * `REQ_BUILDING_TAB_DATA` returns the Supplies/Products gates with their
+ * headers and an empty `connections` list; this request fills one gate in when
+ * the user opens it. Splitting the two is what keeps opening the tab cheap: a
+ * 30-gate warehouse costs one round-trip pair per gate instead of also paying
+ * one `GetSubObjectProps` per connection of every gate.
+ *
+ * `name` travels with the request because the response replaces the whole gate
+ * record client-side, and the gate name is only listed by GetInputNames /
+ * GetOutputNames — which this path does not call.
+ */
+export interface WsReqBuildingGateConnections extends WsMessage {
+  type: WsMessageType.REQ_BUILDING_GATE_CONNECTIONS;
+  x: number;
+  y: number;
+  /** Which accordion the gate belongs to. */
+  tabId: 'supplies' | 'products';
+  /** Gate path, as listed in the tab data. */
+  path: string;
+  /** Gate display name, echoed back in the refreshed record. */
+  name: string;
+  visualClass: string;
+}
+
+/** Exactly one of `supply` / `product` is set, matching the request's tabId. */
+export interface WsRespBuildingGateConnections extends WsMessage {
+  type: WsMessageType.RESP_BUILDING_GATE_CONNECTIONS;
+  x: number;
+  y: number;
+  tabId: 'supplies' | 'products';
+  path: string;
+  supply?: BuildingSupplyData;
+  product?: BuildingProductData;
 }
 
 /** Lightweight property refresh — reuses existing Delphi temp object. */

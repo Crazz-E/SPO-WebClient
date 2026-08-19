@@ -177,6 +177,8 @@ export type {
   WsRespBuildingDetails,
   WsReqBuildingTabData,
   WsRespBuildingTabData,
+  WsReqBuildingGateConnections,
+  WsRespBuildingGateConnections,
   WsReqBuildingRefreshProperties,
   WsRespBuildingRefreshProperties,
   WsReqBuildingSetProperty,

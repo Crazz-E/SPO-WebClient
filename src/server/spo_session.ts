@@ -2949,6 +2949,25 @@ private handlePush(socketName: string, packet: RdoPacket) {
     return buildingDetailsHandler.getBuildingTabData(this, x, y, tabId, visualClass);
   }
 
+  /**
+   * One gate's connection rows, read on demand when the user opens it.
+   * The tab request above deliberately returns gates with empty connection
+   * lists; this is the other half.
+   */
+  public async getBuildingGateConnections(
+    x: number,
+    y: number,
+    tabId: 'supplies' | 'products',
+    path: string,
+    name: string,
+    visualClass?: string,
+  ): Promise<{
+    supply?: import('../shared/types').BuildingSupplyData;
+    product?: import('../shared/types').BuildingProductData;
+  }> {
+    return buildingDetailsHandler.getBuildingGateConnections(this, x, y, tabId, path, name, visualClass);
+  }
+
   public async refreshBuildingProperties(x: number, y: number, visualClass: string, activeTabId?: string): Promise<BuildingDetailsResponse> {
     return buildingDetailsHandler.refreshBuildingProperties(this, x, y, visualClass, activeTabId);
   }
