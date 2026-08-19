@@ -478,17 +478,33 @@ export interface BuildingConnectionData {
 }
 
 /**
- * Supply/input data with connections
+ * Supply/input gate.
+ *
+ * A gate arrives in two stages, and the type says which one it is in.
+ *
+ * Listing a building's gates costs one RDO call (`GetInputNames`) and yields
+ * `path` and `name` — those two are always present. Everything else lives on
+ * the gate itself and costs a `SetPath` + `GetPropertyList` to read, so it is
+ * read only when the user opens that gate, exactly as the reference client does
+ * (`LoadFingerInfo` runs for `CurrentFinger` alone,
+ * Voyager/SupplySheetForm.pas:440-506). Until then those fields are `undefined`
+ * — meaning NOT READ YET, never "zero" or "empty". A renderer that shows `0`
+ * for an unread `connectionCount` is stating something the server never said.
+ *
+ * `connections` is the one exception: it is always an array, empty until the
+ * gate is read. Whether that emptiness means "none" or "not read yet" is
+ * carried by `gateLoadingStates` in the building store, which the panels
+ * already consult.
  */
 export interface BuildingSupplyData {
-  /** Supply path */
+  /** Supply path — from GetInputNames, always present. */
   path: string;
-  /** Supply name (e.g., "Pharmaceutics") */
+  /** Supply name (e.g., "Pharmaceutics") — from GetInputNames, always present. */
   name: string;
-  /** Meta fluid type */
-  metaFluid: string;
-  /** Current value */
-  fluidValue: string;
+  /** Meta fluid type. Undefined until the gate is opened. */
+  metaFluid?: string;
+  /** Current value. Undefined until the gate is opened. */
+  fluidValue?: string;
   /** Last cost percentage */
   lastCostPerc?: string;
   /** Minimum quality threshold */
@@ -499,37 +515,39 @@ export interface BuildingSupplyData {
   qpSorted?: string;
   /** Sort mode: 0=cost, 1=quality */
   sortMode?: string;
-  /** Connection count */
-  connectionCount: number;
-  /** Connections */
+  /** Connection count. Undefined until the gate is opened — not zero. */
+  connectionCount?: number;
+  /** Connections — empty until the gate is opened. */
   connections: BuildingConnectionData[];
 }
 
 /**
- * Product/output gate data with connections
- * Fetched via GetOutputNames + SetPath + per-gate property queries
- * Mirror of BuildingSupplyData but with output-specific properties
+ * Product/output gate.
+ *
+ * Two-stage like {@link BuildingSupplyData}, for the same reason: `GetOutputNames`
+ * lists the gates and gives `path` and `name`; everything else is read off the
+ * gate itself when the user opens it. Undefined means NOT READ YET.
  */
 export interface BuildingProductData {
-  /** Output gate path */
+  /** Output gate path — from GetOutputNames, always present. */
   path: string;
-  /** Product name (e.g., "Chemicals", "Clothing") */
+  /** Product name (e.g., "Chemicals", "Clothing") — from GetOutputNames, always present. */
   name: string;
-  /** Meta fluid type identifier */
-  metaFluid: string;
-  /** Last produced value (LastFluid) */
-  lastFluid: string;
-  /** Quality percentage (FluidQuality) */
-  quality: string;
-  /** Sell price percentage (PricePc, 0-300, 100=market) */
-  pricePc: string;
-  /** Average price percentage (AvgPrice) */
-  avgPrice: string;
-  /** Market price (absolute value) */
-  marketPrice: string;
-  /** Connection count */
-  connectionCount: number;
-  /** Output connections (clients/buyers) */
+  /** Meta fluid type identifier. Undefined until the gate is opened. */
+  metaFluid?: string;
+  /** Last produced value (LastFluid). Undefined until the gate is opened. */
+  lastFluid?: string;
+  /** Quality percentage (FluidQuality). Undefined until the gate is opened. */
+  quality?: string;
+  /** Sell price percentage (PricePc, 0-300, 100=market). Undefined until the gate is opened. */
+  pricePc?: string;
+  /** Average price percentage (AvgPrice). Undefined until the gate is opened. */
+  avgPrice?: string;
+  /** Market price (absolute value). Undefined until the gate is opened. */
+  marketPrice?: string;
+  /** Connection count. Undefined until the gate is opened — not zero. */
+  connectionCount?: number;
+  /** Output connections (clients/buyers) — empty until the gate is opened. */
   connections: BuildingConnectionData[];
 }
 

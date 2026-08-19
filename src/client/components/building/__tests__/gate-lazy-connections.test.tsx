@@ -16,6 +16,7 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { renderWithProviders, resetStores, createSpiedCallbacks } from '../../../__tests__/setup/render-helpers';
 import { SuppliesPanel } from '../SuppliesGroup';
 import { ProductsPanel } from '../ProductsGroup';
+import { ProductSummaryCards } from '../PropertyTables';
 import { useBuildingStore, gateKey } from '../../../store/building-store';
 import { useGameStore } from '../../../store/game-store';
 import type {
@@ -69,17 +70,17 @@ const NO_PRODUCTS: BuildingProductData[] = [];
  * Hosts that take their rows from the store, as BuildingInspector does. A gate
  * merge has to reach the screen, and it only does through a subscription.
  */
-function SuppliesHost() {
+function SuppliesHost({ canEdit = false }: { canEdit?: boolean }) {
   const supplies = useBuildingStore((s) => s.details?.supplies ?? NO_SUPPLIES);
-  return <SuppliesPanel supplies={supplies} canEdit={false} buildingX={X} buildingY={Y} />;
+  return <SuppliesPanel supplies={supplies} canEdit={canEdit} buildingX={X} buildingY={Y} />;
 }
 
-function ProductsHost() {
+function ProductsHost({ canEdit = false }: { canEdit?: boolean }) {
   const products = useBuildingStore((s) => s.details?.products ?? NO_PRODUCTS);
   return (
     <ProductsPanel
       products={products}
-      canEdit={false}
+      canEdit={canEdit}
       buildingX={X}
       buildingY={Y}
       onPropertyChange={() => { /* not under test */ }}
@@ -235,5 +236,271 @@ describe.each(PANELS)('$label — one gate at a time', (panel) => {
     fireEvent.click(screen.getByText(panel.header));
 
     expect(onRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ===========================================================================
+// A LISTED GATE — path and name, nothing else read yet
+//
+// This is the shape the tab read now returns. Everything a collapsed row used
+// to show — the supplier/buyer count, the quality badge, the price slider —
+// was a gate-header property, and reading 30 of those cost 60 round-trips
+// before the user had opened anything. The rows below show what is left, and
+// what appears once a gate IS opened.
+// ===========================================================================
+
+const STUB_SUPPLIES: BuildingSupplyData[] = [
+  { path: 'SegA', name: 'Books', connections: [] },
+  { path: 'SegB', name: 'Cars', connections: [] },
+];
+
+const STUB_PRODUCTS: BuildingProductData[] = [
+  { path: 'GateA', name: 'Toys', connections: [] },
+  { path: 'GateB', name: 'Fuel', connections: [] },
+];
+
+function seedListedOnly(): void {
+  useBuildingStore.getState().setDetails(makeDetails());
+  useBuildingStore.getState().mergeTabData('supplies', { supplies: STUB_SUPPLIES }, X, Y);
+  useBuildingStore.getState().mergeTabData('products', { products: STUB_PRODUCTS }, X, Y);
+}
+
+describe('a gate nobody has opened', () => {
+  beforeEach(seedListedOnly);
+
+  it('names the supply gate and claims nothing else', () => {
+    const { container } = renderWithProviders(
+      <SuppliesHost />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn() }) },
+    );
+
+    expect(screen.getByText('Books')).toBeTruthy();
+    // Not "0 suppliers" — the server was never asked, and saying zero would be
+    // stating something it never answered.
+    expect(container.textContent).not.toMatch(/supplier/);
+  });
+
+  it('names the product gate and shows neither badge, count, nor price', () => {
+    const { container } = renderWithProviders(
+      <ProductsHost canEdit />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn() }) },
+    );
+
+    expect(screen.getByText('Toys')).toBeTruthy();
+    expect(container.querySelector('input[type="range"]')).toBeNull();
+    expect(container.textContent).not.toMatch(/Q:/);
+    expect(container.textContent).not.toMatch(/\$/);
+  });
+
+  it('shows the supplier count once the gate has been read', () => {
+    renderWithProviders(
+      <SuppliesHost />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn() }) },
+    );
+    fireEvent.click(screen.getByText('Books'));
+
+    act(() => {
+      useBuildingStore.getState().mergeGateData('supplies', 'SegA', {
+        path: 'SegA', name: 'Books', metaFluid: 'Books', fluidValue: '1200',
+        connectionCount: 2, connections: [conn('Farm A'), conn('Farm B')],
+      }, X, Y);
+    });
+
+    expect(screen.getByText('2 suppliers')).toBeTruthy();
+    // …and only for the gate that was opened.
+    expect(screen.queryByText('1 supplier')).toBeNull();
+  });
+
+  it('shows the product price slider once the gate has been read', () => {
+    const { container } = renderWithProviders(
+      <ProductsHost canEdit />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn() }) },
+    );
+    fireEvent.click(screen.getByText('Toys'));
+
+    act(() => {
+      useBuildingStore.getState().mergeGateData('products', 'GateA', {
+        path: 'GateA', name: 'Toys', metaFluid: 'Toys', lastFluid: '80', quality: '90',
+        pricePc: '110', avgPrice: '105', marketPrice: '5000', connectionCount: 0,
+        connections: [],
+      }, X, Y);
+    });
+
+    // The price control lives inside the opened gate now, exactly where the
+    // reference client puts it: PricePc acts on CurrentFinger alone
+    // (Voyager/ProdSheetForm.pas:684).
+    expect(container.querySelector('input[type="range"]')).toBeTruthy();
+    expect(screen.getByText(/Q:90%/)).toBeTruthy();
+  });
+
+  it('will not let Hire fire without the fluid id it has to name', () => {
+    // metaFluid IS the fluid id every mutation addresses, and it is a header
+    // property. A Hire before the gate is read would search for undefined.
+    const onSearch = jest.fn();
+    renderWithProviders(
+      <SuppliesHost canEdit />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn(), onSearchConnections: onSearch }) },
+    );
+    fireEvent.click(screen.getByText('Books'));
+
+    const hire = screen.getByText('Hire') as HTMLButtonElement;
+    expect(hire.disabled).toBe(true);
+    fireEvent.click(hire);
+    expect(onSearch).not.toHaveBeenCalled();
+
+    act(() => {
+      useBuildingStore.getState().mergeGateData('supplies', 'SegA', {
+        path: 'SegA', name: 'Books', metaFluid: 'Books', connectionCount: 0, connections: [],
+      }, X, Y);
+    });
+
+    const hireNow = screen.getByText('Hire') as HTMLButtonElement;
+    expect(hireNow.disabled).toBe(false);
+    fireEvent.click(hireNow);
+    expect(onSearch).toHaveBeenCalledWith(X, Y, 'Books', 'Books', 'input');
+  });
+
+  it('keeps two gates of the same building apart even with no fluid id to key on', () => {
+    // The cards used to be keyed by metaFluid, which no longer exists at list
+    // time; the path does, and it is what the gate read is addressed by.
+    renderWithProviders(
+      <SuppliesHost />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn() }) },
+    );
+
+    fireEvent.click(screen.getByText('Cars'));
+
+    expect(useBuildingStore.getState().expandedGates.has(gateKey('supplies', 'SegB'))).toBe(true);
+    expect(useBuildingStore.getState().expandedGates.has(gateKey('supplies', 'SegA'))).toBe(false);
+  });
+});
+
+// ===========================================================================
+// THE GENERAL TAB'S PRODUCT SUMMARY
+//
+// `ProductSummaryCards` draws a price slider per product on an industrial
+// building's General tab, from the same `details.products` the accordion uses.
+// Those gates now arrive without a price, so the panel has to say nothing
+// rather than draw a slider at 0 %.
+// ===========================================================================
+
+describe('ProductSummaryCards', () => {
+  const priced = (path: string, name: string): BuildingProductData => ({
+    path, name, metaFluid: name, lastFluid: '80', quality: '90', pricePc: '110',
+    avgPrice: '105', marketPrice: '5000', connectionCount: 0, connections: [],
+  });
+
+  it('renders nothing when no gate has been opened', () => {
+    const { container } = renderWithProviders(
+      <ProductSummaryCards products={STUB_PRODUCTS} canEdit onPropertyChange={() => {}} />,
+    );
+
+    // A slider at 0 % is an instruction the server never gave.
+    expect(container.querySelector('input[type="range"]')).toBeNull();
+    expect(container.textContent).toBe('');
+  });
+
+  it('renders nothing at all when there are no products', () => {
+    const { container } = renderWithProviders(
+      <ProductSummaryCards products={[]} canEdit onPropertyChange={() => {}} />,
+    );
+
+    expect(container.textContent).toBe('');
+  });
+
+  it('renders only the gates whose price has actually been read', () => {
+    const { container } = renderWithProviders(
+      <ProductSummaryCards
+        products={[STUB_PRODUCTS[0], priced('GateB', 'Fuel')]}
+        canEdit
+        onPropertyChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Fuel')).toBeTruthy();
+    expect(screen.queryByText('Toys')).toBeNull();
+    expect(container.querySelectorAll('input[type="range"]')).toHaveLength(1);
+  });
+});
+
+// ===========================================================================
+// A HEADER THAT CAME BACK WITHOUT A FLUID ID
+//
+// `buildGate` maps a missing MetaFluid to '' (the cache writes one value per
+// requested name whether or not the property exists, Cache Server/
+// CachedObjectWrap.pas:225-230). A gate can therefore be "read" and still have
+// no id to address a mutation with, and no mutation may go out on the wire
+// naming an empty fluid.
+// ===========================================================================
+
+describe('a gate read that yielded no fluid id', () => {
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.useRealTimers(); });
+
+  const NAMELESS: BuildingProductData = {
+    path: 'GateA', name: 'Toys', metaFluid: '', lastFluid: '80', quality: '90',
+    pricePc: '110', avgPrice: '105', marketPrice: '5000', connectionCount: 0,
+    connections: [],
+  };
+
+  it('shows the price but refuses to send a price change', () => {
+    const onPropertyChange = jest.fn();
+    useBuildingStore.getState().setDetails(makeDetails());
+    useBuildingStore.getState().mergeTabData('products', { products: [NAMELESS] }, X, Y);
+    act(() => {
+      useBuildingStore.getState().mergeGateData('products', 'GateA', NAMELESS, X, Y);
+    });
+
+    const { container } = renderWithProviders(
+      <ProductsPanel
+        products={[NAMELESS]}
+        canEdit
+        buildingX={X}
+        buildingY={Y}
+        onPropertyChange={onPropertyChange}
+      />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn() }) },
+    );
+    fireEvent.click(screen.getByText('Toys'));
+
+    const slider = container.querySelector('input[type="range"]') as HTMLInputElement;
+    expect(slider).toBeTruthy();
+    fireEvent.change(slider, { target: { value: '150' } });
+    // The slider debounces for 300 ms before it commits (PropertyTables.tsx:405).
+    act(() => { jest.advanceTimersByTime(400); });
+
+    // RDOSetOutputPrice addresses the gate by fluid id; without one there is
+    // nothing to address, so nothing goes out.
+    expect(onPropertyChange).not.toHaveBeenCalled();
+  });
+
+  it('does send the price change once the gate names its fluid', () => {
+    // The other side of the guard: an opened gate with a real id still drives
+    // RDOSetOutputPrice, from inside the expanded body where the control lives.
+    const named: BuildingProductData = { ...NAMELESS, metaFluid: 'Toys' };
+    const onPropertyChange = jest.fn();
+    useBuildingStore.getState().setDetails(makeDetails());
+    useBuildingStore.getState().mergeTabData('products', { products: [named] }, X, Y);
+    act(() => {
+      useBuildingStore.getState().mergeGateData('products', 'GateA', named, X, Y);
+    });
+
+    const { container } = renderWithProviders(
+      <ProductsPanel
+        products={[named]}
+        canEdit
+        buildingX={X}
+        buildingY={Y}
+        onPropertyChange={onPropertyChange}
+      />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn() }) },
+    );
+    fireEvent.click(screen.getByText('Toys'));
+
+    const slider = container.querySelector('input[type="range"]') as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: '150' } });
+    act(() => { jest.advanceTimersByTime(400); });
+
+    expect(onPropertyChange).toHaveBeenCalledWith('PricePc', 150, { fluidId: 'Toys' });
   });
 });

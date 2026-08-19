@@ -380,12 +380,12 @@ export async function getBuildingTabData(
     ctx.log.debug(`[BuildingDetails] Tab data for (${x},${y}), tab=${tabId}`);
 
     // Supplies and Products are the same read with a different gate spec: list
-    // the gates, then one header each. The connection rows are NOT read here —
-    // the accordion draws its collapsed rows from the header alone, and a gate's
-    // rows arrive through `getBuildingGateConnections` when the user opens it.
+    // the gates, and stop. Nothing about a gate — not its header, not its
+    // connection rows — is read until the user opens it, and then both arrive
+    // together through `getBuildingGateConnections`.
     if (tabId === 'supplies' && inspector.hasSupplies) {
-      const supplies = await fetchGateHeaders(
-        ctx, x, y, tempObjectId, gateMap, inspector.isWarehouse, SUPPLY_GATES,
+      const supplies = await listGates(
+        ctx, tempObjectId, gateMap, inspector.isWarehouse, SUPPLY_GATES,
       );
       // For warehouses, also return warehouseWares so the client can filter
       // supplies by GateMap (only show enabled wares).
@@ -397,8 +397,8 @@ export async function getBuildingTabData(
     }
 
     if (tabId === 'products' && inspector.hasProducts) {
-      const products = await fetchGateHeaders(
-        ctx, x, y, tempObjectId, gateMap, inspector.isWarehouse, PRODUCT_GATES,
+      const products = await listGates(
+        ctx, tempObjectId, gateMap, inspector.isWarehouse, PRODUCT_GATES,
       );
       // For warehouses, also return warehouseWares so the client can filter
       // products by GateMap (only show enabled wares).
@@ -604,23 +604,16 @@ async function getBuildingDetailsImpl(
       ? await getWarehouseWareNames(ctx, tempObjectId, gateMap)
       : undefined;
 
-    // Phase 4: gate headers. Same split as the lazy path — headers here,
-    // connection rows on click via `getBuildingGateConnections` — so both entry
+    // Phase 4: the gate lists. Same split as the lazy path — names here,
+    // everything else on click via `getBuildingGateConnections` — so both entry
     // points feed the client the same shape and the accordion behaves
-    // identically whichever one filled it.
+    // identically whichever one filled it. Neither call moves the object off
+    // the building root, so the two can follow each other directly.
     const supplies = suppliesGroup
-      ? await fetchGateHeaders(ctx, x, y, tempObjectId, gateMap, isWarehouse, SUPPLY_GATES)
+      ? await listGates(ctx, tempObjectId, gateMap, isWarehouse, SUPPLY_GATES)
       : undefined;
-
-    // GetOutputNames reads the current object, and the supply pass above may
-    // have left it on an input gate (it does whenever there were few enough
-    // gates to read them on this object rather than on pool objects).
-    if (supplies && productsGroup) {
-      await ctx.cacherSetObject(tempObjectId, x, y);
-    }
-
     const products = productsGroup
-      ? await fetchGateHeaders(ctx, x, y, tempObjectId, gateMap, isWarehouse, PRODUCT_GATES)
+      ? await listGates(ctx, tempObjectId, gateMap, isWarehouse, PRODUCT_GATES)
       : undefined;
 
     return {
@@ -1002,6 +995,8 @@ interface GateSpec<T> {
   readonly gateLabel: string;
   /** What one unreadable connection row is called in the warning. */
   readonly rowLabel: string;
+  /** A gate as the listing knows it: a path and a name, nothing read yet. */
+  buildStub(path: string, name: string): T;
   buildGate(
     path: string,
     name: string,
@@ -1035,6 +1030,7 @@ const SUPPLY_GATES: GateSpec<BuildingSupplyData> = {
   ],
   gateLabel: 'supply',
   rowLabel: 'connection',
+  buildStub: (path, name) => ({ path, name, connections: [] }),
   buildGate: (path, name, header, connectionCount, connections) => ({
     path,
     name,
@@ -1077,6 +1073,7 @@ const PRODUCT_GATES: GateSpec<BuildingProductData> = {
   ],
   gateLabel: 'product',
   rowLabel: 'client connection',
+  buildStub: (path, name) => ({ path, name, connections: [] }),
   buildGate: (path, name, header, connectionCount, connections) => ({
     path,
     name,
@@ -1152,17 +1149,14 @@ async function getGatePaths(
 }
 
 /**
- * Read one gate: SetPath, then its header, then — only when asked — one
- * GetSubObjectProps per connection.
+ * Read one gate in full: SetPath, its header, then one GetSubObjectProps per
+ * connection.
  *
- * `withConnections` is the whole optimisation. Opening a tab reads headers
- * only, because that is all the collapsed accordion row renders (name,
- * cnxCount, and for a product its quality and price); the connection rows sit
- * behind a click and are read when that click happens. The reference client
- * goes further and reads nothing at all until a gate is selected —
- * `LoadFingerInfo` runs for `CurrentFinger` only (Voyager/ProdSheetForm.pas:449-480,
- * Voyager/SupplySheetForm.pas:440-506) — but its gates are tabs, one visible at
- * a time, where ours are accordion rows that all show a header at once.
+ * This runs for ONE gate — the one the user opened — and never as part of
+ * listing a tab. That is `LoadFingerInfo` (Voyager/SupplySheetForm.pas:440-506,
+ * Voyager/ProdSheetForm.pas:369-436): the reference client reads a gate's
+ * header and rows together, for `CurrentFinger` alone, and remembers the result
+ * (`if reload or not Info.Loaded`, Voyager/ProdSheetForm.pas:464).
  *
  * SetPath resolves through the world spool and releases whatever the object
  * held (Cache Server/CachedObjectWrap.pas:156-168), so it needs no reset first,
@@ -1174,7 +1168,6 @@ async function fetchGateDetails<T>(
   path: string,
   name: string,
   spec: GateSpec<T>,
-  withConnections: boolean,
 ): Promise<T | null> {
   const setPathPacket = await ctx.sendRdoRequest('map', rdoCall(
     'SetPath', tempObjectId, RdoValue.string(path),
@@ -1188,9 +1181,7 @@ async function fetchGateDetails<T>(
   const header = await ctx.cacherGetPropertyList(tempObjectId, [...spec.headerProps]);
   const connectionCount = parseInt(header[gateCnxCountIndex(spec)] || '0', 10);
 
-  const connections = withConnections
-    ? await fetchGateConnections(ctx, tempObjectId, path, spec, connectionCount)
-    : [];
+  const connections = await fetchGateConnections(ctx, tempObjectId, path, spec, connectionCount);
 
   return spec.buildGate(path, name, header, connectionCount, connections);
 }
@@ -1245,71 +1236,40 @@ async function fetchGateConnections<T>(
   return connections;
 }
 
-/** Semaphore-gated gate fetch for the worker pool. */
-function pooledGateFetch<T>(spec: GateSpec<T>, withConnections: boolean) {
-  return async (
-    ctx: SessionContext,
-    tempObjectId: string,
-    path: string,
-    name: string,
-    semaphore: Semaphore,
-  ): Promise<T | null> => {
-    await semaphore.acquire();
-    try {
-      return await fetchGateDetails(ctx, tempObjectId, path, name, spec, withConnections);
-    } finally {
-      semaphore.release();
-    }
-  };
-}
-
 /**
- * Read every gate header of one tab, sequentially on the caller's own object
- * when there are few, through a pool of fresh temp objects when there are many.
+ * List a tab's gates. ONE RDO call, whatever the building.
+ *
+ * This is the whole tab read. Nothing per-gate happens here — no SetPath, no
+ * GetPropertyList — because nothing per-gate is known until the user opens a
+ * gate, and the accordion says so rather than inventing a zero.
+ *
+ * It is what the reference client does on focus: `UpdateFingersToList` calls
+ * `GetOutputNames` and fills the finger strip with names
+ * (Voyager/ProdSheetForm.pas:274-297), and `LoadFingerInfo` — the SetPath, the
+ * header, the rows — waits for a finger to be selected
+ * (Voyager/ProdSheetForm.pas:449-480). Voyager can afford that because its
+ * gates are tabs, one visible at a time; ours are accordion rows, all visible,
+ * all collapsed. Reading 30 headers to decorate 30 collapsed rows cost 60
+ * round-trips before a single one was opened.
  *
  * Callers must have pointed `tempObjectId` at the building root already:
  * GetInputNames/GetOutputNames read the current object.
  */
-async function fetchGateHeaders<T>(
+async function listGates<T>(
   ctx: SessionContext,
-  x: number,
-  y: number,
   tempObjectId: string,
   gateMap: string,
   isWarehouse: boolean,
   spec: GateSpec<T>,
 ): Promise<T[]> {
   let paths = await getGatePaths(ctx, tempObjectId, spec);
-  // Warehouses: skip disabled gates (GateMap bit = '0') to avoid unnecessary RDO calls
+  // Warehouses: skip disabled gates (GateMap bit = '0') — they have no gate to open
   if (isWarehouse && gateMap) {
     paths = paths.filter((_, i) => i < gateMap.length && gateMap[i] === '1');
   }
 
-  const workerCount = computeWorkerCount(paths.length);
-
-  if (workerCount <= 1) {
-    // Single worker: use the caller's own temp object (no pool overhead)
-    const gates: T[] = [];
-    for (const { path, name } of paths) {
-      try {
-        const detail = await fetchGateDetails(ctx, tempObjectId, path, name, spec, false);
-        if (detail) gates.push(detail);
-      } catch (e: unknown) {
-        ctx.log.warn(`[BuildingDetails] Error fetching ${spec.gateLabel} ${path}:`, toErrorMessage(e));
-      }
-    }
-    return gates;
-  }
-
-  // Multiple workers: create fresh temp objects for parallel fetching
-  ctx.log.debug(`[BuildingDetails] Using ${workerCount} workers for ${paths.length} ${spec.tabId} paths`);
-  const semaphore = new Semaphore(MAX_GLOBAL_CONCURRENT_RDO);
-  const workers = await createWorkerPool(ctx, x, y, workerCount);
-  try {
-    return await fetchPathsWithPool(ctx, workers, paths, semaphore, pooledGateFetch(spec, false));
-  } finally {
-    closeWorkerPool(ctx, workers);
-  }
+  ctx.log.debug(`[BuildingDetails] Listed ${paths.length} ${spec.tabId} gates, headers deferred`);
+  return paths.map(({ path, name }) => spec.buildStub(path, name));
 }
 
 /**
@@ -1349,10 +1309,10 @@ export async function getBuildingGateConnections(
     // (Cache Server/CachedObjectWrap.pas:156-168). One round-trip saved per
     // click, and the next tab load resets the object itself.
     if (tabId === 'supplies') {
-      const supply = await fetchGateDetails(ctx, tempObjectId, path, name, SUPPLY_GATES, true);
+      const supply = await fetchGateDetails(ctx, tempObjectId, path, name, SUPPLY_GATES);
       return supply ? { supply } : {};
     }
-    const product = await fetchGateDetails(ctx, tempObjectId, path, name, PRODUCT_GATES, true);
+    const product = await fetchGateDetails(ctx, tempObjectId, path, name, PRODUCT_GATES);
     return product ? { product } : {};
   } finally {
     release();
@@ -1389,129 +1349,6 @@ async function batchedParallel<T>(
   const workerCount = Math.min(MAX_CONCURRENT_CONNECTIONS, count);
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
   return results;
-}
-
-// =========================================================================
-// COUNTING SEMAPHORE — limits total concurrent RDO requests across workers
-// =========================================================================
-
-/** @internal Exported for testing only. */
-export class Semaphore {
-  private permits: number;
-  private waiting: Array<() => void> = [];
-
-  constructor(permits: number) {
-    this.permits = permits;
-  }
-
-  async acquire(): Promise<void> {
-    if (this.permits > 0) {
-      this.permits--;
-      return;
-    }
-    return new Promise<void>((resolve) => {
-      this.waiting.push(resolve);
-    });
-  }
-
-  release(): void {
-    const next = this.waiting.shift();
-    if (next) {
-      next();
-    } else {
-      this.permits++;
-    }
-  }
-}
-
-// =========================================================================
-// WORKER POOL — parallel supply/product fetching with fresh temp objects
-// =========================================================================
-
-/** Max concurrent RDO requests globally across all workers on the map socket. */
-const MAX_GLOBAL_CONCURRENT_RDO = 4;
-
-interface WorkerObject {
-  tempObjectId: string;
-}
-
-/**
- * Determine optimal worker count based on slot count.
- * More workers = more parallelism, but each uses a Delphi temp object.
- */
-/** @internal Exported for testing only. */
-export function computeWorkerCount(slotCount: number): number {
-  if (slotCount <= 3) return 1;
-  if (slotCount <= 10) return 2;
-  return 3; // max — respect Delphi buffer limits
-}
-
-/**
- * Create fresh temp objects pointing at the same building.
- * Each worker gets its own independent Delphi TCachedObjectWrap.
- * Degrades gracefully if CreateObject fails for additional workers.
- */
-async function createWorkerPool(
-  ctx: SessionContext,
-  x: number,
-  y: number,
-  desiredCount: number,
-): Promise<WorkerObject[]> {
-  const workers: WorkerObject[] = [];
-
-  for (let i = 0; i < desiredCount; i++) {
-    try {
-      const tempObjectId = await ctx.cacherCreateObject();
-      await ctx.cacherSetObject(tempObjectId, x, y);
-      workers.push({ tempObjectId });
-    } catch (e: unknown) {
-      ctx.log.warn(`[BuildingDetails] Worker ${i} creation failed, continuing with ${workers.length} workers:`, toErrorMessage(e));
-      break; // Degrade gracefully — use however many were created
-    }
-  }
-
-  if (workers.length === 0) {
-    throw new Error('Failed to create any worker temp objects');
-  }
-  return workers;
-}
-
-/** Close all worker temp objects (fire-and-forget). */
-function closeWorkerPool(ctx: SessionContext, workers: WorkerObject[]): void {
-  for (const w of workers) {
-    ctx.cacherCloseObject(w.tempObjectId);
-  }
-}
-
-/**
- * Distribute supply/product paths across worker pool with shared semaphore.
- * Each worker runs SetPath + GetPropertyList on its own temp object.
- * The semaphore caps total concurrent RDO requests to avoid Delphi buffer overflow.
- */
-async function fetchPathsWithPool<T>(
-  ctx: SessionContext,
-  workers: WorkerObject[],
-  paths: Array<{ path: string; name: string }>,
-  semaphore: Semaphore,
-  fetchFn: (ctx: SessionContext, tempObjectId: string, path: string, name: string, semaphore: Semaphore) => Promise<T | null>,
-): Promise<T[]> {
-  const results: (T | null)[] = new Array(paths.length).fill(null);
-  let nextIndex = 0;
-
-  async function workerLoop(workerObj: WorkerObject): Promise<void> {
-    while (nextIndex < paths.length) {
-      const i = nextIndex++;
-      const { path, name } = paths[i];
-      try {
-        results[i] = await fetchFn(ctx, workerObj.tempObjectId, path, name, semaphore);
-      } catch (e: unknown) {
-        ctx.log.warn(`[BuildingDetails] Error fetching path ${path}:`, toErrorMessage(e));
-      }
-    }
-  }
-
-  await Promise.all(workers.map((w) => workerLoop(w)));
-  return results.filter((r): r is T => r !== null);
 }
 
 /**

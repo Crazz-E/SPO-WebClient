@@ -265,20 +265,29 @@ export function ProductSummaryCards({
 }) {
   if (products.length === 0) return null;
 
+  // A product gate carries its price only once the user has opened it in the
+  // Products tab — PricePc, AvgPrice and MarketPrice are gate-header properties,
+  // and reading them for every gate up front is exactly the cost this panel is
+  // no longer allowed to impose. A card with no price would be a slider set to
+  // 0 %, which reads as an instruction the server never gave, so gates that
+  // have not been opened are left out rather than drawn empty.
+  const priced = products.filter((p) => p.pricePc !== undefined);
+  if (priced.length === 0) return null;
+
   return (
     <div className={styles.pscList}>
       <div className={styles.pscSectionLabel}>Products</div>
-      {products.map((product, i) => {
-        const pricePc = parseFloat(product.pricePc) || 0;
-        const marketPrice = parseFloat(product.marketPrice) || 0;
+      {priced.map((product, i) => {
+        const pricePc = parseFloat(product.pricePc ?? '') || 0;
+        const marketPrice = parseFloat(product.marketPrice ?? '') || 0;
         const dollarPrice = marketPrice > 0 ? (pricePc / 100) * marketPrice : 0;
 
         return (
           <ProductSaleCard
             key={i}
-            name={product.name || product.metaFluid}
+            name={product.name || product.metaFluid || ''}
             pricePc={pricePc}
-            avgPricePc={parseFloat(product.avgPrice) || 0}
+            avgPricePc={parseFloat(product.avgPrice ?? '') || 0}
             dollarPrice={dollarPrice}
             priceMax={300}
             priceStep={5}
