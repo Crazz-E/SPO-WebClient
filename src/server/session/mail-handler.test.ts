@@ -13,12 +13,12 @@
  *       `procedure AddLine( line : widestring )` — MailServer.pas:140
  *       `procedure CloseMessage( Id : integer )` — MailServer.pas:112
  *     which the reference client sends `"*"` WITH a QueryId, acked `A<id> ;`
- *     (doc/Mock_Server_scenarios_captures.md:3542-3543, :3548-3549).
+ *     (observed on the live wire).
  *   - `writeRdoFrame` (`fake.frames.mail`) — `AddHeaders` and `DeleteMessage`,
  *     fire-and-forget, `"*"` and no QueryId. `mail-handler-emission.test.ts`
  *     is blind to this channel (`write: () => true`); this file is not.
  *
- * §4bis: the message id `NewMail` / `OpenMessage` answer is the one every
+ * The message id `NewMail` / `OpenMessage` answer is the one every
  * `AddLine`, `Get*` and `CloseMessage` must carry — it is never one of the
  * context ids, and never a constant.
  */
@@ -57,7 +57,7 @@ function htmlResponse(body: string, status = 200): Response {
 
 const MAIL_SERVER = FAKE_CONTEXT_IDS.mailServerId;
 const MAIL_INT_SERVER = FAKE_CONTEXT_IDS.mailIntServerId;
-// §4bis: the message id the fake server hands back — distinct from every
+// The message id the fake server hands back — distinct from every
 // context id and every argument.
 const MSG_ID = '30437308';
 const ACCOUNT = 'SPO_test3@shamba.net';

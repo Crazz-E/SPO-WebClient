@@ -45,7 +45,7 @@ import { TimeoutCategory } from '../../shared/timeout-categories';
  * coordinate, a session id (`FAKE_CONTEXT_IDS`) or a value any test passes in.
  * For most buildings the server returns the same id twice; for warehouses it
  * does not, and that is the case that tells the two tables apart. Shapes follow
- * the live captures (doc/Mock_Server_scenarios_captures.md).
+ * the live captures.
  */
 const CURR_BLOCK = '40133497';
 const OBJECT_ID = '40133512';
@@ -172,7 +172,7 @@ const MATRIX: readonly MatrixEntry[] = [
     // handler already builds. `RDOAutoRelease` appears in NO .pas of the legacy
     // tree, so the inspector toggle wired at template-groups.ts:630 is a silent
     // no-op on the wire — the M-D failure mode, from inside KNOWN_RDO_COMMANDS.
-    // The row still pins the frame we emit today; see the lot 2 report.
+    // The row still pins the frame we emit today.
     command: 'RDOAutoRelease', value: '0',
     args: [RdoValue.int(0)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'AutoRel',
@@ -537,7 +537,7 @@ describe('target selection', () => {
   });
 
   it('emits nothing when CurrBlock comes back empty', async () => {
-    // §4bis, negative case. It also covers for a gap upstream: `parseIdOfResponse`
+    // Negative case. It also covers for a gap upstream: `parseIdOfResponse`
     // returns the string `objid=` for `objid=""` (rdo-helpers.ts:247-255) and
     // `RdoCommand.sel()` accepts it (non-empty, not '0'), so an empty id CAN
     // reach a frame builder. Here it cannot: the handler refuses first.
@@ -874,8 +874,7 @@ describe('argument construction', () => {
    * Unlike `RDOSetSalaries`, which refuses an incomplete triplet, these commands
    * fill the gap silently — a `RDOBanMinister` with no ministryId bans ministry
    * 0. The arity is at least preserved (the server never sees a short argument
-   * list), which is what these rows pin; the wisdom of the default itself is
-   * recorded in the lot report.
+   * list), which is what these rows pin.
    */
   it.each([
     {
@@ -1003,7 +1002,7 @@ describe('direct property set', () => {
     expect(fake.log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid RDO identifier'));
   });
 
-  // BUG connu — voir report/analyse-ecarts-voyager-2026-08-16.md §2 (A-2).
+  // BUG connu (A-2).
   // `template-groups.ts:314` maps the TV advertising slider to the cache key
   // `Comercials` (one m), the spelling the legacy client used for its CACHE
   // entry. The PUBLISHED property is `Commercials` (StdBlocks/Broadcast.pas:53),

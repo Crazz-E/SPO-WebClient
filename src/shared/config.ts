@@ -58,8 +58,8 @@ export const config = {
      * other path that adds a connection sits behind a `size > 0` guard, so it
      * could never hold one (audit O-M1). Everything went down the primary
      * socket — including `parallelAreaReads`, which pipelined onto a single
-     * wire. `rdo-session-lifecycle.md` §9 D2 described a behaviour the code
-     * did not have.
+     * wire. The documented session-lifecycle design described a behaviour the
+     * code did not have.
      *
      * The chicken-and-egg is fixed and O-L1 (answering a server request on the
      * connection that asked) is fixed with it, so populating is now correct.
@@ -141,7 +141,6 @@ export const config = {
      * after reconnect. Code that copes with it today would start throwing. The
      * other rejected codes (1, 3, 4, 5, 6, 7, 9, 12, 15, 16) are programming
      * errors that are currently swallowed, which is exactly what the flip is for.
-     * Derivation and per-call-shape matrix: report/pm3-inventaire-codes-erreur.md.
      *
      * Set RDO_ERROR_CONTRACT=reject to include 2, or =observe to go back to
      * measuring.

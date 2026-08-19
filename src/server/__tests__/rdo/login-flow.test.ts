@@ -91,10 +91,10 @@ describe('RDO Login Flow', () => {
       const clientAwareCmd = mockSession.getCommand(/call ClientAware/);
 
       // Was `/"[*^]" ;$/` — which accepts BOTH separators, so it could never
-      // catch a separator defect. That is the §7 blind spot: the assertion was
+      // catch a separator defect. That is the blind spot: the assertion was
       // written loose enough to pass whatever the code did. ClientAware is a
       // `procedure` (InterfaceServer.pas:197) and the reference client emits it
-      // void — `call ClientAware "*" ;` [capture :1017, :1019].
+      // void — `call ClientAware "*" ;` (live capture).
       expect(clientAwareCmd).toMatch(/"\*"\s*;$/);
       expect(clientAwareCmd).not.toContain('"^"');
     });

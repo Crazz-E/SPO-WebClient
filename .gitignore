@@ -64,12 +64,3 @@ electron/node_modules/
 .claude/install-new-skills.js
 .claude/scheduled_tasks.lock
 .claude/.typecheck-dirty
-
-# Live server log snapshots harvested for byte-level analysis (U3-b).
-# Machine-generated and large; the analysis result is recorded in report/, not the corpus.
-report/campaign/logs-cache/
-
-# Live RDO campaign — inter-agent exchange bus (report/plan-campagne-live-rdo.md §2).
-# Deliberately at the repo root and NOT under src/: it is campaign evidence, not
-# source, and it must survive a session and stay inspectable.
-.rdo-live/

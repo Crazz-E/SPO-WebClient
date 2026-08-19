@@ -9,10 +9,10 @@
  *
  * Architecture: The pool wraps multiple TCP sockets to the same Delphi server.
  * The server dispatches same-connection queries concurrently (24-thread global
- * queue, doc/rdo-protocol-architecture.md §3.5 — verified 2026-07-03), so the
+ * queue, verified 2026-07-03), so the
  * pool is not required for correctness; it spreads load and avoids head-of-line
  * blocking on one socket's kernel buffer. Same-world reads serialize on the
- * shared IS→Model DA path regardless (§3.5) — pooling does not defeat that.
+ * shared IS→Model DA path regardless — pooling does not defeat that.
  */
 
 import * as net from 'net';

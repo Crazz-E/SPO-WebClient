@@ -32,7 +32,7 @@ interface Harness {
 
 function cannedPayload(packet: RdoPacket): string {
   if (packet.verb === RdoVerb.IDOF) return 'objid="39751288"';
-  // A GET answer echoes the member name, not `res=` (§1.4).
+  // A GET answer echoes the member name, not `res=`.
   if (packet.action === RdoAction.GET) return `${packet.member}="#1"`;
   switch (packet.member) {
     case 'CreateObject': return 'res="%4242"';
@@ -91,9 +91,8 @@ describe('selectCompany — EnableEvents / PickEvent / GetTycoonCookie bytes', (
 
     const frames = h.frames().map(withoutRid);
 
-    // [capture :978] — `set EnableEvents="#-1"`. Delphi wordbool TRUE is -1
-    // (doc/rdo-protocol-architecture.md §2.2); "%-1" would silently disable
-    // every push (O-L7).
+    // Live capture — `set EnableEvents="#-1"`. Delphi wordbool TRUE is -1;
+    // "%-1" would silently disable every push (O-L7).
     expect(frames).toContain('C sel 8161308 set EnableEvents="#-1"');
 
     // PickEvent(TycoonId: integer) — must stay "#", never "%".
@@ -104,7 +103,7 @@ describe('selectCompany — EnableEvents / PickEvent / GetTycoonCookie bytes', (
     expect(frames).toContain('C sel 8161308 call GetTycoonCookie "^" "#4666201923","%LastX.0"');
     expect(frames).toContain('C sel 8161308 call GetTycoonCookie "^" "#4666201923","%"');
 
-    // ClientAware is fire-and-forget: "*" and no QueryId [capture :1017].
+    // ClientAware is fire-and-forget: "*" and no QueryId (live capture).
     expect(frames).toContain('C sel 8161308 call ClientAware "*"');
   });
 });

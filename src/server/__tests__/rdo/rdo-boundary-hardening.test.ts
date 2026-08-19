@@ -114,7 +114,7 @@ describe('P-M2 §1 — byte identity with the pre-L2 formatter on legitimate inp
         raw: '', type: 'REQUEST', rid: 34, verb: RdoVerb.SEL, targetId: '8161308',
         action: RdoAction.SET, member: 'EnableEvents', args: [RdoValue.int(-1).format()],
       } as RdoPacket)
-    ).toBe('C 34 sel 8161308 set EnableEvents="#-1"'); // [capture :978]
+    ).toBe('C 34 sel 8161308 set EnableEvents="#-1"'); // (live capture)
   });
 
   it('does NOT auto-type numeric CALL args (numeric usernames stay OLEString)', () => {
@@ -245,8 +245,7 @@ describe('P-H3 — member names must be Delphi identifiers', () => {
 
   it('rejects an empty member only at the WS frontier, not in format()', () => {
     // format() simply omits a falsy member — pre-existing behaviour, and not an
-    // injection vector. handleRdoDirect rejects it before that point
-    // (ws-handlers/misc-handlers.ts:187-189), as does RdoCommand.
+    // injection vector. `RdoCommand` rejects it before that point.
     expect(
       RdoProtocol.format({
         raw: '', type: 'PUSH', verb: RdoVerb.SEL, targetId: '42',
@@ -278,8 +277,8 @@ describe('P-M2 §3 — targetId and separator cannot smuggle a sub-command', () 
     } as RdoPacket);
 
   it('rejects a non-decimal sel targetId', () => {
-    // REQ_RDO_DIRECT relays targetId straight from the browser and it is
-    // spliced in unquoted.
+    // targetId is spliced into the frame unquoted, so a malformed one becomes a
+    // second sub-command; format() must refuse it at the chokepoint.
     expect(() => format({ targetId: '42 call Evil "*" "' })).toThrow('Invalid RDO target ID');
     expect(() => format({ targetId: '4 2' })).toThrow('Invalid RDO target ID');
     expect(() => format({ targetId: '-1' })).toThrow('Invalid RDO target ID');
@@ -298,7 +297,7 @@ describe('P-M2 §3 — targetId and separator cannot smuggle a sub-command', () 
 
   it('leaves a benign idof name byte-identical', () => {
     expect(format({ verb: RdoVerb.IDOF, targetId: 'DirectoryServer', action: undefined, member: undefined }))
-      .toBe('C idof "DirectoryServer"'); // [capture :8]
+      .toBe('C idof "DirectoryServer"'); // (live capture)
   });
 
   it('rejects a separator that is not a ReturnMarker', () => {

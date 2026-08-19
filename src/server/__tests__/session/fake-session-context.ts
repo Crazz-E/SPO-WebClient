@@ -1,6 +1,6 @@
 /**
  * Fake `SessionContext` factory — the single shared test double of the RDO
- * coverage mission (doc/prompts/rdo-test-coverage-mission.md §11).
+ * coverage mission.
  *
  * Handlers in `src/server/session/` never see the full `StarpeaceSession`: they
  * receive the narrow `SessionContext` interface. That is the injection point, so
@@ -73,7 +73,7 @@ const EMPTY_RESPONDER: Responder = () => '';
  * Deliberately distinct from one another and from any value a test is likely to
  * pass as an argument: a handler that hardcodes an id, or swaps two of them,
  * then shows up as a wrong target on the wire instead of matching by accident.
- * Values are shaped like the live captures (doc/Mock_Server_scenarios_captures.md).
+ * Values are shaped like the live captures.
  */
 export const FAKE_CONTEXT_IDS = {
   worldContextId: '8161308',
@@ -381,7 +381,7 @@ export function makePushCtx(overrides: Partial<PushContext> = {}): FakePushCtx {
  * awaits the promise it installed; `switchCompany` nulls the world state and
  * then re-enters `loginWorld`, which fills it again. A fake whose setters only
  * recorded would take the wrong branch at every one of those points — and the
- * §4bis question ("does the id the server returned reach the next frame?")
+ * question ("does the id the server returned reach the next frame?")
  * would be unanswerable.
  *
  * So the setters both RECORD (they stay `jest.fn()`) and WRITE, exactly as
@@ -473,8 +473,8 @@ export interface FakeLoginOptions extends Partial<FakeLoginState> {
  * Build a fake `LoginContext`.
  *
  * `createSocket(name, …)` registers a capture socket under `name` and returns
- * it, so the frames the directory phases write fire-and-forget (`RDOEndSession`,
- * divergence D1 of doc/rdo-session-lifecycle.md §9) land in `frames[name]`.
+ * it, so the frames the directory phases write fire-and-forget (`RDOEndSession`)
+ * land in `frames[name]`.
  */
 export function makeLoginCtx(overrides: FakeLoginOptions = {}): FakeLoginCtx {
   const { sockets = [], ...stateOverrides } = overrides;

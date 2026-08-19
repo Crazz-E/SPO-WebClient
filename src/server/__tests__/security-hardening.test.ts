@@ -4,7 +4,7 @@
  * Tests for 5 security fixes:
  * 1. CDN path traversal prevention
  * 2. SSRF blocklist for proxy-image
- * 3. handleRdoDirect verb validation
+ * 3. RDO verb validation
  * 4. Pre-auth message gate (SessionPhase → allowed WsMessageType)
  * 5. Origin validation on WebSocket upgrade
  */
@@ -136,7 +136,7 @@ describe('SSRF blocklist', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. handleRdoDirect Verb Validation Tests
+// 3. RDO Verb Validation Tests
 // ---------------------------------------------------------------------------
 
 const VALID_VERBS = ['get', 'set', 'call', 'sel'];
@@ -145,7 +145,7 @@ function isValidRdoVerb(verb: string): boolean {
   return VALID_VERBS.includes(verb);
 }
 
-describe('handleRdoDirect verb validation', () => {
+describe('RDO verb validation', () => {
   describe('accepts valid verbs', () => {
     it.each(['get', 'set', 'call', 'sel'])('accepts "%s"', (verb: string) => {
       expect(isValidRdoVerb(verb)).toBe(true);
@@ -254,10 +254,6 @@ describe('Pre-auth message gate', () => {
       expect(isMessageAllowedInPhase(WsMessageType.REQ_CONNECT_DIRECTORY, phase)).toBe(true);
     });
 
-    it('rejects REQ_RDO_DIRECT', () => {
-      expect(isMessageAllowedInPhase(WsMessageType.REQ_RDO_DIRECT, phase)).toBe(false);
-    });
-
     it('rejects REQ_BUILDING_FOCUS', () => {
       expect(isMessageAllowedInPhase(WsMessageType.REQ_BUILDING_FOCUS, phase)).toBe(false);
     });
@@ -290,10 +286,6 @@ describe('Pre-auth message gate', () => {
       expect(isMessageAllowedInPhase(WsMessageType.REQ_CONNECT_DIRECTORY, phase)).toBe(true);
     });
 
-    it('rejects REQ_RDO_DIRECT', () => {
-      expect(isMessageAllowedInPhase(WsMessageType.REQ_RDO_DIRECT, phase)).toBe(false);
-    });
-
     it('rejects REQ_BUILDING_FOCUS', () => {
       expect(isMessageAllowedInPhase(WsMessageType.REQ_BUILDING_FOCUS, phase)).toBe(false);
     });
@@ -309,10 +301,6 @@ describe('Pre-auth message gate', () => {
 
   describe('WORLD_CONNECTED phase', () => {
     const phase = SessionPhase.WORLD_CONNECTED;
-
-    it('allows REQ_RDO_DIRECT', () => {
-      expect(isMessageAllowedInPhase(WsMessageType.REQ_RDO_DIRECT, phase)).toBe(true);
-    });
 
     it('allows REQ_BUILDING_FOCUS', () => {
       expect(isMessageAllowedInPhase(WsMessageType.REQ_BUILDING_FOCUS, phase)).toBe(true);

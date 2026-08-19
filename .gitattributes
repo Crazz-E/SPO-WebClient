@@ -8,8 +8,6 @@
 *.css text eol=lf
 *.html text eol=lf
 *.csv text eol=lf
-# Conformance recordings are replayed BYTE-EXACT against a baseline: a CRLF
-# checkout would corrupt the diff. Pin them like source.
 *.ndjson text eol=lf
 # Force CRLF for Windows batch files
 *.bat text eol=crlf

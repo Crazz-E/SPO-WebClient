@@ -1,12 +1,12 @@
 {
   "version": "1.1.0",
   "installedAt": "2026-03-15T23:33:13.262Z",
-  "generatedAt": "2026-08-18T14:16:21.844Z",
+  "generatedAt": "2026-08-18T23:30:58.304Z",
   "source": "skillsmp.com",
   "generator": ".claude/generate-skills-manifest.js",
   "counts": {
-    "total": 24,
-    "project": 11,
+    "total": 21,
+    "project": 8,
     "community": 13,
     "withRecordedProvenance": 10
   },
@@ -29,13 +29,6 @@
       "stars": 11581,
       "githubUrl": "https://github.com/anthropics/claude-plugins-official/tree/main/plugins/claude-md-management/skills/claude-md-improver",
       "upstreamName": "claude-md-improver"
-    },
-    {
-      "name": "code-guardian",
-      "skillName": "code-guardian",
-      "origin": "project",
-      "path": ".claude/skills/code-guardian",
-      "hasSkillMd": true
     },
     {
       "name": "css-modules-vite",
@@ -118,13 +111,6 @@
       "upstreamName": "pwa-expert"
     },
     {
-      "name": "rdo-conformity",
-      "skillName": "rdo-conformity",
-      "origin": "project",
-      "path": ".claude/skills/rdo-conformity",
-      "hasSkillMd": true
-    },
-    {
       "name": "rdo-network-resilience",
       "skillName": "rdo-network-resilience",
       "origin": "project",
@@ -163,13 +149,6 @@
       "skillName": "spo-testing",
       "origin": "project",
       "path": ".claude/skills/spo-testing",
-      "hasSkillMd": true
-    },
-    {
-      "name": "starpeace-server-logs",
-      "skillName": "starpeace-server-logs",
-      "origin": "project",
-      "path": ".claude/skills/starpeace-server-logs",
       "hasSkillMd": true
     },
     {

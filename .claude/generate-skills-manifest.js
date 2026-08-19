@@ -26,15 +26,12 @@ const MANIFEST = path.join(SKILLS_DIR, 'manifest.json');
  * references project-only identifiers (RDO, Starpeace, SPO-Original, src/*).
  */
 const PROJECT_SKILLS = new Set([
-  'code-guardian',
   'delphi-archaeologist',
   'dependencies',
   'e2e-test',
   'mobile-ux-optimizer',
-  'rdo-conformity',
   'rdo-network-resilience',
   'spo-testing',
-  'starpeace-server-logs',
   'web-games',
   'zustand-store-ts',
 ]);

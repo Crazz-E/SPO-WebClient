@@ -25,7 +25,7 @@ exceeded) — an infinite re-render loop, not a warning.
 | `useStore((s) => ({ a: s.a, b: s.b }))` | two separate selector calls | Object literal is a new reference every time |
 
 **Rule:** never write `?? []`, `?? {}`, or `|| []` inside a selector body. Move the
-fallback outside the call. Cross-reference: `code-guardian` §B.
+fallback outside the call.
 
 ## Always wrap in subscribeWithSelector
 
@@ -69,8 +69,8 @@ export type BuildingStore = BuildingState & BuildingActions;
 ## Actions that reach the server
 
 A store action that mutates game state does not write to the socket itself — it goes
-through the bridge, which owns RDO framing and the request lifecycle. The full chain
-(`code-guardian` §E) must be complete before the UI element ships:
+through the bridge, which owns RDO framing and the request lifecycle. The full chain must
+be complete before the UI element ships:
 
 ```
 onClick → store action → bridge method → RDO command → response handler → store update → UI

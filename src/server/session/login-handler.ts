@@ -214,8 +214,8 @@ async function performDirectoryAuth(ctx: LoginContext, username: string, pass: s
 
     // 3. End Session & Close — fire-and-forget without RID: ACCEPTED DIVERGENCE
     // (audit 2026-07-02, P2 — the captured legacy client sends this WITH a RID and
-    // waits for the "A<id> ;" ack [capture :16-17]; wire-legal either way, TCP
-    // delivers before FIN). See doc/rdo-session-lifecycle.md §9.
+    // waits for the "A<id> ;" ack (live capture); wire-legal either way, TCP
+    // delivers before FIN).
     writeRdoFrame(socket, RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
     ctx.log.debug('[Session] Directory Authentication Success');
   } finally {
@@ -255,8 +255,8 @@ async function performDirectoryQuery(ctx: LoginContext, zonePath?: string): Prom
 
     // 3. End Session & Close — fire-and-forget without RID: ACCEPTED DIVERGENCE
     // (audit 2026-07-02, P2 — the captured legacy client sends this WITH a RID and
-    // waits for the "A<id> ;" ack [capture :16-17]; wire-legal either way, TCP
-    // delivers before FIN). See doc/rdo-session-lifecycle.md §9.
+    // waits for the "A<id> ;" ack (live capture); wire-legal either way, TCP
+    // delivers before FIN).
     writeRdoFrame(socket, RdoCommand.sel(sessionId).call('RDOEndSession').push().build());
     return worlds;
   } finally {

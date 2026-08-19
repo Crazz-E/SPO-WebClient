@@ -12,7 +12,7 @@
  * (assertNotVoidPush, one form per intent). Wire-legal (server acks `A<id> ;`,
  * capture-proven: AddLine → A2174 ;) but forbidden here; the real crash risk
  * is "^" WITHOUT a QueryId.
- * Ref: doc/rdo-protocol-architecture.md §8.5, MsgComposerHandler.pas:324-326.
+ * Ref: MsgComposerHandler.pas:324-326.
  */
 
 import type { SessionContext } from './session-context';

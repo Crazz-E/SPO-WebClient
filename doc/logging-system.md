@@ -62,13 +62,6 @@ cat logs/gateway.ndjson | jq 'select(.corrId == "ws-1743608105000-req47")'
 cat logs/gateway.ndjson | jq -c 'select(.player == "SPO_test3") | {ts, level, ctx, msg}'
 ```
 
-Or use the helper script:
-
-```bash
-./scripts/player-log.sh SPO_test3
-./scripts/player-log.sh SPO_test3 logs/gateway.ndjson --level ERROR
-```
-
 Requires [jq](https://jqlang.github.io/jq/).
 
 ## Configuration Reference
@@ -287,6 +280,5 @@ cat logs/gateway.ndjson | jq 'select(.ctx == "ClientWire" and .player == "SPO_te
 | `src/shared/config.ts` | `config.logging.*` — env var parsing |
 | `src/server/spo_session.ts` | Session with sid, startedAt, child loggers |
 | `src/server/server.ts` | SESSION_START/END markers, `POST /api/debug-log` |
-| `scripts/player-log.sh` | CLI helper to filter logs by player |
 | `logs/gateway.ndjson` | All log entries (git-ignored) |
 | `logs/errors.ndjson` | Error entries with context (git-ignored) |

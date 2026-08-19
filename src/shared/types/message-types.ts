@@ -56,7 +56,6 @@ export enum WsMessageType {
   REQ_AUTH_CHECK = 'REQ_AUTH_CHECK',
   REQ_CONNECT_DIRECTORY = 'REQ_CONNECT_DIRECTORY',
   REQ_LOGIN_WORLD = 'REQ_LOGIN_WORLD',
-  REQ_RDO_DIRECT = 'REQ_RDO_DIRECT',
   REQ_MAP_LOAD = 'REQ_MAP_LOAD',
   REQ_SELECT_COMPANY = 'REQ_SELECT_COMPANY',
   REQ_SWITCH_COMPANY = 'REQ_SWITCH_COMPANY',
@@ -325,15 +324,6 @@ export interface WsReqLoginWorld extends WsMessage {
   username: string;
   password: string;
   worldName: string;
-}
-
-export interface WsReqRdoDirect extends WsMessage {
-  type: WsMessageType.REQ_RDO_DIRECT;
-  verb: RdoVerb;
-  targetId: string;
-  action?: RdoAction;
-  member?: string;
-  args?: string[];
 }
 
 export interface WsReqMapLoad extends WsMessage {

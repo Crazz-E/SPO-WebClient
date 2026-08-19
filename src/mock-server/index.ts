@@ -11,10 +11,6 @@ export { CaptureStore } from './capture-store';
 export { ReplayEngine } from './replay-engine';
 export { MockWebSocketClient } from './mock-ws-client';
 
-// Capture importer
-export { parseCaptureTxt, buildScenario, importCaptureTxt } from './capture-importer';
-export type { ParsedCapture, ParsedWsMessage, ParsedHttpCapture } from './capture-importer';
-
 // Test helpers
 export { createMockEnvironment, quickScenario } from './test-helpers';
 export type { MockEnvironmentOptions, MockEnvironment } from './test-helpers';

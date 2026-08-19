@@ -159,7 +159,10 @@ call RDOGetInvDescEx ^ %<inventionId> %<langId>
 ← res="%<description text>"
 ```
 
-**CRITICAL**: `RDOQueueResearch` and `RDOCancelResearch` are void **procedures** — they use push separator `*`. The Voyager client sets `WaitForAnswer := true` (synchronous void call: `"*"` WITH a QueryId, acked `A<id> ;` — wire-legal, [rdo-protocol-architecture.md §8.5](rdo-protocol-architecture.md)). In the WebClient, project convention (one form per intent, `assertNotVoidPush`) maps void procedures to `writeRdoFrame(socket, RdoCommand.build())` (fire-and-forget, no QueryId) — never `socket.write()` directly (UTF-8 corruption) and never `sendRdoRequest()` with `"*"`.
+**CRITICAL**: `RDOQueueResearch` and `RDOCancelResearch` are declared `procedure`
+(`Kernel/ResearchCenter.pas:73-74`), so their separator is `"*"` — and it is `"*"` because of the
+declaration, not because of what the call site wants. Both QueryId-bearing (`A<id> ;` ack) and
+QueryId-less (silent) forms are legal for a procedure; the Voyager client uses the first.
 
 ## Cache Properties (StoreToCache, ResearchCenter.pas:770-828)
 

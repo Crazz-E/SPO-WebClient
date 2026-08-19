@@ -1,7 +1,7 @@
 # Production Security & Readiness Policy
 
 **Status:** Adopted 2026-07-03 (v1.0) — first formal policy; previously guidance was advisory only (`deployment-security.md` checklist, `DEPLOY.md` Step 9).
-**Scope:** the SPO-WebClient gateway and its production deployment (nginx + Docker on the VPS). The legacy Delphi game servers are out of scope (their defects are tracked in [report/network-server-risk-report.md](../report/network-server-risk-report.md) S1–S5).
+**Scope:** the SPO-WebClient gateway and its production deployment (nginx + Docker on the VPS). The legacy Delphi game servers are out of scope.
 **Enforcement:** every item marked *L4* is verified by the automated compliance suite defined in [E2E-STRATEGY.md §3/L4](E2E-STRATEGY.md); the L4 suite is a required CI job. Items marked *manual* are checked at deploy time per `deploy/DEPLOY.md`. Changing this policy requires updating the corresponding L4 tests in the same PR.
 
 Normative language: **MUST** = required for production; **SHOULD** = required unless a documented exception exists.
@@ -42,7 +42,6 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 
 | ID | Requirement | Status | Enforcement |
 |---|---|---|---|
-| SEC-G-1 | `REQ_RDO_DIRECT` MUST be rate-limited per session and SHOULD be restricted to an allow-list of members/targets (closes risk C9 — currently a client can relay arbitrary RDO calls at line rate). | **Missing — required work** | L4 (test lands with fix) |
 | SEC-G-2 | RDO lanes MUST stay serialized per session (prevents concurrent access to Delphi temp objects). | Met (`server.ts:1228-1233`) | L1 harness |
 | SEC-G-3 | Reconnection MUST remain bounded (3 fast + 20 slow) with jitter, close-triggered only; ServerBusy polling MUST never trigger reconnect; timeouts MUST never close sockets. (Protects the Delphi login lock — risk B1.) | Met (Tier 4) | L1 (`world-reconnect`, `server-busy-reconnect`, `timeout-state-machine`) |
 | SEC-G-4 | Outbound HTTP calls to legacy ASP endpoints MUST have timeouts (risk C8). | **Missing — required work** | L0/L1 (with fix) |
@@ -85,6 +84,6 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 ## 9. Compliance Gate & Exceptions
 
 - The **L4 compliance suite is the machine-readable form of this policy.** A PR that makes L4 fail is a policy violation and MUST NOT merge.
-- Items marked **Missing — required work** (SEC-G-1, SEC-G-4, SEC-R-2, SEC-D-1, global cap of SEC-W-3) are the initial remediation backlog; each fix ships with its L4/L1 test.
+- Items marked **Missing — required work** (SEC-G-4, SEC-R-2, SEC-D-1, global cap of SEC-W-3) are the initial remediation backlog; each fix ships with its L4/L1 test.
 - Exceptions: documented here, with owner, rationale, and expiry date. Current exceptions: **none**.
 - Review cadence: re-audit this policy whenever the deployment topology changes (new public endpoint, new proxy layer, Electron distribution change) and at least once per release cycle.

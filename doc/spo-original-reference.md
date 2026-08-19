@@ -1,59 +1,16 @@
 # SPO-Original Delphi Reference Index
 
-> **Source path:** See `delphi-archaeologist` skill for current codebase path
-> **Status:** canonical catalog (per-object RDO member tables) — maintained by the `delphi-archaeologist` skill; new discoveries are added here
-> **Last verified:** 2026-07-03 (dispatch-rule block aligned with the 2026-07-02 conformity audit + 2026-07-03 concurrency findings)
+> **Source path:** See the `delphi-archaeologist` skill for the current codebase path.
+> **Status:** catalog of per-object RDO member tables, maintained by the `delphi-archaeologist` skill.
+> **Last verified:** 2026-08-18.
 >
-> Pre-indexed reference for RDO conformity checking. Consult this before implementing any RDO request.
-> Wire semantics (verbs, separators, QueryId, concurrency) are canonical in [rdo-protocol-architecture.md](rdo-protocol-architecture.md) — this file defers to it.
-> Conformity workflow: [rdo-protocol-architecture.md](rdo-protocol-architecture.md) (§0 evidence hierarchy) + [rdo-session-lifecycle.md](rdo-session-lifecycle.md); the archaeology checklist is in the `delphi-archaeologist` skill (`resources/rdo-archaeology-checklist.md`).
-
-## RDO Dispatch Rules (from RDOObjectServer.pas)
-
-| Delphi declaration | RDO verb | Separator | Response |
-|--------------------|----------|-----------|----------|
-| `published property Foo : type read Get write Set` | `get` / `set` | *(none)* | `get` → `<Prop>=<prefix><value>`; `set` → empty ack `A<id> ;` |
-| Synchronous call (with RID, expects response) | `call` | `^` (VariantId) | `res=<prefix><value>` |
-| Fire-and-forget (no RID) | `call` | `*` (VoidId) | *(no response — server discards the reply when the echoed QueryId is empty)* |
-| Void call WITH a RID (legacy client does this routinely) | `call` | `*` (VoidId) | empty ack `A<id> ;` — wire-legal, **not** a crash (arch doc §8.5; retired-claim note) |
-
-**Separator rule:** The `^` vs `*` separator does NOT distinguish function/procedure or parameterized/parameterless.
-Both separators parse parameters identically (RDOQueryServer.pas:419-424). The separator controls
-whether the server captures the return value (`^`) or discards it (`*`). Using `^` without a RID
-crashes the Delphi server — it tries to route a response to a non-existent query (arch doc §8.5, last row).
-Live capture confirms: `RDODisconnectInput "*" "%Plastics","%706,436,"` (params after `*`).
-
-**GET fallthrough (capture-first rule, revised 2026-07-02):** `get` on a `function` works — `GetProperty`
-falls through to `CallMethod` (RDOObjectServer.pas:112-116) — and **is what the reference client emits**
-for 0-arg function reads (`RDOOpenSession`, `Logoff` — COM PROPERTYGET marshaling). It is NOT a mistake
-to avoid: follow the capture, never "fix" a captured `get` into a `call`. See arch doc §8.1.
-
-## Delphi Type -> RDO Prefix Mapping
-
-| Delphi type | RDO prefix | Example | Notes |
-|-------------|-----------|---------|-------|
-| `integer` | `#` | `#42` | Ordinal |
-| `wordbool` / `boolean` | `#` | `#-1` (true), `#0` (false) | Delphi `true` = -1 |
-| `widestring` | `%` | `%Hello` | OLE string |
-| `double` / `TDateTime` | `@` | `@3.14159` | 8-byte float |
-| `single` | `!` | `!3.14` | 4-byte float |
-| `currency` | `@` | `@123.45` | Stored as double |
-| `string` (short) | `$` | `$ID` | Short string |
-| `olevariant` (return) | varies | depends on content | Auto-marshaled |
-| *(void / procedure)* | `*` | `*` | No return value |
-
-## RDO Error Codes (ErrorCodes.pas)
-
-| Code | Constant | Meaning |
-|------|----------|---------|
-| 0 | `errNoError` | Success |
-| 1 | `errMalformedQuery` | Bad query syntax |
-| 2 | `errIllegalObject` | Invalid object ID |
-| 3 | `errUnexistentProperty` | Property not found |
-| 5 | `errUnexistentMethod` | Method not found |
-| 6 | `errIllegalParamList` | Wrong parameters |
-| 8 | `errQueryTimedOut` | Timeout |
-| 17 | `errServerBusy` | Server busy |
+> **This file is an INDEX OF THE DELPHI SOURCE, not a protocol reference.** Its value is the
+> per-class member tables with their `File.pas:Line` citations, which are the raw material of
+> the canonical vocabulary. It is not the place to look up how a frame is built.
+>
+> **Known defects in this file.** It has classified members from a *client*
+> call site rather than from a `published` declaration more than once, and that is the mistake
+> that froze the shared production server.
 
 ---
 
@@ -250,7 +207,7 @@ to avoid: follow the capture, never "fix" a captured `get` into a `call`. See ar
 | Member | Kind | Verb | Signature | Return | Line | Notes |
 |--------|------|------|-----------|--------|------|-------|
 | `SetViewedArea` | procedure | `call` | `(#x, #y, #dx, #dy)` | void | 144 | |
-| `ObjectsInArea` | function | `call` | `(#x, #y, #dx, #dy)` | `%data` | 145 | Multi-line building list. **ClientView-stateless** read (server-global locked cache, InterfaceServer.pas:751-782) — concurrency-safe; see arch doc §3.5 |
+| `ObjectsInArea` | function | `call` | `(#x, #y, #dx, #dy)` | `%data` | 145 | Multi-line building list. **ClientView-stateless** read (server-global locked cache, InterfaceServer.pas:751-782) — concurrency-safe |
 | `ObjectAt` | function | `call` | `(#x, #y)` | olevariant | 146 | |
 | `ObjectStatusText` | function | `call` | `(#kind, #Id, #TycoonId)` | olevariant | 147 | kind=TStatusKind |
 | `AllObjectStatusText` | function | `call` | `(#Id, #TycoonId)` | olevariant | 148 | |
@@ -259,7 +216,7 @@ to avoid: follow the capture, never "fix" a captured `get` into a `call`. See ar
 | `FocusObject` | procedure | `call` | `(#Id)` | void | 151 | |
 | `UnfocusObject` | procedure | `call` | `(#Id)` | void | 152 | |
 | `SwitchFocus` | function | `call` | `(#From, #toX, #toY)` | olevariant | 153 | |
-| `SwitchFocusEx` | function | `call` | `(#From, #toX, #toY)` | olevariant | 154 | Extended version (returns focus + status text). Non-atomic unfocus→focus pair; `#From` = previous focus id — **never send two concurrently** (arch doc §3.5) |
+| `SwitchFocusEx` | function | `call` | `(#From, #toX, #toY)` | olevariant | 154 | Extended version (returns focus + status text). Non-atomic unfocus→focus pair; `#From` = previous focus id — **never send two concurrently** |
 | `ConnectFacilities` | function | `call` | `(#Facility1, #Facility2)` | olevariant | 155 | Skipped if ServerBusy |
 | `PickEvent` | function | `call` | `(#TycoonId)` | olevariant | 166 | |
 | `GetUserName` | function | `call` | `()` | olevariant | 167 | |
@@ -276,7 +233,7 @@ to avoid: follow the capture, never "fix" a captured `get` into a `call`. See ar
 | `CreateCircuitSeg` | function | `call` | `(#CircuitId, #OwnerId, #x1, #y1, #x2, #y2, #cost)` | olevariant | 156 | **7 integer params** |
 | `BreakCircuitAt` | function | `call` | `(#CircuitId, #OwnerId, #x, #y)` | olevariant | 157 | |
 | `WipeCircuit` | function | `call` | `(#CircuitId, #OwnerId, #x1, #y1, #x2, #y2)` | olevariant | 158 | |
-| `SegmentsInArea` | function | `call` | `(#CircuitId, #x1, #y1, #x2, #y2)` | olevariant | 159 | **ClientView-stateless** read (server-global roads cache, InterfaceServer.pas:1012-1058) — concurrency-safe; see arch doc §3.5 |
+| `SegmentsInArea` | function | `call` | `(#CircuitId, #x1, #y1, #x2, #y2)` | olevariant | 159 | **ClientView-stateless** read (server-global roads cache, InterfaceServer.pas:1012-1058) — concurrency-safe |
 
 ### Surface & zone operations
 
@@ -430,7 +387,7 @@ to avoid: follow the capture, never "fix" a captured `get` into a `call`. See ar
 > froze the shared Interface Server. **`WaitForAnswer` does not choose the separator**: it only sets
 > `fTimeOut` (`RDOObjectProxy.pas:441-443`), while the separator follows whether the call site
 > consumes a return value (`:438-440`). Waiting for the ack is fine; `"^"` is not.
-> See `rdo-protocol-architecture.md` §8.5 and `VOID_MEMBERS` in `session/rdo-request-guards.ts`.
+> See `VOID_MEMBERS` in `session/rdo-request-guards.ts`.
 
 | Member | Kind | Verb | Signature | Server declaration | Notes |
 |--------|------|------|-----------|--------------------|-------|
@@ -459,8 +416,8 @@ to avoid: follow the capture, never "fix" a captured `get` into a `call`. See ar
 | Member | Kind | Verb | Signature | Return | Source Line | Notes |
 |--------|------|------|-----------|--------|-------------|-------|
 | `Stopped` | property | `set` | `#boolVal` | — | 379/384 | WordBool: -1=true, 0=false |
-| `RDOConnectToTycoon` | function | `call` | `(#tycoonId, #kind, #flag)` | olevariant | 345 | kind=button.Tag; flag=WordBool(-1) |
-| `RDODisconnectFromTycoon` | function | `call` | `(#tycoonId, #kind, #flag)` | olevariant | 357 | kind=button.Tag; flag=WordBool(-1) |
+| `RDOConnectToTycoon` | **procedure** | `call` | `(#tycoonId, #FacTypes, #SetAsDefault)` | void (`*`) | `Kernel/Kernel.pas:1087` | **Corrected 2026-08-18** — was listed `function … olevariant` on the strength of the CLIENT form `IndustryGeneralSheet.pas:345`. 3 register params, so `"^"` is the freeze profile |
+| `RDODisconnectFromTycoon` | **procedure** | `call` | `(#tycoonId, #FacTypes, #RemoveAsDefault)` | void (`*`) | `Kernel/Kernel.pas:1088` | **Corrected 2026-08-18** — same error as the row above. Arity also differs between copies of `Kernel.pas` (2 vs 3) |
 
 ### Company inputs — compInputs tab (CompanyServicesSheetForm.pas)
 
@@ -550,13 +507,7 @@ A res="%Advertisement\t0\t0\t0\t1680\tyes\thits\tComputer Services\t1\t1\t100\t2
 | `world-list-scenario` | DirectoryServer.pas | `RDOSetCurrentKey`, `RDOQueryKey` |
 | `company-list-scenario` | InterfaceServer.pas | `GetCompanyList`, `GetCompanyCount`, `GetCompanyName`, `GetCompanyId` |
 | `select-company-scenario` | InterfaceServer.pas | `Logon`, `MailAccount`, `TycoonId`, `RegisterEventsById`, `EnableEvents` |
-| `map-data-scenario` | InterfaceServer.pas | `SetViewedArea`, `ObjectsInArea`, `SegmentsInArea` |
-| `server-busy-scenario` | InterfaceServer.pas | `ServerBusy` (property) |
 | `switch-focus-scenario` | InterfaceServer.pas | `SwitchFocus` / `SwitchFocusEx` |
-| `refresh-object-scenario` | InterfaceServer.pas | `RefreshObject` (via TModelEvents push) |
-| `set-viewed-area-scenario` | InterfaceServer.pas | `SetViewedArea` |
-| `pick-event-scenario` | InterfaceServer.pas | `PickEvent` |
-| `overlays-scenario` | InterfaceServer.pas | `GetSurface` |
 | `build-menu-scenario` | InterfaceServer.pas | `NewFacility` |
 | `build-roads-scenario` | InterfaceServer.pas | `CreateCircuitSeg`, `BreakCircuitAt`, `WipeCircuit` |
 | `mail-scenario` | MailServer.pas | `NewMail`, `Save`, `Post`, `AddLine`, `GetLines` |

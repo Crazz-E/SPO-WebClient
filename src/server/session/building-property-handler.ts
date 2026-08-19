@@ -73,7 +73,6 @@ async function setBuildingPropertyImpl(
     // Get the building's CurrBlock and ObjectId via map service.
     // For most buildings ObjectId === CurrBlock, but warehouses differ:
     // output/input gate commands (RDOSetOutputPrice, etc.) must target ObjectId.
-    // Ref: voyager-handler-reference.md:1198, building_details_rdo.txt:9-10
     await ctx.connectMapService();
     const tempObjectId = await ctx.cacherCreateObject();
     let currBlock: string;
@@ -146,7 +145,7 @@ async function setBuildingPropertyImpl(
 
     // Output/input gate commands bind to ObjectId, not CurrBlock.
     // For warehouses these differ; for other buildings they are equal.
-    // Ref: voyager-handler-reference.md:1198 — RDOSetOutputPrice BindTo: objectId (direct)
+    // RDOSetOutputPrice BindTo: objectId (direct)
     const RDO_OBJECTID_COMMANDS: ReadonlySet<string> = new Set([
       'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
       'RDOConnectInput', 'RDODisconnectInput', 'RDOConnectOutput', 'RDODisconnectOutput',

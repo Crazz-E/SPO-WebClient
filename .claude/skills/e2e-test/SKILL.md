@@ -16,7 +16,7 @@ Drives the live game client in a real browser via Playwright MCP.
      **SPO_test3 - Green** (never change without explicit developer approval)
    - Verified selectors (post-React, a11y-based) and the child-frame login quirk
    - `window.__spoDebug` programmatic verification API
-   - Server start/stop lifecycle and capture-mode env vars
+   - Server start/stop lifecycle
    - Screenshot policy (sub-agent delegation only)
 2. **[doc/E2E-SCENARIO.md](../../../doc/E2E-SCENARIO.md)** — the ordered L3 live smoke
    script (Phases 0–8, read-only) and report format.

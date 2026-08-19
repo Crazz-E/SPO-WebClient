@@ -5,7 +5,7 @@
  *   Result := OLEStringId + RDOStrEncode( WideStrToStr( aVariant ) );
  * i.e. narrow to AnsiString first (unmappable → `?`), escape second.
  *
- * Regression target: report/rdo-audit-2026-08-14.md §2 (P-C1) and §4 (P-H2).
+ * Regression target: the P-C1 and P-H2 encoding defects.
  */
 
 import {
@@ -117,7 +117,7 @@ describe('cp1252 — encodeCodePoint()', () => {
 });
 
 describe('cp1252 — encodeAnsi(): P-C1 metacharacter forgery', () => {
-  // The exact reproduction from report/rdo-audit-2026-08-14.md §2.
+  // The exact reproduction of the P-C1 defect.
   it.each([
     ['Ģ', 'U+0122', 0x22, '"'],
     ['Ļ', 'U+013B', 0x3b, ';'],

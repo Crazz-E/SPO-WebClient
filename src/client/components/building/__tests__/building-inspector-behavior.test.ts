@@ -723,7 +723,7 @@ describe('compInputs (SERVICES tab)', () => {
     // Void push: server builds with .push() → "C sel <block> call RDOSetCompanyInputDemand "*" ..."
     // Legacy parity: the Delphi client sends this mutation fire-and-forget.
     // ("^" would be wire-legal WITH a QueryId; the real crash risk is "^"
-    // without one — doc/rdo-protocol-architecture.md §8.5.)
+    // without one.)
     expect(ADVERTISEMENT_GROUP.rdoCommands?.['RDOSetCompanyInputDemand']).toBeDefined();
   });
 });

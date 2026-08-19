@@ -11,8 +11,6 @@
 | Document | Covers |
 |----------|--------|
 | [facility-tabs-reference.md](facility-tabs-reference.md) | Tab configurations from CLASSES.BIN, handler registry, 20 configs × 863 classes |
-| [building_details_protocol.md](building_details_protocol.md) | Wire protocol format: GetPropertyList, GetInputNames, SetPath, response parsing |
-| [voyager-handler-reference.md](voyager-handler-reference.md) | Per-handler RDO commands, properties, permissions (companion doc) |
 | [spo-original-reference.md](spo-original-reference.md) | RDO server-side method signatures, type mappings, dispatch rules |
 | [research-system-reference.md](research-system-reference.md) | Research/Inventions system (hdqInventions handler) |
 
@@ -140,8 +138,6 @@ When `fObjChanged` is true, calls `fCacheObj.SetObject(xPos, yPos)` to re-point 
 | `SetObject(x, y)` | Point at facility | Container setup |
 | `Refresh` | Force cache refresh from model server | Container.Refresh() |
 | `KeepAlive` | Prevent timeout | Timer-based, 60s interval |
-
-See [building_details_protocol.md](building_details_protocol.md) for wire format details.
 
 ### Model Server Proxy (Write)
 

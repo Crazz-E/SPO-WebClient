@@ -1,6 +1,6 @@
 /**
  * End-to-end wire-byte test for P-C1 — RDO frame injection from user text.
- * (report/rdo-audit-2026-08-14.md §2, lot L1.)
+ * (Lot L1.)
  *
  * This suite asserts the bytes that are ACTUALLY handed to socket.write(), by
  * driving the production chat handler through the production serialisation
@@ -28,7 +28,7 @@ import { sendChatMessage } from '../../session/chat-handler';
 const WORLD_CONTEXT_ID = '8161308';
 
 /**
- * The audit §2 payload, completed so that the truncation produces TWO fully
+ * The P-C1 audit payload, completed so that the truncation produces TWO fully
  * terminated frames rather than one frame plus a dangling literal:
  *   Ģ (U+0122) truncates to 0x22 '"', Ļ (U+013B) to 0x3B ';'.
  * Interpolated by chat-handler as `"%<payload>";`, the pre-fix wire read

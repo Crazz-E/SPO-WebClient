@@ -737,8 +737,8 @@ describe('fetchAspPage — the HTTP guard rail', () => {
   it('throws on a non-2xx instead of parsing the error page as data', async () => {
     // This is the assertion that must not be relaxed. Five call sites reach for
     // `fetch` directly and skip this check, and they report success on a 500
-    // (report/analyse-ecarts-voyager-2026-08-16.md A-9). Weakening `fetchAspPage`
-    // to "harmonise" with them would remove the only place the status is read.
+    // (defect A-9). Weakening `fetchAspPage` to "harmonise" with them would
+    // remove the only place the status is read.
     fetchMock.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error', text: async () => 'boom' });
     const session = newSession();
     session.setCurrentWorldInfo(WORLD);

@@ -1,7 +1,7 @@
 # RDO Method Archaeology Checklist
 
 > Load this resource when reverse-engineering RDO methods from Delphi source.
-> Extends the 3-point RDO-conformity gate in the root CLAUDE.md (read docs → verify vs Delphi → captures win) with the concrete 8-step search procedure below.
+> Extends the RDO sequence in the root CLAUDE.md (verify the Pascal declaration → check the surviving guards → build with RdoValue/RdoCommand) with the concrete 8-step search procedure below.
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ Read the declaration line. Determine kind and RDO verb:
 | `published function Foo(...): OleVariant` | function | `call` (returns value) |
 | `published procedure Foo(...)` | procedure | `call` (returns void `*`) |
 
-**TRAP CHECK:** If existing WebClient code uses `get` on a `function`, flag it. `get` on a function falls through to `CallMethod` in `RDOObjectServer.pas:~115` but is semantically **WRONG**. It works by accident.
+**TRAP CHECK — read this before "fixing" anything.** `get` on a 0-arg `function` is **correct** and is what the legacy Voyager client emits (`get RDOOpenSession`, `get Logoff`, `get ServerBusy`): COM late-binding produces a property read, and the server dispatches it through the GET fallthrough in `RDOObjectServer.pas:112-116`. Never rewrite a `get` that the reference client proved into a `call` — `get` on a 0-arg member emits **no separator at all**, while `call` does, and choosing the wrong one is the crash class. The table above gives the *declaration*, not the verb to emit. See `delphi-patterns.md` "Rule (capture-first)".
 
 ## Step 3: Extract Parameter Types
 
@@ -145,7 +145,7 @@ const cmd = RdoCommand.sel(objectId)
   .build();
 ```
 
-**Verb choice is capture-first:** mirror the bytes the legacy Voyager client emitted (live captures win over server property/function classification). See `doc/rdo-protocol-architecture.md` §0 and §8.1.
+**Verb choice is capture-first:** mirror the bytes the legacy Voyager client emitted (live captures win over server property/function classification). **Separator choice is the opposite**: it comes from the `published` Pascal declaration, never from a capture and never from a probe.
 
 ## Step 8: Update the Reference Index
 

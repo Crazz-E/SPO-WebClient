@@ -842,7 +842,193 @@ Check `SecurityId` against current tycoon before showing edit controls.
 
 | Related Document | Content |
 |-----------------|---------|
-| [building_details_protocol.md](building_details_protocol.md) | Wire protocol for property fetching (GetPropertyList, GetSubObjProperties, etc.) |
-| [spo-original-reference.md](spo-original-reference.md) | RDO method signatures verified against Delphi source |
-| [rdo_typing_system.md](rdo_typing_system.md) | RdoValue/RdoCommand type-safe builders |
+| [spo-original-reference.md](spo-original-reference.md) | Index of the Delphi source, per class, with File.pas:Line citations |
+| [voyager-inspector-architecture.md](voyager-inspector-architecture.md) | Container lifecycle, xfer_* data binding, threading, the permission model in full |
 | [mock-server-guide.md](mock-server-guide.md) | Adding mock scenarios for new tab handlers |
+
+---
+
+## Per-Handler Control Semantics
+
+### Permission variant per handler
+
+Six variants, defined in full in
+[voyager-inspector-architecture.md](voyager-inspector-architecture.md) §5.
+
+| Handler | Variant | Gate |
+|---|---|---|
+| IndGeneral, SrvGeneral, ResGeneral, HqGeneral, WHGeneral, TVGeneral, Products, Supplies, Workforce, facManagement, Films, Votes | Standard | `GrantAccess(clientSecId, SecurityId)` |
+| townJobs, Ads | ExtraSecurityId fallback | `ExtraSecurityId` first, else `SecurityId` |
+| CapitolTowns, Ministeries | Dual | `GrantAccess(...)` **OR** `ActualRuler = getUserName()` |
+| Mausoleum | Username comparison | `OwnerName = getUserName()` — no `GrantAccess` at all |
+| capitolGeneral, townGeneral, BankLoans, Antennas, unkGeneral, Chart, townServices, townProducts | Read-only | no check; every control is display-only |
+| BankGeneral (loan UI only) | **Inverted** | `NOT fOwnsFacility` — you borrow from someone *else's* bank |
+| townRes | [UNKNOWN] | never fully read |
+
+`SecurityId` is a hyphen-delimited list and the check is a substring test; the server enforces
+independently and **silently**.
+
+### Enabled conditions per handler
+
+| Handler | Control | Enabled when |
+|---|---|---|
+| IndGeneral | `xfer_Name`, `btnClose`, `btnDemolish`, `cbMode`, `cbTrade` | `fOwnsFacility` |
+| IndGeneral | `btnSellToWareHouses` | `fOwnsFacility AND role != Warehouse` |
+| IndGeneral | `btnConnect`, `btnSellToStores`, `btnSellToFacs` | always |
+| SrvGeneral | `btnClose`, `btnDemolish`, price slider | `fOwnsFacility` |
+| SrvGeneral | `btnConnect` | always |
+| ResGeneral | `xfer_Name`, `xfer_Rent`, `xfer_Maintenance`, `btnClose`, `btnDemolish`, `btnRepair` | `fOwnsFacility` |
+| HqGeneral | `xfer_Name`, `btnClose`, `btnDemolish` | `fOwnsFacility` |
+| HqGeneral | `btnConnect` | always |
+| BankGeneral | `btnClose`, `btnDemolish`, `peInterest`, `peTerm`, `peBankBudget` | `fOwnsFacility` (owner) |
+| BankGeneral | `fbRequest`, `eBorrow` | **`NOT fOwnsFacility`** (visitor) |
+| WHGeneral | `clbNames` items, `btnClose`, `btnDemolish` | `fOwnsFacility` |
+| TVGeneral | `peHoursOnAir`, `peAdvertisement`, `btnClose`, `btnDemolish` | `fOwnsFacility` |
+| Products | `PricePc` slider, `btnHireSuppliers`, `btnDelete` | `fOwnsFac` |
+| Supplies | `xfer_minK`, `xfer_MaxPrice`, `btnHireSuppliers`, `btnModify` | `fOwnsFac` |
+| Supplies | `cbAlmBuy` (buy checkbox) | `role IN (2,5,6) AND fOwnsFac` |
+| compInputs | `peDemand.Visible` | `cEditable{i} != ''` — **hidden**, not merely disabled |
+| compInputs | `peDemand.Enabled` | `cEditable{i} != '' AND fOwnsFacility` |
+| Workforce | `xfer_Salaries{n}.Visible` | `WorkersCap{n} != '' AND != '0'` |
+| Workforce | `xfer_Salaries{n}.Enabled` | `fOwnsFacility` |
+| facManagement | `cbAcceptSettings`, `cblSettings`, `btnClone` | `fOwnsFacility` |
+| facManagement | `fbUpgrade` | `fOwnsFacility AND maxUpgrades > 0 AND upgradeCost > 0` |
+| facManagement | `fbDowngrade` | `fOwnsFacility AND upgradeLevel > 1` |
+| Films | `xfer_FilmName`, `btnLaunch`, `cbAutoRelease`, `xfer_FilmBudget`, `xfer_FilmTime` | `fOwnsFacility AND NOT inProd` |
+| Films | `btnReleaseFilm` | `fOwnsFacility AND FilmDone = 'YES'` |
+| Films | `btnCancelFilm` | `fOwnsFacility AND inProd` |
+| Films | `cbAutoProduction` | `fOwnsFacility` |
+| Mausoleum | `btnSetWords` | `fOwnFac` |
+| Mausoleum | `eWordsOfWisdom.ReadOnly` | `NOT fOwnFac` |
+| Mausoleum | `btnCancel` | `fOwnFac AND Transcended != '1'` |
+| Votes | the vote button | **always** — `fOwnsFacility` is computed but never used to gate it |
+| CapitolTowns | `pnTax` | `fHasAccess` (shown/hidden) |
+| Ministeries | `pnBudgetEdit` | `fHasAccess` (shown/hidden) |
+| Ministeries | `edBudget`, `btnSetBudget`, `btnDepose` | a list selection plus valid data |
+| townJobs | `xfer_hiMinSalary`, `xfer_midMinSalary`, `xfer_loMinSalary` | `fOwnsFacility` |
+| townTaxes | every tax editing control | `fOwnsFacility` — non-owners see an empty page |
+
+### UI enumerations
+
+Wire values on the left, what the tab shows on the right.
+
+**Facility role** (`TradeRole` / `Role`) — `IndustryGeneralSheet.pas:130-131`:
+
+| Value | Name | Combo index |
+|---|---|---|
+| 0 | `rolNeutral` | — |
+| 1 | `rolProducer` | — |
+| 2 | `rolDistributer` | 0 |
+| 3 | `rolBuyer` | — |
+| 4 | `rolImporter` | — |
+| 5 | `rolCompExport` | 1 |
+| 6 | `rolCompInport` | 2 |
+
+**Trade level** (`TradeLevel`):
+
+| Combo index | Wire value | Meaning |
+|---|---|---|
+| 0 | 0 | same owner |
+| 1 | 2 | allies |
+| 2 | 3 | anyone |
+
+**Loan request result** (`TBankRequestResult`, `BankGeneralSheet.pas:22`):
+
+| Value | Meaning |
+|---|---|
+| 0 | `brqApproved` |
+| 1 | `brqRejected` |
+| 2 | `brqNotEnoughFunds` |
+| 3 | `brqError` |
+
+**Film auto-flags** — a bitmask packed into one wire argument:
+
+| Bit | Meaning |
+|---|---|
+| 0 (`$01`) | auto-release checkbox |
+| 1 (`$02`) | auto-production checkbox |
+
+The older two-boolean signature is commented out in the Delphi source; there is no separate
+`RDOAutoRelease` member.
+
+**Trouble bitmask** — `facStoppedByTycoon = $04` (`Protocol.pas:119`). A set bit flips the
+Close button's caption to Reopen.
+
+**Encodings that are not obvious:**
+
+| Where | Encoding |
+|---|---|
+| Mausoleum words of wisdom | a pipe character separates paragraphs (`EncodeParagraph` / `DecodeParagraph`) |
+| `CloneMenu{lang}` | pipe-delimited `Name`/`bitmask` pairs — live: `Salaries`, 256, `Price`, 65536, `Suppliers`, 4, `Ads`, 131072 |
+| Service and output prices | an **integer percentage of market price**; the money value is `MarketPrice * Price / 100` |
+| `Tax{i}Percent` | may be negative — a negative percent is a **subsidy** |
+| Company input demand | a slider percent; real demand is `(perc / 100) * cInputMax{i}` |
+| `GateMap` | one character per gate position; `'0'` hides that finger tab |
+
+### Handlers registered but absent from CLASSES.BIN
+
+| Handler | Source | Status |
+|---|---|---|
+| `hdqInventions` | `InventionsSheet.pas` | **live** — loaded at runtime by `HqGeneral`'s `fbResearches` button (`HqMainSheet.pas:338-366`), not from a tab config. See [research-system-reference.md](research-system-reference.md) |
+| `Ads` | `AdvSheetForm.pas` | registered but referenced by no visual class; advertisement is served through `compInputs` instead |
+| `InputSelection` | `InputSelectionForm.pas` | likely dead code |
+| `townPolitics` | `PoliticSheet.pas` | likely dead code |
+| `facMinisteries` | `xMinisteriesSheet.pas` | likely dead code |
+
+### The SERVICES tab name is reused by two different handlers
+
+`TabName=SERVICES` appears with **two** handlers, and they share nothing:
+
+| Handler | Fetch shape | WebClient group |
+|---|---|---|
+| `compInputs` | `cInputCount` plus indexed `cInput{i}.*` | `ADVERTISEMENT_GROUP` |
+| `Supplies` (Config 6 HQ only) | `GetInputNames` then `SetPath` then per-gate `GetPropertyList` | `SUPPLIES_GROUP` |
+
+### Embedded ASP URLs
+
+Non-operational (no ASP server runs these paths today). Kept for the parameter shapes.
+
+| Handler | URL |
+|---|---|
+| capitolGeneral | `{WorldURL}/Visual/Voyager/Politics/politics.asp?WorldName=&TycoonName=&Password=&Capitol=YES&X=&Y=&DAAddr=&DAPort=` |
+| townGeneral | the same page with `&TownName=` instead of `Capitol=YES` |
+| townGeneral | `{WorldURL}/Visual/News/boardreader.asp?...&PaperName=` (rate mayor) |
+| townGeneral | `{WorldURL}/Visual/News/newsreader.asp?...&PaperName=` (read news) |
+| Antennas | double-click navigates the map: `?frame_Id=MapIsoView&frame_Action=MoveTo&x=&y=` |
+| IndGeneral | `{WorldURL}/Visual/Clusters/WebLoader.asp?Page=Home&x=&y=&WorldName=&DAAddr=&DAPort=&frame_Id=FacilitySiteView&frame_Class=HTMLView&frame_NoBorder=Yes&frame_Align=client`, plus `&Access=MODIFY` when the viewer owns the facility |
+| every facility | `{WorldURL}/Visual/Voyager/IsoMap/FacilityImage.asp?ClassId=&WorldName=&xPos=&yPos=` |
+
+### Handler index
+
+| Handler | Section | Permission | Has wire mutations | WebClient group |
+|---|---|---|---|---|
+| Ads | core data | ExtraSecId fallback | yes | `ADS_GROUP` |
+| Antennas | specialized | read-only | no | `ANTENNAS_GROUP` |
+| BankGeneral | general | standard + inverted | yes | `BANK_GENERAL_GROUP` |
+| BankLoans | specialized | read-only | no | `BANK_LOANS_GROUP` |
+| capitolGeneral | general | read-only | no | `CAPITOL_GENERAL_GROUP` |
+| CapitolTowns | specialized | dual | yes | `CAPITOL_TOWNS_GROUP` |
+| Chart | core data | read-only | no | `FINANCES_GROUP` |
+| compInputs | core data | standard | yes | `ADVERTISEMENT_GROUP` |
+| facManagement | core data | standard | yes | `UPGRADE_GROUP` |
+| Films | specialized | standard | yes | `FILMS_GROUP` |
+| hdqInventions | not in BIN | standard | yes | — |
+| HqGeneral | general | standard | yes | `HQ_GENERAL_GROUP` |
+| IndGeneral | general | standard | yes | `IND_GENERAL_GROUP` |
+| Mausoleum | specialized | username comparison | yes | `MAUSOLEUM_GROUP` |
+| Ministeries | specialized | dual | yes | `MINISTERIES_GROUP` |
+| Products | core data | standard | yes | `PRODUCTS_GROUP` |
+| ResGeneral | general | standard | yes | `RES_GENERAL_GROUP` |
+| SrvGeneral | general | standard | yes | `SRV_GENERAL_GROUP` |
+| Supplies | core data | standard | yes | `SUPPLIES_GROUP` |
+| townGeneral | general | read-only | no | `TOWN_GENERAL_GROUP` |
+| townJobs | town hall | ExtraSecId fallback | yes | `TOWN_JOBS_GROUP` |
+| townProducts | town hall | read-only | no | `TOWN_PRODUCTS_GROUP` |
+| townRes | town hall | [UNKNOWN] | [UNKNOWN] | `TOWN_RES_GROUP` |
+| townServices | town hall | read-only | no | `TOWN_SERVICES_GROUP` |
+| townTaxes | town hall | standard | yes | `TOWN_TAXES_GROUP` |
+| TVGeneral | general | standard | yes | `TV_GENERAL_GROUP` |
+| unkGeneral | general | read-only | no | `UNK_GENERAL_GROUP` |
+| Votes | specialized | standard, **not used to gate** | yes | `VOTES_GROUP` |
+| WHGeneral | general | standard | yes | `WH_GENERAL_GROUP` |
+| Workforce | core data | standard | yes | `WORKFORCE_GROUP` |

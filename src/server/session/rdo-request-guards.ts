@@ -26,13 +26,12 @@
  * `RDOQueryServer.pas:484`) in 91 ms. That is still an ERROR, never an ack: the
  * call site cannot tell whether the procedure ran. So arity changes the blast
  * radius, not the verdict — every procedure takes `"*"` + QueryId.
- * See `doc/rdo-protocol-architecture.md` §2.1.0.
  *
  * The reference client emits these with `"*"` + a QueryId and receives a clean
  * empty ack:
  *   `C 2174 sel 30430748 call AddLine "*" "%test message";`  → `A2174 ;`
  *   `C 2177 sel 30437308 call CloseMessage "*" "#30430748";` → `A2177 ;`
- *   (doc/Mock_Server_scenarios_captures.md:3542-3543, :3548-3549)
+ *   (both frames observed on the live wire)
  *
  * Add a member here only with its Delphi declaration cited.
  */
@@ -96,7 +95,7 @@ export const VOID_MEMBERS: ReadonlyMap<string, string> = new Map([
  *
  * ## Why this is a compiled refusal and not a convention
  *
- * The certification sweep (plan rev. 3 §3) is **blind by construction**: it
+ * The certification sweep is **blind by construction**: it
  * emits `call M "*"` / `call M "^"` on members it has not identified — that is
  * its entire purpose. It cannot *know* that it just called `RDODelCompany`. An
  * exclusion that rests on "the sweep should not go there" is not an exclusion.
@@ -225,8 +224,8 @@ export function assertNotVariantOnVoidMember(packetData: { separator?: string; m
  *   - `"*"` on a `function`  → a result written through a register nobody set →
  *     arbitrary memory write.
  *
- * The retired claim of `doc/rdo-protocol-architecture.md` §8.5 ("`\"*\"` +
- * QueryId corrupts all subsequent queries", retired 2026-07-02) was therefore
+ * The retired project claim that `"*"` + QueryId corrupts all subsequent
+ * queries (retired 2026-07-02) was therefore
  * right about the mechanism and wrong only about its scope: the captures that
  * retired it show `"*"` on `AddLine`, `CloseMessage`, `RDOEndSession` and a
  * `set` — procedures and properties, every one of them.
@@ -268,9 +267,7 @@ export function assertNotVoidPush(packetData: { separator?: string; member?: str
  *
  * Every name below is something the client emits in normal play. The guard is
  * therefore not "never emit this"; it is "never emit this after the session is
- * established", and only a caller that knows the phase can apply it. In the
- * conformance harness that caller is the runner: everything it emits happens
- * after the connection floor by construction (`runner.ts`).
+ * established", and only a caller that knows the phase can apply it.
  *
  * Deliberately NOT wired into `spo_session.ts`: the gateway is the code that
  * legitimately emits all of these, and it emits them from the login handlers

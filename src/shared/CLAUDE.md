@@ -18,7 +18,7 @@
 
 Always use the `RdoValue` fluent API (`RdoValue.int()`, `RdoValue.string()`, etc.) and `RdoCommand.build()`. Never construct RDO protocol strings manually.
 
-**Booleans:** emit `#-1` (true) / `#0` (false) — byte-identical to the legacy client; when parsing, accept any non-zero ordinal as true. Never normalize `#-1` to `#1`. See `doc/rdo-protocol-architecture.md` §2.2.
+**Booleans:** emit `#-1` (true) / `#0` (false) — byte-identical to the legacy client; when parsing, accept any non-zero ordinal as true. Never normalize `#-1` to `#1`.
 
 ## Type Modules
 

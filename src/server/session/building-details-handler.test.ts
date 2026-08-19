@@ -2538,13 +2538,13 @@ describe('refreshBuildingProperties', () => {
 // ===========================================================================
 
 /**
- * report/analyse-ecarts-voyager-2026-08-16.md §2 (A-1 / A-3 / A-4).
+ * Known gaps A-1 / A-3 / A-4.
  *
  * These names are fetched through GetPropertyList like any other, but the
  * Delphi StoreToCache routines never write them, so the answer is always empty.
  * The tests below pin the REQUEST — the names really do go out — and the empty
  * result, so the day a fix lands (an RDO getter, or the properties added to the
- * cache) they fail and point at the analysis.
+ * cache) they fail.
  */
 describe('properties requested from a cache that never holds them', () => {
   it('asks the cache for HoursOnAir and Comercials on a TV station', async () => {
@@ -2559,7 +2559,7 @@ describe('properties requested from a cache that never holds them', () => {
     const asked = fake.cacher.getPropertyList.mock.calls.flatMap(([, names]) => names);
     expect(asked).toContain('HoursOnAir');
     expect(asked).toContain('Comercials'); // one 'm' — the published name is 'Commercials'
-    // BUG connu — analyse-ecarts §2 (A-1). The names go out on the wire and the
+    // BUG connu — A-1. The names go out on the wire and the
     // cache answers an empty string for each, every time: the two sliders of the
     // TV sheet are permanently blank.
     const tv = details.groups['tvGeneral'];
@@ -2581,7 +2581,7 @@ describe('properties requested from a cache that never holds them', () => {
 
     const asked = fake.cacher.getPropertyList.mock.calls.flatMap(([, names]) => names);
     expect(asked).toEqual(expect.arrayContaining(['EstLoan', 'Interest', 'Term', 'BudgetPerc']));
-    // BUG connu — analyse-ecarts §2 (A-3 / A-4). The four values come back empty
+    // BUG connu — A-3 / A-4. The four values come back empty
     // for every bank, so the loan sheet renders four blank sliders.
     const bank = details.groups['bankGeneral'];
     for (const name of ['EstLoan', 'Interest', 'Term', 'BudgetPerc']) {

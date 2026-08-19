@@ -13,7 +13,7 @@ Run the live smoke test against the real servers using Playwright MCP tools.
    credentials (SPO_test3 / test3 / Free Space / planitia / SPO_test3 - Green — NEVER
    change), verified selectors (a11y-based; login stages live in a child frame — use
    snapshot refs, not `document.querySelectorAll`), the `__spoDebug` verification API,
-   server lifecycle, and the capture pipeline.
+   and server lifecycle.
 2. **[doc/E2E-SCENARIO.md](../../doc/E2E-SCENARIO.md)** — the ordered L3 smoke script
    (Phases 0–8, read-only) with per-phase assertions and the report table format.
 

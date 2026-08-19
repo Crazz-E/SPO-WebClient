@@ -116,7 +116,6 @@ export type {
   WsReqAuthCheck,
   WsReqConnectDirectory,
   WsReqLoginWorld,
-  WsReqRdoDirect,
   WsReqMapLoad,
   WsReqManageConstruction,
   WsReqSelectCompany,

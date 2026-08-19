@@ -60,9 +60,9 @@ export function redactSensitiveRdoFrame(frame: string): string {
  * unless the caller already emitted its own wire log (`alreadyLogged` —
  * sendRdoRequest logs richer `RDO>>` entries). Together with the `RDO<<`
  * log in processSingleCommand this gives a complete NDJSON record of the
- * wire, which log-capture-converter turns into mock scenarios.
+ * wire.
  *
- * Encoding safety net (P-C1, report/rdo-audit-2026-08-14.md §2): `Buffer.from(
+ * Encoding safety net (P-C1): `Buffer.from(
  * s, 'latin1')` truncates `charCode & 0xFF` with NO replacement character, so a
  * code point above 0xFF whose low byte is an RDO metacharacter used to reach the
  * wire AS that metacharacter (`U+0122 Ģ` → `0x22 '"'`, `U+013B Ļ` → `0x3B ';'`)
@@ -153,7 +153,7 @@ export function extractRevenue(line: string): string {
  */
 /**
  * Interpret an ordinal value (type prefix already stripped) as a boolean.
- * Wire truth (doc/rdo-protocol-architecture.md §2.2): Delphi wordbool true is
+ * Wire truth: Delphi wordbool true is
  * "#-1", but ANY non-zero ordinal must parse as true (the Delphi decoder does
  * VarCast to integer — "#1" from a server-side ordinal is legitimate).
  * Empty string = unparsable → false.
@@ -169,7 +169,7 @@ export function isTrueOrdinal(value: string): boolean {
  * `/res="#(\d+)"/` and `/res="#(-?\d+)"/`. The unsigned variant fails to match a
  * negative code, falls through to the `-1` default, and so reports failure
  * anyway; correct by accident, not by construction. Booleans on the wire are
- * `#-1` / `#0` (arch doc §2.2), so negative ordinals are ordinary here.
+ * `#-1` / `#0`, so negative ordinals are ordinary here.
  *
  * @returns the code, or -1 when the payload carries none (which every caller
  *          already treats as failure).

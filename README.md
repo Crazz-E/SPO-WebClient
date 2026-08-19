@@ -284,8 +284,6 @@ const cmd = RdoCommand.sel(objectId)
 const { prefix, value } = RdoParser.extract(token);
 ```
 
-See [RDO Protocol Architecture](doc/rdo-protocol-architecture.md) and [RDO Typing System](doc/rdo_typing_system.md) for the full protocol reference.
-
 ## API Endpoints
 
 The Node.js server exposes REST endpoints for game data and asset serving. Static terrain assets (chunks, atlases, textures, previews) are served from [Cloudflare R2 CDN](https://github.com/Crazz-E/SPO-WebClient-Chunks) when `CHUNK_CDN_URL` is set.
@@ -346,13 +344,9 @@ npm run test:smoke                 # Component smoke tests only
 Detailed technical docs live in the [doc/](doc/) directory:
 
 **Protocol & Architecture**
-- [RDO Protocol Architecture](doc/rdo-protocol-architecture.md) — Wire framing, dispatch, login sequence, push filtering
-- [RDO Typing System](doc/rdo_typing_system.md) — RdoValue/RdoCommand/RdoParser API reference
-- [RDO Session Lifecycle](doc/rdo-session-lifecycle.md) — Timers, login/logoff sequences, reconnection, accepted divergences
 - [SPO-Original Reference](doc/spo-original-reference.md) — Delphi source analysis and patterns
 
 **Building System**
-- [Building Details Protocol](doc/building_details_protocol.md) — Property query protocol
 - [Facility Tabs Reference](doc/facility-tabs-reference.md) — Inspector tab configurations
 - [Supply System](doc/supply-system.md) — Supply/demand mechanics
 - [Research System Reference](doc/research-system-reference.md) — Research and technology tree
@@ -365,7 +359,6 @@ Detailed technical docs live in the [doc/](doc/) directory:
 - [Graphics Engine Proposal](doc/GRAPHICS-ENGINE-REFACTORING-PROPOSAL.md) — Renderer design
 
 **Voyager (Inspector)**
-- [Voyager Handler Reference](doc/voyager-handler-reference.md) — Handler patterns
 - [Voyager Inspector Architecture](doc/voyager-inspector-architecture.md) — Architecture overview
 - [Voyager Profile Interface](doc/voyager-profile-interface.md) — Profile protocol
 
@@ -377,7 +370,6 @@ Detailed technical docs live in the [doc/](doc/) directory:
 - [E2E Testing](doc/E2E-TESTING.md) — End-to-end test procedure and credentials
 - [E2E Scenario](doc/E2E-SCENARIO.md) — Detailed scenario walkthrough
 - [Mock Server Guide](doc/mock-server-guide.md) — Mock server setup and RDO capture
-- [Mock Server Scenarios](doc/Mock_Server_scenarios_captures.md) — Recorded sessions
 - [CAB Asset Extraction](doc/CAB-EXTRACTION.md) — Extracting textures from game archives
 
 ## License

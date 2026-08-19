@@ -18,7 +18,7 @@ import {
 //
 // The guard that encodes a proven crash rather than a style rule: a single
 // `call SayThis "^"` frame froze the shared production Interface Server
-// (live probe, 2026-08-15). See report/rdo-audit-2026-08-14.md §3.
+// (live probe, 2026-08-15).
 // =============================================================================
 describe('assertNotVariantOnVoidMember', () => {
   it.each([...VOID_MEMBERS.keys()])('rejects "^" on the void member %s', member => {
@@ -38,7 +38,7 @@ describe('assertNotVariantOnVoidMember', () => {
   });
 
   // "^" on a function is correct and capture-proven:
-  // `call GetTycoonCookie "^" "#22","%LastY.0";` -> `A36 res="%395";` [capture :982-983]
+  // `call GetTycoonCookie "^" "#22","%LastY.0";` -> `A36 res="%395";` (live capture)
   it('allows "^" on a member that is not void', () => {
     expect(() => assertNotVariantOnVoidMember({ separator: '"^"', member: 'GetTycoonCookie' })).not.toThrow();
   });

@@ -58,7 +58,7 @@ Browser Client ──WebSocket──▶ Node.js Gateway ──RDO TCP──▶ D
 | Delphi Pattern | WebClient Equivalent | Key Difference |
 |----------------|---------------------|----------------|
 | `RenewWorldProxy()` + 5s throttle | `attemptWorldReconnect()` | WebClient: exponential backoff (5s, 10s, 20s) |
-| `TReconnectThread` (unlimited retries, 100ms loop) | `RECONNECT_MAX_RETRIES = 23` (3 fast + 20 slow, ~5.5 min) | **Accepted divergence D3** (`doc/rdo-session-lifecycle.md` §9): WebClient gives up after 23 jittered attempts; strictly gentler than Delphi's infinite loop |
+| `TReconnectThread` (unlimited retries, 100ms loop) | `RECONNECT_MAX_RETRIES = 23` (3 fast + 20 slow, ~5.5 min) | **Accepted divergence D3**: WebClient gives up after 23 jittered attempts; strictly gentler than Delphi's infinite loop |
 | `fDALastTick` rate limiting | `worldReconnectLastAttempt` | Same concept, different timing |
 | `GetNewWorldProxy()` + `GetDAConnection()` | `loginHandler.reconnectWorldSocket()` | WebClient re-does IDOF + session validation |
 | `OnDADisconnect → RenewWorldProxy` | `socket.on('close') → attemptWorldReconnect()` | Equivalent for world socket only |
@@ -120,10 +120,10 @@ L3 (RDO) timeout MUST be shorter than L1 (WebSocket) timeout. The RDO layer must
 TimeoutCategory.X.rdoMs < TimeoutCategory.X.wsMs  (always)
 ```
 
-### 2. Void Push Convention Guard
-NEVER use `sendRdoRequest()` for void push (`"*"` separator) — **project convention**, enforced by `assertNotVoidPush`. This is NOT a crash fact: void + QueryId is wire-legal and the server acks it with `A<id> ;` (capture-proven: `RDOEndSession` → `A4 ;`, `AddLine` → `A2174 ;`; RDOQueryServer.pas:174-178). The project standardizes on one form per intent. Matrix: `doc/rdo-protocol-architecture.md` §8.5.
+### 2. Void Push Safety Guard
+NEVER use `sendRdoRequest()` with the `"*"` separator on anything that is not a proven Delphi `procedure` listed in `VOID_MEMBERS` — enforced by `assertNotVoidPush`, which is a **SAFETY guard since 2026-08-18**, not a convention. `"*"` on a `function` passes no hidden result pointer and the function writes one anyway through an unset register: an arbitrary write inside the server process. One such frame broke the shared Interface Server for hours. The mirror mistake, `"^"` on a `procedure`, freezes it. For a `procedure`, `"*"` **with** a QueryId is the reference client's own form and is acked `A<id> ;` (capture-proven: `RDOEndSession` → `A4 ;`, `AddLine` → `A2174 ;`; RDOQueryServer.pas:174-178).
 ```typescript
-// WRONG — violates project convention (assertNotVoidPush throws)
+// WRONG — arbitrary write inside the server if the member is a `function` (assertNotVoidPush throws)
 await sendRdoRequest('world', { separator: '*', ... });
 
 // RIGHT — fire-and-forget via writeRdoFrame() (Latin-1, no QueryId)
@@ -134,8 +134,12 @@ writeRdoFrame(socket, RdoCommand.build());
 Fire-and-forget commands (no RID) MUST use `"*"` (VoidId), NEVER `"^"` (VariantId).
 `"^"` without a RID crashes the Delphi server — it tries to route a response to a non-existent query.
 The `"^"` separator is only valid in the synchronous path (`sendRdoRequest` with RID).
-Both `"*"` and `"^"` parse parameters identically (RDOQueryServer.pas:419-454) — the separator
-only controls whether the server captures the return value, NOT argument parsing.
+Both `"*"` and `"^"` parse **arguments** identically (RDOQueryServer.pas:419-454). Do NOT read that
+as "the separator is cosmetic" — that was the pre-2026-08-18 claim and it is what let the fatal
+frame out. The separator decides whether the dispatcher passes a hidden **result pointer**: `"^"`
+pushes one (fatal on a `procedure`, which never pops it → freeze), `"*"` passes none (fatal on a
+`function`, which writes its OleVariant through an unset register → arbitrary write). The member's
+Pascal kind, not the separator, is what you must look up first.
 ```typescript
 // WRONG — "^" without RID crashes Delphi server
 fireAndForget(RdoCommand.sel(id).call('Method').method().args(...).build());
@@ -149,7 +153,7 @@ Live capture proof: `C sel 381792472 call RDODisconnectInput "*" "%Plastics","%7
 Before reconnecting, ALWAYS drain all pending requests. After reconnect, Delphi reuses query IDs. Leftover pending entries would match wrong responses.
 
 ### 4. Sequential RDO Commands (default)
-Default to sequential RDO commands — but for the right reason. The server does NOT serialize per connection (24-thread global queue, same-connection queries execute concurrently, answers in completion order — `doc/rdo-protocol-architecture.md` §3.5, verified 2026-07-03). Sequential remains the default because same-world reads serialize on the shared IS→Model DA path anyway (parallel ≈ no latency gain, measured live) and stateful calls (`SwitchFocusEx`) must never overlap. Exceptions: the D2 cacher pipelining (`doc/rdo-session-lifecycle.md` §9) and ClientView-stateless area reads behind `RDO_PARALLEL_AREA_READS` (default off).
+Default to sequential RDO commands — but for the right reason. The server does NOT serialize per connection (24-thread global queue, same-connection queries execute concurrently, answers in completion order — verified 2026-07-03). Sequential remains the default because same-world reads serialize on the shared IS->Model DA path anyway (parallel ~ no latency gain, measured live) and stateful calls (`SwitchFocusEx`) must never overlap. Exceptions: the D2 cacher pipelining and ClientView-stateless area reads behind `RDO_PARALLEL_AREA_READS` (default off).
 
 ### 5. Request Buffering During ServerBusy
 When `isServerBusy === true`, new requests go to `requestBuffer`. When busy clears, they flush with 50ms delay between each. Buffer has a max size — overflow rejects the request.
@@ -168,7 +172,7 @@ RDO errors classified via `rdo-error-classifier.ts`:
 ### 8. Reconnect Strategy (Tier-3 conformity)
 - **Trigger: world socket `close` event ONLY**, and only if `!loggedOff`. NEVER reconnect on a query timeout or a ServerBusy poll failure — legacy `ReportCnxFailure` is a no-op (ServerCnxHandler.pas:3394-3405); reconnect-on-timeout causes login storms serialized on the IS `fServerLock`.
 - **Backoff**: two bounded phases — 3 fast attempts (5/10/20 s exponential) then 20 slow attempts (15 s fixed) = `RECONNECT_MAX_RETRIES = 23` over ~5.5 min, then give up and surface the error to the user (`spo_session.ts` `RECONNECT_FAST_RETRIES`/`RECONNECT_SLOW_RETRIES`).
-- **Deliberate divergence D3** (`doc/rdo-session-lifecycle.md` §9): legacy Delphi retries forever in a 100 ms loop; the WebClient caps retries to protect the shared server. (Audit P6 resolved Tier 4: `world-reconnect.test.ts` drives the real `StarpeaceSession` and asserts 23.)
+- **Deliberate divergence D3**: legacy Delphi retries forever in a 100 ms loop; the WebClient caps retries to protect the shared server. (Audit P6 resolved Tier 4: `world-reconnect.test.ts` drives the real `StarpeaceSession` and asserts 23.)
 - **ServerBusy poll**: ~50 s cadence (`SERVER_BUSY_CHECK_INTERVAL_MS = 50_000`), stop after 4 consecutive failures (`MAX_CONSECUTIVE_POLL_FAILURES`) WITHOUT reconnecting — mirrors LEDsTimer `mod 50` + `fExceptCount < 4` (ToolbarHandlerViewer.pas:160-162, ServerCnxHandler.pas:3596-3611).
 - Before reconnecting, drain all pending RIDs (rule 3); after re-Logon, all old object ids are stale.
 

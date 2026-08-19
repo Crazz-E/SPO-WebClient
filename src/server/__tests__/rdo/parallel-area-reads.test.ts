@@ -2,8 +2,7 @@
  * Parallel area reads (RDO_PARALLEL_AREA_READS) + focusBuilding dedup —
  * drives the REAL StarpeaceSession over the mock transport.
  *
- * Policy under test (Delphi-verified, see report/rdo-conformity-report.md +
- * agents 2026-07-03):
+ * Policy under test (Delphi-verified, agents 2026-07-03):
  * - ObjectsInArea / SegmentsInArea are ClientView-stateless reads
  *   (InterfaceServer.pas:751-782, :1012-1058) and safe to send concurrently;
  *   with the flag ON they must BOTH be on the wire before either response.

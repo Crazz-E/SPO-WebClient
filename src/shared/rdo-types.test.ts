@@ -506,11 +506,11 @@ describe('RdoCommand', () => {
     });
   });
 
-  // P-L4 — QueryId and separator are two independent axes
-  // (doc/rdo-protocol-architecture.md §8.5). withRequestId() used to overwrite
+  // P-L4 — QueryId and separator are two independent axes.
+  // withRequestId() used to overwrite
   // the separator unconditionally, which made the reference client's void form
   // — `C 2174 sel 30430748 call AddLine "*" "%test message";` → `A2174 ;`
-  // [capture :3542-3543] — impossible to express with RdoCommand.
+  // (live capture) — impossible to express with RdoCommand.
   describe('QueryId × separator decoupling (P-L4)', () => {
     it('does not overwrite an explicit push() when a request ID is added', () => {
       const cmd = RdoCommand.sel(30430748)
@@ -547,8 +547,8 @@ describe('RdoCommand', () => {
     });
 
     it('never produces the one unsafe form — "^" without a QueryId', () => {
-      // withRequestId only ever ADDS a QueryId, so it cannot create row 4 of the
-      // §8.5 matrix. Reaching "^" without a rid still requires an explicit
+      // withRequestId only ever ADDS a QueryId, so it cannot produce the unsafe
+      // combination. Reaching "^" without a rid still requires an explicit
       // method() call, which is unchanged behaviour.
       const cmd = RdoCommand.sel(100).call('M').withRequestId(9).build();
       expect(cmd.startsWith('C 9 ')).toBe(true);

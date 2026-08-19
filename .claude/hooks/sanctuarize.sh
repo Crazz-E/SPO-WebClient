@@ -1,6 +1,5 @@
 #!/bin/bash
-# Stop hook — enforces the sanctuarization manifest (code-guardian §F) instead of
-# leaving it declarative.
+# Stop hook — enforces the end-of-turn typecheck instead of leaving it declarative.
 #
 # Runs the typecheck ONCE per turn, and only if a .ts/.tsx file was actually
 # written (flag set by typecheck-guard.sh). On failure it exits 2, which feeds
@@ -36,7 +35,7 @@ if [ $STATUS -ne 0 ]; then
   echo "Sanctuarization failed — typecheck errors introduced this turn:" >&2
   echo "$OUTPUT" >&2
   echo "" >&2
-  echo "Fix these before ending the turn. Remaining manifest steps (code-guardian §F): npm test, npm run build." >&2
+  echo "Fix these before ending the turn. Remaining manual steps: npm test, npm run build." >&2
   exit 2
 fi
 

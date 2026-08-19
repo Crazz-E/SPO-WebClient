@@ -36,7 +36,7 @@ import { handleSearchMenuHome, handleSearchMenuTowns, handleSearchMenuPeopleSear
 import { handlePoliticsData, handlePoliticsVote, handlePoliticsLaunchCampaign, handlePoliticsCancelCampaign, handleTycoonRole } from './politics-handlers';
 
 // Miscellaneous
-import { handleManageConstruction, handleDefineZone, handleCreateCompany, handleClusterInfo, handleClusterFacilities, handleSearchConnections, handleEmpireFacilities, handleRdoDirect, handleResearchInventory, handleResearchDetails } from './misc-handlers';
+import { handleManageConstruction, handleDefineZone, handleCreateCompany, handleClusterInfo, handleClusterFacilities, handleSearchConnections, handleEmpireFacilities, handleResearchInventory, handleResearchDetails } from './misc-handlers';
 
 export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   // Auth & session
@@ -131,7 +131,6 @@ export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   [WsMessageType.REQ_CLUSTER_FACILITIES]: handleClusterFacilities,
   [WsMessageType.REQ_SEARCH_CONNECTIONS]: handleSearchConnections,
   [WsMessageType.REQ_EMPIRE_FACILITIES]: handleEmpireFacilities,
-  [WsMessageType.REQ_RDO_DIRECT]: handleRdoDirect,
   [WsMessageType.REQ_RESEARCH_INVENTORY]: handleResearchInventory,
   [WsMessageType.REQ_RESEARCH_DETAILS]: handleResearchDetails,
 };

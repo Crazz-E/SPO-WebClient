@@ -434,7 +434,6 @@ describe('Security: RDO Injection', () => {
 
 ## References
 
-- RDO protocol security: [doc/rdo_typing_system.md](../../doc/rdo_typing_system.md)
 - WebSocket implementation: [src/server/server.ts](../../src/server/server.ts)
 - Error handling: [src/shared/error-utils.ts](../../src/shared/error-utils.ts)
 - OWASP Top 10: https://owasp.org/Top10/

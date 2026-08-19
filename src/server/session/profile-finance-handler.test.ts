@@ -15,8 +15,8 @@
  * The lot-4 fixtures were written from our parsers, so they proved that the
  * parsers read their own assumptions: the curriculum pairs, for instance, only
  * matched a `</span>class=value>` shape no ASP page can produce. Re-derived
- * here from the pages, they revive the audit's 18 NE MATCHE PAS
- * (report/audit-transport-c-asp.md) and pin the correction of each.
+ * here from the pages, they revive the audit's 18 NE MATCHE PAS and pin the
+ * correction of each.
  *
  * Branches these fixtures reach for the first time: `FullAccess=false`
  * (bank + curriculum), `SuperRole<>0` (no level block at all), `CurrLevel>5`
@@ -1400,7 +1400,7 @@ describe('executeBankAction', () => {
     });
 
     it('HTTP 500 is a failure, not a silent success — the money path reads the status', async () => {
-      // Regression guard for A-9 (report/analyse-ecarts-voyager-2026-08-16.md).
+      // Regression guard for A-9.
       // This used to return `{ success: true }`: the function decided from the
       // body alone. A-9 covers exactly two classes — the missing page and the
       // IIS fault; everything else on this page answers 200 and is settled by

@@ -30,7 +30,6 @@ import { RdoVerb, RdoAction } from '../../shared/types';
 // These call the REAL handler against a mocked RDO transport, unlike the
 // synthetic-packet suites in __tests__/protocol-validation/, which assert
 // hand-built command strings and therefore never observe the return value.
-// See report/rdo-audit-2026-08-14.md §5 (M-A) and §7 (test blind spots).
 // =============================================================================
 
 /** Minimal SessionContext satisfying what the two placement handlers touch. */
@@ -47,7 +46,7 @@ function makeCtx(payload: string): { ctx: SessionContext; sendRdoRequest: jest.M
 
 describe('placeBuilding', () => {
   // The captured live response for a successful placement is `A147 res="#0";`
-  // — doc/Mock_Server_scenarios_captures.md:3399-3400. It carries no building id.
+  // — observed on the live wire. It carries no building id.
   it('reports success with a null id — the protocol never returns one', async () => {
     const { ctx } = makeCtx('res="#0"');
 
@@ -123,7 +122,7 @@ describe('placeBuilding', () => {
 
   // The captured request is
   //   C 147 sel 8184316 call NewFacility "^" "%PGISupermarketC","#618","#28","#618"
-  // (doc/Mock_Server_scenarios_captures.md, build-menu scenario bm-rdo-001).
+  // (live capture, build-menu scenario).
   it('targets the world context and types the four arguments as %,#,#,#', async () => {
     const fake = makeSessionCtx();
     fake.respond(() => 'res="#0"');
@@ -215,7 +214,7 @@ describe('placeCapitol', () => {
 // The four parsers (parseClusterInfo, parseClusterFacilities,
 // parseBuildingCategories, parseBuildingFacilities) are module-private, so they
 // are driven through their fetchers. Every fixture below reproduces the real
-// page structure; where it comes from a live capture the line is cited.
+// page structure; where it comes from a live capture that is noted.
 // =============================================================================
 
 const mockFetch = fetch as unknown as jest.MockedFunction<
@@ -696,10 +695,10 @@ describe('fetchClusterFacilities', () => {
 /**
  * `Build/KindList.asp:96-218` — no longer `[INFERRED]`.
  *
- * The response body of this page appears in NO capture: only its URL
- * (doc/Mock_Server_scenarios_captures.md:2174) and the `FacilityList.asp` URL it
- * navigates to (:2992). That URL is reproduced parameter for parameter by the
- * `ref` of `:178`, which is what makes the two agree. The rest of the markup —
+ * The response body of this page appears in NO capture: only its URL and the
+ * `FacilityList.asp` URL it navigates to were seen on the live wire. That URL is
+ * reproduced parameter for parameter by the `ref` of `:178`, which is what makes
+ * the two agree. The rest of the markup —
  * the two leading non-kind cells, the `<div class=link>`, the icon path built by
  * `GetKindIcon` (`:88`) and the source's own nested-`<td>` typo at `:113-114` —
  * is now established by the page instead of guessed from our parser.
@@ -857,7 +856,7 @@ function kindListPage(opts: {
 }
 
 // The `ref` this produces matches the captured FacilityList.asp request
-// parameter for parameter (doc/Mock_Server_scenarios_captures.md:2992).
+// parameter for parameter (observed on the live wire).
 const KIND_LIST_HTML = kindListPage({
   cluster: 'PGI',
   tycoonLevel: 0,
@@ -1051,20 +1050,19 @@ describe('fetchBuildingCategories', () => {
 
 /**
  * THE ONE CAPTURED PAGE OF THIS HANDLER — verbatim body of the live response of
- * 2026-02-18, doc/Mock_Server_scenarios_captures.md:3056-3087 and :3138-3252,
- * byte for byte including its mixed tabs and spaces and its blank conditional
- * lines. A capture outranks the ASP source, so this is the reference; the ASP is
- * used below only for the branches the capture does not exercise (it holds one
- * facility, and an AVAILABLE one).
+ * 2026-02-18, byte for byte including its mixed tabs and spaces and its blank
+ * conditional lines. A capture outranks the ASP source, so this is the
+ * reference; the ASP is used below only for the branches the capture does not
+ * exercise (it holds one facility, and an AVAILABLE one).
  *
  * Two things it establishes that the source alone could not: `CacheClass.ImportPrice`
- * renders `$8,000K` (:3174) and `CacheClass.Size` renders `3600 m.` (:3175) —
- * both were `[INFERRED]` formats in the audit (§7.3).
+ * renders `$8,000K` and `CacheClass.Size` renders `3600 m.` — both were
+ * `[INFERRED]` formats until this capture.
  *
  * Structure that matters: `LinkText_0` holds the name and the `available` flag;
  * `Cell_0`'s FIRST inner <tr> holds icon, price and zone; the `info` attribute
- * with FacilityClass + VisualClassId sits in the SECOND inner <tr> (:3201), past
- * the `</tr>` at :3181 where the non-greedy cellRegex stops — which is why the
+ * with FacilityClass + VisualClassId sits in the SECOND inner <tr>, past
+ * the `</tr>` where the non-greedy cellRegex stops — which is why the
  * parser pre-scans, and why the description is read from the cell window too.
  * The `document.all["Cell_" + i]` of the head script is kept in: it must not be
  * mistaken for a cell anchor.
@@ -1381,7 +1379,7 @@ describe('fetchBuildingFacilities', () => {
       '00000024.PGIDirectionFacilities.five', 0,
     );
 
-    // Captured verbatim at doc/Mock_Server_scenarios_captures.md:2992.
+    // Captured verbatim on the live wire.
     expect(fetchedUrl()).toBe(
       'http://158.69.153.134/five/0/visual/voyager/Build/FacilityList.asp?' +
       'Company=Yellow%20Inc.&WorldName=Shamba&Cluster=PGI&Kind=PGIDirectionFacilities' +
@@ -1402,10 +1400,10 @@ describe('fetchBuildingFacilities', () => {
       facilityClass: 'PGIGeneralHeadquarterSTA',
       visualClassId: '602',
       cost: 8000000,
-      // `$8,000K` and `3600 m.` — the two `[INFERRED]` formats of audit §7.3,
-      // established by this capture at :3174-3175.
+      // `$8,000K` and `3600 m.` — two formats that were only `[INFERRED]` until
+      // this capture established them.
       area: 3600,
-      // `infoBlock_0` really is empty in the capture (:3186-3188): this facility
+      // `infoBlock_0` really is empty in the capture: this facility
       // has no Desc, so an empty description is the truth here, not a miss.
       description: '',
       zoneRequirement: 'Building must be located in blue zone or no zone at all.',

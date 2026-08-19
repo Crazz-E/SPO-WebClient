@@ -428,7 +428,6 @@ describe('RDO Building Operations', () => {
   describe('ObjectId targeting for output/input gate commands', () => {
     // Warehouses have ObjectId !== CurrBlock. Output/input gate commands
     // must target ObjectId (the facility), not CurrBlock (the block).
-    // Ref: voyager-handler-reference.md:1198, building_details_rdo.txt:9-10
 
     const OBJECTID_COMMANDS = [
       'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',

@@ -394,8 +394,8 @@ describe('extractRevenue', () => {
 });
 
 describe('isTrueOrdinal', () => {
-  // doc/rdo-protocol-architecture.md §2.2: Delphi wordbool TRUE is -1, but the
-  // decoder does a VarCast to integer, so ANY non-zero ordinal is true. A test
+  // Delphi wordbool TRUE is -1, but the decoder does a VarCast to integer,
+  // so ANY non-zero ordinal is true. A test
   // that only accepted "-1" would reject a legitimate server-side "#1".
   it.each(['-1', '1', '2', '-42'])('reads %s as true', (value) => {
     expect(isTrueOrdinal(value)).toBe(true);
@@ -412,7 +412,7 @@ describe('isTrueOrdinal', () => {
 
 describe('parseResultCode', () => {
   // P-L9: the seven open-coded copies of this regex disagreed on whether the
-  // code could be negative. `#-1` and `#0` are the boolean encoding (§2.2), so
+  // code could be negative. `#-1` and `#0` are the boolean encoding, so
   // a negative ordinal is ordinary here, not a parse failure.
   it('reads the success code', () => {
     expect(parseResultCode('res="#0"')).toBe(0);
@@ -505,7 +505,7 @@ describe('parseIdOfResponse — fallback paths', () => {
     // punctuation. The caller gets the string `objid=` and hands it to
     // RdoCommand.sel(), which accepts it (non-empty, not '0') and emits
     // `C sel objid= …`. The symmetric case — an empty payload — throws.
-    // Pinning CURRENT behaviour, not endorsing it; see the lot report.
+    // Pinning CURRENT behaviour, not endorsing it.
     expect(parseIdOfResponse('objid=""')).toBe('objid=');
   });
 

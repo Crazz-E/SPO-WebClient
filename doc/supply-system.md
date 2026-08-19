@@ -1,6 +1,9 @@
-# Supply System — RDO Protocol Reference
+# Supply System — Game Mechanics
 
 Documented from Delphi source: `Kernel.pas`, `SupplySheetForm.pas`, `ObjectInspectorHandleViewer.pas`.
+
+> **Wire facts are not here.** What remains below is the **game mechanics**: what a supplier
+> search means, what the sort modes and role bitmask do, and what each value represents.
 
 ## FindSuppliers
 
@@ -33,20 +36,20 @@ FindSuppliers(Output, World, Town, Name, Count, XPos, YPos, SortMode, Roles)
 | 8 | rolCompExport | Company Export |
 | 16 | rolImporter | Importer |
 
-## Supply RDO Methods (SupplySheetForm.pas)
+## Supply operations — what each one means
 
-All methods are **procedures** (void). They operate on the currently selected object via `BindTo`.
+Every member below is a Delphi `procedure`.
 
-| Method | Parameters | Description |
-|--------|-----------|-------------|
-| `RDOSetInputMaxPrice` | `(FluidId: widestring, MaxPrice: integer)` | Set max price willing to pay (0-1000) |
-| `RDOSetInputMinK` | `(FluidId: widestring, MinK: integer)` | Set minimum quality threshold (0-100) |
-| `RDOSetInputOverPrice` | `(FluidId: widestring, SupplierIdx: integer, OverPrice: integer)` | Set per-supplier overpayment (0-150%) |
-| `RDOConnectInput` | `(FluidId: widestring, Suppliers: widestring)` | Connect suppliers. Suppliers = "x1,y1,x2,y2,..." |
-| `RDODisconnectInput` | `(FluidId: widestring, Suppliers: widestring)` | Disconnect suppliers. Same coordinate format. |
-| `RDOSetInputSortMode` | `(FluidId: widestring, SortMode: integer)` | Set sort mode: 0=cost, 1=quality |
+| Operation | Meaning and range |
+|---|---|
+| `RDOSetInputMaxPrice` | the highest price the facility will pay, 0-1000 |
+| `RDOSetInputMinK` | the minimum quality it will accept, 0-100 |
+| `RDOSetInputOverPrice` | per-supplier overpayment, 0-150 % — used to outbid competitors for a scarce input |
+| `RDOConnectInput` | attach suppliers. The supplier list is a flat coordinate string `"x1,y1,x2,y2,..."` |
+| `RDODisconnectInput` | detach suppliers, same coordinate format |
+| `RDOSetInputSortMode` | which criterion orders the supplier list: 0 = cost, 1 = quality |
 
-## Supply Properties (per-gate, after SetPath)
+## Supply values (per-gate, after `SetPath`) — what they mean
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -59,7 +62,7 @@ All methods are **procedures** (void). They operate on the currently selected ob
 | `SortMode` | string | Sort mode: 0=cost, 1=quality |
 | `QPSorted` | string | Whether Q/P sorted ("Yes"/"No") |
 
-## Connection Properties (per-connection, indexed)
+## Connection values (per-connection, indexed) — what they mean
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -74,9 +77,14 @@ All methods are **procedures** (void). They operate on the currently selected ob
 | `cnxXPos{i}` | integer | X coordinate of connected facility |
 | `cnxYPos{i}` | integer | Y coordinate of connected facility |
 
-## Server Handler Location
+## Where these are emitted
 
-All supply RDO commands are handled in `spo_session.ts:6056-6167`. The `additionalParams` object carries:
+`src/server/session/building-property-handler.ts` — the `additionalParams` object carries:
+
 - `fluidId` — the meta fluid identifier
-- `connectionList` — "x1,y1,x2,y2,..." for connect/disconnect
-- `index` — supplier index for RDOSetInputOverPrice
+- `connectionList` — `"x1,y1,x2,y2,..."` for connect and disconnect
+- `index` — the supplier index, for `RDOSetInputOverPrice`
+
+`RDOConnectInput` is one of only two members this path sends **synchronously**, because Delphi
+recalculates trade routes on connect and that takes 5-30 s. Waiting is not what picks the
+separator.

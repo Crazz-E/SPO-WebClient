@@ -20,46 +20,71 @@ not. Treat RDO work as the highest-stakes work in the repo.
 - Modify without discussion: `src/shared/rdo-types.ts`, `src/server/rdo.ts`,
   `src/__fixtures__/*`, `jest.config.js` (thresholds only go UP)
 - Load screenshots into the main context during debug/E2E — delegate to a sub-agent
-- Add a UI element without wiring its action — no dead buttons (`code-guardian` §E)
-- Use `"^"` (VariantId) without a RID — **crashes the shared Delphi server**.
-  Fire-and-forget MUST use `"*"` (VoidId). Ref: `RDOQueryServer.pas:419-424` + live capture.
-- Emit a frame whose **argument count differs from the member's Pascal declaration**, or
-  whose separator does not match its kind. Both guards are live-proven on the shared server:
+- Add a UI element without wiring its action — no dead buttons
+- Emit a frame whose **separator does not match the member's Pascal kind**, or whose **argument
+  count differs from its declaration**. Three failure modes, all mechanical:
 
-  | form | consequence | proven |
-  |------|-------------|--------|
-  | `"^"` on a **procedure** with 2 register args | result pointer pushed, never popped → **freeze** | 2026-08-14, `SayThis` |
-  | `"*"` on a **function** | no result pointer passed, the function writes one anyway → **arbitrary memory write**; the IS then answers `error 1` to every query, on every connection — **for over 3 h, the process still alive and still refusing everything** | 2026-08-18, `GetUserList` |
+  | form | mechanism | consequence |
+  |------|-----------|-------------|
+  | `"^"` **without a RID** | reply built with no destination | **crash** (`RDOQueryServer.pas:419-424`) |
+  | `"^"` on a **procedure**, ≥ 2 register args | result pointer pushed, never popped | **freeze** |
+  | `"*"` on a **function** | no result pointer passed, the function writes one anyway through the register its ABI reserves | **arbitrary memory write**; the server then refuses every query on every connection, still looking alive, and does **not** recover on its own |
 
-  **There is therefore no safe frame for a member whose declaration nobody has.** Its kind
-  comes from the Pascal (`extract-rdo-arity.js`), never from a probe.
+  Arity follows the same register file: `ParamCount` comes from the **received** variant array
+  (`RDOObjectServer.pas:218`), args land `EDX` → `ECX` → stack (`:266-277`). Under-emit and the
+  callee reads a slot the dispatcher never set — a garbage pointer for a `widestring`. Over-emit
+  past two register args and it leaves words a `register` callee never pops — the freeze again.
 
-**`sendRdoRequest()` + `"*"` is a SAFETY guard, not a convention** — reclassified 2026-08-18.
-It is wire-legal and capture-proven on a `procedure`, which is why `VOID_MEMBERS` exempts
-those and only those, each with its declaration cited. `assertNotVoidPush` takes **no opt-in**:
-one existed for a few hours for the certification sweep, and it is what let the 2026-08-18
-frame out. Full matrix: [rdo-protocol-architecture.md §8.5](doc/rdo-protocol-architecture.md).
+  **There is therefore no safe frame for a member whose declaration nobody has.** Kind *and*
+  arity come from the Pascal in `../SPO-Original`, never from probing the live server.
+
+  Corollary: **a `function` can never be fire-and-forget.** It needs `"^"` with a rid, i.e.
+  `sendRdoRequest`. Fire-and-forget (`writeRdoFrame`, `"*"`, no rid) is for `procedure`s only.
+
+**`assertNotVoidPush` is a SAFETY guard, not a convention**, and takes **no opt-in** — the one
+that briefly existed is what let the fatal frame out. `VOID_MEMBERS` exempts proven `procedure`s
+only, each with its declaration cited (`src/server/session/rdo-request-guards.ts`).
+⚠ **The guard runs only inside `sendRdoRequest`.** The ~25 direct `writeRdoFrame()` call sites
+bypass it; there the Pascal lookup is the *only* check, and `KNOWN_RDO_COMMANDS`
+(`building-property-handler.ts`) is a second whitelist that cites no declarations.
 
 ## RDO work — mandatory sequence
+
+> **There is no written reference for the wire protocol itself.** The authorities are the Delphi
+> source and the guards in the code. Do not reconstruct rules from memory, and do not probe the
+> live server.
 
 Before writing or modifying **any** RDO code (new calls, changed calls, push handlers,
 anything touching `sendRdoRequest()` or `RdoCommand`):
 
-1. Invoke the **`rdo-conformity`** skill — pre-flight checklist, verb choice, separator matrix
-2. Read [rdo-protocol-architecture.md](doc/rdo-protocol-architecture.md) — evidence hierarchy §0,
-   wire framing, dispatch, push filtering
-3. Sessions, timers, timeouts or reconnection? Also
-   [rdo-session-lifecycle.md](doc/rdo-session-lifecycle.md)
-4. Verify against the Delphi source with **`delphi-archaeologist`**
+1. Read the member's Pascal **declaration** in `../SPO-Original` with **`delphi-archaeologist`** —
+   its **kind** decides the separator, its **parameter list** decides the argument count. Read the
+   server-side declaration, not a client call site: late-bound client calls have already caused a
+   member to be misclassified as a `function`, which is the mistake that froze production.
+2. Check it against the guards in `src/server/session/rdo-request-guards.ts` (`VOID_MEMBERS`,
+   `assertNotVoidPush`) — remembering they do not cover the `writeRdoFrame` path
+3. Choose the **verb** the reference client used, not the one the declaration suggests. `get` on a
+   0-arg `function` is correct and is what Voyager emits (`GetProperty` falls through to
+   `CallMethod`, `RDOObjectServer.pas:112-116`); the conformity bug is inventing `call` frames the
+   client never produced. `set` has **no** fallthrough — a non-existent property returns
+   `errUnexistentProperty` (`:176`).
+4. Sessions, timers, timeouts or reconnection? Use the **`rdo-network-resilience`** skill
+5. Build the frame with `RdoValue`/`RdoCommand` — never a hand-written string
 
-**On conflict, the live captures win** ([Mock_Server_scenarios_captures.md](doc/Mock_Server_scenarios_captures.md)).
-Document *why* the captured form works, then follow it — never the reverse.
+**On conflict, a form the reference client demonstrably emitted wins over what the Delphi
+declaration suggests.** Explain *why* the observed form works, then follow it — never silently
+"fix" a working call to match the source. Live-observed forms are cited in the code comments.
 
 ## Legacy Delphi source
 
-`../SPO-Original` — sibling of this repo, ~2383 files, Delphi 5. **Read-only historical
-artifact.** Index: [spo-original-reference.md](doc/spo-original-reference.md).
+`../SPO-Original` — sibling of this repo, Delphi 5. **Read-only historical artifact.**
 Every claim from it cites `File.pas:Line`, or is marked `[INFERRED]` / `[UNKNOWN]`.
+
+[spo-original-reference.md](doc/spo-original-reference.md) indexes it, but ⚠ **it is
+hand-maintained and has misclassified members before** — it once listed a `procedure` as a
+`function` because it cited a late-bound *client* call site instead of the server declaration.
+For a member's kind or arity, open the `.pas` and read the declaration; the index is a finding
+aid, not an authority.
 
 ## Directory-scoped memory
 
@@ -101,7 +126,6 @@ npm run typecheck    # both tsconfigs
 npm test             # full Jest suite
 npm run test:coverage
 npm run test:changed # --onlyChanged --bail
-npm run conformance -- --help   # RDO conformance suite (doc/rdo-conformance-suite.md §8 runbook)
 ```
 
 ## Automation (`.claude/hooks/`)
@@ -112,11 +136,7 @@ npm run conformance -- --help   # RDO conformance suite (doc/rdo-conformance-sui
 | `typecheck-guard.sh` | PostToolUse (Edit\|Write) | Flags the tree dirty on `.ts`/`.tsx` writes — no work, ~0 ms |
 | `sanctuarize.sh` | Stop | Runs `npm run typecheck` once per turn if dirty; blocks the turn on failure |
 
-The RDO protocol check is **not** a Claude Code hook — it is the native `.git/hooks/pre-push`,
-which fires whatever tool does the push. See **Git**.
-
-`npm test` and `npm run build` stay manual — run them before declaring a session complete
-(`code-guardian` §F).
+`npm test` and `npm run build` stay manual — run them before declaring a session complete.
 
 ## Testing
 
@@ -130,7 +150,7 @@ higher per directory). Thresholds only go UP. Details: **`spo-testing`** skill.
 Seven custom RDO matchers: `toContainRdoCommand`, `toMatchRdoFormat`, `toMatchRdoCallFormat`,
 `toMatchRdoSetFormat`, `toHaveRdoTypePrefix`, `toMatchRdoResponse`, `toPassStrictRdoValidation`.
 
-## Skills — 24 installed (11 project, 13 community)
+## Skills — 21 installed (8 project, 13 community)
 
 Inventory: [manifest.json](.claude/skills/manifest.json). Regenerate after adding or
 removing one:
@@ -144,17 +164,14 @@ node .claude/generate-skills-manifest.js --check  # CI: fail if stale
 
 | Skill | For |
 |-------|-----|
-| `rdo-conformity` | Any RDO work — checklist, verb choice, separator matrix, evidence hierarchy |
 | `delphi-archaeologist` | Reverse-engineering `../SPO-Original`, tracing RDO handlers |
 | `spo-testing` | Tests, coverage, fixtures, mock server, RDO matchers |
-| `starpeace-server-logs` | Reading the Delphi server logs — UTC trap, size rule, freeze vs corruption, incident method |
 | `dependencies` | Vulnerability audit, licences, package updates |
 | `e2e-test` | Live Playwright E2E (user-invoked only) |
 
-**Auto-load only** (not slash-invokable): `code-guardian` (any `src/` file — 5 crash
-categories, coverage ratchet, protected files), `rdo-network-resilience` (reconnect,
-timeouts, ServerBusy), `web-games` (Canvas 2D renderer, frame budget), `zustand-store-ts`
-(stores, selector stability), `mobile-ux-optimizer` (MobileShell/BottomNav/BottomSheet).
+**Auto-load only** (not slash-invokable): `rdo-network-resilience` (reconnect, timeouts,
+ServerBusy), `web-games` (Canvas 2D renderer, frame budget), `zustand-store-ts` (stores,
+selector stability), `mobile-ux-optimizer` (MobileShell/BottomNav/BottomSheet).
 
 **Community (13):** canvas-api, claude-md-improver, css-modules-vite, debugging,
 docs-codebase, git-workflow, pwa-expert, react-best-practices, reviewing-code,
@@ -164,7 +181,6 @@ security-auditor, typescript, web-accessibility, web-performance.
 
 | Agent | Model | Use for |
 |-------|-------|---------|
-| `rdo-conformity-auditor` | Opus | Auditing wire conformity across captures + Delphi + our code. Read-only. |
 | `security-reviewer` | Opus | WebSocket auth, RDO parsing, session management, OWASP. Read-only. |
 | `performance-analyzer` | Opus | Renderer bottlenecks, chunk caching, frame budget. Read-only. |
 
@@ -201,28 +217,10 @@ TypeScript strict. camelCase vars/methods, PascalCase classes/interfaces. `unkno
 blocks + `toErrorMessage(err)` from `@/shared/error-utils`. JSDoc for public API only.
 Small, focused changes.
 
-## Git — the pre-push protocol check (developer rule, 2026-08-18)
+## Git
 
-**A native `pre-push` hook replays the last recording against its baseline before every push.**
-Offline, deterministic, ~40 s, no server and no credentials. It is installed by
-
-```bash
-npm run hooks:install     # writes .git/hooks/pre-push; .git/ is not versioned, so run it once per clone
-```
-
-Source of truth: [scripts/install-git-hooks.js](scripts/install-git-hooks.js). Bypass deliberately
-for a work-in-progress push with `git push --no-verify`.
-
-Two consequences, both deliberate:
-
-- **Commits are not gated.** They are cheap and frequent; the push is the boundary that reaches
-  GitHub. A native hook also fires for VS Code and plain terminals, which the earlier `PreToolUse`
-  gate could not see.
-- **The live run is NOT on the commit path.** It tests the *server*, not our code, so it belongs
-  before a deploy. Never run it just to satisfy a push.
-
-When RDO code changes: run the tests, get a perfect score, and refuse the commit on any incident.
-Runbook: [doc/rdo-conformance-suite.md](doc/rdo-conformance-suite.md) §8, §11.
+**Nothing gates a commit or a push.** Run `npm test` and `npm run typecheck` yourself before
+pushing RDO changes.
 
 Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description.
 Commits: `type: short summary` — `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`.

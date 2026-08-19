@@ -836,7 +836,7 @@ describe('RdoProtocol.parse — responses that carry no QueryId', () => {
 
 describe('RdoProtocol.parse — call arguments', () => {
   it('yields an empty argument list for a bare fire-and-forget call', () => {
-    // `ClientAware` takes no parameter [capture :1017]; args must be [] and not
+    // `ClientAware` takes no parameter (live capture); args must be [] and not
     // undefined, so a consumer can iterate without a guard.
     const packet = RdoProtocol.parse('C sel 8161308 call ClientAware "*"');
 
@@ -856,8 +856,9 @@ describe('RdoProtocol.parse — call arguments', () => {
 describe('RdoProtocol.format — injection guards on the unquoted positions', () => {
   // Every one of these values is spliced into the frame unquoted, at a position
   // the `repeat … until QueryTerm` loop of ExecQuery re-iterates
-  // (RDOQueryServer.pas:133-160). handleRdoDirect relays targetId, action and
-  // separator verbatim from the browser, so none of these is hypothetical.
+  // (RDOQueryServer.pas:133-160). An unvalidated value there becomes a second
+  // sub-command the server executes, so format() is the chokepoint that must
+  // refuse it — whatever the call site.
   it('refuses a target id that is not a decimal object id', () => {
     expect(() => RdoProtocol.format({
       raw: '', type: 'REQUEST', verb: RdoVerb.SEL, targetId: '42 call Evil "*" "',

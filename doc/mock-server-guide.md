@@ -13,7 +13,7 @@ Browser ──WS/JSON──> Gateway ──RDO/TCP──> Game Server
 
 It is used exclusively for **unit testing** — verifying that client code properly formats requests, parses responses, and handles edge cases. It is NOT a live test server.
 
-Each scenario contains captured real-world exchanges from the 9 implemented game interactions (out of 14 originally captured in `doc/Mock_Server_scenarios_captures.md`).
+Each scenario contains captured real-world exchanges from the 9 implemented game interactions.
 
 ## Architecture
 
@@ -29,7 +29,6 @@ src/mock-server/
 ├── capture-store.ts                  # Scenario storage/lookup
 ├── replay-engine.ts                  # WS request matching + wsRequestId rewriting
 ├── mock-ws-client.ts                 # High-level test facade
-├── capture-importer.ts               # .capture.txt parser
 ├── test-helpers.ts                   # createMockEnvironment(), quickScenario()
 └── scenarios/
     ├── scenario-variables.ts         # Variable system + defaults
@@ -414,50 +413,6 @@ export function createMyScenario(
 
   return { /* ws, rdo, http */ };
 }
-```
-
-## Capture Text Format (.capture.txt)
-
-> **Two complementary capture routes:** this section covers hand-authored `.capture.txt` files
-> (`capture-importer.ts`). The OTHER route — converting a **live gateway wire log** into a mock
-> scenario (`npm run capture:convert`, output in `src/mock-server/scenarios/captured/`) — is
-> documented in [E2E-TESTING.md § Capture Pipeline](E2E-TESTING.md).
-
-The `capture-importer.ts` module can parse structured `.capture.txt` files:
-
-```
-=== SCENARIO: My Scenario Name ===
-Description: What this scenario captures
-Server: Shamba
-Date: 2026-02-18
-
---- WS CLIENT -> SERVER ---
-{"type":"REQ_MY_ACTION","wsRequestId":"001","param":"value"}
-
---- WS SERVER -> CLIENT (response to 001) ---
-{"type":"RESP_MY_ACTION","wsRequestId":"001","success":true}
-
---- WS SERVER -> CLIENT (event, no request) ---
-{"type":"EVENT_UPDATE","data":"pushed from server"}
-
---- DELAY 500ms ---
-
---- HTTP GET /five/0/visual/voyager/page.asp ---
-RESPONSE 200 text/html
-<html><body>Content here</body></html>
-
---- NOTE: This exchange only happens during initial login ---
-
-=== END SCENARIO ===
-```
-
-Import in code:
-
-```typescript
-import { importCaptureTxt } from '@/mock-server';
-
-const text = fs.readFileSync('my-capture.capture.txt', 'utf-8');
-const { scenario, httpResponses } = importCaptureTxt(text);
 ```
 
 ## Testing Checklist

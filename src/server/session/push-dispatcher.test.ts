@@ -8,9 +8,8 @@
  * the "never build an RDO string yourself" rule of the mission (§6) is about
  * EXPECTED values on the way OUT.
  *
- * Every packet shape is taken from a live capture where one exists
- * (`src/mock-server/scenarios/captured/*.scenario.ts`), and each `describe`
- * cites the Delphi declaration it mirrors — `TISEvents`,
+ * Every packet shape is taken from a live capture where one exists, and each
+ * `describe` cites the Delphi declaration it mirrors — `TISEvents`,
  * `Voyager/URLHandlers/ServerCnxHandler.pas:469-505`.
  *
  * The pattern worth knowing before reading: a member whose guard carries an
@@ -31,9 +30,9 @@ import type { RdoPacket } from '../../shared/types';
 // ── Incoming frames ─────────────────────────────────────────────────────────
 
 /**
- * The InterfaceServer events proxy id the server pushes to. Value taken from
- * `panels-tour-captured.scenario.ts:525` so the frames below read exactly like
- * the ones the live server sent.
+ * The InterfaceServer events proxy id the server pushes to. Value taken from a
+ * live capture so the frames below read exactly like the ones the live server
+ * sent.
  */
 const PUSH_TARGET = '41003058';
 
@@ -81,7 +80,7 @@ function makeInitClientCtx(resolver: (() => void) | null = jest.fn()) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('InitClient', () => {
-  // Live capture: road-build-rejected-captured.scenario.ts:315
+  // Live capture:
   //   C sel 39827727 call InitClient "*" "@167177","%100000000","#0","#272762984"
   const CAPTURED_ARGS = ['@167177', '%100000000', '#0', '#272762984'];
 
@@ -207,8 +206,8 @@ describe('InitClient', () => {
   });
 
   it('does not swallow other pushes that arrive inside the login window', () => {
-    // Chat traffic starts before InitClient does — capture
-    // panels-tour-captured.scenario.ts:1115 shows a ChatMsg in that window.
+    // Chat traffic starts before InitClient does — a live capture shows a
+    // ChatMsg in that window.
     const fake = makePushCtx({ getWaitingForInitClient: jest.fn(() => true) });
 
     dispatchPush(fake.ctx, WORLD_SOCKET, incoming('ChatMsg', ['%SYSTEM', '%innos has entered Planitia']));
@@ -309,7 +308,7 @@ describe('NewMail', () => {
 
 describe('ChatMsg', () => {
   it('emits sender and text, defaulting the channel to Lobby', () => {
-    // Live capture: panels-tour-captured.scenario.ts:1115
+    // Packet shape taken from a live capture.
     const fake = makePushCtx();
 
     dispatchPush(fake.ctx, WORLD_SOCKET, incoming('ChatMsg', ['%SYSTEM', '%innos has entered Planitia']));
@@ -494,7 +493,7 @@ describe('NotifyChannelChange', () => {
 
 describe('NotifyUserListChange', () => {
   it('parses the three-field form a join sends', () => {
-    // Live capture: panels-tour-captured.scenario.ts:1097
+    // Live capture:
     //   NotifyUserListChange "*" "%innos/8388608/0","#0"
     // AccDesc 8388608 = 0x00800000 → 0 nobility points, modifier bit 0x80 (VETERAN).
     const fake = makePushCtx();
@@ -516,7 +515,7 @@ describe('NotifyUserListChange', () => {
   });
 
   it('parses the bare-name form a leave sends', () => {
-    // Live capture: road-build-rejected-captured.scenario.ts:1392
+    // Live capture:
     //   NotifyUserListChange "*" "%Mayor of Podan","#1"
     const fake = makePushCtx();
 
@@ -575,7 +574,7 @@ describe('NotifyUserListChange', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('RefreshTycoon', () => {
-  // Live capture: panels-tour-captured.scenario.ts:932
+  // Live capture:
   //   RefreshTycoon "*" "%100000000","%0","#18","#0","#70"
   const CAPTURED_ARGS = ['%100000000', '%0', '#18', '#0', '#70'];
 
@@ -698,7 +697,7 @@ describe('EndOfPeriod', () => {
 
 describe('RefreshDate', () => {
   it('stores and forwards the TDateTime double', () => {
-    // Live capture: panels-tour-captured.scenario.ts:1103 — RefreshDate "*" "@167150"
+    // Live capture: RefreshDate "*" "@167150"
     const fake = makePushCtx();
 
     dispatchPush(fake.ctx, WORLD_SOCKET, incoming('RefreshDate', ['@167150']));
@@ -1042,11 +1041,10 @@ describe('any push', () => {
     });
   });
 
-  // Documented gap, not a defect being graved in: report/analyse-ecarts-voyager-2026-08-16.md
-  // §3 asks for unknown members to be JOURNALISED. They are not — they are
-  // forwarded raw and nothing is written to the server log, so a member the
-  // server starts sending goes unnoticed on our side. Nothing is dropped, which
-  // is why this is a gap and not a bug.
+  // Documented gap, not a defect being graved in: unknown members ought to be
+  // JOURNALISED. They are not — they are forwarded raw and nothing is written
+  // to the server log, so a member the server starts sending goes unnoticed on
+  // our side. Nothing is dropped, which is why this is a gap and not a bug.
   it('logs nothing for an unknown member — the gap §3 of the analysis flags', () => {
     const fake = makePushCtx();
 
@@ -1127,8 +1125,7 @@ const TIS_EVENTS: ReadonlyArray<{ member: string; line: number }> = [
  * The list is the documentation and the test is the ratchet: it fails when a NEW
  * member goes unhandled, and it fails again when an exempt member becomes
  * handled without being taken off the list. It does not demand that the existing
- * gaps be closed — they are recorded in
- * report/analyse-ecarts-voyager-2026-08-16.md §3 (family B).
+ * gaps be closed — they are recorded below as family B.
  */
 const PUSH_EXEMPTIONS: ReadonlyArray<{ member: string; reason: string }> = [
   {

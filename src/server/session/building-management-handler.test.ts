@@ -16,8 +16,8 @@
  *   procedure RDOStopUpgrade                      — :1093  → void `"*"`
  *   procedure RDODowngrade                        — :1094  → void `"*"`
  *   property  RDOAcceptCloning : boolean          — :1347  → get/set
- * The `set RDOAcceptCloning="#-1"` frame is reproduced byte for byte in
- * report/audit-impact-serveur-rdo-2026-08-14.md:523.
+ * The `set RDOAcceptCloning="#-1"` frame is reproduced byte for byte from the
+ * live wire.
  *
  * `deleteFacility` already has its M-B regression suite in
  * `building-mutations.test.ts`; only the branches it leaves open are added here.
@@ -40,7 +40,7 @@ import { RdoVerb, RdoAction } from '../../shared/types';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 //
-// §4bis "IDs dynamiques": the ids the fake server hands back are distinct from
+// "IDs dynamiques": the ids the fake server hands back are distinct from
 // one another AND from every argument the tests pass, so a handler that swaps
 // CurrBlock for ObjectId, or hardcodes one, shows up as a wrong `sel`.
 const CURR_BLOCK = '40133601';
@@ -65,7 +65,7 @@ function makeConstructionCtx(cloning = '255'): FakeSessionCtx {
   const fake = makeSessionCtx({ sockets: ['construction'] });
   propsAt(fake).mockResolvedValue([CURR_BLOCK, OBJECT_ID]);
   // A property GET answers with the member name echoed back —
-  // `A40 ServerBusy="#0";` (doc/Mock_Server_scenarios_captures.md:994).
+  // `A40 ServerBusy="#0";` (observed on the live wire).
   fake.respond(() => `RDOAcceptCloning="#${cloning}"`);
   return fake;
 }
@@ -190,7 +190,7 @@ describe('queryTycoonPoliticalRole', () => {
 
     // BUG connu (nouveau, lot 3) — building-management-handler.ts:26-30 accepts
     // only '1' / '-1' / 'true', where the wire rule is "any non-zero ordinal is
-    // true" (rdo-helpers.ts:161 `isTrueOrdinal`, arch doc §2.2). Latent rather
+    // true" (rdo-helpers.ts:161 `isTrueOrdinal`). Latent rather
     // than live: this value comes from the object cache, and
     // TObjectCache.WriteBoolean only ever writes '1' or '0'
     // (Cache/CacheAgent.pas:150-152). Pinned so the divergence is visible if the
@@ -548,7 +548,7 @@ describe('renameFacility', () => {
     expect(focus(fake)).toHaveBeenCalled();
   });
 
-  // §4bis negative case: no id, no frame.
+  // Negative case: no id, no frame.
   it('emits nothing when focusBuilding returns no building id', async () => {
     const fake = makeSessionCtx({ sockets: ['construction'] });
     focus(fake).mockResolvedValue({ buildingId: '', buildingName: '', ownerName: '' });

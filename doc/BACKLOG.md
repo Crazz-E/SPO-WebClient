@@ -15,7 +15,7 @@
 - **Goal:** Implement type-safe handling of RDO protocol values and commands
 - **Implementation:**
   - **Module:** [src/shared/rdo-types.ts](src/shared/rdo-types.ts) - Core type system with RdoValue, RdoParser, RdoCommand classes
-  - **Documentation:** [doc/rdo_typing_system.md](doc/rdo_typing_system.md) - Comprehensive guide with examples and migration patterns
+  - **Documentation:** the RDO typing guide was removed with the rest of the RDO knowledge base (2026-08-19)
   - **RDO Type Prefixes:**
     - `#` (OrdinalId) → Integer values
     - `$` (StringId) → Short string identifiers
@@ -1218,7 +1218,7 @@
   - Cleaner UI: STOP button only shown when relevant
 
 #### Logout Feature
-> ⚠️ **SUPERSEDED (2026-07-02, RDO conformity Tier 2):** the `RDOEndSession`-based logoff described below was WRONG — `RDOEndSession` does not exist on the Interface Server (it is a `TDirectorySession` member only → `error 5`). Current conformant logoff: `ClientNotAware` (fire-and-forget) + `get Logoff` (5 s deadline) on the ClientView, then close the socket. See [rdo-session-lifecycle.md §4.4](rdo-session-lifecycle.md) and `spo_session.ts endSession()`. This entry is kept as historical log only.
+> ⚠️ **SUPERSEDED (2026-07-02, RDO conformity Tier 2):** the `RDOEndSession`-based logoff described below was WRONG — `RDOEndSession` does not exist on the Interface Server (it is a `TDirectorySession` member only → `error 5`). Current conformant logoff: `ClientNotAware` (fire-and-forget) + `get Logoff` (5 s deadline) on the ClientView, then close the socket. See `spo_session.ts endSession()`. This entry is kept as historical log only.
 - **Status:** ✅ COMPLETED (January 2026)
 - **Goal:** Gracefully end RDO session when user logs out, closes browser, or server shuts down
 - **Implementation:**

@@ -3,7 +3,7 @@
  * (rewritten in Tier 4: the previous version tested a parallel mock class
  * that hardcoded RECONNECT_MAX_RETRIES = 3 while production uses 23 — audit P6).
  *
- * Policy under test (doc/rdo-session-lifecycle.md §4.5):
+ * Policy under test:
  * - Reconnect trigger: socket 'close' ONLY, and only if !loggedOff
  * - Two bounded phases: 3 fast (5/10/20s exponential) + 20 slow (15s) = 23 total
  * - ±25% jitter on every backoff delay

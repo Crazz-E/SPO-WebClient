@@ -375,14 +375,14 @@ export class RdoProtocol {
       // Object ids are Delphi pointers rendered as decimal (RDOObjectServer.pas
       // registration). Anything else is a caller-supplied string being spliced
       // into the frame unquoted — `42 call Evil "*" "` would be a second
-      // sub-command. `handleRdoDirect` relays `targetId` straight from the
-      // browser (ws-handlers/misc-handlers.ts:191-197), so this is reachable.
+      // sub-command. This is the chokepoint: every caller-supplied targetId
+      // reaches the wire through here, so the check must live at this level.
       if (packet.verb === RdoVerb.SEL && !/^\d+$/.test(packet.targetId!)) {
         throw new Error(`Invalid RDO target ID: ${packet.targetId} (sel takes a decimal object id)`);
       }
       // CRITICAL FIX: For idof, the targetId MUST be in quotes.
       // The name is a bare quoted string (no type prefix) — `idof "DirectoryServer"`
-      // [capture :8] — so its own quotes must be doubled or it breaks out.
+      // (live capture) — so its own quotes must be doubled or it breaks out.
       if (packet.verb === RdoVerb.IDOF && packet.targetId) {
         parts.push(`"${packet.targetId.replace(/"/g, '""')}"`);
       } else if (packet.targetId) {
@@ -394,9 +394,8 @@ export class RdoProtocol {
     // (§1.3), the very position the `repeat … until QueryTerm` loop of
     // ExecQuery re-iterates (RDOQueryServer.pas:133-160). An unvalidated value
     // is therefore a second sub-command, exactly like member and targetId were.
-    // Reachable: handleRdoDirect relays req.action verbatim from the browser,
-    // and `action?: RdoAction` is a compile-time type only — WS messages are
-    // plain JSON.parse with no schema.
+    // `action?: RdoAction` is a compile-time type only — WS messages arrive as
+    // plain JSON.parse with no schema, so the value must be validated here.
     if (packet.action) {
       if (!RDO_ACTIONS.has(packet.action)) {
         throw new Error(
@@ -454,7 +453,7 @@ export class RdoProtocol {
   /**
    * Format one argument into exactly one RDO literal.
    *
-   * ## Invariant (P-M2, `report/rdo-audit-2026-08-14-annexe-moyennes-basses.md` §1)
+   * ## Invariant (P-M2)
    *
    * **Whatever `val` contains, the returned token is a single balanced RDO
    * literal.** It can never terminate its own quotes early, so it can never

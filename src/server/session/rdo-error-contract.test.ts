@@ -136,9 +136,9 @@ describe('reject mode (the end state)', () => {
 // =============================================================================
 // The flip — `reject-except-stale`, default since 2026-08-16
 //
-// Derived from the Delphi source rather than from traffic
-// (report/pm3-inventaire-codes-erreur.md): the error code follows the VERB
-// SHAPE, because GetProperty / SetProperty / CallMethod have disjoint outputs.
+// Derived from the Delphi source rather than from traffic: the error code
+// follows the VERB SHAPE, because GetProperty / SetProperty / CallMethod have
+// disjoint outputs.
 // =============================================================================
 
 /** RECOVERABLE per classifyRdoError — owned by executeWithRetry. */

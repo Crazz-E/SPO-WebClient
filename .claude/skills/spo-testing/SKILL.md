@@ -76,10 +76,6 @@ mock.addScenario(createAuthScenario());
 expect(mock.match('C 0 idof "DirectoryServer"')).not.toBeNull();
 ```
 
-Scenarios in `src/mock-server/scenarios/captured/` are **generated** by
-`npm run capture:convert` from live gateway wire logs. Never hand-edit them — re-capture
-and re-convert. Use `resolveScenarioVariables(scenario)` before feeding `RdoMock`.
-
 ## Fixtures
 
 `src/__fixtures__/` is a **protected directory** — it holds real server responses. Do not
@@ -104,5 +100,3 @@ npm run typecheck    # auto-enforced by the Stop hook when .ts/.tsx changed
 npm test
 npm run build
 ```
-
-Related: `code-guardian` (crash categories + protected files), `rdo-conformity` (wire rules).

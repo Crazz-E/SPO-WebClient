@@ -1,10 +1,9 @@
 /**
  * Lot L2 — WebSocket frontier allow-lists (P-H3 / P-M2).
  *
- * Two handlers let the browser choose an RDO member name or object id:
+ * One handler lets the browser choose an RDO member name or object id:
  *   - REQ_BUILDING_SET_PROPERTY → `set <propertyName>` / `call <propertyName>`
  *     (building-property-handler.ts:147-174)
- *   - REQ_RDO_DIRECT            → the whole frame body (misc-handlers.ts:191-197)
  *
  * Delphi's `ReadIdent` (RDOUtils.pas:127-145) stops at the first character
  * outside `[A-Za-z0-9_]` and the remainder is re-parsed as sub-commands
@@ -17,7 +16,6 @@ import { describe, it, expect, jest } from '@jest/globals';
 import type { WebSocket } from 'ws';
 import { WsMessageType, SessionPhase, type WsMessage } from '../../../shared/types';
 import { handleBuildingSetProperty } from '../building-handlers';
-import { handleRdoDirect } from '../misc-handlers';
 import type { WsHandlerContext } from '../types';
 
 interface Recorded {
@@ -106,40 +104,3 @@ describe('REQ_BUILDING_SET_PROPERTY — propertyName allow-list', () => {
   });
 });
 
-describe('REQ_RDO_DIRECT — member and targetId allow-list', () => {
-  const base = {
-    type: WsMessageType.REQ_RDO_DIRECT,
-    wsRequestId: 'r1',
-    verb: 'sel',
-    targetId: '8161308',
-    action: 'get',
-    member: 'ServerBusy',
-  };
-
-  it('rejects a member that is not a Delphi identifier', async () => {
-    const r = createCtx();
-    await handleRdoDirect(r.ctx, { ...base, member: 'ServerBusy call Evil' } as unknown as WsMessage);
-
-    expect(r.executeRdo).not.toHaveBeenCalled();
-    expect(lastError(r.sent)?.errorMessage).toContain('Invalid RDO identifier');
-  });
-
-  it('rejects a targetId that is not a decimal object id', async () => {
-    const r = createCtx();
-    await handleRdoDirect(r.ctx, { ...base, targetId: '42 call Evil "*" "' } as unknown as WsMessage);
-
-    expect(r.executeRdo).not.toHaveBeenCalled();
-    expect(lastError(r.sent)?.errorMessage).toContain('Invalid RDO target ID');
-  });
-
-  it('accepts a well-formed direct request', async () => {
-    const r = createCtx();
-    await handleRdoDirect(r.ctx, base as unknown as WsMessage);
-
-    expect(r.executeRdo).toHaveBeenCalledWith('world', expect.objectContaining({
-      targetId: '8161308',
-      member: 'ServerBusy',
-    }));
-    expect(lastError(r.sent)).toBeUndefined();
-  });
-});

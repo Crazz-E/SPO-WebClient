@@ -174,8 +174,8 @@ export async function fetchClusterFacilities(ctx: SessionContext, cluster: strin
  * named `buildTime` (audit B-12). Proof, twice over: the identical expression at
  * `Build/FacilityList.asp:248` is read into `BuildingInfo.area` by
  * `parseBuildingFacilities` below, and the live capture of that twin page renders
- * it `<nobr>3600 m.</nobr>` — metres, next to `$8,000K`
- * (doc/Mock_Server_scenarios_captures.md:3173-3176). The field is `area` now.
+ * it `<nobr>3600 m.</nobr>` — metres, next to `$8,000K`.
+ * The field is `area` now.
  */
 function parseClusterFacilities(ctx: SessionContext, html: string): ClusterFacilityPreview[] {
   const facilities: ClusterFacilityPreview[] = [];
@@ -410,8 +410,8 @@ function cellWindow(html: string, cellIndex: string, span: number): string {
 /**
  * Parse HTML response from FacilityList.asp to extract building information.
  *
- * Reference for every offset below: the live capture of this page
- * (doc/Mock_Server_scenarios_captures.md:3006-3252), which outranks the ASP
+ * Reference for every offset below: the live capture of this page,
+ * which outranks the ASP
  * source, plus `Build/FacilityList.asp:217-345` for the branches the capture
  * does not exercise — it holds a single, AVAILABLE facility.
  */
@@ -477,7 +477,7 @@ function parseBuildingFacilities(ctx: SessionContext, html: string): BuildingInf
     let visualClassId = '';
 
     // PRIMARY: Extract FacilityClass from the info attribute of this Cell_N —
-    // `FacilityList.asp:307`, captured at Mock_Server_scenarios_captures.md:3201.
+    // `FacilityList.asp:307`, confirmed on the live wire.
     const fcMatch = /FacilityClass=([A-Za-z0-9_]+)/i.exec(cellWindow(html, cellIndex, 3000));
     if (fcMatch) {
       facilityClass = fcMatch[1];
@@ -489,8 +489,8 @@ function parseBuildingFacilities(ctx: SessionContext, html: string): BuildingInf
     // hence the only `info=` and the only `CacheClass.Id`, under `if Available`:
     // a locked facility structurally has no kernel class on the page (audit B-15).
     // The icon name is a VISUAL asset name and is provably not the class — the
-    // capture pairs icon `MapPGIHQ1.gif` with class `PGIGeneralHeadquarterSTA`
-    // (:3163 vs :3201). It is kept as an identity for the greyed-out card, which
+    // live capture pairs icon `MapPGIHQ1.gif` with class `PGIGeneralHeadquarterSTA`.
+    // It is kept as an identity for the greyed-out card, which
     // the client cannot click (`BuildMenu.tsx:68`, `:75`), never as something to
     // hand to `NewFacility`. On an AVAILABLE facility a missing `info=` means the
     // page is not the page: guessing there would put a fabricated class on a
@@ -541,7 +541,7 @@ function parseBuildingFacilities(ctx: SessionContext, html: string): BuildingInf
 
     // Extract description — `FacilityList.asp:292`, `<div id=infoBlock_<i>
     // class="description" … display: none>` holding `CacheClass.Desc(LangId)`,
-    // captured at Mock_Server_scenarios_captures.md:3186.
+    // confirmed on the live wire.
     //
     // Two reasons this is anchored on `infoBlock_<i>` and read from the cell
     // WINDOW rather than from `cellContent`:
@@ -646,7 +646,7 @@ export async function placeBuilding(
       // TWorld.RDONewFacility discards the created object into a variable the
       // Delphi source literally names `Useless` (World.pas:3562,3566), so the
       // response only ever carries a result code: `A<rid> res="#0";`
-      // (capture doc/Mock_Server_scenarios_captures.md:3399-3400). The legacy
+      // (observed on the live wire). The legacy
       // client never learns the id either — it repaints the area instead
       // (MapIsoHandler.pas:1022-1047), exactly as our client does.
       // A previous `/sel (\d+)/` match against the RESPONSE lived here: `sel`

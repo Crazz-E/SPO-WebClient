@@ -1,6 +1,6 @@
 /**
  * End-to-end wire-byte tests for P-M2 — sub-command injection through raw
- * arguments. (report/rdo-audit-2026-08-14-annexe-moyennes-basses.md §1, lot L2.)
+ * arguments. (Lot L2.)
  *
  * P-C1 (lot L1) closed the *frame* injection: a code point above 0xFF whose low
  * byte was `"` or `;`. P-M2 is a different, pure-ASCII hole at the same

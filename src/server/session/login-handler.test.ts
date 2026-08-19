@@ -10,12 +10,12 @@
  *
  * The harness here is `makeLoginCtx` — a fake `LoginContext` whose setters write
  * back to the state its getters read, exactly as `StarpeaceSession` does. That
- * is what makes the §4bis question answerable: the ids these tests assert on are
+ * is what makes the question answerable: the ids these tests assert on are
  * the ones the fake server RETURNED, never constants copied into the expectation.
  *
- * Session-lifecycle rules encoded here come from doc/rdo-session-lifecycle.md:
- * §3 (one directory session per batch, `RDOEndSession` fire-and-forget — accepted
- * divergence D1 of §9), §4.1/§4.2 (login order, `EnableEvents` gates every push).
+ * Session-lifecycle rules encoded here: one directory session per batch, with
+ * `RDOEndSession` fire-and-forget (accepted divergence D1), the login order, and
+ * `EnableEvents` gating every push.
  */
 
 jest.mock('node-fetch', () => ({ __esModule: true, default: jest.fn() }));
@@ -115,7 +115,7 @@ async function tickUntil(cond: () => boolean, maxTicks = 200): Promise<void> {
 }
 
 /**
- * `loginWorld` blocks on the InitClient push (§4.1: the server fires it before
+ * `loginWorld` blocks on the InitClient push (the server fires it before
  * answering `RegisterEventsById`). Standing in for the push means calling the
  * resolver the handler installed — which is exactly what `dispatchPush` does.
  */
@@ -154,7 +154,7 @@ describe('checkAuth — the ephemeral directory session', () => {
 
     await checkAuth(fake.ctx, 'SPO_test3', 'test3');
 
-    // §3: one RDOOpenSession…RDOEndSession per batch, never kept open.
+    // One RDOOpenSession…RDOEndSession per batch, never kept open.
     expect(fake.sent[0].packet).toMatchObject({ verb: RdoVerb.IDOF, targetId: 'DirectoryServer' });
     expect(fake.sent.slice(1).map(s => s.packet.member)).toEqual([
       'RDOOpenSession', 'RDOMapSegaUser', 'RDOLogonUser',
@@ -162,7 +162,7 @@ describe('checkAuth — the ephemeral directory session', () => {
     // Every directory frame carries the legacy 20 s deadline (DSProxy.TimeOut,
     // LogonHandlerViewer.pas:341) — not the 60 s default.
     expect(fake.sent.every(s => s.category === TimeoutCategory.DIRECTORY)).toBe(true);
-    // D1 (doc/rdo-session-lifecycle.md §9): RDOEndSession leaves without a RID.
+    // D1: RDOEndSession leaves without a RID.
     expect(fake.frames.directory_auth).toEqual([
       RdoCommand.sel(DIRECTORY_SESSION_ID).call('RDOEndSession').push().build(),
     ]);
@@ -489,7 +489,7 @@ describe('loginWorld', () => {
     await runLoginWorld(fake);
 
     // The server turns around and asks `idof "InterfaceEvents"` from inside
-    // RegisterEventsById (§4.1); an unresolvable name kills the handshake.
+    // RegisterEventsById; an unresolvable name kills the handshake.
     const virtualId = fake.state.knownObjects.get('InterfaceEvents');
     expect(virtualId).toMatch(/^\d+$/);
     const known = fake.hooks.setKnownObject.mock.invocationCallOrder[0];
@@ -666,7 +666,7 @@ describe('loginWorld', () => {
       const settled = loginWorld(fake.ctx, 'SPO_test3', 'test3', WORLD)
         .then(() => null, (err: Error) => err);
 
-      // §4.1: the server fires InitClient synchronously, BEFORE answering
+      // The server fires InitClient synchronously, BEFORE answering
       // RegisterEventsById. A login that never sees it is not a login — the
       // push channel is what the whole session runs on.
       await jest.advanceTimersByTimeAsync(0);
@@ -717,7 +717,7 @@ describe('selectCompany', () => {
     await selectCompany(fake.ctx, '56');
 
     expect(fake.state.currentCompany).toBe(COMPANIES[1]);
-    // §4.2 order: EnableEvents → PickEvent → 3 cookies → ClientAware → PickEvent.
+    // Order: EnableEvents → PickEvent → 3 cookies → ClientAware → PickEvent.
     expect(fake.sent.map(s => s.packet.member)).toEqual([
       'EnableEvents', 'PickEvent', 'GetTycoonCookie', 'GetTycoonCookie', 'GetTycoonCookie', 'PickEvent',
     ]);
@@ -732,7 +732,7 @@ describe('selectCompany', () => {
     expect(fake.sent[2].packet.args).toEqual([`"#${TYCOON_ID}"`, '"%LastY.0"']);
     expect(fake.sent[3].packet.args).toEqual([`"#${TYCOON_ID}"`, '"%LastX.0"']);
     expect(fake.sent[4].packet.args).toEqual([`"#${TYCOON_ID}"`, '"%"']);
-    // ClientAware is fire-and-forget, twice [capture :1017].
+    // ClientAware is fire-and-forget, twice (live capture).
     const clientAware = RdoCommand.sel(CONTEXT_ID).call('ClientAware').push().build();
     expect(fake.frames.world).toEqual([clientAware, clientAware]);
     expect(fake.state.phase).toBe(SessionPhase.WORLD_CONNECTED);
@@ -1102,7 +1102,7 @@ describe('reconnectWorldSocket — the full re-login', () => {
     const register = fake.sent.find(s => s.packet.member === 'RegisterEventsById');
     expect(register?.packet.targetId).toBe(NEW_CONTEXT_ID);
     expect(register?.packet.args).toEqual([`"#${CNNT_ID}"`]);
-    // Same ordering rule as the initial login (§9, world-pool note).
+    // Same ordering rule as the initial login.
     expect(fake.hooks.populateWorldPool).toHaveBeenCalledTimes(1);
   });
 

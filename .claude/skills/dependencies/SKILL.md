@@ -27,8 +27,8 @@ Production deps are few and each carries a specific risk profile — know which 
 | Package | Role | Upgrade risk |
 |---------|------|--------------|
 | `ws` | Gateway WebSocket server | **High** — protocol layer. Frame handling changes break the client bridge. |
-| `cheerio` | Parses server HTML responses | **High** — `spo_session.ts` regex/selector parsing depends on its DOM semantics. Silent data loss risk (code-guardian §C). |
-| `react`, `react-dom` | UI | Medium — check Zustand selector behaviour after major bumps (code-guardian §B). |
+| `cheerio` | Parses server HTML responses | **High** — `spo_session.ts` regex/selector parsing depends on its DOM semantics. Silent data loss risk. |
+| `react`, `react-dom` | UI | Medium — check Zustand selector behaviour after major bumps. |
 | `zustand` | Store | Medium — selector equality semantics changed across majors. |
 | `7zip-min` | CAB asset extraction | Medium — see `doc/CAB-EXTRACTION.md`. |
 | `node-fetch` | HTTP to directory server | Low-medium — ESM/CJS boundary has bitten this package historically. |

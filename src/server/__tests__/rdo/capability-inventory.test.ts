@@ -83,7 +83,7 @@ const rel = (file: string): string => path.relative(SRC, file).replace(/\\/g, '/
 /**
  * `REQ_*` types with no entry in `wsHandlerRegistry`. A type here is declared
  * vocabulary the gateway cannot answer.
- * Recorded in report/analyse-ecarts-voyager-2026-08-16.md §7 (family F-1).
+ * Gap family F-1.
  */
 const UNROUTED: ReadonlyArray<{ type: string; reason: string }> = [
   {
@@ -101,7 +101,7 @@ const UNROUTED: ReadonlyArray<{ type: string; reason: string }> = [
 /**
  * `REQ_*` types no `src/client/` source ever emits. Each has a working server
  * handler: a feature paid for on the server side and one call short.
- * Recorded in report/analyse-ecarts-voyager-2026-08-16.md §7 (family F-2).
+ * Gap family F-2.
  */
 const UNWIRED: ReadonlyArray<{ type: string; reason: string }> = [
   {
@@ -139,11 +139,6 @@ const UNWIRED: ReadonlyArray<{ type: string; reason: string }> = [
   {
     type: 'REQ_MANAGE_CONSTRUCTION',
     reason: 'handleManageConstruction exists; not exposed in the UI.',
-  },
-  {
-    type: 'REQ_RDO_DIRECT',
-    reason: 'Debug tool. Deliberately server-only — the client must not be able to reach ' +
-      'it, so this exemption is permanent.',
   },
 ];
 
@@ -212,8 +207,8 @@ describe('capability inventory — no orphan REQ_* type', () => {
     // Guards the three regexes: a refactor of the enum shape, of the registry
     // literal, or of the client's import style would silently empty a set and
     // make every assertion above vacuous.
-    expect(declaredRequestTypes().length).toBeGreaterThanOrEqual(78);
-    expect(routedRequestTypes().size).toBeGreaterThanOrEqual(76);
+    expect(declaredRequestTypes().length).toBeGreaterThanOrEqual(77);
+    expect(routedRequestTypes().size).toBeGreaterThanOrEqual(75);
     expect(clientEmittedRequestTypes().size).toBeGreaterThanOrEqual(69);
   });
 });
@@ -654,7 +649,7 @@ function ungatedDemands(): string[] {
 
 /**
  * Tab-scoped reads that no template can satisfy.
- * Recorded in report/analyse-ecarts-voyager-2026-08-16.md §2 (A-8).
+ * Gap A-8.
  */
 const UNSATISFIABLE_TAB_DEMANDS: ReadonlyArray<{ fn: string; tab: string; property: string; reason: string }> = [
   {

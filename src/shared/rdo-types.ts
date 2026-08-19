@@ -80,7 +80,7 @@ export function encodeRdoLiteral(prefix: string, value: string): string {
  *
  * This is the *structural* guarantee the framer relies on: a token that matches
  * cannot terminate its own literal early, therefore it cannot append a second
- * sub-command or a second frame (P-M2, `report/rdo-audit-2026-08-14-annexe-moyennes-basses.md` §1).
+ * sub-command or a second frame (P-M2).
  */
 const RDO_LITERAL_PATTERN = /^"[#$^!@%*](?:[^"]|"")*"$/;
 
@@ -500,9 +500,9 @@ export class RdoCommand {
   /**
    * True once `.push()` or `.method()` has stated a separator explicitly.
    * `withRequestId()` then leaves the choice alone — QueryId and separator are
-   * two independent axes (doc/rdo-protocol-architecture.md §8.5), and conflating
-   * them made `QueryId + "*"` — the reference client's form for void members,
-   * `AddLine → A2174 ;` [capture :3542-3543] — impossible to express (P-L4).
+   * two independent axes, and conflating them made `QueryId + "*"` — the
+   * reference client's form for void members, `AddLine → A2174 ;` (live
+   * capture) — impossible to express (P-L4).
    */
   private separatorExplicit = false;
   private rdoArgs: RdoValue[] = [];

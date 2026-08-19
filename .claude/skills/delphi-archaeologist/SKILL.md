@@ -116,10 +116,7 @@ All docs go to `SPO-WebClient/doc/` following existing naming: `kebab-case.md`.
 
 | Existing doc | Relationship |
 |--------------|-------------|
-| `doc/rdo-protocol-architecture.md` | Canonical protocol reference — wire, dispatch, **concurrency model §3.5** (promoted 2026-07-03 from a skill resource); findings about wire behavior land here |
-| `doc/rdo-session-lifecycle.md` | Canonical lifecycle reference — timers, sequences, accepted divergences §9 |
 | `doc/spo-original-reference.md` | Primary RDO member index — new member discoveries go here |
-| `doc/building_details_protocol.md` | Building property protocol — extend with new findings |
 | `doc/facility-tabs-reference.md` | Inspector tab handlers — cross-reference Voyager source |
 | `../SPO-Original/BUILDING_VISUALCLASS_REFERENCE.md` | Visual class catalog (lives in the SPO-Original root, NOT in `doc/`) |
 

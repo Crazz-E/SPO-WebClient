@@ -478,7 +478,6 @@ export class RdoStrictValidator {
                 `Use the correct RdoValue builder: ` +
                 `# → RdoValue.int(), % → RdoValue.string(), @ → RdoValue.double(), ` +
                 `! → RdoValue.float().`,
-              docRef: 'doc/rdo_typing_system.md',
             });
           }
         }

@@ -258,8 +258,6 @@ When documenting RDO methods, check `doc/spo-original-reference.md` first:
 ### Cross-referencing
 
 Link to related documents using relative paths:
-- `[See RDO typing](doc/rdo_typing_system.md)`
-- `[See building protocol](doc/building_details_protocol.md)`
 - `[See facility tabs](doc/facility-tabs-reference.md)`
 
 ### Naming convention

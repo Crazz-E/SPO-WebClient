@@ -24,18 +24,19 @@ add() { OUT="${OUT}$1"$'\n'; }
 
 # --- RDO protocol: the project's critical path -------------------------------
 case "$PROMPT" in
-  *rdo*|*protocol*|*protocole*|*wire*|*rdocommand*|*rdovalue*|*sendrdorequest*)
-    add "RDO WORK DETECTED — mandatory before writing any RDO code:"
-    add "  1. doc/rdo-protocol-architecture.md — evidence hierarchy (§0), wire framing, dispatch, separator matrix (§8.5)"
-    add "  2. doc/rdo_typing_system.md — RdoValue / RdoCommand API"
-    add "  3. Invoke the rdo-conformity skill. Verify against ../SPO-Original via delphi-archaeologist."
-    add "  On conflict, live captures win over Delphi source (doc/Mock_Server_scenarios_captures.md)."
+  *rdo*|*protocol*|*protocole*|*wire*|*rdocommand*|*rdovalue*|*sendrdorequest*|*probe*|*sonde*|*balayage*|*separator*|*separateur*|*séparateur*)
+    add "RDO — the separator must match the member's Pascal kind, and only ../SPO-Original states it."
+    add "  '^' passes a hidden result pointer, '*' passes none. Wrong pairing: freeze on a procedure, arbitrary memory write on a function. Both have hit production."
+    add "  No declaration, no frame. Never probe the live server to find out — that IS the mistake."
+    add "  A 'function' can NEVER be fire-and-forget: it needs '^' WITH a rid, i.e. sendRdoRequest."
+    add "  Guards: VOID_MEMBERS / assertNotVoidPush — but they run ONLY inside sendRdoRequest. The 25 direct writeRdoFrame() sites are unguarded; on that path the Pascal lookup is the only check."
+    add "  Argument count must match the declaration too: under-emit and the callee reads a register the dispatcher never set; over-emit past 2 register args and it never pops them. Build with RdoValue/RdoCommand, never by hand."
     ;;
 esac
 
 case "$PROMPT" in
   *session*|*reconnect*|*reconnexion*|*timeout*|*keepalive*|*keep-alive*|*serverbusy*|*logon*|*login*|*logoff*)
-    add "SESSION / LIFECYCLE — read doc/rdo-session-lifecycle.md (login-logoff sequences, KeepAlive, ServerBusy, reconnection policy, accepted divergences §9). Skill: rdo-network-resilience."
+    add "SESSION / LIFECYCLE — skill: rdo-network-resilience. Verify any sequence change against ../SPO-Original."
     ;;
 esac
 
@@ -64,7 +65,7 @@ esac
 # --- Game domain -------------------------------------------------------------
 case "$PROMPT" in
   *building*|*facility*|*inspector*|*bâtiment*|*batiment*|*usine*)
-    add "BUILDINGS — doc/building_details_protocol.md + doc/facility-tabs-reference.md + doc/voyager-inspector-architecture.md."
+    add "BUILDINGS - doc/facility-tabs-reference.md + doc/voyager-inspector-architecture.md (tabs and UI)."
     ;;
 esac
 
@@ -84,14 +85,8 @@ case "$PROMPT" in
 esac
 
 case "$PROMPT" in
-  *conformance*|*conformité*|*conformite*|*probe*|*sonde*|*baseline*)
-    add "CONFORMANCE SUITE — doc/rdo-conformance-suite.md (usage, suites, risk tiering, replay/live) + src/tools/conformance/ (suites.ts is the catalogue). Never --transport live against the SHARED server for mutations; --allow-variant-on-procedure is never combined with --suite all."
-    ;;
-esac
-
-case "$PROMPT" in
-  *mock*|*capture*|*fixture*)
-    add "MOCK / CAPTURES — src/mock-server/CLAUDE.md (API) + doc/mock-server-guide.md (step-by-step) + doc/Mock_Server_scenarios_captures.md (the 14 live captures). Generated scenarios in scenarios/captured/ are never hand-edited. Captures outrank Delphi source on conflict — see the rdo-conformity skill."
+  *mock*|*fixture*)
+    add "MOCK SERVER — src/mock-server/CLAUDE.md (API) + doc/mock-server-guide.md. Hand-written scenarios only."
     ;;
 esac
 

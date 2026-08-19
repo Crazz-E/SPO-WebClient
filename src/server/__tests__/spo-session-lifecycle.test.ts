@@ -11,10 +11,6 @@
  * hand-written double would simply agree with whatever the code does. The one
  * rule that is never bent: `sendRdoRequest` is never mocked here — it is the
  * subject.
- *
- * Policy references are to doc/rdo-session-lifecycle.md: §2 (timeout and cadence
- * table), §4.3 (steady state), §4.4 (logoff), §4.5 (reconnection), §5 (the
- * anti-pattern table), §7 (cacher KeepAlive).
  */
 
 jest.mock('net', () => ({ Socket: jest.fn() }));
@@ -252,7 +248,7 @@ describe('createSocket', () => {
     socket.emit('close');
     await flush();
 
-    // §4.5: the socket `close` event is the ONLY reconnect trigger, and a failed
+    // The socket `close` event is the ONLY reconnect trigger, and a failed
     // attempt is logged rather than left as an unhandled rejection.
     expect(reconnect).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalledWith('[Session] World auto-reconnect failed:', 'still down');
@@ -267,7 +263,7 @@ describe('createSocket', () => {
     socket.emit('close');
     await flush();
 
-    // §7: the cacher session is per-inspector, and the map socket is re-created
+    // The cacher session is per-inspector, and the map socket is re-created
     // on the next request — reconnecting it eagerly buys nothing.
     expect(reconnect).not.toHaveBeenCalled();
     expect(internals(harness).keepAliveInterval).toBeNull();
@@ -387,7 +383,7 @@ describe('service connections', () => {
     await harness.session.connectMailService();
 
     expect(harness.session.mailServerId).toBe(MAIL_SERVER_ID);
-    // §5: CheckNewMail casts the ServerId to a POINTER (MailServer.pas:543);
+    // CheckNewMail casts the ServerId to a POINTER (MailServer.pas:543);
     // "#0" AVs the server and makes the call always answer -1.
     expect(harness.session.mailIntServerId).toBe('51002449');
     await harness.session.connectMailService();
@@ -479,7 +475,7 @@ describe('cacher object pool', () => {
     const create = commands.find(c => c.includes('CreateObject'));
     const setObject = commands.find(c => c.includes('SetObject'));
     const read = commands.find(c => c.includes('GetPropertyList'));
-    // §7: every data call targets the TEMP object the server handed back.
+    // Every data call targets the TEMP object the server handed back.
     expect(create).toContain(`sel ${CACHER_ID} call CreateObject`);
     expect(setObject).toContain(`sel ${TEMP_OBJECT_ID} call SetObject "^" "#706","#436"`);
     expect(read).toContain(`sel ${TEMP_OBJECT_ID} call GetPropertyList`);
@@ -1105,7 +1101,7 @@ describe('sendRdoRequest — ServerBusy buffering', () => {
     const settled = pending.then(() => null, (err: Error) => err);
 
     // The deadline covers the WAIT, not just the round trip: after four failed
-    // polls nothing else can ever clear the busy flag (§4.3, stop@4).
+    // polls nothing else can ever clear the busy flag (stop@4).
     await jest.advanceTimersByTimeAsync(60_001);
 
     await expect(settled).resolves.toMatchObject({
@@ -1596,7 +1592,7 @@ describe('background timers', () => {
 
     await jest.advanceTimersByTimeAsync(120_000);
 
-    // §4.3: a query on a half-ready socket is worse than a missed sample.
+    // A query on a half-ready socket is worse than a missed sample.
     expect(socket.getCommandsByMember('ServerBusy')).toHaveLength(0);
   });
 
@@ -1637,7 +1633,7 @@ describe('background timers', () => {
     harness.session.deleteSocket('map');
     await jest.advanceTimersByTimeAsync(60_100);
 
-    // §7: no temp object and no socket → nothing to keep alive, timer stops.
+    // No temp object and no socket → nothing to keep alive, timer stops.
     expect(internals(harness).keepAliveInterval).toBeNull();
     releaseInspector(ctx);
   });
@@ -1831,7 +1827,7 @@ describe('attemptWorldReconnect — housekeeping', () => {
     const reconnectHandler = jest
       .spyOn(await import('../session/login-handler'), 'reconnectWorldSocket')
       .mockResolvedValue(undefined);
-    // §4.5 / divergence D3: 3 fast attempts (5/10/20 s), then 20 slow ones at 15 s.
+    // Divergence D3: 3 fast attempts (5/10/20 s), then 20 slow ones at 15 s.
     internals(harness).worldReconnectAttempts = 4;
     internals(harness).worldReconnectLastAttempt = 0;
 
@@ -1935,7 +1931,7 @@ describe('endSession', () => {
     await harness.session.endSession();
 
     // A buffered Logoff would hang the logout; the socket close alone triggers
-    // the authoritative server-side teardown (§4.4).
+    // the authoritative server-side teardown.
     const writes = socket.getCapturedWrites().join('\n');
     expect(writes).toContain('call ClientNotAware "*"');
     expect(writes).not.toContain('get Logoff');

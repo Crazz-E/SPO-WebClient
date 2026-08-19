@@ -23,14 +23,14 @@
  * a text payload. Node's `Buffer.from(s, 'latin1')` is not — it truncates
  * `charCode & 0xFF` with **no replacement character**, so `U+0122 Ģ` becomes
  * `0x22 '"'` and `U+013B Ļ` becomes `0x3B ';'`, *after* RDO escaping has already
- * run. See `report/rdo-audit-2026-08-14.md` §2 (P-C1).
+ * run. That is the P-C1 injection defect.
  *
  * ## Extension point — the 0x80–0x9F band (P-H2 / question U3 / lot L11)
  *
  * ISO-8859-1 and Windows-1252 agree on 0x00–0x7F and 0xA0–0xFF; they differ
  * **only** on 0x80–0x9F, where CP1252 carries `€ … ' ' " " – — ™ œ` and
  * ISO-8859-1 carries C1 control codes. Which one the production server actually
- * uses is open question **U3** (`report/rdo-audit-2026-08-14.md` §6) and is
+ * uses is open question **U3**, and is
  * settled by a live probe, not by reading source.
  *
  * That band is therefore **injectable data**, not hard-coded branches:
@@ -125,7 +125,7 @@ export const CP1252_C1_BAND: C1BandTable = [
  * 185 server log files (575 MB) and found **zero** bytes in 0x80–0x9F, but also
  * almost no human non-ASCII text at all: three bytes in the whole corpus, and
  * the retained chat log for 2026-08-14 is 43 bytes long. Absence proves nothing
- * on a corpus that thin (`report/campaign/U3b-moisson-logs-2026-08-15.md`).
+ * on a corpus that thin.
  *
  * The argument that decided it: the servers are Delphi 5 Win32 processes, and
  * `WideStrToStr` goes through `WideCharToMultiByte` on the process ANSI code

@@ -1,7 +1,7 @@
 /**
  * Tier-4 conformity validation — drives the REAL StarpeaceSession.
  *
- * Covers the audit fixes (report/rdo-webclient-conformity-audit.md):
+ * Covers the conformity audit fixes:
  *  V1  ServerBusy poll must read wordbool "#-1" as busy (any non-zero ordinal)
  *  V2  A throwing push handler must not kill frame processing / the gateway
  *  V4  A recoverable RDO error must NEVER trigger a reconnect (close-only policy)

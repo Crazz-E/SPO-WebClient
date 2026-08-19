@@ -112,8 +112,6 @@ Keyboard (canvas focused): `+`/`-` zoom, `q`/`e` rotate, `m` minimap, `d` debug 
 
 ```bash
 npm run dev          # build + start on :8080 (first boot ~2 min if cache cold)
-# capture mode (wire log → mock scenarios, see below):
-LOG_LEVEL=debug LOG_JSON=true LOG_FILE=logs/capture-<flow>.ndjson CACHE_SKIP_SYNC=true npm run dev
 # readiness probe:
 curl -s http://localhost:8080/api/startup-status      # → phase:"ready"
 # stop (PowerShell):
@@ -122,18 +120,6 @@ Get-Process -Id (Get-NetTCPConnection -LocalPort 8080 -State Listen).OwningProce
 
 Always stop the server after a session. Never leave E2E traffic running unattended against
 the live servers (policy SEC-N, [production-security-policy.md](production-security-policy.md)).
-
-## Capture Pipeline (wire log → mock scenario)
-
-Any flow driven through this procedure can be converted into a replayable mock scenario:
-
-1. Start the server in capture mode (above) — every RDO frame is logged (`RDO>>`/`RDO>*`/`RDO<<`), passwords redacted.
-2. Drive **one flow per browser session** (a page reload starts a new gateway session = new `sid`).
-3. Find the session: `grep -o '"sid":"[^"]*"' logs/capture-<flow>.ndjson | sort -u`
-4. Convert: `npm run capture:convert -- logs/capture-<flow>.ndjson --name <flow> --sid <sid> --var username=SPO_test3`
-   (multi-word `--description`/`--source` args: call `node dist/tools/convert-rdo-capture.js` directly from Git Bash — npm-through-cmd mangles quotes).
-5. The scenario lands in `src/mock-server/scenarios/captured/` with a validation test pattern to copy
-   (`login-full-captured.scenario.test.ts`).
 
 ## Screenshot Policy
 

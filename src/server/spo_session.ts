@@ -1552,9 +1552,12 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
   }
 
   /**
-   * Generic escape hatch (REQ_RDO_DIRECT probe harness, debug tooling): the
-   * packet is caller-supplied, so no member-specific category can be inferred.
-   * NORMAL is the legacy in-play deadline and the right default here.
+   * Generic escape hatch for internal callers: the packet is caller-supplied, so
+   * no member-specific category can be inferred. NORMAL is the legacy in-play
+   * deadline and the right default here.
+   *
+   * No longer reachable from the browser — the REQ_RDO_DIRECT passthrough that
+   * used to expose it was removed on 2026-08-19.
    */
   public async executeRdo(serviceName: string, packetData: Partial<RdoPacket>, category: TimeoutCategory = TimeoutCategory.NORMAL): Promise<string> {
     if (!this.sockets.has(serviceName)) {
@@ -1939,7 +1942,7 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
         this.consecutivePollFailures = 0;
         const busyValue = parsePropertyResponseHelper(response.payload!, 'ServerBusy');
         const wasBusy = this.isServerBusy;
-        // Wordbool true arrives as "#-1" on the wire (doc §2.2): any non-zero
+        // Wordbool true arrives as "#-1" on the wire: any non-zero
         // ordinal means busy (audit V1 — "== '1'" misread the canonical "#-1").
         this.isServerBusy = isTrueOrdinal(busyValue);
 
@@ -2000,7 +2003,6 @@ public createSocket(name: string, host: string, port: number): Promise<net.Socke
    * — matches the legacy client's fire-and-forget KeepAlive. sendRdoRequest()
    * is forbidden here by project convention (assertNotVoidPush, one form per
    * intent) — wire-legal but the server would just ack `A<id> ;`.
-   * Ref: doc/rdo-protocol-architecture.md §8.5.
    */
   private startCacherKeepAlive(): void {
     if (this.keepAliveInterval) return;

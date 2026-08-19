@@ -42,8 +42,6 @@ src/
     └── building-details/      # Property templates
 ```
 
-RDO protocol knowledge is canonical in [rdo-protocol-architecture.md](rdo-protocol-architecture.md) (wire/dispatch — includes the doc knowledge map) and [rdo-session-lifecycle.md](rdo-session-lifecycle.md) (sessions/timers) — required reading before touching `spo_session.ts`, `rdo.ts`, or `rdo-types.ts`.
-
 ## API Endpoints
 
 | Endpoint | Purpose |

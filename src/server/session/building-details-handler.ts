@@ -1073,7 +1073,7 @@ async function getWarehouseWareNames(
  * client is strictly sequential per socket and gets its parallelism from a
  * connection POOL; we pipeline up to 3 QueryId-correlated READS on the single
  * cacher socket instead. Wire-legal, bounded, read-only; the cacher server
- * runs a 16-thread pool. Documented in doc/rdo-session-lifecycle.md §9.
+ * runs a 16-thread pool.
  */
 const MAX_CONCURRENT_CONNECTIONS = 3;
 
