@@ -173,7 +173,11 @@ const ProductCard = memo(function ProductCard({
                     title={conn.companyName || undefined}
                   >
                     <td className={styles.productFacilityCell}>
-                      <span className={styles.productFacilityName}>{conn.facilityName}</span>
+                      <span className={styles.productFacilityName}>
+                        {conn.facilityName || (
+                          <span className={styles.unnamedConnection}>no data</span>
+                        )}
+                      </span>
                       {conn.companyName && (
                         <span className={styles.productOwnerDot}> · {conn.companyName}</span>
                       )}

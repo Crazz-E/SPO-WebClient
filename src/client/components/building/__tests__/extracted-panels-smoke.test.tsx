@@ -469,6 +469,23 @@ describe('SuppliesPanel', () => {
     expect(container.textContent).toContain('No suppliers connected');
   });
 
+  it('labels a connection the server counts but cannot name', () => {
+    // The live case: cnxCount says 1, the cached sub-object carries no facility
+    // name, so every column comes back empty. The row must stay and must read as
+    // "no data" rather than as a blank the user mistakes for a rendering bug.
+    const supply = makeSupply({
+      connectionCount: 1,
+      connections: [makeConnection({ facilityName: '', companyName: '' })],
+    });
+    const { container } = renderWithProviders(
+      <SuppliesPanel supplies={[supply]} canEdit={true} buildingX={100} buildingY={200} />,
+    );
+
+    fireEvent.click(container.querySelector('button') as HTMLButtonElement);
+    expect(container.querySelector('table')).toBeTruthy();
+    expect(container.textContent).toContain('no data');
+  });
+
   it('does not claim "No suppliers" when the header counts one', () => {
     // The reported contradiction, pinned: header "1 supplier", body "No
     // suppliers connected". Whatever else is wrong, the panel must not say both.

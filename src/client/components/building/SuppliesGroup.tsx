@@ -273,7 +273,11 @@ const SupplyCard = memo(function SupplyCard({
                     <td>
                       {conn.connected && <span className={styles.supplyConnectedIcon}>&#10003;</span>}
                     </td>
-                    <td>{conn.facilityName}</td>
+                    <td>
+                      {conn.facilityName || (
+                        <span className={styles.unnamedConnection}>no data</span>
+                      )}
+                    </td>
                     <td>{conn.companyName}</td>
                     <td>${conn.price}</td>
                     <td>{conn.overprice}%</td>
