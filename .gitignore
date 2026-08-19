@@ -64,3 +64,6 @@ electron/node_modules/
 .claude/install-new-skills.js
 .claude/scheduled_tasks.lock
 .claude/.typecheck-dirty
+
+# Legacy UI reference screenshots (local only)
+UI_Legacy_screenshots/
