@@ -1,5 +1,423 @@
 [
   {
+    "version": "1.3.0-beta",
+    "date": "2026-08-19",
+    "entries": [
+      {
+        "type": "changed",
+        "text": "unwire and delete the HALT brake (OB-16)"
+      },
+      {
+        "type": "changed",
+        "text": "make TimeoutCategory mandatory at every sendRdoRequest site"
+      },
+      {
+        "type": "changed",
+        "text": "parallelize RDO area reads behind flag, fix pool slot race, dedup focus calls"
+      },
+      {
+        "type": "changed",
+        "text": "remove orphaned code, unused exports, and dead file (fetch-utils.ts)"
+      },
+      {
+        "type": "changed",
+        "text": "reduce building inspector RDO refresh volume to match legacy client"
+      },
+      {
+        "type": "changed",
+        "text": "filter warehouse supplies/products by GateMap server-side"
+      },
+      {
+        "type": "changed",
+        "text": "reuse Delphi temp object for periodic building refreshes"
+      },
+      {
+        "type": "changed",
+        "text": "extract rich detail rendering into shared RichDetails component"
+      },
+      {
+        "type": "added",
+        "text": "flip the errorCode contract, exempting errIllegalObject at first"
+      },
+      {
+        "type": "added",
+        "text": "make the two observation-mode censuses readable"
+      },
+      {
+        "type": "added",
+        "text": "show Town Hall population demographics in the Demographics tab"
+      },
+      {
+        "type": "added",
+        "text": "RDO network resilience — Batch 2 (connection pool, maintenance, degradation)"
+      },
+      {
+        "type": "added",
+        "text": "RDO network resilience — Batch 1 (Delphi parity audit)"
+      },
+      {
+        "type": "added",
+        "text": "auto-reconnect world socket on disconnect (Delphi RenewWorldProxy pattern)"
+      },
+      {
+        "type": "added",
+        "text": "show disconnection error overlay with return-to-home button"
+      },
+      {
+        "type": "added",
+        "text": "add CACHE_SKIP_SYNC dev setting to skip remote sync when cache exists"
+      },
+      {
+        "type": "added",
+        "text": "add session ID, error context ring buffer, and separate error log"
+      },
+      {
+        "type": "added",
+        "text": "keep building inspector open during map interaction"
+      },
+      {
+        "type": "added",
+        "text": "add structured logging with player tracking for multiplayer testing"
+      },
+      {
+        "type": "added",
+        "text": "format currency values with thousands separators ($1,000,000)"
+      },
+      {
+        "type": "added",
+        "text": "merge StatusTicker into StatusOverlay as unified building popover"
+      },
+      {
+        "type": "added",
+        "text": "rich categorized StatusTicker with building-type-specific layouts"
+      },
+      {
+        "type": "added",
+        "text": "extract cache sync/extract into autonomous Docker service"
+      },
+      {
+        "type": "added",
+        "text": "show parsed detailsText and hintsText in StatusOverlay popover"
+      },
+      {
+        "type": "added",
+        "text": "add SPO_FORCE_WORLD env var to auto-skip zone/world selection"
+      },
+      {
+        "type": "added",
+        "text": "type-aware detailsText parser with dedicated mini-parsers per building type"
+      },
+      {
+        "type": "added",
+        "text": "add fullscreen minimap toggle for mobile"
+      },
+      {
+        "type": "added",
+        "text": "tokenize z-index scale, add narrow-desktop breakpoint, and panel mutual exclusion"
+      },
+      {
+        "type": "added",
+        "text": "rewrite detailsText parser with known-key dictionary and add debug logging"
+      },
+      {
+        "type": "added",
+        "text": "parse inline sales format and structured detailsText in building inspector"
+      },
+      {
+        "type": "added",
+        "text": "optimize building inspector layout with 2-col property grid and wider panel"
+      },
+      {
+        "type": "added",
+        "text": "add relative \"last updated\" timestamp to InfoWidget"
+      },
+      {
+        "type": "added",
+        "text": "improve warehouse wares checklist UX for long lists"
+      },
+      {
+        "type": "added",
+        "text": "lazy tab loading for building details — load supplies/products on demand"
+      },
+      {
+        "type": "added",
+        "text": "integrate price slider into product tile, compact product card layout"
+      },
+      {
+        "type": "added",
+        "text": "add warehouse wares checklist aligned with legacy Delphi client"
+      },
+      {
+        "type": "fixed",
+        "text": "transport C — read what the ASP pages actually return"
+      },
+      {
+        "type": "fixed",
+        "text": "route the ServerBusy poll through sendRdoRequest instead of around it"
+      },
+      {
+        "type": "fixed",
+        "text": "bind the world pool to the session, not to socket creation"
+      },
+      {
+        "type": "fixed",
+        "text": "make mutations verifiable — stop reporting success without evidence"
+      },
+      {
+        "type": "fixed",
+        "text": "repair the session lifecycle — zombie reconnect, QueryId 0, server requests"
+      },
+      {
+        "type": "fixed",
+        "text": "stop emitting \"^\" on Delphi procedures — a single frame freezes the server"
+      },
+      {
+        "type": "fixed",
+        "text": "validate every browser-controlled field that reaches the RDO frame"
+      },
+      {
+        "type": "fixed",
+        "text": "close RDO frame injection via encoding, move the wire codec to CP1252"
+      },
+      {
+        "type": "fixed",
+        "text": "RDO session-behavior conformity Tier 4 — audit P0/P1 fixes"
+      },
+      {
+        "type": "fixed",
+        "text": "RDO session-behavior conformity Tier 3 — legacy timeouts, no reconnect-on-timeout, legacy ServerBusy poll"
+      },
+      {
+        "type": "fixed",
+        "text": "RDO session-lifecycle conformity Tier 2 — Logoff, cacher KeepAlive, CheckNewMail"
+      },
+      {
+        "type": "fixed",
+        "text": "RDO wire conformity Tier 1 — Latin-1 writes, int arg typing, Delphi error grammar"
+      },
+      {
+        "type": "fixed",
+        "text": "align SayThis/AddLine/CloseMessage with Delphi synchronous behavior"
+      },
+      {
+        "type": "fixed",
+        "text": "convert 9 void RDO calls from sendRdoRequest(\"*\") to socket.write()"
+      },
+      {
+        "type": "fixed",
+        "text": "fire-and-forget RDO commands must use \"*\" (VoidId), not \"^\" (VariantId)"
+      },
+      {
+        "type": "fixed",
+        "text": "parse '::' separator correctly in product/supply name extraction"
+      },
+      {
+        "type": "fixed",
+        "text": "correct kind values for Connect/Disconnect to All Stores/Factories/Warehouses"
+      },
+      {
+        "type": "fixed",
+        "text": "use RdoValue.int() for all integer CALL args — restores map + building inspector"
+      },
+      {
+        "type": "fixed",
+        "text": "RDO protocol conformity — event re-registration, mutation retry guard, failure counter"
+      },
+      {
+        "type": "fixed",
+        "text": "remove BindTo(IDOF) that corrupted Delphi connection — restores map loading"
+      },
+      {
+        "type": "fixed",
+        "text": "add missing BindTo(contextId) step after Logon — mirrors Delphi client"
+      },
+      {
+        "type": "fixed",
+        "text": "world login stuck in WORLD_CONNECTING after InitClient timeout"
+      },
+      {
+        "type": "fixed",
+        "text": "world-login validation test no longer hangs (pool fallback + type assertion)"
+      },
+      {
+        "type": "fixed",
+        "text": "RDO protocol conformity — event re-registration, missing pushes, type safety"
+      },
+      {
+        "type": "fixed",
+        "text": "auto-reconnect on consecutive ServerBusy poll failures (Delphi RenewWorldProxy compat)"
+      },
+      {
+        "type": "fixed",
+        "text": "RDOConnectToTycoon/DisconnectFromTycoon wrong sync mode and separator"
+      },
+      {
+        "type": "fixed",
+        "text": "building inspector empty lazy tabs and phantom products on warehouse General"
+      },
+      {
+        "type": "fixed",
+        "text": "clean up server logs and prefetch building inspector tab data"
+      },
+      {
+        "type": "fixed",
+        "text": "harden partial merge carry-forward and add tab-scoped refresh tests"
+      },
+      {
+        "type": "fixed",
+        "text": "proper timeout state machine for unmatched RDO response RIDs"
+      },
+      {
+        "type": "fixed",
+        "text": "prevent duplicate requests on repeated trade connect clicks"
+      },
+      {
+        "type": "fixed",
+        "text": "preserve building name/owner during property refresh"
+      },
+      {
+        "type": "fixed",
+        "text": "move useMemo before early returns to fix React hooks violation (#310)"
+      },
+      {
+        "type": "fixed",
+        "text": "prevent building inspector name blink and add error state for failed loads"
+      },
+      {
+        "type": "fixed",
+        "text": "harden session teardown and RDO resilience on unstable connections"
+      },
+      {
+        "type": "fixed",
+        "text": "harden building inspector RDO pipeline against server crashes"
+      },
+      {
+        "type": "fixed",
+        "text": "prevent building inspector data loss from SetPath race condition"
+      },
+      {
+        "type": "fixed",
+        "text": "add trailing comma to connection list for Delphi ParseGateList compatibility"
+      },
+      {
+        "type": "fixed",
+        "text": "memo-wrap building cards, add sendRdoRequest timeout, expand logging config"
+      },
+      {
+        "type": "fixed",
+        "text": "prevent building inspector crash on building switch (race condition)"
+      },
+      {
+        "type": "fixed",
+        "text": "fetch warehouse wares eagerly to eliminate General tab skeleton"
+      },
+      {
+        "type": "fixed",
+        "text": "preserve lazy tab data across periodic building refreshes"
+      },
+      {
+        "type": "fixed",
+        "text": "correct InfoWidget test assertion and auth-handler TS error"
+      },
+      {
+        "type": "fixed",
+        "text": "prevent warehouse products flash and slow initial inspection"
+      },
+      {
+        "type": "fixed",
+        "text": "route client debug reports to errors.ndjson instead of gateway.ndjson"
+      },
+      {
+        "type": "fixed",
+        "text": "prevent FileTransport crash on EACCES — fail silently to console"
+      },
+      {
+        "type": "fixed",
+        "text": "EACCES on logs bind mount — fixed UID for spo user + create logs dir"
+      },
+      {
+        "type": "fixed",
+        "text": "use void push \"*\" for RDOSetOutputPrice to match legacy client"
+      },
+      {
+        "type": "fixed",
+        "text": "remove stray closing brace causing build failure"
+      },
+      {
+        "type": "fixed",
+        "text": "use fire-and-forget with RID for \"^\" property commands"
+      },
+      {
+        "type": "fixed",
+        "text": "send RDO \"^\" commands via sendRdoRequest() with RID to prevent session poisoning"
+      },
+      {
+        "type": "fixed",
+        "text": "warehouse product section on general tab and set price targeting ObjectId"
+      },
+      {
+        "type": "fixed",
+        "text": "move parsed detailsText display from StatusOverlay to StatusTicker"
+      },
+      {
+        "type": "fixed",
+        "text": "prevent force-world retry loop, add 1s delay for socket readiness"
+      },
+      {
+        "type": "fixed",
+        "text": "force-world auto-advance retries after transient directory error"
+      },
+      {
+        "type": "fixed",
+        "text": "type rawSend calls in building-action-handler to use WsReqPoliticsVote"
+      },
+      {
+        "type": "fixed",
+        "text": "harden company switch — await promises, deduplicate list, guard stale cache"
+      },
+      {
+        "type": "fixed",
+        "text": "use full company switch when creating company from profile menu"
+      },
+      {
+        "type": "fixed",
+        "text": "reset lazy tab states and re-fetch overlays on refresh"
+      },
+      {
+        "type": "fixed",
+        "text": "add explicit Cache-Control headers to prevent stale browser cache"
+      },
+      {
+        "type": "fixed",
+        "text": "auto-mark lazy tabs as loaded when legacy path already fetched data"
+      },
+      {
+        "type": "fixed",
+        "text": "stop sending REQ_BUILDING_TAB_DATA when disconnected"
+      },
+      {
+        "type": "fixed",
+        "text": "include warehouseWares with supplies/products tab data for GateMap filtering"
+      },
+      {
+        "type": "fixed",
+        "text": "prevent auto-refresh race condition, reset tab states on building switch"
+      },
+      {
+        "type": "fixed",
+        "text": "prevent temp object leaks in inspector lifecycle"
+      },
+      {
+        "type": "fixed",
+        "text": "create inspector on-the-fly when legacy path used, prevent retry loop"
+      },
+      {
+        "type": "fixed",
+        "text": "use InputCount + Input{i}.0 for warehouse ware names, filter supplies/products by GateMap"
+      }
+    ]
+  },
+  {
     "version": "1.2.0",
     "date": "2026-03-18",
     "entries": [
