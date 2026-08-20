@@ -3,6 +3,7 @@ export { BuildingInspectorModal } from './BuildingInspectorModal';
 export { ChangelogModal } from './ChangelogModal';
 export { CompanyCreationModal } from './CompanyCreationModal';
 export { ConnectionPickerModal } from './ConnectionPickerModal';
+export { NewspaperModal } from './NewspaperModal';
 export { SettingsDialog } from './SettingsDialog';
 export { ServerSwitchOverlay } from './ServerSwitchOverlay';
 export { SupplierSearchModal } from './SupplierSearchModal';

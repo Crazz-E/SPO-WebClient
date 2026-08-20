@@ -27,6 +27,23 @@
  * census of current behaviour, so the frame emitter can derive the separator
  * from the member instead of having it retyped at every call site.
  *
+ * ## The exception: members added BEFORE their first call site
+ *
+ * A member the client has never emitted has no separator to read off. For those
+ * — and only those — `kind` and `arity` come from the server-side Pascal
+ * declaration, which the comment cites as `File.pas:Line` instead of a call
+ * site. The three POLITICS mutations added for the Politics feature are the
+ * current members in that case:
+ *
+ *   RDOSetRatingFrom  Kernel/TownPolitics.pas:40   procedure, 3 args
+ *   RDOSetPublicity   Kernel/TownPolitics.pas:41   procedure, 2 args
+ *   RDOSetProjectData Kernel/TownPolitics.pas:45   procedure, 3 args
+ *
+ * All three are declared identically on `TPresidentialHall`
+ * (Kernel/WorldPolitics.pas:256,257,260), so one entry serves the Town Hall and
+ * the Capitol. All three are `procedure` — they must be emitted with `"*"` and
+ * no QueryId, which is what `.toFrame()` on a catalogued procedure produces.
+ *
  * ## The `set` accessors of the building inspector — why the set is closed
  *
  * One emission site names its member at runtime rather than in code:
@@ -174,6 +191,9 @@ export const RDO_MEMBERS = {
   RDOSetMinSalaryValue:      { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDOSetOutputPrice:         { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDOSetPrice:               { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
+  RDOSetProjectData:         { kind: 'procedure', arity: 3 },                // Kernel/TownPolitics.pas:45, Kernel/WorldPolitics.pas:260
+  RDOSetPublicity:           { kind: 'procedure', arity: 2 },                // Kernel/TownPolitics.pas:41, Kernel/WorldPolitics.pas:257
+  RDOSetRatingFrom:          { kind: 'procedure', arity: 3 },                // Kernel/TownPolitics.pas:40, Kernel/WorldPolitics.pas:256
   RDOSetRole:                { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223
   RDOSetSalaries:            { kind: 'procedure', arity: 3 },                // src/server/session/building-property-handler.ts:194,223
   RDOSetTaxValue:            { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223

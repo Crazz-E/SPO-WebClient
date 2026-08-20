@@ -4,6 +4,34 @@
     "date": "2026-08-19",
     "entries": [
       {
+        "type": "added",
+        "text": "Politics: the Voyager politics page as a civic tab — ruler figures, Popular/Tycoons/IFEL ratings, publicity, the opposition, and your campaign"
+      },
+      {
+        "type": "added",
+        "text": "Politics: rate the mayor or president per criterion, and set publicity priorities as the office holder"
+      },
+      {
+        "type": "added",
+        "text": "Politics: edit a running campaign's ministers and promises, and read the programme back"
+      },
+      {
+        "type": "added",
+        "text": "Newspaper: read the town paper's editorial columns and publish your own, from the Town Hall"
+      },
+      {
+        "type": "fixed",
+        "text": "Politics data was never requested, so ratings, campaigns and the election countdown were always empty"
+      },
+      {
+        "type": "fixed",
+        "text": "the Capitol's politics pages read a town folder that does not exist, so the presidential ratings were always empty"
+      },
+      {
+        "type": "changed",
+        "text": "the Votes tab now lists the sitting ruler on the ballot and sorts by campaign points, like the original client"
+      },
+      {
         "type": "changed",
         "text": "unwire and delete the HALT brake (OB-16)"
       },

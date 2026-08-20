@@ -435,14 +435,46 @@ describe('building-details scenario', () => {
     expect(handlerNames).toContain('townTaxes');
   });
 
-  it('townTaxes uses columnSuffix pattern (Tax0Name, Tax0Kind, Tax0Percent)', () => {
+  it('townTaxes serves the keys the template actually asks for', () => {
     const taxProps = MOCK_TOWN_HALL.groups['townTaxes'];
     expect(taxProps).toBeDefined();
     const propNames = taxProps.map(p => p.name);
-    expect(propNames).toContain('Tax0Name.0');
+    // `Tax0Name0`, not `Tax0Name.0`: TOWN_TAXES_GROUP declares columnSuffix
+    // 'Name0', so the language ordinal is part of the suffix and carries no dot.
+    // The mock disagreed with the template here, and nothing caught it.
+    expect(propNames).toContain('Tax0Name0');
+    expect(propNames).not.toContain('Tax0Name.0');
     expect(propNames).toContain('Tax0Kind');
     expect(propNames).toContain('Tax0Percent');
     expect(propNames).toContain('Tax0LastYear');
+    // The gateway resolves Tax{index}Id into the real TaxId before every write
+    // (building-property-handler.ts:141-153); without it the write cannot be
+    // addressed at all.
+    expect(propNames).toContain('Tax0Id');
+  });
+
+  it('townTaxes Kind is the tkPercent/tkValue ordinal, not a word', () => {
+    // BasicTaxes.pas:9-10 — taxKind_Percent = 0, taxKind_ValuePerUnit = 1. The
+    // client switches on this to choose between a rate bar and a currency field.
+    const taxProps = MOCK_TOWN_HALL.groups['townTaxes'];
+    const kinds = taxProps.filter(p => /^Tax\d+Kind$/.test(p.name));
+    expect(kinds.length).toBeGreaterThan(0);
+    for (const kind of kinds) {
+      expect(['0', '1']).toContain(kind.value);
+    }
+  });
+
+  it('townServices serves svr* keys, not the products group', () => {
+    // This fixture held prd* keys belonging to TOWN_PRODUCTS_GROUP, so every
+    // property TOWN_SERVICES_GROUP declares came back missing.
+    const srvProps = MOCK_TOWN_HALL.groups['townServices'];
+    expect(srvProps).toBeDefined();
+    const propNames = srvProps.map(p => p.name);
+    expect(propNames).toContain('GQOS');
+    expect(propNames).toContain('srvCount');
+    expect(propNames).toContain('svrName0.0');
+    expect(propNames).toContain('svrRatio0');
+    expect(propNames.some(n => n.startsWith('prd'))).toBe(false);
   });
 
   it('RDO has GetPropertyList exchanges for each building group', () => {

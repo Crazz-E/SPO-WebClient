@@ -37,6 +37,7 @@ const BuildMenu = lazy(() => import('../components/modals/BuildMenu').then(m => 
 const BuildingInspectorModal = lazy(() => import('../components/modals/BuildingInspectorModal').then(m => ({ default: m.BuildingInspectorModal })));
 const ChangelogModal = lazy(() => import('../components/modals/ChangelogModal').then(m => ({ default: m.ChangelogModal })));
 const ConnectionPickerModal = lazy(() => import('../components/modals/ConnectionPickerModal').then(m => ({ default: m.ConnectionPickerModal })));
+const NewspaperModal = lazy(() => import('../components/modals/NewspaperModal').then(m => ({ default: m.NewspaperModal })));
 const SettingsDialog = lazy(() => import('../components/modals/SettingsDialog').then(m => ({ default: m.SettingsDialog })));
 const SupplierSearchModal = lazy(() => import('../components/modals/SupplierSearchModal').then(m => ({ default: m.SupplierSearchModal })));
 
@@ -137,6 +138,7 @@ export function GameScreen() {
         <BuildMenu />
         <ConnectionPickerModal />
         <SupplierSearchModal />
+        <NewspaperModal />
         <SettingsDialog />
         <ChangelogModal />
       </Suspense>

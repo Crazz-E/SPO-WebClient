@@ -8,7 +8,7 @@
 import type { BuildingDetailsTab } from '@/shared/types';
 
 /** Composite tab IDs used by the civic modal. */
-export type CivicTabId = 'overview' | 'administration' | 'demographics' | 'elections';
+export type CivicTabId = 'overview' | 'administration' | 'demographics' | 'elections' | 'politics';
 
 interface CivicTab {
   id: CivicTabId;
@@ -21,8 +21,15 @@ const GROUP_TO_CIVIC_TAB: Record<string, CivicTabId> = {
   townGeneral: 'overview',
   capitolTowns: 'administration',
   ministeries: 'administration',
+  // The mayor's tax table. It sits with the other governance levers rather than
+  // in its own tab, which is where Voyager puts it (`TAXES`), because the modal
+  // keeps four composite tabs instead of the reference client's six.
+  townTaxes: 'administration',
   townJobs: 'demographics',
   townRes: 'demographics',
+  // Town Hall `COMMERCE` / Capitol `SERVICES` — read-only provision figures for
+  // the population the rest of this tab describes.
+  townServices: 'demographics',
   votes: 'elections',
 };
 
@@ -32,6 +39,7 @@ const CIVIC_TABS: CivicTab[] = [
   { id: 'administration', label: 'Administration' },
   { id: 'demographics', label: 'Demographics' },
   { id: 'elections', label: 'Elections' },
+  { id: 'politics', label: 'Politics' },
 ];
 
 /**
@@ -44,8 +52,11 @@ export function buildCivicTabs(
 ): { id: string; label: string }[] {
   const serverGroupIds = new Set(serverTabs.map((t) => t.id));
 
-  // Always include elections (has synthetic Ratings from PoliticsData even if no votes group)
-  const activeCivicTabs = new Set<CivicTabId>(['elections']);
+  // Elections and Politics are synthetic: their content comes from PoliticsData
+  // and from the votes group, never from a server group of their own. Politics
+  // is Voyager's `politics.asp`, reachable there from a button on General —
+  // here it is a tab, because the modal has no place to open a second window.
+  const activeCivicTabs = new Set<CivicTabId>(['elections', 'politics']);
 
   // Check which server groups are present → activate their civic tab
   for (const tab of serverTabs) {

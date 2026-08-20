@@ -3,12 +3,14 @@
  * Consolidates ruler info (previously repeated on Towns/Ministries tabs) into one place.
  */
 
+import { useCallback, useMemo } from 'react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { usePoliticsStore } from '../../store/politics-store';
-import { useGameStore } from '../../store/game-store';
+import { useNewspaperStore } from '../../store/newspaper-store';
+import { useBuildingStore } from '../../store/building-store';
+import { useUiStore } from '../../store/ui-store';
 import { PropertyGroup } from '../building/PropertyGroup';
-import { ProgressBar } from '../common';
-import { buildValueMap, getNum, formatCompact, isPresidentRole } from './capitol-utils';
+import { buildValueMap, getNum, formatCompact } from './capitol-utils';
 import { isCapitolBuilding } from './CivicTabConfig';
 import type { BuildingDetailsTab } from '@/shared/types';
 import styles from './PoliticsPanel.module.css';
@@ -28,9 +30,28 @@ export function OverviewSection({
   buildingY,
   serverTabs,
 }: OverviewSectionProps) {
-  const ownerRole = useGameStore((s) => s.ownerRole);
   const data = usePoliticsStore((s) => s.data);
   const isCapitol = isCapitolBuilding(serverTabs);
+
+  // `TownHallSheet.pas:126` reads the paper's name off the town properties and
+  // `:346` passes it to the board as `PaperName`. Ours arrives in the general
+  // group as `NewspaperName` (template-groups.ts townGeneral).
+  const generalMap = useMemo(() => buildValueMap(generalProperties), [generalProperties]);
+  const newspaperName = generalMap.get('NewspaperName') ?? '';
+  const townName = data?.townName ?? generalMap.get('Town') ?? '';
+
+  const openNewspaper = useCallback(() => {
+    useNewspaperStore.getState().openFor({
+      paperName: newspaperName,
+      townName,
+      isCapitol,
+      buildingX,
+      buildingY,
+    });
+    // Single-slot modal, like Voyager: `TownHallSheet.pas:352` closes the object
+    // inspector when it opens the board.
+    useUiStore.getState().openModal('newspaper');
+  }, [newspaperName, townName, isCapitol, buildingX, buildingY]);
 
   // Ruler info from votes group
   const valueMap = buildValueMap(votesProperties);
@@ -40,7 +61,6 @@ export function OverviewSection({
   const rulerPoints = getNum(valueMap, 'RulerCmpPnts');
 
   const roleTitle = isCapitol ? 'President' : 'Mayor';
-  const townName = data?.townName ?? '';
 
   // Filter general properties (remove Name — shown in modal header)
   const filteredGeneral = generalProperties.filter((p) => p.name !== 'Name');
@@ -84,6 +104,29 @@ export function OverviewSection({
             {data.yearsToElections === 1 ? 'year' : 'years'} until next {isCapitol ? 'presidential' : 'mayoral'} election
           </span>
         </div>
+      )}
+
+      {/* The two buttons Voyager puts on this very sheet
+          (`TownHallSheet.pas:320`/`:337`, `CapitolSheet.pas:258`). "Visit
+          Politics Page" opens a second window there; here it selects the tab. */}
+      <div className={styles.overviewActions}>
+        <button
+          className={styles.actionBtn}
+          onClick={() => useBuildingStore.getState().setCurrentTab('politics')}
+        >
+          {isCapitol ? 'Visit President Politics Page' : 'Visit Politics Page'}
+        </button>
+        {/* Capitol-only exception: `CapitolSheet.pas` has no RateMayor button —
+            the presidential board is a town paper the Capitol does not own, and
+            `boardmsg.asp:19` only fills the ratings folder for a town anyway. */}
+        {!isCapitol && newspaperName !== '' && (
+          <button className={styles.actionBtn} onClick={openNewspaper}>
+            Rate the Mayor
+          </button>
+        )}
+      </div>
+      {!isCapitol && newspaperName === '' && (
+        <p className={styles.campaignMessage}>This town has no newspaper.</p>
       )}
 
       {/* General building properties */}

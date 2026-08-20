@@ -849,7 +849,13 @@ function mapRdoCommandToPropertyName(
     case 'RDOSetMinSalaryValue': {
       const level = params.levelIndex || '0';
       const prefix = level === '0' ? 'hi' : level === '1' ? 'mid' : 'lo';
-      return `${prefix}ActualMinSalary`;
+      // `MinSalary`, not `ActualMinSalary`. The write sets this facility's own
+      // floor; `ActualMinSalary` is the blended figure the town enforces, which
+      // is max(town, world) — Kernel/Kernel.pas:9342-9345 — and Voyager shows it
+      // as a separate marker (`TownHallJobsSheet.pas:149-151`). Reading the
+      // blend back reports every correct write as unconfirmed whenever the
+      // world's floor is the higher of the two.
+      return `${prefix}MinSalary`;
     }
 
     case 'RDOLaunchMovie':

@@ -333,6 +333,8 @@ export const CAPITOL_GENERAL_GROUP: PropertyGroup = {
   icon: 'i',
   order: 0,
   properties: [
+    // See TOWN_GENERAL_GROUP: requested so `grantAccess` has something to test.
+    { rdoName: 'SecurityId', displayName: 'SecurityId', type: PropertyType.TEXT, hideEmpty: true },
     { rdoName: 'QOL', displayName: 'QOL', type: PropertyType.PERCENTAGE },
     {
       rdoName: 'covName',
@@ -348,6 +350,8 @@ export const CAPITOL_GENERAL_GROUP: PropertyGroup = {
     { rdoName: 'ActualRuler', displayName: 'President', type: PropertyType.TEXT },
     { rdoName: 'RulerRating', displayName: 'Popular Rating', type: PropertyType.PERCENTAGE },
     { rdoName: 'TycoonsRating', displayName: 'Tycoons Rating', type: PropertyType.PERCENTAGE },
+    // Kernel/WorldPolitics.pas:1410 writes it on the Capitol's own cache object.
+    { rdoName: 'IFELRating', displayName: "IFEL's Rating", type: PropertyType.PERCENTAGE, hideEmpty: true },
     { rdoName: 'RulerPeriods', displayName: 'Mandate No.', type: PropertyType.NUMBER },
     { rdoName: 'YearsToElections', displayName: 'Years to Elections', type: PropertyType.NUMBER, unit: 'years' },
     { rdoName: 'HasRuler', displayName: 'Has Ruler', type: PropertyType.BOOLEAN, hideEmpty: true },
@@ -364,12 +368,21 @@ export const TOWN_GENERAL_GROUP: PropertyGroup = {
   icon: 'i',
   order: 0,
   properties: [
+    // Requested, never displayed. `allValues` only ever holds what a template
+    // declares, so without this line the facility's SecurityId is never read
+    // and `grantAccess` refuses every civic control — including the mayor's own.
+    // Voyager fetches it per sheet (`TownTaxesSheet.pas:145`,
+    // `TownHallJobsSheet.pas:168-169`); one shared read serves every group here.
+    { rdoName: 'SecurityId', displayName: 'SecurityId', type: PropertyType.TEXT, hideEmpty: true },
     { rdoName: 'ActualRuler', displayName: 'Mayor', type: PropertyType.TEXT },
     { rdoName: 'Town', displayName: 'Town', type: PropertyType.TEXT },
     { rdoName: 'NewspaperName', displayName: 'Newspaper', type: PropertyType.TEXT },
     { rdoName: 'RulerPrestige', displayName: 'Prestige', type: PropertyType.NUMBER },
     { rdoName: 'RulerRating', displayName: 'Ruler Rating', type: PropertyType.PERCENTAGE },
     { rdoName: 'TycoonsRating', displayName: 'Tycoons Rating', type: PropertyType.PERCENTAGE },
+    // Kernel/PoliticsCache.pas:153 writes it on the TOWN folder object, not on
+    // the Town Hall facility — hidden when the facility read comes back empty.
+    { rdoName: 'IFELRating', displayName: "IFEL's Rating", type: PropertyType.PERCENTAGE, hideEmpty: true },
     { rdoName: 'YearsToElections', displayName: 'Years to Elections', type: PropertyType.NUMBER },
     { rdoName: 'HasRuler', displayName: 'Has Ruler', type: PropertyType.BOOLEAN },
     { rdoName: 'RulerPeriods', displayName: 'Ruler Periods', type: PropertyType.NUMBER },
@@ -927,7 +940,12 @@ export const TOWN_TAXES_GROUP: PropertyGroup = {
         { rdoSuffix: 'Tax', columnSuffix: 'Id', label: 'ID', type: PropertyType.TEXT, width: '0%' },
         { rdoSuffix: 'Tax', columnSuffix: 'Name0', label: 'Tax', type: PropertyType.TEXT, width: '30%' },
         { rdoSuffix: 'Tax', columnSuffix: 'Kind', label: 'Kind', type: PropertyType.TEXT, width: '15%' },
-        { rdoSuffix: 'Tax', columnSuffix: 'Percent', label: 'Rate', type: PropertyType.SLIDER, width: '25%', editable: true, min: -100, max: 100, step: 1 },
+        // 0..100, not -100..100. A subsidy is not a negative rate the player
+        // dials in: Voyager sends the literal '-10' and hides the bar
+        // (TownTaxesSheet.pas:336-338), and the server ignores the magnitude
+        // entirely, refunding the whole loss whatever it is (BasicTaxes.pas:197-210).
+        // A negative slider would offer a mechanic that does not exist.
+        { rdoSuffix: 'Tax', columnSuffix: 'Percent', label: 'Rate', type: PropertyType.SLIDER, width: '25%', editable: true, min: 0, max: 100, step: 1 },
         { rdoSuffix: 'Tax', columnSuffix: 'LastYear', label: 'Last Year', type: PropertyType.CURRENCY, width: '30%' },
       ],
     },

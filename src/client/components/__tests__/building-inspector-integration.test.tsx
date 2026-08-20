@@ -67,6 +67,7 @@ const mockDetails: BuildingDetailsResponse = {
   buildingName: 'Small Farm',
   ownerName: 'TestCorp',
   securityId: 'sec-1',
+  canGovern: true,
   tabs,
   groups: {
     general: generalProps,

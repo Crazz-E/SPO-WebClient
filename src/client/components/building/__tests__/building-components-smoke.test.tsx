@@ -97,6 +97,7 @@ describe('PropertyGroup', () => {
       buildingName: 'Factory',
       ownerName: 'TestCo',
       securityId: 'sec-1',
+      canGovern: true,
       tabs: mockTabs,
       groups: { general: [] },
       timestamp: Date.now(),

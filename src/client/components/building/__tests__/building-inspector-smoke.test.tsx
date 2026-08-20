@@ -48,6 +48,7 @@ const mockDetails: BuildingDetailsResponse = {
   buildingName: 'Small Factory',
   ownerName: 'TestCo',
   securityId: 'sec-1',
+  canGovern: true,
   tabs: mockTabs,
   groups: {
     general: [

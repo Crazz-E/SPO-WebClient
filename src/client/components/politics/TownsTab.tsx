@@ -2,27 +2,26 @@
  * TownsTab — Capitol towns table with tax sliders and Elect Mayor (president-only).
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { useClient } from '../../context';
-import { useGameStore } from '../../store/game-store';
 import { SaveIndicator } from '../building/SaveIndicator';
-import { buildValueMap, getNum, formatCompact, isPresidentRole } from './capitol-utils';
+import { buildValueMap, getNum, formatCompact } from './capitol-utils';
 import styles from './PoliticsPanel.module.css';
 
 interface TownsTabProps {
   properties: BuildingPropertyValue[];
   buildingX: number;
   buildingY: number;
+  /** Does this player govern this Capitol? See `grantAccess`. */
+  canGovern: boolean;
 }
 
-export function TownsTab({ properties, buildingX, buildingY }: TownsTabProps) {
+export function TownsTab({ properties, buildingX, buildingY, canGovern }: TownsTabProps) {
   const client = useClient();
-  const ownerRole = useGameStore((s) => s.ownerRole);
-  const isPresident = isPresidentRole(ownerRole);
+  const isPresident = canGovern;
 
   const valueMap = buildValueMap(properties);
-  const ruler = valueMap.get('ActualRuler') ?? '';
   const townCount = getNum(valueMap, 'TownCount');
 
   const rows = Array.from({ length: townCount }, (_, i) => ({
@@ -86,12 +85,25 @@ export function TownsTab({ properties, buildingX, buildingY }: TownsTabProps) {
               <td>{row.hasMayor ? 'Yes' : 'No'}</td>
               {isPresident && (
                 <td>
-                  <button
-                    className={styles.actionBtn}
-                    onClick={() => handleElectMayor(row)}
-                  >
-                    Elect
-                  </button>
+                  {/* The seat must be vacant. `RDOSitMayor` applies only when
+                      `Mayor.SuperRole = nil` (WorldPolitics.pas:1801) and there
+                      is no unseat call at all, so on an occupied seat the button
+                      would send a frame the server discards without a word.
+                      Voyager does let you click into that void; we do not — a
+                      deliberate divergence, recorded in
+                      doc/civic-roles-reference.md §7. */}
+                  {row.hasMayor ? (
+                    <span className={styles.actionUnavailable} title="A mayor only leaves by losing an election">
+                      —
+                    </span>
+                  ) : (
+                    <button
+                      className={styles.actionBtn}
+                      onClick={() => handleElectMayor(row)}
+                    >
+                      Elect
+                    </button>
+                  )}
                 </td>
               )}
             </tr>
@@ -119,11 +131,15 @@ function TaxSlider({
   const [value, setValue] = useState(initialValue);
   const pendingKey = `RDOSetTownTaxes:{"index":"${index}"}`;
 
+  // See MinWageSlider: local state must yield to a fresh server figure.
+  useEffect(() => { setValue(initialValue); }, [initialValue]);
+
   const commitValue = useCallback(
-    () => {
-      client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetTownTaxes', String(value), { index: String(index) });
+    (next: number) => {
+      if (next === initialValue) return;
+      client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetTownTaxes', String(next), { index: String(index) });
     },
-    [client, buildingX, buildingY, index, value],
+    [client, buildingX, buildingY, index, initialValue],
   );
 
   if (!editable) {
@@ -140,7 +156,10 @@ function TaxSlider({
         step={1}
         value={value}
         onChange={(e) => setValue(parseInt(e.target.value, 10))}
-        onPointerUp={commitValue}
+        // One frame per gesture, keyboard and touch-cancel included — see MinWageSlider.
+        onPointerUp={(e) => commitValue(parseInt(e.currentTarget.value, 10))}
+        onKeyUp={(e) => commitValue(parseInt(e.currentTarget.value, 10))}
+        onBlur={(e) => commitValue(parseInt(e.currentTarget.value, 10))}
       />
       <span className={styles.sliderValue}>{value}%</span>
       <SaveIndicator propertyKey={pendingKey} />

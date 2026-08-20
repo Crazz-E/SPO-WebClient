@@ -33,7 +33,8 @@ import { handleGetProfile, handleProfileCurriculum, handleProfileBank, handlePro
 import { handleSearchMenuHome, handleSearchMenuTowns, handleSearchMenuPeopleSearch, handleSearchMenuTycoonProfile, handleSearchMenuRankings, handleSearchMenuRankingDetail, handleSearchMenuBanks } from './search-handlers';
 
 // Politics
-import { handlePoliticsData, handlePoliticsVote, handlePoliticsLaunchCampaign, handlePoliticsCancelCampaign, handleTycoonRole } from './politics-handlers';
+import { handleNewspaperBoard, handleNewspaperPost } from './newspaper-handlers';
+import { handlePoliticsData, handlePoliticsVote, handlePoliticsLaunchCampaign, handlePoliticsCancelCampaign, handlePoliticsSetRating, handlePoliticsSetPublicity, handlePoliticsSetProject, handleTycoonRole } from './politics-handlers';
 
 // Miscellaneous
 import { handleManageConstruction, handleDefineZone, handleCreateCompany, handleClusterInfo, handleClusterFacilities, handleSearchConnections, handleEmpireFacilities, handleResearchInventory, handleResearchDetails } from './misc-handlers';
@@ -122,6 +123,11 @@ export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   [WsMessageType.REQ_POLITICS_VOTE]: handlePoliticsVote,
   [WsMessageType.REQ_POLITICS_LAUNCH_CAMPAIGN]: handlePoliticsLaunchCampaign,
   [WsMessageType.REQ_POLITICS_CANCEL_CAMPAIGN]: handlePoliticsCancelCampaign,
+  [WsMessageType.REQ_POLITICS_SET_RATING]: handlePoliticsSetRating,
+  [WsMessageType.REQ_POLITICS_SET_PUBLICITY]: handlePoliticsSetPublicity,
+  [WsMessageType.REQ_POLITICS_SET_PROJECT]: handlePoliticsSetProject,
+  [WsMessageType.REQ_NEWSPAPER_BOARD]: handleNewspaperBoard,
+  [WsMessageType.REQ_NEWSPAPER_POST]: handleNewspaperPost,
   [WsMessageType.REQ_TYCOON_ROLE]: handleTycoonRole,
 
   // Miscellaneous

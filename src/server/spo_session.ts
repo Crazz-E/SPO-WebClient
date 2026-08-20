@@ -46,6 +46,7 @@ import {
   PolicyEntry,
   PoliticsData,
   PoliticsRatingEntry,
+  NewspaperBoard,
   PoliticalRoleInfo,
   ConnectionSearchResult,
   FavoritesItem,
@@ -93,6 +94,8 @@ import * as mailHandler from './session/mail-handler';
 import * as profileFinanceHandler from './session/profile-finance-handler';
 import * as autoConnectionHandler from './session/auto-connection-handler';
 import * as politicsHandler from './session/politics-handler';
+import * as newspaperHandler from './session/newspaper-handler';
+import type { NewspaperTarget } from './session/newspaper-handler';
 import * as buildingManagementHandler from './session/building-management-handler';
 import * as roadHandler from './session/road-handler';
 import * as zoneSurfaceHandler from './session/zone-surface-handler';
@@ -1164,8 +1167,29 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     return politicsHandler.fetchOwnedFacilities(this);
   }
 
-  public async getPoliticsData(townName: string, buildingX: number, buildingY: number): Promise<PoliticsData> {
-    return politicsHandler.getPoliticsData(this, townName, buildingX, buildingY);
+  public async getPoliticsData(townName: string, buildingX: number, buildingY: number, isCapitol = false): Promise<PoliticsData> {
+    return politicsHandler.getPoliticsData(this, townName, buildingX, buildingY, isCapitol);
+  }
+
+  public async politicsSetRating(buildingX: number, buildingY: number, ratingId: string, value: number): Promise<{ success: boolean; message: string }> {
+    return politicsHandler.politicsSetRating(this, buildingX, buildingY, ratingId, value);
+  }
+
+  public async politicsSetPublicity(buildingX: number, buildingY: number, ratingId: string, value: number): Promise<{ success: boolean; message: string }> {
+    return politicsHandler.politicsSetPublicity(this, buildingX, buildingY, ratingId, value);
+  }
+
+  public async politicsSetProjectData(buildingX: number, buildingY: number, projectId: string, data: string): Promise<{ success: boolean; message: string }> {
+    return politicsHandler.politicsSetProjectData(this, buildingX, buildingY, projectId, data);
+  }
+
+  // -- NEWSPAPER (facade -> newspaper-handler) ------------------------------
+  public async getNewspaperBoard(target: NewspaperTarget, path?: string): Promise<NewspaperBoard> {
+    return newspaperHandler.getNewspaperBoard(this, target, path);
+  }
+
+  public async postNewspaperColumn(target: NewspaperTarget, subject: string, body: string, replyToPath?: string): Promise<{ success: boolean; message: string; board: NewspaperBoard | null }> {
+    return newspaperHandler.postNewspaperColumn(this, target, subject, body, replyToPath);
   }
 
   public async politicsVote(buildingX: number, buildingY: number, candidateName: string): Promise<{ success: boolean; message: string }> {

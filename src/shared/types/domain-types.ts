@@ -631,6 +631,20 @@ export interface BuildingDetailsResponse {
   ownerName: string;
   /** Security/owner ID */
   securityId: string;
+  /**
+   * Does this session's tycoon govern this facility?
+   *
+   * `grantAccess(fTycoonProxyId, securityId)`, decided by the gateway because
+   * only the gateway holds the requester half. Both ids are **object pointers**
+   * — `TTycoon.GetSecurityId` builds the list from `integer(Tycoon)`
+   * (Kernel/Kernel.pas:11135-11154) and Voyager's own requester id is the
+   * `InitClient` push's 4th argument (ServerCnxHandler.pas:514-516), which is
+   * `integer(Tycoon)` too (Kernel/World.pas:3827).
+   *
+   * NOT `ctx.tycoonId`: that is the persistent `TTycoon.Id`, a small ordinal,
+   * and it never appears in a SecurityId. See building-property-handler.ts:542.
+   */
+  canGovern: boolean;
   /** Tab configuration from CLASSES.BIN [InspectorInfo] — drives tab navigation */
   tabs: BuildingDetailsTab[];
   /** All property values grouped by tab */
@@ -956,27 +970,175 @@ export interface PolicyData {
 export interface PoliticsRatingEntry {
   name: string;
   value: number;
+  /**
+   * Rating cache Id — the `RatingId` argument of `RDOSetRatingFrom` /
+   * `RDOSetPublicity` (Kernel/PoliticsCache.pas:65 writes it as `Id`).
+   *
+   * Only the two pages that let you CHANGE a value carry it in their markup:
+   * `tycoonratings.asp:135` and `mayorpub.asp` render `<tr id=<Id>>`.
+   * `popularratings.asp:66` and `ifelratings.asp:63` render the same row
+   * WITHOUT an id — those two tabs are read-only, so their entries have none.
+   */
+  id?: string;
+}
+
+/**
+ * One row of the PUBLICITY tab (`mayorpub.asp`).
+ *
+ * `level` is the raw 0/25/50/75/100 the `<select>` posts, not the label:
+ * `RulerPublicity` is quantised to 25 (`mayorpub.asp:180`) and the five labels
+ * Lowest..Highest are just its rendering (`ePolitics.lng` StrMayorPub_5..9).
+ */
+export interface PoliticsPublicityEntry {
+  id: string;
+  name: string;
+  level: number;
 }
 
 export interface PoliticsCampaignEntry {
   candidateName: string;
   rating: number;
+  /** `Prestige{i}` — Kernel/PoliticsCache.pas:162, Kernel/WorldPolitics.pas:1398. */
+  prestige: number;
 }
+
+/**
+ * One row of the YOUR CAMPAIGN project list (`tycooncampaign.asp:250-315`).
+ *
+ * Two shapes share the row, told apart by the cache object's `TypeId`:
+ *  - `minister` — a tycoon name to appoint, free text, with a validation state;
+ *  - `goal` — a numeric promise rendered as "More than"/"Less than" N %.
+ */
+export interface PoliticsProjectEntry {
+  id: string;
+  name: string;
+  kind: 'minister' | 'goal';
+  /** minister only — the proposed tycoon, empty when none is proposed yet. */
+  ministerName?: string;
+  /** minister only — `ProposalState`: 1 unknown name, 2 not eligible, 3 OK. */
+  proposalState?: 1 | 2 | 3;
+  /**
+   * goal only — the comparator the page printed, VERBATIM.
+   *
+   * `tycooncampaign.asp:295-299` picks between `strMoreThan` and `strLessThan`
+   * on `CacheObj.Mode`, and both come from `ePolitics.lng`, which is localised
+   * per the tycoon's `LangId`. There is no structural difference between the
+   * two branches, so the words are the only signal — and matching them against
+   * the English pair would silently mislabel every non-English player. We carry
+   * the server's own words through to the UI instead of guessing a boolean.
+   */
+  comparator?: string;
+  /** goal only — the promised percentage. */
+  value?: number;
+}
+
+/**
+ * Which of the five mutually exclusive states the YOUR CAMPAIGN panel is in.
+ *
+ *  - `running`     — you have a campaign; the panel offers Withdraw + projects
+ *  - `available`   — you have none and may launch one
+ *  - `ruler`       — you already hold the office (`tycooncampaign.asp:391`)
+ *  - `refused`     — a launch was attempted and denied (`:400-413`)
+ *  - `noElections` — tournament planet (`tycooncampaignnoelections.asp`)
+ */
+export type CampaignState = 'running' | 'available' | 'ruler' | 'refused' | 'noElections';
 
 export interface PoliticsData {
   townName: string;
+  /** Capitol (president) vs Town Hall (mayor) — changes every label and both thresholds. */
+  isCapitol: boolean;
+  hasRuler: boolean;
   yearsToElections: number;
+
+  // -- The ruler (mayordata.asp) -------------------------------------------
   mayorName: string;
   mayorPrestige: number;
+  /** Popular rating — `RulerRating`. */
   mayorRating: number;
   tycoonsRating: number;
-  campaignCount: number;
+  ifelRating: number;
+  /** `RulerPeriods` — displayed as "Mandate No". */
+  mandateNo: number;
+  /**
+   * Absolute URL of the ruler's portrait, or `''` when there is no ruler.
+   *
+   * Built server-side because only the gateway knows the world's IP.
+   * `mayordata.asp:39` composes the same path, and ships it behind an
+   * `if true then` where a `FileExists` check used to be (`:40`) — so the file
+   * is frequently absent and the client must survive a 404 on it.
+   */
+  rulerPhotoUrl: string;
+
+  // -- The rating rails (ratingtabs.asp) ------------------------------------
   popularRatings: PoliticsRatingEntry[];
   ifelRatings: PoliticsRatingEntry[];
   tycoonsRatings: PoliticsRatingEntry[];
+  publicity: PoliticsPublicityEntry[];
+  /** `Obj.Ads` — hits/hour currently purchased, as the page prints it. */
+  publicityAds: string;
+
+  // -- The opposition (opositiondata.asp / allcampaigns.asp) ----------------
+  campaignCount: number;
   campaigns: PoliticsCampaignEntry[];
-  canLaunchCampaign: boolean;
+
+  // -- Your campaign (tycooncampaign.asp) -----------------------------------
+  campaignState: CampaignState;
   campaignMessage: string;
+  canLaunchCampaign: boolean;
+  /** Prestige needed to be accepted: 200 for a town, 1000 for the Capitol. */
+  prestigeThreshold: number;
+  projects: PoliticsProjectEntry[];
+  promise: string;
+
+  /**
+   * Model-server id of the political entity — the bind target of the three
+   * politics mutations. `TownHallId` on the cache object
+   * (Kernel/PoliticsCache.pas:156 = the Town Hall's `CurrBlock`;
+   * Kernel/WorldPolitics.pas:1413 = the presidential hall itself).
+   * `0` when the property could not be read — the mutations refuse to emit.
+   */
+  townHallId: number;
+}
+
+// =============================================================================
+// NEWSPAPER — the town paper's editorial board (Visual/News/boardmsg.asp)
+// =============================================================================
+
+/** One entry of the index, or one reply — the two share a shape. */
+export interface NewspaperColumn {
+  author: string;
+  subject: string;
+  /** Board path, the id every board link carries. Opens the column. */
+  path: string;
+  summary: string;
+}
+
+/**
+ * One open column.
+ *
+ * `body` is PLAIN TEXT, not markup: `boardmsg.asp:255` emits `NewsObj.BodyHTML`,
+ * which is HTML typed by other players, and this client has no sanitiser. The
+ * tags are stripped at the gateway.
+ */
+export interface NewspaperArticle {
+  subject: string;
+  /** "By <author> <description>", as the page prints it (`boardmsg.asp:258`). */
+  byline: string;
+  body: string;
+  replies: NewspaperColumn[];
+}
+
+export interface NewspaperBoard {
+  paperName: string;
+  /** `boards\<World>\<Paper>\` — the board root (`boardreader.asp:5`). */
+  root: string;
+  /** What this response describes: the root for the index, else a column path. */
+  path: string;
+  /** The latest columns. Empty when `article` is set — the index is not rendered then. */
+  columns: NewspaperColumn[];
+  article: NewspaperArticle | null;
+  /** Non-empty when the board could not be read; everything else is then empty. */
+  error: string;
 }
 
 // =============================================================================

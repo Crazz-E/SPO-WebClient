@@ -1002,3 +1002,44 @@ describe('every property-set mapping names a catalogued RDO member', () => {
     expect(new Set(names.map(n => n.emitted)).size).toBe(8);
   });
 });
+
+/**
+ * The gate's data path, not its logic.
+ *
+ * `grantAccess(tycoonId, details.securityId)` decides every civic control, and
+ * `securityId` comes from `allValues`, which holds ONLY what a template declares
+ * (building-details-handler.ts:668-685). When the civic general groups did not
+ * declare `SecurityId`, the property was never requested, the response carried
+ * '' and the gate refused everyone — the mayor of the town included.
+ *
+ * Component tests could not catch this: they build a BuildingDetailsResponse by
+ * hand and set `securityId` on it, bypassing collection entirely.
+ */
+describe('civic templates request the SecurityId the gate needs', () => {
+  beforeEach(() => {
+    clearInspectorTabsCache();
+  });
+
+  it.each([
+    ['capitolGeneral', 'testCapitolSec'],
+    ['townGeneral', 'testTownHallSec'],
+  ])('%s collects SecurityId', (handler, visualClass) => {
+    registerInspectorTabs(visualClass, [{ tabName: 'General', tabHandler: handler }]);
+
+    const collected = collectTemplatePropertyNamesStructured(
+      getTemplateForVisualClass(visualClass),
+    );
+
+    expect(collected.regularProperties).toContain('SecurityId');
+  });
+
+  it.each([
+    ['capitolGeneral', CAPITOL_GENERAL_GROUP],
+    ['townGeneral', TOWN_GENERAL_GROUP],
+  ])('%s declares SecurityId without displaying it', (_id, group) => {
+    const prop = group.properties.find((p) => p.rdoName === 'SecurityId');
+    expect(prop).toBeDefined();
+    // It is an authorisation input, not a figure to show the player.
+    expect(prop!.hideEmpty).toBe(true);
+  });
+});

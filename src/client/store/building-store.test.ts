@@ -68,6 +68,7 @@ const makeBuildingDetails = (x: number, y: number): BuildingDetailsResponse => (
   buildingName: 'Drug Store',
   ownerName: 'TestCorp',
   securityId: 'sec-1',
+  canGovern: true,
   tabs: [],
   groups: {},
   timestamp: Date.now(),
@@ -157,6 +158,7 @@ describe('Building Store — clearDetails (stale data prevention)', () => {
       buildingId: '12345', buildingName: 'Drug Store', ownerName: 'TestCorp',
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     });
 
     store.clearDetails();
@@ -177,6 +179,7 @@ describe('Building Store — clearDetails (stale data prevention)', () => {
       buildingId: '12345', buildingName: 'Drug Store', ownerName: 'TestCorp',
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     });
 
     store.clearDetails();
@@ -213,6 +216,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
       buildingId: '12345', buildingName: 'Drug Store', ownerName: 'TestCorp',
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     });
     expect(useBuildingStore.getState().isOwner).toBe(true);
   });
@@ -226,6 +230,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
       buildingId: '12345', buildingName: 'Drug Store', ownerName: 'OtherCorp',
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     });
     expect(useBuildingStore.getState().isOwner).toBe(false);
   });
@@ -239,6 +244,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
       buildingId: '12345', buildingName: 'Drug Store', ownerName: '',
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     });
     expect(useBuildingStore.getState().isOwner).toBe(true);
   });
@@ -252,6 +258,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
       buildingId: '12345', buildingName: 'Drug Store', ownerName: '',
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     });
     expect(useBuildingStore.getState().isOwner).toBe(false);
   });
@@ -265,6 +272,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
       buildingId: '12345', buildingName: 'Drug Store', ownerName: '',
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     });
     expect(useBuildingStore.getState().isOwner).toBe(false);
   });
@@ -279,6 +287,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
       buildingId: '12345', buildingName: 'Drug Store', ownerName: 'OtherCorp',
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     });
     // Should be true — tycoon owns OtherCorp even though it's not the active company
     expect(useBuildingStore.getState().isOwner).toBe(true);
@@ -291,6 +300,7 @@ describe('Building Store — Ownership for under-construction buildings', () => 
       buildingId: '12345', buildingName: 'Drug Store', ownerName: '',
       x: 100, y: 200, visualClass: '1234', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     });
     // Initially no owned companies — not owner
     expect(useBuildingStore.getState().isOwner).toBe(false);

@@ -57,6 +57,7 @@ function details(): BuildingDetailsResponse {
     buildingName: 'Plant',
     ownerName: 'SPO_test3',
     securityId: '1000',
+    canGovern: true,
     tabs: [],
     groups: {},
     timestamp: 1,

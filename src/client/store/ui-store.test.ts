@@ -160,3 +160,80 @@ describe('ui-store existing state', () => {
     expect(useUiStore.getState().rightPanel).toBeNull();
   });
 });
+
+/**
+ * Stacked prompts — the appoint flow.
+ *
+ * `modal` holds a single value, so raising the name prompt used to replace the
+ * civic inspector outright: it unmounted, and closing the prompt left nothing
+ * behind it. Naming three ministers meant three trips back through the map.
+ */
+describe('ui-store stacked modals', () => {
+  beforeEach(() => {
+    useUiStore.setState({ modal: null, modalBeneath: null, confirmPayload: null, promptPayload: null });
+  });
+
+  it('remembers the modal a prompt was raised over', () => {
+    useUiStore.getState().openModal('buildingInspector');
+    useUiStore.getState().requestPrompt('Elect Mayor', 'Name?', () => {});
+
+    expect(useUiStore.getState().modal).toBe('prompt');
+    expect(useUiStore.getState().modalBeneath).toBe('buildingInspector');
+  });
+
+  it('returns to the inspector when the prompt closes', () => {
+    useUiStore.getState().openModal('buildingInspector');
+    useUiStore.getState().requestPrompt('Elect Mayor', 'Name?', () => {});
+    useUiStore.getState().closeModal();
+
+    expect(useUiStore.getState().modal).toBe('buildingInspector');
+    expect(useUiStore.getState().modalBeneath).toBeNull();
+    expect(useUiStore.getState().promptPayload).toBeNull();
+  });
+
+  it('does the same for a confirm', () => {
+    useUiStore.getState().openModal('buildingInspector');
+    useUiStore.getState().requestConfirm('Depose', 'Sure?', () => {});
+    expect(useUiStore.getState().modalBeneath).toBe('buildingInspector');
+    useUiStore.getState().closeModal();
+    expect(useUiStore.getState().modal).toBe('buildingInspector');
+  });
+
+  it('closes to nothing when the prompt was not raised over anything', () => {
+    useUiStore.getState().requestPrompt('Standalone', 'Name?', () => {});
+    expect(useUiStore.getState().modalBeneath).toBeNull();
+    useUiStore.getState().closeModal();
+    expect(useUiStore.getState().modal).toBeNull();
+  });
+
+  it('does not stack a prompt on a prompt', () => {
+    // A second prompt must not bury the first one's beneath value, or closing
+    // would strand the player one layer down.
+    useUiStore.getState().openModal('buildingInspector');
+    useUiStore.getState().requestPrompt('First', 'a?', () => {});
+    useUiStore.getState().requestPrompt('Second', 'b?', () => {});
+
+    expect(useUiStore.getState().modalBeneath).toBe('buildingInspector');
+    useUiStore.getState().closeModal();
+    expect(useUiStore.getState().modal).toBe('buildingInspector');
+  });
+
+  it('leaves an ordinary modal unstacked', () => {
+    useUiStore.getState().openModal('settings');
+    expect(useUiStore.getState().modalBeneath).toBeNull();
+    useUiStore.getState().closeModal();
+    expect(useUiStore.getState().modal).toBeNull();
+  });
+
+  it('dismisses one layer at a time with Escape', () => {
+    useUiStore.getState().openModal('buildingInspector');
+    useUiStore.getState().requestPrompt('Elect Mayor', 'Name?', () => {});
+
+    useUiStore.getState().dismissTopmost();
+    // Back to the inspector, not out of it — and the focus survives.
+    expect(useUiStore.getState().modal).toBe('buildingInspector');
+
+    useUiStore.getState().dismissTopmost();
+    expect(useUiStore.getState().modal).toBeNull();
+  });
+});

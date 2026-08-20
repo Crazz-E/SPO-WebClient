@@ -27,6 +27,7 @@ const makeDetails = (x: number, y: number): BuildingDetailsResponse => ({
   buildingName: 'Warehouse',
   ownerName: 'TestCorp',
   securityId: 'sec-1',
+  canGovern: true,
   tabs: [],
   groups: {},
   timestamp: 1,

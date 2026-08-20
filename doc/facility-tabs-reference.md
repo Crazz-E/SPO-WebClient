@@ -844,6 +844,7 @@ Check `SecurityId` against current tycoon before showing edit controls.
 |-----------------|---------|
 | [spo-original-reference.md](spo-original-reference.md) | Index of the Delphi source, per class, with File.pas:Line citations |
 | [voyager-inspector-architecture.md](voyager-inspector-architecture.md) | Container lifecycle, xfer_* data binding, threading, the permission model in full |
+| [civic-roles-reference.md](civic-roles-reference.md) | The 6 civic handlers (`townTaxes`, `townJobs`, `CapitolTowns`, `Ministeries`, `townRes`, `Votes`) and the verified tab configs for classes 152 / 1500 / 2500 / 3500 |
 | [../src/mock-server/CLAUDE.md](../src/mock-server/CLAUDE.md) | Adding mock scenarios for new tab handlers |
 
 ---
