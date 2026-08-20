@@ -18,7 +18,6 @@ import {
   ROAD_NONE,
   RoadsRendering,
   RoadBlockClassManager,
-  RoadTextureResolver,
   parseIniFile,
   loadRoadBlockClassFromIni,
   roadBlockId,
@@ -32,14 +31,10 @@ import {
   landTypeOf,
   isWater,
   renderRoadSegment,
-  renderRoadSegments,
   detectSmoothCorner,
-  rotateRoadBlockId,
-  validateRoadId,
   parseCarPathSegments,
   parseCarPaths,
-  SegmentInfo,
-  MapData
+  SegmentInfo
 } from './road-texture-system';
 
 // Path to cache directories

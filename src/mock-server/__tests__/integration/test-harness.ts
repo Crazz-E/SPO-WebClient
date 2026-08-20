@@ -11,7 +11,6 @@
 
 import type { WsMessage } from '@/shared/types/message-types';
 import type { ClientHandlerContext } from '@/client/handlers/client-context';
-import type { BuildingDetailsResponse, BuildingFocusInfo } from '@/shared/types';
 import { MockWebSocketClient } from '../../mock-ws-client';
 import {
   loadScenario,

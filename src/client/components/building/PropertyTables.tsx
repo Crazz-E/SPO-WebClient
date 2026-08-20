@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
-import type { BuildingPropertyValue, BuildingProductData } from '@/shared/types';
+import type { BuildingProductData } from '@/shared/types';
 import {
   PropertyType,
   type PropertyDefinition,

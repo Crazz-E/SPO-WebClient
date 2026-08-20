@@ -17,9 +17,9 @@
  * - deltaTime-based animation (frame-rate independent)
  */
 
-import { CarClassManager, CarDirection } from './car-class-system';
+import { CarClassManager } from './car-class-system';
 import { RoadBlockClassManager, CarPath, RoadBlockId, RoadsRendering, roadBlockId } from './road-texture-system';
-import { GameObjectTextureCache, ObjectAtlasRect } from './game-object-texture-cache';
+import { GameObjectTextureCache } from './game-object-texture-cache';
 import { PLATFORM_SHIFT } from './concrete-texture-system';
 import { TileBounds, ZoomConfig } from '../../shared/map-config';
 

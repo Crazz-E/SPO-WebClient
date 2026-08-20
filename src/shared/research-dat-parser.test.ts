@@ -267,7 +267,7 @@ describe('parseResearchDat with real file', () => {
 
   beforeAll(() => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+
       const fs = require('fs');
       const path = require('path');
       const datPath = path.resolve(__dirname, '../../cache/Inventions/research.0.dat');

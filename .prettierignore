@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+cache/
+webclient-cache/
+public/
+electron/node_modules/
+electron/release/
+package-lock.json
+electron/package-lock.json
+.claude/

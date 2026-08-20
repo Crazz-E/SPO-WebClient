@@ -46,7 +46,7 @@ interface SessionInternals {
 }
 
 function statics(): SessionStatics {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { StarpeaceSession: SessionClass } = require('../spo_session');
   return SessionClass as unknown as SessionStatics;
 }

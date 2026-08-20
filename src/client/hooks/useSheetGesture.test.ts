@@ -6,7 +6,7 @@
  * via the mobile-components test suite.
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 
 /**
  * Extracted snap-point resolution logic (mirrors useSheetGesture internals).

@@ -133,7 +133,7 @@ export function splitMultilinePayload(payload: string): string[] {
  */
 export function extractRevenue(line: string): string {
   // Pattern: optional '(', optional '-', '$', digits with optional commas, '/h', optional ')'
-  const revenuePattern = /\(?\-?\$[\d,]+\/h\)?/;
+  const revenuePattern = /\(?-?\$[\d,]+\/h\)?/;
   const match = revenuePattern.exec(line);
 
   if (match) {

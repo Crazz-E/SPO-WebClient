@@ -31,6 +31,7 @@ not modified without discussion.
 ## Tests
 
 ```bash
+npm run lint
 npm run typecheck
 npm test
 npm run test:coverage
@@ -59,3 +60,7 @@ TypeScript strict. No `any` — `unknown` in catch blocks with `toErrorMessage(e
 for variables and methods, PascalCase for classes and interfaces. JSDoc on public API only.
 LF line endings everywhere except `.bat` and `.cmd` — `.gitattributes` and `.editorconfig`
 enforce it.
+
+`npm run lint` must report **zero errors**; warnings are a known backlog. Prettier is
+configured but not enforced over the existing tree — format the code you touch
+(`npx prettier --write <file>`), do not sweep the repository in a feature branch.

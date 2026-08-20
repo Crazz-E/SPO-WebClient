@@ -11,7 +11,7 @@
 
 import { TerrainLoader } from './terrain-loader';
 import { CoordinateMapper } from './coordinate-mapper';
-import { TextureCache, getFallbackColor } from './texture-cache';
+import { TextureCache } from './texture-cache';
 import { TextureAtlasCache } from './texture-atlas-cache';
 import { ChunkCache, CHUNK_SIZE } from './chunk-cache';
 import { config as appConfig } from '../../shared/config';
@@ -428,7 +428,6 @@ export class IsometricTerrainRenderer {
     // Get visible chunk range from tile bounds (O(1) instead of O(N²))
     const visibleChunks = this.chunkCache.getVisibleChunksFromBounds(bounds);
 
-    let chunksDrawn = 0;
     let tilesRendered = 0;
 
     // Track actually-visible chunks for preload centering
@@ -459,7 +458,6 @@ export class IsometricTerrainRenderer {
         );
 
         if (drawn) {
-          chunksDrawn++;
           tilesRendered += CHUNK_SIZE * CHUNK_SIZE;
         } else if (this.zoomLevel >= 2) {
           // Chunk not ready - render individual tiles for this chunk

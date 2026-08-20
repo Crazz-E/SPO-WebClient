@@ -39,9 +39,7 @@ import {
   TOWN_JOBS_GROUP,
   TOWN_RES_GROUP,
   TOWN_SERVICES_GROUP,
-  TOWN_PRODUCTS_GROUP,
-  TOWN_TAXES_GROUP,
-  ADS_GROUP,
+  TOWN_TAXES_GROUP
 } from './template-groups';
 import {
   collectTemplatePropertyNamesStructured,

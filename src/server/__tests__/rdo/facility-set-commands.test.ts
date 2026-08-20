@@ -11,8 +11,8 @@
 
 /// <reference path="../matchers/rdo-matchers.d.ts" />
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
-import { RdoCommand, RdoValue, RdoParser, RdoTypePrefix } from '../../../shared/rdo-types';
+import { describe, it, expect } from '@jest/globals';
+import { RdoValue } from '../../../shared/rdo-types';
 
 /**
  * Replicates the private buildRdoCommandArgs logic from spo_session.ts

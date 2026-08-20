@@ -13,7 +13,6 @@
 import { describe, it, expect } from '@jest/globals';
 import { splitMultilinePayload } from '../../rdo-helpers';
 import { RdoProtocol } from '../../rdo';
-import { RdoValue } from '../../../shared/rdo-types';
 import { RdoVerb, RdoAction } from '../../../shared/types/protocol-types';
 import type { RdoPacket } from '../../../shared/types/protocol-types';
 

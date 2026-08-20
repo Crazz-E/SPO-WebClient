@@ -34,7 +34,7 @@ import {
   refreshBuildingProperties,
 } from './building-details-handler';
 import type { ActiveInspector } from './building-details-handler';
-import { makeSessionCtx, FAKE_CONTEXT_IDS } from '../__tests__/session/fake-session-context';
+import { makeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { FakeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { SessionContext } from './session-context';
 import type { BuildingDetailsResponse, RdoPacket } from '../../shared/types';

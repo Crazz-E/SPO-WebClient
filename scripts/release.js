@@ -72,9 +72,6 @@ const CATEGORY_MAP = {
   perf: 'Changed',
 };
 
-// Prefixes included in the player-facing changelog
-const PLAYER_PREFIXES = new Set(['feat', 'fix', 'refactor', 'perf']);
-
 // Prefixes included in the dev changelog but not player-facing
 const DEV_ONLY_PREFIXES = new Set(['docs']);
 

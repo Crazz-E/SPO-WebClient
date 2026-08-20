@@ -2,7 +2,6 @@
  * TypeScript type declarations for RDO matchers
  */
 
-import type { RdoScenario } from '../../../mock-server/types/rdo-exchange-types';
 import type { StrictValidatorConfig } from '../../../mock-server/rdo-strict-validator';
 
 declare global {

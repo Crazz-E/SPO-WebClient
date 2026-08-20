@@ -8,7 +8,6 @@
 
 import { memo, useState, useCallback, useRef } from 'react';
 import type { BuildingSupplyData, BuildingConnectionData } from '@/shared/types';
-import { formatCurrency, formatNumber } from '@/shared/building-details';
 import { useClient } from '../../context';
 import { useGateConnections } from './useGateConnections';
 import styles from './PropertyGroup.module.css';

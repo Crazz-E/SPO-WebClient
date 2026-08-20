@@ -4,11 +4,8 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { WsMessageType } from '../../shared/types/message-types';
-import { ROAD_CONSTANTS } from '../../shared/constants';
 import type {
-  BuildingSupplyData,
-  BuildingConnectionData,
+  BuildingSupplyData
 } from '../../shared/types';
 
 // =============================================================================

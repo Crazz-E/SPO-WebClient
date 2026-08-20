@@ -12,11 +12,9 @@ import type { WsMessage, BuildingDetailsResponse, BuildingFocusInfo } from '@/sh
 import { createTestHarness, type TestHarness } from './test-harness';
 import {
   showBuildingOverlay,
-  openInspectorForFocused,
-  unfocusBuilding,
+  openInspectorForFocused
 } from '@/client/handlers/building-focus-handler';
 import { dispatchEvent } from '@/client/handlers/event-handler';
-import { ClientBridge } from '@/client/bridge/client-bridge';
 
 /* ── Mocks ─────────────────────────────────────────────────────────────── */
 

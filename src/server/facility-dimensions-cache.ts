@@ -3,7 +3,6 @@
  * Provides backward compatibility while using new BuildingDataService
  */
 
-import * as path from 'path';
 import { createLogger } from '../shared/logger';
 import { BuildingDataService, FacilityDimensions } from './building-data-service';
 import { BuildingData } from '../shared/types/building-data';

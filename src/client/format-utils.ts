@@ -16,7 +16,7 @@ export function formatMoney(value: string | number): string {
  *  Output: "+$5,000/h", "-$1,200/h", "$0/h".
  */
 export function formatIncome(income: string): string {
-  const cleaned = income.replace(/[^0-9.\-]/g, '');
+  const cleaned = income.replace(/[^0-9.-]/g, '');
   const num = parseFloat(cleaned);
   if (isNaN(num) || num === 0) return '$0/h';
   const abs = Math.abs(num).toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -25,7 +25,7 @@ export function formatIncome(income: string): string {
 
 /** Determine sign of income string for color coding. */
 export function incomeSign(income: string): 'positive' | 'negative' | 'neutral' {
-  const cleaned = income.replace(/[^0-9.\-]/g, '');
+  const cleaned = income.replace(/[^0-9.-]/g, '');
   const num = parseFloat(cleaned);
   if (isNaN(num) || num === 0) return 'neutral';
   return num > 0 ? 'positive' : 'negative';

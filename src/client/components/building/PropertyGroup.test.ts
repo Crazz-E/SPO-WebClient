@@ -14,7 +14,6 @@ import {
   getColorClass,
 } from './PropertyGroup';
 import type { RdoCommandMapping } from '@/shared/building-details';
-import type { BuildingPropertyValue } from '@/shared/types';
 
 // =============================================================================
 // resolveRdoCommand

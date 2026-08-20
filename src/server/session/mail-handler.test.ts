@@ -295,7 +295,7 @@ describe('saveDraft', () => {
       args: [RdoValue.string('l1').format()],
     });
     expect(fake.sent[2].packet).toEqual({
-      verb: RdoVerb.SEL, targetId: MAIL_SERVER, action: RdoAction.CALL, member: 'Save', separator: '\"^\"',
+      verb: RdoVerb.SEL, targetId: MAIL_SERVER, action: RdoAction.CALL, member: 'Save', separator: '"^"',
       args: [RdoValue.string('Shamba').format(), RdoValue.int(parseInt(MSG_ID, 10)).format()],
     });
     expect(fake.sent[2].category).toBe(TimeoutCategory.SLOW);
@@ -413,7 +413,7 @@ describe('readMailMessage', () => {
 
     expect(membersOf(fake.sent)).toEqual(['OpenMessage', 'GetHeaders', 'GetLines', 'GetAttachmentCount', 'CloseMessage']);
     expect(fake.sent[0].packet).toEqual({
-      verb: RdoVerb.SEL, targetId: MAIL_SERVER, action: RdoAction.CALL, member: 'OpenMessage', separator: '\"^\"',
+      verb: RdoVerb.SEL, targetId: MAIL_SERVER, action: RdoAction.CALL, member: 'OpenMessage', separator: '"^"',
       args: [RdoValue.string('Shamba').format(), RdoValue.string(ACCOUNT).format(), RdoValue.string('Inbox').format(), RdoValue.string('MSG-77').format()],
     });
     for (const i of [1, 2, 3]) {
@@ -485,7 +485,7 @@ describe('readMailMessage', () => {
     const msg = await readMailMessage(fake.ctx, 'Inbox', 'X');
 
     expect(membersOf(fake.sent)).toEqual(['OpenMessage', 'GetHeaders', 'GetLines', 'GetAttachmentCount', 'GetAttachment', 'GetAttachment', 'CloseMessage']);
-    expect(fake.sent[4].packet).toEqual({ verb: RdoVerb.SEL, targetId: MSG_ID, action: RdoAction.CALL, member: 'GetAttachment', separator: '\"^\"', args: [RdoValue.int(0).format()] });
+    expect(fake.sent[4].packet).toEqual({ verb: RdoVerb.SEL, targetId: MSG_ID, action: RdoAction.CALL, member: 'GetAttachment', separator: '"^"', args: [RdoValue.int(0).format()] });
     expect(fake.sent[5].packet.args).toEqual([RdoValue.int(1).format()]);
     expect(msg.attachments).toEqual([
       { class: 'TLinkAttachment', executed: true, properties: { Url: 'http://x' } },
@@ -652,7 +652,7 @@ describe('getMailUnreadCount', () => {
     expect(fake.sent[0].socketName).toBe('mail');
     expect(fake.sent[0].category).toBe(TimeoutCategory.NORMAL);
     expect(fake.sent[0].packet).toEqual({
-      verb: RdoVerb.SEL, targetId: MAIL_SERVER, action: RdoAction.CALL, member: 'CheckNewMail', separator: '\"^\"',
+      verb: RdoVerb.SEL, targetId: MAIL_SERVER, action: RdoAction.CALL, member: 'CheckNewMail', separator: '"^"',
       args: [RdoValue.int(parseInt(MAIL_INT_SERVER, 10)).format(), RdoValue.string(ACCOUNT).format()],
     });
     // never the mail server id in the first slot (MailServer.pas:543 dereferences it as a pointer)

@@ -8,7 +8,6 @@ import {
 import {
   RdoValue,
   RdoParser,
-  RdoCommand,
   assertValidRdoIdentifier,
   encodeRdoLiteral,
   isRdoTypePrefix,

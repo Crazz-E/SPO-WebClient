@@ -33,7 +33,6 @@ import {
   type WsRespConnectFacilities,
 } from '../../shared/types';
 import * as ErrorCodes from '../../shared/error-codes';
-import { toErrorMessage } from '../../shared/error-utils';
 import { assertValidRdoIdentifier } from '../../shared/rdo-types';
 import type { WsHandlerContext } from './types';
 import { sendResponse, sendError, withErrorHandler } from './ws-utils';

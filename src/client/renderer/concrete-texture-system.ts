@@ -381,7 +381,7 @@ const CW_SOURCE: readonly number[] = [5, 3, 0, 6, 1, 7, 4, 2];
 export function rotateConcreteCfg(cfg: ConcreteCfg, rotation: number): ConcreteCfg {
   if (rotation === 0) return cfg;
 
-  let current: ConcreteCfg = [...cfg] as ConcreteCfg;
+  const current: ConcreteCfg = [...cfg] as ConcreteCfg;
   for (let r = 0; r < rotation; r++) {
     const prev = [...current] as ConcreteCfg;
     for (let idx = 0; idx < 8; idx++) {

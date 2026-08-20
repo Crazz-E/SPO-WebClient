@@ -6,17 +6,15 @@
  * Test environment is node (no jsdom) — mocks for Canvas/ImageBitmap as needed.
  */
 
-import { VehicleAnimationSystem, AnimatedVehicle, RoadSide } from './vehicle-animation-system';
+import { VehicleAnimationSystem } from './vehicle-animation-system';
 import { CarClassManager } from './car-class-system';
 import {
   RoadBlockClassManager,
   RoadBlockId,
-  RoadsRendering,
-  CarPath,
-  CarPathSegment
+  RoadsRendering
 } from './road-texture-system';
 import { GameObjectTextureCache } from './game-object-texture-cache';
-import { TileBounds, ZoomConfig, ZOOM_LEVELS } from '../../shared/map-config';
+import { TileBounds, ZOOM_LEVELS } from '../../shared/map-config';
 
 // =============================================================================
 // MOCKS

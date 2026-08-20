@@ -9,14 +9,7 @@ import {
   BuildingDetailsResponse,
   SurfaceType,
   WsReqMailConnect,
-  WsReqMailGetFolder,
-  WsReqMailReadMessage,
-  WsReqMailCompose,
-  WsReqMailDelete,
-  WsReqMailGetUnreadCount,
-  WsReqMailSaveDraft,
-  MailFolder,
-  WsReqGetProfile,
+  WsReqGetProfile
 } from '../shared/types';
 import { getErrorMessage } from '../shared/error-codes';
 import { toErrorMessage } from '../shared/error-utils';
@@ -29,7 +22,6 @@ import { useUiStore } from './store/ui-store';
 import { useChatStore } from './store/chat-store';
 import { useBuildingStore } from './store/building-store';
 import { getFacilityDimensionsCache } from './facility-dimensions-cache';
-import { useProfileStore } from './store/profile-store';
 import { useMailStore } from './store/mail-store';
 import { useNewspaperStore } from './store/newspaper-store';
 import { usePoliticsStore } from './store/politics-store';

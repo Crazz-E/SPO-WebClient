@@ -15,7 +15,7 @@ import { useUiStore } from '../../store';
 import { useClient } from '../../context';
 import { isLazyTab } from '../../handlers/building-action-handler';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
-import type { BuildingDetailsTab, BuildingPropertyValue, TownHallDemographics } from '@/shared/types';
+import type { TownHallDemographics } from '@/shared/types';
 import { IconButton, Skeleton, TabBar } from '../common';
 import { QuickStats } from './QuickStats';
 import { InspectorTabs } from './InspectorTabs';
@@ -138,7 +138,6 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     if (!details || !isConnected) return;
     const x = details.x;
     const y = details.y;
-    const vc = details.visualClass;
 
     const doRefresh = () => {
       if (!isConnected) return;

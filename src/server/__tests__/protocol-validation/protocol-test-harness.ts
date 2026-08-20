@@ -234,7 +234,7 @@ export function createProtocolTestHarness(config: HarnessConfig): ProtocolTestHa
   });
 
   // Create the real session (dynamically to pick up mocks)
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { StarpeaceSession: SessionClass } = require('../../spo_session');
   const session = new SessionClass() as StarpeaceSession;
 

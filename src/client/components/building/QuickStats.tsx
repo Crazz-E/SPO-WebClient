@@ -4,7 +4,7 @@
 
 import type { BuildingFocusInfo } from '@/shared/types';
 import { ProgressBar, MiniBar } from '../common';
-import { parseSalesLines, salesVariant } from './StatusOverlay';
+import { parseSalesLines } from './StatusOverlay';
 import { RichDetailsView } from './RichDetails';
 import styles from './QuickStats.module.css';
 

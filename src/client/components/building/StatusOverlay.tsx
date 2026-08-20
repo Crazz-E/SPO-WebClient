@@ -21,9 +21,8 @@ import { ProgressBar } from '../common';
 import {
   parseRichDetails,
   percentColor,
-  formatNumber,
   type RichDetails,
-  type MetricColor,
+  type MetricColor
 } from './RichDetails';
 import styles from './StatusOverlay.module.css';
 

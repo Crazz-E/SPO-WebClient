@@ -3,7 +3,6 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { screen } from '@testing-library/react';
 import { renderWithProviders, resetStores } from '../../__tests__/setup/render-helpers';
 import { RightPanel } from './RightPanel';
 import { LeftPanel } from './LeftPanel';

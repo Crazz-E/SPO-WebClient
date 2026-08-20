@@ -20,6 +20,10 @@
     "test:verbose": "jest --verbose",
     "test:changed": "jest --onlyChanged --bail",
     "test:smoke": "jest --selectProjects component --bail",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "release": "node scripts/release.js",
     "electron": "npm run build:server && cd electron && npm start",
     "electron:validate": "node scripts/validate-electron-package.js",
@@ -57,6 +61,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@jest/globals": "^30.2.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -68,10 +73,15 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.1.4",
     "esbuild": "^0.28.2",
+    "eslint": "^10.8.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
+    "prettier": "^3.9.6",
     "ts-jest": "^29.4.6",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
     "vite": "^7.3.1"
   }
 }

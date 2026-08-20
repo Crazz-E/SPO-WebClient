@@ -8,7 +8,7 @@
 
 import { type ReactNode, useCallback, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { useSheetGesture, type SnapPoint } from '../../hooks/useSheetGesture';
+import { useSheetGesture } from '../../hooks/useSheetGesture';
 import { useUiStore } from '../../store/ui-store';
 import styles from './BottomSheet.module.css';
 

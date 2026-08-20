@@ -16,7 +16,6 @@
 
 import { Season, SEASON_NAMES } from '../../shared/map-config';
 import { LandClass, landClassOf } from '../../shared/land-utils';
-import { config as appConfig } from '../../shared/config';
 
 // Fallback colors for palette indices when texture is not available
 const TERRAIN_COLORS: Record<number, string> = {

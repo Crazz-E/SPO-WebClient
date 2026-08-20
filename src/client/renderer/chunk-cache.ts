@@ -482,9 +482,6 @@ export class ChunkCache {
       const bitmap = await createImageBitmap(blob);
       const tBitmap = performance.now();
 
-      // Get target dimensions for this zoom level
-      const config = ZOOM_LEVELS[zoomLevel];
-      const dims = calculateChunkCanvasDimensions(CHUNK_SIZE, config);
       const ctx = entry.canvas.getContext('2d');
       if (!ctx) {
         bitmap.close();

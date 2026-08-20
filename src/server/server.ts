@@ -1006,7 +1006,7 @@ const server = http.createServer(async (req, res) => {
   };
 
   try {
-    let content: string | Buffer = await fsp.readFile(filePath);
+    const content: string | Buffer = await fsp.readFile(filePath);
 
     if (ext === '.html') {
       let html = content.toString('utf-8');

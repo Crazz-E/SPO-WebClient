@@ -26,11 +26,11 @@ declare function require(id: string): unknown;
 // Browser-safe guard: skip everything if we're not in Node.js
 const isNode = typeof window === 'undefined' && typeof process !== 'undefined';
 
-/* eslint-disable @typescript-eslint/no-require-imports */
+
 // Dynamic require so bundlers don't try to include 'fs' / 'path' in browser builds
 const fs: NodeFsLike | null = isNode ? (require('fs') as NodeFsLike) : null;
 const path: NodePathLike | null = isNode ? (require('path') as NodePathLike) : null;
-/* eslint-enable @typescript-eslint/no-require-imports */
+
 
 export interface FileTransportOptions {
   filePath: string;
