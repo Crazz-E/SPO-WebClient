@@ -56,13 +56,17 @@ function findPropertyValue(
 
 export function BuildingInspectorModal() {
   const modal = useUiStore((s) => s.modal);
+  const modalBeneath = useUiStore((s) => s.modalBeneath);
   const closeModal = useUiStore((s) => s.closeModal);
   const details = useBuildingStore((s) => s.details);
   const focusedBuilding = useBuildingStore((s) => s.focusedBuilding);
   const politicsData = usePoliticsStore((s) => s.data);
   const client = useClient();
 
-  if (modal !== 'buildingInspector') return null;
+  // Stay mounted while a prompt or confirm is stacked on top: unmounting would
+  // throw away the open tab and the scroll position, and the appoint flow raises
+  // a prompt on every single use.
+  if (modal !== 'buildingInspector' && modalBeneath !== 'buildingInspector') return null;
 
   const handleClose = () => {
     closeModal();

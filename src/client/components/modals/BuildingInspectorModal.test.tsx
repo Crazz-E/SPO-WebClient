@@ -26,6 +26,7 @@ const mockDetails: BuildingDetailsResponse = {
   buildingName: 'National Capitol',
   ownerName: 'Government',
   securityId: 'sec-gov',
+  canGovern: true,
   tabs: mockTabs,
   groups: {
     general: [{ name: 'Status', value: 'Active' }],

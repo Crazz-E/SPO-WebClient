@@ -7,7 +7,7 @@ function makeTab(id: string, handlerName?: string): BuildingDetailsTab {
 
 describe('CivicTabConfig', () => {
   describe('buildCivicTabs', () => {
-    it('returns 4 tabs for Capitol (all groups present)', () => {
+    it('returns 5 tabs for Capitol (all groups present)', () => {
       const serverTabs = [
         makeTab('capitolGeneral'),
         makeTab('capitolTowns'),
@@ -17,10 +17,10 @@ describe('CivicTabConfig', () => {
         makeTab('votes'),
       ];
       const tabs = buildCivicTabs(serverTabs);
-      expect(tabs.map((t) => t.id)).toEqual(['overview', 'administration', 'demographics', 'elections']);
+      expect(tabs.map((t) => t.id)).toEqual(['overview', 'administration', 'demographics', 'elections', 'politics']);
     });
 
-    it('returns 3 tabs for TownHall (no towns/ministries)', () => {
+    it('returns 4 tabs for TownHall (no towns/ministries)', () => {
       const serverTabs = [
         makeTab('townGeneral'),
         makeTab('townJobs'),
@@ -28,13 +28,19 @@ describe('CivicTabConfig', () => {
         makeTab('votes'),
       ];
       const tabs = buildCivicTabs(serverTabs);
-      expect(tabs.map((t) => t.id)).toEqual(['overview', 'demographics', 'elections']);
+      expect(tabs.map((t) => t.id)).toEqual(['overview', 'demographics', 'elections', 'politics']);
     });
 
     it('always includes elections even without votes group', () => {
       const serverTabs = [makeTab('capitolGeneral')];
       const tabs = buildCivicTabs(serverTabs);
       expect(tabs.some((t) => t.id === 'elections')).toBe(true);
+    });
+
+    // Politics is synthetic like elections: it reads PoliticsData, never a
+    // server group, so no group can switch it off.
+    it('always includes politics, whatever the server sent', () => {
+      expect(buildCivicTabs([]).map((t) => t.id)).toEqual(['elections', 'politics']);
     });
 
     it('uses human-readable labels', () => {
@@ -47,7 +53,7 @@ describe('CivicTabConfig', () => {
         makeTab('votes'),
       ];
       const tabs = buildCivicTabs(serverTabs);
-      expect(tabs.map((t) => t.label)).toEqual(['Overview', 'Administration', 'Demographics', 'Elections']);
+      expect(tabs.map((t) => t.label)).toEqual(['Overview', 'Administration', 'Demographics', 'Elections', 'Politics']);
     });
 
     it('omits overview if no general group', () => {

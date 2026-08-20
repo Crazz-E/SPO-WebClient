@@ -13,6 +13,7 @@ import { useMailStore } from '../store/mail-store';
 import { useProfileStore } from '../store/profile-store';
 import { useSearchStore } from '../store/search-store';
 import { usePoliticsStore } from '../store/politics-store';
+import { useNewspaperStore } from '../store/newspaper-store';
 import { useTransportStore } from '../store/transport-store';
 import { useUiStore } from '../store/ui-store';
 import { useEmpireStore } from '../store/empire-store';
@@ -40,6 +41,7 @@ import type {
 } from '@/shared/types';
 import { CLUSTER_IDS } from '@/shared/cluster-data';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
+import { isCapitolBuilding } from '../components/politics/CivicTabConfig';
 import {
   WsMessageType,
   type WsMessage,
@@ -67,6 +69,8 @@ import {
   type WsRespSearchMenuRankingDetail,
   type WsRespSearchMenuBanks,
   type WsRespPoliticsData,
+  type WsRespNewspaperBoard,
+  type WsRespNewspaperPost,
   type WsRespTycoonRole,
   type WsRespTransportData,
   type WsRespEmpireFacilities,
@@ -221,10 +225,17 @@ export interface ClientCallbacks {
   onProfileSwitchCompany: (companyId: number, companyName: string, ownerRole: string) => void;
 
   // Politics
-  onRequestPoliticsData: (townName: string, buildingX: number, buildingY: number) => void;
+  onRequestPoliticsData: (townName: string, buildingX: number, buildingY: number, isCapitol: boolean) => void;
   onLaunchCampaign: (buildingX: number, buildingY: number) => void;
   onCancelCampaign: (buildingX: number, buildingY: number) => void;
+  onSetPoliticsRating: (ratingId: string, value: number) => void;
+  onSetPoliticsPublicity: (ratingId: string, value: number) => void;
+  onSetCampaignProject: (projectId: string, data: string) => void;
   onQueryTycoonRole: (tycoonName: string) => void;
+
+  // Newspaper
+  onRequestNewspaperBoard: (path?: string) => void;
+  onPostNewspaperColumn: (subject: string, body: string, replyToPath?: string) => void;
 
   // Empire
   onRequestFacilities: () => void;
@@ -334,8 +345,8 @@ export const ClientBridge = {
     useGameStore.getState().setStatus('reconnecting');
   },
 
-  setCredentials(username: string): void {
-    useGameStore.getState().setCredentials(username);
+  setCredentials(username: string, tycoonId?: string): void {
+    useGameStore.getState().setCredentials(username, tycoonId);
   },
 
   setWorld(worldName: string): void {
@@ -460,7 +471,11 @@ export const ClientBridge = {
       // Set politics store context so civic tabs (especially Ratings) have building coords
       const townGroup = details.groups['townGeneral'] ?? [];
       const townName = townGroup.find(p => p.name === 'Town')?.value ?? '';
-      usePoliticsStore.getState().setTownContext(townName, details.x, details.y);
+      // The Capitol has no town folder and needs `Capitol=YES` + x/y on every
+      // Politics page — see `WsReqPoliticsData.isCapitol`.
+      usePoliticsStore.getState().setTownContext(
+        townName, details.x, details.y, isCapitolBuilding(details.tabs),
+      );
       useUiStore.getState().openModal('buildingInspector');
     } else {
       useUiStore.getState().openRightPanel('building');
@@ -753,9 +768,44 @@ export const ClientBridge = {
     const resp = msg as unknown as { success: boolean; message?: string };
     if (resp.success) {
       showToast(resp.message || 'Campaign updated', 'success');
+      // Launching or withdrawing changes what the whole panel says, and the
+      // server re-rendered it from a fresh cache read (`Recache=YES`). Re-read.
+      ClientBridge.refreshPoliticsData();
     } else {
       showToast(resp.message || 'Campaign action failed', 'error');
     }
+  },
+
+  /**
+   * Outcome of one of the three politics mutations.
+   *
+   * Only failure is reported. All three are Pascal `procedure`s, so a success
+   * carries no server acknowledgement — just "the frame went out" — and a toast
+   * per rating row would drown the player who is setting twenty of them. What a
+   * success does produce is the optimistic value the store already painted;
+   * failure rolls the UI back by dropping it.
+   */
+  handlePoliticsMutationResponse(msg: WsMessage): void {
+    const resp = msg as unknown as {
+      success: boolean; message?: string; ratingId?: string; projectId?: string;
+    };
+    if (resp.success) return;
+    showToast(resp.message || 'The server refused that change', 'error');
+    ClientBridge.refreshPoliticsData();
+  },
+
+  /**
+   * Mark the Politics data stale so the open tab re-reads it.
+   *
+   * The bridge is the INBOUND half of the client and holds no socket, so it
+   * cannot send the request itself. Dropping `loadState` back to `idle` is the
+   * signal: the Politics tab's own lazy-load effect fires whenever it is `idle`,
+   * which is the same path that loaded the tab in the first place. With the tab
+   * closed nothing is mounted, and the next open reads fresh data anyway.
+   */
+  refreshPoliticsData(): void {
+    if (usePoliticsStore.getState().loadState === 'idle') return;
+    usePoliticsStore.getState().setLoadState('idle');
   },
 
   handleTycoonRoleResponse(msg: WsMessage): void {
@@ -777,6 +827,24 @@ export const ClientBridge = {
         : '';
       gameState.setPublicOfficeRole(isPublicOffice, roleName);
     }
+  },
+
+  // ---- Newspaper response handling ----
+
+  handleNewspaperResponse(msg: WsMessage): void {
+    if (msg.type === WsMessageType.RESP_NEWSPAPER_BOARD) {
+      useNewspaperStore.getState().setBoard((msg as WsRespNewspaperBoard).board);
+      return;
+    }
+    const resp = msg as WsRespNewspaperPost;
+    // A refused post leaves the board as it was — there is nothing to replace it
+    // with, and blanking the page would lose the column the player just typed.
+    if (resp.board) {
+      useNewspaperStore.getState().setBoard(resp.board);
+    } else {
+      useNewspaperStore.getState().setPosting(false);
+    }
+    showToast(resp.message, resp.success ? 'success' : 'error');
   },
 
   // ---- Transport response handling ----

@@ -13,6 +13,7 @@
 | [facility-tabs-reference.md](facility-tabs-reference.md) | Tab configurations from CLASSES.BIN, handler registry, 20 configs × 863 classes |
 | [spo-original-reference.md](spo-original-reference.md) | RDO server-side method signatures, type mappings, dispatch rules |
 | [research-system-reference.md](research-system-reference.md) | Research/Inventions system (hdqInventions handler) |
+| [civic-roles-reference.md](civic-roles-reference.md) | Town Hall and Capitol sheets — Mayor/President powers, the civic permission model, server rules |
 
 ---
 

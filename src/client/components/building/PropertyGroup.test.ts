@@ -2,7 +2,7 @@
  * Characterization tests for PropertyGroup pure functions.
  *
  * These cover the exported logic helpers that don't require React rendering:
- * resolveRdoCommand, computePendingKey, checkIsMayor, parseCloneMenu, getColorClass.
+ * resolveRdoCommand, computePendingKey, parseCloneMenu, getColorClass.
  *
  * Serves as a safety net before splitting the 2,447-line file into domain modules.
  */
@@ -10,7 +10,6 @@
 import {
   resolveRdoCommand,
   computePendingKey,
-  checkIsMayor,
   parseCloneMenu,
   getColorClass,
 } from './PropertyGroup';
@@ -234,55 +233,6 @@ describe('computePendingKey', () => {
       Other: { command: 'RDOSetOther' },
     };
     expect(computePendingKey('Unknown', cmds)).toBe('Unknown');
-  });
-});
-
-// =============================================================================
-// checkIsMayor
-// =============================================================================
-
-describe('checkIsMayor', () => {
-  it('returns true when ActualRuler has a non-empty value', () => {
-    expect(checkIsMayor([{ name: 'ActualRuler', value: 'PlayerName' }])).toBe(true);
-  });
-
-  it('returns false when ActualRuler is empty string', () => {
-    expect(checkIsMayor([{ name: 'ActualRuler', value: '' }])).toBe(false);
-  });
-
-  it('returns false when ActualRuler is missing', () => {
-    expect(checkIsMayor([{ name: 'SomeProp', value: '42' }])).toBe(false);
-  });
-
-  it('returns false on empty array', () => {
-    expect(checkIsMayor([])).toBe(false);
-  });
-
-  it('returns true even for "0" (non-empty string)', () => {
-    const props: BuildingPropertyValue[] = [
-      { name: 'ActualRuler', value: '0' },
-    ];
-    expect(checkIsMayor(props)).toBe(true);
-  });
-
-  it('finds ActualRuler among many properties', () => {
-    const props: BuildingPropertyValue[] = [
-      { name: 'Name', value: 'Town Hall' },
-      { name: 'Budget', value: '50000' },
-      { name: 'ActualRuler', value: 'MayorJoe' },
-      { name: 'Population', value: '1200' },
-    ];
-    expect(checkIsMayor(props)).toBe(true);
-  });
-
-  it('returns false when ActualRuler is present but value is undefined-like', () => {
-    // Per the function: ruler?.value !== undefined && ruler.value !== ''
-    // A property with value '' should return false
-    const props: BuildingPropertyValue[] = [
-      { name: 'ActualRuler', value: '' },
-      { name: 'OtherProp', value: 'notempty' },
-    ];
-    expect(checkIsMayor(props)).toBe(false);
   });
 });
 

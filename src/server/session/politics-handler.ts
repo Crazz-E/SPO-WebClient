@@ -13,17 +13,21 @@ import type {
   PoliticsData,
   PoliticsCampaignEntry,
   PoliticsRatingEntry,
+  PoliticsPublicityEntry,
+  PoliticsProjectEntry,
+  CampaignState,
   ConnectionSearchResult,
 } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
 import { rdoCall } from '../../shared/rdo-frame';
 import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
-import { splitMultilinePayload as splitMultilinePayloadHelper } from '../rdo-helpers';
+import { splitMultilinePayload as splitMultilinePayloadHelper, isTrueOrdinal } from '../rdo-helpers';
 import { parseFavoritesResponse } from './session-utils';
 import { toErrorMessage } from '../../shared/error-utils';
 import { config } from '../../shared/config';
 import fetch from 'node-fetch';
+import { redactUrlCredentials } from '../url-redact';
 
 // =========================================================================
 // PRIVATE HELPERS
@@ -53,10 +57,45 @@ const RATING_LABEL_CELL = cellPattern('label');
 const RATING_VALUE_CELL = cellPattern('value');
 
 /**
- * One table row. The trailing alternation accepts a row the server never closed
- * (a truncated response) without letting the body run into the next row.
+ * One table row, attributes and body captured separately. The trailing
+ * alternation accepts a row the server never closed (a truncated response)
+ * without letting the body run into the next row.
+ *
+ * Group 1 is everything between `<tr` and `>` — that is where `tycoonratings.asp:135`
+ * and `mayorpub.asp` hang the rating's cache `Id`. Group 2 is the row body.
  */
-const TABLE_ROW = /<tr\b[^>]*>([\s\S]*?)(?:<\/tr>|(?=<tr\b)|$)/gi;
+const TABLE_ROW = /<tr\b([^>]*)>([\s\S]*?)(?:<\/tr>|(?=<tr\b)|$)/gi;
+
+/**
+ * An `id` attribute, quoted or not.
+ *
+ * Unquoted is the case that matters: the ASP writes `id=<%= CacheObj.Id %>`
+ * with no quotes at all (`tycoonratings.asp:135`), so a pattern demanding them
+ * would find nothing on the one page whose ids we need.
+ */
+const ID_ATTR = /\bid\s*=\s*["']?([^"'\s>]+)/i;
+
+/**
+ * The option the server marked `selected` inside a row.
+ *
+ * This is the only trustworthy read of a publicity level: the visible label is
+ * `StrMayorPub_5..9` out of `ePolitics.lng` and therefore localised, while the
+ * `value` attribute is always the raw 0/25/50/75/100 (`mayorpub.asp:187-191`).
+ * `[^>]*?` before `selected` keeps it from jumping past the option's own `>`
+ * into the next one.
+ */
+const SELECTED_OPTION = /<option\s+[^>]*?value\s*=\s*["']?(\d+)["']?[^>]*?\bselected\b/i;
+
+/**
+ * A `<div class=label>` — the one-sentence banner both the Politics pages use
+ * for their free text.
+ *
+ * `mayorpub.asp:143` prints the publicity total in one; `tycooncampaign.asp:364`,
+ * `:391` and `:400` print the three campaign messages in the only three on that
+ * page. The `(?![\w-])` boundary is what stops `class=label` from matching
+ * `class=labelAccountLevel2`.
+ */
+const LABEL_CLASS_DIV = /<div\s+class\s*=\s*["']?label(?![\w-])["']?[^>]*>([\s\S]*?)<\/div>/i;
 
 /** `tycoonratings.asp:153-159` — the opinion dropdown, whose options are percentages too. */
 const OPINION_SELECT = /<select\b[\s\S]*?<\/select>/gi;
@@ -103,8 +142,8 @@ export function parsePoliticsRatings(html: string): PoliticsRatingEntry[] {
   TABLE_ROW.lastIndex = 0;
   let row: RegExpExecArray | null;
   while ((row = TABLE_ROW.exec(html)) !== null) {
-    const labelCell = RATING_LABEL_CELL.exec(row[1]);
-    const valueCell = RATING_VALUE_CELL.exec(row[1]);
+    const labelCell = RATING_LABEL_CELL.exec(row[2]);
+    const valueCell = RATING_VALUE_CELL.exec(row[2]);
     if (!labelCell || !valueCell) continue;
 
     const name = stripTags(labelCell[1]);
@@ -112,9 +151,51 @@ export function parsePoliticsRatings(html: string): PoliticsRatingEntry[] {
 
     const text = stripTags(valueCell[1].replace(OPINION_SELECT, ' '));
     const numeric = /-?\d+(?:\.\d+)?/.exec(text);
-    ratings.push({ name, value: numeric ? parseFloat(numeric[0]) : 0 });
+    const entry: PoliticsRatingEntry = { name, value: numeric ? parseFloat(numeric[0]) : 0 };
+
+    // Only `tycoonratings.asp` carries one, and only its entries can be rated.
+    const id = ID_ATTR.exec(row[1]);
+    if (id) entry.id = id[1];
+
+    ratings.push(entry);
   }
   return ratings;
+}
+
+/**
+ * Parse the PUBLICITY tab (`mayorpub.asp:155-200`).
+ *
+ * Structurally the same two-cell row as the ratings tables, so it reuses their
+ * cell patterns, but the value is NOT the text: the cell prints a localised
+ * label (`mayorpub.asp:180-190`) and only the `<select>`'s selected option
+ * carries the 0/25/50/75/100 the server will accept back.
+ *
+ * A row with no `id` cannot be sent to `RDOSetPublicity` and is dropped rather
+ * than shipped as an unusable control.
+ */
+export function parsePublicityRows(html: string): PoliticsPublicityEntry[] {
+  const rows: PoliticsPublicityEntry[] = [];
+  TABLE_ROW.lastIndex = 0;
+  let row: RegExpExecArray | null;
+  while ((row = TABLE_ROW.exec(html)) !== null) {
+    const id = ID_ATTR.exec(row[1]);
+    if (!id) continue;
+
+    const labelCell = RATING_LABEL_CELL.exec(row[2]);
+    if (!labelCell) continue;
+    const name = stripTags(labelCell[1]);
+    if (!name) continue;
+
+    const selected = SELECTED_OPTION.exec(row[2]);
+    rows.push({ id: id[1], name, level: selected ? parseInt(selected[1], 10) : 0 });
+  }
+  return rows;
+}
+
+/** The sentence above the publicity table, tags stripped. Empty when absent. */
+export function parsePublicityAds(html: string): string {
+  const match = LABEL_CLASS_DIV.exec(html);
+  return match ? stripTags(match[1]) : '';
 }
 
 /**
@@ -130,44 +211,126 @@ export function parsePoliticsRatings(html: string): PoliticsRatingEntry[] {
  * with an empty table (`popularratings.asp:60` `if not Itr.Empty`), which
  * legitimately parses to `[]`.
  */
+async function fetchPoliticsPage(
+  ctx: SessionContext, url: string, label: string
+): Promise<string> {
+  ctx.log.debug(`[Politics] Fetching ${label} from ${redactUrlCredentials(url)}`);
+  const resp = await fetch(url, { redirect: 'follow' });
+  if (!resp.ok) {
+    ctx.log.warn(`[Politics] ${label} page answered HTTP ${resp.status} — ${redactUrlCredentials(url)}`);
+    return '';
+  }
+  return resp.text();
+}
+
 async function fetchRatingsPage(
   ctx: SessionContext, url: string, label: string
 ): Promise<PoliticsRatingEntry[]> {
-  ctx.log.debug(`[Politics] Fetching ${label} from ${url}`);
-  const resp = await fetch(url, { redirect: 'follow' });
-  if (!resp.ok) {
-    ctx.log.warn(`[Politics] ${label} page answered HTTP ${resp.status} — ${url}`);
-    return [];
-  }
-  return parsePoliticsRatings(await resp.text());
+  return parsePoliticsRatings(await fetchPoliticsPage(ctx, url, label));
 }
 
-async function fetchMayorDataFromBuilding(ctx: SessionContext, x: number, y: number): Promise<{
-  mayorName: string; mayorPrestige: number; mayorRating: number;
-  tycoonsRating: number; yearsToElections: number; campaignCount: number;
-  campaigns: PoliticsCampaignEntry[];
-}> {
-  const empty = { mayorName: '', mayorPrestige: 0, mayorRating: 0, tycoonsRating: 0, yearsToElections: 0, campaignCount: 0, campaigns: [] as PoliticsCampaignEntry[] };
+/**
+ * Read a cache object addressed by PATH rather than by map coordinates.
+ *
+ * Needed because the ruler's figures do not live on the Town Hall facility.
+ * `ActualRuler`, `IFELRating`, `RulerActualPrestige`, `RulerPeriods`,
+ * `TownHallId` and the `Prestige{i}` series are written by
+ * `TPoliticalTownCacheAgent` onto the TOWN folder object
+ * (Kernel/PoliticsCache.pas:134-170) and by `TPresidentialHall.StoreToCache`
+ * onto the Capitol's own object (Kernel/WorldPolitics.pas:1393-1420). The
+ * facility at (x, y) gets only what `TPoliticalTownHall.StoreToCache` writes —
+ * `Capital`, the `Candidate{i}` vote series and the four `Ruler*Cmp*` values
+ * (Kernel/TownPolitics.pas:476-491).
+ *
+ * This is exactly the split `mayordata.asp:10-19` makes: `InitCacheObject(
+ * "Towns\<name>.five\" )` for a town, `InitMapCacheObject(x, y)` for the Capitol.
+ *
+ * A path that does not resolve is not an error and is not special-cased: the
+ * Delphi cache server answers `GetPropertyList` with one empty value per
+ * requested name whichever object the handle points at, so an unbuilt town
+ * arrives as empty strings and {@link fetchRulerData} turns those into zeros —
+ * the same shape as a town with no mayor. This mirrors `queryTycoonPoliticalRole`
+ * (building-management-handler.ts:41-63), which reads `Tycoons\<name>.five\`
+ * the same way.
+ */
+async function readCacheObjectAtPath(
+  ctx: SessionContext, path: string, propertyNames: string[]
+): Promise<string[]> {
+  await ctx.connectMapService();
+  const tempObjectId = await ctx.cacherCreateObject();
   try {
-    const propNames = ['ActualRuler', 'RulerPrestige', 'RulerRating', 'TycoonsRating', 'YearsToElections', 'CampaignCount'];
-    const values = await ctx.getCacherPropertyListAt(x, y, propNames);
-    const campaignCount = parseInt(values[5]) || 0;
+    await ctx.cacherSetPath(tempObjectId, path);
+    return await ctx.cacherGetPropertyList(tempObjectId, propertyNames);
+  } finally {
+    await ctx.cacherCloseObject(tempObjectId);
+  }
+}
 
-    // Fetch campaign candidate data if any campaigns exist
+/** The properties `mayordata.asp` and `opositiondata.asp` read, in one list. */
+const RULER_PROPS = [
+  'ActualRuler', 'RulerActualPrestige', 'RulerRating', 'TycoonsRating',
+  'IFELRating', 'RulerPeriods', 'YearsToElections', 'CampaignCount',
+  'TownHallId', 'HasRuler',
+] as const;
+
+interface RulerData {
+  mayorName: string;
+  mayorPrestige: number;
+  mayorRating: number;
+  tycoonsRating: number;
+  ifelRating: number;
+  mandateNo: number;
+  yearsToElections: number;
+  campaignCount: number;
+  townHallId: number;
+  hasRuler: boolean;
+  campaigns: PoliticsCampaignEntry[];
+}
+
+const EMPTY_RULER_DATA: RulerData = {
+  mayorName: '', mayorPrestige: 0, mayorRating: 0, tycoonsRating: 0, ifelRating: 0,
+  mandateNo: 0, yearsToElections: 0, campaignCount: 0, townHallId: 0, hasRuler: false,
+  campaigns: [],
+};
+
+/**
+ * The ruler block and the candidate list, off the one cache object that holds
+ * both. See {@link readCacheObjectAtPath} for why the address differs between
+ * the two building kinds.
+ */
+async function fetchRulerData(
+  ctx: SessionContext, isCapitol: boolean, townName: string, x: number, y: number
+): Promise<RulerData> {
+  const read = (props: string[]): Promise<string[]> => isCapitol
+    ? ctx.getCacherPropertyListAt(x, y, props)
+    : readCacheObjectAtPath(ctx, `Towns\\${townName}.five\\`, props);
+
+  try {
+    const values = await read([...RULER_PROPS]);
+    if (values.length === 0) return EMPTY_RULER_DATA;
+
+    const campaignCount = parseInt(values[7]) || 0;
+
+    // `Tycoon{i}` / `Rating{i}` / `Prestige{i}` — the campaign series this same
+    // object carries (Kernel/PoliticsCache.pas:160-162, WorldPolitics.pas:1396-1398).
+    // NOT `Candidate{i}` / `CmpRat{i}`: those belong to the votes series on the
+    // FACILITY, which the Votes tab reads and which has no prestige column.
     const campaigns: PoliticsCampaignEntry[] = [];
     if (campaignCount > 0) {
       const candidateProps: string[] = [];
       for (let i = 0; i < campaignCount; i++) {
-        candidateProps.push(`Candidate${i}`, `CmpRat${i}`);
+        candidateProps.push(`Tycoon${i}`, `Rating${i}`, `Prestige${i}`);
       }
       try {
-        const candidateValues = await ctx.getCacherPropertyListAt(x, y, candidateProps);
+        const candidateValues = await read(candidateProps);
         for (let i = 0; i < campaignCount; i++) {
-          const name = candidateValues[i * 2] || '';
-          const rating = parseInt(candidateValues[i * 2 + 1]) || 0;
-          if (name) {
-            campaigns.push({ candidateName: name, rating });
-          }
+          const name = candidateValues[i * 3] || '';
+          if (!name) continue;
+          campaigns.push({
+            candidateName: name,
+            rating: parseInt(candidateValues[i * 3 + 1]) || 0,
+            prestige: parseInt(candidateValues[i * 3 + 2]) || 0,
+          });
         }
       } catch (e: unknown) {
         ctx.log.debug(`[Politics] Could not fetch campaign candidates: ${toErrorMessage(e)}`);
@@ -179,14 +342,18 @@ async function fetchMayorDataFromBuilding(ctx: SessionContext, x: number, y: num
       mayorPrestige: parseInt(values[1]) || 0,
       mayorRating: parseInt(values[2]) || 0,
       tycoonsRating: parseInt(values[3]) || 0,
-      yearsToElections: parseInt(values[4]) || 0,
+      ifelRating: parseInt(values[4]) || 0,
+      mandateNo: parseInt(values[5]) || 0,
+      yearsToElections: parseInt(values[6]) || 0,
       campaignCount,
+      townHallId: parseInt(values[8]) || 0,
+      hasRuler: isTrueOrdinal(values[9] ?? ''),
       campaigns,
     };
   } catch (e: unknown) {
-    ctx.log.debug(`[Politics] Could not fetch mayor data from building: ${toErrorMessage(e)}`);
+    ctx.log.debug(`[Politics] Could not fetch ruler data: ${toErrorMessage(e)}`);
   }
-  return empty;
+  return EMPTY_RULER_DATA;
 }
 
 /**
@@ -203,22 +370,46 @@ async function fetchMayorDataFromBuilding(ctx: SessionContext, x: number, y: num
  */
 function buildCampaignParams(
   ctx: SessionContext,
-  action: 'Launch' | 'Cancel', buildingX: number, buildingY: number, townName?: string
+  action: 'Launch' | 'Cancel' | 'Read', buildingX: number, buildingY: number, townName?: string
 ): URLSearchParams {
   const isCapitol = !townName;
-  return new URLSearchParams({
+  const params = new URLSearchParams({
     WorldName: ctx.currentWorldInfo?.name || '',
     TycoonName: ctx.activeUsername || ctx.cachedUsername || '',
     Password: ctx.cachedPassword || '',
     TownName: townName || '',
     DAAddr: ctx.daAddr || config.rdo.directoryHost,
     DAPort: String(ctx.daPort || config.rdo.ports.directory),
-    [action]: 'TRUE',
     Capitol: isCapitol ? 'YES' : '',
     Recache: 'YES',
     x: isCapitol ? String(buildingX) : '',
     y: isCapitol ? String(buildingY) : '',
   });
+  // `Read` sends neither marker: `:49` and `:66` fire the RDO call only when
+  // `Request("Launch")` / `Request("Cancel")` is non-empty, so the same URL
+  // without them renders the panel and mutates nothing.
+  if (action !== 'Read') params.set(action, 'TRUE');
+  return params;
+}
+
+/** Every Politics page takes the same five parameters, plus `Password`. */
+function buildPoliticsParams(
+  ctx: SessionContext, townName: string, x: number, y: number, isCapitol: boolean
+): string {
+  const params = new URLSearchParams({
+    WorldName: ctx.currentWorldInfo?.name || '',
+    TycoonName: ctx.activeUsername || ctx.cachedUsername || '',
+    Password: ctx.cachedPassword || '',
+    TownName: isCapitol ? '' : townName,
+    DAAddr: ctx.daAddr || config.rdo.directoryHost,
+    DAPort: String(ctx.daPort || config.rdo.ports.directory),
+    Capitol: isCapitol ? 'YES' : '',
+    x: isCapitol ? String(x) : '',
+    y: isCapitol ? String(y) : '',
+  });
+  // The pages parse their own query string; `+` for a space is a form encoding
+  // they do not decode, and town names contain spaces.
+  return params.toString().replace(/\+/g, '%20');
 }
 
 /**
@@ -236,12 +427,9 @@ function buildCampaignParams(
 const CAMPAIGN_CANCEL_BUTTON = /info\s*=\s*["'][^"']*tycooncampaign\.asp\?[^"']*[?&]Cancel=TRUE/i;
 const CAMPAIGN_LAUNCH_BUTTON = /info\s*=\s*["'][^"']*tycooncampaign\.asp\?[^"']*[?&]Launch=TRUE/i;
 
-/** `tycooncampaign.asp:364`, `:391`, `:400` — the only three `<div class=label>` on the page. */
-const CAMPAIGN_LABEL_DIV = /<div\s+class\s*=\s*["']?label(?![\w-])["']?[^>]*>([\s\S]*?)<\/div>/i;
-
 /** The sentence the page shows, without the button table `:364`/`:372` nests inside it. */
 function campaignLabelText(html: string): string {
-  const match = CAMPAIGN_LABEL_DIV.exec(html);
+  const match = LABEL_CLASS_DIV.exec(html);
   return match ? stripTags(match[1].split(/<table\b/i)[0]) : '';
 }
 
@@ -304,6 +492,124 @@ export function parseCampaignResponse(
   };
 }
 
+// -------------------------------------------------------------------------
+// YOUR CAMPAIGN — the project list, the promise, the state
+// -------------------------------------------------------------------------
+
+/** `tycooncampaign.asp:263` — `TypeId="Minister"` tells the two row shapes apart. */
+const PROJECT_TYPE_ID = /<td\b[^>]*\bTypeId\s*=\s*["']?([^"'\s>]+)/i;
+
+/** `tycooncampaign.asp:287` — the minister name, in the input the row edits. */
+const PROJECT_INPUT_VALUE = /<input\b[^>]*\bvalue\s*=\s*"([^"]*)"/i;
+
+/** `tycooncampaign.asp:275-281` — the three proposal-state icons, in state order. */
+const PROPOSAL_STATE_IMG = /images\/(unknown|invalid|ok)\.jpg/i;
+const PROPOSAL_STATES: Record<string, 1 | 2 | 3> = { unknown: 1, invalid: 2, ok: 3 };
+
+/** The `<div id=LabelDiv_…>` that holds a project row's rendered value. */
+const PROJECT_LABEL_DIV = /<div\b[^>]*\bid\s*=\s*["']?LabelDiv_[^\s>"']*["']?[^>]*>([\s\S]*?)<\/div>/i;
+
+/** `<span id=Value_…>` — the exact number, unquantised, unlike the select. */
+const PROJECT_VALUE_SPAN = /<span\b[^>]*\bid\s*=\s*["']?Value_[^\s>"']*["']?[^>]*>([\s\S]*?)<\/span>/i;
+
+/** `tycooncampaign.asp:369` — the campaign promise, in the page's only textarea. */
+const PROMISE_TEXTAREA = /<textarea\b[^>]*>([\s\S]*?)<\/textarea>/i;
+
+/**
+ * Parse the campaign project rows of `tycooncampaign.asp:250-315`.
+ *
+ * The page renders projects only when a campaign exists (`:222-224`), so an
+ * empty result is the normal answer for everyone who is not a candidate — it is
+ * not an error and is not logged as one.
+ *
+ * Two row shapes, told apart by the value cell's `TypeId`:
+ *
+ *  - `Minister` — a tycoon name, editable as free text (`:287`), with a
+ *    validation icon the server picks from `ProposalState` (`:275-281`);
+ *  - anything else — a numeric promise, rendered as a localised comparator plus
+ *    `<span id=Value_…>N</span>%` (`:295-301`).
+ *
+ * The number comes from the span, not from the `<select>`: `:302` quantises the
+ * select to steps of 10 (`10*(CacheObj.Value \ 10)`) while the span prints
+ * `CacheObj.Value` exactly, and showing the player a rounded copy of their own
+ * promise is a lie the page itself does not tell.
+ */
+export function parseCampaignProjects(html: string): PoliticsProjectEntry[] {
+  const projects: PoliticsProjectEntry[] = [];
+  TABLE_ROW.lastIndex = 0;
+  let row: RegExpExecArray | null;
+  while ((row = TABLE_ROW.exec(html)) !== null) {
+    const id = ID_ATTR.exec(row[1]);
+    if (!id) continue;
+
+    const labelCell = RATING_LABEL_CELL.exec(row[2]);
+    if (!labelCell) continue;
+    const name = stripTags(labelCell[1]);
+    if (!name) continue;
+
+    const typeId = PROJECT_TYPE_ID.exec(row[2]);
+    if (!typeId) continue;
+
+    if (typeId[1].toLowerCase() === 'minister') {
+      const input = PROJECT_INPUT_VALUE.exec(row[2]);
+      const state = PROPOSAL_STATE_IMG.exec(row[2]);
+      const entry: PoliticsProjectEntry = { id: id[1], name, kind: 'minister' };
+      if (input) entry.ministerName = input[1];
+      if (state) entry.proposalState = PROPOSAL_STATES[state[1].toLowerCase()];
+      projects.push(entry);
+      continue;
+    }
+
+    const labelDiv = PROJECT_LABEL_DIV.exec(row[2]);
+    const entry: PoliticsProjectEntry = { id: id[1], name, kind: 'goal' };
+    if (labelDiv) {
+      // Everything the page printed before the value span IS the comparator.
+      const comparator = stripTags(labelDiv[1].split(/<span\b/i)[0]);
+      if (comparator) entry.comparator = comparator;
+      const span = PROJECT_VALUE_SPAN.exec(labelDiv[1]);
+      const numeric = span ? /-?\d+(?:\.\d+)?/.exec(stripTags(span[1])) : null;
+      if (numeric) entry.value = parseFloat(numeric[0]);
+    }
+    projects.push(entry);
+  }
+  return projects;
+}
+
+/** The campaign promise, or `''` when the page rendered no textarea. */
+export function parseCampaignPromise(html: string): string {
+  const match = PROMISE_TEXTAREA.exec(html);
+  return match ? match[1].trim() : '';
+}
+
+/**
+ * Read which of the five YOUR CAMPAIGN states `tycooncampaign.asp` is showing.
+ *
+ * Only two of the five are legible from the markup — the two that carry a
+ * button, which is exactly what {@link parseCampaignResponse} already relies on.
+ * The remaining three all render the same bare `<div class=label>`
+ * (`:391` "you are the ruler", `:400-413` a refusal, and a message with no
+ * `case else` when `LaunchError` is outside {100,101,102}), so the page cannot
+ * tell them apart and neither can a regex.
+ *
+ * `isRuler` resolves it without reading a word of localised text: the caller
+ * already knows the office holder's name and the player's own, and holding the
+ * office is precisely the condition `:223` tests (`not IsMayor`). Everything
+ * else that reaches this branch was refused.
+ */
+export function parseCampaignState(
+  html: string, isRuler: boolean
+): { state: CampaignState; message: string } {
+  if (CAMPAIGN_CANCEL_BUTTON.test(html)) return { state: 'running', message: '' };
+  if (CAMPAIGN_LAUNCH_BUTTON.test(html)) return { state: 'available', message: '' };
+
+  const published = campaignLabelText(html);
+  if (isRuler) return { state: 'ruler', message: published };
+  return {
+    state: 'refused',
+    message: published || 'The campaign page published no reason.',
+  };
+}
+
 /**
  * Parse RDO FindSuppliers/FindClients response.
  * Format: newline-separated rows, each with } delimiters.
@@ -338,22 +644,42 @@ function parseRdoConnectionResults(
   }).filter((r): r is ConnectionSearchResult => r !== null);
 }
 
+/**
+ * Prestige a campaign application must clear to be accepted.
+ * `tycooncampaign.asp:364-368` prints 200 for a town, 1000 for the Capitol, and
+ * `:404-408` repeats the same pair when the server refuses with code 101.
+ */
+const PRESTIGE_THRESHOLD_TOWN = 200;
+const PRESTIGE_THRESHOLD_CAPITOL = 1000;
+
 /** Default politics data returned when the server is unreachable. */
-export function getDefaultPoliticsData(townName: string): PoliticsData {
+export function getDefaultPoliticsData(townName: string, isCapitol = false): PoliticsData {
   return {
     townName,
+    isCapitol,
+    hasRuler: false,
     yearsToElections: 0,
     mayorName: '',
     mayorPrestige: 0,
     mayorRating: 0,
     tycoonsRating: 0,
-    campaignCount: 0,
+    ifelRating: 0,
+    mandateNo: 0,
+    rulerPhotoUrl: '',
     popularRatings: [],
     ifelRatings: [],
     tycoonsRatings: [],
+    publicity: [],
+    publicityAds: '',
+    campaignCount: 0,
     campaigns: [],
-    canLaunchCampaign: false,
+    campaignState: 'refused',
     campaignMessage: 'Politics data is not available.',
+    canLaunchCampaign: false,
+    prestigeThreshold: isCapitol ? PRESTIGE_THRESHOLD_CAPITOL : PRESTIGE_THRESHOLD_TOWN,
+    projects: [],
+    promise: '',
+    townHallId: 0,
   };
 }
 
@@ -380,25 +706,17 @@ export async function fetchOwnedFacilities(ctx: SessionContext): Promise<Favorit
  * Fetches mayor info and ratings from the game server's politics ASP pages.
  */
 export async function getPoliticsData(
-  ctx: SessionContext, townName: string, buildingX: number, buildingY: number
+  ctx: SessionContext, townName: string, buildingX: number, buildingY: number,
+  isCapitol = false,
 ): Promise<PoliticsData> {
   const worldIp = ctx.currentWorldInfo?.ip;
   if (!worldIp) {
-    return getDefaultPoliticsData(townName);
+    return getDefaultPoliticsData(townName, isCapitol);
   }
 
   try {
-    const queryParams = new URLSearchParams({
-      WorldName: ctx.currentWorldInfo?.name || '',
-      TycoonName: ctx.activeUsername || ctx.cachedUsername || '',
-      Password: ctx.cachedPassword || '',
-      TownName: townName,
-      DAAddr: ctx.daAddr || config.rdo.directoryHost,
-      DAPort: String(ctx.daPort || config.rdo.ports.directory),
-    });
-
     const baseUrl = `http://${worldIp}/Five/0/Visual/Voyager/Politics`;
-    const query = queryParams.toString().replace(/\+/g, '%20');
+    const query = buildPoliticsParams(ctx, townName, buildingX, buildingY, isCapitol);
 
     const popularRatings = await fetchRatingsPage(ctx, `${baseUrl}/popularratings.asp?${query}`, 'popular ratings');
     const ifelRatings = await fetchRatingsPage(ctx, `${baseUrl}/ifelratings.asp?${query}`, 'IFEL ratings');
@@ -408,7 +726,7 @@ export async function getPoliticsData(
     // of the Voyager tree, so every request 404'd and the tab was permanently
     // empty (audit A-12 / B-4). The page reads the same five parameters as its
     // two siblings (`tycoonratings.asp:6-22`), plus `Password` (`:103`), which
-    // `queryParams` already carries.
+    // `query` already carries.
     let tycoonsRatings: PoliticsRatingEntry[] = [];
     try {
       tycoonsRatings = await fetchRatingsPage(ctx, `${baseUrl}/tycoonratings.asp?${query}`, 'tycoon ratings');
@@ -418,33 +736,79 @@ export async function getPoliticsData(
       ctx.log.warn(`[Politics] Tycoons ratings fetch failed: ${toErrorMessage(e)}`);
     }
 
-    // Fetch mayor data from the town hall building properties
-    const mayorData = await fetchMayorDataFromBuilding(ctx, buildingX, buildingY);
+    // PUBLICITY — same folder, different property, and the level lives in the
+    // `<select>` rather than in the text (`mayorpub.asp:180-191`).
+    let publicity: PoliticsPublicityEntry[] = [];
+    let publicityAds = '';
+    try {
+      const pubHtml = await fetchPoliticsPage(ctx, `${baseUrl}/mayorpub.asp?${query}`, 'publicity');
+      publicity = parsePublicityRows(pubHtml);
+      publicityAds = parsePublicityAds(pubHtml);
+    } catch (e: unknown) {
+      ctx.log.warn(`[Politics] Publicity fetch failed: ${toErrorMessage(e)}`);
+    }
 
-    // Always enable the campaign button — server-side ASP (tycooncampaign.asp) validates
-    // prestige, timing, and eligibility and returns a specific denial message if rejected.
-    // The old check used mayorPrestige (the ruler's prestige, not the user's).
-    const canLaunchCampaign = true;
-    const campaignMessage = '';
+    const rulerData = await fetchRulerData(ctx, isCapitol, townName, buildingX, buildingY);
+
+    // YOUR CAMPAIGN — the same page the Launch/Cancel buttons post to, fetched
+    // with neither marker so it reports without mutating (`buildCampaignParams`).
+    let campaignState: CampaignState = 'refused';
+    let campaignMessage = '';
+    let projects: PoliticsProjectEntry[] = [];
+    let promise = '';
+    try {
+      const params = buildCampaignParams(ctx, 'Read', buildingX, buildingY, isCapitol ? undefined : townName);
+      const campaignHtml = await fetchPoliticsPage(
+        ctx,
+        `${baseUrl}/tycooncampaign.asp?${params.toString().replace(/\+/g, '%20')}`,
+        'campaign panel',
+      );
+      const me = (ctx.activeUsername || ctx.cachedUsername || '').toLowerCase();
+      const isRuler = me !== '' && rulerData.mayorName.toLowerCase() === me;
+      ({ state: campaignState, message: campaignMessage } = parseCampaignState(campaignHtml, isRuler));
+      projects = parseCampaignProjects(campaignHtml);
+      promise = parseCampaignPromise(campaignHtml);
+    } catch (e: unknown) {
+      ctx.log.warn(`[Politics] Campaign panel fetch failed: ${toErrorMessage(e)}`);
+      campaignMessage = 'The campaign page could not be reached.';
+    }
 
     return {
       townName,
-      yearsToElections: mayorData.yearsToElections,
-      mayorName: mayorData.mayorName,
-      mayorPrestige: mayorData.mayorPrestige,
-      mayorRating: mayorData.mayorRating,
-      tycoonsRating: mayorData.tycoonsRating,
-      campaignCount: mayorData.campaignCount,
+      isCapitol,
+      hasRuler: rulerData.hasRuler,
+      yearsToElections: rulerData.yearsToElections,
+      mayorName: rulerData.mayorName,
+      mayorPrestige: rulerData.mayorPrestige,
+      mayorRating: rulerData.mayorRating,
+      tycoonsRating: rulerData.tycoonsRating,
+      ifelRating: rulerData.ifelRating,
+      mandateNo: rulerData.mandateNo,
+      rulerPhotoUrl: rulerData.mayorName
+        ? `http://${worldIp}/fivedata/userinfo/${encodeURIComponent(ctx.currentWorldInfo?.name || '')}/${encodeURIComponent(rulerData.mayorName)}/largephoto.jpg`
+        : '',
       popularRatings,
       ifelRatings,
       tycoonsRatings,
-      campaigns: mayorData.campaigns,
-      canLaunchCampaign,
+      publicity,
+      publicityAds,
+      campaignCount: rulerData.campaignCount,
+      campaigns: rulerData.campaigns,
+      campaignState,
       campaignMessage,
+      // The page itself is the gate: `tycooncampaign.asp` re-checks prestige,
+      // timing and eligibility server-side and answers with a specific denial
+      // (`:400-413`). Enabling the button only when the page has already told us
+      // there is one to press is the whole check.
+      canLaunchCampaign: campaignState === 'available',
+      prestigeThreshold: isCapitol ? PRESTIGE_THRESHOLD_CAPITOL : PRESTIGE_THRESHOLD_TOWN,
+      projects,
+      promise,
+      townHallId: rulerData.townHallId,
     };
   } catch (e: unknown) {
     ctx.log.warn(`[Politics] Failed to fetch politics data: ${toErrorMessage(e)}`);
-    return getDefaultPoliticsData(townName);
+    return getDefaultPoliticsData(townName, isCapitol);
   }
 }
 
@@ -492,6 +856,150 @@ export async function politicsVote(
   }
 }
 
+// =========================================================================
+// THE THREE POLITICS MUTATIONS
+//
+// All three are declared on the political entity — `TPoliticalTownHall`
+// (Kernel/TownPolitics.pas:40,41,45) and, identically, `TPresidentialHall`
+// (Kernel/WorldPolitics.pas:256,257,260) — so one code path serves the Town
+// Hall and the Capitol, and the bind target is always `TownHallId`.
+//
+// All three are Pascal `procedure`s. The catalogue says so, which is what makes
+// `.toFrame()` emit `"*"` with no QueryId: a `"^"` on a procedure leaves a
+// result pointer nobody pops and freezes the shared server. Nothing here writes
+// a separator, and nothing here can.
+// =========================================================================
+
+/**
+ * Resolve the political entity's RDO id for the building at (x, y).
+ *
+ * Two properties, because the two civic buildings publish it differently and
+ * neither publishes both:
+ *
+ *  - **Capitol.** `TPresidentialHall.StoreToCache` writes `TownHallId` =
+ *    `integer(self)` onto its own cache object (Kernel/WorldPolitics.pas:1288,
+ *    :1413), which is what `SetObject(x, y)` resolves to. `CurrBlock` is not
+ *    written there.
+ *  - **Town Hall.** `TPoliticalTownHall.StoreToCache` writes the votes series
+ *    and the `Ruler*` values but NO `TownHallId` (Kernel/TownPolitics.pas:476-491);
+ *    that one lives on the TOWN FOLDER object (Kernel/PoliticsCache.pas:156).
+ *    The facility does carry `CurrBlock` (Kernel/KernelCache.pas:426) — and
+ *    `PoliticsCache.pas:156` defines `TownHallId` AS `TownHall.CurrBlock`, so
+ *    the two are the same number by construction.
+ *
+ * Reading both and preferring `TownHallId` therefore lands on the right object
+ * for either building without needing to know which one it is. This is also the
+ * id `politicsVote` already binds (`CurrBlock`, VotesSheet.pas:246-248), so all
+ * four politics mutations address one object.
+ *
+ * Returns 0 when neither property is readable. Callers MUST refuse to emit on 0:
+ * binding an RDO proxy to object 0 is a request with no destination.
+ */
+async function resolveTownHallId(
+  ctx: SessionContext, buildingX: number, buildingY: number
+): Promise<number> {
+  const values = await ctx.getCacherPropertyListAt(buildingX, buildingY, ['TownHallId', 'CurrBlock']);
+  return (parseInt(values[0] || '', 10) || 0) || (parseInt(values[1] || '', 10) || 0);
+}
+
+/**
+ * Emit one fire-and-forget politics procedure on the construction socket.
+ *
+ * Fire-and-forget is not a shortcut: a Pascal `procedure` produces no reply, so
+ * there is nothing to await. What comes back to the caller is "the frame went
+ * out", and the UI re-reads the page to learn whether it took — the same
+ * contract the reference client works under, where `rdoModifyRating.asp` posts
+ * into a hidden iframe nobody reads (`tycoonratings.asp:109`).
+ */
+async function emitPoliticsProcedure(
+  ctx: SessionContext,
+  buildingX: number, buildingY: number,
+  label: string,
+  build: (townHallId: number) => string,
+): Promise<{ success: boolean; message: string }> {
+  try {
+    await ctx.connectConstructionService();
+    const townHallId = await resolveTownHallId(ctx, buildingX, buildingY);
+    if (townHallId === 0) {
+      return { success: false, message: `No political entity at (${buildingX}, ${buildingY})` };
+    }
+
+    const socket = ctx.getSocket('construction');
+    if (!socket) throw new Error('Construction socket unavailable');
+
+    ctx.log.debug(`[Politics] ${label} on TownHallId ${townHallId}`);
+    writeRdoFrame(socket, build(townHallId));
+    return { success: true, message: '' };
+  } catch (e: unknown) {
+    ctx.log.warn(`[Politics] ${label} failed: ${toErrorMessage(e)}`);
+    return { success: false, message: toErrorMessage(e) };
+  }
+}
+
+/**
+ * Rate the politician in office on one criterion.
+ *
+ * Voyager reaches this through two different doors — the Tycoons' ratings tab
+ * (`tycoonratings.asp:93-115` -> `rdoModifyRating.asp:27`) and the newspaper's
+ * rating form (`boardmsg.asp:120`, one call per criterion) — and both end on the
+ * same three-argument procedure. The value is a percentage; the newspaper form
+ * offers 0..100 in steps of 10 (`boardmsg.asp:344-355`), which is the wider of
+ * the two ranges and the one we expose.
+ */
+export async function politicsSetRating(
+  ctx: SessionContext, buildingX: number, buildingY: number, ratingId: string, value: number
+): Promise<{ success: boolean; message: string }> {
+  const tycoonName = ctx.activeUsername || ctx.cachedUsername || '';
+  return emitPoliticsProcedure(
+    ctx, buildingX, buildingY, `SetRating ${ratingId}=${value}%`,
+    (townHallId) => rdoCall(
+      'RDOSetRatingFrom', townHallId,
+      RdoValue.string(ratingId), RdoValue.string(tycoonName), RdoValue.int(value),
+    ).toFrame(),
+  );
+}
+
+/**
+ * Set how much publicity the ruler buys on one criterion.
+ *
+ * Ruler-only by design, not by check: `mayorpub.asp:52` disables the control for
+ * everyone else, and `rdoModifyPub.asp:15` gates the RDO call on the password.
+ * The server-side `RDOSetPublicity` is the real authority — we send what the
+ * player asked for and let it decide.
+ */
+export async function politicsSetPublicity(
+  ctx: SessionContext, buildingX: number, buildingY: number, ratingId: string, value: number
+): Promise<{ success: boolean; message: string }> {
+  return emitPoliticsProcedure(
+    ctx, buildingX, buildingY, `SetPublicity ${ratingId}=${value}`,
+    (townHallId) => rdoCall(
+      'RDOSetPublicity', townHallId,
+      RdoValue.string(ratingId), RdoValue.int(value),
+    ).toFrame(),
+  );
+}
+
+/**
+ * Set one campaign project — a minister's name or a numeric promise.
+ *
+ * `data` is a widestring in both cases: `tycooncampaign.asp:195` puts
+ * `control.value` into the URL unchanged whether the control was the minister
+ * `<input>` or the percentage `<select>`, and `rdoModifyProject.asp:28` passes
+ * it through as `CStr`.
+ */
+export async function politicsSetProjectData(
+  ctx: SessionContext, buildingX: number, buildingY: number, projectId: string, data: string
+): Promise<{ success: boolean; message: string }> {
+  const tycoonName = ctx.activeUsername || ctx.cachedUsername || '';
+  return emitPoliticsProcedure(
+    ctx, buildingX, buildingY, `SetProjectData ${projectId}`,
+    (townHallId) => rdoCall(
+      'RDOSetProjectData', townHallId,
+      RdoValue.string(tycoonName), RdoValue.string(projectId), RdoValue.string(data),
+    ).toFrame(),
+  );
+}
+
 /**
  * Launch a political campaign via ASP proxy.
  * Fetches tycoonCampaign.asp?Launch=TRUE which calls RDOLaunchCampaign
@@ -509,7 +1017,7 @@ export async function politicsLaunchCampaign(
   try {
     const queryParams = buildCampaignParams(ctx, 'Launch', buildingX, buildingY, townName);
     const url = `http://${worldIp}/Five/0/Visual/Voyager/Politics/tycooncampaign.asp?${queryParams.toString().replace(/\+/g, '%20')}`;
-    ctx.log.debug(`[Politics] Launching campaign via ASP: ${url}`);
+    ctx.log.debug(`[Politics] Launching campaign via ASP: ${redactUrlCredentials(url)}`);
     const resp = await fetch(url, { redirect: 'follow' });
     const html = await resp.text();
     // `resp.ok` catches the absent page and the IIS fault, nothing more: the 298
@@ -541,7 +1049,7 @@ export async function politicsCancelCampaign(
   try {
     const queryParams = buildCampaignParams(ctx, 'Cancel', buildingX, buildingY, townName);
     const url = `http://${worldIp}/Five/0/Visual/Voyager/Politics/tycooncampaign.asp?${queryParams.toString().replace(/\+/g, '%20')}`;
-    ctx.log.debug(`[Politics] Cancelling campaign via ASP: ${url}`);
+    ctx.log.debug(`[Politics] Cancelling campaign via ASP: ${redactUrlCredentials(url)}`);
     const resp = await fetch(url, { redirect: 'follow' });
     const html = await resp.text();
     // Same reasoning as politicsLaunchCampaign above.

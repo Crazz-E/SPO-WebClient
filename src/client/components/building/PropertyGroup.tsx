@@ -27,7 +27,7 @@ import { RevenueGraph } from './RevenueGraph';
 import { SuppliesPanel } from './SuppliesGroup';
 import { ProductsPanel } from './ProductsGroup';
 import { CompInputsPanel } from './InputsGroup';
-import { resolveRdoCommand, computePendingKey, checkIsMayor, getColorClass, buildSalaryParams } from './property-utils';
+import { resolveRdoCommand, computePendingKey, getColorClass, buildSalaryParams } from './property-utils';
 import { SliderInput, TextInput } from './PropertyInputs';
 import { RatioValue, BooleanValue, StopToggle } from './PropertyDisplays';
 import { DataTable, ServiceCardList, ProductSummaryCards } from './PropertyTables';
@@ -36,7 +36,7 @@ import { UpgradeActions, RepairControl, TradeConnectButtons, ActionButton, Clone
 import styles from './PropertyGroup.module.css';
 
 // Re-export utility functions for backward compatibility (tests import from here)
-export { resolveRdoCommand, computePendingKey, checkIsMayor, parseCloneMenu, getColorClass } from './property-utils';
+export { resolveRdoCommand, computePendingKey, parseCloneMenu, getColorClass } from './property-utils';
 
 interface PropertyGroupProps {
   properties: BuildingPropertyValue[];
@@ -48,7 +48,6 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
   const details = useBuildingStore((s) => s.details);
   const isOwner = useBuildingStore((s) => s.isOwner);
   const currentTab = useBuildingStore((s) => s.currentTab);
-  const isPublicOfficeRole = useGameStore((s) => s.isPublicOfficeRole);
   const client = useClient();
 
   // Get property definitions from template system.
@@ -59,11 +58,23 @@ export function PropertyGroup({ properties, buildingX, buildingY }: PropertyGrou
   const activeGroup = template.groups.find((g) => g.id === currentTab) ?? template.groups[0];
   const definitions = activeGroup?.properties ?? [];
 
-  // Check if this is a town tab (mayor can edit town properties)
   const isTownTab = activeGroup?.special === 'town';
-  // President can edit civic building properties (Capitol Budget, Town taxes, etc.)
   const isCivic = isCivicBuilding(visualClass);
-  const canEdit = isTownTab ? checkIsMayor(properties) : (isOwner || (isCivic && isPublicOfficeRole));
+
+  /**
+   * Governance is per-facility, and both previous tests got that wrong.
+   *
+   * `checkIsMayor(properties)` returned true whenever the town had *any* mayor —
+   * it never compared the ruler to the player, so every visitor was granted the
+   * town tab. And `isPublicOfficeRole` is a session-wide label: it handed a
+   * minister, who has no RDO power at all, the editable properties of every
+   * civic building in the world.
+   *
+   * `grantAccess` asks the only question that matters — is this player's tycoon
+   * id in this facility's own id list (`Protocol/Protocol.pas:428-431`).
+   */
+  const canGovern = details?.canGovern ?? false;
+  const canEdit = isOwner || ((isTownTab || isCivic) && canGovern);
 
   // Product price change handler — resolves PricePc → RDOSetOutputPrice via PRODUCTS_GROUP.rdoCommands.
   // Accepts extra params (fluidId) to identify the specific output gate.

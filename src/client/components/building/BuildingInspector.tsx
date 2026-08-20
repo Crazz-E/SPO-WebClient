@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Edit3, RefreshCw, X, Check } from 'lucide-react';
 import { useBuildingStore } from '../../store/building-store';
-import { usePoliticsStore } from '../../store/politics-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store';
 import { useClient } from '../../context';
@@ -26,10 +25,10 @@ import {
   AdministrationSection,
   DemographicsSection,
   ElectionsSection,
+  PoliticsSection,
   buildCivicTabs,
   getGeneralGroupId,
 } from '../politics';
-import { buildValueMap, getNum } from '../politics/capitol-utils';
 import type { CivicTabId } from '../politics/CivicTabConfig';
 import styles from './BuildingInspector.module.css';
 
@@ -54,8 +53,6 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   const [newName, setNewName] = useState('');
 
   const isCivic = details ? isCivicBuilding(details.visualClass) : false;
-  const username = useGameStore((s) => s.username);
-  const holdsOffice = useGameStore((s) => s.isPublicOfficeRole);
   const connectionStatus = useGameStore((s) => s.status);
   const isConnected = connectionStatus === 'connected';
 
@@ -68,19 +65,23 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   // For non-civic buildings, use server-sent tabs directly
   const standardTabs = details?.tabs ?? [];
 
-  // Derive campaign state (needed for Elections tab) — memoized to avoid
-  // recomputing buildValueMap on every unrelated details change.
-  const politicsCampaigns = usePoliticsStore((s) => s.data?.campaigns);
-  const isCandidateFromPolitics = (politicsCampaigns ?? []).some(
-    (c) => c.candidateName.toLowerCase() === (username ?? '').toLowerCase()
-  );
-  const votesGroup = details?.groups['votes'];
-  const valueMap = useMemo(() => buildValueMap(votesGroup ?? []), [votesGroup]);
-  const candidateCount = getNum(valueMap, 'CampaignCount');
-  const isCandidateFromVotes = Array.from({ length: candidateCount }, (_, i) =>
-    valueMap.get(`Candidate${i}`) ?? ''
-  ).some((name) => name.toLowerCase() === (username ?? '').toLowerCase());
-  const isCandidate = isCandidateFromPolitics || isCandidateFromVotes;
+  // Candidacy used to be inferred here, from the `Candidate{i}` series and from
+  // PoliticsData.campaigns, to gate a campaign button on the Elections tab. Both
+  // now live on the Politics tab, where `tycooncampaign.asp` answers the
+  // question directly (`:222-224`) and gives the reason when the answer is no.
+  // The inference — and the store subscription plus useMemo it cost on every
+  // details change — is gone with the button it served.
+
+  /**
+   * Does this player govern THIS facility?
+   *
+   * Decided by the gateway (`grantAccess` over the facility's SecurityId) and
+   * shipped with the details. The requester half is the InitClient proxy id — a
+   * pointer the browser never sees — so this cannot be computed here. A live run
+   * proved the point: the facility's SecurityId is `-296197588--295583672--`,
+   * object addresses, while `tycoonId` is 37.
+   */
+  const canGovern = details?.canGovern ?? false;
 
   const detailsError = useBuildingStore((s) => s.detailsError);
 
@@ -362,8 +363,7 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
             details={details}
             buildingX={details.x}
             buildingY={details.y}
-            isCandidate={isCandidate}
-            holdsOffice={holdsOffice}
+            canGovern={canGovern}
             demographics={focusedBuilding?.demographics ?? null}
           />
         ) : (() => {
@@ -411,16 +411,15 @@ function CivicTabContent({
   details,
   buildingX,
   buildingY,
-  isCandidate,
-  holdsOffice,
+  canGovern,
   demographics,
 }: {
   activeTab: CivicTabId;
   details: NonNullable<ReturnType<typeof useBuildingStore.getState>['details']>;
   buildingX: number;
   buildingY: number;
-  isCandidate: boolean;
-  holdsOffice: boolean;
+  /** Does this player govern THIS facility? Result of `grantAccess`. */
+  canGovern: boolean;
   demographics: TownHallDemographics | null;
 }) {
   const groups = details.groups ?? {};
@@ -431,6 +430,8 @@ function CivicTabContent({
   const ministriesProps = groups['ministeries'] ?? [];
   const jobsProps = groups['townJobs'] ?? [];
   const resProps = groups['townRes'] ?? [];
+  const taxesProps = groups['townTaxes'] ?? [];
+  const servicesProps = groups['townServices'] ?? [];
 
   switch (activeTab) {
     case 'overview':
@@ -448,8 +449,10 @@ function CivicTabContent({
         <AdministrationSection
           townsProperties={townsProps}
           ministriesProperties={ministriesProps}
+          taxesProperties={taxesProps}
           buildingX={buildingX}
           buildingY={buildingY}
+          canGovern={canGovern}
         />
       );
     case 'demographics':
@@ -457,10 +460,12 @@ function CivicTabContent({
         <DemographicsSection
           jobsProperties={jobsProps}
           residentialsProperties={resProps}
+          servicesProperties={servicesProps}
           buildingX={buildingX}
           buildingY={buildingY}
           serverTabs={details.tabs}
           demographics={demographics}
+          canGovern={canGovern}
         />
       );
     case 'elections':
@@ -469,10 +474,12 @@ function CivicTabContent({
           votesProperties={votesProps}
           buildingX={buildingX}
           buildingY={buildingY}
-          isCandidate={isCandidate}
-          holdsOffice={holdsOffice}
         />
       );
+    case 'politics':
+      // Until now this tab was declared in CivicTabConfig with no case here, so
+      // opening it fell through to `null` and rendered an empty panel.
+      return <PoliticsSection buildingX={buildingX} buildingY={buildingY} />;
     default:
       return null;
   }

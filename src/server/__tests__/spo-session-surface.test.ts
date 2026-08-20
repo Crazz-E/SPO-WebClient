@@ -299,8 +299,31 @@ const DELEGATIONS: readonly Delegation[] = [
     method: 'getPoliticsData',
     install: () => jest.spyOn(politicsHandler, 'getPoliticsData'),
     call: s => s.getPoliticsData('Kalisz', 706, 436),
-    forwarded: ['Kalisz', 706, 436],
+    // The 4th argument is the Capitol flag, defaulted at the facade — the
+    // delegation forwards the resolved value, not the caller's omission.
+    forwarded: ['Kalisz', 706, 436, false],
     result: { ratings: [] },
+  },
+  {
+    method: 'politicsSetRating',
+    install: () => jest.spyOn(politicsHandler, 'politicsSetRating'),
+    call: s => s.politicsSetRating(706, 436, '4711', 70),
+    forwarded: [706, 436, '4711', 70],
+    result: { success: true, message: '' },
+  },
+  {
+    method: 'politicsSetPublicity',
+    install: () => jest.spyOn(politicsHandler, 'politicsSetPublicity'),
+    call: s => s.politicsSetPublicity(706, 436, '4711', 25),
+    forwarded: [706, 436, '4711', 25],
+    result: { success: true, message: '' },
+  },
+  {
+    method: 'politicsSetProjectData',
+    install: () => jest.spyOn(politicsHandler, 'politicsSetProjectData'),
+    call: s => s.politicsSetProjectData(706, 436, '88', 'Bob'),
+    forwarded: [706, 436, '88', 'Bob'],
+    result: { success: true, message: '' },
   },
   {
     method: 'politicsVote',
@@ -595,7 +618,7 @@ describe('StarpeaceSession — handler delegation', () => {
   it('covers every one-line handler delegation the facade declares', () => {
     // A guard on the table itself: if a delegation is added to the facade and
     // not to the table, the count stops matching and this row says so.
-    expect(DELEGATIONS).toHaveLength(63);
+    expect(DELEGATIONS).toHaveLength(66);
     expect(new Set(DELEGATIONS.map(d => d.method)).size).toBe(DELEGATIONS.length);
   });
 

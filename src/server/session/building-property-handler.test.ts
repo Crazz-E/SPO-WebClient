@@ -379,7 +379,7 @@ const MATRIX: readonly MatrixEntry[] = [
   {
     command: 'RDOSetMinSalaryValue', value: '120', params: { levelIndex: '1' },
     args: [RdoValue.int(1), RdoValue.int(120)],
-    target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'midActualMinSalary',
+    target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'midMinSalary',
   },
 
   // ── Town hall / capitol (TownTaxesSheet.pas, CapitolTownsSheet.pas) ──────
@@ -712,10 +712,14 @@ describe('argument construction', () => {
     expect(listCalls[listCalls.length - 1][1]).toEqual([property]);
   });
 
+  // The write sets THIS facility's own floor, so the confirmation must read
+  // that back — not `ActualMinSalary`, which is the blended max(town, world)
+  // the town enforces (Kernel/Kernel.pas:9342-9345). Reading the blend reported
+  // every correct write as unconfirmed whenever the world floor was higher.
   it.each([
-    ['0', 'hiActualMinSalary'],
-    ['1', 'midActualMinSalary'],
-    ['2', 'loActualMinSalary'],
+    ['0', 'hiMinSalary'],
+    ['1', 'midMinSalary'],
+    ['2', 'loMinSalary'],
   ])('reads back the level-%s salary as %s', async (levelIndex, property) => {
     const fake = makeConstructionCtx();
 

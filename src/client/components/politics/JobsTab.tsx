@@ -3,12 +3,11 @@
  * Executive (hi*), Professional (mid*), Worker (lo*)
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { useClient } from '../../context';
-import { useGameStore } from '../../store/game-store';
 import { SaveIndicator } from '../building/SaveIndicator';
-import { buildValueMap, getNum, formatCompact, isPresidentRole, isMayorRole } from './capitol-utils';
+import { buildValueMap, getNum, formatCompact } from './capitol-utils';
 import styles from './PoliticsPanel.module.css';
 
 interface JobsTabProps {
@@ -17,6 +16,13 @@ interface JobsTabProps {
   buildingY: number;
   /** True when viewing Capitol (president edits); false for Town Hall (mayor edits). */
   isCapitol: boolean;
+  /**
+   * Does this player govern this facility? Both the Capitol and the Town Hall
+   * gate on the same thing — Voyager reads `fOwnsFacility` off the facility's
+   * own SecurityId on both sheets (`TownHallJobsSheet.pas:142-145`), never off a
+   * role name — so `isCapitol` no longer selects between two different tests.
+   */
+  canGovern: boolean;
 }
 
 interface JobClass {
@@ -29,9 +35,8 @@ interface JobClass {
   minWage: number;
 }
 
-export function JobsTab({ properties, buildingX, buildingY, isCapitol }: JobsTabProps) {
-  const ownerRole = useGameStore((s) => s.ownerRole);
-  const canEdit = isCapitol ? isPresidentRole(ownerRole) : isMayorRole(ownerRole);
+export function JobsTab({ properties, buildingX, buildingY, isCapitol, canGovern }: JobsTabProps) {
+  const canEdit = canGovern;
   const valueMap = buildValueMap(properties);
 
   const classes: JobClass[] = [
@@ -91,7 +96,14 @@ export function JobsTab({ properties, buildingX, buildingY, isCapitol }: JobsTab
           </div>
 
           <div className={styles.statRow}>
-            <span className={styles.statLabel}>Min Wage</span>
+            {/* Two tiers, and the higher one wins: the mayor sets the town's
+                floor, the president the world's, and the wage actually enforced
+                is max(town, world) — Kernel/Kernel.pas:9342-9345. Saying which
+                one this slider writes is the difference between a control the
+                player understands and one that looks broken. */}
+            <span className={styles.statLabel}>
+              {isCapitol ? 'Min Wage (world)' : 'Min Wage (town)'}
+            </span>
           </div>
           <MinWageSlider
             value={cls.minWage}
@@ -123,11 +135,17 @@ function MinWageSlider({
   const [value, setValue] = useState(initialValue);
   const pendingKey = `RDOSetMinSalaryValue:{"levelIndex":"${levelIndex}"}`;
 
+  // Re-sync when the server sends a fresh figure. Without this the local state
+  // captured at mount wins forever, and the 30 s auto-refresh leaves the slider
+  // showing a value the town no longer has.
+  useEffect(() => { setValue(initialValue); }, [initialValue]);
+
   const commitValue = useCallback(
-    () => {
-      client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetMinSalaryValue', String(value), { levelIndex });
+    (next: number) => {
+      if (next === initialValue) return;
+      client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetMinSalaryValue', String(next), { levelIndex });
     },
-    [client, buildingX, buildingY, levelIndex, value],
+    [client, buildingX, buildingY, levelIndex, initialValue],
   );
 
   return (
@@ -141,7 +159,14 @@ function MinWageSlider({
         value={value}
         disabled={!editable}
         onChange={(e) => setValue(parseInt(e.target.value, 10))}
-        onPointerUp={commitValue}
+        // Voyager emits once, on MouseUp (`PercentEdit.pas:357-362`), and so do
+        // we — one frame per gesture, not one per pixel dragged. `onPointerUp`
+        // alone missed two of them: arrow keys never fire it, and a cancelled
+        // touch swallows the edit. `onKeyUp` covers the keyboard, `onBlur` is
+        // the catch-all for anything that ends the interaction another way.
+        onPointerUp={(e) => commitValue(parseInt(e.currentTarget.value, 10))}
+        onKeyUp={(e) => commitValue(parseInt(e.currentTarget.value, 10))}
+        onBlur={(e) => commitValue(parseInt(e.currentTarget.value, 10))}
       />
       <span className={styles.sliderValue}>{value}%</span>
       <SaveIndicator propertyKey={pendingKey} />

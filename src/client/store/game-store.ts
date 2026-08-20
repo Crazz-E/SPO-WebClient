@@ -81,6 +81,16 @@ interface GameState {
   status: ConnectionStatus;
   disconnectReason: DisconnectReason;
   username: string;
+  /**
+   * The player's own tycoon id, decimal, from `WsRespLoginSuccess.tycoonId`.
+   *
+   * This is what Voyager calls the client's SecurityId — `getSecurityId` is
+   * literally `IntToStr(integer(fTycoonId))`
+   * (`Voyager/URLHandlers/ServerCnxHandler.pas:2524-2527`). It is the requester
+   * half of `grantAccess`, which is how a civic control decides whether the
+   * player governs *this* facility rather than merely holding office somewhere.
+   */
+  tycoonId: string;
   worldName: string;
   companyName: string;
   companyId: string;
@@ -149,7 +159,7 @@ interface GameState {
   setStatus: (status: ConnectionStatus) => void;
   setDisconnectReason: (reason: DisconnectReason) => void;
   setReconnectAttempt: (attempt: number) => void;
-  setCredentials: (username: string) => void;
+  setCredentials: (username: string, tycoonId?: string) => void;
   setWorld: (worldName: string) => void;
   setCompany: (name: string, id: string) => void;
   setCompanies: (companies: CompanyInfo[]) => void;
@@ -188,6 +198,7 @@ export const useGameStore = create<GameState>((set) => ({
   status: 'disconnected',
   disconnectReason: null,
   username: '',
+  tycoonId: '',
   worldName: '',
   companyName: '',
   companyId: '',
@@ -225,7 +236,8 @@ export const useGameStore = create<GameState>((set) => ({
   setStatus: (status) => set({ status, ...(status === 'connected' ? { disconnectReason: null } : {}) }),
   setDisconnectReason: (reason) => set({ disconnectReason: reason }),
   setReconnectAttempt: (attempt) => set({ reconnectAttempt: attempt }),
-  setCredentials: (username) => set({ username }),
+  setCredentials: (username, tycoonId) =>
+    set(tycoonId === undefined ? { username } : { username, tycoonId }),
   setWorld: (worldName) => set({ worldName }),
   setCompany: (name, id) => set({ companyName: name, companyId: id }),
   setCompanies: (companies) => set({ companies }),
@@ -300,6 +312,7 @@ export const useGameStore = create<GameState>((set) => ({
       status: 'disconnected',
       disconnectReason: null,
       username: '',
+      tycoonId: '',
       worldName: '',
       companyName: '',
       companyId: '',

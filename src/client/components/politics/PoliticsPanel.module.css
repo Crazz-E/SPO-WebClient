@@ -464,6 +464,102 @@
   border-color: var(--accent-gold);
 }
 
+/* ---- Taxes tab ---- */
+
+.taxRowSelected,
+.taxRowSelected:hover {
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.06));
+}
+
+.dataTable tbody tr[aria-selected] {
+  cursor: pointer;
+}
+
+/* Voyager marks a taxed row with a red $ badge and a subsidised one with a
+   green $ (`TownTaxesSheet.pas:255-297`). The cell text carries the same fact,
+   so this never has to be read on its own. */
+.taxBadgeTaxed,
+.taxBadgeSubsidised {
+  display: inline-block;
+  width: 14px;
+  margin-right: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  text-align: center;
+}
+
+.taxBadgeTaxed {
+  background: var(--accent-danger, #c0392b);
+}
+
+.taxBadgeSubsidised {
+  background: var(--accent-success, #27ae60);
+}
+
+.taxEditor {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.taxEditorHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.taxModes {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.taxMode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sliderLabel {
+  min-width: 72px;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.taxValueRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The server drops a budget of zero or less without a word, so the refusal has
+   to be visible here instead. */
+.budgetInputInvalid,
+.budgetInputInvalid:focus {
+  border-color: var(--accent-danger, #c0392b);
+}
+
+/* A seat nobody holds, and a control that cannot apply to this row. */
+.vacantSeat,
+.actionUnavailable {
+  color: var(--text-placeholder);
+}
+
+.actionUnavailable {
+  display: inline-block;
+  text-align: center;
+  width: 100%;
+  cursor: default;
+}
+
 /* ---- Ruler info (Votes tab header) ---- */
 
 .rulerInfo {
@@ -645,4 +741,298 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-left: var(--space-2);
+}
+
+/* =========================================================================
+   POLITICS PAGE — the two-column body of Voyager's politics.asp, in the modal
+   ========================================================================= */
+
+.politicsPage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.politicsHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.politicsPlace {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.politicsCountdown {
+  flex: 1;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* Side by side when there is room, stacked when there is not. The modal is the
+   container, so this tracks the modal width rather than the viewport. */
+.politicsColumns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 900px) {
+  .politicsColumns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.politicsColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.politicsCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.politicsCardTitle {
+  margin: 0;
+  font-size: var(--text-2xs);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-warm, var(--text-muted));
+}
+
+.politicsVacant {
+  padding: var(--space-6) var(--space-3);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-placeholder);
+}
+
+.politicsEmptyRail {
+  padding: var(--space-5) var(--space-3);
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--text-placeholder);
+}
+
+/* ---- Ruler / candidate identity block ---- */
+
+.rulerLayout {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.rulerPhoto {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--glass-border);
+}
+
+.rulerFigures {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--space-3);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+}
+
+.rulerFigures dt {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.rulerFigures dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rulerFigureName {
+  font-weight: var(--font-semibold);
+}
+
+.strongestBadge {
+  margin-left: var(--space-2);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: rgba(212, 160, 23, 0.18);
+  color: var(--text-primary);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+}
+
+/* ---- The sub-tab rails (ratingtabs.asp / campaigntabs.asp) ---- */
+
+.railBar {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.railBar::-webkit-scrollbar {
+  display: none;
+}
+
+.railTab {
+  padding: 4px var(--space-3);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.railTab:hover {
+  color: var(--text-primary);
+}
+
+.railTabActive {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-primary, #4a7a6a);
+  font-weight: var(--font-semibold);
+}
+
+.railBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.railLead {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-secondary, var(--text-muted));
+  line-height: var(--leading-normal);
+}
+
+.railNote {
+  margin: 0;
+  font-size: var(--text-2xs);
+  color: var(--text-placeholder);
+  line-height: var(--leading-normal);
+}
+
+.railHeading {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-2xs);
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* ---- Editable cells (rating, publicity, campaign project) ---- */
+
+.ratingSelect,
+.projectInput {
+  width: 100%;
+  max-width: 160px;
+  padding: 2px var(--space-2);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+}
+
+.ratingSelect:focus-visible,
+.projectInput:focus-visible {
+  outline: 2px solid var(--accent-primary, #4a7a6a);
+  outline-offset: 1px;
+}
+
+/* A value you sent is not the rating yet — the server mixes it in at the next
+   survey (tycoonratings.asp:111-114). The published figure is dimmed to say so. */
+.ratingSuperseded {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.ratingUnavailable {
+  color: var(--text-placeholder);
+}
+
+.projectComparator {
+  margin-left: var(--space-2);
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+
+.proposal_ok,
+.proposal_warn,
+.proposal_bad {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-2xs);
+}
+
+.proposal_ok { color: var(--color-success, #4ade80); }
+.proposal_warn { color: var(--color-warning, #fbbf24); }
+.proposal_bad { color: var(--color-danger, #f87171); }
+
+.campaignPromise {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  line-height: var(--leading-normal);
+}
+
+/* Marker column of the ballot — VotesSheet.pas image indices 0 (your vote) and
+   1 (in office). Fixed width so the names line up whatever the markers are. */
+.ballotMarker {
+  width: 22px;
+  padding-right: 0 !important;
+  color: var(--accent-primary, #4a7a6a);
+  text-align: center;
+}
+
+/* The two buttons Voyager puts on the General sheet of a Town Hall / Capitol. */
+.overviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+/* A cross-reference inside running text — a button, because it navigates the
+   modal rather than the document. */
+.inlineLink {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent-gold, #d4a017);
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.inlineLink:hover {
+  text-decoration: none;
 }

@@ -11,6 +11,7 @@
  */
 
 import type { SessionContext } from './session-context';
+import { grantAccess } from '../../shared/security-id';
 import type {
   BuildingDetailsResponse,
   BuildingPropertyValue,
@@ -311,6 +312,9 @@ export async function getBuildingBasicDetails(
       buildingName,
       ownerName,
       securityId: allValues.get('SecurityId') || '',
+      // Decided here: only the session holds the requester half, and it is the
+      // InitClient proxy id (a pointer), never ctx.tycoonId.
+      canGovern: grantAccess(String(ctx.fTycoonProxyId ?? ''), allValues.get('SecurityId') || ''),
       tabs: template.groups.map(g => ({
         id: g.id,
         name: g.name,
@@ -514,6 +518,9 @@ export async function refreshBuildingProperties(
       buildingName,
       ownerName,
       securityId: allValues.get('SecurityId') || '',
+      // Decided here: only the session holds the requester half, and it is the
+      // InitClient proxy id (a pointer), never ctx.tycoonId.
+      canGovern: grantAccess(String(ctx.fTycoonProxyId ?? ''), allValues.get('SecurityId') || ''),
       tabs: template.groups.map(g => ({
         id: g.id,
         name: g.name,
@@ -625,6 +632,9 @@ async function getBuildingDetailsImpl(
       buildingName,
       ownerName,
       securityId: allValues.get('SecurityId') || '',
+      // Decided here: only the session holds the requester half, and it is the
+      // InitClient proxy id (a pointer), never ctx.tycoonId.
+      canGovern: grantAccess(String(ctx.fTycoonProxyId ?? ''), allValues.get('SecurityId') || ''),
       tabs: template.groups.map(g => ({
         id: g.id,
         name: g.name,

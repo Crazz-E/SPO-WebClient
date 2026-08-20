@@ -158,6 +158,7 @@ describe('ClientBridge building overlay (stale data prevention)', () => {
       buildingId: 'OLD', buildingName: 'Old Building', ownerName: 'OldCorp',
       x: 50, y: 60, visualClass: '1000', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     } as never);
     useUiStore.getState().openRightPanel('building');
 
@@ -179,6 +180,7 @@ describe('ClientBridge building overlay (stale data prevention)', () => {
       buildingId: 'OLD', buildingName: 'Old Building', ownerName: 'OldCorp',
       x: 50, y: 60, visualClass: '1000', templateName: 'Building',
       securityId: '', tabs: [], groups: {}, timestamp: Date.now(),
+      canGovern: true,
     } as never);
 
     // Act: overlay a new building (no panel open)

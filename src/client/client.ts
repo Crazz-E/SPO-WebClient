@@ -31,6 +31,7 @@ import { useBuildingStore } from './store/building-store';
 import { getFacilityDimensionsCache } from './facility-dimensions-cache';
 import { useProfileStore } from './store/profile-store';
 import { useMailStore } from './store/mail-store';
+import { useNewspaperStore } from './store/newspaper-store';
 import { usePoliticsStore } from './store/politics-store';
 import { SoundManager } from './audio/sound-manager';
 import type { ClientHandlerContext } from './handlers/client-context';
@@ -437,10 +438,11 @@ export class StarpeaceClient implements ClientHandlerContext {
         authHandler.profileSwitchCompany(this, companyId, companyName, ownerRole),
 
       // Politics
-      onRequestPoliticsData: (townName, buildingX, buildingY) => {
+      onRequestPoliticsData: (townName, buildingX, buildingY, isCapitol) => {
+        usePoliticsStore.getState().setLoadState('loading');
         this.sendMessage({
           type: WsMessageType.REQ_POLITICS_DATA,
-          townName, buildingX, buildingY,
+          townName, buildingX, buildingY, isCapitol,
         });
       },
       onLaunchCampaign: (buildingX, buildingY) => {
@@ -457,10 +459,54 @@ export class StarpeaceClient implements ClientHandlerContext {
           buildingX, buildingY, townName,
         });
       },
+      // The three politics mutations all act on the building the Politics tab
+      // is showing, so the coordinates come from the store rather than from the
+      // caller — a rating row knows its id, not where it lives.
+      onSetPoliticsRating: (ratingId, value) => {
+        const { buildingX, buildingY } = usePoliticsStore.getState();
+        usePoliticsStore.getState().setPendingRating(ratingId, value);
+        this.sendMessage({
+          type: WsMessageType.REQ_POLITICS_SET_RATING,
+          buildingX, buildingY, ratingId, value,
+        });
+      },
+      onSetPoliticsPublicity: (ratingId, value) => {
+        const { buildingX, buildingY } = usePoliticsStore.getState();
+        usePoliticsStore.getState().setPendingPublicity(ratingId, value);
+        this.sendMessage({
+          type: WsMessageType.REQ_POLITICS_SET_PUBLICITY,
+          buildingX, buildingY, ratingId, value,
+        });
+      },
+      onSetCampaignProject: (projectId, data) => {
+        const { buildingX, buildingY } = usePoliticsStore.getState();
+        usePoliticsStore.getState().setPendingProject(projectId, data);
+        this.sendMessage({
+          type: WsMessageType.REQ_POLITICS_SET_PROJECT,
+          buildingX, buildingY, projectId, data,
+        });
+      },
+
       onQueryTycoonRole: (tycoonName: string) => this.sendMessage({
         type: WsMessageType.REQ_TYCOON_ROLE,
         tycoonName,
       }),
+
+      // Newspaper — the board context is whichever civic building opened it.
+      onRequestNewspaperBoard: (path) => {
+        const context = useNewspaperStore.getState().context;
+        if (!context) return;
+        useNewspaperStore.getState().setRequestedPath(path ?? '');
+        this.sendMessage({ type: WsMessageType.REQ_NEWSPAPER_BOARD, ...context, path });
+      },
+      onPostNewspaperColumn: (subject, body, replyToPath) => {
+        const context = useNewspaperStore.getState().context;
+        if (!context) return;
+        useNewspaperStore.getState().setPosting(true);
+        this.sendMessage({
+          type: WsMessageType.REQ_NEWSPAPER_POST, ...context, subject, body, replyToPath,
+        });
+      },
 
       // Empire
       onRequestFacilities: () => {

@@ -29,6 +29,7 @@ import {
   WsRespCloneFacility,
   WsReqSearchConnections,
   WsReqPoliticsVote,
+  WsRespPoliticsVote,
   BuildingDetailsResponse,
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
@@ -898,8 +899,25 @@ async function voteForCandidateInline(ctx: ClientHandlerContext, buildingDetails
     buildingY: buildingDetails.y,
     candidateName,
   };
-  ctx.rawSend(voteReq);
-  ctx.showNotification(`Voted for ${candidateName}`, 'success');
+
+  // This used to `rawSend` and announce success in the same breath, so a vote
+  // that never left the gateway — no CurrBlock at those coordinates, no
+  // construction socket — was reported to the player as cast.
+  try {
+    const resp = (await ctx.sendRequest(voteReq)) as WsRespPoliticsVote;
+    if (!resp.success) {
+      ctx.showNotification(resp.message || 'Vote could not be cast', 'error');
+      return;
+    }
+    // Deliberately "Vote sent", not "Voted": RDOVote is a procedure and answers
+    // nothing, and the server drops the ballot in silence unless the voter pays
+    // taxes in this town (`Kernel/TownPolitics.pas:405`). Success here means the
+    // frame was written, which is all anyone downstream can know.
+    ctx.showNotification(`Vote sent for ${candidateName}`, 'success');
+  } catch (err: unknown) {
+    ctx.showNotification(`Vote failed: ${toErrorMessage(err)}`, 'error');
+    return;
+  }
   // Delay refresh to allow void push ("*") to be processed by the server
   setTimeout(() => refreshBuildingDetails(ctx, buildingDetails.x, buildingDetails.y), 500);
 }

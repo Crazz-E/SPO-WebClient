@@ -336,6 +336,17 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
       ClientBridge.handlePoliticsCampaignResponse(msg);
       break;
 
+    case WsMessageType.RESP_POLITICS_SET_RATING:
+    case WsMessageType.RESP_POLITICS_SET_PUBLICITY:
+    case WsMessageType.RESP_POLITICS_SET_PROJECT:
+      ClientBridge.handlePoliticsMutationResponse(msg);
+      break;
+
+    case WsMessageType.RESP_NEWSPAPER_BOARD:
+    case WsMessageType.RESP_NEWSPAPER_POST:
+      ClientBridge.handleNewspaperResponse(msg);
+      break;
+
     case WsMessageType.RESP_TYCOON_ROLE:
       ClientBridge.handleTycoonRoleResponse(msg);
       break;

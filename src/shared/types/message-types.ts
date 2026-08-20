@@ -39,6 +39,7 @@ import type {
   CurriculumActionType,
   PolicyData,
   PoliticsData,
+  NewspaperBoard,
   PoliticalRoleInfo,
   TransportData,
   ClusterInfo,
@@ -251,8 +252,20 @@ export enum WsMessageType {
   RESP_POLITICS_LAUNCH_CAMPAIGN = 'RESP_POLITICS_LAUNCH_CAMPAIGN',
   REQ_POLITICS_CANCEL_CAMPAIGN = 'REQ_POLITICS_CANCEL_CAMPAIGN',
   RESP_POLITICS_CANCEL_CAMPAIGN = 'RESP_POLITICS_CANCEL_CAMPAIGN',
+  REQ_POLITICS_SET_RATING = 'REQ_POLITICS_SET_RATING',
+  RESP_POLITICS_SET_RATING = 'RESP_POLITICS_SET_RATING',
+  REQ_POLITICS_SET_PUBLICITY = 'REQ_POLITICS_SET_PUBLICITY',
+  RESP_POLITICS_SET_PUBLICITY = 'RESP_POLITICS_SET_PUBLICITY',
+  REQ_POLITICS_SET_PROJECT = 'REQ_POLITICS_SET_PROJECT',
+  RESP_POLITICS_SET_PROJECT = 'RESP_POLITICS_SET_PROJECT',
   REQ_TYCOON_ROLE = 'REQ_TYCOON_ROLE',
   RESP_TYCOON_ROLE = 'RESP_TYCOON_ROLE',
+
+  // Newspaper (the town paper's editorial board)
+  REQ_NEWSPAPER_BOARD = 'REQ_NEWSPAPER_BOARD',
+  RESP_NEWSPAPER_BOARD = 'RESP_NEWSPAPER_BOARD',
+  REQ_NEWSPAPER_POST = 'REQ_NEWSPAPER_POST',
+  RESP_NEWSPAPER_POST = 'RESP_NEWSPAPER_POST',
 
   // Connection Search
   REQ_SEARCH_CONNECTIONS = 'REQ_SEARCH_CONNECTIONS',
@@ -1268,6 +1281,16 @@ export interface WsReqPoliticsData extends WsMessage {
   townName: string;
   buildingX: number;
   buildingY: number;
+  /**
+   * Capitol (president) rather than Town Hall (mayor).
+   *
+   * Not cosmetic: the five Politics pages resolve their ratings folder from
+   * `Capitol=YES` + x/y (`popularratings.asp:9-17`), and fall back to
+   * `Towns\<TownName>.five\Ratings\` otherwise. Sending a Capitol request
+   * without it resolves `Towns\.five\Ratings\` — an empty folder, which the
+   * page renders as a legitimate empty table.
+   */
+  isCapitol?: boolean;
 }
 
 export interface WsRespPoliticsData extends WsMessage {
@@ -1312,6 +1335,117 @@ export interface WsRespPoliticsCancelCampaign extends WsMessage {
   type: WsMessageType.RESP_POLITICS_CANCEL_CAMPAIGN;
   success: boolean;
   message?: string;
+}
+
+/**
+ * Rate the politician in office on one criterion — `RDOSetRatingFrom`.
+ *
+ * `ratingId` is the rating cache Id carried by `PoliticsRatingEntry.id`, which
+ * only the Tycoons' ratings tab supplies. `value` is a percentage; Voyager's
+ * own form offers 0..100 in steps of 10 (`boardmsg.asp:344-355`).
+ */
+export interface WsReqPoliticsSetRating extends WsMessage {
+  type: WsMessageType.REQ_POLITICS_SET_RATING;
+  buildingX: number;
+  buildingY: number;
+  ratingId: string;
+  value: number;
+}
+
+export interface WsRespPoliticsSetRating extends WsMessage {
+  type: WsMessageType.RESP_POLITICS_SET_RATING;
+  success: boolean;
+  ratingId: string;
+  value: number;
+  message?: string;
+}
+
+/** Distribute publicity across one criterion — `RDOSetPublicity`. Ruler only. */
+export interface WsReqPoliticsSetPublicity extends WsMessage {
+  type: WsMessageType.REQ_POLITICS_SET_PUBLICITY;
+  buildingX: number;
+  buildingY: number;
+  ratingId: string;
+  value: number;
+}
+
+export interface WsRespPoliticsSetPublicity extends WsMessage {
+  type: WsMessageType.RESP_POLITICS_SET_PUBLICITY;
+  success: boolean;
+  ratingId: string;
+  value: number;
+  message?: string;
+}
+
+/**
+ * Set one campaign project — `RDOSetProjectData`.
+ *
+ * `data` is a widestring whatever the row's kind: a tycoon name for a Minister
+ * row, the percentage as text for a goal row (`tycooncampaign.asp:186-196`
+ * sends `control.value` unchanged in both cases).
+ */
+export interface WsReqPoliticsSetProject extends WsMessage {
+  type: WsMessageType.REQ_POLITICS_SET_PROJECT;
+  buildingX: number;
+  buildingY: number;
+  projectId: string;
+  data: string;
+}
+
+export interface WsRespPoliticsSetProject extends WsMessage {
+  type: WsMessageType.RESP_POLITICS_SET_PROJECT;
+  success: boolean;
+  projectId: string;
+  data: string;
+  message?: string;
+}
+
+// =============================================================================
+// NEWSPAPER — the town paper's editorial board
+// =============================================================================
+
+/**
+ * Everything the board pages need to identify the paper and the reader.
+ *
+ * `paperName` is the town's `NewspaperName` cache property, which the Town Hall
+ * inspector already reads (`template-groups.ts` townGeneral). Voyager passes the
+ * same value from `TownHallSheet.pas:346`.
+ */
+export interface WsReqNewspaperBoard extends WsMessage {
+  type: WsMessageType.REQ_NEWSPAPER_BOARD;
+  paperName: string;
+  townName: string;
+  isCapitol: boolean;
+  buildingX: number;
+  buildingY: number;
+  /** Board path of the column to open. Omitted for the index. */
+  path?: string;
+}
+
+export interface WsRespNewspaperBoard extends WsMessage {
+  type: WsMessageType.RESP_NEWSPAPER_BOARD;
+  board: NewspaperBoard;
+}
+
+export interface WsReqNewspaperPost extends WsMessage {
+  type: WsMessageType.REQ_NEWSPAPER_POST;
+  paperName: string;
+  townName: string;
+  isCapitol: boolean;
+  buildingX: number;
+  buildingY: number;
+  subject: string;
+  body: string;
+  /** Reply to this column rather than opening a new one. */
+  replyToPath?: string;
+}
+
+export interface WsRespNewspaperPost extends WsMessage {
+  type: WsMessageType.RESP_NEWSPAPER_POST;
+  success: boolean;
+  message: string;
+  /** The board as re-rendered by the post — `null` when the post never ran. */
+  board: NewspaperBoard | null;
 }
 
 // =============================================================================

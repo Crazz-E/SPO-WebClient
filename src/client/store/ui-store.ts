@@ -11,7 +11,7 @@ import type { SnapPoint } from '../hooks/useSheetGesture';
 
 export type RightPanelType = 'building' | 'mail' | 'politics' | 'search' | 'transport';
 export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
-export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'prompt' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector' | 'changelog';
+export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'prompt' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector' | 'newspaper' | 'changelog';
 export type MobileTab = 'map' | 'chat' | 'build' | 'favorites' | 'more';
 
 interface UiState {
@@ -21,6 +21,16 @@ interface UiState {
 
   // Modals (overlay everything)
   modal: ModalType | null;
+  /**
+   * The modal a prompt or a confirm was opened *over*, restored when it closes.
+   *
+   * `modal` holds one value, so asking the president for a name used to replace
+   * the civic inspector outright: it unmounted, and closing the prompt left no
+   * inspector at all. Naming three ministers meant three trips back through the
+   * map. Only `requestPrompt` / `requestConfirm` stack — they are the only
+   * modals raised from inside another one.
+   */
+  modalBeneath: ModalType | null;
   /** Payload for confirmation dialogs */
   confirmPayload: { title: string; message: string; onConfirm: () => void } | null;
   /** Payload for text-input prompt dialogs */
@@ -90,6 +100,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   rightPanel: null,
   leftPanel: null,
   modal: null,
+  modalBeneath: null,
   confirmPayload: null,
   promptPayload: null,
   buildMenuCategories: [],
@@ -144,11 +155,27 @@ export const useUiStore = create<UiState>((set, get) => ({
       set({ modal: type });
     }
   },
-  closeModal: () => set({ modal: null, confirmPayload: null, promptPayload: null }),
+  // Closing a stacked prompt returns to whatever it was raised over, not to
+  // nothing. `modalBeneath` is null for every ordinary modal, so this stays a
+  // plain close in every other case.
+  closeModal: () => set((s) => ({
+    modal: s.modalBeneath,
+    modalBeneath: null,
+    confirmPayload: null,
+    promptPayload: null,
+  })),
   requestConfirm: (title, message, onConfirm) =>
-    set({ modal: 'confirm', confirmPayload: { title, message, onConfirm } }),
+    set((s) => ({
+      modal: 'confirm',
+      modalBeneath: s.modal === 'confirm' || s.modal === 'prompt' ? s.modalBeneath : s.modal,
+      confirmPayload: { title, message, onConfirm },
+    })),
   requestPrompt: (title, message, onSubmit, options) =>
-    set({ modal: 'prompt', promptPayload: { title, message, onSubmit, ...options } }),
+    set((s) => ({
+      modal: 'prompt',
+      modalBeneath: s.modal === 'confirm' || s.modal === 'prompt' ? s.modalBeneath : s.modal,
+      promptPayload: { title, message, onSubmit, ...options },
+    })),
 
   // Build menu data
   setBuildMenuCategories: (cats, capitolIconUrl) => set({ buildMenuCategories: cats, ...(capitolIconUrl ? { capitolIconUrl } : {}) }),
@@ -191,6 +218,12 @@ export const useUiStore = create<UiState>((set, get) => ({
         }
       }
       if (state.modal) {
+        // Escape dismisses one layer. On a stacked prompt that means returning
+        // to the inspector underneath, not closing both and losing the focus.
+        if (state.modalBeneath) {
+          set({ modal: state.modalBeneath, modalBeneath: null, confirmPayload: null, promptPayload: null });
+          return;
+        }
         if (state.modal === 'buildingInspector') {
           useBuildingStore.getState().clearFocus();
         }

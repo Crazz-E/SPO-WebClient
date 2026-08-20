@@ -146,11 +146,11 @@ export function computePendingKey(
   return pendingKeyFor(command, params);
 }
 
-/** Check if current player is mayor of this town (from ActualRuler property) */
-export function checkIsMayor(properties: BuildingPropertyValue[]): boolean {
-  const ruler = properties.find((p) => p.name === 'ActualRuler');
-  return ruler?.value !== undefined && ruler.value !== '';
-}
+// `checkIsMayor` lived here. It never compared the ruler to the player — it
+// returned true whenever the town had a mayor at all — so it granted the town
+// tab to every visitor. Replaced by `grantAccess` from '@/shared/security-id',
+// which asks whether this player's tycoon id is in this facility's id list, the
+// test Voyager itself performs (`Protocol/Protocol.pas:428-431`).
 
 /**
  * Parse pipe-delimited CloneMenu0 value into option pairs.

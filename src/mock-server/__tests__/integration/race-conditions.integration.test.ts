@@ -59,6 +59,7 @@ function makeDetails(x: number, y: number, name: string): BuildingDetailsRespons
     y,
     buildingId: `${x * 1000 + y}`,
     securityId: 'sec-test',
+    canGovern: true,
     timestamp: Date.now(),
     visualClass: '100',
     templateName: 'TestTemplate',

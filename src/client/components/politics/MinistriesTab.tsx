@@ -2,28 +2,27 @@
  * MinistriesTab — Ministry table with budget editing + Elect/Depose (president-only).
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Edit3 } from 'lucide-react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { useClient } from '../../context';
-import { useGameStore } from '../../store/game-store';
 import { SaveIndicator } from '../building/SaveIndicator';
-import { buildValueMap, getNum, formatCompact, isPresidentRole } from './capitol-utils';
+import { buildValueMap, getNum, formatCompact } from './capitol-utils';
 import styles from './PoliticsPanel.module.css';
 
 interface MinistriesTabProps {
   properties: BuildingPropertyValue[];
   buildingX: number;
   buildingY: number;
+  /** Does this player govern this Capitol? See `grantAccess`. */
+  canGovern: boolean;
 }
 
-export function MinistriesTab({ properties, buildingX, buildingY }: MinistriesTabProps) {
+export function MinistriesTab({ properties, buildingX, buildingY, canGovern }: MinistriesTabProps) {
   const client = useClient();
-  const ownerRole = useGameStore((s) => s.ownerRole);
-  const isPresident = isPresidentRole(ownerRole);
+  const isPresident = canGovern;
 
   const valueMap = buildValueMap(properties);
-  const ruler = valueMap.get('ActualRuler') ?? '';
   const count = getNum(valueMap, 'MinisterCount');
 
   const rows = Array.from({ length: count }, (_, i) => ({
@@ -79,7 +78,10 @@ export function MinistriesTab({ properties, buildingX, buildingY }: MinistriesTa
           {rows.map((row) => (
             <tr key={row.index}>
               <td>{row.ministry}</td>
-              <td>{row.minister || '—'}</td>
+              {/* Voyager writes the literal 'no minister' for a vacant seat
+                  (`MinisteriesSheet.pas:123-126`); a dash reads as missing data
+                  rather than as an empty office. */}
+              <td>{row.minister || <span className={styles.vacantSeat}>no minister</span>}</td>
               <td>{row.rating}%</td>
               <td>
                 <BudgetInput
@@ -135,12 +137,30 @@ function BudgetInput({
   const [editing, setEditing] = useState(false);
   const pendingKey = `RDOSetMinistryBudget:{"index":"${index}"}`;
 
+  // A fresh server figure must win over what was typed and abandoned.
+  useEffect(() => { if (!editing) setValue(String(initialValue)); }, [initialValue, editing]);
+
+  /**
+   * `RDOSetMinistryBudget` takes a currency, and the server evaluates
+   * `value > 0` BEFORE it checks the caller is the president
+   * (`WorldPolitics.pas:1689`). A zero, a negative or an unparsable amount is
+   * therefore dropped in silence — indistinguishable, from here, from a
+   * permission refusal. Reject it in the UI instead, where we can say why.
+   */
+  const parsed = Number(value.replace(/[\s,]/g, ''));
+  const isValid = Number.isFinite(parsed) && parsed > 0;
+
   const commit = useCallback(() => {
     setEditing(false);
-    const numValue = parseInt(value, 10);
-    if (!isNaN(numValue) && numValue !== initialValue) {
-      client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetMinistryBudget', String(numValue), { index: String(index) });
+    const next = Number(value.replace(/[\s,]/g, ''));
+    if (!Number.isFinite(next) || next <= 0) {
+      setValue(String(initialValue));
+      return;
     }
+    if (next === initialValue) return;
+    // Currency, not integer: `StrToCurr` keeps the decimals, so parseInt would
+    // silently truncate a budget the president meant to set precisely.
+    client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetMinistryBudget', String(next), { index: String(index) });
   }, [value, initialValue, client, buildingX, buildingY, index]);
 
   if (!editable) {
@@ -166,8 +186,12 @@ function BudgetInput({
   return (
     <span className={styles.budgetCell}>
       <input
-        className={styles.budgetInput}
+        className={isValid ? styles.budgetInput : `${styles.budgetInput} ${styles.budgetInputInvalid}`}
         type="number"
+        min={1}
+        step="any"
+        aria-invalid={!isValid}
+        aria-label="Ministry budget"
         value={value}
         autoFocus
         onChange={(e) => setValue(e.target.value)}

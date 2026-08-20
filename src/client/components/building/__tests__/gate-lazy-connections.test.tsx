@@ -28,7 +28,7 @@ const Y = 226;
 
 const makeDetails = (): BuildingDetailsResponse => ({
   buildingId: 'bld-1', x: X, y: Y, visualClass: '9013', templateName: 'Warehouse',
-  buildingName: 'Export Storage 4', ownerName: 'TestCorp', securityId: 's',
+  buildingName: 'Export Storage 4', ownerName: 'TestCorp', securityId: 's', canGovern: true,
   tabs: [], groups: {}, timestamp: 1,
 });
 
