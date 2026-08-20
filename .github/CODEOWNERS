@@ -1,0 +1,15 @@
+# Default owner for everything in the repository.
+*                               @Crazz-E
+
+# The wire protocol is the project: these files change only with a review.
+/src/shared/rdo-types.ts        @Crazz-E
+/src/shared/rdo-members.ts      @Crazz-E
+/src/shared/rdo-frame.ts        @Crazz-E
+/src/server/rdo.ts              @Crazz-E
+/src/__fixtures__/              @Crazz-E
+
+# Build, release and automation surface.
+/.github/                       @Crazz-E
+/jest.config.js                 @Crazz-E
+/Dockerfile                     @Crazz-E
+/docker-compose.yml             @Crazz-E

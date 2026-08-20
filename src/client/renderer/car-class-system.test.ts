@@ -15,6 +15,10 @@ import {
 
 const CAR_CLASSES_DIR = path.join(__dirname, '../../../cache/CarClasses');
 
+// cache/ is the gitignored runtime mirror of the update server — absent on CI.
+// The block that reads real INI files only runs where the mirror exists.
+const describeWithCarCache = fs.existsSync(CAR_CLASSES_DIR) ? describe : describe.skip;
+
 describe('Car Class System', () => {
   // ==========================================================================
   // INI PARSING
@@ -206,7 +210,7 @@ Cargo = People
   // REAL INI FILE PARSING (integration)
   // ==========================================================================
 
-  describe('Real CarClasses INI files', () => {
+  describeWithCarCache('Real CarClasses INI files', () => {
     const iniFiles = fs.existsSync(CAR_CLASSES_DIR)
       ? fs.readdirSync(CAR_CLASSES_DIR).filter(f => f.toLowerCase().endsWith('.ini'))
       : [];

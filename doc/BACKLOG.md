@@ -242,7 +242,7 @@
   - Removed temporary files (nul, tmpclaude-3e1f-cwd)
   - **Git repository initialized:**
     - Initial commit (95e840c): 43 files, 17,294 lines
-    - Repository URL: https://github.com/Crazysky/SPO-WebClient
+    - Repository URL: https://github.com/Crazz-E/SPO-WebClient
     - Successfully pushed to GitHub
   - **Build verification:** Clean compilation (server: 5 JS files, client: 168KB bundle)
   - **Git nomenclature policy:** Added comprehensive guidelines for branches, commits, tags, and PRs

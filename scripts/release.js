@@ -20,6 +20,8 @@ const README_PATH = path.join(ROOT, 'README.md');
 const CLAUDE_MD_PATH = path.join(ROOT, 'CLAUDE.md');
 const CHANGELOG_PATH = path.join(ROOT, 'CHANGELOG.md');
 const CHANGELOG_JSON_PATH = path.join(ROOT, 'src', 'client', 'changelog-data.json');
+const LOCK_PATH = path.join(ROOT, 'package-lock.json');
+const ELECTRON_LOCK_PATH = path.join(ROOT, 'electron', 'package-lock.json');
 
 // --- Helpers ---
 
@@ -150,6 +152,21 @@ function updateChangelogJson(version, date, categories) {
 
 // --- Main ---
 
+/**
+ * A lockfile carries the project version twice. Bumping package.json without it left the
+ * two lockfiles stranded on the previous version — 1.2.1 while the manifests said 1.3.0-beta.
+ */
+function syncLockVersion(lockPath, version) {
+  if (!fs.existsSync(lockPath)) return false;
+  const lock = JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
+  lock.version = version;
+  if (lock.packages && lock.packages['']) {
+    lock.packages[''].version = version;
+  }
+  fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n', 'utf-8');
+  return true;
+}
+
 function main() {
   const newVersion = process.argv[2];
   if (!newVersion) {
@@ -204,7 +221,15 @@ function main() {
     console.log(`Synced electron/package.json version to ${newVersion}`);
   }
 
-  // 5. Update README.md version badge
+  // 5. Keep both lockfiles on the same version as their manifest
+  if (syncLockVersion(LOCK_PATH, newVersion)) {
+    console.log(`Synced package-lock.json version to ${newVersion}`);
+  }
+  if (syncLockVersion(ELECTRON_LOCK_PATH, newVersion)) {
+    console.log(`Synced electron/package-lock.json version to ${newVersion}`);
+  }
+
+  // 6. Update README.md version badge
   if (fs.existsSync(README_PATH)) {
     const readme = fs.readFileSync(README_PATH, 'utf-8');
     const updatedReadme = readme.replace(/> \*\*Beta \d+\.\d+\.\d+\S*\*\*/, `> **Beta ${newVersion}**`);
@@ -212,7 +237,7 @@ function main() {
     console.log(`Updated README.md version badge to Beta ${newVersion}`);
   }
 
-  // 6. Update CLAUDE.md version reference
+  // 7. Update CLAUDE.md version reference
   if (fs.existsSync(CLAUDE_MD_PATH)) {
     const claudeMd = fs.readFileSync(CLAUDE_MD_PATH, 'utf-8');
     const updatedClaudeMd = claudeMd.replace(
@@ -223,9 +248,9 @@ function main() {
     console.log(`Updated CLAUDE.md version to Beta ${newVersion}`);
   }
 
-  // 7. Print next steps
+  // 8. Print next steps
   console.log('\n--- Next steps ---');
-  console.log(`git add package.json electron/package.json README.md CLAUDE.md CHANGELOG.md src/client/changelog-data.json`);
+  console.log(`git add package.json package-lock.json electron/package.json electron/package-lock.json README.md CLAUDE.md CHANGELOG.md src/client/changelog-data.json`);
   console.log(`git commit -m "chore: release v${newVersion}"`);
   console.log(`git tag v${newVersion}`);
   console.log(`git push --follow-tags`);
