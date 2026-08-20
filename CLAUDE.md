@@ -113,14 +113,17 @@ duplicates it. Everything lives in [doc/](doc/); start from
 
 ## Environment
 
-Windows 11 Pro. Two shells available with different syntax: **PowerShell** (primary) and
-**Git Bash** (MINGW64) via the Bash tool. Node.js `C:\Program Files\nodejs\` (v24, npm 11).
+**WSL2 (Linux) on a Windows 11 host** — the working shell is bash inside WSL, with the repo at
+`/home/<user>/SPO-WebClient`. Node.js 22 / npm 10, installed in WSL (`/usr/bin/node`).
+PowerShell on the host is only needed for what WSL cannot do: signing and running the packaged
+Electron installer.
 
 - Use Claude Code tools (Read, Grep, Glob, Edit, Write) rather than shell `grep`/`find`/`cat`/`sed`.
   The permission allowlist deliberately excludes those shell aliases.
-- Processes: `tasklist` / `taskkill` or `Get-Process`, not `ps` / `kill`
-- Line endings: LF only (`.gitattributes`) — never introduce CRLF
-- For bash: `export PATH="/c/Program Files/nodejs:$PATH"`
+- Processes: `ps` / `kill` inside WSL; `tasklist` / `taskkill` only for host-side processes
+- Line endings: LF only (`.gitattributes` and `.editorconfig`) — never introduce CRLF
+- Minimum supported runtime is Node 22 (`engines` in package.json, `node:22` in the Dockerfile,
+  Node 22 in CI). The Electron shell bundles its own Node.
 
 ## Commands
 
@@ -224,8 +227,9 @@ Small, focused changes.
 
 ## Git
 
-**Nothing gates a commit or a push.** Run `npm test` and `npm run typecheck` yourself before
-pushing RDO changes.
+**Nothing gates a local commit.** Run `npm test` and `npm run typecheck` yourself before
+pushing RDO changes — but `.github/workflows/ci.yml` now runs both on every push to `main`
+and every pull request, and `main` is protected: no force-push, no deletion, CI must be green.
 
 Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description.
 Commits: `type: short summary` — `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`.
