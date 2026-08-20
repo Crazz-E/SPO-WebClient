@@ -36,12 +36,9 @@ import {
   getConcreteId,
   rotateConcreteId,
   rotateConcreteCfg,
-  canReceiveConcrete,
-  LAND_CONCRETE_ROTATION,
-  WATER_CONCRETE_ROTATION
+  canReceiveConcrete
 } from './concrete-texture-system';
 import { Rotation } from './road-texture-system';
-import { LandClass, LandType } from '../../shared/land-utils';
 
 // Path to cache directories
 const CACHE_DIR = path.join(__dirname, '../../../cache');
@@ -765,17 +762,23 @@ Id = 255
       const iniFiles = fs.readdirSync(CONCRETE_CLASSES_DIR)
         .filter(f => f.toLowerCase().endsWith('.ini'));
 
+      // The 2002 assets ship as conc1.bmp; the INI from the same server says Conc1.bmp.
+      // The server never compares those two by exact case: /cache/ resolves through
+      // imageFileIndex, which is keyed on the lowercased filename (server.ts:163-203).
+      // Comparing case-sensitively here only tested the developer's filesystem — it
+      // passed on Windows and failed on Linux, where production actually runs.
+      const availableTextures = new Set(
+        fs.readdirSync(CONCRETE_IMAGES_DIR).map(f => f.toLowerCase())
+      );
+
       const missing: string[] = [];
 
       for (const file of iniFiles) {
         const content = fs.readFileSync(path.join(CONCRETE_CLASSES_DIR, file), 'utf-8');
         const config = loadConcreteBlockClassFromIni(content);
 
-        if (config.imagePath) {
-          const texturePath = path.join(CONCRETE_IMAGES_DIR, config.imagePath);
-          if (!fs.existsSync(texturePath)) {
-            missing.push(`${file} -> ${config.imagePath}`);
-          }
+        if (config.imagePath && !availableTextures.has(config.imagePath.toLowerCase())) {
+          missing.push(`${file} -> ${config.imagePath}`);
         }
       }
 
