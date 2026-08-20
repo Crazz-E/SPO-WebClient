@@ -1,6 +1,6 @@
 /**
  * InspectorTabs — Pill grid tab selector driven by server-sent BuildingDetailsTab config.
- * Matches ProfilePanel's vertical pill layout for consistency in narrow side panels.
+ * Vertical pill layout, sized for narrow side panels.
  */
 
 import type { BuildingDetailsTab } from '@/shared/types';
