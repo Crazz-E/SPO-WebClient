@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders, createSpiedCallbacks } from '../../../__tests__/setup/render-helpers';
 import { useProfileStore } from '../../../store/profile-store';
 import { ProfilePanel } from '../ProfilePanel';
@@ -101,6 +101,24 @@ describe('ProfilePanel — sections', () => {
     // requestTabData() flips isLoading before the response lands
     expect(useProfileStore.getState().isLoading).toBe(true);
     expect(container.querySelector('[class*="loading"]')).toBeTruthy();
+  });
+
+  it('renders the section body once its data lands', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Companies');
+    act(() => {
+      useProfileStore.getState().setCompanies({
+        companies: [
+          { name: 'Green Co', companyId: 7, ownerRole: 'Tycoon', cluster: 'A', facilityCount: 3, companyType: 'Industry' },
+        ],
+        currentCompany: 'Green Co',
+        worldName: 'planitia',
+      });
+    });
+
+    expect(useProfileStore.getState().isLoading).toBe(false);
+    expect(screen.getByText('Green Co')).toBeTruthy();
   });
 
   it('forgets the open section when the panel unmounts', () => {
