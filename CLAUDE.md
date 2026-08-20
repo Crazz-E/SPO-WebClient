@@ -56,8 +56,8 @@ rdoSet('Stopped', targetId, RdoValue.int(-1))
 
 The catalogue is a census of what the client emits, not a copy of the Pascal. To add an entry
 you need the member's **kind** and **arity**, and the only authority for those is the server-side
-declaration in `../SPO-Original` — read it with **`delphi-archaeologist`**, cite `File.pas:Line`,
-and never probe the live server.
+declaration in `../SPO-Original/Rdo/Server/` — read it with **`delphi-archaeologist`**,
+cite `File.pas:Line`, and never probe the live server.
 
 Why it matters, mechanically: `"^"` on a `procedure` leaves a result pointer nobody pops
 (**freeze**); `"*"` on a `function` makes it write through a register nobody set (**arbitrary
@@ -80,10 +80,24 @@ count throws, and the separator cannot be written by hand.
 `src/server/session/rdo-request-guards.ts` still guards what the catalogue says nothing about:
 forbidden members, session-lifecycle members, connection-bound members, buffer depth.
 
-## Legacy Delphi source
+## Legacy Delphi source — `../SPO-Original`
 
-`../SPO-Original` — sibling of this repo, Delphi 5. **Read-only historical artifact.**
-Every claim from it cites `File.pas:Line`, or is marked `[INFERRED]` / `[UNKNOWN]`.
+`~/SPO-Original` — sibling of this repo (`../SPO-Original` from the project root), Delphi 5,
+114 MB, ~1750 `.pas`. It holds **both halves of the original system**: the Delphi servers *and*
+the Voyager client. Its own git repo (`Crazz-E/SPO-Original`), a **read-only historical
+artifact** — never write into it, never probe the live server instead. Every claim from it
+cites `File.pas:Line`, or is marked `[INFERRED]` / `[UNKNOWN]`.
+
+| Path | Holds |
+|------|-------|
+| `Rdo/Server/` | **the RDO authority** — `RDOObjectServer.pas`, the declaration the client must match (kind, arity) |
+| `Rdo.BIN/`, `Rdo.IS/` | divergent forks of the same units (345 / 359 / 364 lines) — do not cite them: a line number from `Rdo/` lands on other code there |
+| `Voyager/`, `Voyager.1/` | the original Delphi client — the reference for *what the client demonstrably emitted* (rule 2 above) |
+| `Kernel/`, `Model Server/`, `Interface Server/`, `Directory Server/` | game model and the servers behind the gateway |
+
+A copy of the same tree also sits on the Windows mount
+(`/mnt/c/Users/Crazz/Documents/SPO/SPO-Original`) — same commit, identical content, but CRLF.
+Read the WSL copy.
 
 [spo-original-reference.md](doc/spo-original-reference.md) indexes it, but ⚠ **it is
 hand-maintained and has misclassified members before** — it once listed a `procedure` as a
@@ -131,6 +145,8 @@ Electron installer.
 npm run dev          # build + start (port 8080)
 npm run build        # server + client + terrain-test
 npm run typecheck    # both tsconfigs
+npm run lint         # ESLint 10, flat config — 0 errors is the CI gate
+npm run format       # Prettier over the whole tree (not enforced yet, see below)
 npm test             # full Jest suite
 npm run test:coverage
 npm run test:changed # --onlyChanged --bail
@@ -219,11 +235,34 @@ security-auditor, typescript, web-accessibility, web-performance.
 directory hosts `planitia`/`shamba`/`zorcon` under Free Space; BETA only has `aries`.
 Procedure and selectors: `/e2e-test` skill and [E2E-TESTING.md](doc/E2E-TESTING.md).
 
+## Live server logs — http://158.69.153.134/logs/
+
+The Delphi servers write their logs to an open IIS directory listing, no auth. This is how a
+live run is proved rather than assumed — `doc/BACKLOG-OPEN.md` already cites it as evidence.
+
+| Path | Carries |
+|------|---------|
+| `FIVEMODELSERVER/Survival <YY-MM-DD>.log` | **the one that matters** — civic RDO members log on entry, *before* their `try`, so a line here proves the frame reached the object (`Setting Tax value: …`, `Setting Min Wage: …`, `Caching Town..`) |
+| `FIVEMODELSERVER/TimeWarp <date>.log` | a periodic world snapshot — who holds each ministry, per-town vacancies and average salaries. Small (~20 KB), good for checking model state without replaying a session |
+| `FIVEINTERFACESERVER/Survival <date>.log` | `LOGON ATTEMPT: User=<name>` / `Start Disconnecting <name>` — which identity (human vs role company) was active at a given second |
+| `FIVECACHESERVER/`, `FIVEMAILSERVER/` | near-empty, rarely useful |
+
+Download and grep — the Survival log runs 2–3 MB/day, too big to pull into context. **Reading
+a log is not probing the server**; it stays within the "never probe the live server" rule. It
+is also not a substitute for the Pascal: a log proves what *happened*, the declaration in
+`../SPO-Original/Rdo/Server/` is what defines a member's kind and arity.
+
 ## Code style
 
 TypeScript strict. camelCase vars/methods, PascalCase classes/interfaces. `unknown` in catch
 blocks + `toErrorMessage(err)` from `@/shared/error-utils`. JSDoc for public API only.
 Small, focused changes.
+
+`eslint.config.js` encodes what is a rule here and what is a deliberate shape — read the
+comments before turning something off. CI fails on any ESLint **error**; warnings are a
+backlog, not a gate. Prettier is configured (`.prettierrc.json`) but **not enforced**: the
+tree has never been formatted, so `npm run format` would rewrite ~440 files at once. Format
+what you touch, or make that sweep a commit of its own.
 
 ## Git
 
