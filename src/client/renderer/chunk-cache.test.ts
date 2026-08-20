@@ -37,9 +37,9 @@ global.fetch = jest.fn() as jest.Mock;
 (global as unknown as Record<string, unknown>).createImageBitmap = jest.fn();
 
 // Dynamic require AFTER globals are set (import would be hoisted before the mocks)
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const { ChunkCache, CHUNK_SIZE, MAX_CHUNKS_PER_ZOOM } = require('./chunk-cache');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const { TextureCache } = require('./texture-cache');
 
 // Mock TextureCache

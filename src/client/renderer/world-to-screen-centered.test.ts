@@ -5,7 +5,7 @@
  * injecting only the dependencies that worldToScreenCentered() actually touches.
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import { Rotation, ZOOM_LEVELS } from '../../shared/map-config';
 import { PLATFORM_SHIFT } from './concrete-texture-system';
 import { IsometricMapRenderer } from './isometric-map-renderer';
@@ -41,7 +41,7 @@ function createTestRenderer(overrides: {
     y: (j + i) * (ZOOM_LEVELS[zoomLevel].tileHeight / 2),
   }));
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const renderer = Object.create(IsometricMapRenderer.prototype) as any;
 
   // Inject the minimal dependencies that worldToScreenCentered touches
@@ -274,7 +274,7 @@ describe('worldToScreenCentered', () => {
 
   describe('recorded position from drawBuildings', () => {
     it('returns recorded position when available', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const renderer = createTestRenderer({ rotation: Rotation.NORTH, zoomLevel: ZOOM }) as any;
 
       // Simulate drawBuildings recording the position
@@ -310,7 +310,7 @@ describe('worldToScreenCentered', () => {
       });
 
       // Set recorded position (different from what computation would give)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       (renderer as any).selectedBuildingDrawnTop = { x: 999, y: 888, textureHeight: 777 };
 
       const result = renderer.worldToScreenCentered(10, 20, 4, 4);
@@ -332,7 +332,7 @@ describe('addCachedZone — bounds clipping', () => {
    */
 
   function createRendererForZone() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const renderer = Object.create(IsometricMapRenderer.prototype) as any;
 
     // Minimal state that addCachedZone + rebuildAggregatedData touch

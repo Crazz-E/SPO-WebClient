@@ -46,7 +46,6 @@ import type {
   ClusterFacilityPreview,
 } from './domain-types';
 
-import type { RdoVerb, RdoAction } from './protocol-types';
 
 // =============================================================================
 // MESSAGE TYPE ENUM

@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { screen } from '@testing-library/react';
 import { renderWithProviders } from '../../../__tests__/setup/render-helpers';
 import { NobilityBadge } from '../NobilityBadge';
 import { CHAT_MODIFIER_FLAGS } from '../../../../shared/types/domain-types';

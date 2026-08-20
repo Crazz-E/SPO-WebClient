@@ -32,8 +32,8 @@
 /// <reference path="../matchers/rdo-matchers.d.ts" />
 
 import { describe, it, expect } from '@jest/globals';
-import { RdoCommand, RdoValue, RdoParser, RdoTypePrefix } from '../../../shared/rdo-types';
-import type { RdoExchange, RdoMatchKey } from '../../../mock-server/types/rdo-exchange-types';
+import { RdoCommand, RdoValue, RdoTypePrefix } from '../../../shared/rdo-types';
+import type { RdoExchange } from '../../../mock-server/types/rdo-exchange-types';
 
 // =============================================================================
 // CONSTANTS — mirror mock building IDs from building-details-scenario.ts

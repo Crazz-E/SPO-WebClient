@@ -379,10 +379,11 @@ function BankTab() {
   const [toTycoon, setToTycoon] = useState('');
   const [reason, setReason] = useState('');
 
-  if (!data) return <EmptyState message="No bank data" />;
-
-  // Dynamic interest/term calculation based on borrow amount
+  // Dynamic interest/term calculation based on borrow amount.
+  // Declared before the early return: a hook that only runs once the data lands
+  // changes the hook order between renders, and React throws on the next render.
   const dynamicCalc = useMemo(() => {
+    if (!data) return null;
     const numAmount = parseFloat(amount.replace(/,/g, ''));
     if (!numAmount || isNaN(numAmount)) return null;
     const totalLoansNum = parseFloat((data.totalLoans || '0').replace(/,/g, ''));
@@ -390,7 +391,9 @@ function BankTab() {
     const interest = Math.round(combined / 100_000_000);
     const term = Math.max(5, 200 - Math.round(combined / 10_000_000));
     return { interest, term };
-  }, [amount, data.totalLoans]);
+  }, [amount, data]);
+
+  if (!data) return <EmptyState message="No bank data" />;
 
   const handleBorrow = () => {
     if (!amount) return;

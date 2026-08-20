@@ -5,9 +5,7 @@ import * as os from 'os';
 import {
   extractCabArchive,
   listCabContents,
-  isCabExtractorAvailable,
-  CabFileInfo,
-  CabExtractionResult
+  isCabExtractorAvailable
 } from './cab-extractor';
 
 describe('CAB Extractor (7zip-min)', () => {

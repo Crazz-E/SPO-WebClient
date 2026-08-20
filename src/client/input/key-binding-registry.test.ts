@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import type { KeyActionId } from './key-binding-registry';
 
 // ---------------------------------------------------------------------------
 // localStorage mock

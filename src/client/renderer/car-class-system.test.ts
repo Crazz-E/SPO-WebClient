@@ -7,7 +7,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  CarClassConfig,
   CarClassManager,
   loadCarClassFromIni,
   CAR_DIRECTIONS

@@ -8,12 +8,11 @@ import {
   WsMessageType,
   WsMessage,
   WsReqChatSendMessage,
-  WsReqChatTypingStatus,
   WsReqChatGetUsers,
   WsRespChatUserList,
   WsReqChatGetChannels,
   WsRespChatChannelList,
-  WsReqChatJoinChannel,
+  WsReqChatJoinChannel
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';

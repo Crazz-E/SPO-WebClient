@@ -9,7 +9,7 @@ import { CompInputsPanel } from '../InputsGroup';
 import { ProductsPanel } from '../ProductsGroup';
 import { SuppliesPanel } from '../SuppliesGroup';
 import type { CompInputData, BuildingProductData, BuildingSupplyData, BuildingConnectionData } from '@/shared/types';
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent } from '@testing-library/react';
 import { useBuildingStore, gateKey } from '../../../store/building-store';
 
 /**

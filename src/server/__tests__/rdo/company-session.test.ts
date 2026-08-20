@@ -9,7 +9,6 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { MockRdoSession } from '../../__mocks__/mock-rdo-session';
-import { RdoValue } from '../../../shared/rdo-types';
 
 describe('RDO Company and Session Management', () => {
   let mockSession: MockRdoSession;

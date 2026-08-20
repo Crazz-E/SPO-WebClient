@@ -11,12 +11,10 @@ import { WsMessageType } from '@/shared/types/message-types';
 import type { WsMessage, BuildingDetailsResponse } from '@/shared/types';
 import { createTestHarness, type TestHarness } from './test-harness';
 import {
-  handleMapClick,
   showBuildingOverlay,
   openInspectorForFocused,
-  unfocusBuilding,
+  unfocusBuilding
 } from '@/client/handlers/building-focus-handler';
-import { dispatchEvent } from '@/client/handlers/event-handler';
 
 /* ── Mocks (required for node environment) ─────────────────────────────── */
 

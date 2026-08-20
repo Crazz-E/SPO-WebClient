@@ -10,7 +10,6 @@
 
 import {
   ACTIVE_C1_BAND,
-  ACTIVE_C1_ENCODE_MAP,
   C1_BAND_LENGTH,
   C1_BAND_START,
   CP1252_C1_BAND,
@@ -21,7 +20,7 @@ import {
   decodeAnsi,
   clampToWireBytes,
   encodeAnsi,
-  encodeCodePoint,
+  encodeCodePoint
 } from './cp1252';
 
 /** The bytes that would actually leave the socket for a given JS string. */

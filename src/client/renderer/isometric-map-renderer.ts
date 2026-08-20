@@ -41,22 +41,15 @@ import {
   RoadsRendering,
   RoadBlockClassManager,
   renderRoadSegment,
-  loadRoadBlockClassFromIni,
   RoadBlockId,
   roadBlockId,
   detectSmoothCorner,
   isJunctionTopology,
   rotateRoadBlockId,
-
   isBridge,
-  ROAD_TYPE,
-  LandClass,
-  LandType,
-  landClassOf,
-  landTypeOf,
   isWater
 } from './road-texture-system';
-import { formatLandId, landTypeName, landClassName, decodeLandId, isSpecialTile, rotateLandId } from '../../shared/land-utils';
+import { landTypeName, landClassName, decodeLandId, isSpecialTile, rotateLandId } from '../../shared/land-utils';
 import {
   ConcreteBlockClassManager,
   loadConcreteBlockClassFromIni,
@@ -4648,7 +4641,7 @@ export class IsometricMapRenderer {
           // Y position: shift up for water platforms
           const isWaterPlatform = hasConcrete && onWater;
           const baseY = isWaterPlatform ? screenPos.y - platformYShift : screenPos.y;
-          let labelY = baseY + halfHeight;
+          const labelY = baseY + halfHeight;
 
           // Line 1: tile coordinates (always shown when debugShowTileInfo)
           if (this.debugShowTileInfo) {

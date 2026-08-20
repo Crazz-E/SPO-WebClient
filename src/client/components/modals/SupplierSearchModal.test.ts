@@ -5,7 +5,7 @@
  * not React rendering.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { useUiStore } from '../../store/ui-store';
 import { useProfileStore } from '../../store/profile-store';
 import type { ConnectionSearchResult } from '@/shared/types';

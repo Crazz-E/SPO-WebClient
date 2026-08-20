@@ -223,10 +223,10 @@ export class SearchMenuService {
   /**
    * Get banks list (usually empty)
    */
-  async getBanks(): Promise<any[]> {
+  async getBanks(): Promise<unknown[]> {
     const path = `/five/0/visual/voyager/new%20directory/Banks.asp?WorldName=${encodeURIComponent(this.worldName)}&RIWS=`;
 
-    const html = await this.fetchPage(path);
+    await this.fetchPage(path);
     // Banks page is usually empty, return empty array
     return [];
   }

@@ -9,7 +9,7 @@
  * Uses jest.isolateModules() to reload paths.ts with fresh state per test,
  * since IS_ELECTRON is computed at module-load time from process.versions.
  */
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import * as path from 'path';
 
 // Helpers to load paths.ts in isolation with controlled process.versions
@@ -23,7 +23,7 @@ function loadPathsModule(electronVersion?: string) {
     delete (process.versions as Record<string, string | undefined>).electron;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const mod = require('../paths') as typeof import('../paths');
 
   // Restore immediately so other tests are unaffected

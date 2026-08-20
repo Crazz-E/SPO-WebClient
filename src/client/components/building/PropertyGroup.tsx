@@ -20,7 +20,6 @@ import {
 } from '@/shared/building-details';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
 import { useBuildingStore } from '../../store/building-store';
-import { useGameStore } from '../../store/game-store';
 import { useClient } from '../../context';
 import { ResearchPanel } from './ResearchPanel';
 import { RevenueGraph } from './RevenueGraph';

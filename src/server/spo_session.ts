@@ -22,45 +22,26 @@ import {
   SurfaceData,
   SurfaceType,
   BuildingDetailsResponse,
-  BuildingPropertyValue,
-  BuildingSupplyData,
-  BuildingProductData,
-  BuildingConnectionData,
-  CompInputData,
   MailMessageHeader,
   MailMessageFull,
-  MailAttachment,
   TycoonProfileFull,
   CurriculumData,
   BankAccountData,
-  LoanInfo,
   BankActionResult,
   ProfitLossData,
-  ProfitLossNode,
   CompaniesData,
-  CompanyListItem,
   AutoConnectionsData,
-  AutoConnectionFluid,
-  SupplierEntry,
   PolicyData,
-  PolicyEntry,
   PoliticsData,
-  PoliticsRatingEntry,
   NewspaperBoard,
   PoliticalRoleInfo,
   ConnectionSearchResult,
   FavoritesItem,
   ResearchCategoryData,
-  ResearchInventionItem,
   ResearchInventionDetails,
   ClusterInfo,
-  ClusterCategory,
-  ClusterFacilityPreview,
+  ClusterFacilityPreview
 } from '../shared/types';
-import {
-  getTemplateForVisualClass,
-  collectTemplatePropertyNamesStructured,
-} from '../shared/building-details';
 import { RdoFramer, RdoProtocol } from './rdo';
 import {
   RdoValue,
@@ -80,9 +61,7 @@ import {
   writeRdoFrame,
   tagRdoSocket,
 } from './rdo-helpers';
-import { parseMessageListHtml } from './mail-list-parser';
 import type { AspActionUrl } from './asp-url-extractor';
-import { extractAllActionUrls, extractFormActions } from './asp-url-extractor';
 import {
   parseBuildings as parseBuildingsHelper,
   parseSegments as parseSegmentsHelper,
@@ -103,7 +82,6 @@ import * as buildingTemplatesHandler from './session/building-templates-handler'
 import * as buildingDetailsHandler from './session/building-details-handler';
 import * as buildingPropertyHandler from './session/building-property-handler';
 import * as researchHandler from './session/research-handler';
-import type { SessionContext } from './session/session-context';
 import { dispatchPush } from './session/push-dispatcher';
 import * as loginHandler from './session/login-handler';
 import { canBufferRequest, isConnectionBoundMember } from './session/request-routing';

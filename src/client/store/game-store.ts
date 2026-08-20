@@ -244,7 +244,7 @@ export const useGameStore = create<GameState>((set) => ({
   setSwitchingCompany: (switching) => set({ isSwitchingCompany: switching }),
 
   setTycoonStats: (stats) => set((state) => {
-    const cashNum = parseFloat(stats.cash.replace(/[^0-9.\-]/g, ''));
+    const cashNum = parseFloat(stats.cash.replace(/[^0-9.-]/g, ''));
     const prev = state.cashHistory;
     const next = Number.isFinite(cashNum)
       ? [...prev.slice(-(12 - 1)), cashNum]

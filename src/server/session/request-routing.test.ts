@@ -1,5 +1,3 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import {
   CONNECTION_BOUND_MEMBERS,
   canBufferRequest,

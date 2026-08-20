@@ -6,7 +6,7 @@
 import { describe, it, expect } from '@jest/globals';
 import * as path from 'path';
 import * as fs from 'fs';
-import { parseClassesBin, type BuildingClassEntry, SOUND_SET_KIND } from './classes-bin-parser';
+import { parseClassesBin, type BuildingClassEntry } from './classes-bin-parser';
 
 // Mock logger to prevent console spam during tests
 jest.mock('../shared/logger', () => ({

@@ -24,8 +24,7 @@ import {
   PRODUCTS_GROUP,
   TOWN_JOBS_GROUP,
   TOWN_RES_GROUP,
-  TOWN_SERVICES_GROUP,
-  WORKFORCE_GROUP,
+  TOWN_SERVICES_GROUP
 } from '../../../shared/building-details/template-groups';
 import { PropertyType } from '../../../shared/building-details/property-definitions';
 import type { BuildingPropertyValue } from '../../../shared/types';

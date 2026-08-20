@@ -6,7 +6,7 @@
 
 import { RdoProtocol } from '@/server/rdo';
 import type { RdoPacket } from '@/shared/types/protocol-types';
-import type { RdoExchange, RdoMatchKey, RdoScenario } from './types/rdo-exchange-types';
+import type { RdoExchange, RdoScenario } from './types/rdo-exchange-types';
 import { substituteVariables, mergeVariables } from './scenarios/scenario-variables';
 import type { ScenarioVariables } from './scenarios/scenario-variables';
 

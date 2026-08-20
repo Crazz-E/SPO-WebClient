@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import * as fs from 'fs';
 import * as path from 'path';
-import { BuildingDataService, FacilityDimensions } from './building-data-service';
+import { BuildingDataService } from './building-data-service';
 
 // Mock logger to prevent console spam during tests
 jest.mock('../shared/logger', () => ({

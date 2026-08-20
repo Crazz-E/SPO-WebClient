@@ -23,9 +23,9 @@ jest.mock('node-fetch', () => ({
   default: jest.fn(),
 }));
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import { RdoProtocol } from '../../rdo';
-import { RdoValue, RdoCommand } from '../../../shared/rdo-types';
+import { RdoValue } from '../../../shared/rdo-types';
 import { RdoVerb, RdoAction } from '../../../shared/types/protocol-types';
 
 // Test constants matching typical session state
