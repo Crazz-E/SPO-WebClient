@@ -47,6 +47,12 @@ const CACHE_DIR = path.join(__dirname, '../../../cache');
 const ROAD_CLASSES_DIR = path.join(CACHE_DIR, 'RoadBlockClasses');
 const ROAD_IMAGES_DIR = path.join(CACHE_DIR, 'RoadBlockImages');
 
+// The cache/ tree is a runtime mirror of the update server: it is gitignored and
+// therefore absent on CI. The integration block below reads it directly, so it only
+// runs where the mirror exists — a missing mirror is "not applicable", not a failure.
+const hasRoadCache = fs.existsSync(ROAD_CLASSES_DIR) && fs.existsSync(ROAD_IMAGES_DIR);
+const describeWithRoadCache = hasRoadCache ? describe : describe.skip;
+
 describe('Road Texture System', () => {
   // ==========================================================================
   // INI FILE PARSING TESTS
@@ -531,7 +537,7 @@ Id=5
   // FILE SYSTEM VALIDATION TESTS (Integration)
   // ==========================================================================
 
-  describe('INI File Validation (Integration)', () => {
+  describeWithRoadCache('INI File Validation (Integration)', () => {
     let iniFiles: string[] = [];
     let bmpFiles: string[] = [];
 
