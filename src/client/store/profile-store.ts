@@ -19,7 +19,8 @@ export type ProfileTab = 'curriculum' | 'bank' | 'profitloss' | 'companies' | 'a
 interface ProfileState {
   // State
   profile: TycoonProfileFull | null;
-  currentTab: ProfileTab;
+  /** Open section, or null when the panel shows only the section list. */
+  currentTab: ProfileTab | null;
   isLoading: boolean;
 
   // Tab data (loaded on demand)
@@ -40,7 +41,7 @@ interface ProfileState {
 
   // Actions
   setProfile: (profile: TycoonProfileFull) => void;
-  setCurrentTab: (tab: ProfileTab) => void;
+  setCurrentTab: (tab: ProfileTab | null) => void;
   setLoading: (loading: boolean) => void;
   setCurriculum: (data: CurriculumData) => void;
   setBankAccount: (data: BankAccountData) => void;
@@ -58,7 +59,7 @@ interface ProfileState {
 
 export const useProfileStore = create<ProfileState>((set) => ({
   profile: null,
-  currentTab: 'curriculum',
+  currentTab: null,
   isLoading: false,
   curriculum: null,
   bankAccount: null,
@@ -93,7 +94,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
   reset: () =>
     set((s) => ({
       profile: null,
-      currentTab: 'curriculum',
+      currentTab: null,
       isLoading: false,
       curriculum: null,
       bankAccount: null,
@@ -104,7 +105,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
       supplierSearch: null,
       supplierSearchResults: [],
       supplierSearchLoading: false,
-      // Increment (not zero) so the useEffect re-triggers even if already on 'curriculum'
+      // Increment (not zero) so the useEffect re-triggers even on an unchanged section
       refreshCounter: s.refreshCounter + 1,
     })),
 }));

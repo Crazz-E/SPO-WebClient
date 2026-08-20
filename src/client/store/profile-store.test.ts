@@ -147,6 +147,20 @@ describe('Profile Store', () => {
     });
   });
 
+  describe('setCurrentTab()', () => {
+    it('should default to no open section', () => {
+      expect(useProfileStore.getState().currentTab).toBeNull();
+    });
+
+    it('should open a section and close it again with null', () => {
+      useProfileStore.getState().setCurrentTab('policy');
+      expect(useProfileStore.getState().currentTab).toBe('policy');
+
+      useProfileStore.getState().setCurrentTab(null);
+      expect(useProfileStore.getState().currentTab).toBeNull();
+    });
+  });
+
   describe('reset()', () => {
     it('should clear all tab data and increment counter on reset', () => {
       // Populate state
@@ -176,7 +190,7 @@ describe('Profile Store', () => {
       expect(state.policy).toBeNull();
       // reset() increments counter to guarantee useEffect re-triggers
       expect(state.refreshCounter).toBe(counterBefore + 1);
-      expect(state.currentTab).toBe('curriculum');
+      expect(state.currentTab).toBeNull();
       expect(state.isLoading).toBe(false);
     });
   });

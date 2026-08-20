@@ -1,14 +1,18 @@
 /**
- * ProfilePanel — Tabbed tycoon profile (replaces EmpireOverview).
+ * ProfilePanel — Tycoon profile, master/detail.
  *
- * Tabs: Curriculum, Bank, P&L, Companies, Connections, Strategy.
- * Each tab fetches data from the server on activation via ClientCallbacks.
+ * A vertical list of sections (Curriculum, Bank, P&L, Companies, Initial
+ * Suppliers, Strategy). Picking one opens a drawer to the right of the list
+ * with that section's content.
+ *
+ * Nothing is selected on mount: no section means no server round-trip, so
+ * opening the panel costs nothing until the user asks for a section.
  */
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   GraduationCap, Landmark, TrendingUp, Factory, Link, Flag, X, Plus,
-  RotateCcw, LogOut, Wrench, ChevronUp,
+  RotateCcw, LogOut, Wrench, ChevronUp, ChevronRight, ArrowLeft,
 } from 'lucide-react';
 import { Skeleton, SkeletonLines, ConfirmDialog } from '../common';
 import { useProfileStore, type ProfileTab } from '../../store/profile-store';
@@ -22,13 +26,20 @@ import { formatMoney } from '../../format-utils';
 // Re-export for backwards compatibility (used by ProfilePanel.test.ts)
 export { formatMoney };
 
-const TABS: Array<{ id: ProfileTab; icon: typeof GraduationCap; label: string }> = [
-  { id: 'curriculum', icon: GraduationCap, label: 'CV' },
-  { id: 'bank', icon: Landmark, label: 'Bank' },
-  { id: 'profitloss', icon: TrendingUp, label: 'P&L' },
-  { id: 'companies', icon: Factory, label: 'Co.' },
-  { id: 'autoconnections', icon: Link, label: 'Initial Suppliers' },
-  { id: 'policy', icon: Flag, label: 'Strategy' },
+interface ProfileSection {
+  id: ProfileTab;
+  icon: typeof GraduationCap;
+  label: string;
+  hint: string;
+}
+
+const SECTIONS: ProfileSection[] = [
+  { id: 'curriculum', icon: GraduationCap, label: 'Curriculum', hint: 'Level, prestige and ranking' },
+  { id: 'bank', icon: Landmark, label: 'Bank Account', hint: 'Balance, loans and credit' },
+  { id: 'profitloss', icon: TrendingUp, label: 'Profit & Loss', hint: 'Revenue and expenses' },
+  { id: 'companies', icon: Factory, label: 'Companies', hint: 'Companies you own' },
+  { id: 'autoconnections', icon: Link, label: 'Initial Suppliers', hint: 'Default supply links' },
+  { id: 'policy', icon: Flag, label: 'Strategy', hint: 'Stance towards other tycoons' },
 ];
 
 export function ProfilePanel() {
@@ -38,14 +49,83 @@ export function ProfilePanel() {
   const setCurrentTab = useProfileStore((s) => s.setCurrentTab);
   const client = useClient();
 
-  // Fetch data when tab changes or after a successful action
+  // Fetch only once a section is open — an unopened panel costs no round-trip.
   useEffect(() => {
+    if (currentTab === null) return;
     requestTabData(currentTab, client);
   }, [currentTab, client, refreshCounter]);
 
+  // Leaving the panel collapses the drawer, so it reopens on the list.
+  useEffect(() => () => {
+    useProfileStore.getState().setCurrentTab(null);
+  }, []);
+
+  const toggleSection = useCallback((id: ProfileTab) => {
+    setCurrentTab(useProfileStore.getState().currentTab === id ? null : id);
+  }, [setCurrentTab]);
+
+  const activeSection = SECTIONS.find((s) => s.id === currentTab) ?? null;
+
   return (
-    <div className={styles.panel}>
-      <PillGrid activeTab={currentTab} onTabChange={setCurrentTab} />
+    <div className={`${styles.panel} ${activeSection ? styles.split : ''}`}>
+      <SectionList activeTab={currentTab} onSelect={toggleSection} />
+      {activeSection && (
+        <SectionDrawer section={activeSection} isLoading={isLoading} onClose={() => setCurrentTab(null)} />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section list — vertical rail, the panel's default view
+// ---------------------------------------------------------------------------
+
+function SectionList({ activeTab, onSelect }: { activeTab: ProfileTab | null; onSelect: (id: ProfileTab) => void }) {
+  return (
+    <nav className={styles.sectionList} aria-label="Profile sections">
+      {SECTIONS.map((section) => {
+        const Icon = section.icon;
+        const active = section.id === activeTab;
+        return (
+          <button
+            key={section.id}
+            type="button"
+            aria-expanded={active}
+            aria-current={active ? 'true' : undefined}
+            className={`${styles.sectionItem} ${active ? styles.sectionItemActive : ''}`}
+            onClick={() => onSelect(section.id)}
+          >
+            <Icon size={16} className={styles.sectionIcon} />
+            <span className={styles.sectionText}>
+              <span className={styles.sectionLabel}>{section.label}</span>
+              <span className={styles.sectionHint}>{section.hint}</span>
+            </span>
+            <ChevronRight size={14} className={styles.sectionChevron} />
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section drawer — slides out to the right of the list
+// ---------------------------------------------------------------------------
+
+function SectionDrawer({ section, isLoading, onClose }: { section: ProfileSection; isLoading: boolean; onClose: () => void }) {
+  const Icon = section.icon;
+  return (
+    <section className={styles.drawer} aria-label={section.label}>
+      <header className={styles.drawerHeader}>
+        <button type="button" className={styles.drawerBack} onClick={onClose} aria-label="Back to sections">
+          <ArrowLeft size={16} />
+        </button>
+        <Icon size={15} className={styles.drawerIcon} />
+        <h3 className={styles.drawerTitle}>{section.label}</h3>
+        <button type="button" className={styles.drawerClose} onClick={onClose} aria-label="Close section">
+          <X size={15} />
+        </button>
+      </header>
       <div className={styles.content}>
         {isLoading ? (
           <div className={styles.loading}>
@@ -53,36 +133,10 @@ export function ProfilePanel() {
             <SkeletonLines lines={4} />
           </div>
         ) : (
-          <TabContent tab={currentTab} />
+          <TabContent tab={section.id} />
         )}
       </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Pill Grid — compact 3x2 tab selector
-// ---------------------------------------------------------------------------
-
-function PillGrid({ activeTab, onTabChange }: { activeTab: ProfileTab; onTabChange: (id: ProfileTab) => void }) {
-  return (
-    <div className={styles.pillGrid} role="tablist">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        return (
-          <button
-            key={tab.id}
-            role="tab"
-            aria-selected={tab.id === activeTab}
-            className={`${styles.pill} ${tab.id === activeTab ? styles.pillActive : ''}`}
-            onClick={() => onTabChange(tab.id)}
-          >
-            <Icon size={14} className={styles.pillIcon} />
-            <span className={styles.pillLabel}>{tab.label}</span>
-          </button>
-        );
-      })}
-    </div>
+    </section>
   );
 }
 
