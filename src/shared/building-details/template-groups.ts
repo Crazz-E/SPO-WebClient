@@ -450,7 +450,6 @@ export const SUPPLIES_GROUP: PropertyGroup = {
     'RDOSetInputOverPrice': { command: 'RDOSetInputOverPrice' },
     'RDOSetInputSortMode': { command: 'RDOSetInputSortMode' },
     'RDOSelSelected': { command: 'RDOSelSelected' },
-    'RDOSetBuyingStatus': { command: 'RDOSetBuyingStatus' },
   },
 };
 

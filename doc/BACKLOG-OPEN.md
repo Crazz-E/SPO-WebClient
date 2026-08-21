@@ -574,6 +574,52 @@ civic surface for other single-prong ruler tests.
 
 - **Source:** found while verifying OB-30 against `../SPO-ASP`, 2026-08-20.
 
+### 🟢 OB-32 · `RDOSetBuyingStatus` never existed — the client emitted a phantom member
+
+The gateway emitted `RDOSetBuyingStatus` on the supply "buy" toggle. **There is no such member
+on the server.** No declaration anywhere in the ~1750 `.pas` of `../SPO-Original`, and no
+occurrence at all in `../SPO-ASP`. The name appears exactly once in the whole legacy corpus, and
+it is a late-bound *client* call, not a declaration: `Voyager/SupplySheetForm.pas:741`.
+
+The call was fire-and-forget (`building-property-handler.ts`, no rid), so the failure was
+invisible in both directions: the server built `errUnexistentMethod`
+(`Rdo/Common/ErrorCodes.pas:11` = 5, raised at `Rdo/Server/RDOObjectServer.pas:326`) and then
+discarded it for want of a destination. The toggle was a silent no-op on the wire.
+
+**Its one Voyager call site is dead code.** `TSupplyHandler.threadedBuySet`
+(`Voyager/SupplySheetForm.pas:728-745`) declares `ObjId : integer;` at `:731`, never assigns it,
+and then binds to it — `Proxy.BindTo(ObjId)` at `:739`. Nothing ever runs it: `threadedBuySet`
+occurs twice in the tree, the declaration `:162` and the body `:728`, and no `Threads.Fork`
+targets it (the real Forks in that unit are `:228`, `:556`, `:1100`, `:1167`, `:1181`, `:1196`,
+`:1204`).
+
+**The correct member is `RDOSelSelected`, and it was already wired.** Voyager binds the same
+"buy" checkbox to it:
+
+```
+:1100   Threads.Fork(fHandler.threadedSetSelect, priNormal, [fHandler.fObjectId, cbAlmBuy.Checked]);
+:688      ObjId := parms[0].vInteger;      // assigned, unlike threadedBuySet
+:690      if (ObjId <> 0)                  // guarded
+:699      Proxy.RDOSelSelected(Selec);
+```
+
+Server declaration: `procedure RDOSelSelected(value : WordBool);` on `TPullInput`,
+`Kernel/Kernel.pas:1623` (implementation `:7886`) — `procedure`, arity 1.
+`threadedBuySet` is an abandoned first attempt at the same feature, superseded by
+`threadedSetSelect`. Both commands already returned the same read-back witness, `Selected`.
+
+**Fixed by deletion** — `RDOSetBuyingStatus` is gone from the catalogue
+(`shared/rdo-members.ts`), the dispatch map (`building-details/template-groups.ts`),
+`KNOWN_RDO_COMMANDS`, the argument builder and the read-back table
+(`session/building-property-handler.ts`), and from the tests that pinned its emission. **No
+functionality was removed:** `RDOSelSelected` stays in place and covers the toggle.
+
+- **Source:** `../SPO-Original` (`Voyager/SupplySheetForm.pas`, `Kernel/Kernel.pas`,
+  `Rdo/Server/RDOObjectServer.pas`, `Rdo/Common/ErrorCodes.pas`) and the absence of any hit in
+  `../SPO-ASP`, 2026-08-21. Not probed live: the absence of a declaration already settles it, and
+  a log line could only show the `errUnexistentMethod` that absence predicts.
+
+
 ---
 
 ## Retired

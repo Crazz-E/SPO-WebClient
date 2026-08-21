@@ -31,7 +31,7 @@ export const KNOWN_RDO_COMMANDS: ReadonlySet<string> = new Set([
   'RDOConnectOutput', 'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
   'RDODisconnectInput', 'RDODisconnectOutput', 'RDOLaunchMovie',
   'RDOQueueResearch', 'RDOReleaseMovie', 'RDOSelSelected', 'RDOSelectWare',
-  'RDOSetBuyingStatus', 'RDOSetCompanyInputDemand', 'RDOSetInputFluidPerc',
+  'RDOSetCompanyInputDemand', 'RDOSetInputFluidPerc',
   'RDOSetInputMaxPrice', 'RDOSetInputMinK', 'RDOSetInputOverPrice',
   'RDOSetInputSortMode', 'RDOSetLoanPerc', 'RDOSetMinSalaryValue',
   'RDOSetMinistryBudget', 'RDOSetOutputPrice', 'RDOSetPrice', 'RDOSetRole',
@@ -506,18 +506,6 @@ function buildRdoCommandArgs(
       break;
     }
 
-    case 'RDOSetBuyingStatus': {
-      // Args: fingerIndex (integer), boolean as WordBool
-      // Voyager: SupplySheetForm.pas line 741
-      const fingerIndex = params.fingerIndex;
-      if (fingerIndex === undefined) {
-        throw new Error('RDOSetBuyingStatus requires fingerIndex parameter');
-      }
-      const boolVal = parseInt(value, 10) !== 0 ? -1 : 0;
-      args.push(RdoValue.int(parseInt(fingerIndex, 10)), RdoValue.int(boolVal));
-      break;
-    }
-
     case 'RDOConnectToTycoon':
     case 'RDODisconnectFromTycoon': {
       // Args: tycoonId (integer), kind (integer), flag (wordbool = true)
@@ -821,9 +809,6 @@ function mapRdoCommandToPropertyName(
       return 'SortMode';
 
     case 'RDOSelSelected':
-      return 'Selected';
-
-    case 'RDOSetBuyingStatus':
       return 'Selected';
 
     case 'RDOConnectToTycoon':
