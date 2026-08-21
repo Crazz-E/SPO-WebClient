@@ -4,9 +4,11 @@
       "command": "npx",
       "args": [
         "-y",
-        "@playwright/mcp@latest"
+        "@playwright/mcp@latest",
+        "--browser",
+        "chromium"
       ],
-      "description": "Browser automation for E2E testing (login flows, world selection, building interactions)"
+      "description": "Browser automation for E2E testing (login flows, world selection, building interactions). --browser chromium resolves to Playwright's own 'chrome-for-testing' build under ~/.cache/ms-playwright, installable with `npx @playwright/mcp install-browser chrome-for-testing` and no root. Without the flag the server defaults to the 'chrome' CHANNEL, looks for /opt/google/chrome, and its installer needs sudo — which is what blocked the L3 smoke. The flag is not validated at startup, so a wrong value only surfaces on the first navigate."
     },
     "github": {
       "command": "npx",

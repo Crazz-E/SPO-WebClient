@@ -156,29 +156,74 @@ describe('permission-negative', () => {
 });
 
 describe('building-details', () => {
-  it('fails when the inspector serves no tabs', async () => {
+  const TOWN = {
+    name: 'Helartia',
+    iconUrl: '',
+    mayor: 'SPO_test3',
+    population: 0,
+    unemploymentPercent: 0,
+    qualityOfLife: 0,
+    x: 1,
+    y: 2,
+    path: '',
+    classId: '512',
+  };
+
+  /**
+   * The flow is two round-trips now: the opening read, then the section read.
+   * Both are stubbed so a test can move one and hold the other still.
+   */
+  function arrange(
+    details: { tabs: unknown[]; groups: Record<string, unknown> },
+    section: { groups?: Record<string, unknown> } = { groups: { townTaxes: [{ name: 'Tax0', value: '7' }] } },
+  ) {
     jest.spyOn(session, 'login').mockResolvedValue(stubSession(() => undefined));
     jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
     jest.spyOn(session, 'resolveVisualClass').mockResolvedValue('7010');
-    jest.spyOn(session, 'findTown').mockResolvedValue({
-      name: 'Helartia',
-      iconUrl: '',
-      mayor: 'SPO_test3',
-      population: 0,
-      unemploymentPercent: 0,
-      qualityOfLife: 0,
-      x: 1,
-      y: 2,
-      path: '',
-      classId: '512',
-    });
-    jest.spyOn(session, 'readBuildingDetails').mockResolvedValue({
-      tabs: [],
-      groups: {},
-    } as unknown as Awaited<ReturnType<typeof session.readBuildingDetails>>);
+    jest.spyOn(session, 'findTown').mockResolvedValue(TOWN);
+    jest.spyOn(session, 'readBuildingDetails').mockResolvedValue(
+      details as unknown as Awaited<ReturnType<typeof session.readBuildingDetails>>,
+    );
+    jest.spyOn(session, 'readBuildingTabData').mockResolvedValue(
+      section as unknown as Awaited<ReturnType<typeof session.readBuildingTabData>>,
+    );
+  }
 
+  const TOWN_HALL_TABS = [{ id: 'townGeneral' }, { id: 'townTaxes' }];
+
+  it('passes when the header group opens and the section arrives on demand', async () => {
+    arrange({ tabs: TOWN_HALL_TABS, groups: { townGeneral: [{ name: 'Town', value: 'Helartia' }] } });
+    expect((await flowByName('building-details').run(ctx)).status).toBe('PASS');
+  });
+
+  it('fails when the inspector serves no tabs', async () => {
+    arrange({ tabs: [], groups: {} });
+    expect((await flowByName('building-details').run(ctx)).status).toBe('FAIL');
+  });
+
+  /** The load-time contract: a section nobody opened must cost nothing. */
+  it('fails when the opening read carries a section nobody opened', async () => {
+    arrange({
+      tabs: TOWN_HALL_TABS,
+      groups: { townGeneral: [], townTaxes: [{ name: 'Tax0', value: '7' }] },
+    });
     const result = await flowByName('building-details').run(ctx);
     expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/nobody opened/);
+  });
+
+  it('fails when opening the section brings its group back empty', async () => {
+    arrange({ tabs: TOWN_HALL_TABS, groups: { townGeneral: [] } }, { groups: { townTaxes: [] } });
+    const result = await flowByName('building-details').run(ctx);
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/property values/);
+  });
+
+  it('fails when the section read answers with no groups at all', async () => {
+    arrange({ tabs: TOWN_HALL_TABS, groups: { townGeneral: [] } }, {});
+    const result = await flowByName('building-details').run(ctx);
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/reads its group/);
   });
 });
 
@@ -249,6 +294,12 @@ const helartia = {
   classId: '512',
 };
 
+/**
+ * The opening read answers `canGovern` and the header group; the tax table is a
+ * section, and `readSectionGroups` is the request that brings it. Stubbing them
+ * apart is the point — a tax value that came back on the opening response would
+ * no longer be reachable in production.
+ */
 function governedTownHall(canGovern: boolean, taxValue?: string) {
   jest.spyOn(session, 'login').mockResolvedValue(stubSession(() => undefined));
   jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
@@ -258,8 +309,11 @@ function governedTownHall(canGovern: boolean, taxValue?: string) {
     canGovern,
     visualClass: '512',
     tabs: [{ id: 'townTaxes' }],
-    groups: taxValue === undefined ? {} : { townTaxes: [{ name: 'Tax0Percent', value: taxValue }] },
+    groups: { townGeneral: [] },
   } as unknown as Awaited<ReturnType<typeof session.readBuildingDetails>>);
+  jest.spyOn(session, 'readSectionGroups').mockResolvedValue(
+    taxValue === undefined ? {} : { townTaxes: [{ name: 'Tax0Percent', value: taxValue }] },
+  );
 }
 
 describe('politics-write', () => {

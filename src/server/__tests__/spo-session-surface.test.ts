@@ -552,9 +552,9 @@ const DELEGATIONS: readonly Delegation[] = [
   {
     method: 'getBuildingTabData',
     install: () => jest.spyOn(buildingDetailsHandler, 'getBuildingTabData'),
-    call: s => s.getBuildingTabData(706, 436, 'supplies', 'CarFactoryA'),
-    forwarded: [706, 436, 'supplies', 'CarFactoryA'],
-    result: { supplies: [] },
+    call: s => s.getBuildingTabData(706, 436, 'facManagement', 'CarFactoryA', ['facManagement']),
+    forwarded: [706, 436, 'facManagement', 'CarFactoryA', ['facManagement']],
+    result: { groups: {} },
   },
   {
     method: 'refreshBuildingProperties',

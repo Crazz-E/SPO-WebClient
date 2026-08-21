@@ -12,7 +12,8 @@ import { renderWithProviders, resetStores } from '../../../__tests__/setup/rende
 import { useBuildingStore } from '../../../store/building-store';
 import { BuildingInspector } from '../BuildingInspector';
 import { QuickStats } from '../QuickStats';
-import { InspectorTabs } from '../InspectorTabs';
+import { InspectorMenu } from '../InspectorMenu';
+import { InspectorHeader } from '../InspectorHeader';
 import type { BuildingFocusInfo, BuildingDetailsResponse, BuildingDetailsTab } from '@/shared/types';
 
 // ---------------------------------------------------------------------------
@@ -115,10 +116,10 @@ describe('BuildingInspector smoke tests', () => {
 });
 
 describe('QuickStats smoke test', () => {
-  it('renders revenue and sales info', () => {
+  it('renders the sales info, and leaves revenue to the header', () => {
     renderWithProviders(<QuickStats focus={mockFocus} />);
-    expect(screen.getByText('$500')).toBeTruthy();
     expect(screen.getByText('$1,200')).toBeTruthy();
+    expect(screen.queryByText('$500')).toBeNull();
   });
 
   it('renders construction progress bar', () => {
@@ -129,23 +130,56 @@ describe('QuickStats smoke test', () => {
   });
 });
 
-describe('InspectorTabs smoke test', () => {
-  it('renders tab buttons without crashing', () => {
-    const onTabChange = () => {};
+describe('InspectorMenu smoke test', () => {
+  it('lists every section and opens none of them', () => {
     renderWithProviders(
-      <InspectorTabs tabs={mockTabs} activeTab="general" onTabChange={onTabChange} />,
+      <InspectorMenu tabs={mockTabs} activeTab={null} onSelect={() => {}}>
+        <div>section body</div>
+      </InspectorMenu>,
     );
     expect(screen.getByText('GENERAL')).toBeTruthy();
     expect(screen.getByText('SUPPLIES')).toBeTruthy();
+    // No section open — the body is not mounted, so nothing was read for it.
+    expect(screen.queryByText('section body')).toBeNull();
   });
 
-  it('marks the active tab with aria-selected', () => {
-    const onTabChange = () => {};
+  it('opens the drawer for the active section', () => {
     renderWithProviders(
-      <InspectorTabs tabs={mockTabs} activeTab="general" onTabChange={onTabChange} />,
+      <InspectorMenu tabs={mockTabs} activeTab="general" onSelect={() => {}}>
+        <div>section body</div>
+      </InspectorMenu>,
     );
-    const generalTab = screen.getByText('GENERAL').closest('[role="tab"]');
-    expect(generalTab?.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByText('section body')).toBeTruthy();
+    const item = screen.getAllByText('GENERAL')[0].closest('button');
+    expect(item?.getAttribute('aria-expanded')).toBe('true');
+  });
+});
+
+describe('InspectorHeader smoke test', () => {
+  it('states name, level, society, owner, revenue and ROI', () => {
+    renderWithProviders(
+      <InspectorHeader
+        buildingName="Small Factory"
+        level={3}
+        society="TestCo"
+        owner="SPO_test3"
+        revenue="$500/h"
+        roi="12%"
+        x={100}
+        y={200}
+      />,
+    );
+    expect(screen.getByText('Small Factory')).toBeTruthy();
+    expect(screen.getByText('Lvl 3')).toBeTruthy();
+    expect(screen.getByText('TestCo, SPO_test3')).toBeTruthy();
+    expect(screen.getByText('$500/h')).toBeTruthy();
+    expect(screen.getByText('12%')).toBeTruthy();
+    expect(screen.getByText('100, 200')).toBeTruthy();
+  });
+
+  it('drops the comma when only the society is known', () => {
+    renderWithProviders(<InspectorHeader buildingName="Small Factory" society="TestCo" />);
+    expect(screen.getByText('TestCo')).toBeTruthy();
   });
 });
 

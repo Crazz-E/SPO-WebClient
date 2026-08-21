@@ -14,5 +14,5 @@ export { PoliticsSection } from './PoliticsSection';
 export { RulerCard } from './RulerCard';
 export { RatingsRail } from './RatingsRail';
 export { CampaignPanel } from './CampaignPanel';
-export { buildCivicTabs, getGeneralGroupId, isCapitolBuilding } from './CivicTabConfig';
+export { buildCivicTabs, civicTabGroupIds, getGeneralGroupId, isCapitolBuilding } from './CivicTabConfig';
 export type { CivicTabId } from './CivicTabConfig';

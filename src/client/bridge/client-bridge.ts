@@ -166,7 +166,7 @@ export interface ClientCallbacks {
   onRefreshBuilding: (x: number, y: number) => void;
   /** Lightweight refresh: re-read the properties of the focused building only. */
   onRefreshBuildingProperties: (x: number, y: number) => void;
-  onRequestTabData: (x: number, y: number, tabId: string, visualClass: string) => void;
+  onRequestTabData: (x: number, y: number, tabId: string, visualClass: string, groupIds?: string[]) => void;
   /** Read one gate's connection rows, on expand. See requestGateConnections. */
   onRequestGateConnections: (
     x: number,

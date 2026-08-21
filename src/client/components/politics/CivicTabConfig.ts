@@ -73,6 +73,43 @@ export function buildCivicTabs(
 }
 
 /**
+ * Server groups one civic tab needs, restricted to those this building declares.
+ *
+ * The inverse of `GROUP_TO_CIVIC_TAB`, and the reason `WsReqBuildingTabData`
+ * takes a list: Administration alone consolidates `capitolTowns`,
+ * `ministeries` and `townTaxes`, and the panel reads them in one round-trip
+ * when the section opens rather than at inspector open.
+ *
+ * `elections` also claims `votes`, which is why it is not synthetic here even
+ * though `buildCivicTabs` always offers it; `politics` has no server group at
+ * all — its content comes from PoliticsData — and yields an empty list.
+ */
+/**
+ * Groups a tab reads without owning them.
+ *
+ * `GROUP_TO_CIVIC_TAB` says which tab a group BELONGS to — it is what decides
+ * the tab list. Overview also READS the votes group: the ruler banner takes
+ * `RulerName`, `RulerVotes` and the campaign figures from it
+ * (`OverviewSection`). Without this the banner would stay blank until the user
+ * opened Elections.
+ */
+const EXTRA_GROUPS_READ: Partial<Record<CivicTabId, string[]>> = {
+  overview: ['votes'],
+};
+
+export function civicTabGroupIds(
+  tabId: CivicTabId,
+  serverTabs: BuildingDetailsTab[],
+): string[] {
+  const present = new Set(serverTabs.map((t) => t.id));
+  const owned = Object.entries(GROUP_TO_CIVIC_TAB)
+    .filter(([groupId, civicTab]) => civicTab === tabId && present.has(groupId))
+    .map(([groupId]) => groupId);
+  const alsoRead = (EXTRA_GROUPS_READ[tabId] ?? []).filter((id) => present.has(id));
+  return [...new Set([...owned, ...alsoRead])];
+}
+
+/**
  * Determine which server group ID acts as the "general" group for Overview.
  */
 export function getGeneralGroupId(serverTabs: BuildingDetailsTab[]): string | undefined {

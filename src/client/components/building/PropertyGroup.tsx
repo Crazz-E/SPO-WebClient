@@ -16,6 +16,7 @@ import {
   formatPercentage,
   formatNumber,
   getTemplateForVisualClass,
+  isHiddenProperty,
   PRODUCTS_GROUP,
 } from '@/shared/building-details';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
@@ -36,6 +37,9 @@ import styles from './PropertyGroup.module.css';
 
 // Re-export utility functions for backward compatibility (tests import from here)
 export { resolveRdoCommand, computePendingKey, parseCloneMenu, getColorClass } from './property-utils';
+
+/** The values the UPGRADE_ACTIONS control prints inside itself. */
+const UPGRADE_VALUE_NAMES = ['UpgradeLevel', 'MaxUpgrade', 'NextUpgCost', 'Upgrading', 'Pending'];
 
 interface PropertyGroupProps {
   properties: BuildingPropertyValue[];
@@ -260,6 +264,13 @@ function DefinedProperties({
   );
 
   for (const def of definitions) {
+    // Hidden by design — see HIDDEN_PROPERTY_NAMES. Marked as rendered so the
+    // unmatched-property fallback below does not print the raw row instead.
+    if (isHiddenProperty(def.rdoName)) {
+      rendered.add(def.rdoName);
+      continue;
+    }
+
     // Workforce table
     if (def.type === PropertyType.WORKFORCE_TABLE) {
       elements.push(
@@ -296,7 +307,7 @@ function DefinedProperties({
           buildingY={buildingY}
         />,
       );
-      for (const name of ['UpgradeLevel', 'MaxUpgrade', 'NextUpgCost', 'Upgrading', 'Pending']) {
+      for (const name of UPGRADE_VALUE_NAMES) {
         rendered.add(name);
       }
       continue;
@@ -509,8 +520,12 @@ function DefinedProperties({
 
     // Skip hidden empties
     if (def.hideEmpty && (!value || value.trim() === '' || value === '0')) continue;
-    // Skip upgrade properties (rendered by UPGRADE_ACTIONS)
-    if (['UpgradeLevel', 'MaxUpgrade', 'NextUpgCost', 'Upgrading', 'Pending'].includes(def.rdoName)) {
+    // Upgrade values have no renderer of their own: the UPGRADE_ACTIONS control
+    // prints them inside itself, so a row here would repeat them. Once that
+    // control is on the hide list they lose their only display, and hiding ONE
+    // entry would silently take five values with it — so they fall through to
+    // an ordinary row instead. Only the buttons go.
+    if (!isHiddenProperty('UpgradeActions') && UPGRADE_VALUE_NAMES.includes(def.rdoName)) {
       rendered.add(def.rdoName);
       continue;
     }
@@ -548,7 +563,7 @@ function DefinedProperties({
 
   // Fallback: unmatched properties
   for (const prop of properties) {
-    if (!rendered.has(prop.name) && !prop.name.startsWith('_') && prop.name !== 'ObjectId' && prop.name !== 'SecurityId') {
+    if (!rendered.has(prop.name) && !prop.name.startsWith('_') && prop.name !== 'ObjectId' && !isHiddenProperty(prop.name)) {
       elements.push(<RawPropertyRow key={`raw-${prop.name}`} prop={prop} />);
     }
   }

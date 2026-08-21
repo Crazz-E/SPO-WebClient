@@ -247,6 +247,11 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       if (details.products?.length) preloaded['products'] = 'loaded';
       if (details.compInputs?.length) preloaded['compInputs'] = 'loaded';
       if (details.warehouseWares?.length) preloaded['whGeneral'] = 'loaded';
+      // A response carries only the groups it was asked for — the opening read
+      // carries the header group alone. Marking those loaded is what tells the
+      // panel it owes the server nothing for them; every other section stays
+      // unmarked and is read when its menu entry is opened.
+      for (const groupId of Object.keys(details.groups)) preloaded[groupId] = 'loaded';
 
       // Carry forward lazy tab data when refreshing the same building.
       // EVENT_BUILDING_REFRESH sends basic details (products/supplies/warehouseWares
@@ -262,6 +267,10 @@ export const useBuildingStore = create<BuildingState>((set) => ({
         products: details.products ?? state.details?.products,
         compInputs: details.compInputs ?? state.details?.compInputs,
         warehouseWares: details.warehouseWares ?? state.details?.warehouseWares,
+        // Sections the user already opened survive a header-only refresh. They
+        // keep their values on screen while the panel re-reads them, instead of
+        // blanking to a skeleton every thirty seconds.
+        groups: { ...state.details?.groups, ...details.groups },
       } : details;
 
       return {
@@ -383,6 +392,12 @@ export const useBuildingStore = create<BuildingState>((set) => ({
           ...(data.products !== undefined ? { products: data.products } : {}),
           ...(data.compInputs !== undefined ? { compInputs: data.compInputs } : {}),
           ...(data.warehouseWares !== undefined ? { warehouseWares: data.warehouseWares } : {}),
+          // Property groups arrive one section at a time now, so they MERGE
+          // rather than replace: the response carries only the groups that
+          // section asked for, and the ones already on screen must survive it.
+          ...(data.groups !== undefined
+            ? { groups: { ...state.details.groups, ...data.groups } }
+            : {}),
         },
         tabLoadingStates: { ...state.tabLoadingStates, [tabId]: 'loaded' as TabLoadState },
       };

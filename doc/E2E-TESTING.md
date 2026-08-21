@@ -52,6 +52,15 @@ pointers to this file.
    5–30 s. The live world server can be slow (`SayThis`, `ObjectsInArea` may run into the
    180 s proxy timeout) or transiently refuse TCP connects (`ETIMEDOUT`) — retry after a
    few minutes before concluding anything is broken.
+5. **The chat input keeps focus and swallows every shortcut.** Both key handlers bail out on
+   an `INPUT`/`TEXTAREA` target (`isometric-map-renderer.ts:619`, `isTextInput` in
+   `useKeyboardShortcuts.ts:39`), so after Phase 5 types into the chat box, `q`/`m`/`d` do
+   nothing at all — silently. Call `document.activeElement?.blur()` before any keyboard
+   assertion that follows a `browser_type`.
+6. **The expanded chat panel covers the lower-left of the canvas.** Its message area sits
+   above the map, so a map click there hits the chat, not the world, and nothing happens.
+   Click `Collapse chat` before driving the map, and confirm the target with
+   `document.elementFromPoint(x, y).id === 'game-canvas'`.
 
 ## Login Procedure (verified)
 
@@ -93,6 +102,42 @@ Buttons are found by `title` attribute (main document, `evaluate`-friendly):
 - Info bar (top): world name, date, cash, income sparkline, ranking `#N · SPO_test3`,
   company link **"SPO_test3 - Green ›"** (opens Empire Overview), buildings `n/m`.
 
+## Clicking a Building on the Map (verified live 2026-08-21)
+
+The map is a canvas: there is no element to target, so a building is reached by converting
+its world tile to a client pixel and clicking that pixel with a **real mouse**
+(`page.mouse.click`) — a dispatched synthetic event is not enough, the renderer listens on
+`mousedown`/`mouseup` (`isometric-map-renderer.ts:4946`).
+
+1. Open **Facilities** (left rail) and read a row: it prints `name` and `x, y`. These are
+   your own buildings, so they are always inspectable.
+2. Collapse the chat and give the map room — `browser_resize` to 1440×900. At 780×493 the
+   chat covers the useful half of the canvas (rule 6).
+3. `__spoDebug.worldToCss(x, y)` → `{x, y}` in CSS client pixels. Confirm it is on the map
+   with `document.elementFromPoint(...).id === 'game-canvas'`, then click it.
+4. Allow **~3 s**: the click costs a `REQ_BUILDING_FOCUS` and a `REQ_BUILDING_DETAILS`
+   round-trip before the preview renders. A 1.5 s wait reads as "nothing happened".
+
+Clicking a **Facilities row** instead pans the camera and opens the inspector directly
+(`FacilityList.tsx:40`) — it skips the preview overlay, so it does not exercise the
+INSPECT path.
+
+`tileProbe(x, y).hasConcrete` is **not** a building finder: concrete is the paving around a
+facility, and a click there focuses nothing. Use real coordinates from the Facilities list.
+
+Civic buildings (town halls) are not in that list, and hunting one by map click needs
+screenshots — the civic `VISIT` path is covered at L2 by `politics-read` / `politics-write`.
+
+### Inspector selectors (verified live 2026-08-21)
+
+| Element | Selector |
+|---|---|
+| Preview popover | `[data-testid="status-overlay"]` |
+| Its action button | `[data-testid="inspect-button"]` — reads `INSPECT`, or `VISIT` on a civic building |
+| Section menu | `nav[aria-label="Facility sections"]`, one `button` per section |
+| Section open? | that button's `aria-expanded` |
+| Open section body | `section[aria-label="<section name>"]` |
+
 ## Programmatic State Verification (`__spoDebug`)
 
 All assertions use `browser_evaluate` + `window.__spoDebug` — never screenshots.
@@ -117,8 +162,21 @@ buildingDetails, searchMenu}` (note: `minimap` is `true` by default after login)
 `renderer.mapLoaded === true`, `renderer.buildingCount > 0`,
 `renderer.canvasHasContent === true`, `wire.errors === 0`.
 
-Keyboard (canvas focused): `+`/`-` zoom, `q`/`e` rotate, `m` minimap, `d` debug overlay
-(then `1`–`5` sub-layers: tile info, building info, concrete IDs, water grid, road info).
+Keyboard (nothing focused — see rule 5): `+`/`-` zoom, `q` rotate counter-clockwise,
+`b` Build, `e` Empire, `m` Mail, `r` refresh map, `d` debug overlay (then `1`–`5`
+sub-layers: tile info, building info, concrete IDs, water grid, road info).
+
+⚠ **Two keys this file claimed until 2026-08-21 and the client does not bind.**
+
+- **No clockwise rotate on the keyboard.** `KeyAction.ROTATE_CW` names `e` in
+  `key-binding-registry.ts:38`, but that registry is a declaration nothing reads for map
+  keys: the renderer's own `keydown` binds `q` alone (`isometric-map-renderer.ts:623`), and
+  `e` is taken by the Empire panel (`useKeyboardShortcuts.ts:49`). Clockwise rotation itself
+  works — `rotateCW()` (`isometric-map-renderer.ts:723`) and the mobile rotate gesture
+  (`:805`) both reach it — it simply has no key. Press `q` until rotation cycles back to
+  NORTH.
+- **`m` opens Mail** (`useKeyboardShortcuts.ts:53`), not the minimap, which has its own
+  `Toggle Minimap` HUD button.
 
 ## Server Lifecycle
 
@@ -207,12 +265,19 @@ Follow the login table above. **Assert** via `getState()`: `session.connected`,
 `canvasSize.width > 0`.
 
 ### Phase 3 — Camera controls
-Press `+`, `-` (zoom changes and restores), `q`, `e` (rotation cycles and restores) —
-assert via `renderer.zoom` / `renderer.rotation` after each key.
+Press `+` then `-` (zoom changes and restores), then `q` (rotation steps
+NORTH→WEST→SOUTH→EAST→NORTH — four presses to return) — assert via `renderer.zoom` /
+`renderer.rotation` after each key. No key rotates clockwise; see the ⚠ above.
 
 ### Phase 4 — Tycoon stats
-**Assert:** `tycoonStats.cash` starts with `$`; `tycoonStats.ranking` contains `SPO_test3`;
-`buildings` matches `N/M`.
+**Assert on the rendered info bar**, not on `getState()`: it shows `#N`, `SPO_test3`, a `$`
+cash figure and `N/M` buildings.
+
+⚠ `getState().tycoonStats` carries the **raw model values**, not what the bar prints:
+`cash` is a bare number (`115316825276`, no `$`, no separators) and `ranking` is `#11`
+alone — the tycoon name is added by the widget. Asserting `cash` starts with `$` or that
+`ranking` contains `SPO_test3` fails against a perfectly healthy client; this file asked for
+both until 2026-08-21.
 
 ### Phase 5 — Chat ping
 Type `E2E smoke ping` into the chat textbox and send. **Assert:**
@@ -222,7 +287,25 @@ assertion; the live world can be slow to echo).
 ### Phase 6 — Panel sweep (open → close, one pass)
 For each HUD button by `title`: `Build (B)`, `Search`, `Profile (E)`, `Mail (M)`,
 `Settings` — click, assert the matching `panels.*` flag flips true, press `Escape`, assert
-it flips back. Toggle minimap with `m`. Do not click actions inside the panels.
+it flips back. Toggle the minimap with its `Toggle Minimap` HUD button (**not** `m`).
+Do not click actions inside the panels.
+
+### Phase 6b — Facility inspector (only when the diff touches it)
+Reach one of your own buildings with the recipe above, then assert in order:
+
+1. **Preview** — `[data-testid="status-overlay"]` present, opening on name + level, society,
+   revenue. Exactly one `REQ_BUILDING_DETAILS` in `history`, and **no** `REQ_BUILDING_TAB_DATA`.
+2. **INSPECT** — the button reads `INSPECT` (`VISIT` on a civic building). Clicking it flips
+   `panels.buildingDetails` and adds **no** round-trip: the panel reuses the preview's read.
+3. **Section menu** — `nav[aria-label="Facility sections"]` lists the server-sent tabs, every
+   one `aria-expanded="false"` and no `section[aria-label=…]` drawer open. Nothing is selected
+   on mount, which is what makes the deferred read observable.
+4. **Open a section** — `REQ_BUILDING_TAB_DATA` increments by one and the drawer fills with
+   values. Pick a section that is *not* the header group (Workforce reads cleanly; General
+   often rides in with the opening read and correctly costs nothing).
+
+Give a section **~4 s**: `Finances` draws its graph only once the `moneyGraph` payload lands,
+and sampling earlier shows an empty drawer that fills a moment later.
 
 ### Phase 7 — Wire health
 **Assert:** `wire.sent > 10`, `wire.received > 10`, `wire.errors === 0`.
@@ -241,5 +324,6 @@ server (only the PID you started), confirm your port is free again.
 | Stats | |
 | Chat | |
 | Panels | |
+| Inspector (if driven) | |
 | Wire health | |
 | Clean exit | |
