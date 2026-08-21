@@ -259,7 +259,7 @@ rows=rows.filter(r=>r.owners.length>0||r.catalogued);
 rows=rows.filter(r=>r.voyager>0||r.asp>0||r.wcCount>0||r.catalogued);
 rows.sort((a,b)=>a.area.localeCompare(b.area)||a.name.localeCompare(b.name));
 fs.writeFileSync('rdo-inventory.json',JSON.stringify(rows,null,1));
-const t={}; for(const r of rows)(t[r.status]??=0),t[r.status]++;
+const t={}; for(const r of rows){ t[r.status]=(t[r.status]||0)+1; }
 console.log('rows',rows.length,t);
 const acc=rows.filter(r=>r.account);
 const ag={}; for(const r of acc){const k=r.account+'/'+r.status; ag[k]=(ag[k]||0)+1;}
