@@ -398,7 +398,7 @@
 | `RDOSetInputMaxPrice` | **procedure** | `call` | `(%fluidId, #value)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId) |
 | `RDOSelSelected` | **procedure** | `call` | `(#boolVal)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId); WordBool: -1=true, 0=false |
 | `RDOSetInputSortMode` | **procedure** | `call` | `(%fluidId, #mode)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId); 0=cost, 1=quality |
-| `RDOSetBuyingStatus` | **procedure** | `call` | `(#fingerIndex, #boolVal)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId); WordBool |
+| ~~`RDOSetBuyingStatus`~~ | — | — | — | **NOT PUBLISHED — no declaration in the tree** | Removed from the client in `ad4672a2`. Voyager's only call site is dead code (`SupplySheetForm.pas:731` — `ObjId` never assigned; `threadedBuySet` never forked). The real member is `RDOSelSelected` above. See `doc/BACKLOG-OPEN.md` OB-32 |
 
 ### Product management (ProdSheetForm.pas)
 
@@ -481,8 +481,8 @@ A res="%Advertisement\t0\t0\t0\t1680\tyes\thits\tComputer Services\t1\t1\t100\t2
 | Member | Kind | Verb | Signature | Return | Source Line | Notes |
 |--------|------|------|-----------|--------|-------------|-------|
 | `RDOAutoProduce` | procedure | `call` | `(#boolVal)` | void (`*`) | 372 | WordBool: #-1=true, #0=false |
-| `RDOAutoRelease` | procedure | `call` | `(#boolVal)` | void (`*`) | — | Same pattern as RDOAutoProduce |
-| `RDOLaunchMovie` | procedure | `call` | `(%name, @budget, #months, #autoRel)` | void (`*`) | 311 | autoRel is WordBool |
+| ~~`RDOAutoRelease`~~ | — | — | — | — | — | **NOT PUBLISHED.** The studio publishes four members (`StdBlocks/MovieStudios.pas:103-107`) and this is not one. Auto-release rides bit 0 of `RDOLaunchMovie`'s `AutoInfo` (`flgAutoRelease = $01`, `:19`) |
+| `RDOLaunchMovie` | procedure | `call` | `(%name, @budget, #months, #autoInfo)` | void (`*`) | 310 | `AutoInfo : word` is a **bitmask**, not a boolean: bit 0 = auto-release (`$01`), bit 1 = auto-produce (`$02`) — `MovieStudios.pas:19-20`, packed at `FilmsSheet.pas:296-300` |
 | `RDOCancelMovie` | procedure | `call` | `(#0)` | void (`*`) | 330 | Dummy integer param |
 | `RDOReleaseMovie` | procedure | `call` | `(#0)` | void (`*`) | 350 | Dummy integer param |
 
