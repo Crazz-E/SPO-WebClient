@@ -189,7 +189,7 @@ async function performDirectoryAuth(ctx: LoginContext, username: string, pass: s
     const directoryServerId = parseIdOfResponseHelper(idPacket.payload);
     // RDOOpenSession is a published METHOD (DirectoryServer.pas:143), but the legacy
     // client reads it as a zero-arg COM property-get (RDOObjectProxy.pas:388-399 routes
-    // PROPERTYGET+0args → MarshalPropertyGet; LogonHandlerViewer.pas:308) — byte-exact
+    // PROPERTYGET+0args → MarshalPropertyGet; LogonHandlerViewer.pas:342) — byte-exact
     // wire is `get RDOOpenSession`, served by the Delphi get→CallMethod fallthrough.
     const sessionPacket = await sendDirectoryRequest(ctx, 'directory_auth',rdoGet('RDOOpenSession', directoryServerId).packet);
     const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');

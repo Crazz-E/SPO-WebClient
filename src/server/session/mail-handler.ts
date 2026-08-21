@@ -148,7 +148,7 @@ export async function composeMail(
   const success = resultStr === '-1';
   ctx.log.debug(`[Mail] Post result: ${resultStr} (success=${success})`);
 
-  // 4. Close message to release server memory (MsgComposerHandler.pas:331)
+  // 4. Close message to release server memory (MsgComposerHandler.pas:338)
   // Synchronous — Delphi WaitForAnswer still true from AddLine setting.
   try {
     await ctx.sendRdoRequest('mail', rdoCall(

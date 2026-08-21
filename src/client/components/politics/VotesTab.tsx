@@ -3,8 +3,8 @@
  *
  * One list, not a stat strip plus a list: the reference client renders the
  * sitting ruler as the FIRST ROW of the same ListView as the candidates
- * (`VotesSheet.pas:161`, image index 1) and sorts every row by campaign points,
- * descending (`:206-211`). The ruler is on the ballot like everyone else, and
+ * (`VotesSheet.pas:172-174`, image index 1 at `:231`) and sorts every row by
+ * campaign points, descending (`:219-224`). The ruler is on the ballot like everyone else, and
  * separating him out hid the one comparison the tab exists to make.
  */
 
@@ -39,8 +39,8 @@ export function VotesTab({ properties }: VotesTabProps) {
     const map = valueMap;
     const out: BallotRow[] = [];
 
-    // `VotesSheet.pas:159-161` — "el presidente" goes in first, and only when the
-    // cache carries both his name and his points.
+    // `VotesSheet.pas:173` — "el presidente" goes in first, and only when the
+    // cache carries both his name and his points; emitted at `:174`.
     const rulerName = map.get('RulerName') ?? '';
     const rulerPoints = map.get('RulerCmpPnts') ?? '';
     if (rulerName !== '' && rulerPoints !== '') {
@@ -108,7 +108,8 @@ export function VotesTab({ properties }: VotesTabProps) {
             return (
               <tr key={row.key} className={isVotedFor ? styles.votedRow : undefined}>
                 <td className={styles.ballotMarker}>
-                  {/* `VotesSheet.pas:216-221`: image 0 is your vote, image 1 the
+                  {/* `VotesSheet.pas:229-234`: image 0 is your vote (set at `:311`,
+                      `:330-331`), image 1 the
                       sitting ruler, none for an ordinary candidate. Your vote
                       wins the cell when the ruler is who you voted for. */}
                   {isVotedFor

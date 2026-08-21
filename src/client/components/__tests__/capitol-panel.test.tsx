@@ -672,13 +672,13 @@ describe('CapitolPanel', () => {
       setupElectionsTab();
       renderWithProviders(<BuildingInspector hideHeader />);
       switchTab('elections');
-      // VotesSheet.pas:216-221 — image index 0, rendered here as a check icon
+      // VotesSheet.pas:229-234 — image index 0, rendered here as a check icon
       // rather than a word, so the label is where the meaning lives.
       const marker = screen.getByLabelText('Your vote');
       expect(marker.closest('tr')?.textContent).toContain('Senator Adams');
     });
 
-    // VotesSheet.pas:159-161 — the sitting ruler is the FIRST row of the same
+    // VotesSheet.pas:172-174 — the sitting ruler is the FIRST row of the same
     // list as the candidates, not a separate strip beside it.
     it('puts the sitting ruler on the ballot, marked as in office', () => {
       setupElectionsTab();
@@ -688,7 +688,7 @@ describe('CapitolPanel', () => {
       expect(marker.closest('tr')?.textContent).toContain('President SPO_test3');
     });
 
-    // VotesSheet.pas:206-211 — insertion sort on campaign points, descending.
+    // VotesSheet.pas:219-224 — insertion sort on campaign points, descending.
     it('sorts the ballot by points, descending', () => {
       setupElectionsTab();
       const { container } = renderWithProviders(<BuildingInspector hideHeader />);

@@ -1408,7 +1408,7 @@ export interface WsRespPoliticsSetProject extends WsMessage {
  *
  * `paperName` is the town's `NewspaperName` cache property, which the Town Hall
  * inspector already reads (`template-groups.ts` townGeneral). Voyager passes the
- * same value from `TownHallSheet.pas:346`.
+ * same value from `TownHallSheet.pas:348`.
  */
 export interface WsReqNewspaperBoard extends WsMessage {
   type: WsMessageType.REQ_NEWSPAPER_BOARD;
