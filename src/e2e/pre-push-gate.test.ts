@@ -35,8 +35,16 @@ function invoke(command: string, env: NodeJS.ProcessEnv = {}): HookRun {
   }
 }
 
-function runHook(command: string): number {
-  return invoke(command).code;
+/**
+ * Matcher cases run against a scratch repo, never the real one.
+ *
+ * They assert *whether the hook engages*, and the answer for an engaged push has to be a
+ * refusal — so they need a repo with no gate artifact. Pointing them at the working repo
+ * made them depend on its branch and on whether a gate had been run, which flipped the
+ * expected result the moment either changed.
+ */
+function runHook(command: string, dir: string = scratchRepo()): number {
+  return invoke(command, { GATE_REPO_DIR: dir }).code;
 }
 
 /**
@@ -87,6 +95,13 @@ describe('commands the hook must ignore', () => {
   ])('allows %s', (_label, command) => {
     expect(runHook(command)).toBe(0);
   });
+
+  it('allows them even from a repo that would refuse a real push', () => {
+    // The point is that the hook never engages, not that the artifact check passed.
+    const dir = scratchRepo();
+    expect(runHook('grep -rn "git push" doc/', dir)).toBe(0);
+    expect(runHook('git push', dir)).toBe(2);
+  });
 });
 
 describe('commands the hook must catch', () => {
@@ -98,7 +113,8 @@ describe('commands the hook must catch', () => {
     ['a push after a semicolon', 'git commit -m x; git push'],
     ['a push with a global git flag', 'git -C . push origin main'],
   ])('blocks %s', (_label, command) => {
-    // No gate artifact exists for HEAD in a test run, so a caught push must be refused.
+    // The scratch repo is on a feature branch with no artifact, so an engaged push is
+    // refused for that reason alone — independent of the real repo's state.
     expect(runHook(command)).toBe(2);
   });
 });
