@@ -66,6 +66,9 @@ electron/node_modules/
 .claude/scheduled_tasks.lock
 .claude/.typecheck-dirty
 
+# Per-session Claude worktrees (each is a full checkout; never tracked)
+.claude/worktrees/
+
 # Legacy UI reference screenshots (local only)
 UI_Legacy_screenshots/
 
