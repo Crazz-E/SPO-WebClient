@@ -44,10 +44,19 @@ function runHook(command: string): number {
  * every artifact branch, so those can only be reached from somewhere else.
  */
 function scratchRepo(): string {
+  return scratchRepoOn('fix/scratch');
+}
+
+/** The same throwaway repo, on `main`, to reach the branch guard itself. */
+function scratchRepoOnMain(): string {
+  return scratchRepoOn('main');
+}
+
+function scratchRepoOn(branch: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-gate-repo-'));
   const run = (...args: string[]) =>
     execFileSync('git', ['-C', dir, ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
-  run('init', '-q', '-b', 'fix/scratch');
+  run('init', '-q', '-b', branch);
   run('config', 'user.email', 'test@example.com');
   run('config', 'user.name', 'test');
   fs.writeFileSync(path.join(dir, 'file.txt'), 'x', 'utf8');
@@ -154,9 +163,20 @@ describe('the artifact gate, on a feature branch', () => {
 });
 
 describe('the main-branch guard', () => {
+  // This used to drive the real repository, which only works while the developer happens
+  // to be standing on `main` — precisely when the gate is not needed. From a branch the
+  // hook stopped earlier, on the missing artifact, and the suite failed for a reason that
+  // had nothing to do with the guard. A throwaway repo on `main` reaches the guard from
+  // anywhere, like every other case in this file.
   it('refuses a direct push to main outright', () => {
-    const result = invoke('git push -u origin HEAD');
+    const result = invoke('git push -u origin HEAD', { GATE_REPO_DIR: scratchRepoOnMain() });
     expect(result.code).toBe(2);
     expect(result.stderr).toMatch(/direct push to main/);
+  });
+
+  it('lets the same push through from a feature branch, artifact permitting', () => {
+    const dir = scratchRepo();
+    writeArtifact(dir, { verdict: 'PASS', createdAt: new Date().toISOString() });
+    expect(invoke('git push -u origin HEAD', { GATE_REPO_DIR: dir }).code).toBe(0);
   });
 });
