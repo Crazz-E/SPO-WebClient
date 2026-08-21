@@ -924,7 +924,7 @@ export async function politicsVote(
  *
  * Reading both and preferring `TownHallId` therefore lands on the right object
  * for either building without needing to know which one it is. This is also the
- * id `politicsVote` already binds (`CurrBlock`, VotesSheet.pas:246-248), so all
+ * id `politicsVote` already binds (`CurrBlock`, VotesSheet.pas:258), so all
  * four politics mutations address one object.
  *
  * Returns 0 when neither property is readable. Callers MUST refuse to emit on 0:

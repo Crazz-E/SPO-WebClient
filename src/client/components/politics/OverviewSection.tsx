@@ -33,8 +33,8 @@ export function OverviewSection({
   const data = usePoliticsStore((s) => s.data);
   const isCapitol = isCapitolBuilding(serverTabs);
 
-  // `TownHallSheet.pas:126` reads the paper's name off the town properties and
-  // `:346` passes it to the board as `PaperName`. Ours arrives in the general
+  // `TownHallSheet.pas:127` reads the paper's name off the town properties and
+  // `:348` passes it to the board as `PaperName`. Ours arrives in the general
   // group as `NewspaperName` (template-groups.ts townGeneral).
   const generalMap = useMemo(() => buildValueMap(generalProperties), [generalProperties]);
   const newspaperName = generalMap.get('NewspaperName') ?? '';
