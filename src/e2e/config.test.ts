@@ -11,7 +11,7 @@ import {
 describe('locked configuration', () => {
   it('keeps the accounts as approved — changing one needs developer sign-off', () => {
     expect(PRIMARY_ACCOUNT).toMatchObject({ username: 'SPO_test3', password: 'test3' });
-    expect(SECONDARY_ACCOUNT).toMatchObject({ username: 'SPO_test4', password: 'test4' });
+    expect(SECONDARY_ACCOUNT).toMatchObject({ username: 'Crazz', password: 'test' });
   });
 
   it('targets planitia under Free Space, not BETA', () => {

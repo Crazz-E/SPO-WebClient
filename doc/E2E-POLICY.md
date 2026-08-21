@@ -41,7 +41,7 @@ the absence of an exception.
 L0  Unit + component          Jest node/jsdom, coverage ratchet             CI: every PR
 L1  Protocol conformance      Jest + rdo-mock + RdoStrictValidator          CI: every PR
 L2  LIVE WS drive  ← the gate headless `ws` client -> gateway -> planitia   PRE-PUSH: every code change
-L3  LIVE browser smoke        Playwright MCP, SPO_test3 / SPO_test4         UI/render/mobile diffs, + pre-release
+L3  LIVE browser smoke        Playwright MCP, SPO_test3 / Crazz         UI/render/mobile diffs, + pre-release
 ```
 
 L2 replaces both the abandoned mock-E2E plan and most of the browser smoke. L3 survives only
@@ -216,7 +216,7 @@ actually happened. That is the input that makes the next session start ahead of 
 | Account | Password | Holds | Used for |
 |---|---|---|---|
 | `SPO_test3` | `test3` | Mayor of **Helartia**, Minister of Agriculture, company *SPO_test3 - Green* | Primary. Governance reads and writes, roads, zones |
-| `SPO_test4` | `test4` | Basic account, **2 buildings** | Second party: permission-negative, mail receive, rating another tycoon's term |
+| `Crazz` | `test` | Second party — a real account, holdings not enumerated here | Permission-negative, mail receive, rating another tycoon's term. **Read-only apart from the test mail it receives.** |
 
 Both are **LOCKED** — never changed without explicit developer approval. Zone **Free Space**,
 world **planitia**.
@@ -225,14 +225,17 @@ Two accounts unlock four things that were structurally impossible:
 
 | Now testable | Why it matters |
 |---|---|
-| **Negative permission** — drive `SPO_test4` at the Town Hall, assert `canGovern=false` and that the control is *absent*, not merely disabled | Catches the `tycoonratings.asp:24-25` failure mode (guard commented out, result hardcoded `true`) in our own client |
+| **Negative permission** — drive `Crazz` at the Town Hall, assert `canGovern=false` and that the control is *absent*, not merely disabled | Catches the `tycoonratings.asp:24-25` failure mode (guard commented out, result hardcoded `true`) in our own client |
 | **Mail send -> receive** | Genuinely end-to-end for the first time; send was previously untestable |
-| **Ratings** | `OB-30`: nobody can rate their own term. `SPO_test4` rating `SPO_test3` is a real path |
+| **Ratings** | `OB-30`: nobody can rate their own term. `Crazz` rating `SPO_test3` is a real path |
 | **Roads / zones** | Mayor role removes these from the "structurally untestable" list |
 
-**Blast radius.** All mutations happen on `SPO_test3`'s own town (Helartia) and
-`SPO_test4`'s own two buildings. Never another player's assets. Never a world-scope value.
-Every mutation is restored in the same run (§5).
+**Blast radius.** All mutations happen on `SPO_test3`'s own town (Helartia). The second
+account is touched **only** by `mail-roundtrip`, which sends it one message and deletes it
+in the same run — no flow reads or writes its buildings (`flows.ts`: it appears at the
+login in `permission-negative`, which does not mutate, and as the mail recipient).
+Never another player's assets. Never a world-scope value. Every mutation is restored in
+the same run (§5).
 
 ---
 

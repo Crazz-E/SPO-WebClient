@@ -178,7 +178,7 @@ const politicsWrite: Flow = {
  */
 const permissionNegative: Flow = {
   name: 'permission-negative',
-  what: 'SPO_test4 at the governed town hall sees canGovern=false',
+  what: 'Crazz at the governed town hall sees canGovern=false',
   mutates: false,
   run: async () => {
     const assertions = new Assertions();
@@ -206,7 +206,7 @@ const permissionNegative: Flow = {
  */
 const mailRoundTrip: Flow = {
   name: 'mail-roundtrip',
-  what: 'SPO_test3 sends -> SPO_test4 receives -> delete',
+  what: 'SPO_test3 sends -> Crazz receives -> delete',
   mutates: true,
   run: async () => {
     const assertions = new Assertions();

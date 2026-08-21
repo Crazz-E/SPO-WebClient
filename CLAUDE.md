@@ -204,7 +204,7 @@ L1  Protocol conformance      Jest + src/mock-server/ (rdo-mock, strict   CI: ev
                               validator) — NOT a mock backend for E2E
 L2  LIVE WS drive  <- gate    src/e2e/, headless `ws` -> gateway ->       PRE-PUSH: every code change
                               planitia. `npm run test:live`
-L3  LIVE browser smoke        Playwright MCP, SPO_test3 / SPO_test4       pixels only, + pre-release
+L3  LIVE browser smoke        Playwright MCP, SPO_test3 / Crazz       pixels only, + pre-release
 ```
 
 **The push gate.** `git push` is blocked by a hook unless `npm run gate` has written a PASS
@@ -285,15 +285,16 @@ security-auditor, typescript, web-accessibility, web-performance.
 
 | | Primary | Secondary |
 |---|---|---|
-| Account | `SPO_test3` / `test3` | `SPO_test4` / `test4` |
+| Account | `SPO_test3` / `test3` | `Crazz` / `test` |
 | Holds | **Mayor of Helartia**, Minister of Agriculture, company *SPO_test3 - Green* | basic, 2 buildings |
 | For | governance reads and writes, roads, zones | permission-negative, mail receive, rating another term |
 
 **Never change without explicit developer approval.** Zone **Free Space**, not BETA — the
 live directory hosts `planitia`/`shamba`/`zorcon` under Free Space; BETA only has `aries`.
 
-- **Blast radius:** mutations only on Helartia and on `SPO_test4`'s own two buildings, always
-  restored in the same run. Never another player's assets, never a world-scope value.
+- **Blast radius:** mutations only on Helartia. The second account receives one test mail,
+  deleted in the same run — no flow touches its buildings. Never another player's assets,
+  never a world-scope value.
 - **President functions are excluded** from automated verification — the six
   `TPresidentialHall` members and any `canGovern`-gated Capitol path. The gate BLOCKS on
   them and the session must ask the developer to verify by hand

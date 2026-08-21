@@ -15,7 +15,7 @@ pass.
 **This command is a pointer — the procedure is maintained in one place:**
 
 - **[doc/E2E-TESTING.md](../../doc/E2E-TESTING.md)** — locked credentials (SPO_test3 /
-  test3 and SPO_test4 / test4, Free Space / planitia — NEVER change), verified selectors
+  test3 and Crazz / test, Free Space / planitia — NEVER change), verified selectors
   (a11y-based; login stages live in a child frame — use snapshot refs, not
   `document.querySelectorAll`), the `__spoDebug` verification API, server lifecycle, and
   the ordered Phase 0–8 smoke script with its report table.

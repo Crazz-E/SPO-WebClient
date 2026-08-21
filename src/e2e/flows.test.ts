@@ -396,6 +396,6 @@ describe('mail-roundtrip', () => {
     await flowByName('mail-roundtrip').run(ctx);
 
     const compose = sent.find(m => m.type === WsMessageType.REQ_MAIL_COMPOSE);
-    expect(compose).toMatchObject({ to: 'SPO_test4' });
+    expect(compose).toMatchObject({ to: 'Crazz' });
   });
 });

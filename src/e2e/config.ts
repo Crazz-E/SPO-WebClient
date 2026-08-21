@@ -25,8 +25,8 @@ export const PRIMARY_ACCOUNT: E2eAccount = {
 
 /** Secondary: basic account, two buildings. Drives permission-negative and two-party flows. */
 export const SECONDARY_ACCOUNT: E2eAccount = {
-  username: 'SPO_test4',
-  password: 'test4',
+  username: 'Crazz',
+  password: 'test',
   role: 'basic',
 };
 

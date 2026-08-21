@@ -22,8 +22,8 @@ pointers to this file.
 
 | Field | Primary | Secondary |
 |-------|---------|-----------|
-| **Username** | `SPO_test3` | `SPO_test4` |
-| **Password** | `test3` | `test4` |
+| **Username** | `SPO_test3` | `Crazz` |
+| **Password** | `test3` | `test` |
 | **Region** | `Free Space` | `Free Space` |
 | **World** | `planitia` | `planitia` |
 | **Company** | `SPO_test3 - Green` | (its own) |
@@ -31,11 +31,12 @@ pointers to this file.
 
 - Pick **Free Space**, not BETA — the live directory hosts `planitia`/`shamba`/`zorcon` under Free Space; BETA only has `aries`.
 - `SPO_test3` **has mayor powers** (verified live 2026-08-20, [civic-roles-reference.md](civic-roles-reference.md): `canGovern` true on the Town Hall). Road building, zone overlays and town governance are testable live. It is **not** president — see the exclusion in [E2E-POLICY.md](E2E-POLICY.md) §7.
-- `SPO_test4` exists for what one account cannot do: permission-negative checks, mail
+- `Crazz` exists for what one account cannot do: permission-negative checks, mail
   send→receive, and rating another tycoon's term.
-- **Blast radius** ([E2E-POLICY.md](E2E-POLICY.md) §9): mutations only on Helartia and on
-  `SPO_test4`'s own two buildings, always restored in the same run. Never another player's
-  assets, never a world-scope value, never demolish or create-company.
+- **Blast radius** ([E2E-POLICY.md](E2E-POLICY.md) §9): mutations only on Helartia. The
+  second account is touched only by the mail round-trip, which deletes what it sent in the
+  same run — no flow touches its buildings. Never another player's assets, never a
+  world-scope value, never demolish or create-company.
 
 ## Interaction Rules (React UI reality)
 
