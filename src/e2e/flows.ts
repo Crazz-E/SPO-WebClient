@@ -1,0 +1,345 @@
+/**
+ * The L2 flow catalogue.
+ *
+ * A flow is a scripted live drive over the WebSocket contract, with its own assertions.
+ * The gate picks which flows to run from the diff (doc/E2E-POLICY.md §4) — a fixed script
+ * drifts and eventually tests nothing that changed.
+ */
+
+import { WsMessageType } from '../shared/types/message-types';
+import type {
+  WsRespMailFolder,
+  WsRespMailSent,
+  WsRespPoliticsData,
+} from '../shared/types/message-types';
+import { toErrorMessage } from '../shared/error-utils';
+import { GOVERNED_TOWN, PRIMARY_ACCOUNT, SECONDARY_ACCOUNT, TIMEOUTS } from './config';
+import { findCurrentSurvivalLog, openLogWindow } from './live-log';
+import { runProbe, probeFailure, type ProbeResult, type ProbeSpec } from './probe';
+import {
+  findTown,
+  resolveVisualClass,
+  login,
+  logoff,
+  readBuildingDetails,
+  propertyValue,
+  type LiveSession,
+} from './session';
+import type { WorldLock } from './world-lock';
+
+export interface FlowContext {
+  lock: WorldLock;
+  /** Injected so a dry run can exercise the catalogue without touching the world. */
+  survivalLogUrl?: string;
+}
+
+export interface FlowResult {
+  name: string;
+  status: 'PASS' | 'FAIL';
+  assertions: { what: string; ok: boolean; detail?: string }[];
+  probes: ProbeResult[];
+  messagesSent: number;
+  messagesReceived: number;
+  wireErrors: number;
+  error?: string;
+}
+
+export interface Flow {
+  name: string;
+  /** One line, shown in the gate report. */
+  what: string;
+  /** True when the flow writes to the live world — subject to the blast-radius rule. */
+  mutates: boolean;
+  run: (ctx: FlowContext) => Promise<FlowResult>;
+}
+
+class Assertions {
+  readonly items: { what: string; ok: boolean; detail?: string }[] = [];
+  check(what: string, ok: boolean, detail?: string): void {
+    this.items.push({ what, ok, detail });
+  }
+  get failed(): boolean {
+    return this.items.some(a => !a.ok);
+  }
+}
+
+/**
+ * The login spine — appended to every run regardless of routing. Cheapest possible
+ * regression detector, and where session-lifecycle breakage surfaces first.
+ */
+const loginSpine: Flow = {
+  name: 'login-spine',
+  what: 'connect -> auth -> directory -> world login -> company select -> logoff',
+  mutates: false,
+  run: async () => {
+    const assertions = new Assertions();
+    const session = await login(PRIMARY_ACCOUNT);
+    try {
+      assertions.check('world listing is not empty', session.worlds > 0, `${session.worlds} worlds`);
+      assertions.check('a company was selected', Boolean(session.company.id), session.company.name);
+      assertions.check(
+        'the selected company belongs to the tycoon, not a civic role',
+        !session.company.ownerRole || session.company.ownerRole === PRIMARY_ACCOUNT.username,
+        session.company.ownerRole ?? '(none)',
+      );
+      assertions.check('no gateway errors on the spine', session.driver.errors.length === 0);
+      return report('login-spine', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
+/** Read-only governance: the town this account governs, and its politics payload. */
+const politicsRead: Flow = {
+  name: 'politics-read',
+  what: 'town list -> governed town -> politics data',
+  mutates: false,
+  run: async () => {
+    const assertions = new Assertions();
+    const session = await login(PRIMARY_ACCOUNT);
+    try {
+      const town = await findTown(session, GOVERNED_TOWN);
+      assertions.check('the governed town is still listed', town.name === GOVERNED_TOWN, town.name);
+
+      const politics = await session.driver.request<WsRespPoliticsData>(
+        {
+          type: WsMessageType.REQ_POLITICS_DATA,
+          townName: town.name,
+          buildingX: town.x,
+          buildingY: town.y,
+        },
+        WsMessageType.RESP_POLITICS_DATA,
+      );
+      assertions.check('politics data returned', Boolean(politics.data));
+      assertions.check('no gateway errors', session.driver.errors.length === 0);
+      return report('politics-read', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
+/**
+ * The mutation flow. One probe, on the tax rate of the town this account governs —
+ * inside the blast radius by construction (doc/E2E-POLICY.md §9).
+ */
+const politicsWrite: Flow = {
+  name: 'politics-write',
+  what: 'round-trip probe on RDOSetTaxValue at the governed town hall',
+  mutates: true,
+  run: async ctx => {
+    const assertions = new Assertions();
+    const probes: ProbeResult[] = [];
+    const session = await login(PRIMARY_ACCOUNT);
+    try {
+      const town = await findTown(session, GOVERNED_TOWN);
+      const visualClass = await resolveVisualClass(session, town.x, town.y);
+      const details = await readBuildingDetails(session, town.x, town.y, visualClass);
+      assertions.check('the town hall is governable by this account', details.canGovern === true);
+      if (!details.canGovern) return report('politics-write', assertions, probes, session);
+
+      const current = propertyValue(details.groups, 'townTaxes', 'Tax0Percent');
+      assertions.check('a tax row is readable', current !== undefined, current);
+      if (current === undefined) return report('politics-write', assertions, probes, session);
+
+      const spec: ProbeSpec = {
+        what: `${town.name} tax row 0 rate`,
+        member: 'RDOSetTaxValue',
+        x: town.x,
+        y: town.y,
+        visualClass,
+        groupId: 'townTaxes',
+        readProperty: 'Tax0Percent',
+        writeProperty: 'RDOSetTaxValue',
+        // building-property-handler.ts:141 resolves the row index to the real TaxId.
+        additionalParams: { index: '0' },
+        testValue: original => nudge(original),
+      };
+
+      const url = ctx.survivalLogUrl ?? (await findCurrentSurvivalLog());
+      try {
+        probes.push(await runProbe(session, spec, ctx.lock, openLogWindow, url));
+      } catch (err: unknown) {
+        probes.push(probeFailure(spec, err));
+      }
+      assertions.check('the probe proved the write reached the object', probes[0]?.status === 'PASS', probes[0]?.note);
+      return report('politics-write', assertions, probes, session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
+/**
+ * The negative case the second account exists for: a basic tycoon must not be offered
+ * the mayor's controls. Catches the `tycoonratings.asp:24-25` failure mode — a guard
+ * commented out and the result hardcoded true — in our own client.
+ */
+const permissionNegative: Flow = {
+  name: 'permission-negative',
+  what: 'SPO_test4 at the governed town hall sees canGovern=false',
+  mutates: false,
+  run: async () => {
+    const assertions = new Assertions();
+    const session = await login(SECONDARY_ACCOUNT);
+    try {
+      const town = await findTown(session, GOVERNED_TOWN);
+      const visualClass = await resolveVisualClass(session, town.x, town.y);
+      const details = await readBuildingDetails(session, town.x, town.y, visualClass);
+      assertions.check(
+        'a non-mayor is refused governance of the town hall',
+        details.canGovern === false,
+        `canGovern=${details.canGovern}`,
+      );
+      assertions.check('the read itself still succeeds', Boolean(details.visualClass));
+      return report('permission-negative', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
+/**
+ * Two-party mail, end to end for the first time: send from the primary account, read it
+ * in the secondary's inbox, then delete it — the restore half of the blast-radius rule.
+ */
+const mailRoundTrip: Flow = {
+  name: 'mail-roundtrip',
+  what: 'SPO_test3 sends -> SPO_test4 receives -> delete',
+  mutates: true,
+  run: async () => {
+    const assertions = new Assertions();
+    const subject = `e2e ${new Date().toISOString()}`;
+
+    const sender = await login(PRIMARY_ACCOUNT);
+    try {
+      await sender.driver.request({ type: WsMessageType.REQ_MAIL_CONNECT }, WsMessageType.RESP_MAIL_CONNECTED);
+      const sent = await sender.driver.request<WsRespMailSent>(
+        {
+          type: WsMessageType.REQ_MAIL_COMPOSE,
+          to: SECONDARY_ACCOUNT.username,
+          subject,
+          body: ['Automated L2 probe. Safe to delete.'],
+        },
+        WsMessageType.RESP_MAIL_SENT,
+        TIMEOUTS.login,
+      );
+      assertions.check('the compose was accepted', sent.type === WsMessageType.RESP_MAIL_SENT);
+    } finally {
+      await logoff(sender);
+    }
+
+    const recipient = await login(SECONDARY_ACCOUNT);
+    try {
+      await recipient.driver.request({ type: WsMessageType.REQ_MAIL_CONNECT }, WsMessageType.RESP_MAIL_CONNECTED);
+      const inbox = await recipient.driver.request<WsRespMailFolder>(
+        { type: WsMessageType.REQ_MAIL_GET_FOLDER, folder: 'Inbox' },
+        WsMessageType.RESP_MAIL_FOLDER,
+      );
+      const delivered = inbox.messages.find(m => m.subject === subject);
+      assertions.check('the message arrived in the recipient inbox', Boolean(delivered), subject);
+
+      if (delivered) {
+        await recipient.driver.request(
+          { type: WsMessageType.REQ_MAIL_DELETE, folder: 'Inbox', messageId: delivered.messageId },
+          WsMessageType.RESP_MAIL_DELETED,
+        );
+        assertions.check('the probe message was deleted again', true);
+      }
+      return report('mail-roundtrip', assertions, [], recipient);
+    } finally {
+      await logoff(recipient);
+    }
+  },
+};
+
+/** Building inspector read — the path every facility panel depends on. */
+const buildingDetails: Flow = {
+  name: 'building-details',
+  what: 'town hall inspector read: tabs and property groups',
+  mutates: false,
+  run: async () => {
+    const assertions = new Assertions();
+    const session = await login(PRIMARY_ACCOUNT);
+    try {
+      const town = await findTown(session, GOVERNED_TOWN);
+      const visualClass = await resolveVisualClass(session, town.x, town.y);
+      const details = await readBuildingDetails(session, town.x, town.y, visualClass);
+      assertions.check('tabs were served', details.tabs.length > 0, `${details.tabs.length} tabs`);
+      assertions.check(
+        'the Town Hall template resolved, not the generic one',
+        details.groups.townTaxes !== undefined,
+        `groups: ${Object.keys(details.groups).join(' ')}`,
+      );
+      assertions.check('property groups were served', Object.keys(details.groups).length > 0);
+      assertions.check('no gateway errors', session.driver.errors.length === 0);
+      return report('building-details', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
+export const FLOWS: Flow[] = [
+  loginSpine,
+  politicsRead,
+  politicsWrite,
+  buildingDetails,
+  permissionNegative,
+  mailRoundTrip,
+];
+
+export function flowByName(name: string): Flow {
+  const flow = FLOWS.find(f => f.name === name);
+  if (!flow) {
+    throw new Error(`Unknown flow "${name}". Known: ${FLOWS.map(f => f.name).join(', ')}`);
+  }
+  return flow;
+}
+
+/** Run one flow, turning an unexpected throw into a reportable FAIL. */
+export async function runFlow(flow: Flow, ctx: FlowContext): Promise<FlowResult> {
+  try {
+    return await flow.run(ctx);
+  } catch (err: unknown) {
+    return {
+      name: flow.name,
+      status: 'FAIL',
+      assertions: [],
+      probes: [],
+      messagesSent: 0,
+      messagesReceived: 0,
+      wireErrors: 0,
+      error: toErrorMessage(err),
+    };
+  }
+}
+
+/** Move a value without leaving the legal 0..100 range, so the probe never writes junk. */
+export function nudge(original: string): string {
+  const parsed = Number(original);
+  if (!Number.isFinite(parsed)) return '1';
+  const next = parsed >= 50 ? parsed - 1 : parsed + 1;
+  return String(Math.min(100, Math.max(0, Math.round(next))));
+}
+
+function report(
+  name: string,
+  assertions: Assertions,
+  probes: ProbeResult[],
+  session: LiveSession,
+): FlowResult {
+  const sent = session.driver.log.filter(e => e.direction === 'sent').length;
+  const received = session.driver.log.filter(e => e.direction === 'received').length;
+  const failed = assertions.failed || probes.some(p => p.status === 'FAIL');
+  return {
+    name,
+    status: failed ? 'FAIL' : 'PASS',
+    assertions: assertions.items,
+    probes,
+    messagesSent: sent,
+    messagesReceived: received,
+    wireErrors: session.driver.errors.length,
+  };
+}

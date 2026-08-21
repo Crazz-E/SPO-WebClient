@@ -16,5 +16,5 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/client/**/*", "src/mock-server/**/*"]
+  "exclude": ["node_modules", "src/client/**/*", "src/mock-server/**/*", "src/e2e/**/*"]
 }

@@ -1,6 +1,21 @@
 # E2E & System Test Strategy — Audit and Target Architecture
 
-**Status:** Adopted 2026-07-03 · Supersedes the *strategy* (not the procedures) in [E2E-TESTING.md](E2E-TESTING.md) / [E2E-SCENARIO.md](E2E-SCENARIO.md)
+> ## ⚠ SUPERSEDED (2026-08-21) — read [E2E-POLICY.md](E2E-POLICY.md) for the current rules
+>
+> The **findings below (F1–F8) still stand** and are the reasoning trail for what replaced
+> this document. The **decisions** do not:
+>
+> | This document decided | Now |
+> |---|---|
+> | L2 = system E2E against a **mock backend**, the core investment | **Never built, and cancelled.** A mock validates the client against our *model* of the Delphi server; `OB-29` — a tax write that lands while the cached copy the client reads is never invalidated — cannot be found that way by construction |
+> | Live server is **smoke-only**, manual, pre-release | **Live is the gate.** Every code change is verified over a real socket against planitia before it may be pushed |
+> | `@playwright/test` specs are the regression layer | The regression layer is a **headless WebSocket drive** (`src/e2e/`, zero new dependencies). Playwright stays for pixels |
+> | F2: the locked account caps coverage at ~40% of the surface | **Resolved.** `SPO_test3` now holds the **mayor** role and `SPO_test4` exists as a second party |
+>
+> The five-layer stack in §2 is now four layers; the traceability gate in §4 is now the
+> routing table in E2E-POLICY.md §4.
+
+**Status:** Adopted 2026-07-03 · **Superseded 2026-08-21** by [E2E-POLICY.md](E2E-POLICY.md)
 **Companion policy:** [production-security-policy.md](production-security-policy.md) (SEC-* requirements referenced below)
 
 This document defines how SPO-WebClient reaches and *keeps* 100% E2E coverage of existing and future features, verifies that the **full protocol logic** is respected (sequences, timers, lifecycle — not just individual requests), and verifies **production behavior** against the minimum security policy.
@@ -16,7 +31,7 @@ This document defines how SPO-WebClient reaches and *keeps* 100% E2E coverage of
 | Unit + component | Jest (2 projects: node + jsdom), per-directory coverage ratchet | No (local only — CI runs `npm test` only in the Electron release workflow) |
 | Protocol harness | Real `StarpeaceSession` wired to `MockTcpSocket` + `RdoMock` (`src/server/__tests__/protocol-validation/`) — order-asserted login/logoff/keepalive/ServerBusy/reconnect/timeout suites | No |
 | Mock server | `src/mock-server/` — 9 capture-derived scenarios, `RdoStrictValidator`, WS integration tests | No |
-| E2E | **Prose playbooks** (E2E-TESTING.md 17-phase script, `/e2e` command, `e2e-test` skill) driven manually by an agent via Playwright MCP against the **live** game servers with one locked account | No — not code at all |
+| E2E | **Prose playbooks** (E2E-TESTING.md script, `/e2e` command, `e2e-test` skill) driven manually by an agent via Playwright MCP against the **live** game servers with one locked account | No — not code at all |
 | Production/security | `security-hardening.test.ts` (5 suites) | No |
 
 ### 1.2 Findings

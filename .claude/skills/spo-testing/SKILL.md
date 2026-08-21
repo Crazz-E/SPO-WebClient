@@ -1,6 +1,6 @@
 ---
 name: spo-testing
-description: "TRIGGER: When writing or fixing tests, chasing coverage, or adding fixtures. Jest projects layout, the coverage ratchet, the 7 custom RDO matchers, and the mock server. Replaces the generic jest-testing skill."
+description: "TRIGGER: When writing or fixing tests, chasing coverage, or adding fixtures. Jest projects layout, the coverage ratchet, the 7 custom RDO matchers, and the L1 protocol substrate. Replaces the generic jest-testing skill."
 user-invokable: true
 disable-model-invocation: false
 ---
@@ -64,11 +64,17 @@ expect(frame).toHaveRdoTypePrefix('#');
 expect(frame).toPassStrictRdoValidation();
 ```
 
-## Mock server, not hand-written frames
+## L1 substrate, not hand-written frames
 
-Protocol tests replay real captured exchanges rather than invented strings. See
+Protocol tests match real captured exchanges rather than invented strings. See
 `src/mock-server/CLAUDE.md` for the full API, the match hierarchy and the
 step-by-step for adding a scenario.
+
+`src/mock-server/` is **L1** — it proves a frame is well formed before it reaches the wire.
+It is not a mock backend for E2E: the replay half was retired on 2026-08-21, and
+end-to-end coverage now runs live over a real socket (`src/e2e/`, `npm run test:live`).
+Which layer a change must reach, and what counts as proof, is
+[doc/E2E-POLICY.md](../../../doc/E2E-POLICY.md).
 
 ```ts
 const mock = new RdoMock();

@@ -173,12 +173,16 @@ Electron installer.
 ```bash
 npm run dev          # build + start (port 8080)
 npm run build        # server + client + terrain-test
-npm run typecheck    # both tsconfigs
+npm run typecheck    # all three tsconfigs (server, client, e2e)
 npm run lint         # ESLint 10, flat config — 0 errors is the CI gate
 npm run format       # Prettier over the whole tree (not enforced yet, see below)
 npm test             # full Jest suite
 npm run test:coverage
 npm run test:changed # --onlyChanged --bail
+
+npm run gate         # THE PRE-PUSH GATE — static + exclusions + routing + live drive
+npm run test:live    # the L2 live WebSocket drive alone, against planitia
+npm run e2e:unlock   # clear a world-dirty lock after a human restore
 ```
 
 ## Automation (`.claude/hooks/`)
@@ -188,10 +192,29 @@ npm run test:changed # --onlyChanged --bail
 | `context-router.sh` | UserPromptSubmit | Points at the relevant docs/skills before planning |
 | `typecheck-guard.sh` | PostToolUse (Edit\|Write) | Flags the tree dirty on `.ts`/`.tsx` writes — no work, ~0 ms |
 | `sanctuarize.sh` | Stop | Runs `npm run typecheck` once per turn if dirty; blocks the turn on failure |
+| `pre-push-gate.sh` | PreToolUse (Bash) | Blocks `git push` unless a fresh PASS gate artifact exists for HEAD — see **The push gate** below |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.
 
-## Testing
+## Testing — four layers, and the push gate
+
+```
+L0  Unit + component          Jest node/jsdom, coverage ratchet           CI: every PR
+L1  Protocol conformance      Jest + src/mock-server/ (rdo-mock, strict   CI: every PR
+                              validator) — NOT a mock backend for E2E
+L2  LIVE WS drive  <- gate    src/e2e/, headless `ws` -> gateway ->       PRE-PUSH: every code change
+                              planitia. `npm run test:live`
+L3  LIVE browser smoke        Playwright MCP, SPO_test3 / SPO_test4       pixels only, + pre-release
+```
+
+**The push gate.** `git push` is blocked by a hook unless `npm run gate` has written a PASS
+artifact for the current HEAD. The gate runs static checks, blocks on President-only
+members, routes the diff to the flows that can observe it, and drives them live.
+**A crash is a failure, but silence is not a pass**: a mutation is proven by the
+`FIVEMODELSERVER/Survival` log line, not by a `success: true` response (`OB-28`); a lagging
+read-back is expected (`OB-29`) and does not fail a probe, a missing log line does.
+Three attempts maximum, each naming a different root cause. Full rules:
+[doc/E2E-POLICY.md](doc/E2E-POLICY.md).
 
 `module.ts` → `module.test.ts`, same directory. Two Jest projects: `unit` (node, `.test.ts`)
 and `component` (jsdom, `.test.tsx`).
@@ -218,9 +241,10 @@ node .claude/generate-skills-manifest.js --check  # CI: fail if stale
 | Skill | For |
 |-------|-----|
 | `delphi-archaeologist` | Reverse-engineering `../SPO-Original`, tracing RDO handlers |
-| `spo-testing` | Tests, coverage, fixtures, mock server, RDO matchers |
+| `spo-testing` | Tests, coverage, fixtures, L1 substrate, RDO matchers |
 | `dependencies` | Vulnerability audit, licences, package updates |
-| `e2e-test` | Live Playwright E2E (user-invoked only) |
+| `e2e-test` | L3 live browser smoke (user-invoked only) |
+| `gate` | The pre-push gate — static, exclusions, routing, live drive |
 
 **Auto-load only** (not slash-invokable): `web-games` (Canvas 2D renderer, frame budget),
 `zustand-store-ts` (stores, selector stability), `mobile-ux-optimizer`
@@ -259,9 +283,22 @@ security-auditor, typescript, web-accessibility, web-performance.
 
 ## E2E credentials — LOCKED
 
-`SPO_test3` / `test3` / **Free Space** zone / **planitia** world / **SPO_test3 - Green** company.
-**Never change without explicit developer approval.** Pick **Free Space**, not BETA — the live
-directory hosts `planitia`/`shamba`/`zorcon` under Free Space; BETA only has `aries`.
+| | Primary | Secondary |
+|---|---|---|
+| Account | `SPO_test3` / `test3` | `SPO_test4` / `test4` |
+| Holds | **Mayor of Helartia**, Minister of Agriculture, company *SPO_test3 - Green* | basic, 2 buildings |
+| For | governance reads and writes, roads, zones | permission-negative, mail receive, rating another term |
+
+**Never change without explicit developer approval.** Zone **Free Space**, not BETA — the
+live directory hosts `planitia`/`shamba`/`zorcon` under Free Space; BETA only has `aries`.
+
+- **Blast radius:** mutations only on Helartia and on `SPO_test4`'s own two buildings, always
+  restored in the same run. Never another player's assets, never a world-scope value.
+- **President functions are excluded** from automated verification — the six
+  `TPresidentialHall` members and any `canGovern`-gated Capitol path. The gate BLOCKS on
+  them and the session must ask the developer to verify by hand
+  ([E2E-POLICY.md](doc/E2E-POLICY.md) §7). Never mark one verified on their behalf.
+
 Procedure and selectors: `/e2e-test` skill and [E2E-TESTING.md](doc/E2E-TESTING.md).
 
 ## Live server logs — http://158.69.153.134/logs/
@@ -295,9 +332,13 @@ what you touch, or make that sweep a commit of its own.
 
 ## Git
 
-**Nothing gates a local commit.** Run `npm test` and `npm run typecheck` yourself before
-pushing RDO changes — but `.github/workflows/ci.yml` now runs both on every push to `main`
-and every pull request, and `main` is protected: no force-push, no deletion, CI must be green.
+**Nothing gates a local commit — the gate is on the push.** Commit freely on a branch;
+each retry attempt is its own commit so the loop stays readable. Before pushing, run
+`npm run gate`: `.claude/hooks/pre-push-gate.sh` blocks the push otherwise, and blocks a
+direct push to `main` outright. `.github/workflows/ci.yml` re-runs typecheck and tests on
+every push to `main` and every pull request; `main` is protected: no force-push, no
+deletion, CI must be green. CI cannot hold the locked credentials, so the live evidence
+rides in the PR body.
 
 Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description.
 Commits: `type: short summary` — `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`.

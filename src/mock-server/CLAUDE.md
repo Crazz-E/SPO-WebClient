@@ -1,8 +1,18 @@
-# src/mock-server/ — Mock RDO Server for Testing
+# src/mock-server/ — the L1 protocol substrate
 
 ## Purpose
 
-Mock RDO server that replays captured protocol exchanges. Used by unit and integration tests to verify RDO interactions without a real game server.
+Matches and validates RDO exchanges without a real game server. This is **L1** in
+[doc/E2E-POLICY.md](../../doc/E2E-POLICY.md) — the layer that proves a frame is well formed
+before it ever reaches the wire — and it is consumed by 19 suites under
+`src/server/__tests__/`, plus the `toPassStrictRdoValidation` matcher.
+
+> **It is not a mock backend for E2E.** The replay half (`capture-store.ts`,
+> `replay-engine.ts`, `mock-ws-client.ts`, `index.ts`, `test-helpers.ts` and the
+> `__tests__/integration/` suites) was retired on 2026-08-21: it had no consumer outside
+> this directory and existed to serve a mock-backed E2E layer that was never built.
+> `MockWebSocketClient` never opened a socket, so it could not be pointed at the live
+> gateway either. End-to-end coverage now runs live over a real socket — `src/e2e/`.
 
 ## Key Files
 
@@ -10,11 +20,8 @@ Mock RDO server that replays captured protocol exchanges. Used by unit and integ
 |------|------|
 | `rdo-mock.ts` | Core matcher -- matches incoming RDO commands to scenario exchanges |
 | `rdo-strict-validator.ts` | Protocol compliance checker -- validates outgoing RDO commands |
-| `mock-ws-client.ts` | Test WebSocket client for integration tests |
-| `capture-store.ts` | Central storage for loaded scenarios (WS, RDO, HTTP) |
-| `replay-engine.ts` | Replays scenario exchanges in sequence |
 | `http-mock.ts` | Mock HTTP/ASP endpoint handler |
-| `test-helpers.ts` | Shared test utilities |
+| `types/` | Exchange and scenario types shared with the scenarios |
 
 ## Scenarios
 

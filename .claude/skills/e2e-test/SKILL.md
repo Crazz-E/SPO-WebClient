@@ -18,10 +18,11 @@ Drives the live game client in a real browser via Playwright MCP.
    - `window.__spoDebug` programmatic verification API
    - Server start/stop lifecycle
    - Screenshot policy (sub-agent delegation only)
-2. **[doc/E2E-SCENARIO.md](../../../doc/E2E-SCENARIO.md)** — the ordered L3 live smoke
-   script (Phases 0–8, read-only) and report format.
-3. **[doc/E2E-STRATEGY.md](../../../doc/E2E-STRATEGY.md)** — where live smoke fits (L3);
-   anything deeper belongs to L2 specs against the mock backend, not to a live run.
+   The ordered Phase 0–8 smoke script and report format now live in the same file.
+2. **[doc/E2E-POLICY.md](../../../doc/E2E-POLICY.md)** — the gate: which layer a change
+   must reach, and what counts as proof. L3 is required only for pixels (renderer, layout,
+   mobile, Electron) and pre-release; everything below the pixel is L2,
+   `npm run test:live`.
 
 ## Scenario argument
 
@@ -30,7 +31,10 @@ Drives the live game client in a real browser via Playwright MCP.
 
 ## Hard rules
 
-- Credentials LOCKED; Free Space (not BETA); no destructive game actions; no road/zone
-  tests live (account lacks mayor role — mock scenarios cover those).
+- Credentials LOCKED; Free Space (not BETA). `SPO_test3` **now holds the mayor role**, so
+  road and zone flows are reachable — but this browser pass stays read-only; mutations
+  belong to L2's round-trip probe, which restores what it writes.
+- President functions are excluded from automated verification — notify the developer
+  (doc/E2E-POLICY.md §7).
 - Always run login first; always stop the server after; report per-phase PASS/FAIL.
 - Never load screenshots into the main context — delegate to a sub-agent.
