@@ -13,12 +13,14 @@ import { useBuildingStore } from '../../store/building-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store';
 import { useClient } from '../../context';
-import { isLazyTab } from '../../handlers/building-action-handler';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
-import type { TownHallDemographics } from '@/shared/types';
+import type { BuildingPropertyValue, TownHallDemographics } from '@/shared/types';
 import { IconButton, Skeleton, TabBar } from '../common';
 import { QuickStats } from './QuickStats';
-import { InspectorTabs } from './InspectorTabs';
+import { InspectorHeader, findPropertyValue } from './InspectorHeader';
+import { InspectorMenu } from './InspectorMenu';
+import { resolveSectionFetch, sectionDisplayState, type SectionDisplayState } from './inspector-sections';
+import { parseRichDetails } from './RichDetails';
 import { PropertyGroup } from './PropertyGroup';
 import {
   OverviewSection,
@@ -85,14 +87,17 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
 
   const detailsError = useBuildingStore((s) => s.detailsError);
 
-  // Compute active tab + filtered properties BEFORE early returns so that
+  // Compute active section + filtered properties BEFORE early returns so that
   // the useMemo hook is always called — React requires identical hook count
   // across every render of the same component instance.
-  const activeStandardGroupId = (!isCivic)
-    ? (standardTabs.find((t) => t.id === currentTab)?.id ?? standardTabs[0]?.id ?? '')
-    : '';
-  const activeGroupData = (details && activeStandardGroupId)
-    ? details.groups[activeStandardGroupId]
+  //
+  // No fallback to the first tab any more: a `currentTab` that matches nothing
+  // means the menu is showing, which is how the panel opens.
+  const activeStandardTab = (!isCivic)
+    ? standardTabs.find((t) => t.id === currentTab) ?? null
+    : null;
+  const activeGroupData = (details && activeStandardTab)
+    ? details.groups[activeStandardTab.id]
     : undefined;
   const standardProperties = useMemo(
     () => activeGroupData ? activeGroupData.filter((p) => p.name !== 'Name') : [],
@@ -172,20 +177,17 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   // Lazy tab loading state
   const tabLoadingStates = useBuildingStore((s) => s.tabLoadingStates);
 
-  // Trigger lazy fetch when switching to a tab that needs on-demand data
+  // Read the open section, if it is not already in hand. Nothing is read while
+  // the menu is showing — that is the whole point of the section-at-a-time
+  // panel: opening a facility costs the header group and nothing else.
   useEffect(() => {
-    if (!details || isCivic || !isConnected) return;
+    if (!details || !isConnected) return;
 
-    const activeTab = details.tabs.find((t) => t.id === currentTab);
-    const tabSpecial = activeTab?.special;
-    const lazyId = tabSpecial && isLazyTab(tabSpecial) ? tabSpecial
-      : activeTab && isLazyTab(activeTab.id) ? activeTab.id
-      : null;
-
-    if (lazyId && tabLoadingStates[lazyId] !== 'loaded' && tabLoadingStates[lazyId] !== 'loading' && tabLoadingStates[lazyId] !== 'error') {
-      client.onRequestTabData(details.x, details.y, lazyId, details.visualClass);
+    const fetch = resolveSectionFetch(details, currentTab, isCivic, tabLoadingStates);
+    if (fetch) {
+      client.onRequestTabData(details.x, details.y, fetch.tabId, details.visualClass, fetch.groupIds);
     }
-  }, [currentTab, details?.x, details?.y, details?.visualClass, details?.tabs, isCivic, isConnected, tabLoadingStates, client]);
+  }, [currentTab, details, isCivic, isConnected, tabLoadingStates, client]);
 
   // Loading state — show building name from focusedBuilding to prevent blink
   if (isLoading || (!details && !detailsError && focusedBuilding)) {
@@ -244,6 +246,18 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
     ? currentTab as CivicTabId
     : civicTabs[0]?.id as CivicTabId | undefined;
 
+  // Header fields. The level comes from the focus text the map preview already
+  // showed; the society is the `SwitchFocusEx` company line, and the tycoon
+  // behind it is `Creator` — a property, hence absent until the header read
+  // returns, which is why the attribution collapses gracefully.
+  const richDetails = focusedBuilding.detailsText
+    ? parseRichDetails(focusedBuilding.detailsText)
+    : null;
+  const ownerTycoon = findPropertyValue(details.groups, 'Creator');
+  const roi = findPropertyValue(details.groups, 'ROI');
+
+  const sectionState = sectionDisplayState(details, activeStandardTab?.id ?? null, tabLoadingStates);
+
   return (
     <div className={styles.inspector}>
       {/* Toolbar — refresh + close (top-right, hidden when modal provides its own) */}
@@ -266,11 +280,20 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
         </div>
       )}
 
-      {/* Header (hidden when inside modal — modal provides its own title) */}
+      {/* Header — name/level, society + owner, revenue and ROI.
+          Hidden when inside the civic modal, which states its own title. */}
       {!hideHeader && (
-        <div className={`${styles.header} ${styles.stagger0}`}>
-          <div className={styles.nameRow}>
-            {isRenaming ? (
+        <div className={styles.stagger0}>
+          <InspectorHeader
+            buildingName={details.buildingName}
+            level={richDetails?.upgradeLevel}
+            society={details.ownerName}
+            owner={ownerTycoon}
+            revenue={focusedBuilding.revenue}
+            roi={roi}
+            x={details.x}
+            y={details.y}
+            nameOverride={isRenaming ? (
               <>
                 <input
                   type="text"
@@ -298,109 +321,108 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
                   onClick={handleCancelRename}
                 />
               </>
-            ) : (
-              <>
-                <h3 className={styles.buildingName}>{details.buildingName}</h3>
-                {isOwner && (
-                  <IconButton
-                    icon={<Edit3 size={14} />}
-                    label="Rename building"
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleStartRename}
-                  />
-                )}
-              </>
-            )}
-          </div>
-          <div className={styles.headerMeta}>
-            <span className={styles.ownerName}>{details.ownerName}</span>
-            {(details.x !== undefined && details.y !== undefined) && (
-              <span className={styles.visualClass}>{details.x}, {details.y}</span>
-            )}
-          </div>
+            ) : undefined}
+            actions={!isRenaming && isOwner ? (
+              <IconButton
+                icon={<Edit3 size={14} />}
+                label="Rename building"
+                size="sm"
+                variant="ghost"
+                onClick={handleStartRename}
+              />
+            ) : undefined}
+          />
         </div>
       )}
 
-      {/* Quick stats from focus info (hidden for civic — revenue/workers not meaningful) */}
+      {/* Details + sales (hidden for civic — revenue/workers not meaningful) */}
       {!isCivic && (
         <div className={styles.stagger1}>
           <QuickStats focus={focusedBuilding} />
         </div>
       )}
 
-      {/* Tab navigation */}
       {isCivic ? (
-        /* Civic: horizontal TabBar with consolidated tabs */
-        civicTabs.length > 0 && (
-          <div className={styles.stagger2}>
-            <TabBar
-              tabs={civicTabs}
-              activeTab={activeCivicTab ?? civicTabs[0]?.id ?? ''}
-              onTabChange={setCurrentTab}
-            />
-          </div>
-        )
-      ) : (
-        /* Non-civic: pill grid with server-sent tabs */
-        standardTabs.length > 0 && (
-          <div className={styles.stagger2}>
-            <InspectorTabs
-              tabs={standardTabs}
-              activeTab={currentTab || activeStandardGroupId}
-              onTabChange={setCurrentTab}
-            />
-          </div>
-        )
-      )}
-
-      {/* Tab content — scrollable */}
-      <div className={`${styles.content} ${styles.stagger3}`}>
-        {isCivic ? (
-          <CivicTabContent
-            activeTab={activeCivicTab ?? 'overview'}
-            details={details}
-            buildingX={details.x}
-            buildingY={details.y}
-            canGovern={canGovern}
-            demographics={focusedBuilding?.demographics ?? null}
-          />
-        ) : (() => {
-          // Check if active tab needs lazy data that's still loading
-          const activeTabDef = details.tabs.find((t) => t.id === currentTab);
-          const lazyId = activeTabDef?.special && isLazyTab(activeTabDef.special)
-            ? activeTabDef.special
-            : activeTabDef && isLazyTab(activeTabDef.id) ? activeTabDef.id : null;
-          const tabState = lazyId ? tabLoadingStates[lazyId] : undefined;
-
-          if (lazyId && tabState === 'error') {
-            return (
-              <div className={styles.loadingState}>
-                <span>Failed to load tab data. Click refresh to retry.</span>
-              </div>
-            );
-          }
-
-          if (lazyId && tabState !== 'loaded') {
-            return (
-              <div className={styles.loadingState}>
-                <Skeleton width="100%" height="24px" />
-                <Skeleton width="80%" height="18px" />
-                <Skeleton width="100%" height="120px" />
-              </div>
-            );
-          }
-
-          return (
-            <PropertyGroup
-              properties={standardProperties}
+        <>
+          {/* Civic: horizontal TabBar with consolidated tabs */}
+          {civicTabs.length > 0 && (
+            <div className={styles.stagger2}>
+              <TabBar
+                tabs={civicTabs}
+                activeTab={activeCivicTab ?? civicTabs[0]?.id ?? ''}
+                onTabChange={setCurrentTab}
+              />
+            </div>
+          )}
+          <div className={`${styles.content} ${styles.stagger3}`}>
+            <CivicTabContent
+              activeTab={activeCivicTab ?? 'overview'}
+              details={details}
               buildingX={details.x}
               buildingY={details.y}
+              canGovern={canGovern}
+              demographics={focusedBuilding?.demographics ?? null}
             />
-          );
-        })()}
-      </div>
+          </div>
+        </>
+      ) : (
+        /* Standard: section menu, each entry opening its own drawer */
+        <InspectorMenu
+          tabs={standardTabs}
+          activeTab={activeStandardTab?.id ?? null}
+          onSelect={(tabId) => setCurrentTab(tabId ?? '')}
+        >
+          <SectionBody
+            state={sectionState}
+            properties={standardProperties}
+            buildingX={details.x}
+            buildingY={details.y}
+          />
+        </InspectorMenu>
+      )}
     </div>
+  );
+}
+
+/**
+ * The open section's body: its property rows, a skeleton while the section is
+ * being read, or a retry hint if that read failed.
+ */
+function SectionBody({
+  state,
+  properties,
+  buildingX,
+  buildingY,
+}: {
+  state: SectionDisplayState;
+  properties: BuildingPropertyValue[];
+  buildingX: number;
+  buildingY: number;
+}) {
+  if (state === 'error') {
+    return (
+      <div className={styles.loadingState}>
+        <span>Failed to load this section. Click refresh to retry.</span>
+      </div>
+    );
+  }
+
+  if (state === 'loading') {
+    return (
+      <div className={styles.loadingState}>
+        <Skeleton width="100%" height="24px" />
+        <Skeleton width="80%" height="18px" />
+        <Skeleton width="100%" height="120px" />
+      </div>
+    );
+  }
+
+  return (
+    <PropertyGroup
+      properties={properties}
+      buildingX={buildingX}
+      buildingY={buildingY}
+    />
   );
 }
 

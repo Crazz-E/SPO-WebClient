@@ -216,6 +216,45 @@ export function collectTemplatePropertyNamesForGroups(
 }
 
 /**
+ * Properties the inspector header needs regardless of which group declares them.
+ *
+ * `SecurityId` is the odd one out: it is never rendered — the hide list drops it
+ * — but `canGovern` is computed from it server-side, so the opening read must
+ * still carry it. The rest are the header's own fields (owner, value, ROI), the
+ * id the response falls back on for `buildingId`, and `GateMap`, which the
+ * active inspector keeps to address supply/product gates later.
+ *
+ * `CurrBlock` is deliberately NOT here. It is the second `buildingId` fallback,
+ * but asking for it on every open would hand `enrichVotesTab` the block id of
+ * every town hall and turn a `RDOVoteOf` round-trip per candidate into part of
+ * the opening cost — the exact traffic this read exists to avoid. No shipped
+ * template requests it either.
+ */
+export const HEADER_PROPERTY_NAMES: readonly string[] = [
+  'Name',
+  'Creator',
+  'SecurityId',
+  'ObjectId',
+  'Cost',
+  'ROI',
+  'GateMap',
+];
+
+/**
+ * Collect the opening read: the first group ("general"/"overview") plus the
+ * header fields above. Everything else waits for its menu entry to be opened,
+ * which is what makes the inspector open in one small batch instead of the
+ * whole template — an industry or civic template expands to hundreds of indexed
+ * properties in phase 2, and almost none of them are on screen at open.
+ */
+export function collectHeaderPropertyNames(template: BuildingTemplate): CollectedPropertyNames {
+  const collected = collectTemplatePropertyNamesForGroups(template, []);
+  const regular = new Set(collected.regularProperties);
+  for (const name of HEADER_PROPERTY_NAMES) regular.add(name);
+  return { ...collected, regularProperties: Array.from(regular) };
+}
+
+/**
  * Helper to collect property names from a group with structured output
  */
 function collectGroupPropertyNamesStructured(

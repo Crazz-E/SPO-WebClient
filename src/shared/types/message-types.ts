@@ -16,6 +16,7 @@ import type {
   BuildingDetailsResponse,
   BuildingSupplyData,
   BuildingProductData,
+  BuildingPropertyValue,
   CompInputData,
   WarehouseWareData,
   SearchMenuCategory,
@@ -723,6 +724,17 @@ export interface WsReqBuildingTabData extends WsMessage {
   y: number;
   tabId: string;
   visualClass: string;
+  /**
+   * Template group IDs whose properties this tab needs.
+   *
+   * The inspector opens with the header group alone (see
+   * `collectHeaderPropertyNames`), so every other group is read here, when its
+   * menu entry is opened. One civic tab consolidates several server groups —
+   * Administration is `capitolTowns` + `ministeries` + `townTaxes` — hence a
+   * list rather than a single id. Omitted for the gate-based tabs
+   * (supplies/products/compInputs), which carry no template properties.
+   */
+  groupIds?: string[];
 }
 
 export interface WsRespBuildingTabData extends WsMessage {
@@ -734,6 +746,8 @@ export interface WsRespBuildingTabData extends WsMessage {
   products?: BuildingProductData[];
   compInputs?: CompInputData[];
   warehouseWares?: WarehouseWareData[];
+  /** Property values for the requested `groupIds`, keyed by group ID. */
+  groups?: { [groupId: string]: BuildingPropertyValue[] };
 }
 
 /**

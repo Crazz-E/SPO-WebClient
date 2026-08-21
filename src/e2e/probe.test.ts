@@ -35,13 +35,20 @@ function sessionReading(values: (string | undefined)[], onWrite?: (value: string
     send: jest.fn(),
     seen: jest.fn(() => []),
     request: jest.fn(async (msg: WsMessage) => {
+      // The opening read carries the header group and never the tax table —
+      // the probe reads that through the section request below, the way the
+      // panel does once a menu entry is opened.
       if (msg.type === WsMessageType.REQ_BUILDING_DETAILS) {
-        const value = values.shift();
         return {
           type: WsMessageType.RESP_BUILDING_DETAILS,
-          details: {
-            groups: value === undefined ? {} : { townTaxes: [{ name: 'Tax0Percent', value }] },
-          },
+          details: { groups: { townGeneral: [] } },
+        };
+      }
+      if (msg.type === WsMessageType.REQ_BUILDING_TAB_DATA) {
+        const value = values.shift();
+        return {
+          type: WsMessageType.RESP_BUILDING_TAB_DATA,
+          groups: value === undefined ? {} : { townTaxes: [{ name: 'Tax0Percent', value }] },
         };
       }
       onWrite?.((msg as unknown as { value: string }).value);

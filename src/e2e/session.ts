@@ -11,6 +11,7 @@ import type {
   WsRespLoginSuccess,
   WsRespConnectSuccess,
   WsRespBuildingDetails,
+  WsRespBuildingTabData,
   WsRespBuildingSetProperty,
   WsRespSearchMenuTowns,
   WsRespMapData,
@@ -216,6 +217,49 @@ export async function readBuildingDetails(
     WsMessageType.RESP_BUILDING_DETAILS,
   );
   return response.details;
+}
+
+/**
+ * Read one section of the inspector — the groups the opening read leaves out.
+ *
+ * `readBuildingDetails` carries the header group alone; every other group is
+ * read here, when the user opens its menu entry. `groupIds` is what names them,
+ * and a civic tab consolidates several, hence a list.
+ */
+export async function readBuildingTabData(
+  session: LiveSession,
+  x: number,
+  y: number,
+  tabId: string,
+  visualClass: string,
+  groupIds?: string[],
+): Promise<WsRespBuildingTabData> {
+  return session.driver.request<WsRespBuildingTabData>(
+    { type: WsMessageType.REQ_BUILDING_TAB_DATA, x, y, tabId, visualClass, groupIds },
+    WsMessageType.RESP_BUILDING_TAB_DATA,
+  );
+}
+
+/**
+ * Read one property group the way the panel does: open the facility, then open
+ * the section that carries the group.
+ *
+ * The opening read carries the header group and nothing else, so a group named
+ * here is only ever produced by its section request. Both round-trips are kept:
+ * `readBuildingDetails` releases and recreates the inspector's temp object,
+ * which is the freshest re-read available and the reason a probe's read-back
+ * means anything.
+ */
+export async function readSectionGroups(
+  session: LiveSession,
+  x: number,
+  y: number,
+  groupId: string,
+  visualClass: string,
+): Promise<{ [groupId: string]: BuildingPropertyValue[] }> {
+  await readBuildingDetails(session, x, y, visualClass);
+  const section = await readBuildingTabData(session, x, y, groupId, visualClass, [groupId]);
+  return section.groups ?? {};
 }
 
 export async function setBuildingProperty(

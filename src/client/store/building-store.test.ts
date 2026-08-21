@@ -583,6 +583,52 @@ describe('Building Store — Context Loss Prevention', () => {
     expect(useBuildingStore.getState().tabLoadingStates['supplies']).toBe('loaded');
   });
 
+  /**
+   * Groups arrive one section at a time now. A response carries only the
+   * groups that section asked for, so merging has to be additive: replacing
+   * `groups` wholesale would blank the header group the opening read brought
+   * back, and with it the ROI and the owner in the header.
+   */
+  it('mergeTabData folds a section group in without dropping the ones already held', () => {
+    const details = makeBuildingDetails(100, 200);
+    details.groups = { indGeneral: [{ name: 'ROI', value: '12%' }] };
+    useBuildingStore.getState().setDetails(details);
+    useBuildingStore.getState().setTabLoading('workforce');
+
+    useBuildingStore.getState().mergeTabData(
+      'workforce', { groups: { workforce: [{ name: 'Workers0', value: '25' }] } }, 100, 200,
+    );
+
+    const merged = useBuildingStore.getState().details!.groups;
+    expect(merged['indGeneral']).toEqual([{ name: 'ROI', value: '12%' }]);
+    expect(merged['workforce']).toEqual([{ name: 'Workers0', value: '25' }]);
+    expect(useBuildingStore.getState().tabLoadingStates['workforce']).toBe('loaded');
+  });
+
+  it('mergeTabData replaces a group it already held, rather than appending to it', () => {
+    const details = makeBuildingDetails(100, 200);
+    details.groups = { workforce: [{ name: 'Workers0', value: '10' }] };
+    useBuildingStore.getState().setDetails(details);
+
+    useBuildingStore.getState().mergeTabData(
+      'workforce', { groups: { workforce: [{ name: 'Workers0', value: '25' }] } }, 100, 200,
+    );
+
+    expect(useBuildingStore.getState().details!.groups['workforce'])
+      .toEqual([{ name: 'Workers0', value: '25' }]);
+  });
+
+  it('mergeTabData leaves the groups untouched when the response carries none', () => {
+    const details = makeBuildingDetails(100, 200);
+    details.groups = { indGeneral: [{ name: 'ROI', value: '12%' }] };
+    useBuildingStore.getState().setDetails(details);
+
+    useBuildingStore.getState().mergeTabData('supplies', { supplies: [] }, 100, 200);
+
+    expect(useBuildingStore.getState().details!.groups)
+      .toEqual({ indGeneral: [{ name: 'ROI', value: '12%' }] });
+  });
+
   it('mergeTabData is a no-op when details is null', () => {
     // No building loaded
     useBuildingStore.getState().mergeTabData('supplies', { supplies: [] }, 100, 200);
