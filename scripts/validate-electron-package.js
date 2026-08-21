@@ -37,6 +37,41 @@ function dirExists(p) {
   return fs.existsSync(p) && fs.statSync(p).isDirectory();
 }
 
+/**
+ * Resolve the client entry the packaged server will serve.
+ *
+ * Prefers the Vite manifest, and falls back to public/app.js — the same order the
+ * server uses, so this validates what actually ships rather than a fixed filename.
+ */
+function resolveClientEntry() {
+  const publicDir = path.join(RESOURCES, 'public');
+  const manifestPath = path.join(publicDir, '.vite', 'manifest.json');
+
+  if (fileExists(manifestPath)) {
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+    } catch (err) {
+      return { ok: false, detail: `Vite manifest is not readable JSON: ${err.message}` };
+    }
+    const entry = Object.values(manifest).find((e) => e.isEntry) || manifest['src/client/main.tsx'];
+    if (!entry || !entry.file) {
+      return { ok: false, detail: `Vite manifest has no entry: ${manifestPath}` };
+    }
+    const entryPath = path.join(publicDir, entry.file);
+    return {
+      ok: fileExists(entryPath),
+      detail: `Manifest names ${entry.file}; expected it at ${entryPath}`,
+    };
+  }
+
+  const fallback = path.join(publicDir, 'app.js');
+  return {
+    ok: fileExists(fallback),
+    detail: `No Vite manifest at ${manifestPath}, and no fallback at ${fallback}`,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Pre-flight: does the unpacked release exist?
 // ---------------------------------------------------------------------------
@@ -66,10 +101,15 @@ check(
   `Expected: ${path.join(RESOURCES, 'public', 'index.html')}`,
 );
 
+// The client entry is content-hashed since the move to Vite: public/assets/app.<hash>.js,
+// resolved through .vite/manifest.json, which is exactly how the server rewrites index.html
+// (server.ts:85-102). Checking for a literal public/app.js checked the fallback path that
+// the build stopped producing — it reported a missing file on a perfectly good package.
+const clientEntry = resolveClientEntry();
 check(
-  'app.js exists',
-  fileExists(path.join(RESOURCES, 'public', 'app.js')),
-  `Expected: ${path.join(RESOURCES, 'public', 'app.js')}`,
+  'client entry exists',
+  clientEntry.ok,
+  clientEntry.detail,
 );
 
 check(
