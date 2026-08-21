@@ -141,6 +141,12 @@ An autonomous loop mutating a production game world needs two rails a human run 
   clears it. Attempt 2 never starts on a world attempt 1 left mutated.
 - **Single-flight.** One live session at a time, across both accounts. The same lock file
   carries the holder; a second run refuses rather than queues.
+- **Port ownership.** Several sessions share this machine, so the gateway port is claimed,
+  not assumed. Check it is free (`ss -ltn "sport = :8080"`) before `npm run dev`; if it is
+  taken, start on your own port (`PORT=`) and point the drive at it (`E2E_GATEWAY_URL`,
+  `E2E_GATEWAY_ORIGIN`) rather than killing another session's server. Attaching to someone
+  else's gateway makes their session's behaviour your evidence — a silently wrong PASS.
+  Procedure: [E2E-TESTING.md](E2E-TESTING.md) § Server Lifecycle.
 
 **Pre-flight** before any flow: gateway reachable, world date advancing (server alive), no
 stale session for the account. A failed pre-flight is an **environment abort** — it does not
@@ -284,5 +290,8 @@ npm run gate                     # full pre-push gate: static -> routing -> live
 npm run gate -- --static-only    # skip the live layer (docs/tooling diffs)
 npm run gate -- --flows=login-spine,politics-write
 npm run test:live                # the L2 driver alone, no static stages
+ss -ltn "sport = :8080"          # before `npm run dev` — is the gateway port free?
+PORT=8081 npm run dev            # ... and if not, claim your own
+E2E_GATEWAY_URL=ws://localhost:8081 E2E_GATEWAY_ORIGIN=http://localhost:8081 npm run test:live
 npm run e2e:unlock               # clear a world-dirty lock after a human restore
 ```

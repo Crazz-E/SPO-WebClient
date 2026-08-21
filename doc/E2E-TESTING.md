@@ -66,7 +66,7 @@ pointers to this file.
 
 | Step | Action | Target (a11y) |
 |------|--------|----------------|
-| 1 | `browser_navigate` | `http://localhost:8080` |
+| 1 | `browser_navigate` | `http://localhost:8080` (or the port you claimed — see **Server Lifecycle**) |
 | 2 | `browser_type` | textbox **"Username"** → `SPO_test3` |
 | 3 | `browser_type` | textbox **"Password"** → `test3` |
 | 4 | `browser_click` | button **"Enter the World"** |
@@ -180,16 +180,49 @@ sub-layers: tile info, building info, concrete IDs, water grid, road info).
 
 ## Server Lifecycle
 
+### Claim a port before you start — the machine is shared
+
+Several Claude sessions (and several worktrees) run on this machine at once, and each one
+wants a gateway. **8080 is not yours by default.** Starting a second server on a port
+another session holds either fails outright (`Port 8080 is already in use`) or — worse —
+you attach to *their* gateway and report their session's behaviour as your result.
+
+```bash
+ss -ltn "sport = :8080" | tail -n +2      # empty line = free; any row = taken
+```
+
+- **Free** → start normally on 8080.
+- **Taken** → do **not** kill the listener; it belongs to another session. Pick a free port
+  of your own and point the E2E config at it:
+
+```bash
+PORT=8081 npm run dev
+E2E_GATEWAY_URL=ws://localhost:8081 E2E_GATEWAY_ORIGIN=http://localhost:8081 npm run test:live
+```
+
+`PORT` is read by [`src/shared/config.ts`](../src/shared/config.ts); `E2E_GATEWAY_URL` /
+`E2E_GATEWAY_ORIGIN` by [`src/e2e/config.ts`](../src/e2e/config.ts). For an L3 browser pass,
+navigate to the same port. Suggested convention: one port per worktree, 8080 + n.
+
+Note this is only about **the local port**. It does not license two concurrent live runs —
+the world stays single-flight ([E2E-POLICY.md §6](E2E-POLICY.md)), one live session at a
+time across both accounts, whatever port each gateway listens on.
+
+### Start, probe, stop
+
 ```bash
 npm run dev          # build + start on :8080 (first boot ~2 min if cache cold)
 # readiness probe:
 curl -s http://localhost:8080/api/startup-status      # → phase:"ready"
-# stop (PowerShell):
-Get-Process -Id (Get-NetTCPConnection -LocalPort 8080 -State Listen).OwningProcess | Stop-Process -Force
+# stop (WSL) — only the PID you started:
+ss -ltnp "sport = :8080"                              # read the pid=... you own
+kill <pid>
 ```
 
-Always stop the server after a session. Never leave E2E traffic running unattended against
-the live servers (policy SEC-N, [production-security-policy.md](production-security-policy.md)).
+Always stop the server after a session, and stop **your** server only — a stray
+`kill` on a port you did not claim takes down another session's run. Never leave E2E traffic
+running unattended against the live servers (policy SEC-N,
+[production-security-policy.md](production-security-policy.md)).
 
 ## Screenshot Policy
 
@@ -213,10 +246,14 @@ before a release. Everything below the pixel belongs to L2 (`npm run test:live`)
 
 ### Phase 0 — Server start
 ```
+ss -ltn "sport = :8080" | tail -n +2        # FIRST: is the port free?
+                                            # taken -> PORT=<free port> npm run dev, and use it below
 Bash (background): npm run dev
 Poll http://localhost:8080/api/startup-status until phase:"ready" (~2 min cold)
 browser_navigate → http://localhost:8080
 ```
+Never kill a listener you did not start — another session is probably using it
+(see **Server Lifecycle**).
 
 ### Phase 1 — Login (MANDATORY, always first)
 Follow the login table above. **Assert** via `getState()`: `session.connected`,
@@ -275,7 +312,7 @@ and sampling earlier shows an empty drawer that fills a moment later.
 
 ### Phase 8 — Clean exit
 Close the browser page (triggers the gateway's `ClientNotAware` → `get Logoff`), stop the
-server, confirm port 8080 is free.
+server (only the PID you started), confirm your port is free again.
 
 ### Report
 

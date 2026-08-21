@@ -36,5 +36,10 @@ Drives the live game client in a real browser via Playwright MCP.
   belong to L2's round-trip probe, which restores what it writes.
 - President functions are excluded from automated verification — notify the developer
   (doc/E2E-POLICY.md §7).
-- Always run login first; always stop the server after; report per-phase PASS/FAIL.
+- **Check the port before starting the server.** Other Claude sessions share this machine
+  and 8080 may already be theirs: `ss -ltn "sport = :8080"`. If it is taken, start your own
+  (`PORT=8081 npm run dev`) and navigate to that port — never kill a listener you did not
+  start, and never attach to a gateway another session is driving.
+- Always run login first; always stop the server after (only the PID you started); report
+  per-phase PASS/FAIL.
 - Never load screenshots into the main context — delegate to a sub-agent.
