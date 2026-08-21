@@ -629,19 +629,17 @@ function ungatedDemands(): string[] {
 
 /**
  * Tab-scoped reads that no template can satisfy.
- * Gap A-8.
+ *
+ * Empty since A-8 closed. `CurrBlock` used to be declared only by GENERIC_GROUP
+ * (template-groups.ts:25), reachable through the fallback template alone — which
+ * has no votes tab — so `enrichVotesTab` could never fire. UPGRADE_GROUP now
+ * declares it too, for `enrichUpgradeTab`'s live AcceptCloning read
+ * (Voyager/ManagementSheet.pas:243, :272), and a CLASSES.BIN registration that
+ * pairs `Votes` with `facManagement` therefore collects it.
+ *
+ * Keep this list empty. An entry is a gap admitted, not a rule.
  */
-const UNSATISFIABLE_TAB_DEMANDS: ReadonlyArray<{ fn: string; tab: string; property: string; reason: string }> = [
-  {
-    fn: 'enrichVotesTab',
-    tab: 'votes',
-    property: 'CurrBlock',
-    reason: 'A-8. CurrBlock is declared only by GENERIC_GROUP (template-groups.ts:25), which ' +
-      'is reachable solely through the fallback template — and that template has no votes ' +
-      'tab. No CLASSES.BIN registration can produce both, so RDOVoteOf is never emitted and ' +
-      'the Votes tab never shows who the player voted for.',
-  },
-];
+const UNSATISFIABLE_TAB_DEMANDS: ReadonlyArray<{ fn: string; tab: string; property: string; reason: string }> = [];
 
 describe('capability inventory — a tab may only read what a template collects', () => {
   it('satisfies every ungated property read from at least one reachable template', () => {

@@ -545,7 +545,16 @@ export const UPGRADE_GROUP: PropertyGroup = {
     { rdoName: 'Upgrading', displayName: 'Upgrading', type: PropertyType.BOOLEAN, hideEmpty: true },
     { rdoName: 'Pending', displayName: 'Pending', type: PropertyType.NUMBER, hideEmpty: true },
     { rdoName: 'UpgradeActions', displayName: 'Actions', type: PropertyType.UPGRADE_ACTIONS },
-    { rdoName: 'AcceptCloning', displayName: 'Accept Cloning', type: PropertyType.BOOLEAN, editable: true },
+    // Read, never shown (HIDDEN_PROPERTY_NAMES): the block id `enrichUpgradeTab`
+    // binds its live get to. Voyager's Management sheet asks the cache for the
+    // same name and for the same reason — `Names.Add(tidCurrBlock)`
+    // (Voyager/ManagementSheet.pas:243), then `Proxy.BindTo(fCurrBlock)` (:272).
+    { rdoName: 'CurrBlock', displayName: 'Block ID', type: PropertyType.TEXT, hideEmpty: true },
+    // `notCached`: TBlock.StoreToCache (Kernel/Kernel.pas:5824-5905) never emits
+    // AcceptCloning, so the cache read came back empty and the checkbox was stuck
+    // unchecked even though the server default is true (Kernel.pas:5239).
+    // enrichUpgradeTab() supplies the real value via a live get on CurrBlock.
+    { rdoName: 'AcceptCloning', displayName: 'Accept Cloning', type: PropertyType.BOOLEAN, editable: true, notCached: true },
     { rdoName: 'CloneMenu0', displayName: 'Clone Settings', type: PropertyType.CLONE_SETTINGS },
   ],
   rdoCommands: {

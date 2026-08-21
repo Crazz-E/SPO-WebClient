@@ -264,6 +264,10 @@ function collectGroupPropertyNamesStructured(
   indexedByCount: Map<string, IndexedPropertyInfo[]>
 ): void {
   for (const prop of group.properties) {
+    // Not in the object cache — asking for it would add an empty-valued entry
+    // alongside the real one the live enrichment pushes. Skip it here.
+    if (prop.notCached) continue;
+
     const suffix = prop.indexSuffix || '';
 
     // Handle WORKFORCE_TABLE type specially

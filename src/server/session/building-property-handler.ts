@@ -7,12 +7,12 @@
 
 import type { SessionContext } from './session-context';
 import { RdoValue } from '../../shared/rdo-types';
-import { rdoCall, rdoSet } from '../../shared/rdo-frame';
+import { rdoCall, rdoGet, rdoSet } from '../../shared/rdo-frame';
 import { isCataloguedRdoMember } from '../../shared/rdo-members';
 import type { RdoMemberName } from '../../shared/rdo-members';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { toErrorMessage } from '../../shared/error-utils';
-import { writeRdoFrame } from '../rdo-helpers';
+import { writeRdoFrame, parsePropertyResponse } from '../rdo-helpers';
 import { serialiseConstruction } from './construction-lock';
 
 /**
@@ -284,6 +284,28 @@ async function setBuildingPropertyImpl(
     if (propertyToRead === null) {
       ctx.log.debug(`[BuildingDetails] ${propertyName} has no read-back property — reporting unconfirmed`);
       return { success: true, newValue: '', confirmed: undefined };
+    }
+
+    // AcceptCloning is not in the object cache — TBlock.StoreToCache
+    // (Kernel/Kernel.pas:5824-5905) never writes it, and the cacher answers an
+    // unknown name with an empty string (spo_session.ts:1416-1417), so the
+    // generic read-back below reported every correct write as unconfirmed.
+    // Confirm it the way it is read: a live get on the same CurrBlock.
+    if (propertyName === 'RDOAcceptCloning') {
+      const packet = await ctx.sendRdoRequest('construction', rdoGet(
+        'RDOAcceptCloning', currBlock,
+      ).packet, undefined, TimeoutCategory.NORMAL);
+      const readBack = parsePropertyResponse(packet.payload || '', 'RDOAcceptCloning');
+      const confirmed = readBack !== '';
+      if (!confirmed) {
+        ctx.log.warn(
+          `[BuildingDetails] ${propertyName} was issued but could not be confirmed — ` +
+          `live get of "RDOAcceptCloning" came back empty`
+        );
+      } else {
+        ctx.log.debug(`[BuildingDetails] Property ${propertyName} confirmed at ${readBack}`);
+      }
+      return { success: true, newValue: readBack, confirmed };
     }
 
     // Read back the new value via map service to confirm the change
@@ -823,6 +845,10 @@ function mapRdoCommandToPropertyName(
       return null;
 
     case 'RDOAcceptCloning':
+      // Non-null so the caller does not short-circuit to `confirmed: undefined`.
+      // The value never reaches the cacher: setBuildingPropertyImpl intercepts
+      // this command and confirms it with a live get on CurrBlock, because the
+      // cache does not hold `AcceptCloning` at all.
       return 'AcceptCloning';
 
     // CloneFacility removed — now uses dedicated cloneFacility() method

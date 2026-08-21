@@ -12,7 +12,11 @@ import { describe, it, expect, beforeEach } from '@jest/globals';
 import { RdoMock } from '../../../mock-server/rdo-mock';
 import { RdoStrictValidator } from '../../../mock-server/rdo-strict-validator';
 import { RdoProtocol } from '../../rdo';
-import { cleanPayload } from '../../rdo-helpers';
+import { cleanPayload, parsePropertyResponse } from '../../rdo-helpers';
+import { rdoGet } from '../../../shared/rdo-frame';
+import { UPGRADE_GROUP } from '../../../shared/building-details/template-groups';
+import { collectTemplatePropertyNamesStructured } from '../../../shared/building-details';
+import type { RdoScenario } from '../../../mock-server/types/rdo-exchange-types';
 import {
   createBuildingDetailsScenario,
   ALL_MOCK_BUILDINGS,
@@ -426,5 +430,91 @@ describe('argsPattern Matching Accuracy', () => {
     expect(result2).not.toBeNull();
     // Both should match the same exchange (same argsPattern)
     expect(result1!.exchange.id).toBe(result2!.exchange.id);
+  });
+});
+
+
+// ===========================================================================
+// AcceptCloning — read live, never from the property list
+// ===========================================================================
+
+/**
+ * `AcceptCloning` used to travel inside the GetPropertyList query for the
+ * upgrade tab. TBlock.StoreToCache (Kernel/Kernel.pas:5824-5905) never writes
+ * it, so the cache answered an empty string (spo_session.ts:1416-1417) and the
+ * checkbox stayed unchecked on every building — while the server default is
+ * true (Kernel.pas:5239). Voyager has the same split: the sheet's cached
+ * property list omits it (Voyager/ManagementSheet.pas:242-250) and the value
+ * comes from a live get on CurrBlock (:272-273).
+ */
+describe('AcceptCloning is read live, not from the property list', () => {
+  const CURR_BLOCK = '40133888';
+
+  /** Hand-written: the exchange the live read produces, both flag states. */
+  function acceptCloningScenario(value: string): RdoScenario {
+    return {
+      name: 'accept-cloning',
+      description: 'Live get of RDOAcceptCloning on CurrBlock',
+      variables: {},
+      exchanges: [
+        {
+          id: 'ac-rdo-001',
+          request: `C 300 sel ${CURR_BLOCK} get RDOAcceptCloning`,
+          response: `A300 RDOAcceptCloning="#${value}"`,
+          matchKeys: { verb: 'sel', action: 'get', member: 'RDOAcceptCloning' },
+        },
+      ],
+    };
+  }
+
+  it('is not among the names the upgrade tab asks the cache for', () => {
+    const collected = collectTemplatePropertyNamesStructured({
+      visualClassIds: ['*'],
+      name: 'Probe',
+      groups: [UPGRADE_GROUP],
+    });
+
+    expect(collected.regularProperties).not.toContain('AcceptCloning');
+    // The rest of the tab still travels — the skip is scoped to one name.
+    expect(collected.regularProperties).toContain('UpgradeLevel');
+    // Including the block id the live read binds to (ManagementSheet.pas:243).
+    expect(collected.regularProperties).toContain('CurrBlock');
+  });
+
+  it('emits a catalogued get frame that the strict validator accepts', () => {
+    const scenario = acceptCloningScenario('1');
+    const validator = new RdoStrictValidator();
+    validator.addScenario(scenario);
+
+    // The emitter's own frame, given the rid sendRdoRequest would stamp on it,
+    // is byte-for-byte the request the exchange declares.
+    const frame = rdoGet('RDOAcceptCloning', CURR_BLOCK).toFrame();
+    expect(frame).toBe(`C sel ${CURR_BLOCK} get RDOAcceptCloning;`);
+
+    const request = scenario.exchanges[0].request;
+    validator.validate(RdoProtocol.parse(request), request);
+    expect(validator.getErrors()).toEqual([]);
+  });
+
+  it('matches the live get and reads back "1"', () => {
+    const rdoMock = new RdoMock();
+    rdoMock.addScenario(acceptCloningScenario('1'));
+
+    const result = rdoMock.match(`C 300 sel ${CURR_BLOCK} get RDOAcceptCloning`);
+
+    expect(result).not.toBeNull();
+    const payload = RdoProtocol.parse(result!.response).payload || '';
+    expect(parsePropertyResponse(payload, 'RDOAcceptCloning')).toBe('1');
+  });
+
+  it('reads back "0" when the flag is cleared', () => {
+    const rdoMock = new RdoMock();
+    rdoMock.addScenario(acceptCloningScenario('0'));
+
+    const result = rdoMock.match(`C 300 sel ${CURR_BLOCK} get RDOAcceptCloning`);
+
+    expect(result).not.toBeNull();
+    const payload = RdoProtocol.parse(result!.response).payload || '';
+    expect(parsePropertyResponse(payload, 'RDOAcceptCloning')).toBe('0');
   });
 });

@@ -124,6 +124,15 @@ export interface PropertyDefinition {
   actionId?: string;
   /** For ACTION_BUTTON: button label text */
   buttonLabel?: string;
+  /**
+   * The model server never writes this property to the object cache, so asking
+   * the cacher for it yields an empty string (spo_session.ts:1416-1417) and the
+   * row renders wrong. The definition still draws the row and carries
+   * `editable`; the value arrives from a live RDO get instead — exactly how
+   * Voyager reads it (Voyager/ManagementSheet.pas:272-273, and the cached list
+   * at :242-250 does not contain it).
+   */
+  notCached?: boolean;
 }
 
 /**

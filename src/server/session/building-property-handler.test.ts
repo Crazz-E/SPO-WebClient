@@ -55,6 +55,8 @@ const TEMP_OBJECT_ID = 'cacher-obj-7';
 
 /** What the read-back reports unless a test says otherwise. */
 const READ_BACK = '42';
+/** What the construction socket answers to `get RDOAcceptCloning`. */
+const LIVE_CLONING = '-1';
 
 /** Server-side identifiers resolved from a row index (see §"dynamic ids"). */
 const RESOLVED_TAX_ID = '110';
@@ -78,6 +80,8 @@ function makeConstructionCtx(options: {
   sockets?: string[];
   /** `null` reproduces a session where the InitClient push has not landed yet. */
   fTycoonProxyId?: number | null;
+  /** Value the construction socket answers to `get RDOAcceptCloning`. */
+  liveCloning?: string;
 } = {}): FakeSessionCtx {
   const {
     currBlock = CURR_BLOCK,
@@ -85,9 +89,14 @@ function makeConstructionCtx(options: {
     readBack = [READ_BACK],
     sockets = ['construction'],
     fTycoonProxyId = FAKE_CONTEXT_IDS.tycoonProxyId,
+    liveCloning = LIVE_CLONING,
   } = options;
 
   const fake = makeSessionCtx({ sockets, fTycoonProxyId });
+  // AcceptCloning is confirmed by a live get, not by the cacher.
+  fake.respond((packet) => (
+    packet.member === 'RDOAcceptCloning' ? `RDOAcceptCloning="#${liveCloning}"` : ''
+  ));
   fake.cacher.createObject.mockResolvedValue(TEMP_OBJECT_ID);
   fake.cacher.getPropertyList.mockImplementation(async (_id: string, props: string[]) => {
     if (props[0] === 'CurrBlock') {
@@ -152,6 +161,13 @@ interface MatrixEntry {
    * entirely rather than manufacture a verdict.
    */
   readBack: string | null;
+  /**
+   * The confirmation is a live `get` on CurrBlock, not a cacher read. Only
+   * AcceptCloning: TBlock.StoreToCache (Kernel/Kernel.pas:5824-5905) never
+   * writes it, so the cacher would answer '' and report every correct write as
+   * unconfirmed.
+   */
+  liveReadBack?: true;
 }
 
 const MATRIX: readonly MatrixEntry[] = [
@@ -163,6 +179,7 @@ const MATRIX: readonly MatrixEntry[] = [
     command: 'RDOAcceptCloning', value: '1',
     args: [RdoValue.int(-1)],
     target: 'currBlock', verb: 'set', channel: 'frame', readBack: 'AcceptCloning',
+    liveReadBack: true,
   },
 
   // ── Booleans as WordBool: #-1 / #0, never #1 ─────────────────────────────
@@ -450,13 +467,25 @@ describe('setBuildingProperty — command matrix', () => {
       expect(frame).toEqual(expectedFrame(entry));
       expect(frame).toMatchRdoFormat();
       expect(frame).not.toMatch(/^C \d+ sel /); // a rid here would be the crash form
-      expect(fake.sent).toEqual([]);
+      // The write itself never uses the request channel; a live read-back does.
+      expect(fake.sent.map(r => r.packet.action)).toEqual(
+        entry.liveReadBack ? [RdoAction.GET] : [],
+      );
     }
 
     // Read-back: the property name is the observable side of
     // mapRdoCommandToPropertyName.
     const listCalls = fake.cacher.getPropertyList.mock.calls;
-    if (entry.readBack === null) {
+    if (entry.liveReadBack) {
+      // No verify object at all — the value comes off the construction socket.
+      expect(listCalls[listCalls.length - 1][1]).toEqual(['CurrBlock', 'ObjectId']);
+      expect(fake.sent[0].packet.targetId).toBe(CURR_BLOCK);
+      expect(fake.sent[0].packet.member).toBe(entry.command);
+      expect(fake.sent[0].category).toBe(TimeoutCategory.NORMAL);
+      expect(result.success).toBe(true);
+      expect(result.newValue).toBe(LIVE_CLONING);
+      expect(result.confirmed).toBe(true);
+    } else if (entry.readBack === null) {
       // No witness: the handler must not open a verify object at all, and must
       // report `confirmed: undefined` — "nothing contradicts the write" — rather
       // than the `true` a meaningless read-back used to manufacture.
@@ -1135,6 +1164,61 @@ describe('read-back', () => {
     expect(fake.frames.construction).toHaveLength(1);
     expect(result).toEqual({ success: false, newValue: '' });
     expect(fake.cacher.closeObject).toHaveBeenCalledTimes(2);
+  });
+
+  // ── AcceptCloning: confirmed live, never from the cache ──────────────────
+  //
+  // TBlock.StoreToCache (Kernel/Kernel.pas:5824-5905) does not emit
+  // `AcceptCloning`, and the cacher answers '' for a name it does not hold
+  // (spo_session.ts:1416-1417). Reading the witness there returned `confirmed:
+  // false` for every write that had in fact landed.
+
+  it('confirms AcceptCloning with a live get on CurrBlock, not with the cacher', async () => {
+    const fake = makeConstructionCtx({ liveCloning: '-1', readBack: [''] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOAcceptCloning', '1'));
+
+    // The write went out as a frame; the confirmation as a request.
+    expect(fake.frames.construction).toHaveLength(1);
+    expect(fake.sent).toHaveLength(1);
+    expect(fake.sent[0].packet.action).toBe(RdoAction.GET);
+    expect(fake.sent[0].packet.member).toBe('RDOAcceptCloning');
+    expect(fake.sent[0].packet.targetId).toBe(CURR_BLOCK);
+    // No verify object was opened — only the id lookup.
+    expect(fake.cacher.createObject).toHaveBeenCalledTimes(1);
+    const asked = fake.cacher.getPropertyList.mock.calls.flatMap(([, names]) => names);
+    expect(asked).not.toContain('AcceptCloning');
+    expect(result).toEqual({ success: true, newValue: '-1', confirmed: true });
+    expect(fake.log.debug).toHaveBeenCalledWith(expect.stringContaining('confirmed at -1'));
+  });
+
+  it('confirms a cleared flag as "0" rather than treating it as no answer', async () => {
+    const fake = makeConstructionCtx({ liveCloning: '0' });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOAcceptCloning', '0'));
+
+    expect(result).toEqual({ success: true, newValue: '0', confirmed: true });
+  });
+
+  it('reports AcceptCloning unconfirmed when the live get answers nothing', async () => {
+    const fake = makeConstructionCtx();
+    fake.respond(() => '');
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOAcceptCloning', '1'));
+
+    expect(result).toEqual({ success: true, newValue: '', confirmed: false });
+    expect(fake.log.warn).toHaveBeenCalledWith(expect.stringContaining('could not be confirmed'));
+  });
+
+  it('reports failure when the live get throws, after the frame was sent', async () => {
+    const fake = makeConstructionCtx();
+    fake.respond(() => new Error('Request timeout: RDOAcceptCloning'));
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOAcceptCloning', '1'));
+
+    expect(fake.frames.construction).toHaveLength(1);
+    expect(result).toEqual({ success: false, newValue: '' });
+    expect(fake.cacher.closeObject).toHaveBeenCalledTimes(1);
   });
 });
 
