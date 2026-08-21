@@ -27,7 +27,7 @@ pointers to this file.
 | **Region** | `Free Space` | `Free Space` |
 | **World** | `planitia` | `planitia` |
 | **Company** | `SPO_test3 - Green` | (its own) |
-| **Holds** | **Mayor of Helartia**, Minister of Agriculture | basic account, 2 buildings |
+| **Holds** | **Mayor of Helartia**, Minister of Agriculture | a real player account — holdings not enumerated, and no flow depends on them |
 
 - Pick **Free Space**, not BETA — the live directory hosts `planitia`/`shamba`/`zorcon` under Free Space; BETA only has `aries`.
 - `SPO_test3` **has mayor powers** (verified live 2026-08-20, [civic-roles-reference.md](civic-roles-reference.md): `canGovern` true on the Town Hall). Road building, zone overlays and town governance are testable live. It is **not** president — see the exclusion in [E2E-POLICY.md](E2E-POLICY.md) §7.
