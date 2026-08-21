@@ -1030,7 +1030,9 @@ describe('votes enrichment', () => {
     // GENERIC_TEMPLATE does collect CurrBlock, but it has no votes group.
     await getBuildingBasicDetails(fake.ctx, X, Y, 'unregistered');
 
-    expect(fake.sent).toEqual([]);
+    // It does carry an upgrade tab, so the one request on the wire is that
+    // enrichment's — never RDOVoteOf.
+    expect(fake.sent.map(s => s.packet.member)).toEqual(['RDOAcceptCloning']);
   });
 
   it('leaves the tab alone when the server returns no vote', async () => {
@@ -1063,6 +1065,159 @@ describe('votes enrichment', () => {
 
     expect(groups['votes']).toBeDefined();
     expect(fake.log.debug).toHaveBeenCalledWith(expect.stringContaining('VoteOf enrichment failed'));
+  });
+});
+
+// ===========================================================================
+// enrichUpgradeTab — AcceptCloning is read live, never from the object cache
+// ===========================================================================
+
+describe('upgrade enrichment', () => {
+  /**
+   * The upgrade tab is a LAZY section since the opening read was narrowed to the
+   * header: `getBuildingBasicDetails` never builds `groups['upgrade']` any more,
+   * so the enrichment lives on the section read the menu entry triggers.
+   * `facManagement` is the CLASSES.BIN handler that maps to UPGRADE_GROUP.
+   */
+  function makeUpgradeCtx(over: DetailsCtxOptions = {}): FakeSessionCtx {
+    const fake = makeDetailsCtx(over);
+    registerTabs('9013', ['unkGeneral', 'facManagement']);
+    focusReturns(fake, '40133602');
+    return fake;
+  }
+
+  /** Open the building, then open its upgrade section — what the UI does. */
+  async function openUpgradeSection(fake: FakeSessionCtx) {
+    await getBuildingBasicDetails(fake.ctx, X, Y, '9013');
+    fake.sent.length = 0;
+    return getBuildingTabData(fake.ctx, X, Y, 'upgrade', '9013', ['upgrade']);
+  }
+
+  it('asks RDOAcceptCloning on CurrBlock and appends the answer to the upgrade tab', async () => {
+    const fake = makeUpgradeCtx();
+    cacheValues(fake, { CurrBlock: '40133888', Name: 'Shop' });
+    rdoMembers(fake, { RDOAcceptCloning: 'RDOAcceptCloning="#1"' });
+
+    const data = await openUpgradeSection(fake);
+
+    expect(fake.sent).toHaveLength(1);
+    const [{ packet, socketName, category }] = fake.sent;
+    expect(socketName).toBe('construction');
+    expect(packet.verb).toBe(RdoVerb.SEL);
+    // The block, not the inspector temp object — Voyager binds the same way
+    // (ManagementSheet.pas:272-273).
+    expect(packet.targetId).toBe('40133888');
+    expect(packet.action).toBe(RdoAction.GET);
+    expect(packet.member).toBe('RDOAcceptCloning');
+    expect(category).toBe(TimeoutCategory.NORMAL);
+    expect(data.groups!['upgrade']).toContainEqual({ name: 'AcceptCloning', value: '1' });
+  });
+
+  it('carries a cleared flag through as "0" rather than dropping it', async () => {
+    const fake = makeUpgradeCtx();
+    cacheValues(fake, { CurrBlock: '40133888', Name: 'Shop' });
+    rdoMembers(fake, { RDOAcceptCloning: 'RDOAcceptCloning="#0"' });
+
+    const data = await openUpgradeSection(fake);
+
+    expect(data.groups!['upgrade']).toContainEqual({ name: 'AcceptCloning', value: '0' });
+  });
+
+  // The bug this whole change is about: the name used to travel inside the
+  // section's GetPropertyList, and the cache answers '' for a name it does not
+  // hold — a permanently unchecked box, plus a duplicate entry once the live
+  // value arrived.
+  it('never asks the object cache for AcceptCloning — one entry, not two', async () => {
+    const fake = makeUpgradeCtx();
+    cacheValues(fake, { CurrBlock: '40133888', Name: 'Shop' });
+    rdoMembers(fake, { RDOAcceptCloning: 'RDOAcceptCloning="#1"' });
+
+    const data = await openUpgradeSection(fake);
+
+    const asked = fake.cacher.getPropertyList.mock.calls.flatMap(([, names]) => names);
+    expect(asked).not.toContain('AcceptCloning');
+    // …but the block id it binds to IS asked for, which is what makes the live
+    // read reachable at all (ManagementSheet.pas:243).
+    expect(asked).toContain('CurrBlock');
+    expect(data.groups!['upgrade'].filter(v => v.name === 'AcceptCloning')).toHaveLength(1);
+  });
+
+  it('connects the construction service first when its socket is down', async () => {
+    const fake = makeUpgradeCtx();
+    cacheValues(fake, { CurrBlock: '40133888', Name: 'Shop' });
+    rdoMembers(fake, { RDOAcceptCloning: 'RDOAcceptCloning="#1"' });
+
+    const data = await openUpgradeSection(fake);
+
+    expect(fake.ctx.connectConstructionService).toHaveBeenCalled();
+    expect(data.groups!['upgrade']).toContainEqual({ name: 'AcceptCloning', value: '1' });
+  });
+
+  it('does not reconnect when the construction socket is already up', async () => {
+    const fake = makeUpgradeCtx({ sockets: ['map', 'construction'] });
+    cacheValues(fake, { CurrBlock: '40133888', Name: 'Shop' });
+    rdoMembers(fake, { RDOAcceptCloning: 'RDOAcceptCloning="#1"' });
+
+    await openUpgradeSection(fake);
+
+    expect(fake.ctx.connectConstructionService).not.toHaveBeenCalled();
+  });
+
+  it('skips the enrichment when the block id is unknown', async () => {
+    const fake = makeUpgradeCtx();
+    cacheValues(fake, { Name: 'Shop' }); // CurrBlock answers ''
+
+    await openUpgradeSection(fake);
+
+    expect(fake.sent).toEqual([]);
+  });
+
+  it('never fires on the opening read — the upgrade tab is not built there', async () => {
+    const fake = makeUpgradeCtx();
+    cacheValues(fake, { CurrBlock: '40133888', Name: 'Shop' });
+    rdoMembers(fake, { RDOAcceptCloning: 'RDOAcceptCloning="#1"' });
+
+    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9013');
+
+    expect(details.groups['upgrade']).toBeUndefined();
+    expect(fake.sent).toEqual([]);
+  });
+
+  it('skips the enrichment when the opened section has no upgrade tab', async () => {
+    const fake = makeUpgradeCtx();
+    registerTabs('9014', ['unkGeneral', 'Workforce']);
+    cacheValues(fake, { CurrBlock: '40133888', Name: 'Shop' });
+
+    await getBuildingBasicDetails(fake.ctx, X, Y, '9014');
+    fake.sent.length = 0;
+    const data = await getBuildingTabData(fake.ctx, X, Y, 'workforce', '9014', ['workforce']);
+
+    expect(data.groups!['upgrade']).toBeUndefined();
+    expect(fake.sent.map(r => r.packet.member)).not.toContain('RDOAcceptCloning');
+  });
+
+  it('leaves the tab alone when the server answers with nothing', async () => {
+    const fake = makeUpgradeCtx();
+    cacheValues(fake, { CurrBlock: '40133888', Name: 'Shop' });
+    rdoMembers(fake, { RDOAcceptCloning: '' });
+
+    const data = await openUpgradeSection(fake);
+
+    expect(data.groups!['upgrade'].some(v => v.name === 'AcceptCloning')).toBe(false);
+  });
+
+  it('swallows a failed RDOAcceptCloning — the rest of the section still renders', async () => {
+    const fake = makeUpgradeCtx();
+    cacheValues(fake, { CurrBlock: '40133888', Name: 'Shop' });
+    fake.respond(() => new Error('Request timeout: RDOAcceptCloning'));
+
+    const data = await openUpgradeSection(fake);
+
+    expect(data.groups!['upgrade']).toBeDefined();
+    expect(data.groups!['upgrade'].some(v => v.name === 'AcceptCloning')).toBe(false);
+    expect(fake.log.debug).toHaveBeenCalledWith(
+      expect.stringContaining('AcceptCloning enrichment failed'),
+    );
   });
 });
 

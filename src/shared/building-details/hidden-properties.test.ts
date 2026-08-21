@@ -5,7 +5,8 @@ import { HANDLER_TO_GROUP } from './template-groups';
 describe('hidden properties', () => {
   it('hides every name the redesign took off the sheet', () => {
     for (const name of ['TradeRole', 'Role', 'TradeLevel', 'MoneyGraph',
-      'UpgradeActions', 'SecurityId', 'Trouble', 'Creator', 'OwnerName']) {
+      'UpgradeActions', 'SecurityId', 'Trouble', 'Creator', 'OwnerName',
+      'CurrBlock']) {
       expect(isHiddenProperty(name)).toBe(true);
     }
   });
@@ -28,6 +29,15 @@ describe('hidden properties', () => {
     }
     expect(declared.has('SecurityId')).toBe(true);
     expect(declared.has('MoneyGraph')).toBe(true);
+    // `CurrBlock` is the third: hidden on the sheet, but the upgrade section
+    // must still fetch it — `enrichUpgradeTab` binds its live AcceptCloning
+    // read to it, exactly as Voyager does (ManagementSheet.pas:243, :272).
+    expect(declared.has('CurrBlock')).toBe(true);
+  });
+
+  it('keeps CurrBlock in the upgrade group, where the live read needs it', () => {
+    const upgrade = HANDLER_TO_GROUP['facManagement'];
+    expect(upgrade.properties.map(p => p.rdoName)).toContain('CurrBlock');
   });
 
   it('is a set, so membership does not depend on order', () => {

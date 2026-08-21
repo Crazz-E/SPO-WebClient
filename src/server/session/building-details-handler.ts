@@ -31,7 +31,7 @@ import {
 import type { CollectedPropertyNames } from '../../shared/building-details';
 import { cleanPayload as cleanPayloadHelper, parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
 import { RdoValue } from '../../shared/rdo-types';
-import { rdoCall } from '../../shared/rdo-frame';
+import { rdoCall, rdoGet } from '../../shared/rdo-frame';
 import { toErrorMessage } from '../../shared/error-utils';
 
 // =========================================================================
@@ -278,6 +278,9 @@ export async function getBuildingBasicDetails(
     // Enrich votes tab
     await enrichVotesTab(ctx, groups, allValues);
 
+    // Enrich upgrade tab — AcceptCloning is not a cached property
+    await enrichUpgradeTab(ctx, groups, allValues);
+
     // Determine which special tabs exist
     const hasSupplies = template.groups.some(g => g.special === 'supplies');
     const hasProducts = template.groups.some(g => g.special === 'products');
@@ -403,6 +406,7 @@ export async function getBuildingTabData(
         collectTemplatePropertyNamesForGroups(template, groupIds),
       );
       await enrichVotesTab(ctx, groups, allValues);
+      await enrichUpgradeTab(ctx, groups, allValues);
       return { groups };
     }
 
@@ -522,6 +526,9 @@ export async function refreshBuildingProperties(
     // Enrich votes tab
     await enrichVotesTab(ctx, groups, allValues);
 
+    // Enrich upgrade tab — AcceptCloning is not a cached property
+    await enrichUpgradeTab(ctx, groups, allValues);
+
     // Update GateMap in the inspector (may have changed via RDOSelectWare)
     inspector.gateMap = allValues.get('GateMap') || inspector.gateMap;
 
@@ -635,6 +642,9 @@ async function getBuildingDetailsImpl(
 
     // Enrich votes tab
     await enrichVotesTab(ctx, groups, allValues);
+
+    // Enrich upgrade tab — AcceptCloning is not a cached property
+    await enrichUpgradeTab(ctx, groups, allValues);
 
     // Phase 3: reads that need the object on the building root, first — the
     // gate reads below can leave it on a gate.
@@ -925,6 +935,47 @@ async function enrichVotesTab(
     }
   } catch (e: unknown) {
     ctx.log.debug(`[BuildingDetails] VoteOf enrichment failed: ${toErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Enrich upgrade tab with AcceptCloning (requires a live RDO get on CurrBlock).
+ *
+ * The object cache cannot answer for this one: TBlock.StoreToCache
+ * (Kernel/Kernel.pas:5824-5905) never writes `AcceptCloning`, and the cacher
+ * returns an empty string for a name it does not hold (spo_session.ts:1416-1417),
+ * so the checkbox rendered unchecked for every building while the server default
+ * is true (Kernel.pas:5239). Voyager has the same split — the cached property
+ * list (Voyager/ManagementSheet.pas:242-250) omits it and the sheet reads it
+ * live off CurrBlock instead (:272-273).
+ *
+ * Read only — no ownership gate. Voyager shows the value to everyone and greys
+ * only the editing control (ManagementSheet.pas:128-129); `canEdit` already covers
+ * that on our side.
+ */
+async function enrichUpgradeTab(
+  ctx: SessionContext,
+  groups: { [groupId: string]: BuildingPropertyValue[] },
+  allValues: Map<string, string>,
+): Promise<void> {
+  if (!groups['upgrade']) return;
+
+  const currBlock = allValues.get('CurrBlock');
+  if (!currBlock) return;
+
+  try {
+    if (!ctx.getSocket('construction')) {
+      await ctx.connectConstructionService();
+    }
+    const packet = await ctx.sendRdoRequest('construction', rdoGet(
+      'RDOAcceptCloning', currBlock,
+    ).packet, undefined, TimeoutCategory.NORMAL);
+    const value = parsePropertyResponseHelper(packet.payload || '', 'RDOAcceptCloning');
+    if (value !== '') {
+      groups['upgrade'].push({ name: 'AcceptCloning', value });
+    }
+  } catch (e: unknown) {
+    ctx.log.debug(`[BuildingDetails] AcceptCloning enrichment failed: ${toErrorMessage(e)}`);
   }
 }
 

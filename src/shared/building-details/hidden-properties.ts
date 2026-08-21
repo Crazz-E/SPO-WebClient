@@ -22,6 +22,11 @@ export const HIDDEN_PROPERTY_NAMES: ReadonlySet<string> = new Set([
   'MoneyGraph',
   'UpgradeActions',
   'SecurityId',
+  // Block id — an internal RDO address, not a fact for a player. The upgrade
+  // group requests it so `enrichUpgradeTab` can bind its live AcceptCloning
+  // read to it (Voyager/ManagementSheet.pas:243, :272), which is the same
+  // read-but-never-show case as SecurityId above.
+  'CurrBlock',
   'Trouble',
   // Owner: the header already names the society and the tycoon
   'Creator',
