@@ -68,3 +68,6 @@ electron/node_modules/
 
 # Legacy UI reference screenshots (local only)
 UI_Legacy_screenshots/
+
+# Live-gate evidence — per-machine, per-run; summarised into the PR body instead
+report/e2e/

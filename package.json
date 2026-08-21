@@ -4,7 +4,7 @@
   "description": "TypeScript web client for Starpeace Online - A browser-based multiplayer tycoon/simulation game",
   "main": "dist/server/server.js",
   "scripts": {
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.e2e.json",
     "build:server": "tsc",
     "build:client": "vite build",
     "build:terrain-test": "esbuild src/client/terrain-test.ts --bundle --outfile=public/terrain-test.js --format=iife",
@@ -27,7 +27,11 @@
     "release": "node scripts/release.js",
     "electron": "npm run build:server && cd electron && npm start",
     "electron:validate": "node scripts/validate-electron-package.js",
-    "electron:dist": "npm run build && npm run build:electron-bundle && cd electron && npm run dist && cd .. && npm run electron:validate"
+    "electron:dist": "npm run build && npm run build:electron-bundle && cd electron && npm run dist && cd .. && npm run electron:validate",
+    "build:e2e": "tsc -p tsconfig.e2e.json",
+    "test:live": "npm run build:e2e && node dist/e2e/run.js",
+    "gate": "node scripts/verify-gate.js",
+    "e2e:unlock": "npm run build:e2e && node dist/e2e/unlock.js"
   },
   "keywords": [
     "starpeace",

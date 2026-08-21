@@ -75,7 +75,7 @@ esac
 # --- Testing -----------------------------------------------------------------
 case "$PROMPT" in
   *e2e*|*playwright*|*smoke*)
-    add "E2E — doc/E2E-STRATEGY.md (where it fits), doc/E2E-TESTING.md (procedure), doc/E2E-SCENARIO.md (L3 script). Credentials are LOCKED. Screenshots via sub-agent only."
+    add "E2E — doc/E2E-POLICY.md (THE GATE: layers, routing, President exclusion, 3-attempt loop), doc/E2E-TESTING.md (L3 browser procedure + smoke script). L2 live WS drive: src/e2e/, npm run test:live. Credentials LOCKED (SPO_test3 mayor, Crazz basic). Screenshots via sub-agent only."
     ;;
 esac
 

@@ -1,0 +1,103 @@
+/**
+ * L2 live-drive configuration — accounts, targets, limits.
+ *
+ * Every value here is a policy constant, not a preference. The accounts are LOCKED
+ * (doc/E2E-POLICY.md §9); changing one needs explicit developer approval.
+ */
+
+import { WORLD_ZONES } from '../shared/types/protocol-types';
+
+export interface E2eAccount {
+  /** Login name — LOCKED. */
+  username: string;
+  /** Password — LOCKED. */
+  password: string;
+  /** What this account is for, used in reports. */
+  role: string;
+}
+
+/** Primary: mayor of Helartia, Minister of Agriculture. Drives governance flows. */
+export const PRIMARY_ACCOUNT: E2eAccount = {
+  username: 'SPO_test3',
+  password: 'test3',
+  role: 'mayor + minister',
+};
+
+/** Secondary: basic account, two buildings. Drives permission-negative and two-party flows. */
+export const SECONDARY_ACCOUNT: E2eAccount = {
+  username: 'Crazz',
+  password: 'test',
+  role: 'basic',
+};
+
+/** The town the primary account governs — the only town a probe may mutate. */
+export const GOVERNED_TOWN = 'Helartia';
+
+export const WORLD_NAME = 'planitia';
+
+/** Free Space, not BETA — planitia lives under America (protocol-types.ts:85). */
+export const ZONE_PATH =
+  WORLD_ZONES.find(z => z.name === 'Free Space')?.path ?? 'Root/Areas/America/Worlds';
+
+/** The local gateway the driver speaks to. It, not the driver, holds the RDO sockets. */
+export const GATEWAY_URL = process.env.E2E_GATEWAY_URL || 'ws://localhost:8080';
+
+/**
+ * The gateway rejects a WebSocket with no Origin unless SINGLE_USER_MODE
+ * (server.ts:1079). The driver is not a browser, so it sends one explicitly.
+ */
+export const GATEWAY_ORIGIN = process.env.E2E_GATEWAY_ORIGIN || 'http://localhost:8080';
+
+export const HTTP_BASE = GATEWAY_URL.replace(/^ws/, 'http');
+
+/** Open IIS listing of the Delphi server logs — read-only, no auth. */
+export const LIVE_LOG_BASE =
+  process.env.E2E_LOG_BASE || 'http://158.69.153.134/logs/FIVEMODELSERVER/';
+
+/**
+ * President-only members. A diff touching one of these blocks the gate and hands
+ * verification to the developer (doc/E2E-POLICY.md §7).
+ *
+ * Source: TPresidentialHall, Kernel/WorldPolitics.pas:261-266, indexed in
+ * doc/civic-roles-reference.md:101-106.
+ */
+export const PRESIDENT_MEMBERS = [
+  'RDOSetMinSalaryValue',
+  'RDOSetTownTaxes',
+  'RDOSitMayor',
+  'RDOSitMinister',
+  'RDOBanMinister',
+  'RDOSetMinistryBudget',
+] as const;
+
+export const TIMEOUTS = {
+  /** One request/response round trip through the gateway. */
+  request: 30_000,
+  /** WebSocket open. */
+  connect: 15_000,
+  /** World login is the slow one — directory + world + company. */
+  login: 60_000,
+  /** How long a write may take to appear in the model-server log. */
+  logSettle: 20_000,
+} as const;
+
+export const LIMITS = {
+  /** Minimum gap between live runs on one branch (doc/E2E-POLICY.md §6). */
+  minIntervalMinutes: numberFromEnv('E2E_MIN_INTERVAL_MINUTES', 10),
+  /** Hard daily cap on live runs from this machine. */
+  maxRunsPerDay: numberFromEnv('E2E_MAX_RUNS_PER_DAY', 20),
+  /** How long a gate artifact stays valid for a push. */
+  gateMaxAgeMinutes: numberFromEnv('GATE_MAX_AGE_MINUTES', 60),
+  /** Attempts before the loop gives up and reports (doc/E2E-POLICY.md §8). */
+  maxAttempts: 3,
+} as const;
+
+/** Where run artifacts and locks live. Gitignored — evidence is per-machine. */
+export const REPORT_DIR = 'report/e2e';
+
+function numberFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}

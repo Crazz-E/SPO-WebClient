@@ -1,8 +1,14 @@
-# E2E Testing — Canonical Procedure (Playwright)
+# E2E Testing — Canonical Procedure (L3, browser)
 
 **This is the single source of truth for driving the app in a real browser.**
-The strategy (layers, coverage gates, mock-first policy) lives in [E2E-STRATEGY.md](E2E-STRATEGY.md).
-`.claude/commands/e2e.md` and the `e2e-test` skill are thin pointers to this file.
+The gate — which layer a change must reach, and what counts as proof — lives in
+[E2E-POLICY.md](E2E-POLICY.md). `.claude/commands/e2e.md` and the `e2e-test` skill are thin
+pointers to this file.
+
+> **L3 is now the narrow layer.** Regression coverage belongs to **L2**, the headless
+> WebSocket drive in `src/e2e/` (`npm run test:live`), which reaches everything below the
+> pixel. Reach for a browser run when the change is one a WebSocket cannot observe —
+> rendering, layout, input, mobile, Electron — or before a release.
 
 > **Selector status (verified live 2026-07-03):** the React UI no longer exposes the legacy
 > `#inp-username` / `#btn-connect` / `#build-menu` IDs that older revisions of this document
@@ -14,17 +20,23 @@ The strategy (layers, coverage gates, mock-first policy) lives in [E2E-STRATEGY.
 > **These credentials MUST be used for ALL live E2E runs. NEVER modify, skip, or substitute
 > them without EXPLICIT developer approval.**
 
-| Field | Value |
-|-------|-------|
-| **Username** | `SPO_test3` |
-| **Password** | `test3` |
-| **Region** | `Free Space` |
-| **World** | `planitia` |
-| **Company** | `SPO_test3 - Green` |
+| Field | Primary | Secondary |
+|-------|---------|-----------|
+| **Username** | `SPO_test3` | `Crazz` |
+| **Password** | `test3` | `test` |
+| **Region** | `Free Space` | `Free Space` |
+| **World** | `planitia` | `planitia` |
+| **Company** | `SPO_test3 - Green` | (its own) |
+| **Holds** | **Mayor of Helartia**, Minister of Agriculture | basic account, 2 buildings |
 
 - Pick **Free Space**, not BETA — the live directory hosts `planitia`/`shamba`/`zorcon` under Free Space; BETA only has `aries`.
-- The account also holds a **Political Office: Minister of Agriculture** (visible on the company-select screen) — usable for ministry-level politics flows. It does **not** have mayor powers: road building and zone overlays remain untestable live.
-- No destructive in-game actions (demolish, spend, create company) — destructive coverage belongs to the mock backend (L2), see E2E-STRATEGY.md.
+- `SPO_test3` **has mayor powers** (verified live 2026-08-20, [civic-roles-reference.md](civic-roles-reference.md): `canGovern` true on the Town Hall). Road building, zone overlays and town governance are testable live. It is **not** president — see the exclusion in [E2E-POLICY.md](E2E-POLICY.md) §7.
+- `Crazz` exists for what one account cannot do: permission-negative checks, mail
+  send→receive, and rating another tycoon's term.
+- **Blast radius** ([E2E-POLICY.md](E2E-POLICY.md) §9): mutations only on Helartia. The
+  second account is touched only by the mail round-trip, which deletes what it sent in the
+  same run — no flow touches its buildings. Never another player's assets, never a
+  world-scope value, never demolish or create-company.
 
 ## Interaction Rules (React UI reality)
 
@@ -132,4 +144,65 @@ sub-agent that returns a text verdict.
 
 On failure capture: the failing step, `getState()` output, `browser_console_messages`, and
 the relevant gateway log lines (`logs/*.ndjson`, filter by `sid`). Report as a per-area
-PASS/FAIL table. The full ordered live-smoke script is [E2E-SCENARIO.md](E2E-SCENARIO.md).
+PASS/FAIL table.
+
+---
+
+## L3 Smoke Script (ordered)
+
+Read-only browser pass with the primary account, run when the diff touches pixels or
+before a release. Everything below the pixel belongs to L2 (`npm run test:live`).
+
+### Phase 0 — Server start
+```
+Bash (background): npm run dev
+Poll http://localhost:8080/api/startup-status until phase:"ready" (~2 min cold)
+browser_navigate → http://localhost:8080
+```
+
+### Phase 1 — Login (MANDATORY, always first)
+Follow the login table above. **Assert** via `getState()`: `session.connected`,
+`worldName === "planitia"`, `companyName` contains `SPO_test3`, `panels.login === false`,
+`wire.errors === 0`.
+
+### Phase 2 — Map render
+**Assert:** `renderer.mapLoaded`, `renderer.buildingCount > 0`, `renderer.canvasHasContent`,
+`canvasSize.width > 0`.
+
+### Phase 3 — Camera controls
+Press `+`, `-` (zoom changes and restores), `q`, `e` (rotation cycles and restores) —
+assert via `renderer.zoom` / `renderer.rotation` after each key.
+
+### Phase 4 — Tycoon stats
+**Assert:** `tycoonStats.cash` starts with `$`; `tycoonStats.ranking` contains `SPO_test3`;
+`buildings` matches `N/M`.
+
+### Phase 5 — Chat ping
+Type `E2E smoke ping` into the chat textbox and send. **Assert:**
+`REQ_CHAT_SEND_MESSAGE` appears in `__spoDebug.history` (the outbound request is the
+assertion; the live world can be slow to echo).
+
+### Phase 6 — Panel sweep (open → close, one pass)
+For each HUD button by `title`: `Build (B)`, `Search`, `Profile (E)`, `Mail (M)`,
+`Settings` — click, assert the matching `panels.*` flag flips true, press `Escape`, assert
+it flips back. Toggle minimap with `m`. Do not click actions inside the panels.
+
+### Phase 7 — Wire health
+**Assert:** `wire.sent > 10`, `wire.received > 10`, `wire.errors === 0`.
+
+### Phase 8 — Clean exit
+Close the browser page (triggers the gateway's `ClientNotAware` → `get Logoff`), stop the
+server, confirm port 8080 is free.
+
+### Report
+
+| Phase | Status |
+|-------|--------|
+| Login | PASS/FAIL |
+| Map render | |
+| Camera | |
+| Stats | |
+| Chat | |
+| Panels | |
+| Wire health | |
+| Clean exit | |

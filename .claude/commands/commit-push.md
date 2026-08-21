@@ -1,7 +1,7 @@
 ---
 description: Commit and push only the changes made during the current session
 argument-hint: "[commit message]"
-allowed-tools: Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git add*), Bash(git commit*), Bash(git push*), Bash(git branch*), Read, Grep, Glob
+allowed-tools: Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git add*), Bash(git commit*), Bash(git push*), Bash(git branch*), Bash(npm run gate*), Read, Grep, Glob
 ---
 
 # Commit and Push Current Session Changes
@@ -56,17 +56,45 @@ EOF
 )"
 ```
 
-### 5. Push
+### 5. Gate (REQUIRED before any push)
+
+The push is blocked by `.claude/hooks/pre-push-gate.sh` unless a fresh PASS artifact exists
+for HEAD. Run the gate **after** committing, so the artifact matches the sha being pushed:
+
+```bash
+npm run gate
+```
+
+It runs typecheck -> lint -> tests -> the President exclusion -> routing -> the L2 live
+drive against planitia, and writes `report/e2e/gate-<sha>.json`.
+
+Handle the outcome by verdict — the rules are [doc/E2E-POLICY.md](../../doc/E2E-POLICY.md) sections 7-8:
+
+| Verdict | Do |
+|---|---|
+| `PASS` | Continue to step 6 |
+| `BLOCKED` + President members | **Stop and tell the developer.** Name the members and the flow to exercise by hand. Never mark it verified yourself. Re-run with `npm run gate -- --manual-verified="..."` only after they confirm |
+| `BLOCKED` + rate limit / dirty world | Not a test failure — nothing ran. Wait out the interval, or clear a dirty world with `npm run e2e:unlock` after restoring it |
+| `ENVIRONMENT` | The servers were not in a state to judge the change. Retry with backoff; **does not** count as one of the three attempts |
+| `FAIL` | Diagnose, write the hypothesis, fix, commit, re-run. **Three attempts maximum, each naming a different root cause.** Never edit a test that was failing in order to make it pass |
+
+After the third failed attempt: push the branch, open a **draft** PR titled `blocked: ...`
+with the three hypotheses and the evidence, append the report to
+[doc/BACKLOG-OPEN.md](../../doc/BACKLOG-OPEN.md), and hand back. Do not merge.
+
+### 6. Push
 
 Push to the current branch with the `-u` flag:
 ```bash
 git push -u origin HEAD
 ```
 
-### 6. Report
+### 7. Report
 
 Print a summary:
 - Branch name
 - Commit hash (short)
 - Files changed (list)
+- Gate verdict, the flows that ran, and each probe's log-line / restore result
 - Push status (success/failure)
+- Whether an L3 browser pass is still owed (the gate says so when the diff touches pixels)
