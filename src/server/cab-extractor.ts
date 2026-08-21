@@ -1,7 +1,8 @@
 /**
  * CAB Extractor - Cross-platform Microsoft Cabinet archive extraction
  *
- * Uses the '7zip-min' npm package (v2) for CAB extraction.
+ * Uses the '7zip-min' npm package (v3) for CAB extraction — its Promise API,
+ * and its own type declarations, which ship with the package since v3.
  * No external tools required - 7zip-min includes precompiled 7za binaries.
  * Works on Windows, Linux, and macOS.
  *
@@ -121,7 +122,7 @@ export async function extractCabArchive(
   }
 
   try {
-    // Extract using 7zip-min native Promise API (v2)
+    // Extract using 7zip-min native Promise API
     await _7z.unpack(cabPath, targetDir);
 
     // Get list of extracted files, excluding the source CAB file itself
@@ -157,7 +158,7 @@ export async function listCabContents(cabPath: string): Promise<CabFileInfo[] | 
   }
 
   try {
-    // 7zip-min list() native Promise API (v2)
+    // 7zip-min list() native Promise API
     const output = await _7z.list(cabPath);
     return parse7zList(output);
   } catch (error: unknown) {
