@@ -511,6 +511,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  /* The SaveIndicator here carries a sentence, not a tick (TaxesTab's
+     TAX_EFFECTIVE_NOTICE). It drops to its own line rather than squeezing
+     the tax name when the modal is narrow. */
+  flex-wrap: wrap;
 }
 
 .taxModes {

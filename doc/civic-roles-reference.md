@@ -406,20 +406,33 @@ to its starting values and the model-server log confirms it.
 | `canGovern` on the Town Hall | **true** |
 | `canGovern` on the Capitol | **false** — SPO_test3 is not president |
 | `townTaxes` shape | 47 taxes, `Tax0Id=100` (Farms), `Tax0Name0` with no dot, `Tax0Kind='0'` |
-| `RDOSetTaxValue` rate | lands and reads back, **as the role company** |
+| `RDOSetTaxValue` rate | lands — the read-back lags, see the cache note below |
 | `RDOSetTaxValue` subsidy | literal `-10` lands and reads back **negative** |
 | `RDOSetMinSalaryValue` | lands; `hiMinSalary` is the value written, `hiActualMinSalary` the world floor (0 here) |
 | `capitolTowns` | 25 towns, 7 with a mayor, `HasMayor{i}` present |
 | `ministeries` | 8 ministries, `MinistryId0=1` — **one-based, as `Standards.pas:7-14` says** |
 | PoliticsData | mayor=SPO_test3, 15 rows on each ratings rail, publicity 15 rows |
 
-Two defects the run exposed are filed as `OB-28` (a write is reported confirmed when it was
-discarded) and `OB-29` (a mayor's writes need the **role** company, but the controls show on any
-company). Read both before touching the civic write path.
+Four defects are filed against the civic write path — read them before touching it: `OB-28` (a
+write is reported confirmed when it was discarded), `OB-29` (a tax write lands but the cached copy
+the client reads is never invalidated), `OB-30` (nobody can rate their own term — closed, and the
+reference agrees) and `OB-31` (the ruler test needs two prongs, not one).
 
-**Cache latency:** a civic write takes **30–90 s** to appear in the cacher, because
-`ModelServerCache.BackgroundInvalidateCache` is asynchronous. Any test that writes and immediately
-re-reads will see the old value and must not conclude the write failed.
+⚠ `OB-29` **replaced an earlier entry that said a mayor's writes need the role company.** That was
+wrong: `MasterRole` climbs to the role holder (`Kernel/Kernel.pas:10960-10965`), so
+`Mayor of Helartia` and `SPO_test3` are the same `TTycoon` as far as `CheckOpAuthenticity` is
+concerned. Do not re-derive the old conclusion from the same symptom.
+
+**Cache latency — and why it is not just latency.** A tax write takes **30–90 s** to appear, and
+that is not `BackgroundInvalidateCache` being asynchronous. `RDOSetTaxValue` invalidates
+`Facility.Town` (`Kernel/Population.pas:1285`) while `Tax<i>Percent` is stored on the Town Hall
+**facility** (`:1061`/`:1243`) — the invalidation misses the object entirely, and the value only
+returns when the facility's own TTL lapses. That TTL is **two minutes**: `CreateTTL(0,0,2,0)` at
+`:1192`, signature `CreateTTL(Days, Hours, Min, Sec)` (`Cache/CacheCommon.pas:66`), re-checked on
+every `SetObject` (`Cache/CachedObjectWrap.pas:320`). It is also an opt-in — everything else
+defaults to `NULLTTL` and re-pulls on every read (`Cache/CacheAgent.pas:90`).
+`RDOSetMinSalaryValue` invalidates `Facility` (`:1300`) and does not have the problem. Any test that writes and immediately re-reads will see the old value and must
+not conclude the write failed.
 
 ### Deliberate divergences
 

@@ -976,7 +976,7 @@ export interface PoliticsRatingEntry {
    *
    * Only the two pages that let you CHANGE a value carry it in their markup:
    * `tycoonratings.asp:135` and `mayorpub.asp` render `<tr id=<Id>>`.
-   * `popularratings.asp:66` and `ifelratings.asp:63` render the same row
+   * `popularratings.asp:66` and `ifelratings.asp:64` render the same row
    * WITHOUT an id — those two tabs are read-only, so their entries have none.
    */
   id?: string;
@@ -986,7 +986,7 @@ export interface PoliticsRatingEntry {
  * One row of the PUBLICITY tab (`mayorpub.asp`).
  *
  * `level` is the raw 0/25/50/75/100 the `<select>` posts, not the label:
- * `RulerPublicity` is quantised to 25 (`mayorpub.asp:180`) and the five labels
+ * `RulerPublicity` is quantised to 25 (`mayorpub.asp:169`) and the five labels
  * Lowest..Highest are just its rendering (`ePolitics.lng` StrMayorPub_5..9).
  */
 export interface PoliticsPublicityEntry {

@@ -6,8 +6,50 @@
  *   IFEL's RATING    read-only  (`ifelratings.asp`)
  *   PUBLICITY        ruler only (`mayorpub.asp` -> RDOSetPublicity)
  *
- * `ratingtabs.asp:75-135` hides all but IFEL when the seat is vacant
+ * `ratingtabs.asp:76`/`:122` hide all but IFEL when the seat is vacant
  * (`if Obj.HasRuler`) — there is nobody to rate and nobody buying publicity.
+ *
+ * ## Nobody rates themselves
+ *
+ * `RDOSetRatingFrom` drops the whole call when the sender resolves to the
+ * incumbent:
+ *
+ *     if (Tycoon <> nil) and (Tycoon.MasterRole <> PoliticalTown.Mayor.MasterRole)
+ *
+ * `Kernel/TownPolitics.pas:195`. Silently — it is a `procedure`, so nothing
+ * comes back, and the surrounding `try/except` swallows the rest. `MasterRole`
+ * climbs to the role holder (`Kernel/Kernel.pas:10960-10965`), so playing the
+ * mayor's own role company does not get around it either: both identities
+ * resolve to the same tycoon.
+ *
+ * The UI must therefore prevent the gesture rather than report a failure —
+ * there is no failure to report. `isRuler` is the gate, and it compares against
+ * the human login name, which company switching never changes.
+ *
+ * Verified live 2026-08-20: `Setting town politics Tycoon rating: SPO_test3,
+ * College, 90` on the Helartia Town Hall, of which SPO_test3 is mayor. The
+ * model server logged the entry and changed nothing.
+ *
+ * ### What the reference page does, and what it was meant to do
+ *
+ * `tycoonratings.asp` wrote the same gate and then switched it off:
+ *
+ *     'IsMayor = (Ucase(TycoonName) = Ucase(Obj.ActualRuler)) or ...   ' :24
+ *     IsMayor = true                                                   ' :25
+ *     var canModify = <% if not IsMayor then %>true<% ... %>            ' :53
+ *
+ * `canModify` guards `onRowMouseClick` (`:76`), and that handler is the only
+ * thing that un-hides the `<select>` — the control ships inside a
+ * `display: none` div (`:149-151`). So the INTENT is exactly what this rail now
+ * does: no rating control for the office holder. The shipped page goes further
+ * by accident — with `IsMayor` forced true, the inline control is unreachable
+ * for *everyone*, and the footer sends all readers to the newspaper forum
+ * (`StrTycoonRatings_3`, `ePolitics.lng:52`).
+ *
+ * We implement the intent and keep the control for everyone else, which the
+ * server accepts. The one thing not copied is the mayor's footer text: Voyager
+ * points them at the newspaper, but that path reaches the same guarded
+ * `RDOSetRatingFrom`, so it would be advice that cannot work.
  */
 
 import { useCallback } from 'react';
@@ -31,12 +73,14 @@ const RAIL_LABELS: Record<RatingRail, string> = {
 
 /**
  * The eleven values Voyager's own rating form offers — 0 to 100 by 10
- * (`boardmsg.asp:344-355`). The in-page dropdown of `tycoonratings.asp:154-158`
- * offers only five; the wider range is the one the server has always accepted.
+ * (`boardmsg.asp:339-349`, above a `<option value="-">` placeholder at `:338`).
+ * The in-page dropdown of `tycoonratings.asp:154-158` offers only five, and is
+ * unreachable anyway (see the module note); the wider range is the one the
+ * server has always accepted.
  */
 const RATING_CHOICES = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0];
 
-/** `mayorpub.asp:187-191` — five levels, labels from `ePolitics.lng:8-12`. */
+/** `mayorpub.asp:182-186` — five levels, labels from `ePolitics.lng:7-11`. */
 const PUBLICITY_CHOICES: Array<{ value: number; label: string }> = [
   { value: 100, label: 'Highest' },
   { value: 75, label: 'High' },
@@ -132,9 +176,10 @@ export function RatingsRail({ data }: RatingsRailProps) {
                           {rating.value}%
                         </td>
                         <td>
-                          {/* A row with no cache id has no RatingId to send back
-                              — the rail shows it, but it cannot be rated. */}
-                          {rating.id === undefined ? (
+                          {/* Two rows carry no control. A row with no cache id
+                              has no RatingId to send back; and the office holder
+                              cannot rate their own term at all — see isRuler. */}
+                          {isRuler || rating.id === undefined ? (
                             <span className={styles.ratingUnavailable}>—</span>
                           ) : (
                             <select
@@ -155,14 +200,21 @@ export function RatingsRail({ data }: RatingsRailProps) {
                   })}
                 </tbody>
               </table>
-              {/* StrTycoonRatings_1 — ePolitics.lng:50. The sent value is not the
-                  new rating: the server mixes it with everyone else's, weighted
-                  by prestige, and the figure above only moves at the next cache. */}
-              <p className={styles.railNote}>
-                Values you send are marked. They are mixed with those sent by other
-                tycoons, weighted by personal prestige, and take effect at the next
-                survey — the rating shown does not change immediately.
-              </p>
+              {isRuler ? (
+                <p className={styles.railNote}>
+                  You cannot rate your own term in office. These are the other
+                  tycoons&apos; opinions of it.
+                </p>
+              ) : (
+                /* StrTycoonRatings_1 — ePolitics.lng:50. The sent value is not the
+                   new rating: the server mixes it with everyone else's, weighted
+                   by prestige, and the figure above only moves at the next cache. */
+                <p className={styles.railNote}>
+                  Values you send are marked. They are mixed with those sent by other
+                  tycoons, weighted by personal prestige, and take effect at the next
+                  survey — the rating shown does not change immediately.
+                </p>
+              )}
             </>
           )
         )}
@@ -187,8 +239,8 @@ export function RatingsRail({ data }: RatingsRailProps) {
                       <tr key={row.id}>
                         <td>{row.name}</td>
                         <td>
-                          {/* `mayorpub.asp:52` — only the office holder may move
-                              these, and `rdoModifyPub.asp:15` re-checks it. */}
+                          {/* `mayorpub.asp:50` — only the office holder may move
+                              these, and `rdoModifyPub.asp:14` re-checks it. */}
                           {isRuler ? (
                             <select
                               className={styles.ratingSelect}
@@ -211,7 +263,7 @@ export function RatingsRail({ data }: RatingsRailProps) {
               </table>
             )}
             {isRuler && (
-              /* StrMayorPub_3 / StrMayorPub_1 — ePolitics.lng:3,6 */
+              /* StrMayorPub_3 / StrMayorPub_1 — ePolitics.lng:5,3 */
               <p className={styles.railNote}>
                 Change the priorities to distribute your publicity time. Configure
                 the providers themselves on the Town Hall&apos;s Advertisement settings.

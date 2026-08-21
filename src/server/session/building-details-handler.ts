@@ -430,9 +430,24 @@ export async function getBuildingTabData(
 
 /**
  * Lightweight refresh: re-read building-level properties on the SAME
- * Delphi temp object. Does NOT create a new temp object, does NOT call
- * cacherSetObject or cacherCreateObject. Matches the Delphi client's
- * TObjectInspectorContainer.Refresh behavior.
+ * Delphi temp object, without creating a new one (`cacherCreateObject`) and
+ * without re-focusing the building.
+ *
+ * It DOES call `cacherSetObject`, and that call is the whole point — the
+ * earlier claim that it did not was wrong and, taken at face value, describes
+ * a refresh that can never see new data. `SetObject` is the only door through
+ * which a stale cached object is re-pulled from the model server: it lands in
+ * `TCachedObjectWrap.SetToObject`, which compares `ppLastMod` against the
+ * object's `ppTTL` and calls `UpdateCache` when it has lapsed
+ * (`Cache/CachedObjectWrap.pas:305-343`). Drop the call to match the old
+ * comment and the panel goes permanently blind: `GetPropertyList` would keep
+ * serving whatever snapshot the object was opened on. The reset to building
+ * root — a previous tab request may have left the object on a gate sub-path —
+ * is the second reason it is there.
+ *
+ * `TObjectInspectorContainer.Refresh` is the Voyager analogue, but not the same
+ * mechanism: it calls `TCachedObjectWrap.Refresh`, which only re-reads the
+ * cache file from disk (`:297-303`) and never asks the model server.
  *
  * Falls back to getBuildingBasicDetails() if no ActiveInspector exists
  * (e.g., first load or after session reconnect).
