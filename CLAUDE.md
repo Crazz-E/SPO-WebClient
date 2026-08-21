@@ -105,6 +105,35 @@ hand-maintained and has misclassified members before** — it once listed a `pro
 For a member's kind or arity, open the `.pas` and read the declaration; the index is a finding
 aid, not an authority.
 
+## Legacy web source — `../SPO-ASP`
+
+The other half of the original client: the **ASP pages IIS serves**, which is where the
+Politics, News and campaign screens actually live. Not in `SPO-Original` — the two are
+separate trees, and `doc/` cited `tycoonratings.asp` line numbers for months with no way to
+open them.
+
+```
+../SPO-ASP/Five/<n>/Visual/Voyager/...   the per-world instances, 0..5
+../SPO-ASP/Five/<n>/language/*.lng       the UI strings the pages interpolate
+../SPO-ASP/Five/Visual/...               the template the instances were cut from — DIFFERENT
+```
+
+**Cite `Five/0`.** The six instances are byte-identical to each other and `Five/0` is the path
+the gateway fetches (`buildAspUrl`, `spo_session.ts:927`); the bare `Five/` template diverges,
+so a line number from it lands on other code.
+
+Two things the pages are the authority for, and the Pascal is not:
+
+- **What the reference client demonstrably emitted** — `rdoModifyRating.asp:24-27` shows the
+  `BindTo(TownHallId)` and the argument order for `RDOSetRatingFrom`.
+- **Which controls a player was actually offered.** Read the guard, not just the markup: a
+  `<select>` can ship inside a `display: none` div that only a `canModify`-gated handler
+  reveals (`tycoonratings.asp:53`, `:76`, `:149-151`). ⚠ And read the ASP, not the comment —
+  `tycoonratings.asp:24-25` has the real test commented out and the result hardcoded `true`.
+
+`Five/Client/Cache/` is the client's **map image** cache (`images.cab`), not the model server's
+object cache — it cannot tell you what a cached property currently holds.
+
 ## Directory-scoped memory
 
 Four nested `CLAUDE.md` files carry the local rules and load automatically when you work in

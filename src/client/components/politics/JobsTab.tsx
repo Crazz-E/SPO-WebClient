@@ -3,7 +3,7 @@
  * Executive (hi*), Professional (mid*), Worker (lo*)
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { useClient } from '../../context';
 import { SaveIndicator } from '../building/SaveIndicator';
@@ -107,6 +107,9 @@ export function JobsTab({ properties, buildingX, buildingY, isCapitol, canGovern
           </div>
           <MinWageSlider
             value={cls.minWage}
+            // Same wording as the label above it, so the accessible name says
+            // WHICH of the two floors this slider writes — see that comment.
+            label={`${cls.label} minimum wage (${isCapitol ? 'world' : 'town'})`}
             levelIndex={String(i)}
             buildingX={buildingX}
             buildingY={buildingY}
@@ -120,12 +123,15 @@ export function JobsTab({ properties, buildingX, buildingY, isCapitol, canGovern
 
 function MinWageSlider({
   value: initialValue,
+  label,
   levelIndex,
   buildingX,
   buildingY,
   editable,
 }: {
   value: number;
+  /** Accessible name — three identical sliders sit side by side. */
+  label: string;
   levelIndex: string;
   buildingX: number;
   buildingY: number;
@@ -133,16 +139,28 @@ function MinWageSlider({
 }) {
   const client = useClient();
   const [value, setValue] = useState(initialValue);
+  /**
+   * The last figure we put on the wire. `next === initialValue` alone does not
+   * dedup a gesture: three events end one (pointer up, key up, and the blur
+   * that follows either), and all three carry the SAME new value, which
+   * differs from `initialValue` every time. Cleared by the resync below, so a
+   * figure can be set again once the town has moved off it.
+   */
+  const lastSent = useRef<number | null>(null);
   const pendingKey = `RDOSetMinSalaryValue:{"levelIndex":"${levelIndex}"}`;
 
   // Re-sync when the server sends a fresh figure. Without this the local state
   // captured at mount wins forever, and the 30 s auto-refresh leaves the slider
   // showing a value the town no longer has.
-  useEffect(() => { setValue(initialValue); }, [initialValue]);
+  useEffect(() => {
+    setValue(initialValue);
+    lastSent.current = null;
+  }, [initialValue]);
 
   const commitValue = useCallback(
     (next: number) => {
-      if (next === initialValue) return;
+      if (next === initialValue || next === lastSent.current) return;
+      lastSent.current = next;
       client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetMinSalaryValue', String(next), { levelIndex });
     },
     [client, buildingX, buildingY, levelIndex, initialValue],
@@ -153,6 +171,7 @@ function MinWageSlider({
       <input
         type="range"
         className={styles.slider}
+        aria-label={label}
         min={0}
         max={200}
         step={1}

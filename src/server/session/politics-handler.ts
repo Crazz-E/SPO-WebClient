@@ -199,6 +199,42 @@ export function parsePublicityAds(html: string): string {
 }
 
 /**
+ * Is the session operating as the ruler of this entity?
+ *
+ * `tycooncampaign.asp:98` — the reference test, and it has two prongs:
+ *
+ *     IsMayor = (Ucase(TycoonName) = Ucase(Town.ActualRuler))
+ *            or (Ucase(TycoonName) = Ucase("Mayor of " + Town.Name))
+ *
+ * The second prong is not decoration. `TycoonName` is whatever identity the
+ * page is fetched with, and ours becomes the ROLE name the moment the player
+ * selects their role company (`switchCompany` sets `activeUsername` to
+ * `company.ownerRole`, login-handler.ts:660). `ActualRuler` stays the human
+ * name, so prong one alone reports the mayor as a stranger to their own
+ * campaign page for exactly the session in which they are most likely to be
+ * reading it.
+ *
+ * We add a third comparison the ASP had no need of: the human login name
+ * against `ActualRuler`. The gateway keeps both identities, so it can answer
+ * the question directly instead of inferring it from a name prefix.
+ *
+ * On the Capitol the prefix prong is inert — the reference hardcodes
+ * `"Mayor of "` there too, and a Capitol's ruler is a president — so the first
+ * and third prongs carry it, as they do in the reference.
+ *
+ * @internal Exported for unit tests.
+ */
+export function holdsOffice(ctx: SessionContext, rulerName: string, townName: string): boolean {
+  const ruler = rulerName.toLowerCase();
+  if (ruler === '') return false;
+  const active = (ctx.activeUsername || '').toLowerCase();
+  const human = (ctx.cachedUsername || '').toLowerCase();
+  return (active !== '' && active === ruler)
+    || (human !== '' && human === ruler)
+    || (active !== '' && active === `mayor of ${townName.toLowerCase()}`);
+}
+
+/**
  * Fetch one Politics ratings page.
  *
  * `resp.ok` is the only signal these pages give for "page missing", and it went
@@ -763,8 +799,7 @@ export async function getPoliticsData(
         `${baseUrl}/tycooncampaign.asp?${params.toString().replace(/\+/g, '%20')}`,
         'campaign panel',
       );
-      const me = (ctx.activeUsername || ctx.cachedUsername || '').toLowerCase();
-      const isRuler = me !== '' && rulerData.mayorName.toLowerCase() === me;
+      const isRuler = holdsOffice(ctx, rulerData.mayorName, townName);
       ({ state: campaignState, message: campaignMessage } = parseCampaignState(campaignHtml, isRuler));
       projects = parseCampaignProjects(campaignHtml);
       promise = parseCampaignPromise(campaignHtml);

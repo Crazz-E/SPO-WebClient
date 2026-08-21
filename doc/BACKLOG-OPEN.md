@@ -402,40 +402,177 @@ value that was sent instead of against the empty string.
 - **Source:** live run 2026-08-20; gateway log `[BuildingDetails] Property RDOSetTaxValue
   confirmed at 12` while the sent value was `-10`.
 
-### 🔴 OB-29 · A mayor's writes are refused unless the session operates as the ROLE company
+### 🟠 OB-29 · A tax write lands, but the cache the client reads is never told
 
-`SPO_test3` holds two relevant companies: `SPO_test3 - Green` (ordinary) and `Helartia`,
-whose `ownerRole` is `Mayor of Helartia`. The Town Hall is owned by the mayor role.
+**Superseded 2026-08-20 (evening).** This entry previously read *"a mayor's writes are
+refused unless the session operates as the ROLE company"* and told the developer to choose
+between gating `canGovern` on the current company or surfacing a hint. Both the diagnosis
+and the choice were wrong. The company has nothing to do with it.
 
-- Session on **`SPO_test3 - Green`** → the model server logs the call
-  (`Setting Tax value: Helartia, 100, 37`) and the cached value never changes.
-- Session on **`Helartia`** → the same call lands and the cache refreshes.
+#### What the code says
 
-`Facility.CheckOpAuthenticity` is the discriminator (`Kernel/Kernel.pas:13117`), and
-`OB-13` already recorded that selecting a role company re-logs the world session under
-the role name.
+`TTownHall.RDOSetTaxValue` splits in two (`Kernel/Population.pas:1250-1289`):
 
-**What makes this a UI defect rather than a server rule:** the civic controls are shown
-in both cases, because `canGovern` is decided by `grantAccess` over the facility's
-SecurityId — and that list contains the human's own tycoon address as well as the role's
-(`-296197588--295583672--`), so it grants either session. Voyager behaves identically. On
-an ordinary company the mayor therefore gets editable sliders that do nothing and say
-nothing.
+```pascal
+Tax := Facility.Town.Taxes[IntToStr(TaxId)];
+if Tax <> nil then Tax.ParseValue( Value );                    // :1257-1258 — always
+...
+ModelServerCache.BackgroundInvalidateCache( Facility.Town );   // :1285 — the TOWN
+```
 
-Note the asymmetry in `TTownHall.RDOSetTaxValue` (`Kernel/Population.pas:1250-1288`):
-`Tax.ParseValue` runs **outside** the authenticity guard while
-`ModelServerCache.BackgroundInvalidateCache` runs **inside** it. So on a non-role session
-the model may well change while the cache is never told — which is exactly the shape of
-what was observed. `RDOSetMinSalaryValue` (`:1292-1305`) guards its whole body and has no
-such split.
+The rate changes unconditionally. What is guarded is only the cache invalidation — and
+that invalidation names the **wrong object**. `Tax<i>Percent` is written by
+`TTownHall.StoreToCache` (`:1061`, via `StoreTaxes` at `:1243`) onto the **Town Hall
+facility's** cache object, which is the one the client reads with `cacherSetObject(x, y)`.
+`InvalidateObject` resolves the path of exactly the object it is handed
+(`Cache/MSCacheSpool.pas:159-169`), so invalidating the Town leaves the facility's copy
+standing.
 
-Decide between: gate `canGovern` on the session's current company matching the facility
-owner (diverges from Voyager, kills the dead control), or keep parity and surface a hint
-telling the mayor to switch to their role company. **This is a design call and was left
-for the developer.**
+Compare `RDOSetMinSalaryValue` three lines below (`:1300`):
+`BackgroundInvalidateCache( Facility )` — the facility. That one shows up promptly, which
+is why the original run read the difference as "role company works, ordinary company does
+not". It was reading the difference between two members, not between two sessions.
 
-- **Source:** live run 2026-08-20, both companies exercised against the same Town Hall;
-  model-server `Survival 26-08-20.log`.
+#### Why the company cannot be the discriminator
+
+`CheckOpAuthenticity` walks `Facility → Company → Owner.MasterRole` and compares it to the
+thread-local identity set by `RDOLogonClient` (`Kernel/World.pas:5038-5048`). `MasterRole`
+climbs to the role holder (`Kernel/Kernel.pas:10960-10965`), so `Mayor of Helartia` and
+`SPO_test3` resolve to the **same `TTycoon`**. The guard cannot tell them apart.
+
+#### The evidence
+
+`Survival 26-08-20.log` crossed with `FIVEINTERFACESERVER/Survival 26-08-20.log`:
+
+| Time | Log | Identity in session |
+|------|-----|---------------------|
+| 8:23:25 PM | `LOGON ATTEMPT: User=Mayor of Helartia` | role company |
+| 8:23:53 PM | `Setting Tax value: Helartia, 520, 12` | role company |
+| 8:24:34 PM | `Setting Tax value: Helartia, 520, 14` | role company |
+| 8:25:01 PM | `LOGON ATTEMPT: User=SPO_test3` | ordinary company |
+| 8:25:26 PM | `Setting Tax value: Helartia, 520, 16` | ordinary company |
+| 8:25:42 PM | `Caching Town..` | — |
+
+Both identities behaved identically. And `Caching facilities...` appears **once in the
+whole day**, at 5:17 PM on server start — the Town Hall facility is never re-cached on a
+tax write, whoever sends it.
+
+#### What actually makes the value reappear
+
+The facility's own TTL, and it is **two minutes** — verified, not inferred.
+`TTownHall.StoreToCache` writes `CreateTTL(0,0,2,0)` (`:1192`), and the signature is
+`CreateTTL(Days, Hours, Min, Sec)` (`Cache/CacheCommon.pas:66`, implementation `:75-84`;
+`TTLToDateTime` decodes it back at `:86-106`). It is re-checked on every `SetObject`:
+`TCachedObjectWrap.SetToObject` compares `ppLastMod` against `ppTTL` and calls
+`UpdateCache` when it has lapsed (`Cache/CachedObjectWrap.pas:305-343`).
+
+Two minutes is an **opt-in**, which is what makes the Town Hall unusual. Every cached
+object starts at `NULLTTL` (`Cache/CacheAgent.pas:90`), a zero duration
+(`CacheCommon.pas:34`) that makes `Now - LastMod > 0` true on every read — so the rest of
+the world re-pulls constantly and never shows this symptom. The Town Hall overwrites that
+default in its own `StoreToCache`, and it is the object whose invalidation is broken.
+
+There is no way to force it from our side: `TCachedObjectWrap.UpdateCache` is private
+(`:49` — the published surface is `:17-33`), and the published `Refresh` only re-reads the
+cache file from disk (`:297-303`) without asking the model server.
+
+#### Where that leaves us
+
+Nothing to gate. `canGovern` is correct as it stands, and the write is not refused.
+
+- **Done** — the tax editor no longer shows a confirmation tick. `TaxesTab` passes
+  `SaveIndicator` a `confirmedMessage`, so the mayor gets a sentence about when the rate
+  takes effect instead of a claim the client cannot support. See also `OB-28`, which is
+  the same lie one layer down and is still open on the gateway side: `confirmed` still
+  means "the property is readable".
+- **Still worth deciding** — whether the 30 s inspector poll
+  (`BuildingInspector.tsx:36`) should be tightened for civic buildings, given the value
+  cannot move faster than the TTL anyway. Probably not: the poll already costs a full
+  details round-trip and is not the bottleneck.
+
+- **Source:** live run 2026-08-20 evening, both companies exercised against the same Town
+  Hall; `FIVEMODELSERVER/Survival 26-08-20.log` and `FIVEINTERFACESERVER/Survival
+  26-08-20.log` on `158.69.153.134`.
+
+### 🟢 OB-30 · A tycoon cannot rate their own term — closed, and the reference agrees
+
+`RDOSetRatingFrom` drops the call when the sender resolves to the incumbent:
+
+```pascal
+if (Tycoon <> nil) and (Tycoon.MasterRole <> PoliticalTown.Mayor.MasterRole)
+```
+`Kernel/TownPolitics.pas:195`. Silently — a `procedure` answers nothing and the body sits
+inside `try/except`. Confirmed live: `Setting town politics Tycoon rating: SPO_test3,
+College, 90` at 8:25:54 PM against the Helartia Town Hall, of which SPO_test3 is mayor.
+Nothing changed.
+
+**Closed on the client** — `RatingsRail` renders `—` and an explanation for the office
+holder rather than a live `<select>` (`RatingsRail.tsx:156`, `:180`).
+
+#### Parity, now that `../SPO-ASP` exists
+
+The entry was previously left open because the ASP pages were unreachable. They are in
+place now, and they settle it — the reference page wrote the same gate and then switched
+it off:
+
+```asp
+'IsMayor = (Ucase(TycoonName) = Ucase(Obj.ActualRuler)) or (Ucase(TycoonName) = Ucase("Mayor of " + Obj.Name))
+IsMayor = true
+```
+`Visual/Voyager/Politics/tycoonratings.asp:24-25` — the real test **commented out**, the
+result hardcoded. It feeds `var canModify = <% if not IsMayor then %>true…` (`:53`), which
+guards `onRowMouseClick` (`:76`), which is the only thing that un-hides the `<select>` —
+the control ships inside a `display: none` div (`:149-151`).
+
+So the intent is exactly what we implement: **no rating control for the office holder.**
+What actually shipped is worse than either — with `IsMayor` forced true the inline rating
+is unreachable for *everyone*, and every reader gets the mayor footer telling them to use
+the newspaper forum (`StrTycoonRatings_3`, `language/ePolitics.lng:52`).
+
+We keep the control for everyone else, which the server accepts. We do **not** copy the
+mayor's footer text: it points at `boardmsg.asp`, which reaches the same guarded
+`RDOSetRatingFrom`, so it would be advice that cannot work.
+
+- **Source:** `../SPO-ASP/Five/0/Visual/Voyager/Politics/` — the six world instances
+  `Five/0` … `Five/5` are byte-identical; `Five/` (the template) differs. Cite `Five/0`,
+  which is the path the gateway actually fetches.
+
+### 🔴 OB-31 · The campaign panel misreads the ruler when they play their role company
+
+`politics-handler.ts` decided "am I the ruler?" with one comparison, against the ACTIVE
+identity:
+
+```ts
+const me = (ctx.activeUsername || ctx.cachedUsername || '').toLowerCase();
+const isRuler = me !== '' && rulerData.mayorName.toLowerCase() === me;
+```
+
+`activeUsername` becomes the ROLE name the moment the player selects their role company
+(`switchCompany`, `login-handler.ts:660`), while `ActualRuler` stays the human name. So a
+mayor reading their own campaign page from their mayoral company was reported as a
+stranger to it, and `parseCampaignState` was handed the wrong flag.
+
+The reference has two prongs for exactly this reason:
+
+```asp
+IsMayor = (Ucase(TycoonName) = Ucase(Town.ActualRuler)) or (Ucase(TycoonName) = Ucase("Mayor of " + Town.Name))
+```
+`tycooncampaign.asp:98`; same shape at `opositiondata.asp:29`, `mayorpub.asp:24` (with the
+prefix taken from `StrMayorPub_2 = "Mayor of "`, `ePolitics.lng:4`) and
+`tycooncampaignnoelections.asp:98`.
+
+**Fixed** — `holdsOffice` (`politics-handler.ts`) implements both prongs plus a third the
+ASP had no way to express: the human login name against `ActualRuler`. The gateway holds
+both identities, so it answers the question directly instead of inferring it from a name
+prefix. On the Capitol the prefix prong is inert — the reference hardcodes `"Mayor of "`
+there too — and the other two carry it, as they do in the reference.
+
+Still open as an entry because **the same two-pronged question is asked in more than one
+place** and only this one was audited: `RatingsRail.tsx` compares the human login name
+client-side (correct, but by a different route), and nothing has swept the rest of the
+civic surface for other single-prong ruler tests.
+
+- **Source:** found while verifying OB-30 against `../SPO-ASP`, 2026-08-20.
 
 ---
 

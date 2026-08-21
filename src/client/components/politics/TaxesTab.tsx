@@ -21,7 +21,7 @@
  * the currency editor below is faithful but, on shipped data, unreachable.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { useClient } from '../../context';
 import { SaveIndicator } from '../building/SaveIndicator';
@@ -44,6 +44,29 @@ const TAX_KIND_VALUE = 1;
  * number, and offering a negative slider would invent a mechanic.
  */
 const SUBSIDY_VALUE = '-10';
+
+/**
+ * What replaces the green tick on a tax write.
+ *
+ * The tick claims "the server holds this value now", and nothing here can
+ * support that claim. `RDOSetTaxValue` is a `procedure`, so no answer comes
+ * back, and the read-back the gateway performs reads a cached copy that the
+ * server never invalidates: it invalidates the TOWN (`Kernel/Population.pas:1285`)
+ * while `Tax<i>Percent` is written onto the TOWN HALL facility
+ * (`TTownHall.StoreToCache`, `:1061`/`:1243`). The figure therefore only moves
+ * when that facility's own TTL lapses. That TTL is **two minutes**:
+ * `CreateTTL(0,0,2,0)` at `:1192`, and the signature is
+ * `CreateTTL(Days, Hours, Min, Sec)` (`Cache/CacheCommon.pas:66`). It is
+ * re-checked on every SetObject (`Cache/CachedObjectWrap.pas:320`). Two minutes
+ * is a deliberate exception, not the norm — every other object defaults to
+ * `NULLTTL`, a zero duration that re-pulls on every read
+ * (`Cache/CacheAgent.pas:90`, `CacheCommon.pas:34`).
+ *
+ * The rate itself is set at once — `Tax.ParseValue` runs outside the
+ * authenticity guard (`:1257-1258`) — it is only collected later, at the next
+ * `perYear` boundary (`Kernel/Kernel.pas:4176-4184`).
+ */
+const TAX_EFFECTIVE_NOTICE = 'The new tax rate will take effect tomorrow.';
 
 interface TaxRow {
   index: number;
@@ -163,8 +186,45 @@ function TaxEditor({
   const [rate, setRate] = useState(Math.abs(row.percent));
   const pendingKey = `RDOSetTaxValue:{"index":"${row.index}"}`;
 
-  const commitRate = useCallback(
-    (next: number) => onCommit(row, String(next)),
+  /**
+   * The signed value we believe the town holds — the server's when nothing has
+   * been sent, otherwise the last thing we sent it. Signed, so a subsidy (`-10`)
+   * and the rate it hides behind (`10`) are two different states.
+   *
+   * It is the whole guard. Three events end one gesture (pointer up, key up,
+   * and the blur that follows either), and the tab used to emit on all three:
+   * the live run of 2026-08-20 shows every value arriving twice — `520, 12` at
+   * 8:23:53 and again at 8:23:58, `520, 14` twice, `520, 16` twice. The first
+   * pair was not even a change: the row already stood at 12, and selecting it
+   * then clicking away wrote 12 back. Each non-subsidy write also posts an
+   * event to the town's news feed (`Kernel/Population.pas:1265-1276`), so a
+   * duplicate is visible in the game, not just on the wire.
+   */
+  const lastSent = useRef<number>(row.percent);
+
+  // The server has the last word. It takes up to two minutes to get it — the
+  // Town Hall's cache TTL, see TAX_EFFECTIVE_NOTICE — and until then this must
+  // not snap back, so it reacts to the figure changing rather than to every
+  // refresh. Clearing the guard here is what lets a rate be set again after the
+  // town has moved off it.
+  useEffect(() => {
+    setRate(Math.abs(row.percent));
+    lastSent.current = row.percent;
+  }, [row.percent]);
+
+  /**
+   * One frame per gesture, and never a value the town already carries.
+   *
+   * `wire` exists so the subsidy keeps reaching the server as the literal
+   * `SUBSIDY_VALUE` rather than as a number this function re-rendered — the
+   * guard needs a number, the wire wants the string Voyager sends.
+   */
+  const commit = useCallback(
+    (percent: number, wire: string = String(percent)) => {
+      if (percent === lastSent.current) return;
+      lastSent.current = percent;
+      onCommit(row, wire);
+    },
     [onCommit, row],
   );
 
@@ -181,7 +241,7 @@ function TaxEditor({
     <div className={styles.taxEditor}>
       <div className={styles.taxEditorHeader}>
         <span className={styles.sectionTitle}>{row.name}</span>
-        <SaveIndicator propertyKey={pendingKey} />
+        <SaveIndicator propertyKey={pendingKey} confirmedMessage={TAX_EFFECTIVE_NOTICE} />
       </div>
 
       <div className={styles.taxModes} role="radiogroup" aria-label="Tax mode">
@@ -190,7 +250,7 @@ function TaxEditor({
             type="radio"
             name={`taxmode-${row.index}`}
             checked={!subsidised}
-            onChange={() => commitRate(rate)}
+            onChange={() => commit(rate)}
           />
           Tax
         </label>
@@ -199,7 +259,7 @@ function TaxEditor({
             type="radio"
             name={`taxmode-${row.index}`}
             checked={subsidised}
-            onChange={() => onCommit(row, SUBSIDY_VALUE)}
+            onChange={() => commit(parseInt(SUBSIDY_VALUE, 10), SUBSIDY_VALUE)}
           />
           Subsidize
         </label>
@@ -224,9 +284,9 @@ function TaxEditor({
             // One frame per gesture, as Voyager emits on MouseUp only
             // (`PercentEdit.pas:357-362`) — keyboard and blur included, so an
             // arrow-key change is not silently lost.
-            onPointerUp={(e) => commitRate(parseInt(e.currentTarget.value, 10))}
-            onKeyUp={(e) => commitRate(parseInt(e.currentTarget.value, 10))}
-            onBlur={(e) => commitRate(parseInt(e.currentTarget.value, 10))}
+            onPointerUp={(e) => commit(parseInt(e.currentTarget.value, 10))}
+            onKeyUp={(e) => commit(parseInt(e.currentTarget.value, 10))}
+            onBlur={(e) => commit(parseInt(e.currentTarget.value, 10))}
           />
         </div>
       )}
@@ -256,7 +316,7 @@ function FixedTaxEditor({
     <div className={styles.taxEditor}>
       <div className={styles.taxEditorHeader}>
         <span className={styles.sectionTitle}>{row.name}</span>
-        <SaveIndicator propertyKey={pendingKey} />
+        <SaveIndicator propertyKey={pendingKey} confirmedMessage={TAX_EFFECTIVE_NOTICE} />
       </div>
       <div className={styles.taxValueRow}>
         <input

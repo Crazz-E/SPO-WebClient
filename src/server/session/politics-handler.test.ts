@@ -42,6 +42,7 @@ import {
   politicsSetPublicity,
   politicsSetProjectData,
   searchConnections,
+  holdsOffice,
 } from './politics-handler';
 import { makeSessionCtx, FAKE_CONTEXT_IDS } from '../__tests__/session/fake-session-context';
 import type { FakeSessionCtx } from '../__tests__/session/fake-session-context';
@@ -1851,3 +1852,51 @@ describe('searchConnections', () => {
     expect(fake.log.warn).toHaveBeenCalledWith('[Connections] input search failed: Request timeout: FindSuppliers');
   });
 });
+
+// =============================================================================
+// holdsOffice — the reference's two-pronged IsMayor, plus one prong of our own
+// =============================================================================
+
+describe('holdsOffice', () => {
+  const RULER = 'SPO_test3';
+  const TOWN = 'Helartia';
+
+  /** Only the two identity fields matter here. */
+  function ctxAs(activeUsername: string | null, cachedUsername: string) {
+    return makeSessionCtx({ activeUsername, cachedUsername }).ctx;
+  }
+
+  it('recognises the ruler playing an ordinary company', () => {
+    expect(holdsOffice(ctxAs('SPO_test3', 'SPO_test3'), RULER, TOWN)).toBe(true);
+  });
+
+  it('recognises the ruler playing their ROLE company', () => {
+    // `switchCompany` sets activeUsername to the ownerRole; ActualRuler stays
+    // the human name. Prong one alone answered false here — the bug this fixes.
+    expect(holdsOffice(ctxAs('Mayor of Helartia', 'SPO_test3'), RULER, TOWN)).toBe(true);
+  });
+
+  it('recognises the role name even when the human name is unknown', () => {
+    // The reference's second prong standing on its own — `tycooncampaign.asp:98`.
+    expect(holdsOffice(ctxAs('Mayor of Helartia', ''), RULER, TOWN)).toBe(true);
+  });
+
+  it('matches case-insensitively, as Ucase() does on both sides', () => {
+    expect(holdsOffice(ctxAs('mayor of HELARTIA', ''), RULER, TOWN)).toBe(true);
+    expect(holdsOffice(ctxAs('spo_TEST3', ''), RULER, TOWN)).toBe(true);
+  });
+
+  it('does not mistake another tycoon for the ruler', () => {
+    expect(holdsOffice(ctxAs('gatorlor', 'gatorlor'), RULER, TOWN)).toBe(false);
+  });
+
+  it("does not mistake another town's mayor for this one's", () => {
+    expect(holdsOffice(ctxAs('Mayor of Flumenia', 'innos'), RULER, TOWN)).toBe(false);
+  });
+
+  it('answers false on a vacant seat rather than matching an empty name', () => {
+    expect(holdsOffice(ctxAs('', ''), '', TOWN)).toBe(false);
+    expect(holdsOffice(ctxAs('gatorlor', 'gatorlor'), '', TOWN)).toBe(false);
+  });
+});
+

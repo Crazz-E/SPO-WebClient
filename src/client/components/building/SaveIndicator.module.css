@@ -60,3 +60,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- Notice (sentence shown instead of a checkmark) ---- */
+.notice {
+  color: var(--text-secondary);
+  font-style: italic;
+  /* The sentence wraps rather than being clipped: it carries the whole
+     meaning, unlike the "Failed" label which is backed by a title tooltip. */
+  white-space: normal;
+  max-width: 22ch;
+  line-height: 1.3;
+  animation: noticeFade 5s ease-out forwards;
+}
+
+@keyframes noticeFade {
+  0% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}

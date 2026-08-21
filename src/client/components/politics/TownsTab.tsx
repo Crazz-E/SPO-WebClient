@@ -2,7 +2,7 @@
  * TownsTab — Capitol towns table with tax sliders and Elect Mayor (president-only).
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { BuildingPropertyValue } from '@/shared/types';
 import { useClient } from '../../context';
 import { SaveIndicator } from '../building/SaveIndicator';
@@ -75,6 +75,7 @@ export function TownsTab({ properties, buildingX, buildingY, canGovern }: TownsT
               <td>
                 <TaxSlider
                   value={row.tax}
+                  townName={row.name}
                   buildingX={buildingX}
                   buildingY={buildingY}
                   index={row.index}
@@ -116,12 +117,15 @@ export function TownsTab({ properties, buildingX, buildingY, canGovern }: TownsT
 
 function TaxSlider({
   value: initialValue,
+  townName,
   buildingX,
   buildingY,
   index,
   editable,
 }: {
   value: number;
+  /** Only for the accessible name — every row's slider looks alike otherwise. */
+  townName: string;
   buildingX: number;
   buildingY: number;
   index: number;
@@ -129,14 +133,26 @@ function TaxSlider({
 }) {
   const client = useClient();
   const [value, setValue] = useState(initialValue);
+  /**
+   * The last figure we put on the wire. `next === initialValue` alone does not
+   * dedup a gesture: three events end one (pointer up, key up, and the blur
+   * that follows either), and all three carry the SAME new value, which
+   * differs from `initialValue` every time. Cleared by the resync below, so a
+   * figure can be set again once the town has moved off it.
+   */
+  const lastSent = useRef<number | null>(null);
   const pendingKey = `RDOSetTownTaxes:{"index":"${index}"}`;
 
   // See MinWageSlider: local state must yield to a fresh server figure.
-  useEffect(() => { setValue(initialValue); }, [initialValue]);
+  useEffect(() => {
+    setValue(initialValue);
+    lastSent.current = null;
+  }, [initialValue]);
 
   const commitValue = useCallback(
     (next: number) => {
-      if (next === initialValue) return;
+      if (next === initialValue || next === lastSent.current) return;
+      lastSent.current = next;
       client.onSetBuildingProperty(buildingX, buildingY, 'RDOSetTownTaxes', String(next), { index: String(index) });
     },
     [client, buildingX, buildingY, index, initialValue],
@@ -151,6 +167,7 @@ function TaxSlider({
       <input
         type="range"
         className={styles.slider}
+        aria-label={`Tax rate for ${townName}`}
         min={0}
         max={100}
         step={1}
