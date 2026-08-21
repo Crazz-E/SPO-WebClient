@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.2-beta] - 2026-08-21
+
+### Fixed
+- validate the client entry that ships, and stop the double release
+- the civic write path — what lands, what does not, and what the UI claims
+
 ## [1.3.1-beta] - 2026-08-21
 
 ### Added

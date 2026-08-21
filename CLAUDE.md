@@ -2,7 +2,7 @@
 
 Browser-based multiplayer tycoon client, wire-compatible with the original Delphi
 Starpeace Online servers. TypeScript + Node.js + WebSocket + Canvas 2D isometric.
-RDO protocol. Beta 1.3.1-beta.
+RDO protocol. Beta 1.3.2-beta.
 
 ```
 Browser Client --WebSocket--> Node.js Gateway --RDO/TCP--> Delphi Game Servers
