@@ -15,7 +15,7 @@
 import { toErrorMessage } from '../shared/error-utils';
 import { TIMEOUTS } from './config';
 import { LOG_MARKERS, awaitMarker, openLogWindow, type LogWindow } from './live-log';
-import { readBuildingDetails, setBuildingProperty, propertyValue, type LiveSession } from './session';
+import { readSectionGroups, setBuildingProperty, propertyValue, type LiveSession } from './session';
 import type { WorldLock } from './world-lock';
 
 export interface ProbeSpec {
@@ -70,8 +70,8 @@ export async function runProbe(
     );
   }
 
-  const before = await readBuildingDetails(session, spec.x, spec.y, spec.visualClass);
-  const original = propertyValue(before.groups, spec.groupId, spec.readProperty);
+  const before = await readSectionGroups(session, spec.x, spec.y, spec.groupId, spec.visualClass);
+  const original = propertyValue(before, spec.groupId, spec.readProperty);
   if (original === undefined) {
     throw new Error(
       `Cannot read ${spec.groupId}.${spec.readProperty} at (${spec.x},${spec.y}) — ` +
@@ -108,8 +108,8 @@ export async function runProbe(
     );
     logLine = await awaitMarker(window, marker, TIMEOUTS.logSettle);
 
-    const after = await readBuildingDetails(session, spec.x, spec.y, spec.visualClass);
-    const current = propertyValue(after.groups, spec.groupId, spec.readProperty);
+    const after = await readSectionGroups(session, spec.x, spec.y, spec.groupId, spec.visualClass);
+    const current = propertyValue(after, spec.groupId, spec.readProperty);
     if (current === written) {
       readBack = 'CONFIRMED';
     } else {

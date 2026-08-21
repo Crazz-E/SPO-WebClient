@@ -240,6 +240,28 @@ export async function readBuildingTabData(
   );
 }
 
+/**
+ * Read one property group the way the panel does: open the facility, then open
+ * the section that carries the group.
+ *
+ * The opening read carries the header group and nothing else, so a group named
+ * here is only ever produced by its section request. Both round-trips are kept:
+ * `readBuildingDetails` releases and recreates the inspector's temp object,
+ * which is the freshest re-read available and the reason a probe's read-back
+ * means anything.
+ */
+export async function readSectionGroups(
+  session: LiveSession,
+  x: number,
+  y: number,
+  groupId: string,
+  visualClass: string,
+): Promise<{ [groupId: string]: BuildingPropertyValue[] }> {
+  await readBuildingDetails(session, x, y, visualClass);
+  const section = await readBuildingTabData(session, x, y, groupId, visualClass, [groupId]);
+  return section.groups ?? {};
+}
+
 export async function setBuildingProperty(
   session: LiveSession,
   x: number,

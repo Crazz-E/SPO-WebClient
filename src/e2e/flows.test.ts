@@ -294,6 +294,12 @@ const helartia = {
   classId: '512',
 };
 
+/**
+ * The opening read answers `canGovern` and the header group; the tax table is a
+ * section, and `readSectionGroups` is the request that brings it. Stubbing them
+ * apart is the point — a tax value that came back on the opening response would
+ * no longer be reachable in production.
+ */
 function governedTownHall(canGovern: boolean, taxValue?: string) {
   jest.spyOn(session, 'login').mockResolvedValue(stubSession(() => undefined));
   jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
@@ -303,8 +309,11 @@ function governedTownHall(canGovern: boolean, taxValue?: string) {
     canGovern,
     visualClass: '512',
     tabs: [{ id: 'townTaxes' }],
-    groups: taxValue === undefined ? {} : { townTaxes: [{ name: 'Tax0Percent', value: taxValue }] },
+    groups: { townGeneral: [] },
   } as unknown as Awaited<ReturnType<typeof session.readBuildingDetails>>);
+  jest.spyOn(session, 'readSectionGroups').mockResolvedValue(
+    taxValue === undefined ? {} : { townTaxes: [{ name: 'Tax0Percent', value: taxValue }] },
+  );
 }
 
 describe('politics-write', () => {

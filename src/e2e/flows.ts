@@ -23,6 +23,7 @@ import {
   logoff,
   readBuildingDetails,
   readBuildingTabData,
+  readSectionGroups,
   propertyValue,
   type LiveSession,
 } from './session';
@@ -140,7 +141,10 @@ const politicsWrite: Flow = {
       assertions.check('the town hall is governable by this account', details.canGovern === true);
       if (!details.canGovern) return report('politics-write', assertions, probes, session);
 
-      const current = propertyValue(details.groups, 'townTaxes', 'Tax0Percent');
+      // The tax table is a section: the opening read above answers `canGovern`
+      // and the header group, and this is the request that brings the rates.
+      const taxes = await readSectionGroups(session, town.x, town.y, 'townTaxes', visualClass);
+      const current = propertyValue(taxes, 'townTaxes', 'Tax0Percent');
       assertions.check('a tax row is readable', current !== undefined, current);
       if (current === undefined) return report('politics-write', assertions, probes, session);
 
