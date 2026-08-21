@@ -8,6 +8,12 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # ts-jest 29 pins TypeScript below 7, so a TypeScript major makes `npm ci`
+      # fail outright and the group PR can never go green. Lift this once ts-jest
+      # supports TypeScript 7.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
     commit-message:
       prefix: chore
 
