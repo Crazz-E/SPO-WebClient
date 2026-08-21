@@ -1,0 +1,344 @@
+<div class="wrap">
+
+<header class="masthead">
+  <span class="eyebrow">Starpeace Online WebClient · Beta 1.3.0-beta</span>
+  <h1>RDO Surface Coverage</h1>
+  <p class="lede">Every RDO member a legacy client actually touches — the Voyager desktop client
+  <em>and</em> the ASP pages it embedded — and nothing else. A member neither corpus reaches is out of
+  scope, however published it may be. Against that universe: what the WebClient emits today, and the
+  on-screen control behind each one.</p>
+  <div class="provenance">
+    <span><b>Servers + Voyager</b> ../SPO-Original @ b28df48</span>
+    <span><b>ASP pages</b> ../SPO-ASP @ 87dce48 · 3,195 files</span>
+    <span><b>WebClient</b> main @ ad4672a2 · working tree, not the commit</span>
+    <span><b>Generated</b> 2026-08-21</span>
+    <span><b>Scope</b> 313 in scope · 445 published members ignored</span>
+  </div>
+</header>
+
+<section>
+  <div class="kpis">
+    <div class="kpi" style="--bar:var(--accent)">
+      <span class="num">313</span><span class="lbl">Members in scope</span>
+      <span class="sub">Touched by Voyager (165), by an ASP page (87), or by both (55) — plus 6 the WebClient emits that neither corpus explains.</span>
+    </div>
+    <div class="kpi" style="--bar:var(--wired)">
+      <span class="num">138</span><span class="lbl">Wired in the WebClient</span>
+      <span class="sub"><b style="color:var(--wired)">44.1% complete.</b> Every one reaches a real screen or protocol step — no dead entries.</span>
+    </div>
+    <div class="kpi" style="--bar:var(--gap)">
+      <span class="num">175</span><span class="lbl">Remaining</span>
+      <span class="sub">83 of them are ASP-only — account creation, subscriptions, directory keys. That is the migration ahead.</span>
+    </div>
+    <div class="kpi" style="--bar:var(--dormant)">
+      <span class="num">445</span><span class="lbl">Ignored</span>
+      <span class="sub">Published by a server class, touched by neither client. Excluded on purpose — not counted against us.</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="eyebrow">Why there are two legacy clients</span>
+    <h2>The ASP pages are a second client, and the migration runs through here</h2>
+    <p>Voyager was a shell around an embedded browser. A large part of what a player did — creating an
+    account, subscribing, rating a mayor, setting a campaign project — happened on ASP pages served by the
+    world, which opened their own RDO connection through
+    <code>Server.CreateObject("RDOClient.RDOObjectProxy")</code> and called the model directly.
+    Those pages are as much a source of truth as the Delphi client, and the WebClient is absorbing them
+    one screen at a time.</p>
+  </div>
+  <div class="method">
+    <div class="card">
+      <h3>What the ASP corpus adds</h3>
+      <p><b>87 members</b> that Voyager never touches at all. They cluster where you would expect the web to
+      own the flow: account creation and directory keys (<code>RDONewAccount</code>,
+      <code>RDOCreateFullPathKey</code>, <code>RDOGetUserPath</code>), subscriptions
+      (<code>RDODeleteFullPathNode</code>, <code>RDOReadDate</code>), and tycoon finance
+      (<code>RDOAskLoan</code>, <code>RDOPayLoan</code>, <code>RDOSendMoney</code>).</p>
+      <p>Six world instances ship the same pages, so each page counts once and is cited under
+      <code>Five/0/</code> — the instance the gateway fetches. 130 distinct pages are cited here.</p>
+    </div>
+    <div class="card">
+      <h3>The three members that started this</h3>
+      <p><code>RDOSetRatingFrom</code>, <code>RDOSetPublicity</code> and <code>RDOSetProjectData</code> were
+      added to the catalogue from the Pascal declaration alone, with no client call site to copy — which
+      looked like a hole in the evidence.</p>
+      <p>It was not. All three are ASP members:
+      <code>Visual/News/boardmsg.asp</code>, <code>Visual/Voyager/Politics/rdoModifyPub.asp</code> and
+      <code>rdoModifyProject.asp</code>. The Politics panel is the first ASP screen the WebClient absorbed
+      outright, and this table now shows that lineage instead of an empty column.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="eyebrow">Isolated view</span>
+    <h2>Account management</h2>
+    <p>A cross-cutting slice, not a subsystem — these 59 members span the Directory Server, the Interface
+    Server and the World, and no file path separates them. Three rules define the set, applied in order,
+    so you can disagree with a visible rule rather than a hidden one.
+    <b>18 of 59 are wired — 30.5%</b>, the weakest area on this page.</p>
+  </div>
+
+  <div class="acct">
+    <div class="acctrow">
+      <div class="acctname">
+        <b>Directory</b>
+        <span>Identity, credentials, registry keys, subscription and billing. Every member declared on
+        <code>TDirectorySession</code> / <code>TDirectoryServer</code> — the Directory Server <em>is</em> the
+        account authority, so this rule is structural.</span>
+      </div>
+      <div class="acctbar"><span class="sw" style="width:20.6%"></span><span class="sg" style="width:79.4%"></span></div>
+      <div class="acctnum"><b>7</b>&thinsp;/&thinsp;34</div>
+    </div>
+    <div class="acctrow">
+      <div class="acctname">
+        <b>World session identity</b>
+        <span>Who the player is once inside a world: <code>Logon</code>, <code>Logoff</code>,
+        <code>AccountStatus</code>, <code>TycoonId</code>, <code>UserName</code>, <code>Password</code>, the
+        client-view binding and the tycoon cookie. A name list, because these sit on
+        <code>TClientView</code> and <code>TInterfaceServer</code> beside unrelated members.</span>
+      </div>
+      <div class="acctbar"><span class="sw" style="width:64.3%"></span><span class="sg" style="width:35.7%"></span></div>
+      <div class="acctnum"><b>9</b>&thinsp;/&thinsp;14</div>
+    </div>
+    <div class="acctrow">
+      <div class="acctname">
+        <b>Companies under the account</b>
+        <span>Listing, naming and creating the companies an account owns — the company selector and the
+        role-abandon flow. Also a name list, spanning <code>TClientView</code> and <code>TWorld</code>.</span>
+      </div>
+      <div class="acctbar"><span class="sw" style="width:18.2%"></span><span class="sg" style="width:81.8%"></span></div>
+      <div class="acctnum"><b>2</b>&thinsp;/&thinsp;11</div>
+    </div>
+  </div>
+
+  <div class="method">
+    <div class="card">
+      <h3>Almost all of it is ASP work</h3>
+      <p>Of the 41 remaining, the great majority are ASP-only. Account creation runs through
+      <code>Five/0/Visual/Voyager/NewLogon/rdoCreateAccount.asp</code>
+      (<code>RDONewAccount</code>, <code>RDONewUserId</code>, <code>RDOCreateFullPathKey</code>,
+      <code>RDOWriteString</code>, <code>RDOWriteInteger</code>); the company selector is one page,
+      <code>NewLogon/chooseCompany.asp</code>, which alone accounts for six <code>GetCompany*</code> members.</p>
+      <p>The whole subscription and billing branch — <code>RDOGenSubscriptionId</code>,
+      <code>RDOGenTransactionId</code>, <code>RDONotifyCharge</code>, <code>RDONotifyMoneyTransfer</code>,
+      <code>RDORecordSubscriptionInfo</code> — lives under <code>Five/0/Subscription/</code> and talks to a
+      payment gateway (<code>callSIPS.asp</code>, <code>SIPSCallBack.asp</code>). Decide whether that branch is
+      in the product before counting it as debt.</p>
+    </div>
+    <div class="card">
+      <h3>What is already wired, and what it costs to finish</h3>
+      <p>The login path itself is done: <code>RDOOpenSession</code> → <code>RDOLogonUser</code> →
+      <code>RDOQueryKey</code> / <code>RDOSearchKey</code> → <code>RDOSetCurrentKey</code> →
+      <code>Logon</code> → <code>TycoonId</code> / <code>AccountStatus</code> → <code>RDOEndSession</code>.
+      A player can sign in and enter a world.</p>
+      <p>What they cannot do is <b>create</b> an account, <b>manage</b> a subscription, or <b>see</b> more than
+      the count of their companies — <code>GetCompanyCount</code> and <code>NewCompany</code> are wired, but
+      every field the selector shows for each company (<code>GetCompanyName</code>, <code>GetCompanyId</code>,
+      <code>GetCompanyProfit</code>, <code>GetCompanyOwnerRole</code>, <code>GetCompanyCluster</code>,
+      <code>GetCompanyFacilityCount</code>) is not. That one page is the densest cluster of remaining work
+      on this page.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="eyebrow">Coverage by subsystem</span>
+    <h2>Where the WebClient stands, area by area</h2>
+    <p>Areas come from the class that declares the member, not from where the WebClient uses it.
+    A long amber run is a feature one of the legacy clients shipped and we have not rebuilt yet. Mail is
+    closed and Politics is nearly there; the Interface Server session and the Kernel carry most of what
+    is left, and Directory &amp; Account is almost entirely ASP work. Ten members previously filed under
+    <em>Other</em> now sit in Directory &amp; Account: they are declared in <code>DServer/DirectoryServer.pas</code>,
+    the second Directory Server project, which the area rule did not recognise.</p>
+  </div>
+  <div class="areas" id="areas"></div>
+  <div class="legend">
+    <span><i style="background:var(--wired)"></i>Wired — the WebClient emits it</span>
+    <span><i style="background:var(--gap)"></i>Remaining — Voyager uses it, we do not</span>
+  </div>
+</section>
+
+<section>
+  <div class="risk">
+    <h3>One catalogued member has no declaration — and it is the one that is meant to</h3>
+    <p style="font-size:14px;color:var(--ink-soft)">A sweep of all 138 catalogued members against every
+    <code>procedure|function|property</code> declaration in the ~1,750 <code>.pas</code> now returns a single
+    name, and it is the benign one. The two real findings this panel opened with have both been closed;
+    the evidence is kept below, because a phantom member that gets deleted leaves no trace in the code to
+    explain why the control disappeared.</p>
+
+    <p style="font-size:14px;color:var(--ink-soft)"><b style="color:var(--wired)">Correct by design —
+    <code>RDOCnntId</code>.</b> Not a missing member: the query parser answers it before any object lookup
+    and returns <code>errNoError</code>. <code>tidConnRequestName = 'RDOCnntId'</code>
+    (<code>Rdo/Server/RDOQueryServer.pas:9</code>), intercepted at <code>:269-274</code> with
+    <code>PropValue := IntToStr(ConnId)</code>. It reaches no class because it is answered by the
+    connection, which is exactly what <code>request-routing.ts</code> documents. Nothing to fix.</p>
+
+    <div style="border-top:1px solid var(--risk);padding-top:14px;display:flex;flex-direction:column;gap:8px">
+      <h3 style="color:var(--wired)">Closed — <code>RDOSetBuyingStatus</code></h3>
+      <p style="font-size:14px;color:var(--ink-soft)">It never existed, and its only Voyager call site was dead
+      code: in <code>Voyager/SupplySheetForm.pas:728-745</code>, <code>ObjId</code> is declared at <code>:731</code>
+      and <b>never assigned</b> before <code>Proxy.BindTo(ObjId)</code> at <code>:739</code> — where all four
+      siblings in the same unit do <code>ObjId := parms[0].vInteger</code> and guard
+      <code>if (ObjId &lt;&gt; 0)</code> (<code>:642-644</code>, <code>:665-667</code>, <code>:688-690</code>,
+      <code>:711-713</code>) — and <code>threadedBuySet</code> has no caller anywhere (declaration
+      <code>:162</code>, body <code>:728</code>). It was an abandoned first attempt at a feature Voyager ships
+      through a different, real member: <code>RDOSelSelected</code> (<code>TPullInput</code>,
+      <code>Kernel/Kernel.pas:1623</code>), forked from <code>cbAlmBuy</code> at <code>:1100</code> and emitted at
+      <code>:699</code>. The WebClient already had <code>RDOSelSelected</code> wired to the same read-back
+      witness, so deleting the phantom cost no behaviour. Recorded as <b>OB-32</b> in
+      <code>doc/BACKLOG-OPEN.md</code>.</p>
+
+      <h3 style="color:var(--wired)">Closed — <code>RDOAutoRelease</code></h3>
+      <p style="font-size:14px;color:var(--ink-soft)">Also never existed, and the Pascal shows why it could not:
+      the movie studio publishes exactly four members (<code>StdBlocks/MovieStudios.pas:103-107</code>), and
+      auto-release travels as <b>bit 0 of the <code>AutoInfo : word</code></b> argument of
+      <code>RDOLaunchMovie</code> — <code>flgAutoRelease = $01</code> at <code>:19</code>, read back at
+      <code>:494</code> and <code>:693</code>. The trailing comment on <code>:104</code> still preserves the
+      original signature where that parameter was named <code>AutoRelease : WordBool</code>.</p>
+      <p style="font-size:14px;color:var(--ink-soft)">The fix was not the obvious one. Deleting the mapping alone
+      would have made things worse: <code>resolveRdoCommand</code> falls through to
+      <code>{ command: propertyName }</code>, so an unmapped editable property goes out as
+      <code>call AutoRel</code> — one phantom traded for another. <b>Auto-release is a launch parameter, not a
+      property</b>, so the control is now read-only and the flag is chosen when the film is launched, feeding the
+      <code>autoInfo</code> bit-packing the handler already built. That is precisely what the reference client
+      does: <code>cbAutoRelease</code> has no click handler, only <code>Enabled</code>/<code>Checked</code> for
+      display (<code>FilmsSheet.pas:183</code>, <code>:194</code>, <code>:200</code>), and its value is read once
+      at launch (<code>:383</code>, emitted <code>:310</code>). Its sibling <code>cbAutoProduction</code> does have
+      a handler (<code>:451</code>) because <code>RDOAutoProduce</code> is real (<code>MovieStudios.pas:107</code>)
+      — the asymmetry is in Voyager too.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="eyebrow">Full inventory</span>
+    <h2>Every member, its declaration, and its control</h2>
+    <p>313 rows — the members a legacy client touches. Search matches member name, owning class, unit, or UI location.
+    Click a column heading to sort. <em>No call site</em> isolates the rows whose only evidence is a name read by string,
+    where the member mattered to a screen but the wire traffic is unproven.</p>
+  </div>
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search member, class, unit, or screen…" aria-label="Search the inventory">
+    <div class="chips" id="statusChips">
+      <button class="chip" data-s="all" aria-pressed="true">All</button>
+      <button class="chip" data-s="wired" aria-pressed="false">Wired</button>
+      <button class="chip" data-s="gap" aria-pressed="false">Remaining</button>
+      <button class="chip" data-s="nocall" aria-pressed="false">No call site</button>
+    </div>
+    <select id="acct" aria-label="Filter by account-management group">
+      <option value="">All members</option>
+      <option value="any">Account management (59)</option>
+      <option value="directory">— Directory (34)</option>
+      <option value="session">— World session identity (14)</option>
+      <option value="company">— Companies (11)</option>
+    </select>
+    <select id="origin" aria-label="Filter by legacy origin">
+      <option value="">Any origin</option>
+      <option value="voyager">Voyager only</option>
+      <option value="asp">ASP pages only</option>
+      <option value="both">Both clients</option>
+      <option value="none">Neither corpus</option>
+    </select>
+    <select id="area" aria-label="Filter by subsystem"><option value="">All subsystems</option></select>
+    <select id="kind" aria-label="Filter by member kind">
+      <option value="">All kinds</option>
+      <option value="function">function &nbsp;^</option>
+      <option value="procedure">procedure &nbsp;*</option>
+      <option value="accessor">property &nbsp;get/set</option>
+    </select>
+    <span class="count" id="count"></span>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr>
+        <th><button data-k="n">Member</button></th>
+        <th><button data-k="k">Kind</button></th>
+        <th><button data-k="ar">Subsystem</button></th>
+        <th><button data-k="o">Declared in</button></th>
+        <th><button data-k="v">Voyager</button></th>
+        <th><button data-k="p">ASP pages</button></th>
+        <th><button data-k="w">WebClient</button></th>
+        <th><button data-k="ui">WebClient UI location</button></th>
+        <th><button data-k="s">Status</button></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No member matches those filters.</div>
+  </div>
+</section>
+
+<section>
+  <div class="shead">
+    <span class="eyebrow">How this was built</span>
+    <h2>Method, and what each column can be trusted to mean</h2>
+  </div>
+  <div class="method">
+    <div class="card">
+      <h3>The scope rule</h3>
+      <p>962 <code>.pas</code> files were parsed for <code>published</code> sections inside class declarations — exactly what
+      <code>TRDOObjectServer</code> can reach, via <code>GetPropInfo</code> for properties and <code>GetMethodAddress</code> for
+      methods (<code>Rdo/Server/RDOObjectServer.pas:90-200</code>). That yields 760 members.</p>
+      <p><b>445 of them are then dropped</b>, because no legacy client calls or names them. A member neither corpus reached is not
+      a gap in the WebClient — it is protocol nobody used. What survives is the 313 rows here, including 6 the WebClient emits with
+      no legacy trace, kept so our own surface is never under-counted.</p>
+      <p>Divergent forks are excluded by rule: unit paths resolve through the five server <code>.dpr</code> files, so
+      <code>Kernel.pas</code> counts and <code>Kernel0/1/2</code>, <code>Kernel.ok</code>, <code>Kernel.Iroel</code> and
+      <code>Copy of Kernel</code> do not.</p>
+    </div>
+    <div class="card">
+      <h3>What counts as Voyager using it</h3>
+      <p><b>Called.</b> Voyager binds late, through <code>OleVariant</code> proxies, so a call reads
+      <code>MSProxy.RDOSetTaxValue(TaxId, Value)</code>. Two detectors: every member reached through a variable declared
+      <code>: OleVariant</code>, and every <code>.RDO…(</code> call regardless of receiver. 186 members.</p>
+      <p><b>Consumed.</b> Voyager also reads properties by name, declared as string constants —
+      <code>tidInterest = 'Interest'</code> in <code>BankGeneralSheet.pas:17</code>, then looked up on the cached property list.
+      A string literal that exactly matches a published member name counts as consumption. 46 more members, shown as
+      <em>reads</em> in the table.</p>
+      <p>The two are reported separately because they carry different weight: a call proves the wire traffic, a read proves only
+      that the name mattered to a screen.</p>
+    </div>
+    <div class="card">
+      <h3>Reading the ASP corpus</h3>
+      <p>ASP pages are VBScript, and the two objects they build are unambiguous. A variable assigned
+      <code>Server.CreateObject("RDOClient.RDOObjectProxy")</code> is an RDO proxy — every member reached through it is a
+      <b>call</b>, as is any <code>.RDO…</code> access regardless of receiver. A variable assigned
+      <code>Server.CreateObject("CacheManager.CachedObject")</code> is a cache handle — members reached through it, and string
+      literals matching a published name, are <b>reads</b>.</p>
+      <p>Same split as Voyager, same caveat: a read means the page displayed the value, not that it travelled over RDO.
+      <code>Five/fiveWS.asp</code> and <code>WebService/FiveWS.asmx</code> are scanned too — the ASP.NET service that fronted
+      account checks used the identical proxy. The bare <code>Five/</code> template tree is skipped wherever <code>Five/0</code>
+      carries the same page, so a citation never lands on a near-copy.</p>
+    </div>
+    <div class="card">
+      <h3>The WebClient columns</h3>
+      <p>Counted from real emission sites — <code>rdoCall</code> / <code>rdoGet</code> / <code>rdoSet</code> in
+      <code>src/server/</code>, tests excluded. Eight of those sites dispatch a member chosen at runtime; each was expanded to the
+      closed set it can actually name (<code>KNOWN_RDO_COMMANDS</code>, the world-property loop, the mail helpers, the gate-list spec).</p>
+      <p>The UI location is resolved from <code>template-groups.ts</code> where the member is a building-inspector command — that file
+      maps every command to its tab and control — and is hand-attributed from the handler for session, map, mail, chat and politics paths.</p>
+    </div>
+    <div class="card">
+      <h3>Kind and the wire separator</h3>
+      <p>The separator is not a style choice: a <code>function</code> takes <code>^</code> and a QueryId, a <code>procedure</code>
+      takes <code>*</code> and none, a property is emitted as <code>get</code> / <code>set</code> with no separator at all.</p>
+      <p>Getting it wrong is not cosmetic. <code>^</code> on a procedure leaves a result pointer nobody pops (freeze);
+      <code>*</code> on a function writes through a register nobody set (arbitrary memory write). This table reports the kind from the
+      Pascal declaration, which is the only authority for it.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  Counts are a census of the code as committed, not a claim about the live world. An ignored member may still be reachable — it
+  simply has no caller in either legacy client. The scope grows as ASP screens are identified, so regenerate against current
+  <code>SPO-Original</code> and <code>SPO-ASP</code> checkouts before treating any number here as final.
+</footer>
+
+</div>

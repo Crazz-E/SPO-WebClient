@@ -1,0 +1,125 @@
+<script>
+(function(){
+  const DATA = window.__RDO__;
+  const SEP = { function:'^', procedure:'*', accessor:'get/set' };
+  const LABEL = { wired:'Wired', gap:'Remaining' };
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  /* ── area bars ─────────────────────────────────────── */
+  const areas = {};
+  for (const r of DATA) {
+    const a = areas[r.ar] || (areas[r.ar] = { wired:0, gap:0, total:0 });
+    a[r.s]++; a.total++;
+  }
+  const ordered = Object.entries(areas).sort((a,b) =>
+    b[1].total - a[1].total || b[1].gap - a[1].gap);
+  document.getElementById('areas').innerHTML = ordered.map(([name,a]) => {
+    const pct = n => (n / a.total * 100).toFixed(2) + '%';
+    return `<div class="arow">
+      <span class="an">${esc(name)}</span>
+      <span class="track" role="img" aria-label="${a.wired} of ${a.total} wired, ${a.gap} remaining">
+        <span class="sw" style="width:${pct(a.wired)}"></span>
+        <span class="sg" style="width:${pct(a.gap)}"></span>
+      </span>
+      <span class="acount"><b>${a.wired}</b>&thinsp;/&thinsp;${a.total}</span>
+    </div>`;
+  }).join('');
+
+  /* ── filters ───────────────────────────────────────── */
+  const areaSel = document.getElementById('area');
+  for (const [name] of ordered) areaSel.insertAdjacentHTML('beforeend', `<option>${esc(name)}</option>`);
+
+  const q = document.getElementById('q'), kindSel = document.getElementById('kind');
+  const originSel = document.getElementById('origin');
+  const acctSel = document.getElementById('acct');
+  const body = document.getElementById('rows'), empty = document.getElementById('empty');
+  const countEl = document.getElementById('count');
+  let status = 'all', sortKey = 's', sortDir = 1;
+
+  const RANK = { wired:0, gap:1 };
+  function sortVal(r) {
+    if (sortKey === 's') return RANK[r.s] * 1000 - (r.vc || 0) * 10 - (r.pc || 0) * 10 - (r.vr || 0) - (r.pr || 0);
+    if (sortKey === 'p') return -((r.pc || 0) * 100 + (r.pr || 0));
+    if (sortKey === 'v') return -((r.vc || 0) * 100 + (r.vr || 0));
+    if (sortKey === 'o') return (r.o[0] || '~').toLowerCase();
+    if (sortKey === 'ui') return (r.ui || '~').toLowerCase();
+    if (sortKey === 'w') return -(r.w || 0);
+    return String(r[sortKey] || '').toLowerCase();
+  }
+
+  function render() {
+    const term = q.value.trim().toLowerCase();
+    const area = areaSel.value, kind = kindSel.value, origin = originSel.value, acct = acctSel.value;
+    const rows = DATA.filter(r =>
+      (status === 'all' || (status === 'nocall' ? !(r.vc || r.pc) : r.s === status)) &&
+      (!origin || r.og === origin) &&
+      (!acct || (acct === 'any' ? !!r.am : r.am === acct)) &&
+      (!area || r.ar === area) &&
+      (!kind || r.k === kind) &&
+      (!term || (r.n + ' ' + r.ar + ' ' + r.o.join(' ') + ' ' + (r.ui || '') + ' ' + (r.d || '') + ' ' +
+                 r.vs.join(' ') + ' ' + r.ps.join(' ')).toLowerCase().includes(term))
+    ).sort((a,b) => {
+      const x = sortVal(a), y = sortVal(b);
+      return (x < y ? -1 : x > y ? 1 : a.n.localeCompare(b.n)) * sortDir;
+    });
+
+    countEl.textContent = rows.length + ' of ' + DATA.length + ' members';
+    empty.hidden = rows.length > 0;
+    body.innerHTML = rows.map(r => {
+      const arity = r.k === 'accessor'
+        ? (r.ac || '—')
+        : (r.a === null ? '?' : r.a + (r.a === 1 ? ' arg' : ' args'));
+      const owner = r.o.length
+        ? r.o.map(o => esc(o)).join('<br>')
+        : '<span class="zero">no declaration found</span>';
+      const use = (c, rd, srcs) => {
+        const parts = [];
+        if (c) parts.push(c + (c === 1 ? ' call' : ' calls'));
+        if (rd) parts.push(rd + (rd === 1 ? ' read' : ' reads'));
+        return parts.length
+          ? `<span title="${esc(srcs.join('\n'))}">${parts.join('<br>')}</span>`
+          : '<span class="zero">not seen</span>';
+      };
+      const voy = use(r.vc, r.vr, r.vs);
+      const aspU = use(r.pc, r.pr, r.ps);
+      const web = r.w ? r.w : '<span class="zero">0</span>';
+      const ui = r.ui
+        ? esc(r.ui).replace(/^([^—·]+)/, '<b>$1</b>')
+        : (r.vs[0] ? '<span class="zero">Voyager: ' + esc(r.vs[0]) + '</span>'
+          : r.ps[0] ? '<span class="zero">ASP: ' + esc(r.ps[0]) + '</span>'
+          : '<span class="zero">—</span>');
+      return `<tr>
+        <td><span class="mname">${esc(r.n)}</span>${r.d ? `<span class="decl" title="${esc(r.d)}">${esc(r.d)}</span>` : ''}</td>
+        <td style="white-space:nowrap">${esc(r.k)}<span class="sep">${SEP[r.k] || '?'}</span><br><span class="decl">${esc(arity)}</span></td>
+        <td style="font-size:12.5px">${esc(r.ar)}</td>
+        <td class="src">${owner}</td>
+        <td class="num" style="text-align:left;white-space:nowrap">${voy}</td>
+        <td class="num" style="text-align:left;white-space:nowrap">${aspU}</td>
+        <td class="num">${web}</td>
+        <td class="ui">${ui}</td>
+        <td><span class="pill p-${r.s}">${LABEL[r.s]}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('statusChips').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    status = b.dataset.s;
+    for (const c of e.currentTarget.children) c.setAttribute('aria-pressed', String(c === b));
+    render();
+  });
+  document.querySelectorAll('thead th button').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.k;
+    if (sortKey === k) { sortDir *= -1; } else { sortKey = k; sortDir = 1; }
+    document.querySelectorAll('thead th button').forEach(x => x.removeAttribute('data-active'));
+    b.setAttribute('data-active', '');
+    render();
+  }));
+  q.addEventListener('input', render);
+  areaSel.addEventListener('change', render);
+  originSel.addEventListener('change', render);
+  acctSel.addEventListener('change', render);
+  kindSel.addEventListener('change', render);
+  render();
+})();
+</script>
