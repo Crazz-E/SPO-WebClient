@@ -1,5 +1,71 @@
 [
   {
+    "version": "1.3.1-beta",
+    "date": "2026-08-21",
+    "entries": [
+      {
+        "type": "fixed",
+        "text": "clear what the lint found — a hook order bug and 120 dead bindings"
+      },
+      {
+        "type": "fixed",
+        "text": "compare cache textures the way the server resolves them"
+      },
+      {
+        "type": "fixed",
+        "text": "point the updater and the release at Crazz-E, not the old handle"
+      },
+      {
+        "type": "fixed",
+        "text": "bound the inspector summary so long sales lists scroll"
+      },
+      {
+        "type": "fixed",
+        "text": "label a connection the server counts but cannot name"
+      },
+      {
+        "type": "fixed",
+        "text": "stop destroying an all-empty connection row while parsing it"
+      },
+      {
+        "type": "fixed",
+        "text": "correct the Delphi citations and make the ordering guard actually bite"
+      },
+      {
+        "type": "fixed",
+        "text": "send the tycoon proxy id on RDOConnectToTycoon, not the persistent id"
+      },
+      {
+        "type": "changed",
+        "text": "open Profile sections on demand, not on panel open"
+      },
+      {
+        "type": "changed",
+        "text": "list the gates, read none of them — the Voyager loading model"
+      },
+      {
+        "type": "changed",
+        "text": "expand a gate to load it, once, in both accordions"
+      },
+      {
+        "type": "changed",
+        "text": "read a gate's connections when the gate is opened, not before"
+      },
+      {
+        "type": "changed",
+        "text": "derive every RDO separator from a member catalogue"
+      },
+      {
+        "type": "added",
+        "text": "the mayor's tools, and a gate that knows which building it guards"
+      },
+      {
+        "type": "added",
+        "text": "rebuild the workforce panel as per-class salary sliders"
+      }
+    ]
+  },
+  {
     "version": "1.3.0-beta",
     "date": "2026-08-19",
     "entries": [

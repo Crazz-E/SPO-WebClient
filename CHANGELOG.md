@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.3.1-beta] - 2026-08-21
+
+### Added
+- the mayor's tools, and a gate that knows which building it guards
+- rebuild the workforce panel as per-class salary sliders
+
+### Fixed
+- clear what the lint found — a hook order bug and 120 dead bindings
+- compare cache textures the way the server resolves them
+- point the updater and the release at Crazz-E, not the old handle
+- bound the inspector summary so long sales lists scroll
+- label a connection the server counts but cannot name
+- stop destroying an all-empty connection row while parsing it
+- correct the Delphi citations and make the ordering guard actually bite
+- send the tycoon proxy id on RDOConnectToTycoon, not the persistent id
+
+### Changed
+- open Profile sections on demand, not on panel open
+- list the gates, read none of them — the Voyager loading model
+- expand a gate to load it, once, in both accordions
+- read a gate's connections when the gate is opened, not before
+- derive every RDO separator from a member catalogue
+
+### Documentation
+- add the governance files the repository was missing
+- remove four obsolete documents and repair their references
+
 ## [1.3.0-beta] - 2026-08-19
 
 ### Removed

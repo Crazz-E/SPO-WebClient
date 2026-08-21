@@ -2,7 +2,7 @@
 
 A browser-based multiplayer tycoon game client for [Starpeace Online](http://www.starpeaceonline.com), rebuilt from scratch in TypeScript with React 19 and a custom Canvas 2D isometric renderer.
 
-> **Beta 1.3.0-beta**
+> **Beta 1.3.1-beta**
 
 ## Overview
 
