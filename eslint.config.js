@@ -24,8 +24,9 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
 
   {
-    // These are CommonJS by design — the Electron shell, the Jest plumbing, the scripts.
-    files: ['electron/**/*.js', 'jest.config.js', 'src/__mocks__/**/*.js', 'scripts/**/*.js'],
+    // These are CommonJS by design — the Electron shell, the Jest plumbing, the scripts,
+    // and the legacy-archaeology generators behind report/rdo-surface-coverage.html.
+    files: ['electron/**/*.js', 'jest.config.js', 'src/__mocks__/**/*.js', 'scripts/**/*.js', 'report/**/*.js'],
     languageOptions: {
       sourceType: 'commonjs',
       globals: { module: 'writable', require: 'readonly', __dirname: 'readonly', process: 'readonly', console: 'readonly' },
