@@ -397,7 +397,7 @@ describe('RDO Building Operations', () => {
     const FIRE_AND_FORGET_COMMANDS = [
       'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
       'RDODisconnectInput', 'RDODisconnectOutput',
-      'RDOAutoProduce', 'RDOAutoRelease', 'RDOSetTradeLevel', 'RDOSetRole', 'RDOSetLoanPerc',
+      'RDOAutoProduce', 'RDOSetTradeLevel', 'RDOSetRole', 'RDOSetLoanPerc',
       'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
     ];
 

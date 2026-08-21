@@ -332,12 +332,15 @@ describe('Specialized handler RDO properties', () => {
     expect(autoProd!.type).toBe(PropertyType.BOOLEAN);
     expect(autoProd!.editable).toBe(true);
 
+    // AutoRel displays, it does not write: no server member sets auto-release after
+    // launch, so a mapping here would emit a frame the server discards. It rides bit 0
+    // of RDOLaunchMovie's AutoInfo instead (StdBlocks/MovieStudios.pas:19,104).
     const autoRel = FILMS_GROUP.properties.find(p => p.rdoName === 'AutoRel');
     expect(autoRel!.type).toBe(PropertyType.BOOLEAN);
-    expect(autoRel!.editable).toBe(true);
+    expect(autoRel!.editable).toBeUndefined();
 
     expect(FILMS_GROUP.rdoCommands!['AutoProd']?.command).toBe('RDOAutoProduce');
-    expect(FILMS_GROUP.rdoCommands!['AutoRel']?.command).toBe('RDOAutoRelease');
+    expect(FILMS_GROUP.rdoCommands!['AutoRel']).toBeUndefined();
   });
 
   it('Mausoleum should have memorial properties', () => {

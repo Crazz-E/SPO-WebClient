@@ -172,19 +172,6 @@ const MATRIX: readonly MatrixEntry[] = [
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'AutoProd',
   },
   {
-    // NEW FINDING (lot 2) — the server publishes no such member. The movie
-    // studio publishes exactly four (StdBlocks/MovieStudios.pas:104-107):
-    // RDOLaunchMovie, RDOCancelMovie, RDOReleaseMovie, RDOAutoProduce. Auto-release
-    // travels inside RDOLaunchMovie's `AutoInfo : word` bitmask (bit 0), which the
-    // handler already builds. `RDOAutoRelease` appears in NO .pas of the legacy
-    // tree, so the inspector toggle wired at template-groups.ts:630 is a silent
-    // no-op on the wire — the M-D failure mode, from inside KNOWN_RDO_COMMANDS.
-    // The row still pins the frame we emit today.
-    command: 'RDOAutoRelease', value: '0',
-    args: [RdoValue.int(0)],
-    target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'AutoRel',
-  },
-  {
     command: 'RDOSelSelected', value: '1',
     args: [RdoValue.int(-1)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'Selected',
@@ -1310,13 +1297,13 @@ describe('construction lock', () => {
     const fake = makeConstructionCtx();
 
     const first = setBuildingProperty(fake.ctx, 10, 20, 'RDOAutoProduce', '1');
-    const second = setBuildingProperty(fake.ctx, 30, 40, 'RDOAutoRelease', '0');
+    const second = setBuildingProperty(fake.ctx, 30, 40, 'RDOSelSelected', '0');
     await jest.advanceTimersByTimeAsync(400);
     await Promise.all([first, second]);
 
     expect(fake.frames.construction).toEqual([
       RdoCommand.sel(CURR_BLOCK).call('RDOAutoProduce').push().args(RdoValue.int(-1)).build(),
-      RdoCommand.sel(CURR_BLOCK).call('RDOAutoRelease').push().args(RdoValue.int(0)).build(),
+      RdoCommand.sel(CURR_BLOCK).call('RDOSelSelected').push().args(RdoValue.int(0)).build(),
     ]);
 
     // The discriminating part: the second mutation's lookup happens AFTER the

@@ -1213,10 +1213,10 @@ describe('Films', () => {
     expect(prop!.editable).toBe(true);
   });
 
-  it('AutoRel: BOOLEAN, editable (auto-release toggle)', () => {
+  it('AutoRel: BOOLEAN, read-only — it is a launch parameter, not a property', () => {
     const prop = FILMS_GROUP.properties.find(p => p.rdoName === 'AutoRel');
     expect(prop!.type).toBe(PropertyType.BOOLEAN);
-    expect(prop!.editable).toBe(true);
+    expect(prop!.editable).toBeUndefined();
   });
 
   it('launchMovie: ACTION_BUTTON with actionId="launchMovie"', () => {
@@ -1244,8 +1244,9 @@ describe('Films', () => {
     expect(FILMS_GROUP.rdoCommands?.['AutoProd']?.command).toBe('RDOAutoProduce');
   });
 
-  it('rdoCommands: AutoRel maps to RDOAutoRelease', () => {
-    expect(FILMS_GROUP.rdoCommands?.['AutoRel']?.command).toBe('RDOAutoRelease');
+  it('rdoCommands: AutoRel maps to nothing — RDOAutoRelease does not exist', () => {
+    expect(FILMS_GROUP.rdoCommands?.['AutoRel']).toBeUndefined();
+    expect(FILMS_GROUP.rdoCommands?.['AutoProd']?.command).toBe('RDOAutoProduce');
   });
 });
 
