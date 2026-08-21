@@ -482,24 +482,6 @@ export class MockRdoSession {
   }
 
   /**
-   * Simulates RDOSetBuyingStatus command
-   * Voyager: SupplySheetForm.pas line 741
-   */
-  async simulateSetBuyingStatus(buildingId: number, fingerIndex: number, buying: boolean): Promise<string> {
-    const rid = this.getNextRequestId();
-    const boolVal = buying ? -1 : 0; // WordBool: -1=true, 0=false
-    const cmd = RdoCommand
-      .sel(buildingId)
-      .withRequestId(rid)
-      .call('RDOSetBuyingStatus')
-      .args(RdoValue.int(fingerIndex), RdoValue.int(boolVal))
-      .build();
-
-    this.send(cmd);
-    return cmd;
-  }
-
-  /**
    * Simulates RDOConnectToTycoon command
    * Voyager: IndustryGeneralSheet.pas line 345
    */

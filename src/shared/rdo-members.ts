@@ -178,7 +178,6 @@ export const RDO_MEMBERS = {
   RDOSearchKey:              { kind: 'function',  arity: 2 },                // src/server/session/login-handler.ts:303
   RDOSelectWare:             { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDOSelSelected:            { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223
-  RDOSetBuyingStatus:        { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDOSetCompanyInputDemand:  { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDOSetCurrentKey:          { kind: 'function',  arity: 1 },                // src/server/session/login-handler.ts:291
   RDOSetInputFluidPerc:      { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223

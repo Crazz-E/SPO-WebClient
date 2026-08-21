@@ -328,11 +328,6 @@ const MATRIX: readonly MatrixEntry[] = [
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'SortMode',
   },
   {
-    command: 'RDOSetBuyingStatus', value: '1', params: { fingerIndex: '3' },
-    args: [RdoValue.int(3), RdoValue.int(-1)],
-    target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'Selected',
-  },
-  {
     command: 'RDOSetCompanyInputDemand', value: '75', params: { index: '1' },
     args: [RdoValue.int(1), RdoValue.int(75)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'cInputDem1',
@@ -848,7 +843,6 @@ describe('argument construction', () => {
     ['RDODisconnectInput', { connectionList: '706,436,' }],
     ['RDODisconnectOutput', { connectionList: '706,436,' }],
     ['RDOSetInputOverPrice', { fluidId: 'Plastics' }],
-    ['RDOSetBuyingStatus', {}],
     ['RDOConnectToTycoon', {}],
     ['RDODisconnectFromTycoon', {}],
   ])('%s emits nothing when a required parameter is missing', async (command, params) => {
@@ -907,13 +901,11 @@ describe('argument construction', () => {
 
   it.each([
     ['RDOSelSelected', '0'],
-    ['RDOSetBuyingStatus', '0'],
     ['RDOAcceptCloning', '0'],
   ])('%s encodes false as #0', async (command, value) => {
     const fake = makeConstructionCtx();
-    const params = command === 'RDOSetBuyingStatus' ? { fingerIndex: '0' } : undefined;
 
-    await settle(setBuildingProperty(fake.ctx, X, Y, command, value, params));
+    await settle(setBuildingProperty(fake.ctx, X, Y, command, value));
 
     expect(onlyFrame(fake)).toContain(RdoValue.int(0).format());
     expect(onlyFrame(fake)).not.toContain(RdoValue.int(-1).format());
