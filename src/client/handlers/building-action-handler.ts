@@ -696,8 +696,16 @@ async function launchMovie(ctx: ClientHandlerContext, buildingDetails: BuildingD
   const monthsStr = prompt('Production months:', '12');
   if (!monthsStr) return;
 
+  // Auto-release is a launch parameter, not a property: no server member sets it
+  // afterwards, it rides bit 0 of AutoInfo (StdBlocks/MovieStudios.pas:19,104). Voyager
+  // reads its checkbox at launch and never emits on the toggle (FilmsSheet.pas:383), so
+  // asking here is the faithful equivalent — the displayed AutoRel belongs to the film
+  // already running, which is not the one being launched.
+  const autoRel = confirm('Release the film automatically when production finishes?') ? '1' : '0';
+
+  // Auto-produce IS a persisted studio flag with a real member behind it
+  // (RDOAutoProduce, MovieStudios.pas:107), so the current value is the right default.
   const filmsGroup = buildingDetails.groups['films'] || [];
-  const autoRel = filmsGroup.find(p => p.name === 'AutoRel')?.value || '0';
   const autoProd = filmsGroup.find(p => p.name === 'AutoProd')?.value || '0';
 
   try {

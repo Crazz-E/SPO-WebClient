@@ -344,20 +344,6 @@ describe('RDO Building Operations', () => {
       expect(cmd).toContain('"#0"');
     });
 
-    it('should format RDOSetBuyingStatus with fingerIndex and WordBool', async () => {
-      const cmd = await mockSession.simulateSetBuyingStatus(123456, 3, true);
-
-      expect(cmd).toMatchRdoCallFormat('RDOSetBuyingStatus');
-      expect(cmd).toContain('"#3"');
-      expect(cmd).toContain('"#-1"');
-    });
-
-    it('should format RDOSetBuyingStatus false correctly', async () => {
-      const cmd = await mockSession.simulateSetBuyingStatus(123456, 0, false);
-
-      expect(cmd).toMatchRdoCallFormat('RDOSetBuyingStatus');
-      expect(cmd).toContain('"#0"');
-    });
   });
 
   describe('Tycoon Trade (ConnectToTycoon/DisconnectFromTycoon)', () => {
@@ -411,7 +397,7 @@ describe('RDO Building Operations', () => {
     const FIRE_AND_FORGET_COMMANDS = [
       'RDOSetOutputPrice', 'RDOSetInputOverPrice', 'RDOSetInputMaxPrice', 'RDOSetInputMinK',
       'RDODisconnectInput', 'RDODisconnectOutput',
-      'RDOAutoProduce', 'RDOAutoRelease', 'RDOSetTradeLevel', 'RDOSetRole', 'RDOSetLoanPerc',
+      'RDOAutoProduce', 'RDOSetTradeLevel', 'RDOSetRole', 'RDOSetLoanPerc',
       'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
     ];
 
@@ -500,7 +486,6 @@ describe('RDO Building Operations', () => {
       await mockSession.simulateSetInputOverPrice(1, 'Iron', 0, 120);
       await mockSession.simulateSetInputSortMode(1, 'Iron', 1);
       await mockSession.simulateSelSelected(1, true);
-      await mockSession.simulateSetBuyingStatus(1, 2, false);
       await mockSession.simulateConnectToTycoon(1, 42, 1);
       await mockSession.simulateDisconnectFromTycoon(1, 42, 1);
       mockSession.simulateSetStopped(1, true);

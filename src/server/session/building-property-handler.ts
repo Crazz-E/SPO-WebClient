@@ -26,12 +26,12 @@ import { serialiseConstruction } from './construction-lock';
  * (M-D), which turned a mapping bug into a silent no-op on the wire.
  */
 export const KNOWN_RDO_COMMANDS: ReadonlySet<string> = new Set([
-  'RDOAcceptCloning', 'RDOAutoProduce', 'RDOAutoRelease', 'RDOBanMinister',
+  'RDOAcceptCloning', 'RDOAutoProduce', 'RDOBanMinister',
   'RDOCacncelTransc', 'RDOCancelMovie', 'RDOCancelResearch', 'RDOConnectInput',
   'RDOConnectOutput', 'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
   'RDODisconnectInput', 'RDODisconnectOutput', 'RDOLaunchMovie',
   'RDOQueueResearch', 'RDOReleaseMovie', 'RDOSelSelected', 'RDOSelectWare',
-  'RDOSetBuyingStatus', 'RDOSetCompanyInputDemand', 'RDOSetInputFluidPerc',
+  'RDOSetCompanyInputDemand', 'RDOSetInputFluidPerc',
   'RDOSetInputMaxPrice', 'RDOSetInputMinK', 'RDOSetInputOverPrice',
   'RDOSetInputSortMode', 'RDOSetLoanPerc', 'RDOSetMinSalaryValue',
   'RDOSetMinistryBudget', 'RDOSetOutputPrice', 'RDOSetPrice', 'RDOSetRole',
@@ -430,8 +430,7 @@ function buildRdoCommandArgs(
       break;
     }
 
-    case 'RDOAutoProduce':
-    case 'RDOAutoRelease': {
+    case 'RDOAutoProduce': {
       // Boolean as WordBool (#-1 = true, #0 = false)
       const boolVal = parseInt(value, 10) !== 0 ? -1 : 0;
       args.push(RdoValue.int(boolVal));
@@ -503,18 +502,6 @@ function buildRdoCommandArgs(
       // Voyager: SupplySheetForm.pas line 699
       const boolVal = parseInt(value, 10) !== 0 ? -1 : 0;
       args.push(RdoValue.int(boolVal));
-      break;
-    }
-
-    case 'RDOSetBuyingStatus': {
-      // Args: fingerIndex (integer), boolean as WordBool
-      // Voyager: SupplySheetForm.pas line 741
-      const fingerIndex = params.fingerIndex;
-      if (fingerIndex === undefined) {
-        throw new Error('RDOSetBuyingStatus requires fingerIndex parameter');
-      }
-      const boolVal = parseInt(value, 10) !== 0 ? -1 : 0;
-      args.push(RdoValue.int(parseInt(fingerIndex, 10)), RdoValue.int(boolVal));
       break;
     }
 
@@ -792,9 +779,6 @@ function mapRdoCommandToPropertyName(
     case 'RDOAutoProduce':
       return 'AutoProd';
 
-    case 'RDOAutoRelease':
-      return 'AutoRel';
-
     case 'RDOSetOutputPrice': {
       // Output price is per-fluid; read back via PricePc (single-product) or indexed
       const fluidId = params.fluidId;
@@ -821,9 +805,6 @@ function mapRdoCommandToPropertyName(
       return 'SortMode';
 
     case 'RDOSelSelected':
-      return 'Selected';
-
-    case 'RDOSetBuyingStatus':
       return 'Selected';
 
     case 'RDOConnectToTycoon':

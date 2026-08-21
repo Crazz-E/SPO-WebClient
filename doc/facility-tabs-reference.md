@@ -633,7 +633,6 @@ threadEnd:   if update != fLastUpdate → discard results (tab already changed)
 | `RDOSetInputMaxPrice` | (fluidId, maxPrice) | Set max acceptable price |
 | `RDOSetInputSortMode` | (fluidId, mode) | Sort by cost or quality |
 | `RDOSelSelected` | (bool) | Toggle auto-buy |
-| `RDOSetBuyingStatus` | (fingerIndex, bool) | Toggle buying for input |
 
 **UI**: Tabs per input supply, stock display, cost/min-K/max-price controls, auto-buy toggle, supplier list sortable by cost or quality.
 

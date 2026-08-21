@@ -217,7 +217,6 @@ describe('Supply RDO command mapping', () => {
       case 'RDOSetInputMinK': return 'minK';
       case 'RDOSetInputSortMode': return 'SortMode';
       case 'RDOSelSelected': return 'Selected';
-      case 'RDOSetBuyingStatus': return 'Selected';
       case 'RDOSetInputOverPrice': return 'OverPriceCnxInfo';
       case 'RDOConnectInput': return 'cnxCount';
       case 'RDODisconnectInput': return 'cnxCount';
@@ -239,10 +238,6 @@ describe('Supply RDO command mapping', () => {
 
   it('should map RDOSelSelected to Selected', () => {
     expect(mapCommand('RDOSelSelected')).toBe('Selected');
-  });
-
-  it('should map RDOSetBuyingStatus to Selected', () => {
-    expect(mapCommand('RDOSetBuyingStatus')).toBe('Selected');
   });
 
   it('should map connection commands to cnxCount', () => {
