@@ -37,7 +37,7 @@ import type { ActiveInspector } from './building-details-handler';
 import { makeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { FakeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { SessionContext } from './session-context';
-import type { BuildingDetailsResponse, RdoPacket } from '../../shared/types';
+import type { BuildingDetailsResponse, BuildingPropertyValue, RdoPacket } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
@@ -497,7 +497,7 @@ describe('getBuildingBasicDetails', () => {
 // ===========================================================================
 
 describe('property collection and grouping', () => {
-  it('splits phase 1 into batches of 50 properties', async () => {
+  it('opens on ONE batch — the header group, not the whole template', async () => {
     const fake = makeDetailsCtx();
     // ResGeneral (20) + Workforce (24) + facManagement (8) + townJobs (18) — over 50.
     registerTabs('9003', ['ResGeneral', 'Workforce', 'facManagement', 'townJobs']);
@@ -505,6 +505,27 @@ describe('property collection and grouping', () => {
     cacheValues(fake, { Name: 'Tower' });
 
     await getBuildingBasicDetails(fake.ctx, X, Y, '9003');
+
+    // This used to be four groups and more than one batch. The opening read is
+    // now the first group plus the header fields, which fits in one.
+    const batches = fake.cacher.getPropertyList.mock.calls;
+    expect(batches).toHaveLength(1);
+    expect(batches[0][1].length).toBeLessThanOrEqual(50);
+  });
+
+  it('splits a section read into batches of 50 properties', async () => {
+    const fake = makeDetailsCtx();
+    registerTabs('9003', ['ResGeneral', 'Workforce', 'facManagement', 'townJobs']);
+    focusReturns(fake, '40133602');
+    cacheValues(fake, { Name: 'Tower' });
+
+    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9003');
+    fake.cacher.getPropertyList.mockClear();
+
+    // A civic tab consolidates several server groups and asks for them at once,
+    // which is where the 50-name cap still has to hold.
+    const groupIds = details.tabs.slice(1).map(t => t.id);
+    await getBuildingTabData(fake.ctx, X, Y, groupIds[0], '9003', groupIds);
 
     const batches = fake.cacher.getPropertyList.mock.calls;
     expect(batches.length).toBeGreaterThan(1);
@@ -895,6 +916,22 @@ describe('votes enrichment', () => {
     return fake;
   }
 
+  /**
+   * Open the facility, then open the section that carries `CurrBlock`.
+   *
+   * The enrichment used to ride on `getBuildingBasicDetails`, back when that
+   * call read the whole template. It reads the header group only now, so the
+   * enrichment fires where the group it depends on is actually read: the
+   * section request. Same behaviour, one round-trip later, and only for a user
+   * who opened the tab.
+   */
+  async function openVotesSection(fake: FakeSessionCtx): Promise<{ [groupId: string]: BuildingPropertyValue[] }> {
+    await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    fake.sent.length = 0;
+    const tab = await getBuildingTabData(fake.ctx, X, Y, 'probeBlock', '9011', ['probeBlock']);
+    return tab.groups ?? {};
+  }
+
   // The reason the enrichment exists — and the reason it never runs in
   // production. Pinned on the real registration, with no probe group.
   it('never fires on a real town hall: no shipped template carries CurrBlock', async () => {
@@ -920,7 +957,7 @@ describe('votes enrichment', () => {
     cacheValues(fake, { CurrBlock: '40133888', RulerName: 'Fred', RulerVotes: '120' });
     rdoMembers(fake, { RDOVoteOf: 'res="%Fred"' });
 
-    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    const groups = await openVotesSection(fake);
 
     expect(fake.sent).toHaveLength(1);
     const [{ packet, socketName, category }] = fake.sent;
@@ -933,7 +970,7 @@ describe('votes enrichment', () => {
     expect(packet.separator).toBe('"^"');
     expect(packet.args).toEqual([RdoValue.string('SPO_test3').format()]);
     expect(category).toBe(TimeoutCategory.NORMAL);
-    expect(details.groups['votes']).toContainEqual({ name: 'VoteOf', value: 'Fred' });
+    expect(groups['votes']).toContainEqual({ name: 'VoteOf', value: 'Fred' });
   });
 
   it('connects the construction service first when its socket is down', async () => {
@@ -942,7 +979,7 @@ describe('votes enrichment', () => {
     cacheValues(fake, { CurrBlock: '40133888', RulerName: 'Fred' });
     rdoMembers(fake, { RDOVoteOf: 'res="%Fred"' });
 
-    await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    await openVotesSection(fake);
 
     expect(fake.ctx.connectConstructionService).toHaveBeenCalled();
   });
@@ -952,7 +989,7 @@ describe('votes enrichment', () => {
     cacheValues(fake, { CurrBlock: '40133888', RulerName: 'Fred' });
     rdoMembers(fake, { RDOVoteOf: 'res="%Fred"' });
 
-    await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    await openVotesSection(fake);
 
     expect(fake.ctx.connectConstructionService).not.toHaveBeenCalled();
   });
@@ -962,7 +999,7 @@ describe('votes enrichment', () => {
     cacheValues(fake, { CurrBlock: '40133888', RulerName: 'Fred' });
     rdoMembers(fake, { RDOVoteOf: 'res="%Fred"' });
 
-    await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    await openVotesSection(fake);
 
     expect(fake.sent[0].packet.args).toEqual([RdoValue.string('CachedGuy').format()]);
   });
@@ -971,7 +1008,7 @@ describe('votes enrichment', () => {
     const fake = makeVotesCtx();
     cacheValues(fake, { RulerName: 'Fred' }); // no CurrBlock
 
-    await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    await openVotesSection(fake);
 
     expect(fake.sent).toEqual([]);
   });
@@ -980,7 +1017,7 @@ describe('votes enrichment', () => {
     const fake = makeVotesCtx({ activeUsername: null, cachedUsername: null });
     cacheValues(fake, { CurrBlock: '40133888', RulerName: 'Fred' });
 
-    await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    await openVotesSection(fake);
 
     expect(fake.sent).toEqual([]);
   });
@@ -1001,9 +1038,9 @@ describe('votes enrichment', () => {
     cacheValues(fake, { CurrBlock: '40133888', RulerName: 'Fred' });
     rdoMembers(fake, { RDOVoteOf: 'res="%"' });
 
-    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    const groups = await openVotesSection(fake);
 
-    expect(details.groups['votes'].some(v => v.name === 'VoteOf')).toBe(false);
+    expect(groups['votes'].some(v => v.name === 'VoteOf')).toBe(false);
   });
 
   it('leaves the tab alone when the reply carries no payload at all', async () => {
@@ -1012,9 +1049,9 @@ describe('votes enrichment', () => {
     const noPayload: RdoPacket = { raw: '', type: 'RESPONSE', rid: 3 };
     fake.respond(() => noPayload);
 
-    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    const groups = await openVotesSection(fake);
 
-    expect(details.groups['votes'].some(v => v.name === 'VoteOf')).toBe(false);
+    expect(groups['votes'].some(v => v.name === 'VoteOf')).toBe(false);
   });
 
   it('swallows a failed RDOVoteOf — the rest of the sheet still renders', async () => {
@@ -1022,9 +1059,9 @@ describe('votes enrichment', () => {
     cacheValues(fake, { CurrBlock: '40133888', RulerName: 'Fred' });
     fake.respond(() => new Error('Request timeout: RDOVoteOf'));
 
-    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9011');
+    const groups = await openVotesSection(fake);
 
-    expect(details.groups['votes']).toBeDefined();
+    expect(groups['votes']).toBeDefined();
     expect(fake.log.debug).toHaveBeenCalledWith(expect.stringContaining('VoteOf enrichment failed'));
   });
 });
@@ -1326,12 +1363,89 @@ describe('getBuildingTabData', () => {
     expect(fake.cacher.setObject).toHaveBeenCalledWith(FIRST_TEMP, X, Y);
   });
 
-  it('returns nothing for a tab that needs no lazy data', async () => {
+  it('returns nothing for a tab asked for with no group list and no gate data', async () => {
     const fake = makeDetailsCtx();
     setActiveInspectorForTest(fake.ctx, makeInspector());
 
     expect(await getBuildingTabData(fake.ctx, X, Y, 'indGeneral')).toEqual({});
     expect(fake.sent).toEqual([]);
+  });
+
+  // ── section reads: the groups the opening read deliberately skipped ──────
+
+  it('reads a section group the opening read skipped', async () => {
+    const fake = makeDetailsCtx();
+    registerTabs('9101', ['IndGeneral', 'Workforce']);
+    focusReturns(fake, '40133602');
+    cacheValues(fake, { Name: 'Plant', Workers0: '25', WorkersMax0: '40' });
+
+    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9101');
+    // The opening read stopped at the header group.
+    expect(details.groups['Workforce']).toBeUndefined();
+
+    const workforceId = details.tabs[1].id;
+    const tab = await getBuildingTabData(fake.ctx, X, Y, workforceId, '9101', [workforceId]);
+
+    expect(tab.groups?.[workforceId]).toBeDefined();
+    expect(tab.groups?.[workforceId]).toContainEqual(
+      expect.objectContaining({ name: 'Workers0', value: '25' }),
+    );
+  });
+
+  it('refreshes the header group alongside the section, so the header stays live', async () => {
+    const fake = makeDetailsCtx();
+    registerTabs('9102', ['IndGeneral', 'Workforce']);
+    focusReturns(fake, '40133602');
+    cacheValues(fake, { Name: 'Plant', ROI: '14%', Workers0: '25' });
+
+    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9102');
+    const [generalId, workforceId] = details.tabs.map(t => t.id);
+
+    const tab = await getBuildingTabData(fake.ctx, X, Y, workforceId, '9102', [workforceId]);
+
+    // `collectTemplatePropertyNamesForGroups` folds the first group back in.
+    expect(tab.groups?.[generalId]).toContainEqual(
+      expect.objectContaining({ name: 'ROI', value: '14%' }),
+    );
+  });
+
+  it('reads the several groups a civic tab consolidates in one request', async () => {
+    const fake = makeDetailsCtx();
+    registerTabs('9103', ['capitolGeneral', 'capitolTowns', 'ministeries']);
+    focusReturns(fake, '40133602');
+    cacheValues(fake, {
+      Name: 'Capitol', townCount: '1', townName0: 'Helartia',
+      ministryCount: '1', ministryName0: 'Agriculture',
+    });
+
+    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9103');
+    const groupIds = details.tabs.slice(1).map(t => t.id);
+
+    const tab = await getBuildingTabData(fake.ctx, X, Y, 'administration', '9103', groupIds);
+
+    // Whatever the groups turn out to hold, the read covered both ids and only
+    // the ids asked for — no third group rode along beyond the header one.
+    const returned = new Set(Object.keys(tab.groups ?? {}));
+    for (const id of returned) {
+      expect([...groupIds, details.tabs[0].id]).toContain(id);
+    }
+  });
+
+  it('holds the inspector mutex, so a section read cannot race a gate read', async () => {
+    const fake = makeDetailsCtx();
+    registerTabs('9104', ['IndGeneral', 'Workforce']);
+    focusReturns(fake, '40133602');
+    cacheValues(fake, { Name: 'Plant', Workers0: '25' });
+
+    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9104');
+    const workforceId = details.tabs[1].id;
+    fake.cacher.setObject.mockClear();
+
+    await getBuildingTabData(fake.ctx, X, Y, workforceId, '9104', [workforceId]);
+
+    // The reset to building root runs before the read, exactly as the gate path
+    // needs — a previous SetPath must not decide what a section sees.
+    expect(fake.cacher.setObject).toHaveBeenCalledWith(FIRST_TEMP, X, Y);
   });
 
   it('returns nothing when the tab exists but the template says it has no data', async () => {

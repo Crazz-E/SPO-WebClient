@@ -113,8 +113,9 @@ describe('Building Inspector — integration flow', () => {
     expect(screen.getAllByText('Small Farm').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/TestCorp/)).toBeTruthy();
 
-    // Tabs
-    expect(screen.getByText('GENERAL')).toBeTruthy();
+    // Sections. GENERAL is open, so its name is on the rail AND on the drawer
+    // header — the menu is master/detail now, not a single row of pills.
+    expect(screen.getAllByText('GENERAL').length).toBeGreaterThan(0);
     expect(screen.getByText('PRODUCTION')).toBeTruthy();
   });
 
@@ -219,7 +220,7 @@ describe('BuildingInspectorModal — integration flow', () => {
     const dialog = screen.getByRole('dialog');
     // The modal provides the title — inspector inside should NOT duplicate it
     // Modal title is in the header; inspector should have tabs but no redundant header
-    expect(within(dialog).getByText('GENERAL')).toBeTruthy();
+    expect(within(dialog).getAllByText('GENERAL').length).toBeGreaterThan(0);
     expect(within(dialog).getByText('PRODUCTION')).toBeTruthy();
   });
 

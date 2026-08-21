@@ -1,5 +1,9 @@
 /**
- * QuickStats — Revenue/sales summary bar at top of building inspector.
+ * QuickStats — the details + sales blocks under the inspector header.
+ *
+ * Named for what it was (a revenue bar); revenue, society and ROI now live in
+ * `InspectorHeader`, and what remains is the two blocks the redesigned panel
+ * puts between the header and the section menu.
  */
 
 import type { BuildingFocusInfo } from '@/shared/types';
@@ -271,6 +275,14 @@ export function parseDetailsText(text: string): DetailEntry[] {
   }
 }
 
+/**
+ * Facility summary: the parsed details block, then the sales list.
+ *
+ * Revenue used to head this bar; it now sits in `InspectorHeader` alongside the
+ * society and the ROI, which is where the redesigned inspector states the
+ * facility's identity. What is left here is the two blocks the spec puts under
+ * the header, in that order — details, then sales.
+ */
 export function QuickStats({ focus }: QuickStatsProps) {
   const constructionPct = focus.salesInfo
     ? parseConstructionPercent(focus.salesInfo)
@@ -278,11 +290,12 @@ export function QuickStats({ focus }: QuickStatsProps) {
 
   return (
     <div className={styles.bar}>
-      {focus.revenue && (
-        <div className={styles.stat}>
-          <span className={styles.value}>{focus.revenue}</span>
-          <span className={styles.label}>Revenue</span>
-        </div>
+      {focus.detailsText && (
+        <RichDetailsView detailsText={focus.detailsText} hintsText={focus.hintsText} />
+      )}
+
+      {!focus.detailsText && focus.hintsText && (
+        <div className={styles.hint}>{focus.hintsText}</div>
       )}
 
       {constructionPct !== null ? (
@@ -298,8 +311,8 @@ export function QuickStats({ focus }: QuickStatsProps) {
           const lines = parseSalesLines(focus.salesInfo);
           if (lines.length > 0) {
             // A warehouse posts one row per ware it sells — 30+ of them. The
-            // rows scroll inside a capped box so the tab bar and the tab
-            // content below keep their share of the inspector height.
+            // rows scroll inside a capped box so the section menu below keeps
+            // its share of the inspector height.
             return (
               <div className={styles.salesList}>
                 <div className={styles.salesListHeader}>
@@ -331,14 +344,6 @@ export function QuickStats({ focus }: QuickStatsProps) {
             </div>
           );
         })()
-      )}
-
-      {focus.detailsText && (
-        <RichDetailsView detailsText={focus.detailsText} hintsText={focus.hintsText} />
-      )}
-
-      {!focus.detailsText && focus.hintsText && (
-        <div className={styles.hint}>{focus.hintsText}</div>
       )}
     </div>
   );

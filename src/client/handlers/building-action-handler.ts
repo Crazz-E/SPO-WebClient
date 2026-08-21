@@ -141,7 +141,13 @@ export async function requestBuildingRefreshProperties(
 
 // ── Tab Data (Lazy Loading) ─────────────────────────────────────────────────
 
-/** Special tab IDs that require lazy loading. */
+/**
+ * Tabs whose data comes from a gate walk (SetPath + per-gate reads) rather than
+ * from the template's property list. They are fetched by id, with no `groupIds`.
+ * Every OTHER tab is now lazy too — its group is read when the section opens —
+ * but through the `groupIds` path, so this set stays what it always was: the
+ * three specials.
+ */
 const LAZY_TAB_IDS = new Set(['supplies', 'products', 'compInputs']);
 
 export function isLazyTab(tabId: string): boolean {
@@ -154,6 +160,7 @@ export async function requestTabData(
   y: number,
   tabId: string,
   visualClass: string,
+  groupIds?: string[],
 ): Promise<void> {
   // Don't send requests when disconnected
   if (useGameStore.getState().status !== 'connected') return;
@@ -174,6 +181,7 @@ export async function requestTabData(
       y,
       tabId,
       visualClass,
+      ...(groupIds && groupIds.length > 0 ? { groupIds } : {}),
     };
 
     const response = await ctx.sendRequest(req) as WsRespBuildingTabData;

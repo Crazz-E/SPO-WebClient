@@ -375,11 +375,26 @@ export function StatusOverlay() {
       }}
       data-testid="status-overlay"
     >
-      {/* Header: building name + upgrade level badge */}
+      {/* Header: name + level, then the society, then revenue.
+          Same three lines the inspector header opens with, minus the ROI and
+          the tycoon — both are property reads the preview does not pay for. */}
       <div className={styles.header}>
-        <div className={styles.buildingName}>{building.buildingName}</div>
-        {richDetails?.upgradeLevel !== undefined && (
-          <span className={styles.levelBadge}>Lvl {richDetails.upgradeLevel}</span>
+        <div className={styles.headerTop}>
+          <div className={styles.buildingName}>{building.buildingName}</div>
+          {richDetails?.upgradeLevel !== undefined && (
+            <span className={styles.levelBadge}>Lvl {richDetails.upgradeLevel}</span>
+          )}
+        </div>
+        {building.ownerName && (
+          <div className={styles.ownerName}>{building.ownerName}</div>
+        )}
+        {building.revenue && (
+          <span className={`${styles.revenuePill} ${revenueClass(building.revenue)}`}>
+            <span className={styles.revenueArrow}>
+              {direction === 'up' ? '\u25B2' : direction === 'down' ? '\u25BC' : '\u25CF'}
+            </span>
+            {building.revenue}
+          </span>
         )}
       </div>
 
@@ -422,21 +437,6 @@ export function StatusOverlay() {
         }
         return <div className={styles.salesInfo}>{building.salesInfo}</div>;
       })()}
-
-      {/* Owner + revenue row */}
-      <div className={styles.infoRow}>
-        {building.ownerName && (
-          <span className={styles.ownerName}>{building.ownerName}</span>
-        )}
-        {building.revenue && (
-          <span className={`${styles.revenuePill} ${revenueClass(building.revenue)}`}>
-            <span className={styles.revenueArrow}>
-              {direction === 'up' ? '\u25B2' : direction === 'down' ? '\u25BC' : '\u25CF'}
-            </span>
-            {building.revenue}
-          </span>
-        )}
-      </div>
 
       {/* Hints */}
       {showHint && (

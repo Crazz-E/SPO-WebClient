@@ -1,0 +1,208 @@
+/* InspectorMenu — section list + drawer, mirroring ProfilePanel */
+
+.menu {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ---- Section list — the menu's default view ---- */
+
+.sectionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: var(--space-3);
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-border) transparent;
+}
+
+/* A section is open: the list shrinks to a rail, the drawer takes the rest */
+.split .sectionList {
+  width: 176px;
+  padding: var(--space-2);
+  border-right: 1px solid var(--surface-border);
+}
+
+.sectionItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-default),
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.sectionItem:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--surface-border);
+}
+
+.sectionItemActive,
+.sectionItemActive:hover {
+  color: var(--accent-gold);
+  background: rgba(212, 168, 83, 0.1);
+  border-color: var(--accent-gold-dark);
+}
+
+.sectionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-bold);
+  text-transform: uppercase;
+}
+
+.sectionLabel {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sectionChevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* Rail mode — icon and label only */
+.split .sectionItem {
+  padding: var(--space-2);
+}
+
+.split .sectionChevron {
+  display: none;
+}
+
+/* ---- Drawer — opens to the right of the list ---- */
+
+.drawer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  animation: drawerIn 180ms var(--ease-out);
+}
+
+@keyframes drawerIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer {
+    animation: none;
+  }
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--surface-border);
+  flex-shrink: 0;
+}
+
+.drawerTitle {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.drawerBack,
+.drawerClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-default),
+    background var(--duration-fast) var(--ease-default);
+}
+
+.drawerBack:hover,
+.drawerClose:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+/* The back arrow only earns its place when the list is hidden (mobile) */
+.drawerBack {
+  display: none;
+}
+
+.drawerContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-border) transparent;
+}
+
+/* Tablet — narrower rail so the drawer keeps a usable width */
+@media (max-width: 1023px) {
+  .split .sectionList {
+    width: 140px;
+  }
+}
+
+/* Mobile — the drawer replaces the list entirely */
+@media (max-width: 767px) {
+  .split .sectionList {
+    display: none;
+  }
+
+  .drawerBack {
+    display: flex;
+  }
+
+  .drawerClose {
+    display: none;
+  }
+}

@@ -26,6 +26,7 @@ import {
   getTemplateForVisualClass,
   collectTemplatePropertyNamesStructured,
   collectTemplatePropertyNamesForGroups,
+  collectHeaderPropertyNames,
 } from '../../shared/building-details';
 import type { CollectedPropertyNames } from '../../shared/building-details';
 import { cleanPayload as cleanPayloadHelper, parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
@@ -264,8 +265,15 @@ export async function getBuildingBasicDetails(
   try {
     await ctx.cacherSetObject(tempObjectId, x, y);
 
-    // Phase 1+2: Fetch properties (same as getBuildingDetailsImpl)
-    const { allValues, groups, moneyGraph } = await fetchPropertiesAndGroups(ctx, tempObjectId, template);
+    // Phase 1+2: the OPENING read only — the header fields plus the first
+    // group, the one the inspector shows before the user picks anything. Every
+    // other group is read by `getBuildingTabData` when its menu entry is
+    // opened. Reading the whole template here is what made the panel slow: a
+    // civic or industry template expands to hundreds of indexed properties in
+    // phase 2, paid for on every click on the map.
+    const { allValues, groups, moneyGraph } = await fetchPropertiesAndGroups(
+      ctx, tempObjectId, template, collectHeaderPropertyNames(template),
+    );
 
     // Enrich votes tab
     await enrichVotesTab(ctx, groups, allValues);
@@ -356,11 +364,13 @@ export async function getBuildingTabData(
   y: number,
   tabId: string,
   visualClass?: string,
+  groupIds?: string[],
 ): Promise<{
   supplies?: BuildingSupplyData[];
   products?: BuildingProductData[];
   compInputs?: CompInputData[];
   warehouseWares?: WarehouseWareData[];
+  groups?: { [groupId: string]: BuildingPropertyValue[] };
 }> {
   let inspector = getActiveInspector(ctx, x, y);
 
@@ -382,6 +392,19 @@ export async function getBuildingTabData(
     await ctx.cacherSetObject(tempObjectId, x, y);
 
     ctx.log.debug(`[BuildingDetails] Tab data for (${x},${y}), tab=${tabId}`);
+
+    // Template groups the opening read skipped. `collectTemplatePropertyNamesForGroups`
+    // always folds the first group back in, so the header refreshes for free on
+    // every section the user opens.
+    if (groupIds && groupIds.length > 0) {
+      const template = getTemplateForVisualClass(visualClass || '0');
+      const { allValues, groups } = await fetchPropertiesAndGroups(
+        ctx, tempObjectId, template,
+        collectTemplatePropertyNamesForGroups(template, groupIds),
+      );
+      await enrichVotesTab(ctx, groups, allValues);
+      return { groups };
+    }
 
     // Supplies and Products are the same read with a different gate spec: list
     // the gates, and stop. Nothing about a gate — not its header, not its
