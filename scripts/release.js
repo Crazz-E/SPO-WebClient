@@ -242,7 +242,8 @@ function main() {
   if (fs.existsSync(CLAUDE_MD_PATH)) {
     const claudeMd = fs.readFileSync(CLAUDE_MD_PATH, 'utf-8');
     const updatedClaudeMd = claudeMd.replace(
-      /RDO protocol\. Beta \d+\.\d+\.\d+\S*/,
+      // The prerelease part stops at the sentence's full stop: [\w.] would swallow it.
+      /RDO protocol\. Beta \d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?/,
       `RDO protocol. Beta ${newVersion}`
     );
     if (updatedClaudeMd === claudeMd) {
