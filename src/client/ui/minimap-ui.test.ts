@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { useUiStore } from '../store/ui-store';
 import type { MinimapRendererAPI } from './minimap-ui';
 
 // ---------------------------------------------------------------------------
@@ -22,6 +23,7 @@ interface MockElement {
   removeChild: jest.Mock;
   addEventListener: jest.Mock;
   onmousedown: ((e: unknown) => void) | null;
+  onclick: (() => void) | null;
   getContext: jest.Mock;
   imageSmoothingEnabled: boolean;
 }
@@ -79,6 +81,7 @@ function createMockElement(): MockElement {
     }),
     addEventListener: jest.fn(),
     onmousedown: null,
+    onclick: null,
     getContext: jest.fn(() => mockCtx),
     imageSmoothingEnabled: true,
   };
@@ -148,24 +151,85 @@ function createMockRenderer(overrides: Partial<MinimapRendererAPI> = {}): Minima
   };
 }
 
+// ---------------------------------------------------------------------------
+// Viewport mock — a resizable window whose resize listeners can be fired
+// ---------------------------------------------------------------------------
+
+interface MockWindow {
+  innerWidth: number;
+  innerHeight: number;
+  addEventListener: jest.Mock;
+  removeEventListener: jest.Mock;
+}
+
+let mockWindow: MockWindow | null = null;
+let viewportHandlers: Array<() => void>;
+
+function installWindow(width: number, height = 800): void {
+  viewportHandlers = [];
+  mockWindow = {
+    innerWidth: width,
+    innerHeight: height,
+    addEventListener: jest.fn((type: string, fn: () => void) => {
+      if (type === 'resize' || type === 'orientationchange') viewportHandlers.push(fn);
+    }),
+    removeEventListener: jest.fn((_type: string, fn: () => void) => {
+      viewportHandlers = viewportHandlers.filter(h => h !== fn);
+    }),
+  };
+  (globalThis as Record<string, unknown>).window = mockWindow;
+}
+
+/** Change the viewport width and fire the listener once, like a rotation would. */
+function resizeTo(width: number, height = 800): void {
+  if (mockWindow) {
+    mockWindow.innerWidth = width;
+    mockWindow.innerHeight = height;
+  }
+  // 'resize' and 'orientationchange' share one handler — fire it a single time.
+  viewportHandlers.slice(0, 1).forEach(h => h());
+}
+
+function wrapperStyle(): string {
+  return allElements.find(el => el.id === 'minimap-wrapper')!.style.cssText ?? '';
+}
+
 beforeEach(() => {
   jest.useFakeTimers();
   allElements = [];
   mockCtx = createMockCtx();
+  viewportHandlers = [];
 
   const bodyEl = createMockElement();
 
   (globalThis as Record<string, unknown>).document = {
     createElement: jest.fn(() => createMockElement()),
     body: bodyEl,
+    documentElement: {},
     addEventListener: jest.fn(),
     removeEventListener: jest.fn(),
   };
+  (globalThis as Record<string, unknown>).getComputedStyle = jest.fn(() => ({
+    getPropertyValue: () => '420px',
+  }));
+
+  useUiStore.setState({
+    minimapFullscreen: false,
+    mobileTab: 'map',
+    modal: null,
+    rightPanel: null,
+    leftPanel: null,
+    commandPaletteOpen: false,
+    isPlacingBuilding: false,
+  });
 });
 
 afterEach(() => {
   jest.useRealTimers();
   jest.restoreAllMocks();
+  (globalThis as Record<string, unknown>).window = undefined;
+  mockWindow = null;
+  viewportHandlers = [];
 });
 
 const { MinimapUI } = require('./minimap-ui') as typeof import('./minimap-ui');
@@ -563,6 +627,231 @@ describe('MinimapUI', () => {
       expect(canvas!.height).toBe(160);
 
       minimap.destroy();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Mobile collision — the minimap must never sit on top of the mobile UI
+  // ---------------------------------------------------------------------------
+
+  describe('mobile collision', () => {
+    it('keeps the docked minimap hidden on a mobile viewport', () => {
+      installWindow(375);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+
+      expect(minimap.isVisible()).toBe(false);
+      expect(wrapperStyle()).toContain('display: none');
+
+      minimap.destroy();
+    });
+
+    it('hides the docked minimap at 700px — the band the mobile shell owns', () => {
+      installWindow(1024);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+      expect(minimap.isVisible()).toBe(true);
+
+      resizeTo(700);
+
+      expect(minimap.isVisible()).toBe(false);
+      expect(wrapperStyle()).toContain('display: none');
+
+      minimap.destroy();
+    });
+
+    it('docks again — without the fullscreen scrim — when the viewport grows back', () => {
+      installWindow(375);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+      minimap.setSize('large');
+
+      useUiStore.getState().setMinimapFullscreen(true);
+      expect(wrapperStyle()).toContain('inset: 0');
+
+      resizeTo(1024);
+
+      expect(useUiStore.getState().minimapFullscreen).toBe(false);
+      expect(minimap.isVisible()).toBe(true);
+
+      const style = wrapperStyle();
+      expect(style).toContain('top: 12px');
+      expect(style).toContain('width: 320px');
+      expect(style).not.toContain('inset: 0');
+      expect(style).not.toContain('rgba(0,0,0,0.6)');
+
+      minimap.destroy();
+    });
+
+    it('re-shows the docked style after a fullscreen session, never the scrim', () => {
+      installWindow(1024);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+
+      useUiStore.getState().setMinimapFullscreen(true);
+      useUiStore.getState().setMinimapFullscreen(false);
+
+      minimap.toggle();  // hide
+      minimap.toggle();  // show again
+
+      const style = wrapperStyle();
+      expect(style).toContain('display: block');
+      expect(style).not.toContain('rgba(0,0,0,0.6)');
+      expect(style).toContain('z-index: var(--z-dropdown, 100)');
+
+      minimap.destroy();
+    });
+
+    it('keeps the fullscreen scrim below modals', () => {
+      installWindow(375);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+      useUiStore.getState().setMinimapFullscreen(true);
+
+      expect(wrapperStyle()).toContain('z-index: calc(var(--z-modal) - 1)');
+
+      minimap.destroy();
+    });
+
+    it('closes the fullscreen minimap when a menu opens', () => {
+      installWindow(375);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+      useUiStore.getState().setMinimapFullscreen(true);
+      expect(wrapperStyle()).toContain('inset: 0');
+
+      useUiStore.getState().setMobileTab('build');
+
+      expect(useUiStore.getState().minimapFullscreen).toBe(false);
+      expect(wrapperStyle()).toContain('display: none');
+
+      minimap.destroy();
+    });
+
+    it('closes the fullscreen minimap when a modal opens', () => {
+      installWindow(375);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+      useUiStore.getState().setMinimapFullscreen(true);
+
+      useUiStore.getState().openModal('settings');
+
+      expect(useUiStore.getState().minimapFullscreen).toBe(false);
+
+      minimap.destroy();
+    });
+
+    it('refuses to open over a menu that is already up', () => {
+      installWindow(375);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+
+      useUiStore.getState().openModal('settings');
+      useUiStore.getState().setMinimapFullscreen(true);
+
+      expect(useUiStore.getState().minimapFullscreen).toBe(false);
+      expect(wrapperStyle()).toContain('display: none');
+
+      minimap.destroy();
+    });
+
+    it('closes the fullscreen minimap on a tap it cannot navigate from', () => {
+      installWindow(375);
+
+      const renderer = createMockRenderer({ getTerrainPixelData: jest.fn(() => null) });
+      const minimap = new MinimapUI();
+      minimap.setRenderer(renderer);
+      useUiStore.getState().setMinimapFullscreen(true);
+
+      const container = allElements.find(el => el.id === 'minimap-container');
+      container!.onmousedown!({ offsetX: 10, offsetY: 10, preventDefault: jest.fn(), stopPropagation: jest.fn() });
+
+      expect(renderer.centerOn).not.toHaveBeenCalled();
+      expect(useUiStore.getState().minimapFullscreen).toBe(false);
+
+      minimap.destroy();
+    });
+
+    it('resizes the fullscreen diamond on rotation', () => {
+      installWindow(375, 800);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+      useUiStore.getState().setMinimapFullscreen(true);
+
+      resizeTo(700, 375);
+
+      const canvas = allElements.find(el => el.getContext.mock?.calls?.length > 0);
+      expect(canvas!.width).toBe(375);   // min(700, 375)
+
+      minimap.destroy();
+    });
+
+    it('shifts right when the desktop left panel opens', () => {
+      installWindow(1024);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+
+      useUiStore.getState().openLeftPanel('empire');
+
+      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
+      expect(wrapper!.style.left).toBe('calc(420px + 12px)');
+
+      minimap.destroy();
+    });
+
+    it('clears a stale fullscreen flag when the viewport shrinks into mobile', () => {
+      installWindow(1024);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+
+      // Desktop has no fullscreen minimap — the flag can only be stale here.
+      useUiStore.setState({ minimapFullscreen: true });
+
+      resizeTo(375);
+
+      expect(useUiStore.getState().minimapFullscreen).toBe(false);
+      expect(minimap.isVisible()).toBe(false);
+
+      minimap.destroy();
+    });
+
+    it('closes the fullscreen minimap on a scrim tap', () => {
+      installWindow(375);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+      useUiStore.getState().setMinimapFullscreen(true);
+
+      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
+      expect(wrapper!.onclick).toBeDefined();
+      wrapper!.onclick!();
+
+      expect(useUiStore.getState().minimapFullscreen).toBe(false);
+      expect(wrapper!.onclick).toBeNull();
+
+      minimap.destroy();
+    });
+
+    it('detaches the viewport listener on destroy', () => {
+      installWindow(375);
+
+      const minimap = new MinimapUI();
+      minimap.setRenderer(createMockRenderer());
+      expect(viewportHandlers.length).toBeGreaterThan(0);
+
+      minimap.destroy();
+      expect(viewportHandlers).toHaveLength(0);
     });
   });
 });
