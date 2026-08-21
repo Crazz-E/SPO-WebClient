@@ -235,14 +235,22 @@ function main() {
   }
 
   // 7. Update CLAUDE.md version reference
+  //
+  // It used to look for a table row that CLAUDE.md no longer has, replace nothing,
+  // and report success anyway — which is how the file sat on 1.3.0-beta while every
+  // other manifest moved on. A pattern that matches nothing is now an audible miss.
   if (fs.existsSync(CLAUDE_MD_PATH)) {
     const claudeMd = fs.readFileSync(CLAUDE_MD_PATH, 'utf-8');
     const updatedClaudeMd = claudeMd.replace(
-      /\| RDO protocol \| Beta \d+\.\d+\.\d+\S*/,
-      `| RDO protocol | Beta ${newVersion}`
+      /RDO protocol\. Beta \d+\.\d+\.\d+\S*/,
+      `RDO protocol. Beta ${newVersion}`
     );
-    fs.writeFileSync(CLAUDE_MD_PATH, updatedClaudeMd, 'utf-8');
-    console.log(`Updated CLAUDE.md version to Beta ${newVersion}`);
+    if (updatedClaudeMd === claudeMd) {
+      console.warn(`WARNING: CLAUDE.md has no version line to update — check it by hand`);
+    } else {
+      fs.writeFileSync(CLAUDE_MD_PATH, updatedClaudeMd, 'utf-8');
+      console.log(`Updated CLAUDE.md version to Beta ${newVersion}`);
+    }
   }
 
   // 8. Print next steps
