@@ -22,6 +22,7 @@ import {
   login,
   logoff,
   readBuildingDetails,
+  readBuildingTabData,
   propertyValue,
   type LiveSession,
 } from './session';
@@ -255,9 +256,19 @@ const mailRoundTrip: Flow = {
 };
 
 /** Building inspector read — the path every facility panel depends on. */
+/**
+ * Building inspector read — the path every facility panel depends on.
+ *
+ * The inspector reads one section at a time: the opening read carries the
+ * header group, and each other group arrives when its menu entry is opened.
+ * Both halves are asserted here, because only a live drive can show that the
+ * deferred read still finds its properties in the real Delphi cache — the
+ * temp object has to survive between the two round-trips and be reset to the
+ * building root before the second.
+ */
 const buildingDetails: Flow = {
   name: 'building-details',
-  what: 'town hall inspector read: tabs and property groups',
+  what: 'town hall inspector read: header group at open, section group on demand',
   mutates: false,
   run: async () => {
     const assertions = new Assertions();
@@ -266,13 +277,42 @@ const buildingDetails: Flow = {
       const town = await findTown(session, GOVERNED_TOWN);
       const visualClass = await resolveVisualClass(session, town.x, town.y);
       const details = await readBuildingDetails(session, town.x, town.y, visualClass);
+
       assertions.check('tabs were served', details.tabs.length > 0, `${details.tabs.length} tabs`);
+      // The template is what declares the tabs, and it is unchanged by the
+      // section-at-a-time read — so it is the tab list, not the groups, that
+      // tells a Town Hall from the generic fallback.
       assertions.check(
         'the Town Hall template resolved, not the generic one',
-        details.groups.townTaxes !== undefined,
+        details.tabs.some(t => t.id === 'townTaxes'),
+        `tabs: ${details.tabs.map(t => t.id).join(' ')}`,
+      );
+      assertions.check(
+        'the opening read carries the header group',
+        details.groups.townGeneral !== undefined,
         `groups: ${Object.keys(details.groups).join(' ')}`,
       );
-      assertions.check('property groups were served', Object.keys(details.groups).length > 0);
+      // The load-time contract: a section nobody opened costs nothing.
+      assertions.check(
+        'the opening read does NOT carry a section nobody opened',
+        details.groups.townTaxes === undefined,
+        `groups: ${Object.keys(details.groups).join(' ')}`,
+      );
+
+      const section = await readBuildingTabData(
+        session, town.x, town.y, 'townTaxes', visualClass, ['townTaxes'],
+      );
+      assertions.check(
+        'opening the section reads its group',
+        section.groups?.townTaxes !== undefined,
+        `groups: ${Object.keys(section.groups ?? {}).join(' ')}`,
+      );
+      assertions.check(
+        'the section read has property values, not just a key',
+        (section.groups?.townTaxes?.length ?? 0) > 0,
+        `${section.groups?.townTaxes?.length ?? 0} values`,
+      );
+
       assertions.check('no gateway errors', session.driver.errors.length === 0);
       return report('building-details', assertions, [], session);
     } finally {

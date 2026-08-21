@@ -11,6 +11,7 @@ import type {
   WsRespLoginSuccess,
   WsRespConnectSuccess,
   WsRespBuildingDetails,
+  WsRespBuildingTabData,
   WsRespBuildingSetProperty,
   WsRespSearchMenuTowns,
   WsRespMapData,
@@ -216,6 +217,27 @@ export async function readBuildingDetails(
     WsMessageType.RESP_BUILDING_DETAILS,
   );
   return response.details;
+}
+
+/**
+ * Read one section of the inspector — the groups the opening read leaves out.
+ *
+ * `readBuildingDetails` carries the header group alone; every other group is
+ * read here, when the user opens its menu entry. `groupIds` is what names them,
+ * and a civic tab consolidates several, hence a list.
+ */
+export async function readBuildingTabData(
+  session: LiveSession,
+  x: number,
+  y: number,
+  tabId: string,
+  visualClass: string,
+  groupIds?: string[],
+): Promise<WsRespBuildingTabData> {
+  return session.driver.request<WsRespBuildingTabData>(
+    { type: WsMessageType.REQ_BUILDING_TAB_DATA, x, y, tabId, visualClass, groupIds },
+    WsMessageType.RESP_BUILDING_TAB_DATA,
+  );
 }
 
 export async function setBuildingProperty(
