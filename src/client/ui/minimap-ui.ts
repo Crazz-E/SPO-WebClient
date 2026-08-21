@@ -12,8 +12,11 @@
  *  - Click/tap inside → re-center main camera on that map position
  *
  * Layout:
- *  Desktop (≥ 640 px): top-left, shifts right when the left panel is open
- *  Mobile  (< 640 px): bottom-left, above the BottomNav safe area
+ *  Desktop (≥ 768 px): docked top-left, shifts right when the left panel is open
+ *  Mobile  (< 768 px): never docked — a floating diamond would sit on the
+ *                      BottomSheet / BottomNav. The only mobile form is the
+ *                      fullscreen overlay opened from MinimapToggleButton, and
+ *                      it closes itself as soon as any menu opens.
  *
  * Size is controlled via Settings (Small / Medium / Large preset).
  */
@@ -45,12 +48,21 @@ export interface MinimapRendererAPI {
 // ---------------------------------------------------------------------------
 
 const DESKTOP_PAD   = 12;   // px — screen-edge gap (desktop)
-const MOBILE_PAD    = 8;    // px — screen-edge gap (mobile)
 const MOBILE_SIZE   = 140;  // px — fixed diamond size (mobile)
 const MIN_SIZE      = 120;  // px — minimum size
 const MAX_SIZE      = 500;  // px — maximum size
-const MOBILE_BP     = 640;  // px — viewport width breakpoint
+/**
+ * px — viewport width breakpoint. Must stay equal to `useResponsive`'s `tablet`
+ * breakpoint and to the `max-width: 767px` guard every mobile stylesheet uses:
+ * a lower value here left a band of widths (landscape phones, small tablets)
+ * where the mobile shell was on screen *and* the docked minimap was floating
+ * over it.
+ */
+const MOBILE_BP     = 768;
 const UPDATE_MS     = 500;  // ms — render interval
+
+/** Fullscreen scrim stacking level — above the mobile sheet, below any modal. */
+const FULLSCREEN_Z  = 'calc(var(--z-modal) - 1)';
 
 /** Pixel sizes for each preset. */
 const SIZE_MAP: Record<MinimapSize, number> = {
@@ -99,6 +111,15 @@ export class MinimapUI {
   /** Current diamond bounding-box side (always square). */
   private currentSize: number = SIZE_MAP.medium;
 
+  /** Preset side chosen in Settings — restored when the viewport grows back. */
+  private desktopSize: number = SIZE_MAP.medium;
+
+  /** Layout the DOM currently reflects — `null` until the DOM exists. */
+  private mobileLayout: boolean | null = null;
+
+  /** Bound resize/orientation handler, kept so destroy() can detach it. */
+  private onViewportChange: (() => void) | null = null;
+
   private unsubPanel: (() => void) | null = null;
   private unsubFullscreen: (() => void) | null = null;
 
@@ -123,15 +144,17 @@ export class MinimapUI {
     // On mobile, DOM is created but hidden — fullscreen store state controls visibility
     if (this.isMobile()) {
       this.ensureDOM();
-      if (this.wrapper) this.wrapper.style.display = 'none';
-      this.subscribeFullscreen();
+      this.enterMobileLayout();
       return;
     }
 
     if (this.visible) return;
     this.visible = true;
     this.ensureDOM();
-    if (this.wrapper) this.wrapper.style.display = 'block';
+    // Re-apply the docked style rather than just flipping `display`: a previous
+    // fullscreen session replaced the wrapper's whole style block, and showing
+    // that again would put a full-viewport scrim over the UI.
+    this.applyDockedStyle('block');
     this.startUpdating();
   }
 
@@ -150,10 +173,11 @@ export class MinimapUI {
     return this.visible;
   }
 
-  /** Apply a size preset from Settings. Mobile ignores this. */
+  /** Apply a size preset from Settings. Mobile has no docked minimap to size. */
   public setSize(preset: MinimapSize): void {
-    if (this.isMobile()) return;
     const px = SIZE_MAP[preset] ?? SIZE_MAP.medium;
+    this.desktopSize = px;
+    if (this.isMobile()) return;
     this.applySize(px);
   }
 
@@ -163,6 +187,8 @@ export class MinimapUI {
     this.stopUpdating();
     if (this.unsubPanel) { this.unsubPanel(); this.unsubPanel = null; }
     if (this.unsubFullscreen) { this.unsubFullscreen(); this.unsubFullscreen = null; }
+    this.detachViewportListener();
+    this.mobileLayout = null;
     if (this.wrapper?.parentElement) {
       this.wrapper.parentElement.removeChild(this.wrapper);
     }
@@ -190,21 +216,141 @@ export class MinimapUI {
 
   private applyPositioning(): void {
     if (!this.wrapper) return;
-    if (this.isMobile()) {
-      this.wrapper.style.top    = '';
-      this.wrapper.style.bottom = `calc(env(safe-area-inset-bottom, 0px) + 56px + ${MOBILE_PAD}px)`;
-      this.wrapper.style.left   = `${MOBILE_PAD}px`;
+    // Docked minimap is desktop-only, so there is a single anchor: top-left,
+    // pushed right by an open left panel.
+    this.wrapper.style.bottom = '';
+    this.wrapper.style.top    = `${DESKTOP_PAD}px`;
+    const panelOpen = useUiStore.getState().leftPanel !== null;
+    if (panelOpen) {
+      const w = getComputedStyle(document.documentElement)
+        .getPropertyValue('--panel-width-desktop').trim() || '420px';
+      this.wrapper.style.left = `calc(${w} + ${DESKTOP_PAD}px)`;
     } else {
-      this.wrapper.style.bottom = '';
-      this.wrapper.style.top    = `${DESKTOP_PAD}px`;
-      const panelOpen = useUiStore.getState().leftPanel !== null;
-      if (panelOpen) {
-        const w = getComputedStyle(document.documentElement)
-          .getPropertyValue('--panel-width-desktop').trim() || '420px';
-        this.wrapper.style.left = `calc(${w} + ${DESKTOP_PAD}px)`;
-      } else {
-        this.wrapper.style.left = `${DESKTOP_PAD}px`;
-      }
+      this.wrapper.style.left = `${DESKTOP_PAD}px`;
+    }
+  }
+
+  /**
+   * Write the docked wrapper/container style from scratch.
+   *
+   * Both fullscreen entry and exit rewrite these elements wholesale, so every
+   * path back to the docked form goes through here — that is what guarantees a
+   * later `show()` can never resurrect the fullscreen scrim.
+   */
+  private applyDockedStyle(display: 'block' | 'none'): void {
+    if (!this.wrapper || !this.container) return;
+
+    this.wrapper.onclick = null;
+    this.wrapper.style.cssText = `
+      position: fixed;
+      top: ${DESKTOP_PAD}px;
+      left: ${DESKTOP_PAD}px;
+      width: ${this.currentSize}px;
+      height: ${this.currentSize}px;
+      overflow: visible;
+      z-index: var(--z-dropdown, 100);
+      pointer-events: none;
+      display: ${display};
+      transition: left 250ms cubic-bezier(0.16,1,0.3,1),
+                  bottom 250ms cubic-bezier(0.16,1,0.3,1);
+    `;
+
+    this.container.style.position  = 'absolute';
+    this.container.style.inset     = '0';
+    this.container.style.width     = '';
+    this.container.style.height    = '';
+    this.container.style.top       = '';
+    this.container.style.left      = '';
+    this.container.style.transform = '';
+
+    this.applyPositioning();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Layout mode — the docked minimap exists on desktop only
+  // ---------------------------------------------------------------------------
+
+  /** Tear the docked minimap down: hidden, idle, and never over the mobile UI. */
+  private enterMobileLayout(): void {
+    this.visible = false;
+    this.stopUpdating();
+    if (useUiStore.getState().minimapFullscreen) {
+      useUiStore.getState().setMinimapFullscreen(false);
+    }
+    this.fullscreen = false;
+    this.currentSize = MOBILE_SIZE;
+    this.applyDockedStyle('none');
+    this.subscribeFullscreen();
+  }
+
+  /** Bring the docked minimap back at its Settings size. */
+  private leaveMobileLayout(): void {
+    if (useUiStore.getState().minimapFullscreen) {
+      useUiStore.getState().setMinimapFullscreen(false);
+    }
+    this.fullscreen = false;
+    this.visible = true;
+    this.applySize(this.desktopSize);
+    this.applyDockedStyle('block');
+    this.startUpdating();
+  }
+
+  private attachViewportListener(): void {
+    if (this.onViewportChange) return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    this.onViewportChange = () => this.handleViewportChange();
+    window.addEventListener('resize', this.onViewportChange);
+    window.addEventListener('orientationchange', this.onViewportChange);
+  }
+
+  private detachViewportListener(): void {
+    if (!this.onViewportChange) return;
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('resize', this.onViewportChange);
+      window.removeEventListener('orientationchange', this.onViewportChange);
+    }
+    this.onViewportChange = null;
+  }
+
+  /**
+   * A rotation crosses the breakpoint far more often than a window drag does —
+   * without this the minimap kept whichever layout it was built with, which is
+   * how a desktop-sized diamond ended up floating over the mobile shell.
+   */
+  private handleViewportChange(): void {
+    if (!this.wrapper) return;
+    const mobile = this.isMobile();
+
+    if (mobile !== this.mobileLayout) {
+      this.mobileLayout = mobile;
+      mobile ? this.enterMobileLayout() : this.leaveMobileLayout();
+      return;
+    }
+
+    // Same layout — a fullscreen diamond still has to follow the new viewport.
+    if (this.fullscreen) this.enterFullscreen();
+  }
+
+  /**
+   * Any surface the fullscreen minimap must not sit on top of. The scrim covers
+   * the whole viewport, so leaving it up over a menu blocks every control
+   * underneath it.
+   */
+  private isMenuOpen(): boolean {
+    const s = useUiStore.getState();
+    return s.modal !== null
+      || s.commandPaletteOpen
+      || s.rightPanel !== null
+      || s.leftPanel !== null
+      || s.mobileTab !== 'map'
+      || s.isPlacingBuilding;
+  }
+
+  /** Re-anchor on panel changes, and never let the scrim outlive a menu opening. */
+  private onUiStateChange(): void {
+    this.applyPositioning();
+    if (useUiStore.getState().minimapFullscreen && this.isMenuOpen()) {
+      useUiStore.getState().setMinimapFullscreen(false);
     }
   }
 
@@ -239,7 +385,7 @@ export class MinimapUI {
       inset: 0;
       width: 100%;
       height: 100%;
-      z-index: 500;
+      z-index: ${FULLSCREEN_Z};
       pointer-events: auto;
       background: rgba(0,0,0,0.6);
     `;
@@ -271,13 +417,16 @@ export class MinimapUI {
     if (!this.wrapper || !this.container) return;
 
     this.stopUpdating();
-    this.wrapper.style.display = 'none';
-    this.wrapper.onclick = null;
 
-    // Reset container transform for next open
-    this.container.style.transform = '';
-    this.container.style.top = '';
-    this.container.style.left = '';
+    // Back to the docked geometry — on mobile that means hidden, on desktop the
+    // Settings preset. Leaving the fullscreen style behind is what used to make
+    // the minimap reappear as a viewport-wide scrim over the menus.
+    this.currentSize = this.isMobile() ? MOBILE_SIZE : this.desktopSize;
+    if (this.canvas) {
+      this.canvas.width  = this.currentSize;
+      this.canvas.height = this.currentSize;
+    }
+    this.applyDockedStyle(this.visible ? 'block' : 'none');
   }
 
   // ---------------------------------------------------------------------------
@@ -292,18 +441,6 @@ export class MinimapUI {
     // ── Outer wrapper ─────────────────────────────────────────────────────────
     this.wrapper = document.createElement('div');
     this.wrapper.id = 'minimap-wrapper';
-    this.wrapper.style.cssText = `
-      position: fixed;
-      top: ${DESKTOP_PAD}px;
-      left: ${DESKTOP_PAD}px;
-      width: ${this.currentSize}px;
-      height: ${this.currentSize}px;
-      overflow: visible;
-      z-index: 100;
-      pointer-events: none;
-      transition: left 250ms cubic-bezier(0.16,1,0.3,1),
-                  bottom 250ms cubic-bezier(0.16,1,0.3,1);
-    `;
 
     // ── Inner diamond container ────────────────────────────────────────────────
     this.container = document.createElement('div');
@@ -333,9 +470,11 @@ export class MinimapUI {
     // ── Interaction: click-to-navigate ───────────────────────────────────────
     this.attachInteractionListeners();
 
-    // ── Position + panel subscription ─────────────────────────────────────────
-    this.applyPositioning();
-    this.unsubPanel = useUiStore.subscribe(() => this.applyPositioning());
+    // ── Style + position + subscriptions ─────────────────────────────────────
+    this.applyDockedStyle('none');
+    this.unsubPanel = useUiStore.subscribe(() => this.onUiStateChange());
+    this.mobileLayout = this.isMobile();
+    this.attachViewportListener();
 
     document.body.appendChild(this.wrapper);
   }
@@ -653,11 +792,19 @@ export class MinimapUI {
   // ---------------------------------------------------------------------------
 
   private handleClick(pixelX: number, pixelY: number): void {
+    // Read the size first, then close: closing resets currentSize, and the
+    // reverse transform below needs the size the tap was made against.
+    const s = this.currentSize;
+
+    // Close before the guards — a tap must never leave the scrim over the UI,
+    // not even when the colormap is not ready and navigation is impossible.
+    if (this.fullscreen) {
+      useUiStore.getState().setMinimapFullscreen(false);
+    }
+
     if (!this.renderer || !this.terrainCanvas) return;
     const dims = this.renderer.getMapDimensions();
     if (dims.width === 0 || dims.height === 0) return;
-
-    const s = this.currentSize;
     const tW = this.terrainCanvas.width;
     const tH = this.terrainCanvas.height;
     const scale = this.getTerrainScale();
@@ -685,10 +832,5 @@ export class MinimapUI {
       Math.max(0, Math.min(dims.width  - 1, Math.round(tileJ))),
       Math.max(0, Math.min(dims.height - 1, Math.round(tileI))),
     );
-
-    // Auto-close fullscreen minimap after navigation
-    if (this.fullscreen) {
-      useUiStore.getState().setMinimapFullscreen(false);
-    }
   }
 }
