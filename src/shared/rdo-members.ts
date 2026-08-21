@@ -148,7 +148,6 @@ export const RDO_MEMBERS = {
   Post:                      { kind: 'function',  arity: 2 },                // src/server/session/mail-handler.ts:148
   RDOAcceptCloning:          { kind: 'accessor',  access: ['get', 'set'] },  // src/server/session/building-management-handler.ts:114
   RDOAutoProduce:            { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223
-  RDOAutoRelease:            { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223
   RDOBanMinister:            { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223
   RDOCacncelTransc:          { kind: 'procedure', arity: 0 },                // src/server/session/building-property-handler.ts:194,223
   RDOCancelMovie:            { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223

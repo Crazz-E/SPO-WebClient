@@ -639,14 +639,21 @@ export const FILMS_GROUP: PropertyGroup = {
     { rdoName: 'InProd', displayName: 'In Production', type: PropertyType.TEXT },
     { rdoName: 'FilmDone', displayName: 'Film Done', type: PropertyType.BOOLEAN },
     { rdoName: 'AutoProd', displayName: 'Auto Produce', type: PropertyType.BOOLEAN, editable: true },
-    { rdoName: 'AutoRel', displayName: 'Auto Release', type: PropertyType.BOOLEAN, editable: true },
+    // Read-only by necessity: no server member sets auto-release after launch. The
+    // studio publishes four members (StdBlocks/MovieStudios.pas:103-107) and none of
+    // them is one. The flag rides bit 0 of RDOLaunchMovie's `AutoInfo : word`
+    // (flgAutoRelease = $01, MovieStudios.pas:19), so it is chosen at launch — which
+    // is exactly what Voyager does: cbAutoRelease has no click handler, only
+    // Enabled/Checked for display (FilmsSheet.pas:183,194,200), read once at :383.
+    { rdoName: 'AutoRel', displayName: 'Auto Release', type: PropertyType.BOOLEAN },
     { rdoName: 'launchMovie', displayName: 'Launch Movie', type: PropertyType.ACTION_BUTTON, actionId: 'launchMovie', buttonLabel: 'Launch Movie' },
     { rdoName: 'cancelMovie', displayName: 'Cancel Movie', type: PropertyType.ACTION_BUTTON, actionId: 'cancelMovie', buttonLabel: 'Cancel Movie' },
     { rdoName: 'releaseMovie', displayName: 'Release Movie', type: PropertyType.ACTION_BUTTON, actionId: 'releaseMovie', buttonLabel: 'Release Movie' },
   ],
   rdoCommands: {
+    // AutoProd only. RDOAutoProduce is real (MovieStudios.pas:107); RDOAutoRelease is
+    // not, and a mapping here would put a frame on the wire that the server discards.
     'AutoProd': { command: 'RDOAutoProduce' },
-    'AutoRel': { command: 'RDOAutoRelease' },
   },
 };
 

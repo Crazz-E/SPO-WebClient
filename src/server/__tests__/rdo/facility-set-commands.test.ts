@@ -71,8 +71,7 @@ function buildRdoCommandArgs(
       args.push(RdoValue.int(taxId), RdoValue.string(value));
       break;
     }
-    case 'RDOAutoProduce':
-    case 'RDOAutoRelease': {
+    case 'RDOAutoProduce': {
       const boolVal = parseInt(value, 10) !== 0 ? -1 : 0;
       args.push(RdoValue.int(boolVal));
       break;
@@ -181,7 +180,6 @@ function mapRdoCommandToPropertyName(
     case 'RDOSetLoanPerc': return 'BudgetPerc';
     case 'RDOSetTaxValue': return `Tax${params.index || '0'}Percent`;
     case 'RDOAutoProduce': return 'AutoProd';
-    case 'RDOAutoRelease': return 'AutoRel';
     case 'RDOSelectWare': return 'GateMap';
     case 'RDOSetWordsOfWisdom': return 'WordsOfWisdom';
     case 'RDOCacncelTransc': return 'Transcended';
@@ -362,18 +360,6 @@ describe('Facility SET Command Format (buildRdoCommandArgs)', () => {
     it('should treat any non-zero as true', () => {
       const result = buildRdoCommandArgs('RDOAutoProduce', '42');
       expect(result).toBe('"#-1"');
-    });
-  });
-
-  describe('RDOAutoRelease', () => {
-    it('should format true as WordBool #-1', () => {
-      const result = buildRdoCommandArgs('RDOAutoRelease', '1');
-      expect(result).toBe('"#-1"');
-    });
-
-    it('should format false as WordBool #0', () => {
-      const result = buildRdoCommandArgs('RDOAutoRelease', '0');
-      expect(result).toBe('"#0"');
     });
   });
 
@@ -623,10 +609,6 @@ describe('mapRdoCommandToPropertyName', () => {
 
   it('should map RDOAutoProduce to AutoProd', () => {
     expect(mapRdoCommandToPropertyName('RDOAutoProduce')).toBe('AutoProd');
-  });
-
-  it('should map RDOAutoRelease to AutoRel', () => {
-    expect(mapRdoCommandToPropertyName('RDOAutoRelease')).toBe('AutoRel');
   });
 
   it('should map RDOSelectWare to GateMap', () => {

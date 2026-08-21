@@ -26,7 +26,7 @@ import { serialiseConstruction } from './construction-lock';
  * (M-D), which turned a mapping bug into a silent no-op on the wire.
  */
 export const KNOWN_RDO_COMMANDS: ReadonlySet<string> = new Set([
-  'RDOAcceptCloning', 'RDOAutoProduce', 'RDOAutoRelease', 'RDOBanMinister',
+  'RDOAcceptCloning', 'RDOAutoProduce', 'RDOBanMinister',
   'RDOCacncelTransc', 'RDOCancelMovie', 'RDOCancelResearch', 'RDOConnectInput',
   'RDOConnectOutput', 'RDOConnectToTycoon', 'RDODisconnectFromTycoon',
   'RDODisconnectInput', 'RDODisconnectOutput', 'RDOLaunchMovie',
@@ -430,8 +430,7 @@ function buildRdoCommandArgs(
       break;
     }
 
-    case 'RDOAutoProduce':
-    case 'RDOAutoRelease': {
+    case 'RDOAutoProduce': {
       // Boolean as WordBool (#-1 = true, #0 = false)
       const boolVal = parseInt(value, 10) !== 0 ? -1 : 0;
       args.push(RdoValue.int(boolVal));
@@ -779,9 +778,6 @@ function mapRdoCommandToPropertyName(
 
     case 'RDOAutoProduce':
       return 'AutoProd';
-
-    case 'RDOAutoRelease':
-      return 'AutoRel';
 
     case 'RDOSetOutputPrice': {
       // Output price is per-fluid; read back via PricePc (single-product) or indexed
