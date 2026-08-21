@@ -171,7 +171,7 @@ Electron installer.
 ## Commands
 
 ```bash
-npm run dev          # build + start (port 8080)
+npm run dev          # build + start (port 8080 — check it is free first, see below)
 npm run build        # server + client + terrain-test
 npm run typecheck    # all three tsconfigs (server, client, e2e)
 npm run lint         # ESLint 10, flat config — 0 errors is the CI gate
@@ -184,6 +184,13 @@ npm run gate         # THE PRE-PUSH GATE — static + exclusions + routing + liv
 npm run test:live    # the L2 live WebSocket drive alone, against planitia
 npm run e2e:unlock   # clear a world-dirty lock after a human restore
 ```
+
+**The gateway port is shared.** Several Claude sessions and worktrees run on this machine at
+once, so 8080 is not yours by default. Check before starting — `ss -ltn "sport = :8080"` —
+and if it is taken, claim your own (`PORT=8081 npm run dev`, with `E2E_GATEWAY_URL` /
+`E2E_GATEWAY_ORIGIN` pointed at it) instead of killing a listener another session started.
+Attaching to someone else's gateway turns their session's behaviour into your test evidence.
+
 
 ## Automation (`.claude/hooks/`)
 
