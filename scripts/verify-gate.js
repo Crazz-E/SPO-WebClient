@@ -61,7 +61,9 @@ function changedFiles() {
   const committed = git(args).split('\n').filter(Boolean);
   // `-uall` matters: without it an untracked DIRECTORY collapses to a single `dir/` entry,
   // so a new file inside it would never be routed to a flow.
-  const working = git(['status', '--porcelain', '-uall'])
+  // Not through git(): its trim() would eat the leading space of a ` M path` line and
+  // hand the router `ath` — the first-listed unstaged modification lost its first letter.
+  const working = execFileSync('git', ['status', '--porcelain', '-uall'], { encoding: 'utf8' })
     .split('\n')
     .filter(Boolean)
     .map(line => line.slice(3).trim())
