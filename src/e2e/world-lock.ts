@@ -13,7 +13,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { LIMITS, REPORT_DIR } from './config';
+import { LIMITS, WORLD_STATE_DIR } from './config';
+
+/** The two knobs `checkRateLimit` reads — injectable so tests can pin tight values. */
+export type RateLimits = Pick<typeof LIMITS, 'minIntervalMinutes' | 'maxRunsPerDay'>;
 
 export interface PendingRestore {
   /** Human description used in the dirty-world report. */
@@ -57,7 +60,7 @@ export class WorldLock {
   private readonly lockPath: string;
   private readonly historyPath: string;
 
-  constructor(private readonly dir: string = REPORT_DIR) {
+  constructor(private readonly dir: string = WORLD_STATE_DIR) {
     this.lockPath = path.join(dir, 'world-lock.json');
     this.historyPath = path.join(dir, 'run-history.json');
   }
@@ -134,15 +137,15 @@ export class WorldLock {
    * Refuse a run that is too soon after the last one on this branch, or over the daily
    * cap. Throws with the wait time rather than sleeping — the caller decides.
    */
-  checkRateLimit(branch: string, now: Date = new Date()): void {
+  checkRateLimit(branch: string, now: Date = new Date(), limits: RateLimits = LIMITS): void {
     const history = readJson<RunHistoryFile>(this.historyPath, { runs: [] });
     const nowMs = now.getTime();
 
     const dayAgo = nowMs - 24 * 60 * 60 * 1000;
     const recent = history.runs.filter(r => Date.parse(r.at) > dayAgo);
-    if (recent.length >= LIMITS.maxRunsPerDay) {
+    if (recent.length >= limits.maxRunsPerDay) {
       throw new Error(
-        `Daily live-run cap reached (${recent.length}/${LIMITS.maxRunsPerDay} in the last 24 h). ` +
+        `Daily live-run cap reached (${recent.length}/${limits.maxRunsPerDay} in the last 24 h). ` +
           `This cap exists to keep a retry loop from becoming a login storm.`,
       );
     }
@@ -154,12 +157,12 @@ export class WorldLock {
     // server.ts:545), and tripping that reads as a login failure rather than a rate limit.
     const lastRun = recent.map(r => Date.parse(r.at)).sort().pop();
     if (lastRun !== undefined) {
-      const waitMs = LIMITS.minIntervalMinutes * 60 * 1000 - (nowMs - lastRun);
+      const waitMs = limits.minIntervalMinutes * 60 * 1000 - (nowMs - lastRun);
       if (waitMs > 0) {
         const previous = recent.find(r => Date.parse(r.at) === lastRun)?.branch ?? 'another branch';
         throw new Error(
           `Last live run (${previous}) was ${Math.round((nowMs - lastRun) / 1000)} s ago. ` +
-            `Wait ${Math.ceil(waitMs / 1000)} s (minimum interval ${LIMITS.minIntervalMinutes} min).`,
+            `Wait ${Math.ceil(waitMs / 1000)} s (minimum interval ${limits.minIntervalMinutes} min).`,
         );
       }
     }

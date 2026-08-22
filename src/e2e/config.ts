@@ -5,6 +5,8 @@
  * (doc/E2E-POLICY.md §9); changing one needs explicit developer approval.
  */
 
+import * as os from 'os';
+import * as path from 'path';
 import { WORLD_ZONES } from '../shared/types/protocol-types';
 
 export interface E2eAccount {
@@ -82,18 +84,34 @@ export const TIMEOUTS = {
 } as const;
 
 export const LIMITS = {
-  /** Minimum gap between live runs on one branch (doc/E2E-POLICY.md §6). */
-  minIntervalMinutes: numberFromEnv('E2E_MIN_INTERVAL_MINUTES', 10),
-  /** Hard daily cap on live runs from this machine. */
-  maxRunsPerDay: numberFromEnv('E2E_MAX_RUNS_PER_DAY', 20),
-  /** How long a gate artifact stays valid for a push. */
+  /**
+   * Minimum gap between live runs. 0 since 2026-08-22 (developer decision): the bench
+   * worker serializes every live run mechanically, so the numeric throttle no longer
+   * carries the protection — the queue does. The env knob stays for tightening later.
+   */
+  minIntervalMinutes: numberFromEnv('E2E_MIN_INTERVAL_MINUTES', 0),
+  /**
+   * Backstop cap on live runs from this machine — 1000 since 2026-08-22 (developer
+   * decision: the Delphi servers hold far more; this only stops a runaway loop).
+   */
+  maxRunsPerDay: numberFromEnv('E2E_MAX_RUNS_PER_DAY', 1000),
+  /** How long a gate attestation stays valid for a push. */
   gateMaxAgeMinutes: numberFromEnv('GATE_MAX_AGE_MINUTES', 60),
   /** Attempts before the loop gives up and reports (doc/E2E-POLICY.md §8). */
   maxAttempts: 3,
 } as const;
 
-/** Where run artifacts and locks live. Gitignored — evidence is per-machine. */
+/** Where run artifacts live. Gitignored — evidence is per-machine, per-worktree. */
 export const REPORT_DIR = 'report/e2e';
+
+/**
+ * Where the world lock, dirty flag and run history live. This must be ONE directory for
+ * the whole machine, not one per worktree: the thing being locked is the live world and
+ * the LOCKED accounts, which every worktree shares. A relative default here is exactly
+ * the bug the bench worker fixed — two worktrees each holding "the" lock.
+ */
+export const WORLD_STATE_DIR =
+  process.env.E2E_WORLD_STATE_DIR || path.join(os.homedir(), '.spo-bench', 'world');
 
 function numberFromEnv(name: string, fallback: number): number {
   const raw = process.env[name];

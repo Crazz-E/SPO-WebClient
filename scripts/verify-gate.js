@@ -36,15 +36,27 @@ function git(args) {
   return execFileSync('git', args, { encoding: 'utf8' }).trim();
 }
 
+/**
+ * The commit this branch is judged against. `origin/main` when the remote ref exists — a
+ * LOCAL `main` that lags makes the gate judge every commit merged since, not the branch
+ * (seen 2026-08-21: a one-file docs change routed as three PRs' worth of source). The bench
+ * worker fetches `origin main` before each job, so the remote ref is fresh there; a
+ * checkout without the remote falls back to `main`, and a repo with neither to HEAD.
+ */
+function diffBase() {
+  for (const ref of ['origin/main', 'main']) {
+    try {
+      return git(['merge-base', 'HEAD', ref]);
+    } catch {
+      // Try the next ref.
+    }
+  }
+  return null;
+}
+
 /** Everything this branch changed against its merge-base, plus the working tree. */
 function changedFiles() {
-  const base = (() => {
-    try {
-      return git(['merge-base', 'HEAD', 'main']);
-    } catch {
-      return null;
-    }
-  })();
+  const base = diffBase();
   const args = base ? ['diff', '--name-only', base, 'HEAD'] : ['diff', '--name-only', 'HEAD'];
   const committed = git(args).split('\n').filter(Boolean);
   // `-uall` matters: without it an untracked DIRECTORY collapses to a single `dir/` entry,
@@ -65,13 +77,7 @@ function changedFiles() {
  * synthetic all-added hunks, in the same `+++ b/<path>` shape the scanner parses.
  */
 function diffText() {
-  const base = (() => {
-    try {
-      return git(['merge-base', 'HEAD', 'main']);
-    } catch {
-      return null;
-    }
-  })();
+  const base = diffBase();
   const committed = base ? git(['diff', base, 'HEAD']) : '';
   const working = git(['diff', 'HEAD']);
 

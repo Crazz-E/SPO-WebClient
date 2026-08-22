@@ -58,15 +58,20 @@ EOF
 
 ### 5. Gate (REQUIRED before any push)
 
-The push is blocked by `.claude/hooks/pre-push-gate.sh` unless a fresh PASS artifact exists
-for HEAD. Run the gate **after** committing, so the artifact matches the sha being pushed:
+The push is blocked by `.claude/hooks/pre-push-gate.sh` unless the **bench worker** has
+attested HEAD (PASS, fingerprint-stable, this worktree, < 60 min). Run the gate **after**
+committing, so the attestation matches the sha being pushed, and run it **in the
+background** — it queues a bench job and waits, possibly behind other sessions' jobs:
 
 ```bash
 npm run gate
 ```
 
-It runs typecheck -> lint -> tests -> the President exclusion -> routing -> the L2 live
-drive against planitia, and writes `report/e2e/gate-<sha>.json`.
+It prechecks locally (typecheck -> lint -> tests), then the worker builds this worktree,
+replays the static stages, applies the President exclusion and routing, drives the L2
+flows live against planitia, writes `report/e2e/gate-<sha>.json` here and the attestation
+in `~/.spo-bench/verdicts/`. `WORKER DOWN` (exit 3) means the bench itself needs
+attention — `systemctl --user restart spo-bench-worker` — not the change.
 
 Handle the outcome by verdict — the rules are [doc/E2E-POLICY.md](../../doc/E2E-POLICY.md) sections 7-8:
 
@@ -74,7 +79,8 @@ Handle the outcome by verdict — the rules are [doc/E2E-POLICY.md](../../doc/E2
 |---|---|
 | `PASS` | Continue to step 6 |
 | `BLOCKED` + President members | **Stop and tell the developer.** Name the members and the flow to exercise by hand. Never mark it verified yourself. Re-run with `npm run gate -- --manual-verified="..."` only after they confirm |
-| `BLOCKED` + rate limit / dirty world | Not a test failure — nothing ran. Wait out the interval, or clear a dirty world with `npm run e2e:unlock` after restoring it |
+| `BLOCKED` + dirty world | Not a test failure — nothing ran. Clear the (machine-global) dirty world with `npm run e2e:unlock` after a human restored it |
+| `STALE` | The tree changed while the job was queued or running. Not an attempt. Resubmit `npm run gate` on the tree you mean |
 | `ENVIRONMENT` | The servers were not in a state to judge the change. Retry with backoff; **does not** count as one of the three attempts |
 | `FAIL` | Diagnose, write the hypothesis, fix, commit, re-run. **Three attempts maximum, each naming a different root cause.** Never edit a test that was failing in order to make it pass |
 

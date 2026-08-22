@@ -180,49 +180,40 @@ sub-layers: tile info, building info, concrete IDs, water grid, road info).
 
 ## Server Lifecycle
 
-### Claim a port before you start — the machine is shared
+### The bench worker owns the gateway — lease it, don't start it
 
-Several Claude sessions (and several worktrees) run on this machine at once, and each one
-wants a gateway. **8080 is not yours by default.** Starting a second server on a port
-another session holds either fails outright (`Port 8080 is already in use`) or — worse —
-you attach to *their* gateway and report their session's behaviour as your result.
-
-```bash
-ss -ltn "sport = :8080" | tail -n +2      # empty line = free; any row = taken
-```
-
-- **Free** → start normally on 8080.
-- **Taken** → do **not** kill the listener; it belongs to another session. Pick a free port
-  of your own and point the E2E config at it:
+Several Claude sessions (and several worktrees) run on this machine at once, but the live
+bench — port 8080, the LOCKED accounts, the world — has a **single owner**: the bench
+worker ([bench-worker.md](bench-worker.md)). For an L3 browser pass, take a **lease**:
 
 ```bash
-PORT=8081 npm run dev
-E2E_GATEWAY_URL=ws://localhost:8081 E2E_GATEWAY_ORIGIN=http://localhost:8081 npm run test:live
+npm run dev                                   # queues a lease job and waits
+# → the worker builds THIS worktree, starts ITS gateway on :8080, and holds it
+#   for 30 min (npm run dev -- --lease-minutes=60 for longer, max 120)
 ```
 
-`PORT` is read by [`src/shared/config.ts`](../src/shared/config.ts); `E2E_GATEWAY_URL` /
-`E2E_GATEWAY_ORIGIN` by [`src/e2e/config.ts`](../src/e2e/config.ts). For an L3 browser pass,
-navigate to the same port. Suggested convention: one port per worktree, 8080 + n.
+The command returns when the gateway is ready (the report says until when). Navigate
+Playwright to `http://localhost:8080` and drive. You never stop the server: the lease
+ends at expiry, or earlier with `npm run dev:release` — **release it as soon as you are
+done**, other sessions' jobs are waiting behind it. Either way the worker tears the
+gateway down; no orphan survives.
 
-Note this is only about **the local port**. It does not license two concurrent live runs —
-the world stays single-flight ([E2E-POLICY.md §6](E2E-POLICY.md)), one live session at a
-time across both accounts, whatever port each gateway listens on.
+If the deposit fails with `WORKER DOWN` (exit 3), the worker itself needs attention:
+`systemctl --user restart spo-bench-worker`, or `scripts/bench-install.sh` first-time.
 
-### Start, probe, stop
+### The conscious exception — a debug gateway of your own
+
+For interactive debugging only, off the bench, **never on 8080**:
 
 ```bash
-npm run dev          # build + start on :8080 (first boot ~2 min if cache cold)
-# readiness probe:
-curl -s http://localhost:8080/api/startup-status      # → phase:"ready"
-# stop (WSL) — only the PID you started:
-ss -ltnp "sport = :8080"                              # read the pid=... you own
-kill <pid>
+PORT=8081 npm run dev:local                   # build + start yourself
+curl -s http://localhost:8081/api/startup-status      # → phase:"ready"
+# stop it yourself when done: ss -ltnp "sport = :8081" → kill <your pid>
 ```
 
-Always stop the server after a session, and stop **your** server only — a stray
-`kill` on a port you did not claim takes down another session's run. Never leave E2E traffic
-running unattended against the live servers (policy SEC-N,
-[production-security-policy.md](production-security-policy.md)).
+Nothing observed against a `dev:local` gateway is evidence — the push hook only accepts
+the worker's attestations. Never leave E2E traffic running unattended against the live
+servers (policy SEC-N, [production-security-policy.md](production-security-policy.md)).
 
 ## Screenshot Policy
 
@@ -244,16 +235,16 @@ PASS/FAIL table.
 Read-only browser pass with the primary account, run when the diff touches pixels or
 before a release. Everything below the pixel belongs to L2 (`npm run test:live`).
 
-### Phase 0 — Server start
+### Phase 0 — Lease the bench
 ```
-ss -ltn "sport = :8080" | tail -n +2        # FIRST: is the port free?
-                                            # taken -> PORT=<free port> npm run dev, and use it below
-Bash (background): npm run dev
-Poll http://localhost:8080/api/startup-status until phase:"ready" (~2 min cold)
+Bash (background): npm run dev              # bench lease — returns when THIS worktree's
+                                            # gateway is ready on :8080 (~2 min cold build)
 browser_navigate → http://localhost:8080
 ```
-Never kill a listener you did not start — another session is probably using it
-(see **Server Lifecycle**).
+You start nothing and stop nothing: the worker holds the gateway for the lease (30 min
+default) and tears it down at expiry, or earlier when you run `npm run dev:release` at the
+end of the pass (see **Server Lifecycle**). `WORKER DOWN` at this step is a bench problem,
+not a test result.
 
 ### Phase 1 — Login (MANDATORY, always first)
 Follow the login table above. **Assert** via `getState()`: `session.connected`,

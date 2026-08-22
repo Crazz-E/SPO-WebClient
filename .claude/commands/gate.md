@@ -1,19 +1,28 @@
 ---
-description: Run the pre-push gate — static checks, President exclusion, and the L2 live drive against planitia
+description: Run the pre-push gate — local precheck, then a bench-worker job (build, static, President exclusion, L2 live drive against planitia, attestation)
 argument-hint: "[--static-only|--flows=a,b|--manual-verified=...]"
-allowed-tools: Bash(npm run gate*), Bash(npm run test:live*), Bash(npm run e2e:unlock*), Bash(git status*), Bash(git diff*), Bash(git log*), Read, Grep, Glob
+allowed-tools: Bash(npm run gate*), Bash(npm run test:live*), Bash(npm run bench:status*), Bash(npm run e2e:unlock*), Bash(bash scripts/bench-*), Bash(git status*), Bash(git diff*), Bash(git log*), Read, Grep, Glob
 ---
 
 # Pre-Push Gate
 
-Run the gate for the current HEAD, passing `$ARGUMENTS` through when given:
+Run the gate for the current HEAD, passing `$ARGUMENTS` through when given. **Run it in
+the background** — it queues a job on the bench worker and waits its turn, possibly behind
+other sessions' jobs; the wait costs nothing:
 
 ```bash
 npm run gate
 ```
 
-**The rules are [doc/E2E-POLICY.md](../../doc/E2E-POLICY.md)** — do not restate or reinvent
-them here. What matters when reading the result:
+It prechecks locally (typecheck, lint, tests — a red precheck queues nothing), then the
+bench worker builds **this worktree**, replays the static stages, applies the President
+exclusion and the diff routing, drives the routed L2 flows live, and writes the
+attestation the push hook reads. Only the worker attests — `npm run gate:local` is
+evidence for reading, not a push unblock.
+
+**The rules are [doc/E2E-POLICY.md](../../doc/E2E-POLICY.md)**, the mechanics
+[doc/bench-worker.md](../../doc/bench-worker.md) — do not restate or reinvent them here.
+What matters when reading the result:
 
 - **A crash is a failure, but silence is not a pass.** A mutation is proven by the
   `FIVEMODELSERVER/Survival` log line, not by a `success: true` response (`OB-28`).
@@ -21,9 +30,13 @@ them here. What matters when reading the result:
   up to two minutes (`OB-29`). A **missing log line is** a failure.
 - `BLOCKED` on President members means a person must verify it. Report that to the
   developer with the members named; never clear it yourself.
+- `STALE` means the tree changed while the job was queued or running — resubmit on the
+  tree you mean. Not an attempt.
 - `ENVIRONMENT` does not consume one of the three attempts.
-- If the world is left dirty, say so loudly: every later live run is blocked until a human
-  restores the values and runs `npm run e2e:unlock`.
+- `WORKER DOWN` (exit 3) is a bench problem, not a verdict: `systemctl --user restart
+  spo-bench-worker`, then resubmit.
+- If the world is left dirty, say so loudly: every later live run on this machine is
+  blocked until a human restores the values and runs `npm run e2e:unlock`.
 
-Report the verdict, the flows that ran, each probe's log-line and restore result, and
-whether an L3 browser pass is still owed.
+Report the verdict, the job id, the flows that ran, each probe's log-line and restore
+result, and whether an L3 browser pass is still owed.
