@@ -542,8 +542,11 @@ function setSecurityHeaders(res: http.ServerResponse): void {
 // Simple in-memory rate limiter for sensitive endpoints
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX_AUTH = 10;       // max auth attempts per minute per IP
-const RATE_LIMIT_MAX_PROXY = 60;      // max proxy-image requests per minute per IP
+// Ceilings raised to 1000/min on 2026-08-22 (developer decision) for the automated test
+// phase: the bench worker serializes real live traffic, and the Delphi servers hold this
+// load without trouble. Tighten again before any public deployment.
+const RATE_LIMIT_MAX_AUTH = 1000;     // max auth attempts per minute per IP
+const RATE_LIMIT_MAX_PROXY = 1000;    // max proxy-image requests per minute per IP
 const RATE_LIMIT_MAX_ENTRIES = 10_000; // max entries before forced cleanup
 
 function checkRateLimit(ip: string, category: string, maxRequests: number): boolean {
@@ -1058,7 +1061,8 @@ const server = http.createServer(async (req, res) => {
 // 2. WebSocket Server
 // Per-IP WebSocket connection tracking for rate limiting
 const wsConnectionsPerIp = new Map<string, number>();
-const WS_MAX_CONNECTIONS_PER_IP = 5;
+// 1000 since 2026-08-22 (developer decision, test phase — see the rate-limit note above).
+const WS_MAX_CONNECTIONS_PER_IP = 1000;
 
 const wss = new WebSocketServer({
   server,
