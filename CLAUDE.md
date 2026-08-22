@@ -243,9 +243,11 @@ log line does. Three attempts maximum, each naming a different root cause. Full 
 `module.ts` → `module.test.ts`, same directory. Two Jest projects: `unit` (node, `.test.ts`)
 and `component` (jsdom, `.test.tsx`).
 
-**Two coverage numbers — do not conflate them.** New/modified lines must reach ≥ 93 %
-(review convention). `jest.config.js` separately enforces a machine floor (global 38 %,
-higher per directory). Thresholds only go UP. Details: **`spo-testing`** skill.
+**Two coverage numbers — do not conflate them.** New/modified lines must reach ≥ 93 %,
+enforced by `npm run coverage:changed` (`scripts/coverage-changed.js`, run by `gate:precheck`
+and by CI on every pull request; `COVERAGE_CHANGED_MIN` overrides the floor). `jest.config.js`
+separately enforces a machine floor (global 38 %, higher per directory), unchanged by that
+script. Thresholds only go UP. Details: **`spo-testing`** skill.
 
 Seven custom RDO matchers: `toContainRdoCommand`, `toMatchRdoFormat`, `toMatchRdoCallFormat`,
 `toMatchRdoSetFormat`, `toHaveRdoTypePrefix`, `toMatchRdoResponse`, `toPassStrictRdoValidation`.
