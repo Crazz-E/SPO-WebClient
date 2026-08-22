@@ -41,21 +41,42 @@ invokes_push="$(printf '%s' "$payload" | node -e "
 
     const segments = kept.join('\n').split(/\n|;|&&|\|\||\||\(/);
     // Allow leading global flags, with or without a value: \`git -C . push\`.
-    const pushes = segments.filter(s => /^\s*git\s+(?:-[^\s]+(?:\s+[^\s-][^\s]*)?\s+)*push(\s|$)/.test(s));
+    const isPush = s => /^\s*git\s+(?:-[^\s]+(?:\s+[^\s-][^\s]*)?\s+)*push(\s|$)/.test(s);
+    const pushes = segments.filter(isPush);
     const dryRun = /--dry-run/.test(command);
     // A push that only DELETES a remote ref (\`--delete\`, \`-d\`, or an empty-source refspec
     // \`origin :branch\`) moves no code and needs no attestation.
     const deleteOnly = pushes.length > 0 && pushes.every(s => /\s(?:--delete|-d)(?:\s|$)/.test(s) || /\s:[^\s]+/.test(s));
-    process.stdout.write(pushes.length > 0 && !dryRun && !deleteOnly ? 'yes' : 'no');
+
+    // Which repo the push acts on. The hook runs in the SESSION's cwd, which is not where
+    // a \`cd <worktree> && git push\` or a \`git -C <worktree> push\` lands — judging the
+    // session's own HEAD there would block a correctly attested push (or, worse, bless the
+    // wrong tree). Take \`-C <dir>\` from the push itself, else the last \`cd <dir>\` before it.
+    let dir = '';
+    const first = segments.findIndex(isPush);
+    if (first >= 0) {
+      const c = segments[first].match(/\s-C\s+([^\s]+)/);
+      if (c) dir = c[1];
+      else {
+        for (let i = first - 1; i >= 0; i--) {
+          const cd = segments[i].match(/^\s*cd\s+([^\s]+)\s*$/);
+          if (cd) { dir = cd[1]; break; }
+        }
+      }
+    }
+    process.stdout.write((pushes.length > 0 && !dryRun && !deleteOnly ? 'yes' : 'no') + '\t' + dir.replace(new RegExp('^[\\x22\\x27]|[\\x22\\x27]$', 'g'), ''));
   });
 " 2>/dev/null)"
 
+push_dir="${invokes_push#*	}"
+invokes_push="${invokes_push%%	*}"
 [ "$invokes_push" = "yes" ] || exit 0
 
-# The repo to judge. Defaults to the working directory; overridden only so the hook's own
-# test suite can exercise the attestation branches from a scratch repo on a feature
-# branch — on `main` the branch guard below fires first and hides them.
-repo="${GATE_REPO_DIR:-.}"
+# The repo to judge: the directory the push command itself names (\`git -C <dir>\`, or a
+# preceding \`cd <dir>\`), else the working directory. GATE_REPO_DIR overrides both, so the
+# hook's own test suite can exercise the attestation branches from a scratch repo on a
+# feature branch — on `main` the branch guard below fires first and hides them.
+repo="${GATE_REPO_DIR:-${push_dir:-.}}"
 bench="${SPO_BENCH_DIR:-$HOME/.spo-bench}"
 
 head_sha="$(git -C "$repo" rev-parse HEAD 2>/dev/null)"
@@ -91,9 +112,9 @@ max_age="${GATE_MAX_AGE_MINUTES:-60}"
 if [ "${verdict:-UNKNOWN}" != "PASS" ]; then
   echo "BLOCKED: the bench verdict for HEAD is ${verdict:-UNKNOWN}, not PASS." >&2
   if [ "${verdict:-}" = "BLOCKED" ]; then
-    echo "This diff touches President-only members. A person must verify it by hand, then:" >&2
-    echo "  npm run gate -- --manual-verified=\"<what you ran, and the result>\"" >&2
-    echo "Do not mark it verified on the developer's behalf — doc/E2E-POLICY.md §7." >&2
+    echo "The live stage was refused before running — a dirty world lock or the rate limit." >&2
+    echo "Nothing was tested. Read the job report; a dirty world needs a human restore and" >&2
+    echo "npm run e2e:unlock, then resubmit: npm run gate" >&2
   elif [ "${verdict:-}" = "STALE" ]; then
     echo "The tree changed while the job was queued or running; the result attests a tree" >&2
     echo "that no longer exists. Resubmit: npm run gate" >&2

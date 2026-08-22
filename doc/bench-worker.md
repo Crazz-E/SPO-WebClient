@@ -79,8 +79,8 @@ one process (the worker) consumes the spool.
 10. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs), running
     slot released, next job.
 
-Verdicts: `PASS` · `FAIL` · `BLOCKED` (President members — a human verifies, §7 of the
-policy) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `DIRTY` (gate on
+Verdicts: `PASS` (possibly with capability exceptions listed — §7 of the policy) · `FAIL` ·
+`BLOCKED` (the live stage was refused before running: dirty world or rate limit) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `DIRTY` (gate on
 uncommitted changes — commit first) · `ABANDONED` ·
 `INTERRUPTED` (worker died mid-job — check the world lock before resubmitting) · `LEASED`.
 

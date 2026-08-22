@@ -5,6 +5,7 @@ import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './pat
 import { Spool, type JobRequest } from './job';
 import { listVerdicts } from './verdict';
 import {
+  countCapabilityExceptions,
   main,
   processOldest,
   realRunCommand,
@@ -152,6 +153,28 @@ describe('processOldest — the queue discipline', () => {
       fingerprintStable: true,
       worktree: h.worktree,
     });
+  });
+
+  it('carries the gate artifact\'s capability exceptions into the attestation', async () => {
+    const h = harness();
+    deposit(h);
+    const artifactDir = path.join(h.worktree, 'report', 'e2e');
+    fs.mkdirSync(artifactDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(artifactDir, `gate-head-of-${path.basename(h.worktree)}.json`),
+      JSON.stringify({ exclusions: { capability: [{ capability: 'president' }] } }),
+      'utf8',
+    );
+    await processOldest(h.deps);
+    expect(listVerdicts(h.paths)[0].verdict.exceptions).toBe(1);
+  });
+
+  it('counts zero exceptions when the artifact is absent or unreadable', () => {
+    expect(countCapabilityExceptions(undefined)).toBe(0);
+    expect(countCapabilityExceptions('/nowhere/gate.json')).toBe(0);
+    const bad = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-')), 'gate.json');
+    fs.writeFileSync(bad, '{not json', 'utf8');
+    expect(countCapabilityExceptions(bad)).toBe(0);
   });
 
   it('still reports when runJob itself throws', async () => {

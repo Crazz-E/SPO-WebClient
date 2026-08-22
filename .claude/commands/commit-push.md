@@ -74,7 +74,7 @@ Handle the outcome by verdict — the rules are [doc/E2E-POLICY.md](../../doc/E2
 | Verdict | Do |
 |---|---|
 | `PASS` | Continue to step 6 |
-| `BLOCKED` + President members | **Stop and tell the developer.** Name the members and the flow to exercise by hand. Never mark it verified yourself. Re-run with `npm run gate -- --manual-verified="..."` only after they confirm |
+| `CAPABILITY EXCEPTION` in a PASS | Not a failure: the server says the account lacks the role the touched members need (E2E-POLICY §7). Report the members and the checks in the PR body; nothing clears it. If the capability is GRANTED the gate fails closed — add the flow that drives the member |
 | `BLOCKED` + dirty world | Not a test failure — nothing ran. Clear the (machine-global) dirty world with `npm run e2e:unlock` after a human restored it |
 | `STALE` | The tree changed while the job was queued or running. Not an attempt. Resubmit `npm run gate` on the tree you mean |
 | `DIRTY` (or exit 2 `DIRTY TREE` at deposit) | Uncommitted or untracked changes in the worktree. A gate attests HEAD by sha, so nothing ran. Commit (or stash) first, then resubmit — not an attempt |
