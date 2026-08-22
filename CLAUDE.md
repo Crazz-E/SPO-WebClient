@@ -187,6 +187,7 @@ npm run bench:status # worker liveness + queue
 npm run e2e:unlock   # clear a world-dirty lock after a human restore
 npm run finish       # THE END of an update — after the PR is merged: main ff'd, refs pruned, worker
                      # reinstalled if its sources changed, this worktree + branch removed. Last command.
+                     # `npm run finish -- <branch>` finishes a merged branch checked out nowhere (keeps this worktree).
 npm run deps:gate    # Dependabot PRs: merges main in, installs, gates, pushes and auto-merges them one by one;
                      # a lockfile change routes to spine + building-details
 
