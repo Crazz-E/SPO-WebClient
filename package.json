@@ -37,6 +37,7 @@
     "gate:precheck": "npm run typecheck && npm run lint && npm test",
     "gate:local": "node scripts/verify-gate.js",
     "finish": "bash scripts/finish.sh",
+    "deps:gate": "bash scripts/deps-gate.sh",
     "bench:status": "bash scripts/bench-status.sh",
     "e2e:unlock": "npm run build:e2e && node dist/e2e/unlock.js"
   },

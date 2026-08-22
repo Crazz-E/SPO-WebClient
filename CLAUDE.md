@@ -187,6 +187,8 @@ npm run bench:status # worker liveness + queue
 npm run e2e:unlock   # clear a world-dirty lock after a human restore
 npm run finish       # THE END of an update — after the PR is merged: main ff'd, refs pruned, worker
                      # reinstalled if its sources changed, this worktree + branch removed. Last command.
+npm run deps:gate    # Dependabot PRs: rebases, installs, gates, pushes and auto-merges them one by one;
+                     # a lockfile change routes to spine + building-details
 
 PORT=8081 npm run dev:local   # build + start yourself, OFF 8080 — the CONSCIOUS EXCEPTION (see below)
 npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push

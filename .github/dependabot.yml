@@ -4,15 +4,24 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    # `npm run deps:gate` takes these through the bench one at a time; a small limit keeps
+    # the queue (and the number of lockfiles conflicting with each other) short.
+    open-pull-requests-limit: 2
     groups:
       dev-dependencies:
         dependency-type: development
+      runtime:
+        dependency-type: production
     ignore:
       # ts-jest 29 pins TypeScript below 7, so a TypeScript major makes `npm ci`
       # fail outright and the group PR can never go green. Lift this once ts-jest
       # supports TypeScript 7.
       - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # node-fetch 3 is ESM-only and the server bundle is CJS (build:electron-bundle),
+      # so the major can never land as a plain bump. The real fix is Node 22's global
+      # fetch — a code change, not a dependency update.
+      - dependency-name: node-fetch
         update-types: ['version-update:semver-major']
     commit-message:
       prefix: chore
@@ -21,7 +30,10 @@ updates:
     directory: /electron
     schedule:
       interval: weekly
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
+    groups:
+      electron-shell:
+        patterns: ['*']
     commit-message:
       prefix: chore
 
@@ -30,5 +42,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 1
+    groups:
+      actions:
+        patterns: ['*']
     commit-message:
       prefix: chore
