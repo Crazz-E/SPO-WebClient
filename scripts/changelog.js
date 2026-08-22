@@ -27,7 +27,7 @@
  * real; locally, --preview is the one to reach for (`npm run release:preview`).
  */
 
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -144,13 +144,19 @@ function jsonEntries(categories) {
 
 // --- Git ------------------------------------------------------------------------
 
-function run(cmd) {
-  return execSync(cmd, { cwd: ROOT, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+/**
+ * Run git with an argument ARRAY — no shell. The release workflow runs on windows-latest,
+ * where a shell string like `--match 'v*'` hands git the literal quotes (cmd/pwsh do not
+ * strip single quotes the way sh does), so no tag ever matched and the first automatic
+ * release died with "no v* tag reachable". execFileSync is quote-free on every OS.
+ */
+function git(...args) {
+  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
 }
 
 function lastTag() {
   try {
-    return run("git describe --tags --abbrev=0 --match 'v*'");
+    return git('describe', '--tags', '--abbrev=0', '--match', 'v*');
   } catch {
     return null;
   }
@@ -158,17 +164,17 @@ function lastTag() {
 
 function subjectsBetween(from, to) {
   const range = from ? `${from}..${to}` : to;
-  const log = run(`git log ${range} --no-merges --format=%s`);
+  const log = git('log', range, '--no-merges', '--format=%s');
   return log ? log.split('\n') : [];
 }
 
 function tagDate(tag) {
-  return run(`git log -1 --format=%cs ${tag}`);
+  return git('log', '-1', '--format=%cs', tag);
 }
 
 /** Every `v*` tag reachable from HEAD, oldest first (version order). */
 function versionTags() {
-  const out = run("git tag --merged HEAD --list 'v*'");
+  const out = git('tag', '--merged', 'HEAD', '--list', 'v*');
   return out
     ? out
         .split('\n')
@@ -199,11 +205,11 @@ function cmdNext() {
     // releases claiming one version — stop before building anything.
     let at;
     try {
-      at = run(`git rev-parse --verify -q refs/tags/v${version}^{commit}`);
+      at = git('rev-parse', '--verify', '-q', `refs/tags/v${version}^{commit}`);
     } catch {
       at = null;
     }
-    const head = run('git rev-parse HEAD');
+    const head = git('rev-parse', 'HEAD');
     if (at && at !== head) {
       throw new Error(`tag v${version} already exists at ${at.slice(0, 8)}, not at HEAD ${head.slice(0, 8)}`);
     }
