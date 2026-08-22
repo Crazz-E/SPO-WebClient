@@ -17,9 +17,14 @@ const SCRIPT = path.join(process.cwd(), 'scripts', 'finish.sh');
 
 const FAKE_GH = `#!/usr/bin/env bash
 # gh pr view <branch> --json state|mergeCommit -q <query>
-[ "\${FAKE_GH_STATE:-NONE}" = "NONE" ] && { echo "no pull requests found" >&2; exit 1; }
+# FAKE_GH_BRANCH_STATES="a=MERGED,b=OPEN" overrides FAKE_GH_STATE per branch ($3).
+state="\${FAKE_GH_STATE:-NONE}"
+for kv in \${FAKE_GH_BRANCH_STATES//,/ }; do
+  [ "\${kv%%=*}" = "$3" ] && state="\${kv#*=}"
+done
+[ "$state" = "NONE" ] && { echo "no pull requests found" >&2; exit 1; }
 case "$*" in
-  *"--json state"*) echo "$FAKE_GH_STATE" ;;
+  *"--json state"*) echo "$state" ;;
   *"--json mergeCommit"*) echo "$FAKE_GH_MERGE_SHA" ;;
   *) echo "fake gh: unexpected args: $*" >&2; exit 1 ;;
 esac
@@ -234,7 +239,7 @@ describe('after a merge', () => {
     expect(fs.existsSync(bench.mainRepo)).toBe(true);
   });
 
-  it('prunes orphan session worktrees — clean, nothing ahead of main, no process inside — and keeps the rest', () => {
+  it('prunes orphan worktrees and finishes merged leftovers; keeps unmerged work and dirty trees', () => {
     const bench = scratchBench();
     const base = path.join(bench.mainRepo, '.claude', 'worktrees');
     fs.mkdirSync(base, { recursive: true });
@@ -243,12 +248,20 @@ describe('after a merge', () => {
     commitFile(path.join(base, 'ahead'), 'src/work.ts', 'export const w = 1;\n', 'feat: work');
     git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/dirty', path.join(base, 'dirty'));
     fs.writeFileSync(path.join(base, 'dirty', 'notes.md'), 'wip\n', 'utf8');
+    // A session that pushed, merged (squash: commits still "ahead") and never ran finish.
+    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/merged', path.join(base, 'merged'));
+    commitFile(path.join(base, 'merged'), 'src/done.ts', 'export const d = 1;\n', 'feat: done');
 
-    const run = runFinish(bench, bench.mainRepo); // on main: sync + prune only
+    const run = runFinish(bench, bench.mainRepo, {
+      FAKE_GH_BRANCH_STATES: 'claude-x/merged=MERGED,claude-x/ahead=OPEN',
+    }); // on main: sync + prune only
     expect(run.code).toBe(0);
     expect(run.stdout).toMatch(/== pruning orphan worktree .*orphan/);
+    expect(run.stdout).toMatch(/== finishing worktree .*merged — its PR is MERGED/);
     expect(fs.existsSync(path.join(base, 'orphan'))).toBe(false);
+    expect(fs.existsSync(path.join(base, 'merged'))).toBe(false);
     expect(spawnSync('git', ['-C', bench.mainRepo, 'rev-parse', '--verify', '-q', 'claude-x/orphan']).status).not.toBe(0);
+    expect(spawnSync('git', ['-C', bench.mainRepo, 'rev-parse', '--verify', '-q', 'claude-x/merged']).status).not.toBe(0);
     expect(fs.existsSync(path.join(base, 'ahead'))).toBe(true);
     expect(fs.existsSync(path.join(base, 'dirty'))).toBe(true);
   });

@@ -50,23 +50,34 @@ sync_main() {
   git -C "$MAIN_REPO" log --oneline -1
 }
 
-# Session worktrees that hold nothing: clean, zero commits ahead of origin/main, and no
-# process living inside them (a session still open has its shell there). They appear when
-# a session is started and abandoned without touching anything — the harness leaves them,
-# and they pile up. Anything that carries work (a commit, an edit, a live shell) is kept.
+# Session worktrees nobody finished. Two kinds, both clean and with no process living
+# inside them (a session still open has its shell there):
+#   - orphans: zero commits ahead of origin/main — started and abandoned untouched;
+#   - merged leftovers: commits ahead, but the branch's PR is MERGED on GitHub — the
+#     session pushed, merged, and never ran finish. Its work is on main; only the shell
+#     of it remains. Finishing it here is how one session's oversight is healed by the
+#     next, mechanically.
+# Anything else — an edit, an unmerged commit, a live shell — is kept.
 prune_orphan_worktrees() {
-  local dir wt_branch
+  local dir wt_branch ahead state
   for dir in "$MAIN_REPO"/.claude/worktrees/*/; do
     dir="${dir%/}"
     [ -d "$dir/.git" ] || [ -f "$dir/.git" ] || continue
     [ "$dir" = "$here" ] && continue
     [ -z "$(git -C "$dir" status --porcelain 2>/dev/null)" ] || continue
-    [ "$(git -C "$dir" rev-list --count origin/main..HEAD 2>/dev/null || echo 1)" = "0" ] || continue
     if [ -d /proc ] && ls -d /proc/[0-9]*/cwd 2>/dev/null | xargs -r readlink 2>/dev/null | grep -qx "$dir"; then
       continue
     fi
     wt_branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
-    echo "== pruning orphan worktree $dir (clean, nothing ahead of main, no process inside)"
+    ahead="$(git -C "$dir" rev-list --count origin/main..HEAD 2>/dev/null || echo 1)"
+    if [ "$ahead" = "0" ]; then
+      echo "== pruning orphan worktree $dir (clean, nothing ahead of main, no process inside)"
+    else
+      [ "$wt_branch" != "HEAD" ] && [ "$wt_branch" != "main" ] || continue
+      state="$(gh pr view "$wt_branch" --json state -q .state 2>/dev/null || echo NONE)"
+      [ "$state" = "MERGED" ] || continue
+      echo "== finishing worktree $dir — its PR is MERGED and nobody ran finish"
+    fi
     git -C "$MAIN_REPO" worktree remove --force "$dir"
     if [ "$wt_branch" != "HEAD" ] && [ "$wt_branch" != "main" ]; then
       git -C "$MAIN_REPO" branch -D "$wt_branch" >/dev/null 2>&1 || true
