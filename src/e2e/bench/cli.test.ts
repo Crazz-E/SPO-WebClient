@@ -13,6 +13,7 @@ interface Harness {
   err: string[];
   alive: boolean;
   aliveReason?: string;
+  clean: boolean;
   clock: { nowMs: number };
 }
 
@@ -26,11 +27,12 @@ function harness(): Harness {
     out: [],
     err: [],
     alive: true,
+    clean: true,
     clock: { nowMs: 1_000_000 },
     deps: {
       paths,
       spool,
-      fingerprint: () => ({ head: 'abc123', hash: 'h1' }),
+      fingerprint: () => ({ head: 'abc123', hash: 'h1', clean: h.clean }),
       git: args => (args.includes('--show-toplevel') ? '/wt/a' : 'fix/x'),
       workerAlive: () => ({ alive: h.alive, reason: h.aliveReason }),
       now: () => (h.clock.nowMs += 100),
@@ -50,7 +52,7 @@ function reportFor(id: string, overrides: Partial<JobReport> = {}): JobReport {
     worktree: '/wt/a',
     branch: 'fix/x',
     verdict: 'PASS',
-    fingerprints: { atSubmit: { head: 'abc123', hash: 'h1' } },
+    fingerprints: { atSubmit: { head: 'abc123', hash: 'h1', clean: true } },
     targetMoved: false,
     startedAt: '2026-08-22T09:00:00Z',
     ...overrides,
@@ -119,6 +121,21 @@ describe('submit', () => {
     const first = h.spool.queued()[0].request.id;
     expect(await main(['submit', '--type=gate'], h.deps)).toBe(2);
     expect(h.err.join('\n')).toContain(first);
+  });
+
+  it('refuses a gate on a dirty tree at deposit — exit 2, nothing queued', async () => {
+    const h = harness();
+    h.clean = false;
+    expect(await main(['submit', '--type=gate'], h.deps)).toBe(2);
+    expect(h.err.join('\n')).toMatch(/DIRTY TREE/);
+    expect(h.spool.queued()).toHaveLength(0);
+  });
+
+  it('still accepts a live or lease job on a dirty tree — they attest nothing', async () => {
+    const h = harness();
+    h.clean = false;
+    expect(await main(['submit', '--type=live'], h.deps)).toBe(0);
+    expect(h.spool.queued()).toHaveLength(1);
   });
 
   it('rejects an unknown job type', async () => {

@@ -29,6 +29,8 @@ interface Harness {
   submitterAlive: boolean;
   /** Successive fingerprint hashes; the last one repeats. */
   hashes: string[];
+  /** What every fingerprint reports for `clean`. */
+  clean: boolean;
   published: string[];
   gatewayFails: boolean;
   clock: { nowMs: number };
@@ -52,6 +54,7 @@ function harness(): Harness {
     logs: [],
     submitterAlive: true,
     hashes: ['h1'],
+    clean: true,
     published: [],
     gatewayFails: false,
     clock: { nowMs: 1_000_000 },
@@ -61,7 +64,7 @@ function harness(): Harness {
       port: 8080,
       fingerprint: wt => {
         const hash = h.hashes[Math.min(fingerprintCalls++, h.hashes.length - 1)];
-        return { head: `head-of-${path.basename(wt)}`, hash };
+        return { head: `head-of-${path.basename(wt)}`, hash, clean: h.clean };
       },
       runCommand: async (cmd, args, options) => {
         h.commands.push({ cmd, args, cwd: options.cwd, env: options.env });
@@ -91,7 +94,7 @@ function deposit(h: Harness, type: JobRequest['type'] = 'gate', args: string[] =
       type,
       worktree: h.worktree,
       branch: 'fix/x',
-      fingerprint: { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1' },
+      fingerprint: { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1', clean: true },
       submitter: { pid: 4321 },
       args,
       ...(type === 'lease' ? { leaseMinutes: 1 } : {}),
@@ -230,6 +233,26 @@ describe('runJob — gate', () => {
     expect(h.commands).toHaveLength(0);
   });
 
+  it('refuses a gate on a dirty tree: DIRTY, nothing built, no gateway, no attestation', async () => {
+    const h = harness();
+    const job = deposit(h);
+    h.clean = false;
+    await processOldest(h.deps);
+    expect(h.spool.readReport(job.id)?.verdict).toBe('DIRTY');
+    expect(h.spool.readReport(job.id)?.detail).toMatch(/commit first/);
+    expect(h.commands).toHaveLength(0);
+    expect(h.gatewayStarts).toHaveLength(0);
+    expect(listVerdicts(h.paths)).toHaveLength(0);
+  });
+
+  it('runs a live job on a dirty tree — only gate attests a sha', async () => {
+    const h = harness();
+    const job = deposit(h, 'live');
+    h.clean = false;
+    await processOldest(h.deps);
+    expect(h.spool.readReport(job.id)?.verdict).toBe('PASS');
+  });
+
   it('downgrades a PASS to STALE when the tree moved, keeping the body verdict visible', async () => {
     const h = harness();
     const job = deposit(h);
@@ -285,7 +308,7 @@ describe('runJob — live and lease', () => {
         type: 'gate',
         worktree: h.worktree,
         branch: 'fix/x',
-        fingerprint: { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1' },
+        fingerprint: { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1', clean: true },
         submitter: { pid: 0 },
         args: [],
       },
@@ -302,7 +325,7 @@ describe('runJob — live and lease', () => {
     let calls = 0;
     h.deps.fingerprint = wt => {
       if (++calls === 2) throw new Error('worktree vanished mid-fingerprint');
-      return { head: `head-of-${path.basename(wt)}`, hash: 'h1' };
+      return { head: `head-of-${path.basename(wt)}`, hash: 'h1', clean: true };
     };
     const report = await runJob(h.deps, job);
     expect(report.targetMoved).toBe(true);

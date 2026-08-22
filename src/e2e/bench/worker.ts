@@ -135,7 +135,9 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   }
   deps.spool.writeReport(report);
 
-  if (request.type === 'gate') {
+  // DIRTY ran nothing and attests nothing: the sha is neither passed nor failed, and an
+  // earlier clean attestation of the same sha stays valid.
+  if (request.type === 'gate' && report.verdict !== 'DIRTY') {
     const head =
       report.fingerprints.atEnd?.head ?? report.fingerprints.atStart?.head ?? request.fingerprint.head;
     writeVerdict(deps.paths, {
@@ -186,6 +188,16 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
     report.fingerprints.atStart = deps.fingerprint(request.worktree);
   } catch (err: unknown) {
     return finish('FAIL', `could not fingerprint the worktree: ${toErrorMessage(err)}`);
+  }
+
+  // A gate attests HEAD by sha. If the tree on disk is not that commit, whatever passes
+  // is not what the sha holds — refuse before spending a build or a live slot on it.
+  if (request.type === 'gate' && !report.fingerprints.atStart.clean) {
+    return finish(
+      'DIRTY',
+      'the worktree has uncommitted or untracked changes; a gate attests HEAD by sha, so ' +
+        'the tested tree must be exactly that commit — commit first, then resubmit',
+    );
   }
 
   // Refresh origin/main so verify-gate judges the branch against the real main, not a

@@ -20,6 +20,11 @@ export interface TreeFingerprint {
   head: string;
   /** sha256 over HEAD + diff + status + untracked file contents. */
   hash: string;
+  /**
+   * True when the tree IS its HEAD — no diff, nothing staged, nothing untracked. An
+   * attestation names a sha, so a gate may only attest a tree that is that sha.
+   */
+  clean: boolean;
 }
 
 export type GitRunner = (worktree: string, args: string[], input?: string) => string;
@@ -52,5 +57,5 @@ export function fingerprintTree(worktree: string, git: GitRunner = runGit): Tree
     .createHash('sha256')
     .update([head, diff, status, untrackedHashes].join('\u0000'))
     .digest('hex');
-  return { head, hash };
+  return { head, hash, clean: diff === '' && status === '' };
 }

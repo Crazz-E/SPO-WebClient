@@ -37,7 +37,7 @@ one process (the worker) consumes the spool.
 |---|---|---|
 | Worker | `src/e2e/bench/worker.ts` | the permanent loop — claims, builds, drives, reports |
 | Client | `src/e2e/bench/cli.ts` | `submit` / `wait` / `status` (wrapped by `scripts/bench-*.sh`) |
-| Fingerprint | `src/e2e/bench/fingerprint.ts` | moving-target detector (HEAD + diff + status + untracked content) |
+| Fingerprint | `src/e2e/bench/fingerprint.ts` | moving-target detector (HEAD + diff + status + untracked content) and the clean-tree test a gate requires |
 | Gateway | `src/e2e/bench/gateway.ts` | clean-port guarantee, per-job gateway start/stop |
 | Attestations | `src/e2e/bench/verdict.ts` | `verdicts/<sha>.json` + `bench/gate` GitHub commit status |
 | Supervision | `scripts/bench-install.sh` | systemd --user unit, `Restart=always`, linger |
@@ -53,7 +53,10 @@ one process (the worker) consumes the spool.
    dead → report `ABANDONED`, nothing runs, the queue cleans itself.
 3. **Clean bench**: kill anything on 8080 (safe — only the worker starts gateways there),
    verify the port is free.
-4. **Fingerprint `atStart`**, compare with `atSubmit`; `git fetch origin main` (best-effort)
+4. **Fingerprint `atStart`**, compare with `atSubmit`. A **gate on a dirty tree is `DIRTY`**
+   — nothing runs, nothing is attested: the attestation names a sha, so the tested tree
+   must be exactly that commit (the client already refuses it at deposit, exit 2; the
+   worker enforces it again). Then `git fetch origin main` (best-effort)
    so verify-gate routes the diff against the real `origin/main`, not a lagging local one.
 5. **Build**: `npm run build` in the job's worktree — always. A stale `dist/` runs
    yesterday's code and produces a silently wrong PASS; ~16 s is the price of never
@@ -77,7 +80,8 @@ one process (the worker) consumes the spool.
     slot released, next job.
 
 Verdicts: `PASS` · `FAIL` · `BLOCKED` (President members — a human verifies, §7 of the
-policy) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `ABANDONED` ·
+policy) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `DIRTY` (gate on
+uncommitted changes — commit first) · `ABANDONED` ·
 `INTERRUPTED` (worker died mid-job — check the world lock before resubmitting) · `LEASED`.
 
 A second deposit from a worktree whose first job is still queued is **refused, naming the

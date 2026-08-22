@@ -73,7 +73,7 @@ npm run gate
 
    | Stage | Check |
    |---|---|
-   | Clean bench | nothing listens on 8080; fingerprint the tree |
+   | Clean bench | nothing listens on 8080; fingerprint the tree — uncommitted changes -> `DIRTY`, nothing runs (the attestation names a sha, so the tree must be that commit) |
    | Build | `npm run build` in the worktree — the tested gateway IS this tree's code |
    | Static (replayed) | typecheck, lint, tests — the attestation is the worker's, not the session's |
    | Exclusions | President members / Capitol governance in the diff -> **BLOCK**, emit manual-verify handoff (§7) |
