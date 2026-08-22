@@ -234,6 +234,25 @@ describe('after a merge', () => {
     expect(fs.existsSync(bench.mainRepo)).toBe(true);
   });
 
+  it('prunes orphan session worktrees — clean, nothing ahead of main, no process inside — and keeps the rest', () => {
+    const bench = scratchBench();
+    const base = path.join(bench.mainRepo, '.claude', 'worktrees');
+    fs.mkdirSync(base, { recursive: true });
+    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/orphan', path.join(base, 'orphan'));
+    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/ahead', path.join(base, 'ahead'));
+    commitFile(path.join(base, 'ahead'), 'src/work.ts', 'export const w = 1;\n', 'feat: work');
+    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/dirty', path.join(base, 'dirty'));
+    fs.writeFileSync(path.join(base, 'dirty', 'notes.md'), 'wip\n', 'utf8');
+
+    const run = runFinish(bench, bench.mainRepo); // on main: sync + prune only
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(/== pruning orphan worktree .*orphan/);
+    expect(fs.existsSync(path.join(base, 'orphan'))).toBe(false);
+    expect(spawnSync('git', ['-C', bench.mainRepo, 'rev-parse', '--verify', '-q', 'claude-x/orphan']).status).not.toBe(0);
+    expect(fs.existsSync(path.join(base, 'ahead'))).toBe(true);
+    expect(fs.existsSync(path.join(base, 'dirty'))).toBe(true);
+  });
+
   it('refuses to finish a named branch that is still checked out in a worktree', () => {
     const bench = scratchBench();
     const run = runFinish(bench, bench.mainRepo, { FAKE_GH_STATE: 'MERGED' }, [bench.branch]);

@@ -50,8 +50,34 @@ sync_main() {
   git -C "$MAIN_REPO" log --oneline -1
 }
 
+# Session worktrees that hold nothing: clean, zero commits ahead of origin/main, and no
+# process living inside them (a session still open has its shell there). They appear when
+# a session is started and abandoned without touching anything — the harness leaves them,
+# and they pile up. Anything that carries work (a commit, an edit, a live shell) is kept.
+prune_orphan_worktrees() {
+  local dir wt_branch
+  for dir in "$MAIN_REPO"/.claude/worktrees/*/; do
+    dir="${dir%/}"
+    [ -d "$dir/.git" ] || [ -f "$dir/.git" ] || continue
+    [ "$dir" = "$here" ] && continue
+    [ -z "$(git -C "$dir" status --porcelain 2>/dev/null)" ] || continue
+    [ "$(git -C "$dir" rev-list --count origin/main..HEAD 2>/dev/null || echo 1)" = "0" ] || continue
+    if [ -d /proc ] && ls -d /proc/[0-9]*/cwd 2>/dev/null | xargs -r readlink 2>/dev/null | grep -qx "$dir"; then
+      continue
+    fi
+    wt_branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
+    echo "== pruning orphan worktree $dir (clean, nothing ahead of main, no process inside)"
+    git -C "$MAIN_REPO" worktree remove --force "$dir"
+    if [ "$wt_branch" != "HEAD" ] && [ "$wt_branch" != "main" ]; then
+      git -C "$MAIN_REPO" branch -D "$wt_branch" >/dev/null 2>&1 || true
+    fi
+  done
+  git -C "$MAIN_REPO" worktree prune
+}
+
 if [ "$branch" = "main" ] && [ "$branch_only" = 0 ]; then
   sync_main
+  prune_orphan_worktrees
   echo "on main: nothing else to finish"
   exit 0
 fi
@@ -98,6 +124,7 @@ fi
 echo "== deleting local branch $branch (merged as ${merge_sha:0:8})"
 git branch -D "$branch" >/dev/null
 git worktree prune
+prune_orphan_worktrees
 
 echo
 echo "finished: main at $(git log --oneline -1), no branch left for '$branch' locally or on origin."
