@@ -1,5 +1,9 @@
 # Changelog
 
+> Frozen at 1.3.2-beta. Every release after it lives on
+> [GitHub Releases](https://github.com/Crazz-E/SPO-WebClient/releases), with notes generated
+> from the conventional commits by `scripts/changelog.js` (`npm run release:preview`).
+
 ## [1.3.2-beta] - 2026-08-21
 
 ### Fixed

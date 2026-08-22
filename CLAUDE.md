@@ -2,7 +2,7 @@
 
 Browser-based multiplayer tycoon client, wire-compatible with the original Delphi
 Starpeace Online servers. TypeScript + Node.js + WebSocket + Canvas 2D isometric.
-RDO protocol. Beta 1.3.2-beta.
+RDO protocol. Beta — version = latest `v*` tag / GitHub Release.
 
 ```
 Browser Client --WebSocket--> Node.js Gateway --RDO/TCP--> Delphi Game Servers
@@ -377,6 +377,10 @@ bypass list): PR required (0 approvals — solo maintainer), `typecheck + tests`
 PR cannot merge on CI alone, and **if `main` moves after your gate, update the branch and
 re-run `npm run gate`** — the new sha needs its own attestation. The detailed live
 evidence still rides in the PR body. Setup checklist: [bench-worker.md §5](doc/bench-worker.md).
+**The last link is the release:** every merge to `main` runs `electron-release.yml`, which
+computes the version from the last `v*` tag and the commits since it (`feat` → minor,
+otherwise patch), builds the installer, tags and publishes the GitHub Release — never create
+`v*` tags by hand (a tag ruleset forbids updating or deleting them).
 
 **An update is finished only after `npm run finish`.** GitHub deletes the remote branch at
 merge (`delete_branch_on_merge`); the local side does not clean itself. `finish` refuses
