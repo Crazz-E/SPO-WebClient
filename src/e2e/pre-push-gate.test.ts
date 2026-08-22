@@ -158,6 +158,24 @@ describe('the attestation gate, on a feature branch', () => {
     return invoke(push, { GATE_REPO_DIR: dir, SPO_BENCH_DIR: bench, ...env });
   }
 
+  it('judges the repo a `git -C <dir> push` names, not the session cwd', () => {
+    const dir = scratchRepo();
+    const bench = benchWith(dir, {});
+    expect(invoke(`git -C ${dir} push -u origin HEAD`, { SPO_BENCH_DIR: bench }).code).toBe(0);
+    const other = scratchRepo();
+    const blocked = invoke(`git -C ${other} push -u origin HEAD`, { SPO_BENCH_DIR: bench });
+    expect(blocked.code).toBe(2);
+    // Both scratch repos share a HEAD, so the attestation exists but names the other
+    // worktree — the hook judged `other`, which is the point.
+    expect(blocked.stderr).toMatch(/attested for another worktree/);
+  });
+
+  it('judges the repo a preceding `cd <dir>` selects', () => {
+    const dir = scratchRepo();
+    const bench = benchWith(dir, {});
+    expect(invoke(`cd ${dir} && npm run build && git push -u origin HEAD`, { SPO_BENCH_DIR: bench }).code).toBe(0);
+  });
+
   it('blocks when the bench has no attestation for HEAD', () => {
     const dir = scratchRepo();
     const result = invokeWith(dir, scratchBench());

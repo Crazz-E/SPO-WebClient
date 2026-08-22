@@ -297,6 +297,15 @@ describe('main', () => {
     });
   });
 
+  it('forwards the capabilities the caller asked for, and refuses an unknown one', async () => {
+    const runner = jest.fn(async (_options: LiveRunOptions) => result);
+    await main(['--flows=login-spine', '--capabilities=president'], runner, sink().stream);
+    expect(runner.mock.calls[0][0].capabilities).toEqual(['president']);
+    await expect(main(['--capabilities=emperor'], runner, sink().stream)).rejects.toThrow(
+      /Unknown capability "emperor"\. Known: president/,
+    );
+  });
+
   it('writes the run artifact and points at it', async () => {
     const out = sink();
     await main(['--flows=login-spine'], async () => result, out.stream);

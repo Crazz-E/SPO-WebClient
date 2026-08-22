@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { toErrorMessage } from '../shared/error-utils';
 import { REPORT_DIR, WORLD_NAME } from './config';
-import { checkCapability, type Capability, type CapabilityEvidence } from './capability';
+import { CAPABILITIES, checkCapability, type Capability, type CapabilityEvidence } from './capability';
 import { FLOWS, flowByName, runFlow, type FlowResult } from './flows';
 import { preflight, type PreflightResult } from './preflight';
 import { WorldLock } from './world-lock';
@@ -105,7 +105,7 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
   };
 }
 
-/** `npm run test:live -- --flows=a,b --branch=fix/x` */
+/** `npm run test:live -- --flows=a,b --branch=fix/x --capabilities=president` */
 export async function main(
   argv: string[] = process.argv.slice(2),
   runner: (options: LiveRunOptions) => Promise<LiveRunResult> = runLive,
@@ -116,8 +116,14 @@ export async function main(
 
   const flows = flagged('flows')?.split(',').filter(Boolean) ?? FLOWS.map(f => f.name);
   const branch = flagged('branch') ?? 'local';
+  const capabilities = (flagged('capabilities')?.split(',').filter(Boolean) ?? []).map(name => {
+    if (!(name in CAPABILITIES)) {
+      throw new Error(`Unknown capability "${name}". Known: ${Object.keys(CAPABILITIES).join(', ')}`);
+    }
+    return name as Capability;
+  });
 
-  const result = await runner({ flows, branch });
+  const result = await runner({ flows, branch, capabilities });
   const file = path.join(REPORT_DIR, `live-${result.startedAt.replace(/[:.]/g, '-')}.json`);
   fs.mkdirSync(REPORT_DIR, { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
