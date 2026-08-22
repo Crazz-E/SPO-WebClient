@@ -58,8 +58,12 @@ exports.route = files => ({
 });
 exports.presidentMembersInDiff = diff => {
   if (process.env.FAKE_DIFF_OUT) fs.writeFileSync(process.env.FAKE_DIFF_OUT, diff, 'utf8');
-  return [];
+  return JSON.parse(process.env.FAKE_PRESIDENT || '[]');
 };
+`;
+
+const FAKE_CAPABILITY = `'use strict';
+exports.capabilitiesFor = members => (members.length > 0 ? ['president'] : []);
 `;
 
 const FAKE_RUN = `'use strict';
@@ -110,6 +114,7 @@ beforeAll(() => {
   fs.mkdirSync(path.join(template, 'dist', 'e2e'), { recursive: true });
   fs.writeFileSync(path.join(template, 'dist', 'e2e', 'routing.js'), FAKE_ROUTING, 'utf8');
   fs.writeFileSync(path.join(template, 'dist', 'e2e', 'run.js'), FAKE_RUN, 'utf8');
+  fs.writeFileSync(path.join(template, 'dist', 'e2e', 'capability.js'), FAKE_CAPABILITY, 'utf8');
 });
 
 /**
@@ -287,6 +292,7 @@ describe('stage 4 — live', () => {
     expect(run.liveOptions).toEqual({
       flows: ['login-spine', 'politics-read'],
       branch: 'feature/x',
+      capabilities: [],
     });
     expect(run.stdout).toMatch(/live drive on planitia: login-spine, politics-read/);
     expect(run.stdout).toMatch(/summary: PASS/);
@@ -383,5 +389,77 @@ describe('the diff base', () => {
       changed: expect.arrayContaining(['README.md', 'src/server/thing.ts']),
     });
     expect(run.diffSeen).toContain('+edited');
+  });
+});
+
+describe('stage 5 — capability judgement (doc/E2E-POLICY.md §7)', () => {
+  const president = JSON.stringify(['RDOSitMayor']);
+  const evidence = (granted: boolean, determined = true) =>
+    JSON.stringify({
+      status: 'PASS',
+      flows: [],
+      capabilities: [
+        {
+          capability: 'president',
+          account: 'SPO_test3',
+          members: ['RDOSitMayor', 'RDOSitMinister'],
+          determined,
+          granted,
+          checks: [{ what: 'canGovern on the Capitol (server grantAccess)', value: String(granted) }],
+          checkedAt: 'now',
+          ...(determined ? {} : { error: 'socket closed' }),
+        },
+      ],
+    });
+
+  it('runs the live stage for a capability even when routing is static-only', () => {
+    const run = runGate(scratchRepo(), [], {
+      FAKE_ROUTING: JSON.stringify({ staticOnly: true }),
+      FAKE_PRESIDENT: president,
+      FAKE_LIVE: evidence(false),
+    });
+    expect(run.code).toBe(0);
+    expect(run.liveOptions).toEqual({ flows: [], branch: 'feature/x', capabilities: ['president'] });
+  });
+
+  it('records a refused capability as an exception and passes', () => {
+    const run = runGate(scratchRepo(), [], {
+      FAKE_ROUTING: JSON.stringify({ required: ['login-spine'] }),
+      FAKE_PRESIDENT: president,
+      FAKE_LIVE: evidence(false),
+    });
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(/CAPABILITY EXCEPTION/);
+    expect(run.stdout).toMatch(/does not hold the 'president' capability/);
+    expect(run.artifact).toMatchObject({
+      verdict: 'PASS',
+      exclusions: {
+        presidentMembersTouched: ['RDOSitMayor'],
+        capability: [{ capability: 'president', members: ['RDOSitMayor'], account: 'SPO_test3' }],
+      },
+    });
+  });
+
+  it('fails closed when the server GRANTS the capability and no flow drives the member', () => {
+    const run = runGate(scratchRepo(), [], {
+      FAKE_ROUTING: JSON.stringify({ required: ['login-spine'] }),
+      FAKE_PRESIDENT: president,
+      FAKE_LIVE: evidence(true),
+    });
+    expect(run.code).toBe(1);
+    expect(run.stdout).toMatch(/holds the 'president' capability/);
+    expect(run.stdout).toMatch(/add a flow that exercises the changed member/);
+    expect(run.artifact).toMatchObject({ verdict: 'FAIL', exclusions: { capability: [] } });
+  });
+
+  it('fails when the capability could not be determined — read, never assumed', () => {
+    const run = runGate(scratchRepo(), [], {
+      FAKE_ROUTING: JSON.stringify({ required: ['login-spine'] }),
+      FAKE_PRESIDENT: president,
+      FAKE_LIVE: evidence(false, false),
+    });
+    expect(run.code).toBe(1);
+    expect(run.stdout).toMatch(/did not answer whether SPO_test3 holds the 'president' capability/);
+    expect(run.artifact).toMatchObject({ verdict: 'FAIL' });
   });
 });
