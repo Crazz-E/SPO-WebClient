@@ -117,6 +117,9 @@ session edits worktree
                             GitHub deletes the remote branch
   → npm run finish          main ff'd, refs pruned, worker reinstalled if its sources changed,
                             worktree + branch removed — nothing left but main
+  → electron-release.yml    on the push to main: computes the version from the last v* tag
+                            and the commits since it, builds, tags, publishes the GitHub
+                            Release — never create v* tags by hand
 ```
 
 Only the worker writes attestations. A session cannot unblock its own push, and a PR

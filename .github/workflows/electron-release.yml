@@ -1,49 +1,80 @@
+# Electron Release — every merge to main becomes a release.
+#
+# The version is derived, not committed: scripts/changelog.js reads the last `v*` tag and
+# the conventional-commit subjects since it (feat -> minor, otherwise patch; nothing ->
+# skip). The workflow builds the installer, then creates the GitHub Release as a DRAFT with
+# every asset attached and publishes it; the `v<version>` tag materialises at that moment,
+# on GITHUB_SHA. Never create a `v*` tag by hand.
+#
+# Why `push: branches: [main]` and not a tag trigger: the tag is made here with
+# GITHUB_TOKEN, and events caused by GITHUB_TOKEN never start another workflow — a
+# `v*` tag trigger would simply never fire. workflow_dispatch is the manual retry.
 name: Electron Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      publish:
-        description: 'Publish to GitHub Releases'
-        required: false
-        default: 'false'
-        type: boolean
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-main
   cancel-in-progress: false
 
 jobs:
   build-windows:
     runs-on: windows-latest
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
+      # Derives the version from the tags; fails if `v<version>` already exists at another
+      # commit; writes version= and skip= to GITHUB_OUTPUT. Nothing else runs when skip is true.
+      - name: Derive the next version
+        id: next
+        run: node scripts/changelog.js --next
+
+      # A previous run of this same sha may have died between `release create --draft` and
+      # the publish. A draft has no tag, so deleting it costs nothing and makes the run resumable.
+      - name: Delete a stale draft for this version
+        if: steps.next.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.next.outputs.version }}
+        run: |
+          $ids = gh api "repos/${{ github.repository }}/releases" --paginate --jq ('.[] | select(.draft and .tag_name == "' + $env:TAG + '") | .id')
+          foreach ($id in ($ids -split "`n" | Where-Object { $_ })) {
+            Write-Host "Deleting stale draft release $id for $env:TAG"
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$id"
+          }
+
       - name: Cache root node_modules
+        if: steps.next.outputs.skip != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
           key: root-modules-${{ hashFiles('package-lock.json') }}
 
       - name: Cache electron node_modules
+        if: steps.next.outputs.skip != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: electron/node_modules
           key: electron-modules-${{ hashFiles('electron/package-lock.json') }}
 
       - name: Cache electron-builder
+        if: steps.next.outputs.skip != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -54,58 +85,58 @@ jobs:
             electron-builder-${{ runner.os }}-
 
       - name: Install root dependencies
+        if: steps.next.outputs.skip != 'true'
         run: npm ci
 
+      # The manifests carry 0.0.0-dev in git. Stamping them here, before the build, is what
+      # puts the real version into vite's __APP_VERSION__ and into electron-builder's installer.
+      - name: Stamp the version into the root manifest
+        if: steps.next.outputs.skip != 'true'
+        run: npm version ${{ steps.next.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Stamp the version into the electron manifest
+        if: steps.next.outputs.skip != 'true'
+        working-directory: electron
+        run: npm version ${{ steps.next.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Generate the in-app changelog
+        if: steps.next.outputs.skip != 'true'
+        run: node scripts/changelog.js --json
+
+      - name: Generate the release notes
+        if: steps.next.outputs.skip != 'true'
+        run: node scripts/changelog.js --notes notes.md && Get-Content notes.md
+
       - name: Run tests (catches path resolution + bundle regressions)
+        if: steps.next.outputs.skip != 'true'
         run: npm test
 
       - name: Build server + client
+        if: steps.next.outputs.skip != 'true'
         run: npm run build
 
       - name: Build electron server bundle
+        if: steps.next.outputs.skip != 'true'
         run: npm run build:electron-bundle
 
       - name: Install electron dependencies
+        if: steps.next.outputs.skip != 'true'
         working-directory: electron
         run: npm ci
 
-      # electron-builder uploads the installer, the blockmap and latest.yml in parallel.
-      # When the release does not exist yet, two of those uploads create it at the same
-      # second and GitHub ends up with two releases on one tag — which is what v1.3.1-beta
-      # produced: the blockmap on one, the installer on the other. Creating it first turns
-      # every upload into an attach.
-      - name: Ensure the release exists before uploading to it
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $tag = "${{ github.ref_name }}"
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --prerelease --title $tag --notes "Automated build for $tag. See CHANGELOG.md."
-          } else {
-            Write-Host "Release $tag already exists."
-          }
-
-      - name: Build and publish installer
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish == 'true'
-        working-directory: electron
-        run: npx electron-builder --win --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Build installer (no publish)
-        if: "!(startsWith(github.ref, 'refs/tags/v') || inputs.publish == 'true')"
+      - name: Build installer
+        if: steps.next.outputs.skip != 'true'
         working-directory: electron
         run: npx electron-builder --win --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Validate packaged app structure
+        if: steps.next.outputs.skip != 'true'
         run: node scripts/validate-electron-package.js
 
       - name: Upload installer artifact
+        if: steps.next.outputs.skip != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-installer
@@ -114,3 +145,17 @@ jobs:
             electron/release/*.exe.blockmap
             electron/release/*.yml
           if-no-files-found: error
+
+      # Draft first: a draft creates no tag and nobody's updater sees it. Every asset is
+      # attached to the draft, then the publish flips it live and creates the tag on
+      # GITHUB_SHA — one release, one tag, all files, or nothing at all.
+      - name: Publish the release
+        if: steps.next.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.next.outputs.version }}
+        run: |
+          $assets = Get-ChildItem electron/release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' } | ForEach-Object { $_.FullName }
+          gh release create $env:TAG --target ${{ github.sha }} --draft --title $env:TAG --notes-file notes.md @assets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release edit $env:TAG --draft=false --latest
