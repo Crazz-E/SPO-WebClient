@@ -158,6 +158,25 @@ describe('the attestation gate, on a feature branch', () => {
     return invoke(push, { GATE_REPO_DIR: dir, SPO_BENCH_DIR: bench, ...env });
   }
 
+  it('judges the repo a `git -C <dir> push` names, not the session cwd', () => {
+    const dir = scratchRepo();
+    const bench = benchWith(dir, {});
+    expect(invoke(`git -C ${dir} push -u origin HEAD`, { SPO_BENCH_DIR: bench }).code).toBe(0);
+    const other = scratchRepo();
+    const blocked = invoke(`git -C ${other} push -u origin HEAD`, { SPO_BENCH_DIR: bench });
+    expect(blocked.code).toBe(2);
+    // Either the scratch repos share a HEAD (same commit second) and the attestation
+    // names the other worktree, or they differ and `other` has none — both prove the
+    // hook judged `other`, not the cwd.
+    expect(blocked.stderr).toMatch(/attested for another worktree|no bench attestation for HEAD/);
+  });
+
+  it('judges the repo a preceding `cd <dir>` selects', () => {
+    const dir = scratchRepo();
+    const bench = benchWith(dir, {});
+    expect(invoke(`cd ${dir} && npm run build && git push -u origin HEAD`, { SPO_BENCH_DIR: bench }).code).toBe(0);
+  });
+
   it('blocks when the bench has no attestation for HEAD', () => {
     const dir = scratchRepo();
     const result = invokeWith(dir, scratchBench());
@@ -179,12 +198,12 @@ describe('the attestation gate, on a feature branch', () => {
     expect(result.stderr).toMatch(/Three attempts maximum/);
   });
 
-  it('blocks a BLOCKED verdict with the manual-verification instruction', () => {
+  it('blocks a BLOCKED verdict — the live stage never ran — and says how to clear it', () => {
     const dir = scratchRepo();
     const result = invokeWith(dir, benchWith(dir, { verdict: 'BLOCKED' }));
     expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/President-only members/);
-    expect(result.stderr).toMatch(/never mark it verified|Do not mark it verified/i);
+    expect(result.stderr).toMatch(/refused before running/);
+    expect(result.stderr).toMatch(/e2e:unlock/);
   });
 
   it('blocks a STALE verdict — the tree moved, the result attests nothing current', () => {

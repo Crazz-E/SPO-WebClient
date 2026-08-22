@@ -57,8 +57,9 @@ export const LIVE_LOG_BASE =
   process.env.E2E_LOG_BASE || 'http://158.69.153.134/logs/FIVEMODELSERVER/';
 
 /**
- * President-only members. A diff touching one of these blocks the gate and hands
- * verification to the developer (doc/E2E-POLICY.md §7).
+ * President-only members. A diff touching one of these makes the gate read, from the
+ * server, whether the test account holds the presidency (doc/E2E-POLICY.md §7): granted
+ * means the change must be driven by a flow; refused is a recorded capability exception.
  *
  * Source: TPresidentialHall, Kernel/WorldPolitics.pas:261-266, indexed in
  * doc/civic-roles-reference.md:101-106.
