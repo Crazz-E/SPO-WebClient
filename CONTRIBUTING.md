@@ -65,7 +65,10 @@ new sha needs its own attestation. Fill in [the PR template](.github/pull_reques
 and say which RDO members the change touches, if any.
 
 **Merge with squash**, and make the PR title a conventional commit (`type: summary`) — it
-becomes the one squash commit, and that commit is the changelog line.
+becomes the one squash commit, and that commit is the changelog line. GitHub deletes the
+remote branch at merge; then **`npm run finish`** closes the local side (main fast-forwarded,
+refs pruned, worker reinstalled if its sources changed, worktree and branch removed). An
+update is done when `main` is the only branch left, locally and on origin.
 
 ## Changelog
 

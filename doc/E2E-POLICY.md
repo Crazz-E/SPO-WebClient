@@ -312,6 +312,7 @@ npm run dev                      # bench LEASE: this worktree's gateway held on 
 npm run dev:release              # ...and give it back as soon as you are done
 npm run bench:status             # worker liveness + queue
 npm run e2e:unlock               # clear a world-dirty lock after a human restore
+npm run finish                   # after the merge: main ff'd, refs pruned, worker reinstalled if needed, worktree + branch gone
 
 npm run gate:local               # verify-gate directly — evidence for reading, no push unblock
 PORT=8081 npm run dev:local      # a debug gateway of your own — attests nothing

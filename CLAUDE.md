@@ -185,6 +185,8 @@ npm run dev          # a bench LEASE: the worker builds THIS worktree and holds 
 npm run dev:release  # end your lease early (otherwise it expires, 30 min default)
 npm run bench:status # worker liveness + queue
 npm run e2e:unlock   # clear a world-dirty lock after a human restore
+npm run finish       # THE END of an update — after the PR is merged: main ff'd, refs pruned, worker
+                     # reinstalled if its sources changed, this worktree + branch removed. Last command.
 
 PORT=8081 npm run dev:local   # build + start yourself, OFF 8080 — the CONSCIOUS EXCEPTION (see below)
 npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push
@@ -368,6 +370,13 @@ bypass list): PR required (0 approvals — solo maintainer), `typecheck + tests`
 PR cannot merge on CI alone, and **if `main` moves after your gate, update the branch and
 re-run `npm run gate`** — the new sha needs its own attestation. The detailed live
 evidence still rides in the PR body. Setup checklist: [bench-worker.md §5](doc/bench-worker.md).
+
+**An update is finished only after `npm run finish`.** GitHub deletes the remote branch at
+merge (`delete_branch_on_merge`); the local side does not clean itself. `finish` refuses
+unless the PR is MERGED, fast-forwards `~/SPO-WebClient` to `origin/main`, prunes stale
+`origin/*` refs, reinstalls the bench worker when the merge touched `src/e2e/bench/` or
+`scripts/bench-*`, then removes this worktree and its branch. Run it as the session's last
+command — the end state is `main` alone, locally and on origin.
 
 Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description — or the session worktree
 branch (`claude-<user>/…`); the hook accepts any branch but `main`.

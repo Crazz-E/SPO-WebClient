@@ -1,7 +1,7 @@
 ---
 description: Commit and push only the changes made during the current session
 argument-hint: "[commit message]"
-allowed-tools: Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git add*), Bash(git commit*), Bash(git push*), Bash(git branch*), Bash(npm run gate*), Read, Grep, Glob
+allowed-tools: Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git add*), Bash(git commit*), Bash(git push*), Bash(git branch*), Bash(npm run gate*), Bash(npm run finish*), Bash(gh pr *), Read, Grep, Glob
 ---
 
 # Commit and Push Current Session Changes
@@ -97,12 +97,28 @@ moved since your gate, `gh pr update-branch <n>` (or merge `origin/main` locally
 and **run `npm run gate` again** — the new sha has no attestation of its own. A PR merges on
 `typecheck + tests` + `bench/gate` only; nobody, the owner included, can bypass.
 
-### 7. Report
+### 7. Merge, then finish
+
+When both statuses are green (`gh pr checks <n>`), squash-merge (`gh pr merge <n> --squash
+--delete-branch`; "`main` is already used by worktree" after a successful merge is not an
+error — the merge happened, only the local checkout switch failed). Then, **as the very last
+command**:
+
+```bash
+npm run finish
+```
+
+It refuses unless the PR is MERGED; fast-forwards `~/SPO-WebClient`, prunes refs, reinstalls
+the worker if `src/e2e/bench/` or `scripts/bench-*` changed, removes this worktree and branch.
+Nothing survives but `main`.
+
+### 8. Report
 
 Print a summary:
 - Branch name
 - Commit hash (short)
 - Files changed (list)
 - Gate verdict, the flows that ran, and each probe's log-line / restore result
-- Push status (success/failure)
+- Push status (success/failure), PR number, merge commit
+- `npm run finish` result: main at <sha>, worktree and branch gone
 - Whether an L3 browser pass is still owed (the gate says so when the diff touches pixels)
