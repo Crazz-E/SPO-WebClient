@@ -29,8 +29,11 @@ Path aliases resolve in tests: `@/`, `@shared/`, `@server/`, `@client/`.
 
 ## Coverage — two different numbers, do not conflate them
 
-**Project convention:** new or modified lines must be ≥ **93 %** covered. This is a review
-standard, not machine-enforced — meeting the jest thresholds is not sufficient.
+**Project rule:** new or modified lines must be ≥ **93 %** covered. Enforced by
+`npm run coverage:changed` (`scripts/coverage-changed.js`: diff against `origin/main`, one Jest
+run with coverage restricted to the changed files, aggregate ratio over changed statement
+lines) in `gate:precheck` and in CI on pull requests — meeting the jest thresholds is not
+sufficient.
 
 **Machine floor** (`jest.config.js`, ratchet baseline 2026-03-11) — thresholds **only go UP**:
 
