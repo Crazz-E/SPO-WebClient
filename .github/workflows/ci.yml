@@ -36,5 +36,14 @@ jobs:
       - name: Typecheck (server + client)
         run: npm run typecheck
 
+      - name: Build (server + client + terrain-test)
+        # The bench worker builds before every gate; CI builds too so a PR that never sat
+        # on the bench (a dependency bump, an external contributor) cannot ship a tree
+        # that does not compile to a runnable gateway.
+        run: npm run build
+
+      - name: Audit production dependencies (SEC-D-1)
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Tests
         run: npm test
