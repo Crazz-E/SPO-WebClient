@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { toErrorMessage } from '../shared/error-utils';
 import { REPORT_DIR, WORLD_NAME } from './config';
+import { CAPABILITIES, checkCapability, type Capability, type CapabilityEvidence } from './capability';
 import { FLOWS, flowByName, runFlow, type FlowResult } from './flows';
 import { preflight, type PreflightResult } from './preflight';
 import { WorldLock } from './world-lock';
@@ -21,6 +22,8 @@ export interface LiveRunResult {
   status: 'PASS' | 'FAIL' | 'ENVIRONMENT' | 'BLOCKED';
   preflight: PreflightResult;
   flows: FlowResult[];
+  /** What the server says the test account may do — read-only, gathered before the flows. */
+  capabilities: CapabilityEvidence[];
   error?: string;
 }
 
@@ -28,6 +31,8 @@ export interface LiveRunOptions {
   flows: string[];
   branch: string;
   lock?: WorldLock;
+  /** Capabilities the diff depends on (doc/E2E-POLICY.md §7); the gate judges the evidence. */
+  capabilities?: Capability[];
 }
 
 export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
@@ -46,6 +51,7 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
       status: 'BLOCKED',
       preflight: { ok: false, checks: [], environmentAbort: false },
       flows: [],
+      capabilities: [],
       error: toErrorMessage(err),
     };
   }
@@ -59,15 +65,22 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
       status: 'ENVIRONMENT',
       preflight: checks,
       flows: [],
+      capabilities: [],
       error: checks.checks.filter(c => !c.ok).map(c => `${c.what}: ${c.detail}`).join('; '),
     };
   }
 
   lock.recordRun(options.branch);
   const results: FlowResult[] = [];
+  const capabilities: CapabilityEvidence[] = [];
   let releaseError: string | undefined;
 
   try {
+    // Capability reads come first: they mutate nothing, and the gate needs the answer
+    // whether or not a flow then runs.
+    for (const capability of options.capabilities ?? []) {
+      capabilities.push(await checkCapability(capability));
+    }
     for (const name of options.flows) {
       results.push(await runFlow(flowByName(name), { lock, survivalLogUrl: checks.survivalLogUrl }));
     }
@@ -87,11 +100,12 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
     status: failed ? 'FAIL' : 'PASS',
     preflight: checks,
     flows: results,
+    capabilities,
     error: releaseError,
   };
 }
 
-/** `npm run test:live -- --flows=a,b --branch=fix/x` */
+/** `npm run test:live -- --flows=a,b --branch=fix/x --capabilities=president` */
 export async function main(
   argv: string[] = process.argv.slice(2),
   runner: (options: LiveRunOptions) => Promise<LiveRunResult> = runLive,
@@ -102,8 +116,14 @@ export async function main(
 
   const flows = flagged('flows')?.split(',').filter(Boolean) ?? FLOWS.map(f => f.name);
   const branch = flagged('branch') ?? 'local';
+  const capabilities = (flagged('capabilities')?.split(',').filter(Boolean) ?? []).map(name => {
+    if (!(name in CAPABILITIES)) {
+      throw new Error(`Unknown capability "${name}". Known: ${Object.keys(CAPABILITIES).join(', ')}`);
+    }
+    return name as Capability;
+  });
 
-  const result = await runner({ flows, branch });
+  const result = await runner({ flows, branch, capabilities });
   const file = path.join(REPORT_DIR, `live-${result.startedAt.replace(/[:.]/g, '-')}.json`);
   fs.mkdirSync(REPORT_DIR, { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
@@ -117,6 +137,11 @@ export function formatSummary(result: LiveRunResult): string {
   if (result.error) lines.push(`  ! ${result.error}`);
   for (const check of result.preflight.checks.filter(c => !c.ok)) {
     lines.push(`  pre-flight FAIL  ${check.what}: ${check.detail ?? ''}`);
+  }
+  for (const cap of result.capabilities) {
+    const verdict = !cap.determined ? 'UNDETERMINED' : cap.granted ? 'GRANTED' : 'NOT GRANTED';
+    lines.push(`  capability ${cap.capability}: ${verdict} for ${cap.account}${cap.error ? ` — ${cap.error}` : ''}`);
+    for (const check of cap.checks) lines.push(`          ${check.what} = ${check.value}`);
   }
   for (const flow of result.flows) {
     lines.push(`  ${flow.status.padEnd(4)}  ${flow.name}${flow.error ? ` — ${flow.error}` : ''}`);

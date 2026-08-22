@@ -5,17 +5,19 @@
  *
  * Runs, in order, stopping at the first failure:
  *
- *   static      typecheck, lint, tests
- *   exclusions  President members in the diff -> BLOCK, hand verification to the developer
- *   routing     diff -> required L2 flows
- *   live        pre-flight, lock, flows against planitia, restore, release
- *   artifact    report/e2e/gate-<sha>.json, which the push hook reads
+ *   static        typecheck, lint, tests
+ *   capabilities  President members in the diff -> the live stage must read, from the
+ *                 server, whether the test account holds the capability (§7)
+ *   routing       diff -> required L2 flows
+ *   live          pre-flight, lock, capability reads, flows against planitia, restore, release
+ *   judge         a capability the server GRANTS must be exercised by a flow (fail closed);
+ *                 one it REFUSES is a recorded exception, never a human override
+ *   artifact      report/e2e/gate-<sha>.json, which the push hook reads
  *
  * Usage:
  *   node scripts/verify-gate.js
  *   node scripts/verify-gate.js --static-only
  *   node scripts/verify-gate.js --flows=login-spine,politics-write
- *   node scripts/verify-gate.js --manual-verified="ran the president flow by hand, tax landed"
  *   node scripts/verify-gate.js --attempt=2
  */
 
@@ -61,7 +63,9 @@ function changedFiles() {
   const committed = git(args).split('\n').filter(Boolean);
   // `-uall` matters: without it an untracked DIRECTORY collapses to a single `dir/` entry,
   // so a new file inside it would never be routed to a flow.
-  const working = git(['status', '--porcelain', '-uall'])
+  // Not through git(): its trim() would eat the leading space of a ` M path` line and
+  // hand the router `ath` — the first-listed unstaged modification lost its first letter.
+  const working = execFileSync('git', ['status', '--porcelain', '-uall'], { encoding: 'utf8' })
     .split('\n')
     .filter(Boolean)
     .map(line => line.slice(3).trim())
@@ -130,7 +134,7 @@ async function main() {
     static: {},
     routing: {},
     live: null,
-    exclusions: { presidentMembersTouched: [], manualVerification: flag('manual-verified') || null },
+    exclusions: { presidentMembersTouched: [], capability: [] },
   };
 
   // --- Stage 1: static -------------------------------------------------------
@@ -157,39 +161,14 @@ async function main() {
   }
 
   const { route, presidentMembersInDiff } = require(path.resolve('dist/e2e/routing.js'));
+  const { capabilitiesFor } = require(path.resolve('dist/e2e/capability.js'));
 
-  // --- Stage 2: exclusions ---------------------------------------------------
+  // --- Stage 2: capabilities -------------------------------------------------
+  // A member the test account may not be authorised to call is not a reason to stop;
+  // it is a question for the server. The live stage reads the answer (§7).
   const president = presidentMembersInDiff(diffText());
   artifact.exclusions.presidentMembersTouched = president;
-  if (president.length > 0 && !artifact.exclusions.manualVerification) {
-    artifact.verdict = 'BLOCKED';
-    const file = write(artifact);
-    process.stdout.write(
-      [
-        '',
-        '=== MANUAL-VERIFY-REQUIRED ===============================================',
-        '',
-        `This diff touches President-only members: ${president.join(', ')}`,
-        '',
-        'SPO_test3 is not president, so no automated flow can exercise these. And',
-        'RDOSitMinister exists in two variants with different argument types that a',
-        'name+arity catalogue cannot tell apart (civic-roles-reference.md:112-115) —',
-        'the wrong variant on a procedure is the arbitrary-memory-write case.',
-        '',
-        'What to do:',
-        '  1. Log in as a president and exercise the changed flow at the Capitol.',
-        '  2. Confirm the write in FIVEMODELSERVER/Survival <date>.log.',
-        '  3. Re-run:  npm run gate -- --manual-verified="<what you ran, and the result>"',
-        '',
-        'The push stays blocked until then. Do not mark this verified on the model\'s',
-        'behalf — doc/E2E-POLICY.md §7.',
-        '==========================================================================',
-        '',
-      ].join('\n'),
-    );
-    process.stdout.write(`Artifact: ${file}\n`);
-    return 2;
-  }
+  const capabilities = capabilitiesFor(president);
 
   // --- Stage 3: routing ------------------------------------------------------
   const decision = route(files);
@@ -216,7 +195,9 @@ async function main() {
   const requested = flag('flows');
   const flows = requested ? requested.split(',').filter(Boolean) : decision.required;
 
-  if (staticOnly || flows.length === 0) {
+  // A capability question cannot be answered statically: the live stage runs for it even
+  // when nothing else is routed there.
+  if ((staticOnly || flows.length === 0) && capabilities.length === 0) {
     artifact.verdict = 'PASS';
     artifact.live = { skipped: true, why: 'nothing in this diff is observable over the wire' };
     const file = write(artifact);
@@ -228,11 +209,53 @@ async function main() {
   // --- Stage 4: live ---------------------------------------------------------
   process.stdout.write(`\n=== live drive on planitia: ${flows.join(', ')}\n`);
   const { runLive, formatSummary } = require(path.resolve('dist/e2e/run.js'));
-  const live = await runLive({ flows, branch });
+  const live = await runLive({ flows: staticOnly ? [] : flows, branch, capabilities });
   artifact.live = live;
   process.stdout.write(`${formatSummary(live)}\n`);
 
   artifact.verdict = live.status === 'PASS' ? 'PASS' : live.status === 'BLOCKED' ? 'BLOCKED' : 'FAIL';
+
+  // --- Stage 5: judge the capability evidence --------------------------------
+  for (const evidence of live.capabilities || []) {
+    if (!evidence.determined) {
+      artifact.verdict = 'FAIL';
+      process.stdout.write(
+        `\nGate FAIL — the server did not answer whether ${evidence.account} holds the ` +
+          `'${evidence.capability}' capability (${evidence.error || 'no answer'}); a capability ` +
+          'must be read, never assumed.\n',
+      );
+    } else if (evidence.granted) {
+      // The account CAN do it — so the change must be exercised, and nothing is routed to do so.
+      artifact.verdict = 'FAIL';
+      process.stdout.write(
+        `\nGate FAIL — ${evidence.account} holds the '${evidence.capability}' capability, so ` +
+          `${evidence.members.join(', ')} can be driven live: add a flow that exercises the ` +
+          'changed member (src/e2e/flows.ts) and route it (src/e2e/routing.ts). Silence is not a pass.\n',
+      );
+    } else {
+      artifact.exclusions.capability.push({
+        capability: evidence.capability,
+        members: president.filter(m => evidence.members.includes(m)),
+        account: evidence.account,
+        checks: evidence.checks,
+        checkedAt: evidence.checkedAt,
+      });
+      process.stdout.write(
+        [
+          '',
+          '=== CAPABILITY EXCEPTION =================================================',
+          `${evidence.account} does not hold the '${evidence.capability}' capability on the server:`,
+          ...evidence.checks.map(c => `  ${c.what} = ${c.value}`),
+          `The touched member(s) ${president.join(', ')} therefore cannot be driven by this bench.`,
+          'Recorded in the artifact and the PR; this is a property of the account, not a verdict',
+          'on the change. The catalogue (kind + arity) remains the guard for these frames.',
+          '==========================================================================',
+          '',
+        ].join('\n'),
+      );
+    }
+  }
+
   const file = write(artifact);
 
   if (decision.needsL3) warnL3();

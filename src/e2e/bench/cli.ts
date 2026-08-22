@@ -6,7 +6,7 @@
  *     job id — unless --wait, which folds straight into the wait loop so the whole
  *     round trip is ONE background shell command for the session (zero tokens spent
  *     waiting). Unrecognized flags are forwarded verbatim to the job body, so
- *     `npm run gate -- --manual-verified="…"` reaches verify-gate.js unchanged.
+ *     `npm run gate -- --flows=login-spine` reaches verify-gate.js unchanged.
  *     A dead worker is reported HERE, at deposit time — exit 3, immediately. A gate on
  *     a tree with uncommitted changes is refused here too — exit 2: the attestation
  *     names a sha, so the tested tree must BE that sha.

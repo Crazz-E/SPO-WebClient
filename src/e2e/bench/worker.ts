@@ -148,12 +148,26 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
       fingerprintStable: !report.targetMoved,
       jobId: request.id,
       createdAt: new Date(deps.now()).toISOString(),
+      exceptions: countCapabilityExceptions(report.gateArtifact),
     });
   }
 
   deps.spool.finish(runningFile);
   deps.log(`finished ${request.id}: ${report.verdict}`);
   return true;
+}
+
+/** How many capability exceptions the gate artifact carries; 0 when unreadable or absent. */
+export function countCapabilityExceptions(artifactPath: string | undefined): number {
+  if (!artifactPath) return 0;
+  try {
+    const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8')) as {
+      exclusions?: { capability?: unknown[] };
+    };
+    return artifact.exclusions?.capability?.length ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<JobReport> {

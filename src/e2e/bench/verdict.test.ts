@@ -91,6 +91,14 @@ describe('publishPendingStatuses — the retry-until-pushed loop', () => {
     expect(listVerdicts(paths)[0].verdict.published).toBe(true);
   });
 
+  it('names the capability exceptions in the GitHub description', () => {
+    const paths = tempBench();
+    writeVerdict(paths, verdictFor('abc123', { exceptions: 2 }));
+    const descriptions: string[] = [];
+    publishPendingStatuses(paths, (_wt, _head, _state, description) => descriptions.push(description), () => {});
+    expect(descriptions[0]).toMatch(/PASS — 2 capability exception\(s\) — job/);
+  });
+
   it('does not republish', () => {
     const paths = tempBench();
     writeVerdict(paths, verdictFor('abc123', { published: true }));

@@ -79,8 +79,8 @@ one process (the worker) consumes the spool.
 10. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs), running
     slot released, next job.
 
-Verdicts: `PASS` · `FAIL` · `BLOCKED` (President members — a human verifies, §7 of the
-policy) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `DIRTY` (gate on
+Verdicts: `PASS` (possibly with capability exceptions listed — §7 of the policy) · `FAIL` ·
+`BLOCKED` (the live stage was refused before running: dirty world or rate limit) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `DIRTY` (gate on
 uncommitted changes — commit first) · `ABANDONED` ·
 `INTERRUPTED` (worker died mid-job — check the world lock before resubmitting) · `LEASED`.
 
@@ -122,6 +122,11 @@ session edits worktree
 Only the worker writes attestations. A session cannot unblock its own push, and a PR
 cannot merge on CI alone — the live evidence must exist even if the local hook were
 sidestepped.
+
+**Dependabot PRs** ride the same chain through `npm run deps:gate`: it rebases, installs
+(`npm ci` *in the PR's worktree* — a worktree has no `node_modules` of its own and would
+otherwise build against the main checkout's old packages), gates, pushes and auto-merges
+them one by one; a lockfile change routes to spine + building-details.
 
 **One-time GitHub setup (repo admin).** The chain is only deterministic if nobody can
 merge around it, so the rule must bind the admin too. On `main`:

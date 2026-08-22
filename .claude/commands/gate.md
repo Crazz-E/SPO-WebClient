@@ -1,6 +1,6 @@
 ---
 description: Run the pre-push gate — local precheck, then a bench-worker job (build, static, President exclusion, L2 live drive against planitia, attestation)
-argument-hint: "[--static-only|--flows=a,b|--manual-verified=...]"
+argument-hint: "[--static-only|--flows=a,b]"
 allowed-tools: Bash(npm run gate*), Bash(npm run test:live*), Bash(npm run bench:status*), Bash(npm run e2e:unlock*), Bash(bash scripts/bench-*), Bash(git status*), Bash(git diff*), Bash(git log*), Read, Grep, Glob
 ---
 
@@ -28,8 +28,10 @@ What matters when reading the result:
   `FIVEMODELSERVER/Survival` log line, not by a `success: true` response (`OB-28`).
 - A **read-back mismatch is not a failure** — the Town Hall's cached copy lags the write by
   up to two minutes (`OB-29`). A **missing log line is** a failure.
-- `BLOCKED` on President members means a person must verify it. Report that to the
-  developer with the members named; never clear it yourself.
+- A `CAPABILITY EXCEPTION` is not a failure: the server said the test account does not
+  hold the role the touched member needs (doc/E2E-POLICY.md §7). Report it with the
+  members and the checks; nothing clears it, and no flag should. If the capability is
+  GRANTED the gate fails closed — write the flow that drives the member.
 - `STALE` means the tree changed while the job was queued or running — resubmit on the
   tree you mean. Not an attempt.
 - `ENVIRONMENT` does not consume one of the three attempts.
