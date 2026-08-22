@@ -387,8 +387,10 @@ otherwise patch), builds the installer, tags and publishes the GitHub Release �
 merge (`delete_branch_on_merge`); the local side does not clean itself. `finish` refuses
 unless the PR is MERGED, fast-forwards `~/SPO-WebClient` to `origin/main`, prunes stale
 `origin/*` refs, reinstalls the bench worker when the merge touched `src/e2e/bench/` or
-`scripts/bench-*`, then removes this worktree and its branch, and prunes any orphan
-session worktree (clean, nothing ahead of `main`, no process inside). Run it as the
+`scripts/bench-*`, then removes this worktree and its branch, prunes any orphan session
+worktree (clean, nothing ahead of `main`, no process inside) and finishes any clean
+worktree whose PR is already MERGED — a session that forgot `finish` is healed by the next
+one. Run it as the
 session's last command — the end state is `main` alone, locally and on origin.
 
 Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description — or the session worktree
