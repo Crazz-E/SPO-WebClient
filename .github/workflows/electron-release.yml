@@ -107,10 +107,11 @@ jobs:
         if: steps.next.outputs.skip != 'true'
         run: node scripts/changelog.js --notes notes.md && Get-Content notes.md
 
-      - name: Run tests (catches path resolution + bundle regressions)
-        if: steps.next.outputs.skip != 'true'
-        run: npm test
-
+      # No `npm test` here: the sha being released already passed CI (ubuntu) on its PR and
+      # on the push to main, and the bench gate before that. The suite also drives the
+      # Linux bench tooling (bash hook, finish.sh, verify-gate.js, POSIX paths) and cannot
+      # pass on windows-latest — run 32588068343 died there with 5 Linux-only suites. The
+      # build + electron:validate below are what this runner is for.
       - name: Build server + client
         if: steps.next.outputs.skip != 'true'
         run: npm run build

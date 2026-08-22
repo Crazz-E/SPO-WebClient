@@ -122,8 +122,8 @@ function mergeOnOrigin(bench: Bench, file: string): string {
   return sha;
 }
 
-function runFinish(bench: Bench, cwd: string, env: NodeJS.ProcessEnv = {}): FinishRun {
-  const result = spawnSync('bash', [SCRIPT], {
+function runFinish(bench: Bench, cwd: string, env: NodeJS.ProcessEnv = {}, args: string[] = []): FinishRun {
+  const result = spawnSync('bash', [SCRIPT, ...args], {
     cwd,
     encoding: 'utf8',
     env: {
@@ -213,6 +213,34 @@ describe('after a merge', () => {
     expect(branchExists(bench)).toBe(false);
     expect(git(bench.mainRepo, 'worktree', 'list', '--porcelain')).not.toContain(bench.worktree);
     expect(git(bench.mainRepo, 'status', '--porcelain')).toBe('');
+  });
+
+  it('finishes a named branch that is checked out nowhere, leaving the current worktree alone', () => {
+    const bench = scratchBench();
+    const mergeSha = mergeOnOrigin(bench, 'doc/merged.md');
+    // The session switched away: the worktree is gone, the branch remains.
+    git(bench.mainRepo, 'worktree', 'remove', bench.worktree);
+    const run = runFinish(
+      bench,
+      bench.mainRepo,
+      { FAKE_GH_STATE: 'MERGED', FAKE_GH_MERGE_SHA: mergeSha },
+      [bench.branch],
+    );
+    expect(run.code).toBe(0);
+    expect(run.stdout).not.toMatch(/== removing worktree/);
+    expect(run.stdout).toMatch(/== deleting local branch feature\/x/);
+    expect(headOf(bench.mainRepo)).toBe(mergeSha);
+    expect(branchExists(bench)).toBe(false);
+    expect(fs.existsSync(bench.mainRepo)).toBe(true);
+  });
+
+  it('refuses to finish a named branch that is still checked out in a worktree', () => {
+    const bench = scratchBench();
+    const run = runFinish(bench, bench.mainRepo, { FAKE_GH_STATE: 'MERGED' }, [bench.branch]);
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/checked out in a worktree/);
+    expect(branchExists(bench)).toBe(true);
+    expect(fs.existsSync(bench.worktree)).toBe(true);
   });
 
   it('leaves the bench worker alone when the merge did not touch its sources', () => {
