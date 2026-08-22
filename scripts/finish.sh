@@ -18,11 +18,30 @@
 #
 # Run it as the LAST command of a session: step 5 removes the directory you stand in.
 # From the main checkout on `main` it only does 2-3 (useful after a merge made in the UI).
+#
+#   npm run finish -- <branch>   finishes a branch that is NOT checked out anywhere — e.g.
+#                                one a session worktree hosted and has since switched away
+#                                from. Same MERGED check, same main sync; the worktree you
+#                                stand in is left alone, only the branch goes.
 set -euo pipefail
 
 MAIN_REPO="${SPO_MAIN_REPO:-$HOME/SPO-WebClient}"
 here="$(git rev-parse --show-toplevel)"
 branch="$(git rev-parse --abbrev-ref HEAD)"
+target="${1:-}"
+branch_only=0
+if [ -n "$target" ] && [ "$target" != "$branch" ]; then
+  if git -C "$MAIN_REPO" worktree list --porcelain | grep -qx "branch refs/heads/$target"; then
+    echo "REFUSED: '$target' is checked out in a worktree — run npm run finish from there." >&2
+    exit 1
+  fi
+  if ! git -C "$MAIN_REPO" rev-parse --verify -q "refs/heads/$target" >/dev/null; then
+    echo "REFUSED: no local branch '$target'." >&2
+    exit 1
+  fi
+  branch="$target"
+  branch_only=1
+fi
 
 sync_main() {
   echo "== main: fast-forward to origin/main, prune stale refs"
@@ -31,7 +50,7 @@ sync_main() {
   git -C "$MAIN_REPO" log --oneline -1
 }
 
-if [ "$branch" = "main" ]; then
+if [ "$branch" = "main" ] && [ "$branch_only" = 0 ]; then
   sync_main
   echo "on main: nothing else to finish"
   exit 0
@@ -66,13 +85,13 @@ if git -C "$MAIN_REPO" diff --name-only "${merge_sha}^" "$merge_sha" | grep -qx 
   (cd "$MAIN_REPO" && npm ci --no-audit --no-fund --prefix electron)
 fi
 
-if [ -n "$(git -C "$here" status --porcelain)" ]; then
+if [ "$branch_only" = 0 ] && [ -n "$(git -C "$here" status --porcelain)" ]; then
   echo "REFUSED: '$here' has uncommitted changes — they are not on main. Commit or discard them first." >&2
   exit 1
 fi
 
 cd "$MAIN_REPO"
-if [ "$here" != "$MAIN_REPO" ]; then
+if [ "$branch_only" = 0 ] && [ "$here" != "$MAIN_REPO" ]; then
   echo "== removing worktree $here"
   git worktree remove "$here"
 fi
