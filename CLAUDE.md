@@ -187,6 +187,8 @@ npm run bench:status # worker liveness + queue
 npm run e2e:unlock   # clear a world-dirty lock after a human restore
 npm run finish       # THE END of an update — after the PR is merged: main ff'd, refs pruned, worker
                      # reinstalled if its sources changed, this worktree + branch removed. Last command.
+npm run deps:gate    # Dependabot PRs: merges main in, installs, gates, pushes and auto-merges them one by one;
+                     # a lockfile change routes to spine + building-details
 
 PORT=8081 npm run dev:local   # build + start yourself, OFF 8080 — the CONSCIOUS EXCEPTION (see below)
 npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push
@@ -243,9 +245,11 @@ log line does. Three attempts maximum, each naming a different root cause. Full 
 `module.ts` → `module.test.ts`, same directory. Two Jest projects: `unit` (node, `.test.ts`)
 and `component` (jsdom, `.test.tsx`).
 
-**Two coverage numbers — do not conflate them.** New/modified lines must reach ≥ 93 %
-(review convention). `jest.config.js` separately enforces a machine floor (global 38 %,
-higher per directory). Thresholds only go UP. Details: **`spo-testing`** skill.
+**Two coverage numbers — do not conflate them.** New/modified lines must reach ≥ 93 %,
+enforced by `npm run coverage:changed` (`scripts/coverage-changed.js`, run by `gate:precheck`
+and by CI on every pull request; `COVERAGE_CHANGED_MIN` overrides the floor). `jest.config.js`
+separately enforces a machine floor (global 38 %, higher per directory), unchanged by that
+script. Thresholds only go UP. Details: **`spo-testing`** skill.
 
 Seven custom RDO matchers: `toContainRdoCommand`, `toMatchRdoFormat`, `toMatchRdoCallFormat`,
 `toMatchRdoSetFormat`, `toHaveRdoTypePrefix`, `toMatchRdoResponse`, `toPassStrictRdoValidation`.
@@ -319,10 +323,13 @@ live directory hosts `planitia`/`shamba`/`zorcon` under Free Space; BETA only ha
 - **Blast radius:** mutations only on Helartia. The second account receives one test mail,
   deleted in the same run — no flow touches its buildings. Never another player's assets,
   never a world-scope value.
-- **President functions are excluded** from automated verification — the six
-  `TPresidentialHall` members and any `canGovern`-gated Capitol path. The gate BLOCKS on
-  them and the session must ask the developer to verify by hand
-  ([E2E-POLICY.md](doc/E2E-POLICY.md) §7). Never mark one verified on their behalf.
+- **Capability exceptions, not overrides.** The six `TPresidentialHall` members and any
+  `canGovern`-gated Capitol path need the president capability, which `SPO_test3` does not
+  hold. The gate reads that from the server (`IsPresident` in the tycoon cache, `canGovern`
+  on the Capitol) — never from the UI: a missing control is a bug to fix, a refused
+  capability is a recorded exception the gate continues past. If the server ever grants it,
+  the gate fails closed until a flow drives the member. No flag, no human text, clears it
+  ([E2E-POLICY.md](doc/E2E-POLICY.md) §7).
 
 Procedure and selectors: `/e2e-test` skill and [E2E-TESTING.md](doc/E2E-TESTING.md).
 

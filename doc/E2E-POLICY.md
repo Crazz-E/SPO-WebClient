@@ -78,7 +78,7 @@ npm run gate
    | Clean bench | nothing listens on 8080; fingerprint the tree — uncommitted changes -> `DIRTY`, nothing runs (the attestation names a sha, so the tree must be that commit) |
    | Build | `npm run build` in the worktree — the tested gateway IS this tree's code |
    | Static (replayed) | typecheck, lint, tests — the attestation is the worker's, not the session's |
-   | Exclusions | President members / Capitol governance in the diff -> **BLOCK**, emit manual-verify handoff (§7) |
+   | Capabilities | President members / Capitol governance in the diff -> the live stage reads, from the server, whether the account holds the capability (§7): granted -> a flow must drive it (fail closed); refused -> recorded exception |
    | Routing | map the diff to the required L2 flows (§4) |
    | Live | pre-flight, acquire the (now machine-global) lock, run the flows against planitia, release |
    | Attest | `report/e2e/gate-<sha>.json` in the worktree + `~/.spo-bench/verdicts/<sha>.json` |
@@ -107,6 +107,8 @@ nothing that changed; the routing table is what keeps the run pointed at the del
 | `src/client/components/politics/**` | L2 `politics-read`, `politics-write` |
 | `src/client/components/building/**` | L2 `building-details` |
 | `src/client/renderer/**`, mobile layout, `*.module.css` | **L3** browser smoke (a WS drive cannot see a pixel) |
+| `package.json`, `package-lock.json` | L2 spine + `building-details` — the shipped code moved even though no `src/` file did |
+| `electron/**` | static only — packaged by `electron-release.yml`, not observable over the wire |
 | `doc/**`, `*.md`, CI config, tooling | static only |
 
 The **login spine** (connect -> auth -> directory -> world login -> company select ->
@@ -172,34 +174,39 @@ the worker's serialization; the knobs remain for tightening before any public de
 
 ---
 
-## 7. Exclusion — President functions
+## 7. Capability exceptions — what the account cannot do
 
-Out of scope for automated verification, permanently, because `SPO_test3` is not president
-and the failure mode is severe.
+A change can only be driven live if the test account is **authorised to perform it on the
+server**. That is a property of the account, read from the server — never of the UI. The
+distinction is the whole point:
 
-The six `TPresidentialHall` members ([civic-roles-reference.md:101-106](civic-roles-reference.md)):
+| What the gate sees | What it is | What happens |
+|---|---|---|
+| a control missing, a request refused by the gateway, a wrong frame | a **bug** | `FAIL` — diagnose, fix, iterate (§8) |
+| the server says the account does not hold the role the member needs | a **capability exception** | recorded with its evidence; the gate continues |
 
-`RDOSetMinSalaryValue` · `RDOSetTownTaxes` · `RDOSitMayor` · `RDOSitMinister` ·
-`RDOBanMinister` · `RDOSetMinistryBudget`
+The six `TPresidentialHall` members ([civic-roles-reference.md:101-106](civic-roles-reference.md))
+— `RDOSetMinSalaryValue` · `RDOSetTownTaxes` · `RDOSitMayor` · `RDOSitMinister` ·
+`RDOBanMinister` · `RDOSetMinistryBudget` — need the **president** capability. When the diff
+touches one, the live stage reads two server facts for `SPO_test3` (`src/e2e/capability.ts`):
+`IsPresident` from the tycoon cache (`Tycoons\<name>.five\`, written by `StoreRoleInfoToCache`)
+and `canGovern` on the Capitol itself — the server's own `grantAccess` decision on the
+presidential hall. `granted` follows `canGovern`; the cache flag rides along as evidence.
 
-— plus any Capitol path behind `canGovern` (false for `SPO_test3`).
+- **Granted** → the members *can* be driven, so they *must* be: the gate **fails closed**
+  until a flow exercises the changed member (`src/e2e/flows.ts`) and the routing table
+  sends the diff there. Silence is never a pass.
+- **Refused** → a `CAPABILITY EXCEPTION` is written to the artifact (members, account, the
+  checks and their values, the time) and summarised in the `bench/gate` status and the PR.
+  The gate goes on to its verdict. The catalogue (kind + arity, `src/shared/rdo-members.ts`)
+  remains the guard for those frames — `RDOSitMinister` has two variants a name+arity
+  catalogue cannot tell apart (`civic-roles-reference.md:112-115`), which is why the
+  exception is listed loudly rather than silently.
+- **Undetermined** (the server did not answer) → `FAIL`: a capability is read, never assumed.
 
-> When the diff touches these, the gate **BLOCKS** and emits `MANUAL-VERIFY-REQUIRED`
-> naming the members, the flow to exercise and what to look for. The push stays blocked
-> until the developer confirms they ran it themselves. **The session must notify the user
-> and must never mark the change verified on its own.**
-
-Blocking rather than warning is deliberate: `civic-roles-reference.md:112-115` documents
-that `RDOSitMinister` exists in two variants with different argument types that a
-name+arity catalogue **cannot tell apart**, and the wrong variant on a `procedure` is the
-arbitrary-memory-write case from `CLAUDE.md`. That is exactly the change no automated gate
-should wave through.
-
-Clearing the block is explicit and auditable:
-
-```bash
-npm run gate -- --manual-verified="<what you ran, and the result>"
-```
+There is **no human override**: nothing a session or a developer types turns an exception
+into a verification. The only way to verify these members is an account that holds the
+capability — and then the gate demands the flow.
 
 ---
 
@@ -279,7 +286,11 @@ the same run (§5).
                 "probes": [{ "member": "RDOSetTaxValue", "logLine": "Setting Tax value: 12",
                              "restored": true, "readBack": "CONFIRMED" }] }]
   },
-  "exclusions": { "presidentMembersTouched": [], "manualVerification": null },
+  "exclusions": { "presidentMembersTouched": ["RDOSitMayor"],
+                  "capability": [{ "capability": "president", "members": ["RDOSitMayor"],
+                                   "account": "SPO_test3",
+                                   "checks": [{ "what": "canGovern on the Capitol (server grantAccess)", "value": "false" }],
+                                   "checkedAt": "…Z" }] },
   "attempt": 1
 }
 ```
@@ -306,13 +317,13 @@ The L1 half — `rdo-mock.ts`, `rdo-strict-validator.ts`, `http-mock.ts`, `types
 npm run gate                     # local precheck -> bench job: build, static, routing, live, attest
 npm run gate -- --static-only    # skip the live layer (docs/tooling diffs)
 npm run gate -- --flows=login-spine,politics-write
-npm run gate -- --manual-verified="…"   # clear a President BLOCK after a human verified (§7)
 npm run test:live                # the L2 drive as a bench job
 npm run dev                      # bench LEASE: this worktree's gateway held on 8080 for you
 npm run dev:release              # ...and give it back as soon as you are done
 npm run bench:status             # worker liveness + queue
 npm run e2e:unlock               # clear a world-dirty lock after a human restore
 npm run finish                   # after the merge: main ff'd, refs pruned, worker reinstalled if needed, worktree + branch gone
+npm run deps:gate [PR...]        # Dependabot PRs: merge main in, npm ci in the PR's worktree, gate, push, auto-merge — one at a time
 
 npm run gate:local               # verify-gate directly — evidence for reading, no push unblock
 PORT=8081 npm run dev:local      # a debug gateway of your own — attests nothing

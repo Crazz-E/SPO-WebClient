@@ -34,9 +34,11 @@
     "test:live": "bash scripts/bench-submit.sh --type=live --wait",
     "test:live:local": "npm run build:e2e && node dist/e2e/run.js",
     "gate": "npm run gate:precheck && bash scripts/bench-submit.sh --type=gate --wait",
-    "gate:precheck": "npm run typecheck && npm run lint && npm test",
+    "gate:precheck": "npm run typecheck && npm run lint && npm test && npm run coverage:changed",
+    "coverage:changed": "node scripts/coverage-changed.js",
     "gate:local": "node scripts/verify-gate.js",
     "finish": "bash scripts/finish.sh",
+    "deps:gate": "bash scripts/deps-gate.sh",
     "bench:status": "bash scripts/bench-status.sh",
     "e2e:unlock": "npm run build:e2e && node dist/e2e/unlock.js"
   },

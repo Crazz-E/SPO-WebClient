@@ -40,7 +40,9 @@ npm test
 npm run test:coverage
 ```
 
-New or modified lines must reach **93 % coverage**. Jest thresholds only go up, never down.
+New or modified lines must reach **93 % coverage** — enforced by `npm run coverage:changed`
+(part of `npm run gate`'s precheck, and run by CI on every pull request); the `jest.config.js`
+floor is a separate number and is unchanged by it. Jest thresholds only go up, never down.
 Never change a test to make it pass: a red test means the code is wrong, or the criterion was
 badly stated — in that case, ask.
 
@@ -72,6 +74,9 @@ update is done when `main` is the only branch left, locally and on origin. The m
 is the release: `electron-release.yml` computes the version from the last `v*` tag and the
 commits since it (`feat` → minor, otherwise patch), builds the installer, tags and publishes
 it on GitHub Releases — never create `v*` tags by hand.
+
+Dependabot PRs: `npm run deps:gate` merges main in, installs, gates, pushes and auto-merges them
+one by one; a lockfile change routes to spine + building-details.
 
 ## Changelog
 

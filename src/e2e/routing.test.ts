@@ -44,7 +44,18 @@ describe('route', () => {
   });
 
   it('treats repo-root config and generated output as static-only', () => {
-    const decision = route(['.gitignore', '.editorconfig', 'package.json', 'report/x.html', 'coverage/lcov.info']);
+    const decision = route(['.gitignore', '.editorconfig', 'tsconfig.json', 'report/x.html', 'coverage/lcov.info']);
+    expect(decision.unmapped).toEqual([]);
+    expect(decision.staticOnly).toBe(true);
+  });
+
+  it('routes a dependency change to the spine and the inspector — the shipped code moved', () => {
+    expect(route(['package-lock.json']).required).toEqual([SPINE_FLOW, 'building-details']);
+    expect(route(['package.json']).staticOnly).toBe(false);
+  });
+
+  it('treats the Electron shell as static-only — not observable over the wire', () => {
+    const decision = route(['electron/package.json', 'electron/package-lock.json', 'electron/main.js']);
     expect(decision.unmapped).toEqual([]);
     expect(decision.staticOnly).toBe(true);
   });

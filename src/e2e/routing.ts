@@ -30,6 +30,16 @@ export const ROUTES: RouteRule[] = [
     why: 'documentation, L1 substrate or tests — static verification only',
   },
   {
+    test: /^package(-lock)?\.json$/,
+    flows: ['building-details'],
+    why: 'dependency change — the shipped code moved even though no src/ file did',
+  },
+  {
+    test: /^electron\//,
+    flows: [],
+    why: 'Electron shell — packaged by electron-release.yml, not observable over the wire',
+  },
+  {
     test: /^src\/e2e\/|^scripts\/|^\.claude\/|^\.github\/|^\.[^/]*$|^[^/]+\.(json|js|cjs|mjs|ya?ml)$/,
     flows: [],
     why: 'tooling and repo config — verified by its own unit tests',
@@ -151,9 +161,9 @@ export function isCallSite(file: string): boolean {
 }
 
 /**
- * President-only members newly written by this diff. A hit blocks the gate and hands
- * verification to the developer (doc/E2E-POLICY.md §7) — `SPO_test3` is not president,
- * and `RDOSitMinister` has two variants a name+arity catalogue cannot tell apart.
+ * President-only members newly written by this diff. A hit sends the gate to the server
+ * for the account's capability (doc/E2E-POLICY.md §7) — `SPO_test3` is not president, and
+ * `RDOSitMinister` has two variants a name+arity catalogue cannot tell apart.
  *
  * Only **added** lines in real call sites count. A deletion cannot introduce a bad frame,
  * and a mention in prose is not a call.

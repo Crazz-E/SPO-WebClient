@@ -34,8 +34,8 @@ Drives the live game client in a real browser via Playwright MCP.
 - Credentials LOCKED; Free Space (not BETA). `SPO_test3` **now holds the mayor role**, so
   road and zone flows are reachable — but this browser pass stays read-only; mutations
   belong to L2's round-trip probe, which restores what it writes.
-- President functions are excluded from automated verification — notify the developer
-  (doc/E2E-POLICY.md §7).
+- President members are a **capability exception** when the server says the account is not
+  president — recorded by the gate, never overridden by hand (doc/E2E-POLICY.md §7).
 - **Never start the gateway yourself — lease it.** `npm run dev` queues a bench lease: the
   worker builds this worktree, starts its gateway on 8080 and holds it for you (30 min by
   default, `-- --lease-minutes=N` up to 120). Navigate to `http://localhost:8080`. When
