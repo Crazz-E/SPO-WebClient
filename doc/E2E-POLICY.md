@@ -6,8 +6,9 @@
 **Companion:** [production-security-policy.md](production-security-policy.md)
 
 This is the rule an automated session must satisfy before it may push. It is enforced by
-`.claude/hooks/pre-push-gate.sh`, not by discipline: `git push` is blocked unless a fresh,
-matching gate artifact exists.
+`.claude/hooks/pre-push-gate.sh`, not by discipline: `git push` is blocked unless the
+**bench worker** — the single process owning the live bench, see
+[bench-worker.md](bench-worker.md) — has attested the current HEAD.
 
 ---
 
@@ -66,21 +67,29 @@ The unit of enforcement is the **push**, not the commit.
 npm run gate
 ```
 
-   It runs, in order, and stops at the first failure:
+   It **prechecks locally** (`npm run typecheck`, `npm run lint`, `npm test` — free,
+   parallelizable, consumes no bench slot), then **queues a job on the bench worker** and
+   waits (one background command, zero tokens). The worker, in the depositing worktree:
 
    | Stage | Check |
    |---|---|
-   | Static | `npm run typecheck`, `npm run lint` (0 errors), `npm test` |
+   | Clean bench | nothing listens on 8080; fingerprint the tree |
+   | Build | `npm run build` in the worktree — the tested gateway IS this tree's code |
+   | Static (replayed) | typecheck, lint, tests — the attestation is the worker's, not the session's |
    | Exclusions | President members / Capitol governance in the diff -> **BLOCK**, emit manual-verify handoff (§7) |
    | Routing | map the diff to the required L2 flows (§4) |
-   | Live | pre-flight, acquire lock, run the flows against planitia, release lock |
-   | Artifact | write `report/e2e/gate-<sha>.json` |
+   | Live | pre-flight, acquire the (now machine-global) lock, run the flows against planitia, release |
+   | Attest | `report/e2e/gate-<sha>.json` in the worktree + `~/.spo-bench/verdicts/<sha>.json` |
 
-4. The hook re-reads that artifact at push time and blocks unless it exists, its `head`
-   matches `git rev-parse HEAD`, its verdict is `PASS`, and it is younger than
-   `GATE_MAX_AGE_MINUTES` (default 60).
-5. CI re-runs L0/L1/L4 on the PR. L3/L2 evidence rides in the PR body — CI cannot hold the
-   locked credentials.
+4. The hook reads the **attestation** at push time and blocks unless it exists for HEAD,
+   its verdict is `PASS`, the tree fingerprint was stable across the run (a moved tree is
+   `STALE`, never PASS), it names the pushing worktree, and it is younger than
+   `GATE_MAX_AGE_MINUTES` (default 60). **Only the worker attests** — `npm run gate:local`
+   produces evidence for reading, not a push unblock.
+5. CI re-runs L0/L1 on the PR — it cannot hold the locked credentials. The worker
+   publishes the attestation as the `bench/gate` **commit status** once the sha reaches
+   GitHub (automatic retry); branch protection requires it, so a PR cannot merge on CI
+   alone. The detailed evidence rides in the PR body.
 
 ---
 
@@ -136,25 +145,28 @@ to `UNCONFIRMED`, it does not by itself fail the probe. A missing log line **fai
 
 An autonomous loop mutating a production game world needs two rails a human run does not.
 
-- **World-dirty lock.** If a run aborts before restore, `report/e2e/world-lock.json` is left
-  behind with the pending restores. **All further live runs are blocked** until a human
-  clears it. Attempt 2 never starts on a world attempt 1 left mutated.
-- **Single-flight.** One live session at a time, across both accounts. The same lock file
-  carries the holder; a second run refuses rather than queues.
-- **Port ownership.** Several sessions share this machine, so the gateway port is claimed,
-  not assumed. Check it is free (`ss -ltn "sport = :8080"`) before `npm run dev`; if it is
-  taken, start on your own port (`PORT=`) and point the drive at it (`E2E_GATEWAY_URL`,
-  `E2E_GATEWAY_ORIGIN`) rather than killing another session's server. Attaching to someone
-  else's gateway makes their session's behaviour your evidence — a silently wrong PASS.
+- **World-dirty lock.** If a run aborts before restore, `~/.spo-bench/world/world-lock.json`
+  is left behind with the pending restores — one file for the whole machine, visible from
+  every worktree. **All further live runs are blocked** until a human clears it. Attempt 2
+  never starts on a world attempt 1 left mutated.
+- **Single-flight.** Mechanical since 2026-08-22: the bench worker executes one job at a
+  time ([bench-worker.md](bench-worker.md)). The lock file remains as the world-dirty
+  carrier and as a belt-and-braces refusal for `gate:local` runs.
+- **Bench ownership.** The gateway port, the LOCKED accounts and the world belong to the
+  bench worker — sessions deposit jobs instead of starting gateways. Driving a browser
+  needs a **lease** (`npm run dev`); `npm run dev:local` on another port is the conscious
+  exception, for debugging, and attests nothing.
   Procedure: [E2E-TESTING.md](E2E-TESTING.md) § Server Lifecycle.
 
 **Pre-flight** before any flow: gateway reachable, world date advancing (server alive), no
 stale session for the account. A failed pre-flight is an **environment abort** — it does not
 consume one of the three attempts (§8).
 
-**Rate limit.** One live run per branch per `LIVE_MIN_INTERVAL_MINUTES` (default 10), hard
-daily cap (default 20). This is what keeps a retry loop from becoming a login storm
-(SEC-N-3).
+**Rate limit.** Since 2026-08-22 (developer decision) the queue is the throttle and the
+numeric quotas stand aside for the test phase: interval 0, daily backstop 1000
+(`E2E_MIN_INTERVAL_MINUTES`, `E2E_MAX_RUNS_PER_DAY`), gateway ceilings 1000/min
+([bench-worker.md](bench-worker.md) §6). The SEC-N-3 login-storm protection now rests on
+the worker's serialization; the knobs remain for tightening before any public deployment.
 
 ---
 
@@ -286,12 +298,16 @@ The L1 half — `rdo-mock.ts`, `rdo-strict-validator.ts`, `http-mock.ts`, `types
 ## 12. Commands
 
 ```bash
-npm run gate                     # full pre-push gate: static -> routing -> live -> artifact
+npm run gate                     # local precheck -> bench job: build, static, routing, live, attest
 npm run gate -- --static-only    # skip the live layer (docs/tooling diffs)
 npm run gate -- --flows=login-spine,politics-write
-npm run test:live                # the L2 driver alone, no static stages
-ss -ltn "sport = :8080"          # before `npm run dev` — is the gateway port free?
-PORT=8081 npm run dev            # ... and if not, claim your own
-E2E_GATEWAY_URL=ws://localhost:8081 E2E_GATEWAY_ORIGIN=http://localhost:8081 npm run test:live
+npm run gate -- --manual-verified="…"   # clear a President BLOCK after a human verified (§7)
+npm run test:live                # the L2 drive as a bench job
+npm run dev                      # bench LEASE: this worktree's gateway held on 8080 for you
+npm run dev:release              # ...and give it back as soon as you are done
+npm run bench:status             # worker liveness + queue
 npm run e2e:unlock               # clear a world-dirty lock after a human restore
+
+npm run gate:local               # verify-gate directly — evidence for reading, no push unblock
+PORT=8081 npm run dev:local      # a debug gateway of your own — attests nothing
 ```

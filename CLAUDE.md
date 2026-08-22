@@ -171,7 +171,6 @@ Electron installer.
 ## Commands
 
 ```bash
-npm run dev          # build + start (port 8080 — check it is free first, see below)
 npm run build        # server + client + terrain-test
 npm run typecheck    # all three tsconfigs (server, client, e2e)
 npm run lint         # ESLint 10, flat config — 0 errors is the CI gate
@@ -180,16 +179,28 @@ npm test             # full Jest suite
 npm run test:coverage
 npm run test:changed # --onlyChanged --bail
 
-npm run gate         # THE PRE-PUSH GATE — static + exclusions + routing + live drive
-npm run test:live    # the L2 live WebSocket drive alone, against planitia
+npm run gate         # THE PRE-PUSH GATE — local precheck, then a bench-worker job (queued, serialized)
+npm run test:live    # the L2 live drive as a bench job
+npm run dev          # a bench LEASE: the worker builds THIS worktree and holds its gateway on 8080 for you
+npm run dev:release  # end your lease early (otherwise it expires, 30 min default)
+npm run bench:status # worker liveness + queue
 npm run e2e:unlock   # clear a world-dirty lock after a human restore
+
+npm run dev:local    # build + start yourself — the CONSCIOUS EXCEPTION (see below)
+npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push
 ```
 
-**The gateway port is shared.** Several Claude sessions and worktrees run on this machine at
-once, so 8080 is not yours by default. Check before starting — `ss -ltn "sport = :8080"` —
-and if it is taken, claim your own (`PORT=8081 npm run dev`, with `E2E_GATEWAY_URL` /
-`E2E_GATEWAY_ORIGIN` pointed at it) instead of killing a listener another session started.
-Attaching to someone else's gateway turns their session's behaviour into your test evidence.
+**The live bench has one owner: the bench worker.** Several Claude sessions and worktrees
+run on this machine at once, but the live test bench — port 8080, the LOCKED accounts, the
+Helartia world state — is owned by a single permanent worker process (systemd --user unit
+`spo-bench-worker`, installed by `scripts/bench-install.sh`). Sessions never start a
+gateway, never kill a process, never hold a lock: they deposit a job (`npm run gate`,
+`npm run test:live`, `npm run dev`) and wait for the report — the wait is one background
+shell command, zero tokens. Jobs run strictly one at a time, oldest first, each in the
+depositing session's worktree (uncommitted changes included; the worker builds it). A dead
+worker is announced at deposit time (exit 3). Starting a gateway yourself (`npm run
+dev:local`, on a port other than 8080) is the conscious exception, for debugging only —
+its results attest nothing. Full spec: [doc/bench-worker.md](doc/bench-worker.md).
 
 
 ## Automation (`.claude/hooks/`)
@@ -199,7 +210,7 @@ Attaching to someone else's gateway turns their session's behaviour into your te
 | `context-router.sh` | UserPromptSubmit | Points at the relevant docs/skills before planning |
 | `typecheck-guard.sh` | PostToolUse (Edit\|Write) | Flags the tree dirty on `.ts`/`.tsx` writes — no work, ~0 ms |
 | `sanctuarize.sh` | Stop | Runs `npm run typecheck` once per turn if dirty; blocks the turn on failure |
-| `pre-push-gate.sh` | PreToolUse (Bash) | Blocks `git push` unless a fresh PASS gate artifact exists for HEAD — see **The push gate** below |
+| `pre-push-gate.sh` | PreToolUse (Bash) | Blocks `git push` unless the bench worker has attested HEAD: PASS, fingerprint-stable, this worktree, < 60 min — see **The push gate** below |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.
 
@@ -214,14 +225,18 @@ L2  LIVE WS drive  <- gate    src/e2e/, headless `ws` -> gateway ->       PRE-PU
 L3  LIVE browser smoke        Playwright MCP, SPO_test3 / Crazz       pixels only, + pre-release
 ```
 
-**The push gate.** `git push` is blocked by a hook unless `npm run gate` has written a PASS
-artifact for the current HEAD. The gate runs static checks, blocks on President-only
-members, routes the diff to the flows that can observe it, and drives them live.
-**A crash is a failure, but silence is not a pass**: a mutation is proven by the
-`FIVEMODELSERVER/Survival` log line, not by a `success: true` response (`OB-28`); a lagging
-read-back is expected (`OB-29`) and does not fail a probe, a missing log line does.
-Three attempts maximum, each naming a different root cause. Full rules:
-[doc/E2E-POLICY.md](doc/E2E-POLICY.md).
+**The push gate.** `git push` is blocked by a hook unless the **bench worker** has
+attested the current HEAD (`~/.spo-bench/verdicts/<sha>.json`): verdict PASS, tree
+fingerprint stable across the run, attested for THIS worktree, younger than 60 min.
+`npm run gate` produces that attestation: it prechecks locally (typecheck, lint, tests —
+free, parallelizable), then queues a bench job; the worker builds the worktree, runs
+verify-gate (static replayed, President exclusion, diff routing) and drives the routed
+flows live. **Only the worker attests** — `npm run gate:local` is evidence for reading,
+never a push unblock. **A crash is a failure, but silence is not a pass**: a mutation is
+proven by the `FIVEMODELSERVER/Survival` log line, not by a `success: true` response
+(`OB-28`); a lagging read-back is expected (`OB-29`) and does not fail a probe, a missing
+log line does. Three attempts maximum, each naming a different root cause. Full rules:
+[doc/E2E-POLICY.md](doc/E2E-POLICY.md); bench mechanics: [doc/bench-worker.md](doc/bench-worker.md).
 
 `module.ts` → `module.test.ts`, same directory. Two Jest projects: `unit` (node, `.test.ts`)
 and `component` (jsdom, `.test.tsx`).
@@ -342,10 +357,13 @@ what you touch, or make that sweep a commit of its own.
 
 **Nothing gates a local commit — the gate is on the push.** Commit freely on a branch;
 each retry attempt is its own commit so the loop stays readable. Before pushing, run
-`npm run gate`: `.claude/hooks/pre-push-gate.sh` blocks the push otherwise, and blocks a
-direct push to `main` outright. `.github/workflows/ci.yml` re-runs typecheck and tests on
-every push to `main` and every pull request; `main` is protected: no force-push, no
-deletion, CI must be green. CI cannot hold the locked credentials, so the live evidence
+`npm run gate`: `.claude/hooks/pre-push-gate.sh` blocks the push without a fresh bench
+attestation for HEAD, and blocks a direct push to `main` outright. `.github/workflows/ci.yml`
+re-runs typecheck and tests on every push to `main` and every pull request; `main` is
+protected: no force-push, no deletion, CI must be green. CI cannot hold the locked
+credentials, so the worker publishes each attestation as the `bench/gate` **commit status**
+once the sha reaches GitHub (retried automatically until the push happens) — with branch
+protection requiring it, a PR cannot merge on CI alone. The detailed live evidence still
 rides in the PR body.
 
 Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description.

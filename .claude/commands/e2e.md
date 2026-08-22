@@ -23,9 +23,10 @@ pass.
 
 Execute the scenario phases in order, assert programmatically via
 `window.__spoDebug.getState()` (no screenshots for state verification), continue to the
-next phase on failure, and finish with the per-phase PASS/FAIL table plus a clean server
-stop.
+next phase on failure, and finish with the per-phase PASS/FAIL table.
 
 Rules that always apply: credentials are LOCKED; this browser pass stays **read-only**
-(mutations belong to L2's round-trip probe, which restores what it writes); always stop the
-server; delegate any screenshot reads to a sub-agent.
+(mutations belong to L2's round-trip probe, which restores what it writes); the gateway is
+**leased** from the bench worker (`npm run dev`), never started or stopped by hand
+([doc/bench-worker.md](../../doc/bench-worker.md)); delegate any screenshot reads to a
+sub-agent.
