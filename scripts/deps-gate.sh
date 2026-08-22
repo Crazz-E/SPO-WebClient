@@ -3,9 +3,11 @@
 #
 # Default: every open PR by app/dependabot, oldest first. Per PR, strictly in sequence:
 #
-#   1. a throwaway worktree at .claude/worktrees/deps-<N> on the PR branch, rebased on
-#      origin/main — Dependabot rebases only on conflict and never again once a human has
-#      pushed, so "branch up to date" is ours to satisfy. A rebase conflict is not ours to
+#   1. a throwaway worktree at .claude/worktrees/deps-<N> on the PR branch, with origin/main
+#      MERGED in — Dependabot rebases only on conflict and never again once a human has
+#      pushed, so "branch up to date" is ours to satisfy. A merge, never a rebase: history
+#      is not rewritten, so the push needs no force (this repo forbids force pushes; the
+#      squash merge flattens the PR anyway). A merge conflict is not ours to
 #      solve: comment `@dependabot recreate`, drop the worktree, move on (SKIPPED-conflict);
 #   2. `npm ci` IN THAT WORKTREE (and `npm ci --prefix electron` when the PR touches
 #      electron/). This is the whole point of the script: a session worktree has no
@@ -17,8 +19,8 @@
 #      the bump. node_modules is gitignored, so the install does not disturb the tree
 #      fingerprint the attestation is bound to;
 #   3. `npm run gate` — the same command a session runs: local precheck, then a bench job,
-#      waited on. The worker attests the rebased sha;
-#   4. ONLY on gate exit 0: `git push --force-with-lease` the rebased sha, `gh pr merge
+#      waited on. The worker attests the merged sha;
+#   4. ONLY on gate exit 0: `git push` the merged sha (a fast-forward of the PR branch), `gh pr merge
 #      --squash --auto`, wait for MERGED, then `scripts/finish.sh` from the worktree (ff
 #      main, refresh main's node_modules, remove worktree + branch).
 #      Gate exit != 0: the worktree stays for inspection (GATE-FAIL), next PR.
@@ -63,9 +65,9 @@ for n in "${prs[@]}"; do
   fi
   git -C "$MAIN_REPO" worktree add -B "$branch" "$wt" "origin/$branch"
 
-  if ! git -C "$wt" rebase --quiet origin/main; then
-    git -C "$wt" rebase --abort || true
-    echo "-- rebase on origin/main conflicts: asking Dependabot to recreate the PR"
+  if ! git -C "$wt" merge --quiet --no-edit origin/main; then
+    git -C "$wt" merge --abort || true
+    echo "-- merging origin/main conflicts: asking Dependabot to recreate the PR"
     gh pr comment "$n" --body "@dependabot recreate"
     git -C "$MAIN_REPO" worktree remove --force "$wt"
     git -C "$MAIN_REPO" branch -D "$branch" >/dev/null 2>&1 || true
@@ -91,8 +93,8 @@ for n in "${prs[@]}"; do
     continue
   fi
 
-  echo "-- gate PASS for ${sha:0:8}: pushing the rebased branch"
-  git -C "$wt" push --force-with-lease origin "$branch"
+  echo "-- gate PASS for ${sha:0:8}: pushing the updated branch (fast-forward, no force)"
+  git -C "$wt" push origin "HEAD:$branch"
   gh pr merge "$n" --squash --auto
 
   deadline=$(( $(date +%s) + MERGE_TIMEOUT_S ))
