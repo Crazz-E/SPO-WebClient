@@ -40,18 +40,14 @@ Format: `type: short summary`
 
 Types: `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`
 
-Always include the Co-Authored-By trailer:
-
-```
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
-```
-
-Use a HEREDOC to pass the commit message:
+Always end with the Co-Authored-By trailer the harness prescribes for the running model
+(e.g. `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`). Use a HEREDOC to pass
+the commit message:
 ```bash
 git commit -m "$(cat <<'EOF'
 type: short summary
 
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude <model> <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -95,6 +91,11 @@ Push to the current branch with the `-u` flag:
 ```bash
 git push -u origin HEAD
 ```
+
+Then open (or refresh) the PR. `main` requires the branch to be **up to date**: if `main`
+moved since your gate, `gh pr update-branch <n>` (or merge `origin/main` locally), commit,
+and **run `npm run gate` again** — the new sha has no attestation of its own. A PR merges on
+`typecheck + tests` + `bench/gate` only; nobody, the owner included, can bypass.
 
 ### 7. Report
 

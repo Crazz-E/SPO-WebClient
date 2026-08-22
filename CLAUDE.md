@@ -186,7 +186,7 @@ npm run dev:release  # end your lease early (otherwise it expires, 30 min defaul
 npm run bench:status # worker liveness + queue
 npm run e2e:unlock   # clear a world-dirty lock after a human restore
 
-npm run dev:local    # build + start yourself — the CONSCIOUS EXCEPTION (see below)
+PORT=8081 npm run dev:local   # build + start yourself, OFF 8080 — the CONSCIOUS EXCEPTION (see below)
 npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push
 ```
 
@@ -359,14 +359,18 @@ what you touch, or make that sweep a commit of its own.
 each retry attempt is its own commit so the loop stays readable. Before pushing, run
 `npm run gate`: `.claude/hooks/pre-push-gate.sh` blocks the push without a fresh bench
 attestation for HEAD, and blocks a direct push to `main` outright. `.github/workflows/ci.yml`
-re-runs typecheck and tests on every push to `main` and every pull request; `main` is
-protected: no force-push, no deletion, CI must be green. CI cannot hold the locked
-credentials, so the worker publishes each attestation as the `bench/gate` **commit status**
-once the sha reaches GitHub (retried automatically until the push happens) — with branch
-protection requiring it, a PR cannot merge on CI alone. The detailed live evidence still
-rides in the PR body.
+re-runs lint, typecheck and tests on every push to `main` and every pull request. CI
+cannot hold the locked credentials, so the worker publishes each attestation as the
+`bench/gate` **commit status** once the sha reaches GitHub (retried automatically until
+the push happens). **`main` is governed by one ruleset that binds the owner too** (empty
+bypass list): PR required (0 approvals — solo maintainer), `typecheck + tests` **and**
+`bench/gate` required, branch **up to date** with `main`, no force-push, no deletion. So a
+PR cannot merge on CI alone, and **if `main` moves after your gate, update the branch and
+re-run `npm run gate`** — the new sha needs its own attestation. The detailed live
+evidence still rides in the PR body. Setup checklist: [bench-worker.md §5](doc/bench-worker.md).
 
-Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description.
+Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description — or the session worktree
+branch (`claude-<user>/…`); the hook accepts any branch but `main`.
 Commits: `type: short summary` — `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `chore`, `build`.
 
 ## Transparency

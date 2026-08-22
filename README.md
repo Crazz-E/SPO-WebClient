@@ -107,7 +107,7 @@ npm run build:client       # Build client only (Vite)
 npm run build:terrain-test # Build terrain test (esbuild)
 
 # Run
-npm run dev:local          # Build all + start server on port 8080
+npm run dev:local          # Build all + start server (PORT, default 8080) — on the bench machine use PORT=8081: the worker owns 8080
 npm run dev                # On the shared test machine: lease the bench worker's gateway (doc/bench-worker.md)
 npm run dev:react          # Vite dev server only (hot reload, no backend)
 npm start                  # Start server (must build first)

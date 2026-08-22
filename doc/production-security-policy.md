@@ -2,7 +2,7 @@
 
 **Status:** Adopted 2026-07-03 (v1.0) — first formal policy; previously guidance was advisory only (`deployment-security.md` checklist — since removed as superseded — and `DEPLOY.md` Step 9).
 **Scope:** the SPO-WebClient gateway and its production deployment (nginx + Docker on the VPS). The legacy Delphi game servers are out of scope.
-**Enforcement:** every item marked *L4* is verified by the automated compliance suite defined in [E2E-STRATEGY.md §3/L4](E2E-STRATEGY.md); the L4 suite is a required CI job. Items marked *manual* are checked at deploy time per `deploy/DEPLOY.md`. Changing this policy requires updating the corresponding L4 tests in the same PR.
+**Enforcement:** items marked *L4* were to be verified by the compliance suite planned in [E2E-STRATEGY.md §3/L4](E2E-STRATEGY.md) — **that suite was never built and the strategy is superseded** ([E2E-POLICY.md](E2E-POLICY.md)); as of 2026-08-22 no CI job runs it, and `ci.yml` runs lint, typecheck and `npm test` only (no `npm audit`, SEC-D-1 stands open). *L4* therefore means "covered by unit tests where they exist, otherwise manual" until a compliance stage is added to CI or the bench gate. Items marked *manual* are checked at deploy time per `deploy/DEPLOY.md`. Changing this policy still requires updating the corresponding tests in the same PR.
 
 Normative language: **MUST** = required for production; **SHOULD** = required unless a documented exception exists.
 
