@@ -4,6 +4,7 @@ import * as path from 'path';
 import { Writable } from 'stream';
 import { formatSummary, main, runLive, type LiveRunOptions, type LiveRunResult } from './run';
 import { WorldLock } from './world-lock';
+import { LIMITS } from './config';
 import * as preflightModule from './preflight';
 import * as flowsModule from './flows';
 
@@ -91,14 +92,19 @@ describe('runLive', () => {
   });
 
   it('reports BLOCKED rather than FAIL when the rate limiter refuses', async () => {
+    // Since 2026-08-22 the shipping interval is 0 (developer decision — the bench worker
+    // queue throttles), so the refusal is reached through the daily backstop cap instead.
     const lock = tempLock();
-    lock.recordRun('fix/a', new Date());
+    const now = Date.now();
+    for (let i = 0; i < LIMITS.maxRunsPerDay; i++) {
+      lock.recordRun(`fix/${i}`, new Date(now - i * 1_000));
+    }
     const preflight = jest.spyOn(preflightModule, 'preflight');
 
     const result = await runLive({ flows: ['login-spine'], branch: 'fix/a', lock });
 
     expect(result.status).toBe('BLOCKED');
-    expect(result.error).toMatch(/minimum interval/);
+    expect(result.error).toMatch(/Daily live-run cap/);
     expect(preflight).not.toHaveBeenCalled();
   });
 

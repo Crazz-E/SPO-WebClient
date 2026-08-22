@@ -38,9 +38,13 @@ describe('locked configuration', () => {
     expect(LIMITS.maxAttempts).toBe(3);
   });
 
-  it('keeps the live-run limits positive so the limiter can never be disabled by accident', () => {
-    expect(LIMITS.minIntervalMinutes).toBeGreaterThan(0);
-    expect(LIMITS.maxRunsPerDay).toBeGreaterThan(0);
+  it('runs unthrottled by the clock — approved 2026-08-22, the bench worker queue is the throttle', () => {
+    // Developer decision 2026-08-22: quotas raised to "1000/min territory" for the test
+    // phase. The mechanism stays (checkRateLimit accepts injected limits); only the
+    // shipping defaults are open. Changing these numbers again needs the same sign-off
+    // as the accounts above.
+    expect(LIMITS.minIntervalMinutes).toBe(0);
+    expect(LIMITS.maxRunsPerDay).toBe(1000);
     expect(LIMITS.gateMaxAgeMinutes).toBeGreaterThan(0);
   });
 });
