@@ -94,7 +94,16 @@ for n in "${prs[@]}"; do
   fi
 
   echo "-- gate PASS for ${sha:0:8}: pushing the updated branch (fast-forward, no force)"
-  git -C "$wt" push origin "HEAD:$branch"
+  # Dependabot may have recreated the branch while the gate ran (its conflict rebase): the
+  # remote then holds work we do not have, and a fast-forward is rightly refused. That is
+  # not ours to force — the attested sha is no longer the PR's; leave the worktree, report,
+  # and let the next run pick the new head up.
+  if ! git -C "$wt" push origin "HEAD:$branch"; then
+    note "$n SKIPPED-moved (the remote branch changed during the gate — attested ${sha:0:8} is not its head; rerun)"
+    git -C "$MAIN_REPO" worktree remove --force "$wt"
+    git -C "$MAIN_REPO" branch -D "$branch" >/dev/null 2>&1 || true
+    continue
+  fi
   gh pr merge "$n" --squash --auto
 
   deadline=$(( $(date +%s) + MERGE_TIMEOUT_S ))
