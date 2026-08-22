@@ -74,13 +74,18 @@ When `$ARGUMENTS` contains a version number (e.g., `1.3.0`):
    ```
    This updates: CHANGELOG.md, package.json, changelog-data.json, README.md, CLAUDE.md
 
-2. Print the manual next steps:
+2. Print the manual next steps. `main` takes PRs only (ruleset, no bypass) and the push
+   hook refuses `main` outright, so the release rides a branch like any other change:
    ```
    Release $ARGUMENTS prepared. Next steps:
-     git add -A
-     git commit -m "chore: release $ARGUMENTS"
-     git tag -a v$ARGUMENTS -m "Release $ARGUMENTS"
-     git push origin main --tags
+     git switch -c chore/release-$ARGUMENTS
+     git add package.json package-lock.json electron/package.json electron/package-lock.json README.md CLAUDE.md CHANGELOG.md src/client/changelog-data.json
+     git commit -m "chore: release v$ARGUMENTS"
+     npm run gate                      # bench attestation for this sha (static only: manifests and docs)
+     git push -u origin HEAD && gh pr create --fill
+     # after CI + bench/gate are green and the PR is squash-merged:
+     git fetch origin main && git tag -a v$ARGUMENTS -m "Release $ARGUMENTS" origin/main
+     git push origin v$ARGUMENTS       # the tag triggers electron-release.yml
      gh release create v$ARGUMENTS --title "v$ARGUMENTS" --notes-file CHANGELOG-LATEST.md
    ```
 

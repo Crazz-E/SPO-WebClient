@@ -13,7 +13,9 @@ npm run dev:local   # build + start on port 8080 (a fresh clone, no bench worker
 ```
 
 Node.js 22 or newer, npm 10 or newer. On the shared test machine the gateway is **leased
-from the bench worker** instead (`npm run dev`) — see [doc/bench-worker.md](doc/bench-worker.md).
+from the bench worker** instead (`npm run dev`) — see [doc/bench-worker.md](doc/bench-worker.md);
+a gateway of your own there goes **off 8080** (`PORT=8081 npm run dev:local`) — the worker
+clears that port before every job.
 
 ## The one rule that matters
 
@@ -44,22 +46,29 @@ badly stated — in that case, ask.
 
 ## Branches and commits
 
-Branches: `feature/`, `fix/`, `refactor/`, `doc/` + a short description.
+Branches: `feature/`, `fix/`, `refactor/`, `doc/` + a short description (a Claude session's
+worktree branch `claude-<user>/…` is fine too — only `main` is refused).
 
 Commits: `type: short summary`, where type is `feat`, `fix`, `refactor`, `perf`, `docs`,
 `test`, `chore` or `build`.
 
 ## Pull requests
 
-Two required checks on `main`: **CI** (`typecheck + tests`, GitHub-hosted) and
-**`bench/gate`** — the live attestation the bench worker publishes as a commit status once
-your branch is pushed ([doc/bench-worker.md](doc/bench-worker.md) §5). `git push` itself is
-blocked locally until the worker has attested HEAD (`npm run gate`). Fill in
-[the PR template](.github/pull_request_template.md), and say which RDO members the change
-touches, if any.
+`main` takes pull requests only — one ruleset, no bypass, binding the owner as well. Two
+required checks: **CI** (`typecheck + tests`, GitHub-hosted) and **`bench/gate`** — the live
+attestation the bench worker publishes as a commit status once your branch is pushed
+([doc/bench-worker.md](doc/bench-worker.md) §5); no approval is required (solo maintainer),
+and the branch must be **up to date** with `main`. `git push` itself is blocked locally until
+the worker has attested HEAD (`npm run gate`, on a committed tree — a dirty tree is refused).
+If `main` moves while your PR is open, update the branch and run `npm run gate` again: the
+new sha needs its own attestation. Fill in [the PR template](.github/pull_request_template.md),
+and say which RDO members the change touches, if any.
 
 **Merge with squash**, and make the PR title a conventional commit (`type: summary`) — it
-becomes the one squash commit, and that commit is the changelog line.
+becomes the one squash commit, and that commit is the changelog line. GitHub deletes the
+remote branch at merge; then **`npm run finish`** closes the local side (main fast-forwarded,
+refs pruned, worker reinstalled if its sources changed, worktree and branch removed). An
+update is done when `main` is the only branch left, locally and on origin.
 
 ## Changelog
 

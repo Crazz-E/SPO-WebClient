@@ -256,10 +256,15 @@ function main() {
 
   // 8. Print next steps
   console.log('\n--- Next steps ---');
+  // main takes PRs only (ruleset, no bypass) and the push hook refuses main outright:
+  // the release commit rides a branch, gets gated and merged, and the tag lands afterwards.
+  console.log(`git switch -c chore/release-${newVersion}`);
   console.log(`git add package.json package-lock.json electron/package.json electron/package-lock.json README.md CLAUDE.md CHANGELOG.md src/client/changelog-data.json`);
   console.log(`git commit -m "chore: release v${newVersion}"`);
-  console.log(`git tag v${newVersion}`);
-  console.log(`git push --follow-tags`);
+  console.log(`npm run gate && git push -u origin HEAD && gh pr create --fill`);
+  console.log(`# after the PR is merged:`);
+  console.log(`git fetch origin main && git tag -a v${newVersion} -m "Release ${newVersion}" origin/main`);
+  console.log(`git push origin v${newVersion}`);
   console.log(`gh release create v${newVersion} --title "v${newVersion}" --notes-file CHANGELOG.md`);
 }
 

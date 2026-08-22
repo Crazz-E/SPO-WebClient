@@ -58,7 +58,9 @@ for what a WebSocket cannot observe: rendering, layout, input, mobile, Electron.
 
 The unit of enforcement is the **push**, not the commit.
 
-1. Work on `feature/` `fix/` `refactor/` `doc/`. Never push `main` directly.
+1. Work on `feature/` `fix/` `refactor/` `doc/` — or the session's `claude-<user>/…`
+   worktree branch. Never push `main` directly: the hook refuses it, and the ruleset takes
+   PRs only.
 2. **Commit freely** — no gate on commit. Each retry attempt is its own commit so the loop
    stays readable afterwards.
 3. Before `git push`, run:
@@ -217,8 +219,11 @@ Not every red run consumes an attempt:
 | **The criterion was wrong** | — | **Stop and ask.** Never launder a bad requirement into a code change |
 
 The last row is `CLAUDE.md`'s existing rule ("never modify a test to make it pass") applied
-to the loop. Machine-enforced: if attempt *N*'s diff touches a test file that was failing at
-attempt *N-1*, the gate fails hard.
+to the loop. **Not yet machine-enforced** — `verify-gate.js` records `--attempt` in the
+artifact but does not compare attempts; the rule "attempt *N* must not touch a test file
+that was failing at attempt *N-1*" is a review convention until a gate stage carries the
+previous attempt's failing set. Mechanical today: the worker's fingerprint (`STALE`), the
+clean-tree rule (`DIRTY`), the President exclusion (`BLOCKED`) and the hook.
 
 **On exhaustion:** push the branch, open a **draft** PR titled `blocked: …`, attach the
 evidence and all three hypotheses, do not merge, hand back. Work is never discarded.
@@ -307,6 +312,7 @@ npm run dev                      # bench LEASE: this worktree's gateway held on 
 npm run dev:release              # ...and give it back as soon as you are done
 npm run bench:status             # worker liveness + queue
 npm run e2e:unlock               # clear a world-dirty lock after a human restore
+npm run finish                   # after the merge: main ff'd, refs pruned, worker reinstalled if needed, worktree + branch gone
 
 npm run gate:local               # verify-gate directly — evidence for reading, no push unblock
 PORT=8081 npm run dev:local      # a debug gateway of your own — attests nothing

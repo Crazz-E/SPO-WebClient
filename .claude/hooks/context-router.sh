@@ -93,6 +93,12 @@ esac
 
 # --- Server / deployment -----------------------------------------------------
 case "$PROMPT" in
+  *push*|*gate*|*bench*|*worker*|*"pull request"*|*" pr "*|*" pr"*|*merge*|*github*|*attestation*)
+    add "PUSH CHAIN — doc/bench-worker.md (worker, job life, §5 push chain + GitHub ruleset checklist), doc/E2E-POLICY.md §3 (the gate), CONTRIBUTING.md § Pull requests. Commit first (a dirty tree is DIRTY), npm run gate in the background, push, PR; if main moved, update + re-gate. Only the worker attests; nobody bypasses main."
+    ;;
+esac
+
+case "$PROMPT" in
   *deploy*|*docker*|*production*|*sécurité*|*securite*|*security*)
     add "SERVER / DEPLOY — doc/architecture-overview.md, doc/production-security-policy.md, doc/logging-system.md, deploy/DEPLOY.md (procedure)."
     ;;

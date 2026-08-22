@@ -113,7 +113,10 @@ session edits worktree
   → GitHub PR               CI re-runs L0/L1 (ubuntu, no credentials)
   → bench/gate status       the worker publishes the attestation as a commit status once
                             the sha exists on GitHub (retried on a 30 s cycle until then)
-  → merge                   branch protection: CI green AND bench/gate green
+  → merge                   ruleset: PR, CI green AND bench/gate green, up to date, no bypass;
+                            GitHub deletes the remote branch
+  → npm run finish          main ff'd, refs pruned, worker reinstalled if its sources changed,
+                            worktree + branch removed — nothing left but main
 ```
 
 Only the worker writes attestations. A session cannot unblock its own push, and a PR
