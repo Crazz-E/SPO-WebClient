@@ -70,6 +70,17 @@ describe('fingerprintTree', () => {
     expect(fingerprintTree(dir).hash).toBe(before.hash);
   });
 
+  it('reports clean only when the tree IS its HEAD', () => {
+    const dir = scratchRepo();
+    expect(fingerprintTree(dir).clean).toBe(true);
+    fs.writeFileSync(path.join(dir, 'new.ts'), 'v1\n', 'utf8');
+    expect(fingerprintTree(dir).clean).toBe(false); // untracked
+    commit(dir, 'add');
+    expect(fingerprintTree(dir).clean).toBe(true);
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'dirty\n', 'utf8');
+    expect(fingerprintTree(dir).clean).toBe(false); // modified
+  });
+
   it('throws on a directory that is not a worktree', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-nogit-'));
     expect(() => fingerprintTree(dir)).toThrow();

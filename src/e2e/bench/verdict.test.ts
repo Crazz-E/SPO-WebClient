@@ -56,6 +56,7 @@ describe('statusState', () => {
     expect(statusState('FAIL')).toBe('failure');
     expect(statusState('STALE')).toBe('failure');
     expect(statusState('BLOCKED')).toBe('failure');
+    expect(statusState('DIRTY')).toBe('failure');
     expect(statusState('ENVIRONMENT')).toBe('error');
     expect(statusState('INTERRUPTED')).toBe('error');
   });

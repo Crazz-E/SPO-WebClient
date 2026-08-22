@@ -81,6 +81,7 @@ Handle the outcome by verdict — the rules are [doc/E2E-POLICY.md](../../doc/E2
 | `BLOCKED` + President members | **Stop and tell the developer.** Name the members and the flow to exercise by hand. Never mark it verified yourself. Re-run with `npm run gate -- --manual-verified="..."` only after they confirm |
 | `BLOCKED` + dirty world | Not a test failure — nothing ran. Clear the (machine-global) dirty world with `npm run e2e:unlock` after a human restored it |
 | `STALE` | The tree changed while the job was queued or running. Not an attempt. Resubmit `npm run gate` on the tree you mean |
+| `DIRTY` (or exit 2 `DIRTY TREE` at deposit) | Uncommitted or untracked changes in the worktree. A gate attests HEAD by sha, so nothing ran. Commit (or stash) first, then resubmit — not an attempt |
 | `ENVIRONMENT` | The servers were not in a state to judge the change. Retry with backoff; **does not** count as one of the three attempts |
 | `FAIL` | Diagnose, write the hypothesis, fix, commit, re-run. **Three attempts maximum, each naming a different root cause.** Never edit a test that was failing in order to make it pass |
 

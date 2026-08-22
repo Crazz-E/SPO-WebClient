@@ -7,7 +7,9 @@
  *     round trip is ONE background shell command for the session (zero tokens spent
  *     waiting). Unrecognized flags are forwarded verbatim to the job body, so
  *     `npm run gate -- --manual-verified="…"` reaches verify-gate.js unchanged.
- *     A dead worker is reported HERE, at deposit time — exit 3, immediately.
+ *     A dead worker is reported HERE, at deposit time — exit 3, immediately. A gate on
+ *     a tree with uncommitted changes is refused here too — exit 2: the attestation
+ *     names a sha, so the tested tree must BE that sha.
  *
  *   wait <job-id> [--timeout-min=N]
  *     Sleeps until the report exists (exit 0 on PASS/LEASED, 1 otherwise), the worker
@@ -20,7 +22,7 @@
  *     Worker liveness, the queue, and recent reports.
  *
  * Exit codes: 0 ok · 1 job completed with a non-passing verdict · 2 refused at deposit
- * (duplicate) · 3 worker down · 4 wait timeout.
+ * (duplicate, or a gate on a dirty tree) · 3 worker down · 4 wait timeout.
  */
 
 import { execFileSync } from 'child_process';
@@ -150,6 +152,17 @@ async function submit(parsed: ParsedArgs, deps: CliDeps): Promise<number> {
     return 1;
   }
 
+  const fingerprint = deps.fingerprint(worktree);
+  // The hook and GitHub both key on HEAD's sha. A gate run over uncommitted changes would
+  // attest a sha that was never tested on its own — refuse it before it costs bench time.
+  // The worker enforces the same rule (DIRTY), so a bypassed client still attests nothing.
+  if (type === 'gate' && !fingerprint.clean) {
+    deps.err('DIRTY TREE: this worktree has uncommitted or untracked changes.');
+    deps.err('A gate attests HEAD by sha, so the tree it tests must be exactly that commit.');
+    deps.err('Commit (or stash) first, then:  npm run gate');
+    return 2;
+  }
+
   let request;
   try {
     request = deps.spool.submit(
@@ -157,7 +170,7 @@ async function submit(parsed: ParsedArgs, deps: CliDeps): Promise<number> {
         type,
         worktree,
         branch,
-        fingerprint: deps.fingerprint(worktree),
+        fingerprint,
         // With --wait this process stays alive until the report lands, so the worker can
         // tell a dead session from a queued one. Without it there is nobody to watch.
         submitter: { pid: parsed.known.has('wait') ? deps.pid : 0 },

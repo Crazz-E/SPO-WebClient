@@ -10,7 +10,7 @@ function tempBench(): BenchPaths {
   return paths;
 }
 
-const FP = { head: 'abc123', hash: 'deadbeef' };
+const FP = { head: 'abc123', hash: 'deadbeef', clean: true };
 
 function requestFor(worktree: string): Omit<JobRequest, 'id' | 'submittedAt'> {
   return {

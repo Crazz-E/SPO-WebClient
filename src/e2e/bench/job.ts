@@ -23,6 +23,8 @@ export type JobVerdict =
   | 'ENVIRONMENT'
   /** The tree changed between deposit and the end of the run — never presented as PASS. */
   | 'STALE'
+  /** A gate job on a tree with uncommitted changes: nothing ran, nothing is attested. */
+  | 'DIRTY'
   /** The depositing session died before its job started; nothing ran. */
   | 'ABANDONED'
   /** The worker went down mid-job; the body may have partially run. */
