@@ -70,6 +70,9 @@ remote branch at merge; then **`npm run finish`** closes the local side (main fa
 refs pruned, worker reinstalled if its sources changed, worktree and branch removed). An
 update is done when `main` is the only branch left, locally and on origin.
 
+Dependabot PRs: `npm run deps:gate` rebases, installs, gates, pushes and auto-merges them
+one by one; a lockfile change routes to spine + building-details.
+
 ## Changelog
 
 Synthetic, not verbose: one line per `feat` / `fix` / `perf` / `refactor` squash commit

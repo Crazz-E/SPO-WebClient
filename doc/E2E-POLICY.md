@@ -107,6 +107,8 @@ nothing that changed; the routing table is what keeps the run pointed at the del
 | `src/client/components/politics/**` | L2 `politics-read`, `politics-write` |
 | `src/client/components/building/**` | L2 `building-details` |
 | `src/client/renderer/**`, mobile layout, `*.module.css` | **L3** browser smoke (a WS drive cannot see a pixel) |
+| `package.json`, `package-lock.json` | L2 spine + `building-details` — the shipped code moved even though no `src/` file did |
+| `electron/**` | static only — packaged by `electron-release.yml`, not observable over the wire |
 | `doc/**`, `*.md`, CI config, tooling | static only |
 
 The **login spine** (connect -> auth -> directory -> world login -> company select ->
@@ -313,6 +315,7 @@ npm run dev:release              # ...and give it back as soon as you are done
 npm run bench:status             # worker liveness + queue
 npm run e2e:unlock               # clear a world-dirty lock after a human restore
 npm run finish                   # after the merge: main ff'd, refs pruned, worker reinstalled if needed, worktree + branch gone
+npm run deps:gate [PR...]        # Dependabot PRs: rebase, npm ci in the PR's worktree, gate, push, auto-merge — one at a time
 
 npm run gate:local               # verify-gate directly — evidence for reading, no push unblock
 PORT=8081 npm run dev:local      # a debug gateway of your own — attests nothing

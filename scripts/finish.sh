@@ -10,7 +10,9 @@
 #   3. prunes stale origin/* refs (GitHub already deleted the remote branch at merge —
 #      delete_branch_on_merge);
 #   4. reinstalls the bench worker when the merge touched its sources — the worker runs
-#      the main checkout's dist/, and nothing else rebuilds it;
+#      the main checkout's dist/, and nothing else rebuilds it; refreshes the main
+#      checkout's node_modules when the merge changed a lockfile — every session worktree
+#      resolves its packages from there;
 #   5. removes this session's worktree (must be clean — `git worktree remove` refuses a
 #      dirty one) and the local branch.
 #
@@ -49,6 +51,19 @@ sync_main
 if git -C "$MAIN_REPO" diff --name-only "${merge_sha}^" "$merge_sha" | grep -qE '^src/e2e/bench/|^scripts/bench-'; then
   echo "== the merge touched the bench worker — reinstalling it from main"
   bash "$MAIN_REPO/scripts/bench-install.sh"
+fi
+
+# A merged dependency bump must reach the main checkout's node_modules at once: session
+# worktrees have none of their own and resolve up to this one, so a lagging install would
+# build and test every later branch against the packages the merge just replaced. The
+# worker runs dist/, which npm ci does not touch.
+if git -C "$MAIN_REPO" diff --name-only "${merge_sha}^" "$merge_sha" | grep -qx 'package-lock.json'; then
+  echo "== the merge changed package-lock.json — npm ci in $MAIN_REPO"
+  (cd "$MAIN_REPO" && npm ci --no-audit --no-fund)
+fi
+if git -C "$MAIN_REPO" diff --name-only "${merge_sha}^" "$merge_sha" | grep -qx 'electron/package-lock.json'; then
+  echo "== the merge changed electron/package-lock.json — npm ci --prefix electron in $MAIN_REPO"
+  (cd "$MAIN_REPO" && npm ci --no-audit --no-fund --prefix electron)
 fi
 
 if [ -n "$(git -C "$here" status --porcelain)" ]; then
