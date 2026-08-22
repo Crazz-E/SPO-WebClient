@@ -66,7 +66,7 @@ problem, not a formality.
 4. **Never** hand-edit `package-lock.json`. Regenerate it.
 5. Do not add a dependency to solve something the standard library or an existing dep covers.
    The dependency count is deliberately low.
-6. **Dependabot PRs:** `npm run deps:gate` rebases, installs, gates, pushes and auto-merges
+6. **Dependabot PRs:** `npm run deps:gate` merges main in, installs, gates, pushes and auto-merges
    them one by one. The install step is not optional: a session worktree has no
    `node_modules` of its own — npm and Node resolve up to `~/SPO-WebClient/node_modules` —
    so without an `npm ci` *in the PR's worktree* the bench would build and drive the bump
