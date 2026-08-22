@@ -179,12 +179,12 @@ describe('the attestation gate, on a feature branch', () => {
     expect(result.stderr).toMatch(/Three attempts maximum/);
   });
 
-  it('blocks a BLOCKED verdict with the manual-verification instruction', () => {
+  it('blocks a BLOCKED verdict — the live stage never ran — and says how to clear it', () => {
     const dir = scratchRepo();
     const result = invokeWith(dir, benchWith(dir, { verdict: 'BLOCKED' }));
     expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/President-only members/);
-    expect(result.stderr).toMatch(/never mark it verified|Do not mark it verified/i);
+    expect(result.stderr).toMatch(/refused before running/);
+    expect(result.stderr).toMatch(/e2e:unlock/);
   });
 
   it('blocks a STALE verdict — the tree moved, the result attests nothing current', () => {

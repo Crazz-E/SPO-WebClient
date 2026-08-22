@@ -7,6 +7,7 @@ import { WorldLock } from './world-lock';
 import { LIMITS } from './config';
 import * as preflightModule from './preflight';
 import * as flowsModule from './flows';
+import * as capabilityModule from './capability';
 
 function tempLock(): WorldLock {
   return new WorldLock(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-run-')));
@@ -34,6 +35,40 @@ function passingFlow(name: string): flowsModule.FlowResult {
 afterEach(() => jest.restoreAllMocks());
 
 describe('runLive', () => {
+  it('reads the requested capabilities before the flows and carries the evidence', async () => {
+    jest.spyOn(preflightModule, 'preflight').mockResolvedValue(okPreflight);
+    const order: string[] = [];
+    jest.spyOn(capabilityModule, 'checkCapability').mockImplementation(async capability => {
+      order.push(`cap:${capability}`);
+      return {
+        capability,
+        account: 'SPO_test3',
+        members: ['RDOSitMayor'],
+        determined: true,
+        granted: false,
+        checks: [{ what: 'canGovern on the Capitol (server grantAccess)', value: 'false' }],
+        checkedAt: 'now',
+      };
+    });
+    jest.spyOn(flowsModule, 'runFlow').mockImplementation(async flow => {
+      order.push(`flow:${flow.name}`);
+      return passingFlow(flow.name);
+    });
+
+    const result = await runLive({
+      flows: ['login-spine'],
+      branch: 'fix/a',
+      lock: tempLock(),
+      capabilities: ['president'],
+    });
+
+    expect(order).toEqual(['cap:president', 'flow:login-spine']);
+    expect(result.status).toBe('PASS');
+    expect(result.capabilities).toHaveLength(1);
+    expect(result.capabilities[0].granted).toBe(false);
+    expect(formatSummary(result)).toContain('capability president: NOT GRANTED for SPO_test3');
+  });
+
   it('runs the requested flows and passes when they all pass', async () => {
     jest.spyOn(preflightModule, 'preflight').mockResolvedValue(okPreflight);
     jest.spyOn(flowsModule, 'runFlow').mockImplementation(async flow => passingFlow(flow.name));
@@ -154,6 +189,7 @@ describe('formatSummary', () => {
     status: 'FAIL',
     preflight: { ok: true, checks: [], environmentAbort: false },
     flows: [],
+    capabilities: [],
   };
 
   it('leads with the world and the verdict', () => {
@@ -231,6 +267,7 @@ describe('main', () => {
     status: 'PASS',
     preflight: { ok: true, checks: [], environmentAbort: false },
     flows: [],
+    capabilities: [],
   };
 
   function sink(): { stream: Writable; text: () => string } {

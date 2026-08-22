@@ -146,9 +146,9 @@ export function isCallSite(file: string): boolean {
 }
 
 /**
- * President-only members newly written by this diff. A hit blocks the gate and hands
- * verification to the developer (doc/E2E-POLICY.md §7) — `SPO_test3` is not president,
- * and `RDOSitMinister` has two variants a name+arity catalogue cannot tell apart.
+ * President-only members newly written by this diff. A hit sends the gate to the server
+ * for the account's capability (doc/E2E-POLICY.md §7) — `SPO_test3` is not president, and
+ * `RDOSitMinister` has two variants a name+arity catalogue cannot tell apart.
  *
  * Only **added** lines in real call sites count. A deletion cannot introduce a bad frame,
  * and a mention in prose is not a call.

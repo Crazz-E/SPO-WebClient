@@ -30,6 +30,8 @@ export interface BenchVerdict {
   fingerprintStable: boolean;
   jobId: string;
   createdAt: string;
+  /** Capability exceptions the gate recorded (doc/E2E-POLICY.md §7) — shown on GitHub. */
+  exceptions?: number;
   /** Set once the commit status landed on GitHub. */
   published?: boolean;
 }
@@ -113,7 +115,8 @@ export function publishPendingStatuses(
         verdict.worktree,
         verdict.head,
         statusState(verdict.verdict),
-        `${verdict.verdict}${verdict.fingerprintStable ? '' : ' (tree moved)'} — job ${verdict.jobId}`,
+        `${verdict.verdict}${verdict.fingerprintStable ? '' : ' (tree moved)'}` +
+          `${verdict.exceptions ? ` — ${verdict.exceptions} capability exception(s)` : ''} — job ${verdict.jobId}`,
       );
       writeVerdict(paths, { ...verdict, published: true });
       log(`published bench/gate=${statusState(verdict.verdict)} for ${verdict.head.slice(0, 8)}`);

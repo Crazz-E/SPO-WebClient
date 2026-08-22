@@ -91,9 +91,9 @@ max_age="${GATE_MAX_AGE_MINUTES:-60}"
 if [ "${verdict:-UNKNOWN}" != "PASS" ]; then
   echo "BLOCKED: the bench verdict for HEAD is ${verdict:-UNKNOWN}, not PASS." >&2
   if [ "${verdict:-}" = "BLOCKED" ]; then
-    echo "This diff touches President-only members. A person must verify it by hand, then:" >&2
-    echo "  npm run gate -- --manual-verified=\"<what you ran, and the result>\"" >&2
-    echo "Do not mark it verified on the developer's behalf — doc/E2E-POLICY.md §7." >&2
+    echo "The live stage was refused before running — a dirty world lock or the rate limit." >&2
+    echo "Nothing was tested. Read the job report; a dirty world needs a human restore and" >&2
+    echo "npm run e2e:unlock, then resubmit: npm run gate" >&2
   elif [ "${verdict:-}" = "STALE" ]; then
     echo "The tree changed while the job was queued or running; the result attests a tree" >&2
     echo "that no longer exists. Resubmit: npm run gate" >&2
