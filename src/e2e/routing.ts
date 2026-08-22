@@ -50,11 +50,6 @@ export const ROUTES: RouteRule[] = [
     why: 'generated output — not source',
   },
   {
-    test: /^electron\//,
-    flows: [],
-    why: 'the Electron shell — nothing here is reachable through the gateway; the release workflow validates the packaged app',
-  },
-  {
     test: /^src\/client\/renderer\/|\.module\.css$|^src\/client\/layouts\/|^src\/client\/mobile\/|\.css$/,
     flows: [],
     needsL3: true,
