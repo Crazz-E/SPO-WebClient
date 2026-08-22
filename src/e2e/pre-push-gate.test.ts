@@ -165,9 +165,10 @@ describe('the attestation gate, on a feature branch', () => {
     const other = scratchRepo();
     const blocked = invoke(`git -C ${other} push -u origin HEAD`, { SPO_BENCH_DIR: bench });
     expect(blocked.code).toBe(2);
-    // Both scratch repos share a HEAD, so the attestation exists but names the other
-    // worktree — the hook judged `other`, which is the point.
-    expect(blocked.stderr).toMatch(/attested for another worktree/);
+    // Either the scratch repos share a HEAD (same commit second) and the attestation
+    // names the other worktree, or they differ and `other` has none — both prove the
+    // hook judged `other`, not the cwd.
+    expect(blocked.stderr).toMatch(/attested for another worktree|no bench attestation for HEAD/);
   });
 
   it('judges the repo a preceding `cd <dir>` selects', () => {
