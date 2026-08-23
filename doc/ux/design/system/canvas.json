@@ -1,14 +1,70 @@
 {
   "artboards": [
-    { "file": "Main.dc.html", "title": "1 · Fondations", "x": 0, "y": 0, "w": 1200, "h": 980 },
-    { "file": "Controles.dc.html", "title": "2 · Contrôles", "x": 1280, "y": 0, "w": 1200, "h": 1040 },
-    { "file": "Surfaces.dc.html", "title": "3 · Surfaces", "x": 0, "y": 1140, "w": 1400, "h": 980 },
-    { "file": "Listes.dc.html", "title": "4 · Listes — et la liste longue", "x": 1480, "y": 1140, "w": 1400, "h": 1000 },
-    { "file": "Mobile.dc.html", "title": "5 · Mobile (option C)", "x": 2560, "y": 0, "w": 900, "h": 900 }
+    {
+      "file": "Main.dc.html",
+      "title": "1 · Fondations",
+      "x": 0,
+      "y": 0,
+      "w": 1200,
+      "h": 980
+    },
+    {
+      "file": "Controles.dc.html",
+      "title": "2 · Contrôles",
+      "x": 1280,
+      "y": 0,
+      "w": 1200,
+      "h": 1040
+    },
+    {
+      "file": "Surfaces.dc.html",
+      "title": "3 · Surfaces",
+      "x": 0,
+      "y": 1140,
+      "w": 1400,
+      "h": 980
+    },
+    {
+      "file": "Listes.dc.html",
+      "title": "4 · Listes — et la liste longue",
+      "x": 1480,
+      "y": 1140,
+      "w": 1400,
+      "h": 1000
+    },
+    {
+      "file": "Mobile.dc.html",
+      "title": "5 · Mobile (option C)",
+      "x": 2560,
+      "y": 0,
+      "w": 900,
+      "h": 900
+    }
   ],
   "annotations": [
-    { "id": "sys-brief", "x": 0, "y": -200, "w": 720, "text": "SYSTÈME — la boîte à outils de l'option C.\nCinq planches : fondations (tokens assainis, un seul focus, une seule échelle de texte et de z-index), contrôles (Button, IconButton, Chip, Field, Switch/Checkbox/Radio, Slider, Tabs), surfaces (la feuille universelle, le dialogue de confirmation, les toasts, le SaveIndicator, les états de contenu), listes (DataTable et la LISTE LONGUE — entrepôts et supermarchés Magna à plusieurs dizaines de produits), et la déclinaison mobile.\nTout est écrit avec les valeurs exactes des tokens actuels ; ce qui est nouveau est marqué NOUVEAU. À valider avant les flux T1/T3." },
-    { "id": "sys-long-list", "x": 1480, "y": 1060, "w": 520, "text": "LISTE LONGUE — la contrainte posée le 23/08 : un entrepôt peut lister tous les produits échangeables ; un supermarché Magna, des dizaines d'articles.\nRéponse : filtre collant + repli « Attention » + groupes + lignes 40 px + défilement interne + compteur en pied. Le détail d'une porte s'empile dans la feuille au lieu de s'ouvrir en accordéon." }
+    {
+      "id": "sys-brief",
+      "x": 0,
+      "y": -480,
+      "w": 720,
+      "text": "SYSTÈME — la boîte à outils de l'option C.\nCinq planches : fondations (tokens assainis, un seul focus, une seule échelle de texte et de z-index), contrôles (Button, IconButton, Chip, Field, Switch/Checkbox/Radio, Slider, Tabs), surfaces (la feuille universelle, le dialogue de confirmation, les toasts, le SaveIndicator, les états de contenu), listes (DataTable et la LISTE LONGUE — entrepôts et supermarchés Magna à plusieurs dizaines de produits), et la déclinaison mobile.\nTout est écrit avec les valeurs exactes des tokens actuels ; ce qui est nouveau est marqué NOUVEAU. À valider avant les flux T1/T3."
+    },
+    {
+      "id": "sys-long-list",
+      "x": 1480,
+      "y": 880,
+      "w": 520,
+      "text": "LISTE LONGUE — précision du 23/08 : la liste longue est le BLOC INSPECT (aperçu + en-tête, un bloc poussé en continu) d'un entrepôt ou d'un supermarché Magna ; les onglets Approvisionnements / Produits / Services restent tels quels côté requêtes.\nRéponse : filtre collant + tri par nom (locaux, zéro requête) + lignes compactes + défilement interne + compteur ; sur les onglets, ligne repliée = nom seul, la requête part à l'ouverture du dépliant. Pas de catégories : le jeu n'en fournit aucune (TMetaFluid, Kernel.pas:743-798)."
+    },
+    {
+      "id": "sys-map",
+      "x": 2560,
+      "y": -200,
+      "w": 520,
+      "text": "CARTE — tuile « Carte » ajoutée à la barre de commande (desktop et mobile). Elle ouvre la vue carte : la minicarte de données de Voyager (couleur par classe de bâtiment, vos bâtiments déficitaires en rouge, brouillard, rectangle de vue, clic = sauter, zoom propre), plus BACK / NEXT, GO TOWN HALL et les favoris de position. Voir doc/ux/missing-features.md pour ce qui manque au WebClient."
+    }
   ],
-  "launch": { "view": "canvas" }
+  "launch": {
+    "view": "canvas"
+  }
 }

@@ -35,15 +35,27 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 
 ## 2bis. Contraintes de données à prendre en compte
 
-- **Les listes de produits / services peuvent être très longues.** Un entrepôt peut techniquement
-  lister tous les produits échangeables (plusieurs dizaines de portes, chacune avec ses
-  connexions) ; les supermarchés de Magna affichent un nombre important d'articles dans la liste
-  produits/services. La feuille universelle doit donc traiter la **liste longue** comme un
-  composant de première classe : filtre toujours visible, regroupement, lignes compactes,
-  défilement interne (virtualisé au portage), repli par défaut sur ce qui demande attention,
-  « tout afficher (n) » — jamais une page qui s'allonge sans fin.
+- **La liste longue, c'est le bloc Inspect.** L'aperçu (`StatusOverlay`) et l'en-tête de
+  l'inspecteur rendent un **bloc unique** (`detailsText` / `salesInfo` / `hintsText`) que le serveur
+  pousse en continu ; pour un entrepôt (« Storing: … » × dizaines de produits) ou un supermarché
+  Magna (lignes de vente), il est très long. Comme les données sont déjà là, la réponse est
+  **locale et gratuite** : filtre toujours visible, tri par nom affiché, lignes compactes,
+  défilement interne, compteur.
+- **Les onglets Approvisionnements / Produits / Services ne changent pas côté requêtes.** Une
+  ligne repliée ne montre **rien de plus que le code actuel** (le nom) ; c'est **l'ouverture du
+  dépliant qui déclenche la lecture** (quantités, nombre de fournisseurs, liste, curseurs). Le
+  nombre de requêtes RDO est une contrainte dure — chaque lecture par ligne coûte au joueur.
+  Le filtre s'applique aux noms ; aucun regroupement ne nécessite de lecture supplémentaire.
+- **Aucune catégorie de produit n'existe dans le jeu** : `TMetaFluid` (`Kernel/Kernel.pas:743-798`)
+  n'a que nom, unité, prix, poids et un *set* de flags de capacité jamais sérialisé vers le
+  client ; l'ordre des portes d'un entrepôt est l'ordre ASCII des ids internes
+  (`Class Storage/NativeClassStorage.pas:133-152`, `StdBlocks/MegaWarehouse.pas:53-88`). Donc pas
+  de groupes par famille ; le tri par nom affiché est la seule classification honnête. Une table
+  éditoriale côté client reste possible mais c'est une décision à prendre, pas une hypothèse.
 - Les valeurs techniques (coordonnées, ids, classes, bitmasks) restent disponibles mais ne se
   rendent jamais dans le flux nominal ([audit §5](audit.md)).
+- **Toute fonctionnalité supposée par l'ergonomie est vérifiée** dans le WebClient ; ce qui
+  manque — et existe dans Voyager — est listé dans [missing-features.md](missing-features.md).
 
 ## 3. Ce qui ne bouge pas
 
