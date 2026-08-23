@@ -42,8 +42,8 @@ qui a été livré, pour que le code et les canevas restent lisibles côte à c�
   Recherche / Government), et `x,y` ou `x y` → `Go to (x, y)`. Tout est local : aucune
   requête par frappe. Chaque entrée passe par `onNavigateToBuilding`, le chemin d'un clic carte.
 - Les commandes « Find Building / Find Player » qui ne menaient nulle part sont retirées.
-- Hors lot : coordonnées cliquables dans le chat (N5), palette sur mobile (avec la barre de
-  commande mobile).
+- Hors lot : coordonnées cliquables dans le chat (N5). La palette est atteignable sur mobile
+  depuis la pastille de recherche de la barre de commande (PR #70).
 
 ## T5 — régler les taxes d'une ville
 

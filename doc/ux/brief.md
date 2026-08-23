@@ -113,8 +113,9 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 | #67 | **Carte-1** — surface « Map » (M / tuile / triangle mobile) : terrain + bâtiments chargés (miens, déficitaires), rectangle de vue, clic = sauter, zoom 1–8×, Back / Next (historique caméra), hôtel de ville le plus proche | N1 (partiel), N2, N3 |
 | #68 | **Carte-2** — favoris de position dans la surface Map : ajouter la vue (nom), aller, renommer, supprimer ; local par monde et joueur | N4 (local) |
 | #69 | **Feuille flottante** — desktop : cadre 472 px (420 en desktop étroit), 64 px du haut, 16 px des bords, arrondi + ombre, la carte reste visible autour ; la barre de commande, le rail et la pastille se décalent (rail pour toute surface, pastille dégagée de la minicarte) ; tablette : panneau ancré conservé | handoff 00 §3.2 |
+| #70 | **Barre de commande mobile** — les six tuiles du desktop (Build · Map · Chat · Government · Mail · More), rangée de recherche (palette) au-dessus sur la carte ; Fav → More › My facilities ; la barre d'info ouvre le Profil | handoff 00 §4.2 (mobile), S2, T7 mobile |
 
-Restent (dans l'ordre proposé) : mobile : barre de commande complète.
+**Tous les lots du plan sont portés.** Restent, hors lot : la barre de mode mobile pour routes/zones (le placement garde `PlacementHUD`), la tablette (panneau ancré), et les points 🟡 de [missing-features](missing-features.md) (N5 chat, N6/N7, B5 rétrogradation, B6, H3, H6, N10).
 
 ## 7. Livrables attendus de la phase Design
 

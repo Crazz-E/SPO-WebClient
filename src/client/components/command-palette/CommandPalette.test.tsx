@@ -43,14 +43,18 @@ describe('CommandPalette', () => {
     expect(useUiStore.getState().commandPaletteOpen).toBe(false);
   });
 
-  it('reads the facilities list once when it opens empty, not again when it is loading or filled', () => {
+  it('reads the facilities list and the towns page once when it opens empty, not again when loading or filled', () => {
     const onRequestFacilities = jest.fn();
-    const { unmount } = renderWithProviders(<CommandPalette />, { clientCallbacks: createSpiedCallbacks({ onRequestFacilities }) });
+    const onSearchMenuTowns = jest.fn();
+    const { unmount } = renderWithProviders(<CommandPalette />, { clientCallbacks: createSpiedCallbacks({ onRequestFacilities, onSearchMenuTowns }) });
     expect(onRequestFacilities).toHaveBeenCalledTimes(1);
+    expect(onSearchMenuTowns).toHaveBeenCalledTimes(1);
+    useSearchStore.getState().setTownsData(TOWNS);
     unmount();
     useEmpireStore.setState({ isLoading: true });
-    const r2 = renderWithProviders(<CommandPalette />, { clientCallbacks: createSpiedCallbacks({ onRequestFacilities }) });
+    const r2 = renderWithProviders(<CommandPalette />, { clientCallbacks: createSpiedCallbacks({ onRequestFacilities, onSearchMenuTowns }) });
     expect(onRequestFacilities).toHaveBeenCalledTimes(1);
+    expect(onSearchMenuTowns).toHaveBeenCalledTimes(1);
     r2.unmount();
     useEmpireStore.getState().setFacilities([{ id: 1, name: 'Farm', x: 1, y: 2 }]);
     renderWithProviders(<CommandPalette />, { clientCallbacks: createSpiedCallbacks({ onRequestFacilities }) });
@@ -113,6 +117,13 @@ describe('CommandPalette', () => {
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onNavigateToBuilding).toHaveBeenCalledWith(2, 2);
+  });
+
+  it('Escape typed in the field closes the palette', () => {
+    renderWithProviders(<CommandPalette />);
+    openPalette();
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+    expect(useUiStore.getState().commandPaletteOpen).toBe(false);
   });
 
   it('says when nothing matches', () => {

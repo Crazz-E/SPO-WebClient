@@ -68,7 +68,7 @@ function legacyView(stack: Surface[]): { rightPanel: RightPanelType | null; left
   };
 }
 export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'prompt' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector' | 'newspaper' | 'changelog';
-export type MobileTab = 'map' | 'chat' | 'build' | 'favorites' | 'more';
+export type MobileTab = 'map' | 'chat' | 'build' | 'more';
 
 interface UiState {
   // Surfaces — the universal sheet's stack (source of truth)

@@ -1,0 +1,43 @@
+/* MobileSearchPill — search row above the mobile tile row */
+
+.pill {
+  display: none; /* mobile only */
+  position: fixed;
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: calc(var(--bottomnav-height) + var(--space-2) + var(--sai-bottom));
+  z-index: var(--z-hud);
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto; /* override inherited none from .shell */
+}
+
+.pill:active {
+  opacity: 0.8;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .pill {
+    display: flex;
+  }
+}

@@ -3,7 +3,7 @@
  *
  * Single row: [World + Date] [Cash] [Income/h] [Rank + Name]
  * Glass background, 36px tall, z-300.
- * Tap to open favorites/empire panel.
+ * Tap to open the Profile (empire) surface.
  */
 
 import { formatMoney, formatIncome, incomeSign } from '../../format-utils';
@@ -22,10 +22,12 @@ export function MobileInfoBar() {
   const tycoonStats = useGameStore((s) => s.tycoonStats);
   const gameDate = useGameStore((s) => s.gameDate);
   const username = useGameStore((s) => s.username);
+  const openLeftPanel = useUiStore((s) => s.openLeftPanel);
   const setMobileTab = useUiStore((s) => s.setMobileTab);
 
   const handleTap = () => {
-    setMobileTab('favorites');
+    setMobileTab('map');
+    openLeftPanel('empire');
   };
 
   const sign = tycoonStats ? incomeSign(tycoonStats.incomePerHour) : 'neutral';
