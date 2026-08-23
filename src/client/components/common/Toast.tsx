@@ -1,23 +1,60 @@
 /**
- * Toast — Phone-style notification cards with auto-dismiss.
- * Stacks newest-on-top, max 3 visible, click-to-dismiss, 15s auto-read.
+ * Toast — transient notifications (doc/ux/handoff/00-socle.md §2.9).
+ *
+ * Each toast carries an icon AND a word for its severity (Done / Notice / Warning / Failed),
+ * so meaning never rides on colour alone (WCAG 1.4.1; audit §3.2). An optional action
+ * ("View", "Retry") makes a toast useful instead of merely informative.
+ *
+ * Two live regions are mounted PERMANENTLY — `role="status"` (polite) for info/success/
+ * warning and `role="alert"` (assertive) for errors — because a region created in the same
+ * tick as its first message is not announced by most screen readers (audit §3.2). Errors do
+ * not auto-dismiss: a failure the player did not see is a failure that did not happen for them.
+ *
+ * Stacks newest-on-top, max 3 visible, click-to-dismiss.
  */
 
 import { useEffect, useState, useCallback, type ReactNode } from 'react';
+import { Check, AlertTriangle, Info, XCircle } from 'lucide-react';
 import styles from './Toast.module.css';
 
-type ToastVariant = 'info' | 'success' | 'warning' | 'error';
+export type ToastVariant = 'info' | 'success' | 'warning' | 'error';
 
-interface ToastMessage {
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
+export interface ToastMessage {
   id: string;
   message: string;
   variant: ToastVariant;
+  /** Short word shown before the message; defaults per variant (Done / Notice / Warning / Failed). */
+  title?: string;
   icon?: ReactNode;
+  action?: ToastAction;
   createdAt: number;
+}
+
+export interface ToastOptions {
+  title?: string;
+  icon?: ReactNode;
+  action?: ToastAction;
 }
 
 export const AUTO_DISMISS_MS = 15000;
 export const MAX_VISIBLE = 3;
+
+export const DEFAULT_TITLES: Record<ToastVariant, string> = {
+  info: 'Notice',
+  success: 'Done',
+  warning: 'Warning',
+  error: 'Failed',
+};
+
+/** A plain options object — not a React element (`$$typeof`), not a string, not an array. */
+function isToastOptions(x: ReactNode | ToastOptions | undefined): x is ToastOptions {
+  return typeof x === 'object' && x !== null && !Array.isArray(x) && !('$$typeof' in x);
+}
 
 /** Global toast state — subscribe from components */
 let toastListeners: Array<(toasts: ToastMessage[]) => void> = [];
@@ -30,22 +67,31 @@ function notifyListeners() {
   }
 }
 
-/** Show a toast notification. Returns the toast ID for later dismissal. */
-export function showToast(message: string, variant: ToastVariant = 'info', icon?: ReactNode): string {
+/**
+ * Show a toast. Returns its id. The third argument keeps the historical `icon` shape
+ * (`showToast(msg, variant, icon)`) and also accepts a `ToastOptions` object.
+ * Errors stay until dismissed; everything else auto-dismisses after AUTO_DISMISS_MS.
+ */
+export function showToast(message: string, variant: ToastVariant = 'info', iconOrOptions?: ReactNode | ToastOptions): string {
+  const options: ToastOptions = isToastOptions(iconOrOptions) ? iconOrOptions : { icon: iconOrOptions };
   const toast: ToastMessage = {
     id: String(++nextId),
     message,
     variant,
-    icon,
+    title: options.title,
+    icon: options.icon,
+    action: options.action,
     createdAt: Date.now(),
   };
   currentToasts = [...currentToasts, toast];
   notifyListeners();
 
-  setTimeout(() => {
-    currentToasts = currentToasts.filter((t) => t.id !== toast.id);
-    notifyListeners();
-  }, AUTO_DISMISS_MS);
+  if (variant !== 'error') {
+    setTimeout(() => {
+      currentToasts = currentToasts.filter((t) => t.id !== toast.id);
+      notifyListeners();
+    }, AUTO_DISMISS_MS);
+  }
 
   return toast.id;
 }
@@ -83,21 +129,62 @@ export function subscribeToasts(listener: (toasts: ToastMessage[]) => void): () 
   };
 }
 
-const dotClass: Record<ToastVariant, string> = {
-  info: styles.dotInfo,
-  success: styles.dotSuccess,
-  warning: styles.dotWarning,
-  error: styles.dotError,
+const variantClass: Record<ToastVariant, string> = {
+  info: styles.info,
+  success: styles.success,
+  warning: styles.warning,
+  error: styles.error,
 };
 
-const progressClass: Record<ToastVariant, string> = {
-  info: styles.progressInfo,
-  success: styles.progressSuccess,
-  warning: styles.progressWarning,
-  error: styles.progressError,
-};
+function VariantIcon({ variant }: { variant: ToastVariant }) {
+  const props = { size: 16, 'aria-hidden': true as const };
+  switch (variant) {
+    case 'success':
+      return <Check {...props} />;
+    case 'warning':
+      return <AlertTriangle {...props} />;
+    case 'error':
+      return <XCircle {...props} />;
+    default:
+      return <Info {...props} />;
+  }
+}
 
-/** Toast container — mount once at root */
+function ToastCard({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: string) => void }) {
+  const title = toast.title ?? DEFAULT_TITLES[toast.variant];
+  return (
+    <div className={`${styles.toast} ${variantClass[toast.variant]}`} data-variant={toast.variant}>
+      <span className={styles.icon}>{toast.icon ?? <VariantIcon variant={toast.variant} />}</span>
+      <span className={styles.message}>
+        <strong className={styles.title}>{title}</strong>
+        <span aria-hidden="true"> — </span>
+        {toast.message}
+      </span>
+      {toast.action && (
+        <button
+          type="button"
+          className={styles.action}
+          onClick={() => {
+            toast.action?.onClick();
+            onDismiss(toast.id);
+          }}
+        >
+          {toast.action.label}
+        </button>
+      )}
+      <button type="button" className={styles.dismiss} onClick={() => onDismiss(toast.id)} aria-label={`Dismiss: ${title}`}>
+        &times;
+      </button>
+      {toast.variant !== 'error' && (
+        <div className={styles.progressTrack} aria-hidden="true">
+          <div className={styles.progressBar} style={{ animationDuration: `${AUTO_DISMISS_MS}ms` }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Toast container — mount once at root. The live regions exist even when empty. */
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -112,47 +199,23 @@ export function ToastContainer() {
     dismissToast(id);
   }, []);
 
-  if (toasts.length === 0) return null;
-
   const { visible, hiddenCount } = getVisibleToasts(toasts);
+  const polite = visible.filter((t) => t.variant !== 'error');
+  const assertive = visible.filter((t) => t.variant === 'error');
 
   return (
-    <div className={styles.container} role="status" aria-live="polite">
-      {visible.map((toast) => (
-        <div
-          key={toast.id}
-          className={styles.toast}
-          onClick={() => dismiss(toast.id)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') dismiss(toast.id);
-          }}
-        >
-          <span className={`${styles.dot} ${dotClass[toast.variant]}`} />
-          {toast.icon && <span className={styles.icon}>{toast.icon}</span>}
-          <span className={styles.message}>{toast.message}</span>
-          <button
-            className={styles.dismiss}
-            onClick={(e) => {
-              e.stopPropagation();
-              dismiss(toast.id);
-            }}
-            aria-label="Dismiss"
-          >
-            &times;
-          </button>
-          <div className={styles.progressTrack}>
-            <div
-              className={`${styles.progressBar} ${progressClass[toast.variant]}`}
-              style={{ animationDuration: `${AUTO_DISMISS_MS}ms` }}
-            />
-          </div>
-        </div>
-      ))}
-      {hiddenCount > 0 && (
-        <div className={styles.overflow}>+{hiddenCount} more</div>
-      )}
+    <div className={styles.container}>
+      <div role="alert" aria-live="assertive" aria-atomic="false" className={styles.region}>
+        {assertive.map((t) => (
+          <ToastCard key={t.id} toast={t} onDismiss={dismiss} />
+        ))}
+      </div>
+      <div role="status" aria-live="polite" aria-atomic="false" className={styles.region}>
+        {polite.map((t) => (
+          <ToastCard key={t.id} toast={t} onDismiss={dismiss} />
+        ))}
+        {hiddenCount > 0 && <div className={styles.overflow}>+{hiddenCount} more</div>}
+      </div>
     </div>
   );
 }
