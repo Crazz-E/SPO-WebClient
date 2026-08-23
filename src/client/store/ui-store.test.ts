@@ -285,3 +285,82 @@ describe('ui-store requestConfirm options', () => {
     expect(useUiStore.getState().modal).toBe('confirm');
   });
 });
+
+describe('ui-store surface stack', () => {
+  beforeEach(() => {
+    useUiStore.setState({ modal: null, modalBeneath: null, confirmPayload: null, promptPayload: null, commandPaletteOpen: false, minimapFullscreen: false });
+    useUiStore.getState().clearSurfaces();
+  });
+
+  it('push never replaces: the building stays under the supplier search', () => {
+    const s = useUiStore.getState();
+    s.setRootSurface({ kind: 'building' });
+    s.pushSurface({ kind: 'search', params: { fluid: 'Cotton' } });
+    expect(useUiStore.getState().stack.map((x) => x.kind)).toEqual(['building', 'search']);
+    // legacy view follows the top
+    expect(useUiStore.getState().rightPanel).toBe('search');
+    s.popSurface();
+    expect(useUiStore.getState().stack.map((x) => x.kind)).toEqual(['building']);
+    expect(useUiStore.getState().rightPanel).toBe('building');
+  });
+
+  it('pushing the same surface twice is a no-op', () => {
+    const s = useUiStore.getState();
+    s.pushSurface({ kind: 'mail' });
+    s.pushSurface({ kind: 'mail' });
+    expect(useUiStore.getState().stack).toHaveLength(1);
+  });
+
+  it('popTo returns to a chip; replaceTop keeps the depth', () => {
+    const s = useUiStore.getState();
+    s.setRootSurface({ kind: 'empire' });
+    s.pushSurface({ kind: 'building' });
+    s.pushSurface({ kind: 'search' });
+    s.popToSurface(0);
+    expect(useUiStore.getState().stack.map((x) => x.kind)).toEqual(['empire']);
+    expect(useUiStore.getState().leftPanel).toBe('empire');
+    expect(useUiStore.getState().rightPanel).toBeNull();
+    s.replaceTopSurface({ kind: 'facilities' });
+    expect(useUiStore.getState().stack.map((x) => x.kind)).toEqual(['facilities']);
+  });
+
+  it('legacy open/toggle/close map onto the stack', () => {
+    const s = useUiStore.getState();
+    s.openRightPanel('mail');
+    expect(useUiStore.getState().stack).toEqual([{ kind: 'mail' }]);
+    s.toggleRightPanel('mail');
+    expect(useUiStore.getState().stack).toEqual([]);
+    s.toggleLeftPanel('overlays');
+    expect(useUiStore.getState().leftPanel).toBe('overlays');
+    s.openRightPanel('building');
+    // one sheet: opening a right content replaces the left one (option C, one surface)
+    expect(useUiStore.getState().leftPanel).toBeNull();
+    expect(useUiStore.getState().rightPanel).toBe('building');
+    s.closeAllPanels();
+    expect(useUiStore.getState().stack).toEqual([]);
+  });
+
+  it('Escape unstacks one surface at a time', () => {
+    const s = useUiStore.getState();
+    s.setRootSurface({ kind: 'building' });
+    s.pushSurface({ kind: 'search' });
+    s.dismissTopmost();
+    expect(useUiStore.getState().stack.map((x) => x.kind)).toEqual(['building']);
+    s.dismissTopmost();
+    expect(useUiStore.getState().stack).toEqual([]);
+  });
+
+  it('the civic modal still clears the sheet (until socle-3c folds it in)', () => {
+    const s = useUiStore.getState();
+    s.setRootSurface({ kind: 'mail' });
+    s.openModal('buildingInspector');
+    expect(useUiStore.getState().stack).toEqual([]);
+    useUiStore.getState().closeModal();
+  });
+
+  it('pinned is plain state', () => {
+    useUiStore.getState().setPinned(true);
+    expect(useUiStore.getState().pinned).toBe(true);
+    useUiStore.getState().setPinned(false);
+  });
+});
