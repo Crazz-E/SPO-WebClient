@@ -55,7 +55,7 @@ Légende : ✅ existe · 🟡 partiel · ❌ manquant · **V** = Voyager l'avait
 | # | Fonction supposée | WebClient | Voyager | À implémenter |
 |---|---|---|---|---|
 | P1 | Politique depuis le HUD / la feuille (desktop **et** mobile) | ✅ **fait (socle-3b/3c)** — surface Government + civique dans la feuille, tuile P ; avant : ❌ `rightPanel: 'politics'` déclaré (`ui-store.ts:12`) mais **rendu nulle part** : feuille vide sur mobile (`MobileShell.tsx:47-73`), panneau sans contenu sur desktop (`GameScreen.tsx:63-74`) ; la politique n'existe que dans la **modale civique** | V (fiches civiques) | Brancher le contenu civique dans la feuille universelle |
-| P2 | Ouvrir l'hôtel de ville de **ma** ville / les taxes directement | ✅ **fait (socle-3b)** — Government › villes → hôtel de ville via `onNavigateToBuilding` ; avant : ❌ seul `onOpenCapitol` ; hôtel de ville = clic sur la carte ou Recherche › Villes (recentre sans ouvrir) | **V** GO TOWN HALL (`MapIsoView.pas:978`) | N3 + ouverture de l'inspecteur à l'arrivée |
+| P2 | Ouvrir l'hôtel de ville de **ma** ville / les taxes directement | ✅ **fait (socle-3b, T5 PR #65)** — Government › villes → hôtel de ville via `onNavigateToBuilding` ; bouton « Taxes » par ville → hôtel de ville ouvert sur Administration (taxes) ; avant : ❌ seul `onOpenCapitol` ; hôtel de ville = clic sur la carte ou Recherche › Villes (recentre sans ouvrir) | **V** GO TOWN HALL (`MapIsoView.pas:978`) | N3 + ouverture de l'inspecteur à l'arrivée |
 
 ## 5. Courrier, recherche, palette
 

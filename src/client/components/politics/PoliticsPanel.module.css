@@ -466,6 +466,17 @@
 
 /* ---- Taxes tab ---- */
 
+.taxRowButton {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
 .taxRowSelected,
 .taxRowSelected:hover {
   background: var(--bg-elevated);

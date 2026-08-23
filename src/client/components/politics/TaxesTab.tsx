@@ -149,7 +149,18 @@ export function TaxesTab({ properties, buildingX, buildingY, canGovern }: TaxesT
                     >
                       $
                     </span>
-                    {row.name}
+                    {/* A mayor selects a row to edit it; a plain <tr onClick> is not reachable
+                        from the keyboard, so the name is a button for them (T5). */}
+                    {canGovern ? (
+                      <button
+                        type="button"
+                        className={styles.taxRowButton}
+                        aria-pressed={row.index === selected}
+                        onClick={() => setSelected(row.index)}
+                      >
+                        {row.name}
+                      </button>
+                    ) : row.name}
                   </td>
                   <td>{subsidised ? 'Subsidized' : `${row.percent}%`}</td>
                   <td>{row.lastYear}</td>
