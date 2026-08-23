@@ -18,6 +18,8 @@ import { worldToScreenCentered } from '../../bridge/client-bridge';
 import { useClient } from '../../context/ClientContext';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
 import { ProgressBar } from '../common';
+import { DiagnosisBanner } from './DiagnosisBanner';
+import { parseFacilityDiagnosis } from '@/shared/building-details/facility-diagnosis';
 import {
   parseRichDetails,
   percentColor,
@@ -364,7 +366,9 @@ export function StatusOverlay() {
   const direction = revenueDirection(building.revenue);
   const isCivic = isCivicBuilding(building.visualClass || '0');
   const richDetails = building.detailsText ? parseRichDetails(building.detailsText) : null;
-  const showHint = building.hintsText && building.hintsText !== 'No hints for this facility.';
+  const diagnosis = parseFacilityDiagnosis(building.detailsText, building.hintsText);
+  // Raw hint only when the diagnosis found nothing to say (unknown text is kept by the parser)
+  const showHint = diagnosis.severity === 'none' && building.hintsText && building.hintsText !== 'No hints for this facility.';
 
   return (
     <div
@@ -438,7 +442,8 @@ export function StatusOverlay() {
         return <div className={styles.salesInfo}>{building.salesInfo}</div>;
       })()}
 
-      {/* Hints */}
+      {/* Diagnosis (T2): severity word + sentence; the action lives in the inspector */}
+      <DiagnosisBanner diagnosis={diagnosis} compact />
       {showHint && (
         <div className={styles.hintsLine}>{building.hintsText}</div>
       )}
