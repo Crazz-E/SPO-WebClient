@@ -133,7 +133,7 @@ export function LeftRail() {
       <div className={styles.group}>
         <IconButton
           icon={<Mail size={20} />}
-          label="Mail (M)"
+          label="Mail (L)"
           size="lg"
           variant="glass"
           active={rightPanel === 'mail'}

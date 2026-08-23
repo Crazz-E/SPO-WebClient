@@ -34,8 +34,8 @@ Légende : ✅ existe · 🟡 partiel · ❌ manquant · **V** = Voyager l'avait
 | B2 | Bloc Inspect (« Storing », ventes, hints) poussé en continu | ✅ `map-parsers.ts:170,257-266`, push `RefreshObject` ~5 s, texte mis à jour à chaque push (`event-handler.ts:141`) ; **deux parseurs** (`RichDetails.tsx:124`, `QuickStats.tsx:123`) | V | Filtre + tri locaux sur le bloc ; fusionner les deux parseurs au portage |
 | B3 | Onglets Approvisionnements / Produits : noms à l'ouverture de l'onglet, détail à l'ouverture de la ligne | ✅ déjà ainsi — 1 RDO (`GetInputNames`/`GetOutputNames`) à l'ouverture, puis `SetPath` + `GetPropertyList` + `GetSubObjectProps` ×connexions (max 20, 3 à la fois) à l'ouverture (`building-details-handler.ts:364,1264`) | V | **Ne rien ajouter** sur les lignes repliées ; filtre de noms local |
 | B4 | Recherche fournisseur : Entrée lance, filtres conservés | ❌ Entrée ne fait rien (`ConnectionPickerModal.tsx:124-131`), filtres réinitialisés à chaque ouverture (`:44-53`) | — | Entrée + mémoire des filtres (store) |
-| B5 | Confirmation des actions destructives / coûteuses | 🟡 `requestConfirm` : **démolir seulement** (`building-action-handler.ts:462`) ; rien sur déconnexion, démolition de route, rétrogradation, dépense | — | Dialogue de confirmation généralisé (planche Surfaces) |
-| B6 | SaveIndicator sur toute écriture | 🟡 `PropertyInputs`, `WorkforceTable`, `TaxesTab`, `MinistriesTab`, `JobsTab`, `TownsTab` ; **pas** sur renommer, connexions, curseurs fournisseurs | — | Généraliser ; ajouter l'état « en attente de relecture » (OB-29) |
+| B5 | Confirmation des actions destructives / coûteuses | 🟡 **Dialog généralisé disponible (socle-2), branché sur démolir** ; déconnexion, routes, dépense → T1/T3 ; état initial : `requestConfirm` : **démolir seulement** (`building-action-handler.ts:462`) ; rien sur déconnexion, démolition de route, rétrogradation, dépense | — | Dialogue de confirmation généralisé (planche Surfaces) |
+| B6 | SaveIndicator sur toute écriture | 🟡 **échec lisible + annoncé (socle-2)** ; généralisation → T3 ; `PropertyInputs`, `WorkforceTable`, `TaxesTab`, `MinistriesTab`, `JobsTab`, `TownsTab` ; **pas** sur renommer, connexions, curseurs fournisseurs | — | Généraliser ; ajouter l'état « en attente de relecture » (OB-29) |
 | B7 | Diagnostic en tête (« Production arrêtée — il manque du coton ») | 🟡 `hintsText` brut affiché (`StatusOverlay.tsx:443`, `RichDetails.tsx:532`), sans sévérité ni action | V (texte brut aussi) | Parser les hints connus → sévérité + action (« Trouver un fournisseur ») ; fallback texte brut |
 | B8 | Bouton « Trouver un fournisseur » depuis une porte vide | ✅ Hire → `ConnectionPickerModal` | V | — (le placer aussi dans le diagnostic) |
 
@@ -43,19 +43,19 @@ Légende : ✅ existe · 🟡 partiel · ❌ manquant · **V** = Voyager l'avait
 
 | # | Fonction supposée | WebClient | Voyager | À implémenter |
 |---|---|---|---|---|
-| H1 | Indicateur de mode persistant (placement / route / zone) sur desktop | ❌ rien (`isPlacingBuilding` lu par `MobileShell` seulement) ; route/zone = bouton surligné | — | Barre de mode (planche HUD) |
-| H2 | Confirmer / annuler la pose sur desktop | ❌ clic gauche pose, clic droit annule, Échap — non affiché | — | Boutons dans la barre de mode ; le mobile a déjà `PlacementHUD` |
+| H1 | Indicateur de mode persistant (placement / route / zone) sur desktop | ✅ **fait (socle-4b)** — barre de mode de la CommandBar ; avant : ❌ rien (`isPlacingBuilding` lu par `MobileShell` seulement) ; route/zone = bouton surligné | — | Barre de mode (planche HUD) |
+| H2 | Confirmer / annuler la pose sur desktop | 🟡 **Done/Annuler + Tourner la vue dans la barre de mode (socle-4b)** ; la confirmation de dépense (Dialog) arrive avec T1 ; avant : ❌ clic gauche pose, clic droit annule, Échap — non affiché | — | Boutons dans la barre de mode ; le mobile a déjà `PlacementHUD` |
 | H3 | **« Tourner » en placement** | ⚠️ **tourne la carte**, pas le bâtiment (`MobileShell.tsx:136` → `rotateCW`) ; **aucune orientation de bâtiment** n'existe | **V** idem : pas d'orientation de bâtiment | Libeller « Tourner la vue » ; ne pas promettre une rotation de bâtiment |
-| H4 | Coût vs trésorerie avant la pose, trésorerie après | ❌ coût affiché (`BuildMenu.tsx:115`), jamais comparé au cash ; aucune désactivation | — | Comparaison locale (`tycoonStats.cash`) dans la barre de mode et le dialogue |
-| H5 | Liste des raccourcis à jour | 🟡 `SettingsDialog.tsx:136-145` (B E M R ⌘K Esc D) ; Q, +/−, 1–5 absents ; collision M (mail vs minimap dans le registre mort) | — | Générer la liste depuis le registre ; réattribuer M = Carte, L = Courrier |
+| H4 | Coût vs trésorerie avant la pose, trésorerie après | 🟡 **coût + trésorerie après dans la barre de mode (socle-4b)** ; blocage si insuffisant → T1 ; avant : ❌ coût affiché (`BuildMenu.tsx:115`), jamais comparé au cash ; aucune désactivation | — | Comparaison locale (`tycoonStats.cash`) dans la barre de mode et le dialogue |
+| H5 | Liste des raccourcis à jour | ✅ **fait (socle-4a)** — table unique `SHORTCUTS`, M = carte, L = courrier, P = gouvernement, W = tourner la vue, modificateurs laissés au navigateur ; avant : 🟡 `SettingsDialog.tsx:136-145` (B E M R ⌘K Esc D) ; Q, +/−, 1–5 absents ; collision M (mail vs minimap dans le registre mort) | — | Générer la liste depuis le registre ; réattribuer M = Carte, L = Courrier |
 | H6 | Pastille d'état avec alertes cliquables (bâtiments en difficulté) | 🟡 `InfoWidget` a la teinte dette (`failureLevel`) ; **pas de liste** des bâtiments en difficulté | — | Liste dérivée des `hintsText` / revenus négatifs déjà reçus (pas de RDO en plus) |
 
 ## 4. Politique et points d'entrée
 
 | # | Fonction supposée | WebClient | Voyager | À implémenter |
 |---|---|---|---|---|
-| P1 | Politique depuis le HUD / la feuille (desktop **et** mobile) | ❌ `rightPanel: 'politics'` déclaré (`ui-store.ts:12`) mais **rendu nulle part** : feuille vide sur mobile (`MobileShell.tsx:47-73`), panneau sans contenu sur desktop (`GameScreen.tsx:63-74`) ; la politique n'existe que dans la **modale civique** | V (fiches civiques) | Brancher le contenu civique dans la feuille universelle |
-| P2 | Ouvrir l'hôtel de ville de **ma** ville / les taxes directement | ❌ seul `onOpenCapitol` ; hôtel de ville = clic sur la carte ou Recherche › Villes (recentre sans ouvrir) | **V** GO TOWN HALL (`MapIsoView.pas:978`) | N3 + ouverture de l'inspecteur à l'arrivée |
+| P1 | Politique depuis le HUD / la feuille (desktop **et** mobile) | ✅ **fait (socle-3b/3c)** — surface Government + civique dans la feuille, tuile P ; avant : ❌ `rightPanel: 'politics'` déclaré (`ui-store.ts:12`) mais **rendu nulle part** : feuille vide sur mobile (`MobileShell.tsx:47-73`), panneau sans contenu sur desktop (`GameScreen.tsx:63-74`) ; la politique n'existe que dans la **modale civique** | V (fiches civiques) | Brancher le contenu civique dans la feuille universelle |
+| P2 | Ouvrir l'hôtel de ville de **ma** ville / les taxes directement | ✅ **fait (socle-3b)** — Government › villes → hôtel de ville via `onNavigateToBuilding` ; avant : ❌ seul `onOpenCapitol` ; hôtel de ville = clic sur la carte ou Recherche › Villes (recentre sans ouvrir) | **V** GO TOWN HALL (`MapIsoView.pas:978`) | N3 + ouverture de l'inspecteur à l'arrivée |
 
 ## 5. Courrier, recherche, palette
 
@@ -65,14 +65,14 @@ Légende : ✅ existe · 🟡 partiel · ❌ manquant · **V** = Voyager l'avait
 | M2 | Suppression avec confirmation + refetch | ❌ `client-bridge.ts:646-653` | — | Confirmation + rafraîchir le dossier |
 | M3 | Échec d'envoi visible, brouillon conservé | ❌ branche `success: false` vide, brouillon effacé avant réponse (`:638-644`) | — | Toast `alert` + conservation |
 | S1 | **Recherche de bâtiment par nom** | ❌ aucun membre RDO ni route ; la palette « Find Building by Name » ouvre le panneau Recherche qui ne le fait pas | — (Voyager : pas de recherche générale ; `FindSuppliers`/`FindClients` filtrent par nom mais par fluide et autour d'un bâtiment) | Décider : recherche **locale** dans « Mes bâtiments » (favoris déjà lus) + villes + joueurs ; pas de nouveau RDO tant que non justifié |
-| S2 | Palette sur mobile | ❌ montée mais sans déclencheur tactile (`useKeyboardShortcuts.ts:25-29` seulement) | — | Champ de recherche de la barre de commande (planche HUD / Mobile) |
+| S2 | Palette sur mobile | ✅ **fait (socle-4c)** — entrée du menu mobile ; desktop : ligne recherche de la CommandBar ; avant : ❌ montée mais sans déclencheur tactile (`useKeyboardShortcuts.ts:25-29` seulement) | — | Champ de recherche de la barre de commande (planche HUD / Mobile) |
 
 ## 6. Empire
 
 | # | Fonction supposée | WebClient | Voyager | À implémenter |
 |---|---|---|---|---|
-| E1 | Profil / auto-connexions sur mobile | ❌ tous les appelants de `toggleLeftPanel('empire')` sont cachés < 768 px ; `MobileMenu` ne l'ouvre pas ; `LeftPanel.module.css:93-97` a pourtant un style mobile | V | Tuile « Empire » de la barre de commande → feuille |
-| E2 | Épingler la feuille (rester ouverte en cliquant d'autres bâtiments) | 🟡 implicite : `noScrim` sur le panneau bâtiment seulement (`GameScreen.tsx:114`) ; pas de contrôle, pas pour mail/recherche | — | Bouton « Épingler » ; pas de scrim sur la feuille en général |
+| E1 | Profil / auto-connexions sur mobile | ✅ **fait (socle-3b + 4c)** — surface dans la feuille mobile + entrée Profil du menu ; avant : ❌ tous les appelants de `toggleLeftPanel('empire')` sont cachés < 768 px ; `MobileMenu` ne l'ouvre pas ; `LeftPanel.module.css:93-97` a pourtant un style mobile | V | Tuile « Empire » de la barre de commande → feuille |
+| E2 | Épingler la feuille (rester ouverte en cliquant d'autres bâtiments) | ✅ **fait (socle-3b)** — bouton Épingler, le bâtiment s'empile ; avant : 🟡 implicite : `noScrim` sur le panneau bâtiment seulement (`GameScreen.tsx:114`) ; pas de contrôle, pas pour mail/recherche | — | Bouton « Épingler » ; pas de scrim sur la feuille en général |
 
 ---
 

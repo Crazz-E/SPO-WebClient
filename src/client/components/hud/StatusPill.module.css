@@ -1,0 +1,201 @@
+/* StatusPill — desktop status line, one glass pill centred on the free area (00-socle.md §4.1) */
+
+.pill {
+  position: fixed;
+  top: var(--space-3);
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: max-content;
+  height: 40px;
+  z-index: var(--z-hud);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-4);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  pointer-events: auto;
+  transition: right var(--duration-panel) var(--ease-out);
+}
+
+/* A surface is open: the free area shrinks by the panel width, the pill re-centres on it */
+.shifted {
+  right: var(--panel-width-desktop);
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background: var(--surface-border-strong);
+  flex-shrink: 0;
+}
+
+/* --- World + date --- */
+.world {
+  color: var(--accent-gold);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.date {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Money --- */
+.cashButton,
+.nameButton {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 var(--space-2);
+  margin: 0 calc(-1 * var(--space-2));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-default);
+}
+
+.cashButton:hover,
+.nameButton:hover {
+  background: var(--glass-bg-hover);
+}
+
+.cashButton:focus-visible,
+.nameButton:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 1px;
+}
+
+.cash {
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.incomePositive,
+.incomeNegative,
+.incomeNeutral {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.incomePositive { color: var(--money-positive); }
+.incomeNegative { color: var(--money-negative); }
+.incomeNeutral { color: var(--money-neutral); }
+
+/* --- Debt tag (failureLevel >= 1) --- */
+.debt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  background: var(--error-bg);
+  border: 1px solid var(--error);
+  color: var(--money-negative);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+}
+
+.debtDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--error);
+}
+
+/* Critical (failureLevel >= 2) — pulsing red */
+.alertPulse {
+  animation: debtPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes debtPulse {
+  0%, 100% { background: var(--error-bg); }
+  50% { background: rgba(239, 68, 68, 0.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alertPulse {
+    animation: none;
+  }
+  .pill {
+    transition: none;
+  }
+}
+
+/* --- Identity --- */
+.rankBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border: 1px solid var(--accent-gold-dark);
+  border-radius: var(--radius-full);
+  background: var(--accent-gold-subtle);
+  color: var(--accent-gold);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+}
+
+.nameButton {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: var(--font-medium);
+}
+
+.role {
+  color: var(--accent-gold);
+  font-size: var(--text-2xs);
+  text-transform: capitalize;
+}
+
+.company,
+.facilities {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.company {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.freshness {
+  color: var(--text-disabled);
+  font-size: var(--text-2xs);
+}
+
+/* Tablet — the panel is narrower */
+@media (max-width: 1023px) {
+  .shifted {
+    right: var(--panel-width-tablet);
+  }
+}
+
+/* Mobile — hidden, the mobile bar stays */
+@media (max-width: 767px) {
+  .pill {
+    display: none;
+  }
+}

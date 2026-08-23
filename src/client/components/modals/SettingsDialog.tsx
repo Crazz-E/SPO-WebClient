@@ -11,6 +11,7 @@ import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
 import { showToast } from '../common/Toast';
 import { Switch } from '../common';
+import { SHORTCUTS } from '../../hooks/useKeyboardShortcuts';
 import styles from './SettingsDialog.module.css';
 
 export function SettingsDialog() {
@@ -136,13 +137,9 @@ export function SettingsDialog() {
           <section className={styles.section}>
             <h3 className={styles.sectionTitle}>Keyboard Shortcuts</h3>
             <div className={styles.shortcutGrid}>
-              <ShortcutRow keys="B" action="Build Menu" />
-              <ShortcutRow keys="E" action="Empire Overview" />
-              <ShortcutRow keys="M" action="Mail" />
-              <ShortcutRow keys="R" action="Refresh Map" />
-              <ShortcutRow keys="Cmd+K" action="Command Palette" />
-              <ShortcutRow keys="Esc" action="Close Panel/Modal" />
-              <ShortcutRow keys="D" action="Debug Overlay" />
+              {SHORTCUTS.map((sc) => (
+                <ShortcutRow key={sc.keys} keys={sc.keys} action={sc.action} />
+              ))}
             </div>
           </section>
 

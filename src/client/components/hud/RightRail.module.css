@@ -2,7 +2,7 @@
 
 .rail {
   position: absolute;
-  bottom: var(--space-3);
+  bottom: 150px; /* above the command bar (two rows + margins) */
   right: var(--space-3);
   z-index: var(--z-sticky);
   display: flex;

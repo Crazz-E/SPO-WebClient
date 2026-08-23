@@ -3,8 +3,8 @@
  *
  * The canvas fills 100% of the viewport (managed by client.ts).
  * All UI is absolutely positioned overlays:
- * - InfoWidget (z-300): top-right stats card
- * - LeftRail (z-200): action buttons
+ * - StatusPill (z-350): top, player status in one line
+ * - CommandBar (z-350): bottom, search / mode bar + six tiles
  * - RightRail (z-200): map controls
  * - ChatStrip (z-150): bottom-edge persistent chat
  * - Sheet (z-400): the universal surface — one stack (inspector, mail, search, politics, profile…)
@@ -14,7 +14,7 @@
 
 import { lazy, Suspense } from 'react';
 import { useUiStore } from '../store';
-import { InfoWidget, LeftRail, RightRail, VersionBadge } from '../components/hud';
+import { StatusPill, CommandBar, RightRail, VersionBadge } from '../components/hud';
 import { ChatStrip } from '../components/chat';
 import { StatusOverlay } from '../components/building';
 import { ServerSwitchOverlay, ZoneTypePicker } from '../components/modals';
@@ -51,11 +51,11 @@ export function GameScreen() {
       <StatusOverlay />
 
 
-      {/* InfoWidget — top-right stats card */}
-      <InfoWidget />
+      {/* StatusPill — top, the player's state in one line */}
+      <StatusPill />
 
-      {/* LeftRail — action buttons */}
-      <LeftRail />
+      {/* CommandBar — bottom: search / mode bar + six tiles */}
+      <CommandBar />
 
       {/* RightRail — map controls */}
       <RightRail />
