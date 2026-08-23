@@ -8,6 +8,22 @@ import type { BuildingCategory, BuildingInfo } from '@/shared/types';
 import { useBuildingStore } from './building-store';
 import { useGameStore } from './game-store';
 import type { SnapPoint } from '../hooks/useSheetGesture';
+import { isDialogSuppressed, type DialogKind, type DialogRow } from '../components/common/Dialog';
+
+/**
+ * How a confirmation is asked. `kind` picks the initial focus (safe action for a
+ * destruction, primary for a spend) and the danger styling; `typeToConfirm` keeps the typed
+ * guard the demolish flow uses; `rows` show cost / cash-after lines; `dontAskAgainKey` lets a
+ * repeated spend opt out for the session (never honoured for a destructive dialog).
+ */
+export interface ConfirmOptions {
+  kind?: DialogKind;
+  rows?: DialogRow[];
+  confirmLabel?: string;
+  cancelLabel?: string;
+  typeToConfirm?: string | null;
+  dontAskAgainKey?: string;
+}
 
 export type RightPanelType = 'building' | 'mail' | 'politics' | 'search' | 'transport';
 export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
@@ -32,7 +48,7 @@ interface UiState {
    */
   modalBeneath: ModalType | null;
   /** Payload for confirmation dialogs */
-  confirmPayload: { title: string; message: string; onConfirm: () => void } | null;
+  confirmPayload: { title: string; message: string; onConfirm: () => void; options?: ConfirmOptions } | null;
   /** Payload for text-input prompt dialogs */
   promptPayload: { title: string; message: string; placeholder?: string; defaultValue?: string; onSubmit: (value: string) => void } | null;
 
@@ -67,7 +83,7 @@ interface UiState {
   // Actions — Modals
   openModal: (type: ModalType) => void;
   closeModal: () => void;
-  requestConfirm: (title: string, message: string, onConfirm: () => void) => void;
+  requestConfirm: (title: string, message: string, onConfirm: () => void, options?: ConfirmOptions) => void;
   requestPrompt: (title: string, message: string, onSubmit: (value: string) => void, options?: { placeholder?: string; defaultValue?: string }) => void;
 
   // Actions — Build menu data
@@ -164,12 +180,18 @@ export const useUiStore = create<UiState>((set, get) => ({
     confirmPayload: null,
     promptPayload: null,
   })),
-  requestConfirm: (title, message, onConfirm) =>
+  requestConfirm: (title, message, onConfirm, options) => {
+    // A spend the player opted out of for the session does not ask again (Dialog §2.8).
+    if (options?.dontAskAgainKey && isDialogSuppressed(options.dontAskAgainKey)) {
+      onConfirm();
+      return;
+    }
     set((s) => ({
       modal: 'confirm',
       modalBeneath: s.modal === 'confirm' || s.modal === 'prompt' ? s.modalBeneath : s.modal,
-      confirmPayload: { title, message, onConfirm },
-    })),
+      confirmPayload: { title, message, onConfirm, options },
+    }));
+  },
   requestPrompt: (title, message, onSubmit, options) =>
     set((s) => ({
       modal: 'prompt',

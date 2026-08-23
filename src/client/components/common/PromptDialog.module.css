@@ -1,21 +1,18 @@
-.submitBtn {
-  padding: var(--space-2) var(--space-4);
-  background: var(--accent-gold);
-  border: 1px solid var(--accent-gold);
-  border-radius: var(--radius-md);
-  color: var(--bg-primary);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
+/* PromptDialog — the one text field inside a Dialog */
+
+.input {
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
   font-family: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
 }
 
-.submitBtn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.submitBtn:not(:disabled):hover {
-  background: var(--accent-gold-light);
-  box-shadow: 0 0 12px rgba(212, 168, 83, 0.3);
+.input::placeholder {
+  color: var(--text-placeholder);
 }

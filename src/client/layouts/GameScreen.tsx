@@ -149,6 +149,12 @@ export function GameScreen() {
         <ConfirmDialog
           title={confirmPayload.title}
           message={confirmPayload.message}
+          kind={confirmPayload.options?.kind}
+          rows={confirmPayload.options?.rows}
+          confirmText={confirmPayload.options?.typeToConfirm}
+          confirmLabel={confirmPayload.options?.confirmLabel}
+          cancelLabel={confirmPayload.options?.cancelLabel}
+          dontAskAgainKey={confirmPayload.options?.dontAskAgainKey}
           onConfirm={() => { confirmPayload.onConfirm(); closeModal(); }}
           onCancel={closeModal}
         />

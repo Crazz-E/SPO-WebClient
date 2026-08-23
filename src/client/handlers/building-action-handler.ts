@@ -465,6 +465,7 @@ export function handleBuildingAction(ctx: ClientHandlerContext, actionId: string
       () => deleteFacility(ctx, buildingDetails.x, buildingDetails.y).then(success => {
         if (success) ClientBridge.hideBuildingPanel();
       }),
+      { kind: 'destructive', confirmLabel: 'Demolish', typeToConfirm: 'CONFIRM' },
     );
   } else if (actionId === 'startRepair') {
     startRepair(ctx, buildingDetails);

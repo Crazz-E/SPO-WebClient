@@ -1,12 +1,19 @@
-import { useState, useCallback } from 'react';
-import styles from './ConfirmDialog.module.css';
-import promptStyles from './PromptDialog.module.css';
+/**
+ * PromptDialog — a `Dialog` with one text field. Keeps the historical API
+ * (`onSubmit(value)` / `onCancel`, `placeholder`, `defaultValue`) used by `ui-store.requestPrompt`.
+ * Enter submits when the trimmed value is non-empty; the field is labelled by the message.
+ */
 
-interface PromptDialogProps {
+import { useCallback, useId, useState } from 'react';
+import { Dialog } from './Dialog';
+import styles from './PromptDialog.module.css';
+
+export interface PromptDialogProps {
   title: string;
   message: string;
   placeholder?: string;
   defaultValue?: string;
+  submitLabel?: string;
   onSubmit: (value: string) => void;
   onCancel: () => void;
 }
@@ -16,51 +23,44 @@ export function PromptDialog({
   message,
   placeholder,
   defaultValue = '',
+  submitLabel = 'Submit',
   onSubmit,
   onCancel,
 }: PromptDialogProps) {
-  const [inputValue, setInputValue] = useState(defaultValue);
-  const canSubmit = inputValue.trim().length > 0;
+  const [value, setValue] = useState(defaultValue);
+  const inputId = useId();
+  const trimmed = value.trim();
+  const canSubmit = trimmed.length > 0;
 
-  const handleSubmit = useCallback(() => {
-    if (canSubmit) onSubmit(inputValue.trim());
-  }, [canSubmit, inputValue, onSubmit]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && canSubmit) onSubmit(inputValue.trim());
-      if (e.key === 'Escape') onCancel();
-    },
-    [canSubmit, inputValue, onSubmit, onCancel],
-  );
+  const submit = useCallback(() => {
+    if (canSubmit) onSubmit(trimmed);
+  }, [canSubmit, onSubmit, trimmed]);
 
   return (
-    <div className={styles.backdrop} onClick={onCancel}>
-      <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
-        <h3 className={styles.title}>{title}</h3>
-        <p className={styles.message}>{message}</p>
-        <input
-          className={styles.input}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          autoFocus
-          spellCheck={false}
-        />
-        <div className={styles.buttons}>
-          <button className={styles.cancelBtn} onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            className={promptStyles.submitBtn}
-            disabled={!canSubmit}
-            onClick={handleSubmit}
-          >
-            Submit
-          </button>
-        </div>
-      </div>
-    </div>
+    <Dialog
+      title={title}
+      description={message}
+      kind="info"
+      primary={{ label: submitLabel, onClick: submit, disabled: !canSubmit }}
+      onClose={onCancel}
+    >
+      <input
+        id={inputId}
+        className={styles.input}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && canSubmit) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        placeholder={placeholder}
+        aria-label={message}
+        autoFocus
+        spellCheck={false}
+        autoComplete="off"
+      />
+    </Dialog>
   );
 }
