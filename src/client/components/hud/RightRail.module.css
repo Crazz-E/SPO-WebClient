@@ -13,7 +13,7 @@
 }
 
 .shifted {
-  right: calc(var(--panel-width-desktop) + var(--space-3));
+  right: calc(var(--panel-width-desktop) + var(--sheet-inset) + var(--space-4));
 }
 
 .group {

@@ -179,7 +179,7 @@ clic sur un jeton = `popTo(i)` ; le `Dialog` n'est **pas** dans la pile (il pass
 
 | Zone | Spécification |
 |---|---|
-| Conteneur | desktop : `position: absolute; top: 64px; right: 16px; bottom: 16px; width: 472px`, `--bg-secondary`, bordure `--surface-border`, `--radius-xl`, `--shadow-xl`, `--z-panel` ; tablette (768–1199) : `left: 16px; right: 16px` ; mobile : `BottomSheet` existant (snap peek/half/full) avec le **même** contenu |
+| Conteneur | desktop : `position: absolute; top: 64px; right: 16px; bottom: 16px; width: 472px`, `--bg-secondary`, bordure `--surface-border`, `--radius-xl`, `--shadow-xl`, `--z-panel` ; tablette (768–1199) : `left: 16px; right: 16px` ; mobile : `BottomSheet` existant (snap peek/half/full) avec le **même** contenu. **Porté (PR #69)** : desktop ≥ 1024 tel quel (`--sheet-top`, `--sheet-inset`, `--panel-width-desktop: 472px`, 420 en 1024–1399) ; **écart voulu** : tablette 768–1023 garde le panneau ancré 360 px (la barre de commande n'a pas de place sous un cadre pleine largeur) — à revoir avec la barre tablette/mobile |
 | Pile (haut) | jetons `Chip variant=stack`, séparés d'un chevron 12 px `--text-disabled` ; si > 3 jetons, le milieu se replie en « … » (`title` = libellé complet) ; à droite : `IconButton pin` (desktop) et `IconButton x` |
 | En-tête | propre au contenu (voir chaque handoff) ; `h2` 18/600, sous-titre 12 `--text-muted` |
 | Sections | `Tabs variant=underline`, `overflow-x: auto` |
