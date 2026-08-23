@@ -1,0 +1,69 @@
+/* DiagnosisBanner — severity word + sentence + one action (T2) */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) var(--space-5) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-tertiary);
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+}
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  line-height: var(--leading-normal);
+}
+
+.label {
+  font-weight: var(--font-semibold);
+}
+
+.stop {
+  background: var(--error-bg);
+  border-color: var(--error);
+}
+
+.stop .icon,
+.stop .label {
+  color: var(--money-negative);
+}
+
+.warning {
+  background: var(--warning-bg);
+  border-color: var(--warning);
+}
+
+.warning .icon,
+.warning .label {
+  color: var(--warning);
+}
+
+.hint {
+  background: var(--info-bg);
+  border-color: var(--info);
+}
+
+.hint .icon,
+.hint .label {
+  color: var(--info);
+}
+
+.ok {
+  background: var(--success-bg);
+  border-color: var(--success);
+}
+
+.ok .icon,
+.ok .label {
+  color: var(--money-positive);
+}

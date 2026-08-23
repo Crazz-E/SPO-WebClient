@@ -197,6 +197,15 @@ describe('BuildingInspector toolbar', () => {
     expect(screen.getByLabelText('Close')).toBeTruthy();
   });
 
+  it('the diagnosis banner reads the pushed hint and its action opens the matching tab (T2, B7)', () => {
+    useBuildingStore.getState().setFocus({ ...mockFocus, detailsText: 'Upgrade Level: 2', hintsText: 'Warning: This facility requires Cotton to produce. Hire some suppliers or try to overpay those you already have.' } as never);
+    useBuildingStore.setState({ details: { ...mockDetails, tabs: [...(mockDetails.tabs ?? []), { id: 'supplies', name: 'SUPPLIES', order: 9, icon: 'S', handlerName: 'Supplies' }] } as never, isLoading: false });
+    renderWithProviders(<BuildingInspector />);
+    expect(screen.getByText(/No supplies/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Find Cotton suppliers' }));
+    expect(useBuildingStore.getState().currentTab).toBe('supplies');
+  });
+
   it('"View on map" recentres the camera on the building (T3, N9)', () => {
     useBuildingStore.getState().setFocus(mockFocus);
     useBuildingStore.setState({ details: mockDetails, isLoading: false });

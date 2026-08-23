@@ -18,6 +18,8 @@ import type { BuildingPropertyValue, TownHallDemographics } from '@/shared/types
 import { IconButton, Skeleton, TabBar } from '../common';
 import { QuickStats } from './QuickStats';
 import { InspectorHeader, findPropertyValue } from './InspectorHeader';
+import { DiagnosisBanner, tabForAction } from './DiagnosisBanner';
+import { parseFacilityDiagnosis } from '@/shared/building-details/facility-diagnosis';
 import { InspectorMenu } from './InspectorMenu';
 import { resolveSectionFetch, sectionDisplayState, type SectionDisplayState } from './inspector-sections';
 import { parseRichDetails } from './RichDetails';
@@ -250,6 +252,7 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   // showed; the society is the `SwitchFocusEx` company line, and the tycoon
   // behind it is `Creator` — a property, hence absent until the header read
   // returns, which is why the attribution collapses gracefully.
+  const diagnosis = parseFacilityDiagnosis(focusedBuilding.detailsText, focusedBuilding.hintsText);
   const richDetails = focusedBuilding.detailsText
     ? parseRichDetails(focusedBuilding.detailsText)
     : null;
@@ -343,6 +346,19 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
             ) : undefined}
           />
         </div>
+      )}
+
+      {/* Diagnosis — the first thing to read: severity + sentence + one action (T2, B7).
+          Parsed from the pushed status text; no extra read. Civic buildings carry
+          demographics here instead, which the Town Hall tabs already show. */}
+      {!isCivic && (
+        <DiagnosisBanner
+          diagnosis={diagnosis}
+          onAction={(action) => {
+            const tab = tabForAction(action, details.tabs);
+            if (tab) setCurrentTab(tab);
+          }}
+        />
       )}
 
       {/* Details + sales (hidden for civic — revenue/workers not meaningful) */}
