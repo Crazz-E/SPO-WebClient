@@ -729,7 +729,7 @@
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: var(--radius-md);
-  color: var(--status-error);
+  color: var(--error);
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
   font-family: var(--font-sans);
@@ -739,7 +739,7 @@
 
 .dangerBtn:hover {
   background: rgba(239, 68, 68, 0.2);
-  border-color: var(--status-error);
+  border-color: var(--error);
 }
 
 .utilityBtn {
@@ -891,11 +891,11 @@
 /* ---- Curriculum Items positive/negative ---- */
 
 .positiveValue {
-  color: var(--status-success);
+  color: var(--success);
 }
 
 .negativeValue {
-  color: var(--status-error);
+  color: var(--error);
 }
 
 /* ---- Bank: Total row ---- */
@@ -1009,4 +1009,15 @@
 .rowDisabled {
   opacity: 0.5;
   pointer-events: none;
+}
+
+/* Focus ring restored (design-tokens.test.ts): removing the outline on :focus is fine only
+   because keyboard focus gets the shared gold ring. */
+.formInput:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+.formSelect:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
 }

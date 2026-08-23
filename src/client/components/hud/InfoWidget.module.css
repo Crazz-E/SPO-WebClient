@@ -19,7 +19,7 @@
   pointer-events: auto;
   overflow: hidden;
   transition: background var(--duration-base) var(--ease-default),
-    right 250ms var(--ease-out);
+    right var(--duration-panel) var(--ease-out);
 }
 
 .shifted {
@@ -57,7 +57,7 @@
 
 .server {
   color: var(--accent-gold);
-  font-size: var(--text-2xs, 0.65rem);
+  font-size: var(--text-2xs);
   font-weight: var(--font-semibold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -65,7 +65,7 @@
 
 .date {
   color: var(--text-muted);
-  font-size: var(--text-2xs, 0.65rem);
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -170,7 +170,7 @@
 
 .role {
   color: var(--accent-gold);
-  font-size: var(--text-2xs, 0.65rem);
+  font-size: var(--text-2xs);
   text-transform: capitalize;
 }
 
@@ -181,7 +181,7 @@
 
 .levelName {
   color: var(--accent-gold);
-  font-size: var(--text-2xs, 0.65rem);
+  font-size: var(--text-2xs);
   font-weight: var(--font-medium);
 }
 
@@ -207,7 +207,7 @@
 
 .facilitiesLabel {
   color: var(--text-muted);
-  font-size: var(--text-2xs, 0.65rem);
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
   min-width: 36px;
 }
@@ -216,21 +216,21 @@
   flex: 1;
   height: 3px;
   background: var(--bg-tertiary);
-  border-radius: var(--radius-full, 9999px);
+  border-radius: var(--radius-full);
   overflow: hidden;
 }
 
 .facilitiesFill {
   height: 100%;
   background: var(--primary);
-  border-radius: var(--radius-full, 9999px);
+  border-radius: var(--radius-full);
   transition: width var(--duration-base) var(--ease-default);
 }
 
 /* Last-update relative timestamp */
 .lastUpdate {
   color: var(--text-disabled);
-  font-size: var(--text-2xs, 0.65rem);
+  font-size: var(--text-2xs);
   text-align: right;
   margin-top: 1px;
 }

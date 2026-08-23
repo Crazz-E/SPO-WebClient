@@ -23,9 +23,9 @@
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-8);
-  background: var(--glass-bg, rgba(15, 23, 42, 0.85));
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.08));
-  border-radius: var(--radius-xl, 16px);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   min-width: 220px;
   max-width: 320px;
@@ -55,10 +55,10 @@
 .retryBtn {
   margin-top: var(--space-1);
   padding: var(--space-2) var(--space-5);
-  background: var(--color-primary, #3b82f6);
+  background: var(--primary);
   color: #fff;
   border: none;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   cursor: pointer;
@@ -66,11 +66,11 @@
 }
 
 .retryBtn:hover {
-  background: var(--color-primary-light, #60a5fa);
+  background: var(--primary-light);
 }
 
 .retryBtn:active {
-  background: var(--color-primary-dark, #2563eb);
+  background: var(--primary-dark);
 }
 
 /* ---- Error state (after reconnect failure) ---- */
@@ -78,7 +78,7 @@
 .errorIcon {
   width: 40px;
   height: 40px;
-  color: var(--error, #ef4444);
+  color: var(--error);
 }
 
 .errorMessage {
@@ -91,10 +91,10 @@
 .homeBtn {
   margin-top: var(--space-2);
   padding: var(--space-2) var(--space-5);
-  background: var(--error, #ef4444);
+  background: var(--error);
   color: #fff;
   border: none;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   cursor: pointer;

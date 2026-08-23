@@ -41,9 +41,9 @@
 }
 
 .item.active {
-  background: color-mix(in srgb, var(--accent-blue) 20%, transparent);
-  color: var(--accent-blue);
-  border-left-color: var(--accent-blue);
+  background: color-mix(in srgb, var(--info) 20%, transparent);
+  color: var(--info);
+  border-left-color: var(--info);
   font-weight: 500;
 }
 
@@ -55,6 +55,6 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--accent-blue);
+  background: var(--info);
   flex-shrink: 0;
 }

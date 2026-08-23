@@ -97,7 +97,7 @@
   padding: var(--space-3);
   border-radius: var(--radius-md);
   background: rgba(248, 113, 113, 0.12);
-  color: var(--color-danger, #f87171);
+  color: var(--error);
   font-size: var(--text-xs);
 }
 
@@ -144,7 +144,7 @@
 
 .columnSubject {
   font-size: var(--text-xs);
-  color: var(--accent-gold, #d4a017);
+  color: var(--accent-gold);
   text-decoration: underline;
 }
 
@@ -242,7 +242,7 @@
 
 .input:focus-visible,
 .textarea:focus-visible {
-  outline: 2px solid var(--accent-primary, #4a7a6a);
+  outline: 2px solid var(--accent-gold);
   outline-offset: 1px;
 }
 

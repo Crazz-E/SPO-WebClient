@@ -276,9 +276,9 @@
   width: 100%;
   padding: var(--space-3);
   background: transparent;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-gold);
   border-radius: var(--radius-lg);
-  color: var(--accent);
+  color: var(--accent-gold);
   font-size: var(--text-sm);
   font-weight: var(--font-semibold);
   font-family: var(--font-sans);
@@ -289,7 +289,7 @@
 }
 
 .debugBtn:hover {
-  background: var(--accent);
+  background: var(--accent-gold);
   color: var(--bg-primary);
 }
 
@@ -318,4 +318,11 @@
 .logoutBtn:hover {
   background: var(--error);
   color: var(--bg-primary);
+}
+
+/* Focus ring restored (design-tokens.test.ts): removing the outline on :focus is fine only
+   because keyboard focus gets the shared gold ring. */
+.slider:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
 }

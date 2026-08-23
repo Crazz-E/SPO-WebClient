@@ -25,11 +25,11 @@
   border-left: none;
   border-right: none;
   font-family: var(--font-sans);
-  font-size: var(--text-2xs, 0.65rem);
+  font-size: var(--text-2xs);
 }
 
 .bar:active {
-  background: var(--glass-bg-hover, rgba(255, 255, 255, 0.08));
+  background: var(--glass-bg-hover);
 }
 
 .world {

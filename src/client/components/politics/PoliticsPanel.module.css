@@ -193,7 +193,7 @@
 .launchBtn {
   width: 100%;
   padding: var(--space-3);
-  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-hover));
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
   color: var(--bg-primary);
   border: none;
   border-radius: var(--radius-md);
@@ -211,7 +211,7 @@
 .cancelCampaignBtn {
   width: 100%;
   padding: var(--space-3);
-  background: linear-gradient(135deg, var(--status-error), #a33);
+  background: linear-gradient(135deg, var(--error), #a33);
   color: var(--text-primary);
   border: none;
   border-radius: var(--radius-md);
@@ -468,7 +468,7 @@
 
 .taxRowSelected,
 .taxRowSelected:hover {
-  background: var(--bg-elevated, rgba(255, 255, 255, 0.06));
+  background: var(--bg-elevated);
 }
 
 .dataTable tbody tr[aria-selected] {
@@ -491,11 +491,11 @@
 }
 
 .taxBadgeTaxed {
-  background: var(--accent-danger, #c0392b);
+  background: var(--error);
 }
 
 .taxBadgeSubsidised {
-  background: var(--accent-success, #27ae60);
+  background: var(--success);
 }
 
 .taxEditor {
@@ -548,7 +548,7 @@
    to be visible here instead. */
 .budgetInputInvalid,
 .budgetInputInvalid:focus {
-  border-color: var(--accent-danger, #c0392b);
+  border-color: var(--error);
 }
 
 /* A seat nobody holds, and a control that cannot apply to this row. */
@@ -810,7 +810,7 @@
   font-weight: var(--font-semibold);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--accent-warm, var(--text-muted));
+  color: var(--text-muted);
 }
 
 .politicsVacant {
@@ -913,7 +913,7 @@
 
 .railTabActive {
   color: var(--text-primary);
-  border-bottom-color: var(--accent-primary, #4a7a6a);
+  border-bottom-color: var(--accent-gold);
   font-weight: var(--font-semibold);
 }
 
@@ -926,7 +926,7 @@
 .railLead {
   margin: 0;
   font-size: var(--text-xs);
-  color: var(--text-secondary, var(--text-muted));
+  color: var(--text-secondary);
   line-height: var(--leading-normal);
 }
 
@@ -963,7 +963,7 @@
 
 .ratingSelect:focus-visible,
 .projectInput:focus-visible {
-  outline: 2px solid var(--accent-primary, #4a7a6a);
+  outline: 2px solid var(--accent-gold);
   outline-offset: 1px;
 }
 
@@ -992,9 +992,9 @@
   font-size: var(--text-2xs);
 }
 
-.proposal_ok { color: var(--color-success, #4ade80); }
-.proposal_warn { color: var(--color-warning, #fbbf24); }
-.proposal_bad { color: var(--color-danger, #f87171); }
+.proposal_ok { color: var(--success); }
+.proposal_warn { color: var(--warning); }
+.proposal_bad { color: var(--error); }
 
 .campaignPromise {
   margin: 0;
@@ -1012,7 +1012,7 @@
 .ballotMarker {
   width: 22px;
   padding-right: 0 !important;
-  color: var(--accent-primary, #4a7a6a);
+  color: var(--accent-gold);
   text-align: center;
 }
 
@@ -1030,7 +1030,7 @@
   padding: 0;
   background: none;
   border: none;
-  color: var(--accent-gold, #d4a017);
+  color: var(--accent-gold);
   font-size: inherit;
   font-family: inherit;
   text-decoration: underline;

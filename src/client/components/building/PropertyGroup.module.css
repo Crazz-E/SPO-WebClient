@@ -79,7 +79,7 @@
 }
 
 .textInput:focus {
-  border-color: var(--accent-primary);
+  border-color: var(--accent-gold);
   background: var(--surface-border-active);
 }
 
@@ -518,7 +518,7 @@
 
 .pscName {
   font-size: var(--text-sm);
-  font-weight: var(--font-semibold, 600);
+  font-weight: var(--font-semibold);
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -538,7 +538,7 @@
 }
 
 .pscSupplyWarn {
-  color: var(--color-warning, #ff9800);
+  color: var(--warning);
 }
 
 .pscSupplyBad {
@@ -552,7 +552,7 @@
 
 .pscPrice {
   font-size: var(--text-sm);
-  font-weight: var(--font-semibold, 600);
+  font-weight: var(--font-semibold);
   color: var(--accent-gold);
   font-variant-numeric: tabular-nums;
 }
@@ -582,7 +582,7 @@
   height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-bottom: 5px solid var(--text-muted, #4ADE80);
+  border-bottom: 5px solid var(--text-muted);
   transform: translateX(-50%);
   pointer-events: none;
   opacity: 0.7;
@@ -906,8 +906,8 @@
   z-index: 51;
   margin: var(--space-2) 0;
   padding: var(--space-3);
-  background: var(--bg-tertiary, rgba(30, 32, 40, 0.95));
-  border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.1));
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
@@ -1242,7 +1242,7 @@
 }
 
 .currencyInput:focus {
-  border-color: var(--accent-primary);
+  border-color: var(--accent-gold);
   background: var(--surface-border-active);
 }
 
@@ -1625,7 +1625,7 @@
 }
 
 .wareFilterInput:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-gold);
 }
 
 /* Ware item */
@@ -1874,4 +1874,27 @@
 .unnamedConnection {
   color: var(--text-disabled);
   font-style: italic;
+}
+
+/* Focus ring restored (design-tokens.test.ts): removing the outline on :focus is fine only
+   because keyboard focus gets the shared gold ring. */
+.textInput:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+.slider:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+.upgradeQty:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+.currencyInput:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+.wareFilterInput:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
 }
