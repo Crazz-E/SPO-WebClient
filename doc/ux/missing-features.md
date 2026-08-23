@@ -89,6 +89,111 @@ plein écran mobile.
 - **Catégories de produits** : n'existent nulle part (`Kernel/Kernel.pas:743-798`) — tri par nom seulement.
 - **Données sur une ligne repliée** des onglets : jamais (budget RDO).
 
+## 9. Audit de branchement des maquettes — chaque élément visuel → une fonction
+
+Règle (2026-08-23) : **aucun élément visuel sans fonction**. Pour chaque contrôle des canevas
+Système et Flux : la fonction du WebClient qui le porte ; sinon la référence Voyager et l'entrée
+ci-dessus ; sinon le visuel a été **revu** (colonne « Décision »). « Client » = pur état d'interface,
+aucune dépendance serveur.
+
+### 9.1 Pastille d'état et barre de commande (planches HUD, Mobile, Flux)
+
+| Élément | Branché sur | Décision |
+|---|---|---|
+| Monde, date, cash, revenu/h, sparkline, rang, nom, rôle, compagnie, 14/50 | `InfoWidget` : `tycoonStats`, `lastStatsUpdate` ✅ | — |
+| Clic sur l'argent → Finances | `ProfilePanel` onglet `profitloss` ✅ | — |
+| Clic sur le nom → Profil | `toggleLeftPanel('empire')` ✅ (desktop) ; mobile → E1 | — |
+| « 2 alertes » (bâtiments en difficulté) | ❌ aucune source sans lectures par bâtiment ; Voyager ne l'avait que sur la minicarte (déficitaires en rouge, `Map.pas:3588`) | **Revu** : segment retiré ; remplacé par « Dette » affiché seulement si `failureLevel ≥ 1` (donnée reçue) ; la liste des déficitaires reste **N1** (minicarte) |
+| Recherche / palette (Ctrl K) | `CommandPalette` ✅ ; bâtiments = ❌ S1 | **Revu** : placeholder « mes bâtiments » (recherche locale dans les favoris déjà lus), joueurs et villes (routes existantes) ; coordonnées → N5 |
+| Tuile Construire (B) | `openModal('buildMenu')` ✅ | — |
+| Tuile Carte (M) | minicarte ✅ ; contenu de la vue → N1–N4 | reprend la touche M (courrier passe à L) → H5 |
+| Tuile Empire (E) | `toggleLeftPanel('empire')` ✅ ; mobile → E1 | — |
+| Tuile Politique (P) | `onOpenCapitol` ✅ partiel ; hôtel de ville → P1, P2, N3 | — |
+| Tuile Courrier (L) + badge | `toggleRightPanel('mail')` + `unreadCount` ✅ | — |
+| « Plus » : Routes, Zones, Calques, Réglages, Changer de serveur | `onBuildRoad`/`onDemolishRoad`, `zonePicker` (charge publique), `overlays`, `settings`, `onSwitchServer` ✅ | **Revu** : « Journal » retiré (aucun journal d'événements n'existe ; pas dans Voyager non plus) |
+| Barre de mode : nom, coût | `facility.cost` ✅ | — |
+| Barre de mode : « après : trésorerie » | calcul local `cash − cost` ✅ (client) | H4 pour le blocage si insuffisant |
+| Barre de mode : « Tourner la vue » (R) | `rotateCW` ✅ (tourne la **carte**) | **Revu** : libellé « la vue » ; aucune rotation de bâtiment (H3) |
+| Barre de mode : Terminer (Échap) | `setupEscapeHandler` ✅ | H1 pour l'indicateur persistant |
+| Barre de mode route : « 14 tuiles · $ 28 000 » | coût route inconnu côté client avant la réponse serveur (`road-handler.ts:206` = erreur de fonds seulement) | **Revu** : coût retiré, « 14 tuiles » seulement ; aperçu de coût = **H7** (à instruire : Voyager l'affichait-il ? `[UNKNOWN]`) |
+| Zoom +/− | `onZoomIn/Out` ✅ | — |
+| Pastille chat « Général · 14 » | `ChatStrip` (canal, en ligne) ✅ | — |
+
+### 9.2 Feuille universelle (inspecteur)
+
+| Élément | Branché sur | Décision |
+|---|---|---|
+| Jetons de pile (Usine textile › Approvisionnements › …) | client (store de pile à créer, pas de serveur) | E2 / pile de surfaces |
+| Épingler | client | E2 (nouveau) |
+| Fermer | ✅ | — |
+| Identité : nom, compagnie, ville, niveau | `BuildingDetails` + bloc Inspect ✅ | — |
+| Tag d'état (À l'arrêt / En production) + diagnostic | `hintsText` / `detailsText` ✅ brut | B7 (parseur de hints → sévérité + action) |
+| « Trouver un fournisseur » (diagnostic et porte vide) | `onSearchConnections` → `ConnectionPickerModal` ✅ | — |
+| « Choisir sur la carte » | `connectMap` ✅ (un flux) | N10 pour l'ajouter au picker |
+| Onglets de sections | `BuildingDetailsTab` (CLASSES.BIN) ✅ | libellés à mapper (audit §5) |
+| Filtre des approvisionnements | client (noms déjà reçus) ✅ | — |
+| Ligne repliée = nom ; ouverture charge valeurs / fournisseurs | `useGateConnections` ✅ (même régime) | — |
+| Curseurs Prix max / Qualité min | écritures `MaxPrice` / `minK` ✅ | B6 (SaveIndicator) |
+| Ligne fournisseur : nom, compagnie, prix, qualité, distance | `BuildingConnectionData` ✅ ; distance = calcul local `x,y` ✅ | — |
+| Déconnecter (×) → confirmation | `onDisconnectConnection` ✅ ; confirmation → B5 | — |
+| « Ajouter un fournisseur » | même picker ✅ | — |
+| Pied : « Actualisé il y a » | `lastUpdate` ✅ | — |
+| Pied : Renommer | ✅ B1 | — |
+| Pied : Voir sur la carte | `centerOn` ✅ (implicite) | N9 (bouton) |
+
+### 9.3 Construire (T1)
+
+| Élément | Branché sur | Décision |
+|---|---|---|
+| Catégories (nom, compte) | `BuildingCategory.kindName` ✅ ; compte = longueur de la liste reçue | — |
+| Filtre par nom | client ✅ | — |
+| Cache de session du menu | client | **nouveau** (réduit les requêtes) |
+| Liste : nom, coût, empreinte, zone | `BuildingInfo.name/cost/xsize/ysize/zoneRequirement` ✅ | — |
+| Cadenas + raison | `available` + `category.tycoonLevel` ✅ | — |
+| Détail : description | `BuildingInfo.description` ✅ | — |
+| « 120 emplois », « Entrées : coton, chimie » | ❌ absents de `BuildingInfo` ; Voyager : `[UNKNOWN]` | **Revu** : retirés |
+| « Placer sur la carte » | `onPlaceBuilding(facilityClass, visualClassId)` ✅ | — |
+| Fantôme valide / invalide | `placementValid` ✅ | — |
+| Calque Zones annoncé | `enableCityZonesForPlacement` ✅ | visuel = annonce |
+| Dialogue de confirmation + « ne plus demander » | `requestConfirm` ✅ + préférence client | B5 |
+| Toast « Construit — Voir » | `showNotification` ✅ + `focusBuilding` ✅ | — |
+| Mode conservé après la pose | comportement actuel ✅ | H1 (le rendre visible) |
+| Mobile : Poser / Annuler / Tourner la vue | `PlacementHUD` ✅ | — |
+
+### 9.4 Raccorder un fournisseur (T3)
+
+| Élément | Branché sur | Décision |
+|---|---|---|
+| Aperçu au clic : nom, propriétaire, état, revenu, métriques | `StatusOverlay` (bloc Inspect) ✅ | — |
+| « Inspecter » / « Aller » | `openInspectorForFocused` / `centerOn` ✅ | — |
+| Picker : champ + Entrée | champ ✅ ; Entrée ❌ → B4 | — |
+| Jetons Ville, Max | filtres `town`, `maxResults` ✅ | — |
+| Jetons de rôle | 5 rôles du bitmask : Producteur, Distributeur, Importateur, Acheteur, Exportateur ✅ | **Revu** : libellés corrigés (j'avais « Usines / Entrepôts / Fermes ») |
+| Résultats : nom, compagnie, ville, prix, qualité | `ConnectionSearchResult` ✅ | — |
+| Distance, tri par distance | calcul local depuis `x,y` ✅ | — |
+| Sélection multiple + « Connecter » | `onConnectionConnect` (liste `{x,y}`) ✅ | — |
+| Vide : « élargir les rôles » / « choisir sur la carte » | client / N10 | — |
+| SaveIndicator « Connecté » | composant ✅ ; brancher sur la connexion → B6 | — |
+| Diagnostic qui change après connexion | bloc Inspect poussé ✅ (le serveur décide) | — |
+
+### 9.5 Vue Carte
+
+| Élément | Branché sur | Décision |
+|---|---|---|
+| Minicarte terrain + rectangle de vue + clic = sauter | ✅ | — |
+| Bâtiments / mes bâtiments / déficitaires / brouillard | ❌ → N1 (Voyager ✅) | gardé, listé |
+| Retour / Suivant | ❌ → N2 (Voyager ✅) | gardé, listé |
+| Hôtel de ville le plus proche | ❌ → N3 (Voyager ✅, faisable sans RDO) | gardé, listé |
+| Favoris (liste) / ajouter / supprimer | lecture ✅ ; écriture ❌ → N4 (Voyager ✅) | gardé, listé |
+| Calques | ✅ | — |
+
+### 9.6 Nouvelles entrées issues de l'audit
+
+| # | Fonction | WebClient | Voyager | À faire |
+|---|---|---|---|---|
+| H7 | Aperçu du coût d'une route avant le tracé | ❌ (le serveur répond « fonds insuffisants » après coup) | `[UNKNOWN]` — à instruire avec `delphi-archaeologist` (coût par tuile dans le modèle ?) | Si le modèle l'expose, calcul local ; sinon la barre reste « n tuiles » |
+| H8 | Cache de session du menu de construction | ❌ re-demandé à chaque ouverture | n/a | client, réduit les requêtes |
+
 ---
 
 *Sources : agent de vérification sur le code du WebClient (2026-08-23) ; archéologie Voyager

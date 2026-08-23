@@ -1,0 +1,143 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "T1-1 · Construire — catégories",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T1-2.dc.html",
+      "title": "T1-2 · Construire — liste + sélection",
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T1-3.dc.html",
+      "title": "T1-3 · Placement — mode actif",
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T1-3b.dc.html",
+      "title": "T1-3b · Placement — pose invalide",
+      "x": 4560,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T1-4.dc.html",
+      "title": "T1-4 · Confirmation",
+      "x": 0,
+      "y": 1000,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T1-5.dc.html",
+      "title": "T1-5 · Posée — toast, mode conservé",
+      "x": 1520,
+      "y": 1000,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T1-Mobile.dc.html",
+      "title": "T1 · Mobile — catégories / placement",
+      "x": 3040,
+      "y": 1000,
+      "w": 820,
+      "h": 780
+    },
+    {
+      "file": "T3-1.dc.html",
+      "title": "T3-1 · Aperçu au clic",
+      "x": 0,
+      "y": 2100,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T3-2.dc.html",
+      "title": "T3-2 · Feuille — diagnostic + Coton ouvert",
+      "x": 1520,
+      "y": 2100,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T3-3.dc.html",
+      "title": "T3-3 · Trouver un fournisseur — résultats",
+      "x": 3040,
+      "y": 2100,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T3-3b.dc.html",
+      "title": "T3-3b · Aucun résultat",
+      "x": 4560,
+      "y": 2100,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T3-3c.dc.html",
+      "title": "T3-3c · Recherche en cours",
+      "x": 6080,
+      "y": 2100,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T3-4.dc.html",
+      "title": "T3-4 · Connecté",
+      "x": 0,
+      "y": 3100,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T3-5.dc.html",
+      "title": "T3-5 · Déconnecter — confirmation",
+      "x": 1520,
+      "y": 3100,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "T3-Mobile.dc.html",
+      "title": "T3 · Mobile — feuille / recherche",
+      "x": 3040,
+      "y": 3100,
+      "w": 820,
+      "h": 780
+    }
+  ],
+  "annotations": [
+    {
+      "id": "flows-brief",
+      "x": 0,
+      "y": -420,
+      "w": 760,
+      "text": "FLUX T1 — CONSTRUIRE et T3 — RACCORDER UN FOURNISSEUR, option C, desktop + mobile.\nChaque planche porte une note (cadre pointillé or) qui dit ce qu'elle montre. Règles tenues : aucune requête RDO de plus que le code actuel (catégories → liste au clic, détail d'une porte à l'ouverture, recherche à Entrée) ; ligne repliée = nom seul ; diagnostic tiré du bloc Inspect ; confirmation sur dépense et destruction ; « Tourner la vue » (pas de rotation de bâtiment) ; distances calculées localement.\nCe qui suppose une implémentation est dans doc/ux/missing-features.md (H1, H2, H4, B4, B5, B7, N9, N10)."
+    },
+    {
+      "id": "flows-t3",
+      "x": 0,
+      "y": 2080,
+      "w": 560,
+      "text": "T3 — du clic sur la carte au fournisseur connecté : 5 interactions (clic bâtiment → Inspecter → Trouver un fournisseur → cocher → Connecter), contre 8–10 aujourd'hui sur 3 surfaces imbriquées. Tout se passe dans UNE feuille empilée ; la carte reste visible et cliquable."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

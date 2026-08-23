@@ -23,7 +23,7 @@
 
   <!-- STATUS PILL -->
   <section style="display: flex; flex-direction: column; gap: 10px;">
-    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Pastille d'état — tout ce que l'InfoWidget savait, en une ligne (mobile : cash, revenu, alertes, rang)</h2>
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Pastille d'état — tout ce que l'InfoWidget savait, en une ligne (mobile : cash, revenu, rang)</h2>
     <div style="display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 16px; background: rgba(20,22,24,0.88); border: 1px solid rgba(255,255,255,0.06); border-radius: 9999px; align-self: flex-start;">
       <span style="color: #D4A853; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;">Planitia</span>
       <span style="color: #7D8492; font-size: 12px; font-variant-numeric: tabular-nums;">12 mars 2334</span>
@@ -32,11 +32,11 @@
       <span style="color: #4ADE80; font-size: 12px; font-variant-numeric: tabular-nums;">+$ 184 200 / h</span>
       <svg aria-hidden="true" width="64" height="18" viewBox="0 0 64 18" fill="none" stroke="#4ADE80" stroke-width="1.5"><path d="M1 14 L9 12 L17 13 L25 9 L33 10 L41 6 L49 7 L57 4 L63 3"></path></svg>
       <span style="width: 1px; height: 18px; background: rgba(255,255,255,0.12);"></span>
-      <button style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 9999px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #F87171; font: 500 12px 'Inter', sans-serif; cursor: pointer;" title="2 alertes — ouvrir la liste" aria-label="2 alertes — ouvrir la liste"><span style="width: 8px; height: 8px; border-radius: 9999px; background: #EF4444;"></span>2 alertes</button>
+      <span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 9999px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #F87171; font: 500 12px 'Inter', sans-serif;" title="Dette — niveau 1"><span style="width: 8px; height: 8px; border-radius: 9999px; background: #EF4444;"></span>Dette</span>
       <span style="width: 1px; height: 18px; background: rgba(255,255,255,0.12);"></span>
       <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="display: inline-flex; padding: 1px 7px; border: 1px solid #B8912E; border-radius: 9999px; background: rgba(212,168,83,0.1); color: #D4A853; font: 700 11px 'JetBrains Mono', monospace;">#12</span><span style="color: #F0F0F2; font-size: 13px; font-weight: 500;">SPO_test3</span><span style="color: #D4A853; font-size: 11px;">Maire</span><span style="color: #7D8492; font-size: 12px;">· SPO_test3 - Green</span><span style="color: #7D8492; font-size: 12px;">· 14 / 50</span></span>
     </div>
-    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">La pastille est cliquable par segment : l'argent ouvre Finances, les alertes ouvrent la liste des bâtiments en difficulté, le nom ouvre le Profil. Dette : la pastille prend la teinte erreur (comme l'InfoWidget aujourd'hui).</p>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">La pastille est cliquable par segment : l'argent ouvre Finances (profil › pertes et profits), le nom ouvre le Profil. « Dette » n'apparaît que si <code style="font-family: 'JetBrains Mono', monospace;">failureLevel ≥ 1</code> (donnée déjà reçue) — il n'existe pas de liste « bâtiments en difficulté » sans lectures supplémentaires, donc la pastille ne la promet pas.</p>
   </section>
 
   <!-- COMMAND BAR idle -->
@@ -45,7 +45,7 @@
     <div style="width: 760px; display: flex; flex-direction: column; gap: 8px;">
       <div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; background: rgba(20,22,24,0.88); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; color: #565D68; font-size: 13px;">
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA1AC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-        Rechercher un bâtiment, un joueur, une ville — ou une commande…
+        Rechercher mes bâtiments, un joueur, une ville — ou une commande…
         <span style="margin-left: auto; display: inline-flex; gap: 4px;"><kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">Ctrl</kbd><kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">K</kbd></span>
       </div>
       <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; padding: 6px; background: rgba(20,22,24,0.88); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;">
@@ -57,7 +57,7 @@
         <button style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer; font: 500 11px 'Inter', sans-serif;"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>Plus</button>
       </div>
     </div>
-    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">« Plus » ouvre Routes, Zones, Calques, Réglages, Changer de serveur, Journal. La recherche est la Command Palette d'aujourd'hui, élargie aux bâtiments, joueurs, villes et coordonnées (voir missing-features). Raccourci « M » repris pour Carte ; le courrier passe à « L » (lettre).</p>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">« Plus » ouvre Routes, Zones (charge publique), Calques, Réglages, Changer de serveur. La recherche est la Command Palette d'aujourd'hui, élargie à <em>mes</em> bâtiments (favoris déjà lus, recherche locale), aux joueurs et villes (routes existantes) et aux coordonnées (voir missing-features S1, N5). Raccourci « M » repris pour Carte ; le courrier passe à « L » (lettre).</p>
   </section>
 
   <!-- COMMAND BAR mode -->
@@ -79,7 +79,7 @@
       <span style="width: 8px; height: 8px; border-radius: 9999px; background: #D4A853;"></span>
       <span style="font-size: 12px; font-weight: 600; color: #D4A853; letter-spacing: 0.04em; text-transform: uppercase;">Route</span>
       <span style="font-size: 14px; font-weight: 500; color: #F0F0F2;">Tracer</span>
-      <span style="font-size: 12px; color: #9CA1AC;">Glissez sur la carte · 14 tuiles · <span style="color: #D4A853; font-family: 'JetBrains Mono', monospace; font-weight: 700;">$ 28 000</span></span>
+      <span style="font-size: 12px; color: #9CA1AC;">Glissez sur la carte · 14 tuiles</span>
       <span style="flex: 1;"></span>
       <button style="height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Démolir</button>
       <button style="height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #F0F0F2; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Terminer <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">Échap</kbd></button>

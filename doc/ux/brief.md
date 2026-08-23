@@ -105,6 +105,9 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
    **Fait (v1)** : https://claude.ai/code/artifact/41b437c4-2db5-4ccf-b4f7-0512d23e10db — sources dans
    [design/system/](design/system/) : Fondations · Contrôles · Surfaces (feuille universelle, dialogue, toasts, SaveIndicator) · Listes (**liste longue** entrepôt / Magna) · Mobile. **À valider.**
 3. **Canevas par flux** P1 puis P2 : écrans desktop et mobile côte à côte, états réels (données du mock server), copy finale (`design:ux-copy`).
+   **Fait (v1) — T1 Construire + T3 Raccorder un fournisseur** : https://claude.ai/code/artifact/845491f3-837c-466d-a813-d262863c1b31 — 15 planches
+   (T1-1…T1-5 + mobile, T3-1…T3-5 + mobile), générées par [design/flows/gen.py](design/flows/gen.py). Audit de
+   branchement de chaque élément visuel : [missing-features.md §9](missing-features.md). **À valider.**
 4. **Handoff par flux** (`doc/ux/handoff/<flux>.md`) : tokens, composants, props, états, breakpoints, animations, cas limites.
 
 ---
