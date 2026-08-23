@@ -8,6 +8,12 @@
 # After:  ~0 ms here; one 15 s pass per turn, only when .ts/.tsx actually changed.
 #
 # Always exits 0 — never blocks an edit.
+#
+# It also stamps the session heartbeat: an edit here proves a session is working in this
+# worktree, which is what stops another session's `npm run finish` from reaping it.
+
+. "$(dirname "$0")/session-heartbeat.sh"
+spo_stamp_heartbeat
 
 FILE_PATH=$(node -e "
   let d='';

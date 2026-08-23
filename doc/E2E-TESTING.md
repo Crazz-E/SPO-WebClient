@@ -206,7 +206,7 @@ If the deposit fails with `WORKER DOWN` (exit 3), the worker itself needs attent
 For interactive debugging only, off the bench, **never on 8080**:
 
 ```bash
-PORT=8081 npm run dev:local                   # build + start yourself
+npm run dev:local                             # build + start yourself, first free port from 8081
 curl -s http://localhost:8081/api/startup-status      # → phase:"ready"
 # stop it yourself when done: ss -ltnp "sport = :8081" → kill <your pid>
 ```

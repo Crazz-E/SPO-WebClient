@@ -121,6 +121,11 @@
             "type": "command",
             "command": "bash .claude/hooks/pre-push-gate.sh",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/bench-port-guard.sh",
+            "timeout": 10
           }
         ]
       }

@@ -8,6 +8,10 @@
 # Emits at most a handful of lines. Stdout is added to the turn's context.
 # Always exits 0.
 
+# A session is alive here — stamp the heartbeat finish.sh reads before reaping a worktree.
+. "$(dirname "$0")/session-heartbeat.sh"
+spo_stamp_heartbeat
+
 PROMPT=$(node -e "
   let d='';
   process.stdin.on('data',c=>d+=c);

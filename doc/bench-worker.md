@@ -1,7 +1,7 @@
 # The Bench Worker — single owner of the live test bench
 
 **Status:** Adopted 2026-08-22 · Companion to [E2E-POLICY.md](E2E-POLICY.md) (the rules)
-**Code:** `src/e2e/bench/` · **Client scripts:** `scripts/bench-*.sh` · **Hook:** `.claude/hooks/pre-push-gate.sh`
+**Code:** `src/e2e/bench/` · **Client scripts:** `scripts/bench-*.sh` · **Hooks:** `.claude/hooks/pre-push-gate.sh`, `.claude/hooks/bench-port-guard.sh`
 
 ## 1. Why
 
@@ -51,8 +51,8 @@ one process (the worker) consumes the spool.
    a queued session spends **zero tokens** waiting.
 2. **Claim**: the worker takes the oldest deposit. If the depositing session's pid is
    dead → report `ABANDONED`, nothing runs, the queue cleans itself.
-3. **Clean bench**: kill anything on 8080 (safe — only the worker starts gateways there),
-   verify the port is free.
+3. **Clean bench**: kill anything on 8080 (safe because no session may start a gateway
+   there — enforced by `.claude/hooks/bench-port-guard.sh`, §7), verify the port is free.
 4. **Fingerprint `atStart`**, compare with `atSubmit`. A **gate on a dirty tree is `DIRTY`**
    — nothing runs, nothing is attested: the attestation names a sha, so the tested tree
    must be exactly that commit (the client already refuses it at deposit, exit 2; the
@@ -116,7 +116,8 @@ session edits worktree
   → merge                   ruleset: PR, CI green AND bench/gate green, up to date, no bypass;
                             GitHub deletes the remote branch
   → npm run finish          main ff'd, refs pruned, worker reinstalled if its sources changed,
-                            worktree + branch removed — nothing left but main
+                            worktree RETIRED (removed by the next run, once no session is in
+                            it) — the end state is main alone. `--now` removes it at once.
   → electron-release.yml    on the push to main: computes the version from the last v* tag
                             and the commits since it, builds, tags, publishes the GitHub
                             Release — never create v* tags by hand
@@ -166,10 +167,28 @@ deployment.
 
 ## 7. The conscious exceptions
 
-- `npm run dev:local` — build and run a gateway yourself, **on a port other than 8080**,
-  for interactive debugging. Its behaviour attests nothing.
-- `npm run gate:local` / `npm run test:live:local` — the drive without the worker.
-  Evidence for reading; the push hook does not accept it.
+- `npm run dev:local` — build and run a gateway yourself, for interactive debugging. It
+  picks the first free port from 8081 up and **refuses 8080** (`scripts/dev-local.sh`);
+  `PORT=<n>` chooses. Its behaviour attests nothing.
+- `npm run gate:local` — the static gate without the worker. Evidence for reading; the
+  push hook does not accept it.
+
+`.claude/hooks/bench-port-guard.sh` makes the boundary mechanical rather than advisory. It
+refuses, before the command runs:
+
+| Refused | Because | Sanctioned form |
+|---------|---------|-----------------|
+| `npm start`, `node dist/server/server.js`, any `PORT=8080 …` | the default port *is* the bench port (`src/shared/config.ts:23`), and step 3 of a job SIGKILLs whatever it finds there | `npm run dev` (a lease) or `npm run dev:local` |
+| `npm run test:live:local`, `node dist/e2e/run.js` | they use the LOCKED accounts and mutate Helartia with no world lock — a concurrent job lands in the same town | `npm run test:live`, `npm run gate` |
+
+The escape hatch is deliberately awkward and human-only: prefix the command with
+`SPO_BENCH_PORT_OVERRIDE=i-own-the-bench`. A session must not reach for it — if the bench
+is in the way, ask the worker for it with `npm run dev` instead of taking it.
+
+Step 3's "safe — only the worker starts gateways there" was an assumption held up by a
+paragraph in CLAUDE.md. It had already been broken: a session verifying its own change
+took 8080, and a listener the worker cannot attribute blocks *every* session's gate until
+a human frees the port. The hook is what makes the assumption true.
 
 ## 8. Acceptance criteria (verified by the test suites)
 

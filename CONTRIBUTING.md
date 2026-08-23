@@ -9,13 +9,13 @@ nested `CLAUDE.md` files cover `src/server`, `src/shared`, `src/mock-server` and
 
 ```bash
 npm ci
-npm run dev:local   # build + start on port 8080 (a fresh clone, no bench worker)
+npm run dev:local   # build + start on the first free port from 8081 up
 ```
 
 Node.js 22 or newer, npm 10 or newer. On the shared test machine the gateway is **leased
 from the bench worker** instead (`npm run dev`) — see [doc/bench-worker.md](doc/bench-worker.md);
-a gateway of your own there goes **off 8080** (`PORT=8081 npm run dev:local`) — the worker
-clears that port before every job.
+a gateway of your own there goes **off 8080**, which `dev:local` now guarantees on its own —
+the worker clears that port before every job, and a hook refuses any command that would take it.
 
 ## The one rule that matters
 

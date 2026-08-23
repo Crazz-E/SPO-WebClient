@@ -158,8 +158,9 @@ An autonomous loop mutating a production game world needs two rails a human run 
   carrier and as a belt-and-braces refusal for `gate:local` runs.
 - **Bench ownership.** The gateway port, the LOCKED accounts and the world belong to the
   bench worker — sessions deposit jobs instead of starting gateways. Driving a browser
-  needs a **lease** (`npm run dev`); `npm run dev:local` on another port is the conscious
-  exception, for debugging, and attests nothing.
+  needs a **lease** (`npm run dev`); `npm run dev:local`, which picks a port off the bench, is
+  the conscious exception, for debugging, and attests nothing. `.claude/hooks/bench-port-guard.sh`
+  refuses anything else that would take the bench port or drive the live world outside the worker.
   Procedure: [E2E-TESTING.md](E2E-TESTING.md) § Server Lifecycle.
 
 **Pre-flight** before any flow: gateway reachable, world date advancing (server alive), no
@@ -326,5 +327,5 @@ npm run finish                   # after the merge: main ff'd, refs pruned, work
 npm run deps:gate [PR...]        # Dependabot PRs: merge main in, npm ci in the PR's worktree, gate, push, auto-merge — one at a time
 
 npm run gate:local               # verify-gate directly — evidence for reading, no push unblock
-PORT=8081 npm run dev:local      # a debug gateway of your own — attests nothing
+npm run dev:local                # a debug gateway of your own, off the bench — attests nothing
 ```
