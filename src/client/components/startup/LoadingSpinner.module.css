@@ -18,17 +18,17 @@
 }
 
 .dot:nth-child(1) {
-  background: var(--accent-gold-light, #f6d365);
+  background: var(--accent-gold-light);
   animation-delay: 0s;
 }
 
 .dot:nth-child(2) {
-  background: var(--accent-gold, #d4a017);
+  background: var(--accent-gold);
   animation-delay: -0.6s;
 }
 
 .dot:nth-child(3) {
-  background: var(--color-primary, #60a5fa);
+  background: var(--primary);
   animation-delay: -1.2s;
 }
 

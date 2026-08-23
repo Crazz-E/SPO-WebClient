@@ -20,7 +20,7 @@
   border-top-right-radius: var(--radius-xl);
   display: flex;
   flex-direction: column;
-  transition: height 250ms var(--ease-out);
+  transition: height var(--duration-panel) var(--ease-out);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
   max-height: calc(100vh - 56px - env(safe-area-inset-bottom, 0px));
   overflow: hidden;

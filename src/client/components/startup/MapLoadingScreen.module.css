@@ -36,9 +36,9 @@
   letter-spacing: 0.12em;
   background: linear-gradient(
     135deg,
-    var(--color-primary-light),
-    var(--color-primary),
-    var(--color-primary-dark)
+    var(--primary-light),
+    var(--primary),
+    var(--primary-dark)
   );
   background-clip: text;
   -webkit-background-clip: text;

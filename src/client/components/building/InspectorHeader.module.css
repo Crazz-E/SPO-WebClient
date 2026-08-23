@@ -27,7 +27,7 @@
 .level {
   flex-shrink: 0;
   padding: 1px var(--space-2);
-  border: 1px solid var(--accent-gold-dark, #8a6a2a);
+  border: 1px solid var(--accent-gold-dark);
   border-radius: var(--radius-sm);
   background: rgba(212, 168, 83, 0.12);
   color: var(--accent-gold);

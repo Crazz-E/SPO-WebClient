@@ -19,11 +19,11 @@
   justify-content: flex-end;
   padding: 6px 6px 0 0;
   color: var(--accent-gold);
-  transition: background var(--duration-fast, 150ms) var(--ease-default, ease);
+  transition: background var(--duration-fast) var(--ease-default);
 }
 
 .trigger:active {
-  background: var(--glass-bg-hover, rgba(255, 255, 255, 0.08));
+  background: var(--glass-bg-hover);
 }
 
 @media (max-width: 767px) {

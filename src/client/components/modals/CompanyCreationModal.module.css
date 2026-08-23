@@ -142,7 +142,7 @@
 
 .categoriesHeader {
   padding: var(--space-2) var(--space-4);
-  font-size: var(--text-xxs);
+  font-size: var(--text-2xs);
   font-weight: var(--font-semibold);
   color: var(--text-muted);
   text-transform: uppercase;
@@ -260,7 +260,7 @@
 }
 
 .facilityDesc {
-  font-size: var(--text-xxs);
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -282,7 +282,7 @@
 }
 
 .facilityTime {
-  font-size: var(--text-xxs);
+  font-size: var(--text-2xs);
   color: var(--text-muted);
 }
 
@@ -397,4 +397,11 @@
   .submitBtn {
     width: 100%;
   }
+}
+
+/* Focus ring restored (design-tokens.test.ts): removing the outline on :focus is fine only
+   because keyboard focus gets the shared gold ring. */
+.nameInput:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
 }

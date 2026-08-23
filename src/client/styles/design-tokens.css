@@ -29,6 +29,8 @@
   --surface-border: rgba(255, 255, 255, 0.06);
   --surface-border-active: rgba(255, 255, 255, 0.12);
   --surface-divider: rgba(255, 255, 255, 0.04);
+  --surface-border-strong: rgba(255, 255, 255, 0.12);
+  --scrim: rgba(0, 0, 0, 0.5); /* the one dialog backdrop */
 
   /* ---- Glass (InfoWidget + minimap only) ---- */
   --glass-bg: rgba(20, 22, 24, 0.88);
@@ -36,6 +38,7 @@
   --glass-border: rgba(255, 255, 255, 0.06);
   --glass-border-active: rgba(255, 255, 255, 0.12);
   --glass-blur: blur(12px);
+  --glass-bg-hover: rgba(255, 255, 255, 0.08);
 
   /* ---- Text (neutral gray hierarchy, WCAG AA) ---- */
   --text-primary: #F0F0F2;
@@ -116,7 +119,11 @@
   --z-dropdown: 100;
   --z-sticky: 200;
   --z-overlay: 300;
+  --z-ticker: 340;
+  --z-hud: 350;       /* status pill, command bar, zoom, collapsed mobile sheet */
+  --z-bottomnav: 350;
   --z-panel: 400;
+  --z-backdrop: 499;  /* dialog scrim, always just under --z-modal */
   --z-modal: 500;
   --z-toast: 600;
   --z-tooltip: 700;
@@ -147,6 +154,8 @@
   --bottomnav-height: 56px;
   --palette-width: 560px;
   --palette-max-height: 400px;
+  --sai-bottom: env(safe-area-inset-bottom, 0px);
+  --content-top: calc(var(--space-3) + 40px + var(--space-2)); /* below the status pill (mobile) */
 
   /* ---- Breakpoints (for reference — use in @media queries) ---- */
   /* --bp-mobile: 480px → 767px     */
@@ -169,8 +178,6 @@
     --text-2xl: 1.25rem;
     --text-xl: 1.125rem;
     --text-sm: 0.8125rem;  /* 13px on mobile */
-    --text-xs: 0.6875rem;  /* 11px on mobile */
-    --text-2xs: 0.625rem;  /* 10px on mobile */
     --topbar-height: 32px;
     --panel-width-desktop: 100vw;
     --panel-width-tablet: 100vw;

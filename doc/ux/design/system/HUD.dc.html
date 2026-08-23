@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #F0F0F2; background: #0C0D10; }
+    a { color: #D4A853; } a:hover { color: #E8C77B; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="width: 1200px; height: 1160px; padding: 32px; background: #0C0D10; display: flex; flex-direction: column; gap: 20px; overflow: hidden;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <h1 style="margin: 0; font-size: 20px; font-weight: 600;">HUD desktop — option C</h1>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">Trois objets permanents au-dessus de la carte, rien d'autre : la <strong style="color: #F0F0F2;">pastille d'état</strong> en haut, la <strong style="color: #F0F0F2;">barre de commande</strong> en bas (recherche / palette + 6 tuiles, dont « Carte »), le <strong style="color: #F0F0F2;">zoom</strong>. Le reste vit dans la feuille universelle.</p>
+  </div>
+
+  <!-- STATUS PILL -->
+  <section style="display: flex; flex-direction: column; gap: 10px;">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Pastille d'état — tout ce que l'InfoWidget savait, en une ligne (mobile : cash, revenu, rang)</h2>
+    <div style="display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 16px; background: rgba(20,22,24,0.88); border: 1px solid rgba(255,255,255,0.06); border-radius: 9999px; align-self: flex-start;">
+      <span style="color: #D4A853; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;">Planitia</span>
+      <span style="color: #7D8492; font-size: 12px; font-variant-numeric: tabular-nums;">12 mars 2334</span>
+      <span style="width: 1px; height: 18px; background: rgba(255,255,255,0.12);"></span>
+      <span style="font: 700 16px 'JetBrains Mono', monospace; color: #D4A853; font-variant-numeric: tabular-nums;">$ 12 480 300</span>
+      <span style="color: #4ADE80; font-size: 12px; font-variant-numeric: tabular-nums;">+$ 184 200 / h</span>
+      <svg aria-hidden="true" width="64" height="18" viewBox="0 0 64 18" fill="none" stroke="#4ADE80" stroke-width="1.5"><path d="M1 14 L9 12 L17 13 L25 9 L33 10 L41 6 L49 7 L57 4 L63 3"></path></svg>
+      <span style="width: 1px; height: 18px; background: rgba(255,255,255,0.12);"></span>
+      <span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 9999px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #F87171; font: 500 12px 'Inter', sans-serif;" title="Dette — niveau 1"><span style="width: 8px; height: 8px; border-radius: 9999px; background: #EF4444;"></span>Dette</span>
+      <span style="width: 1px; height: 18px; background: rgba(255,255,255,0.12);"></span>
+      <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="display: inline-flex; padding: 1px 7px; border: 1px solid #B8912E; border-radius: 9999px; background: rgba(212,168,83,0.1); color: #D4A853; font: 700 11px 'JetBrains Mono', monospace;">#12</span><span style="color: #F0F0F2; font-size: 13px; font-weight: 500;">SPO_test3</span><span style="color: #D4A853; font-size: 11px;">Maire</span><span style="color: #7D8492; font-size: 12px;">· SPO_test3 - Green</span><span style="color: #7D8492; font-size: 12px;">· 14 / 50</span></span>
+    </div>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">La pastille est cliquable par segment : l'argent ouvre Finances (profil › pertes et profits), le nom ouvre le Profil. « Dette » n'apparaît que si <code style="font-family: 'JetBrains Mono', monospace;">failureLevel ≥ 1</code> (donnée déjà reçue) — il n'existe pas de liste « bâtiments en difficulté » sans lectures supplémentaires, donc la pastille ne la promet pas.</p>
+  </section>
+
+  <!-- COMMAND BAR idle -->
+  <section style="display: flex; flex-direction: column; gap: 10px;">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Barre de commande — au repos : recherche / palette + 6 tuiles</h2>
+    <div style="width: 760px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; background: rgba(20,22,24,0.88); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; color: #565D68; font-size: 13px;">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA1AC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+        Rechercher mes bâtiments, un joueur, une ville — ou une commande…
+        <span style="margin-left: auto; display: inline-flex; gap: 4px;"><kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">Ctrl</kbd><kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">K</kbd></span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; padding: 6px; background: rgba(20,22,24,0.88); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;">
+        <button style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer; font: 500 11px 'Inter', sans-serif;"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"></path><path d="m18 15 4-4"></path><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"></path></svg>Construire <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">B</kbd></button>
+        <button style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer; font: 500 11px 'Inter', sans-serif;"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.1 6.1 9.9 4 3.6 6.1a1 1 0 0 0-.6.9v12l6.9-2.3 4.2 2.1 6.3-2.1a1 1 0 0 0 .6-.9V4z"></path><path d="M15 5.8v15"></path><path d="M9 4v15"></path></svg>Carte <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">M</kbd></button>
+        <button style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer; font: 500 11px 'Inter', sans-serif;"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>Empire <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">E</kbd></button>
+        <button style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer; font: 500 11px 'Inter', sans-serif;"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22h18"></path><path d="M6 18v-7"></path><path d="M10 18v-7"></path><path d="M14 18v-7"></path><path d="M18 18v-7"></path><path d="m3 9 9-7 9 7z"></path></svg>Politique <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">P</kbd></button>
+        <button style="position: relative; height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer; font: 500 11px 'Inter', sans-serif;"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>Courrier <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">L</kbd><span style="position: absolute; top: 6px; right: 10px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 9999px; background: #EF4444; color: #fff; font: 700 11px 'Inter', sans-serif; display: inline-flex; align-items: center; justify-content: center;">3</span></button>
+        <button style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer; font: 500 11px 'Inter', sans-serif;"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>Plus</button>
+      </div>
+    </div>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">« Plus » ouvre Routes, Zones (charge publique), Calques, Réglages, Changer de serveur. La recherche est la Command Palette d'aujourd'hui, élargie à <em>mes</em> bâtiments (favoris déjà lus, recherche locale), aux joueurs et villes (routes existantes) et aux coordonnées (voir missing-features S1, N5). Raccourci « M » repris pour Carte ; le courrier passe à « L » (lettre).</p>
+  </section>
+
+  <!-- COMMAND BAR mode -->
+  <section style="display: flex; flex-direction: column; gap: 10px;">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Barre de commande — en mode (placement, route, zone) : la ligne du haut devient la barre de mode</h2>
+    <div style="width: 760px; display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 8px 0 8px; background: rgba(20,22,24,0.88); border: 1px solid #B8912E; border-radius: 12px; box-shadow: 0 0 12px rgba(212,168,83,0.2);">
+      <button style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #9CA1AC; cursor: pointer;" title="Rechercher ou commander" aria-label="Rechercher ou commander"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+      <span style="width: 8px; height: 8px; border-radius: 9999px; background: #D4A853;"></span>
+      <span style="font-size: 12px; font-weight: 600; color: #D4A853; letter-spacing: 0.04em; text-transform: uppercase;">Placement</span>
+      <span style="font-size: 14px; font-weight: 500; color: #F0F0F2;">Usine textile</span>
+      <span style="font: 700 12px 'JetBrains Mono', monospace; color: #D4A853;">$ 240 000</span>
+      <span style="font-size: 12px; color: #9CA1AC;">après : <span style="color: #4ADE80;">$ 12 240 300</span></span>
+      <span style="flex: 1;"></span>
+      <button style="height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Tourner la vue <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">R</kbd></button>
+      <button style="height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #F0F0F2; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Terminer <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">Échap</kbd></button>
+    </div>
+    <div style="width: 760px; display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 8px; background: rgba(20,22,24,0.88); border: 1px solid #B8912E; border-radius: 12px; box-shadow: 0 0 12px rgba(212,168,83,0.2);">
+      <button style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #9CA1AC; cursor: pointer;" title="Rechercher ou commander" aria-label="Rechercher ou commander"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+      <span style="width: 8px; height: 8px; border-radius: 9999px; background: #D4A853;"></span>
+      <span style="font-size: 12px; font-weight: 600; color: #D4A853; letter-spacing: 0.04em; text-transform: uppercase;">Route</span>
+      <span style="font-size: 14px; font-weight: 500; color: #F0F0F2;">Tracer</span>
+      <span style="font-size: 12px; color: #9CA1AC;">Glissez sur la carte · 14 tuiles</span>
+      <span style="flex: 1;"></span>
+      <button style="height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Démolir</button>
+      <button style="height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #F0F0F2; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Terminer <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">Échap</kbd></button>
+    </div>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">Le mode est visible tant qu'il dure — plus de toast qui expire. Coût et trésorerie après sont affichés avant le clic ; la pose demande confirmation (dialogue de la planche Surfaces) sauf si le joueur a coché « ne plus demander ».</p>
+  </section>
+
+  <!-- MAP VIEW -->
+  <section style="display: flex; flex-direction: column; gap: 10px;">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Vue « Carte » — ce que la tuile ouvre (la minicarte de données de Voyager, en feuille)</h2>
+    <div style="display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px;">
+      <div style="display: flex; flex-direction: column; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden;">
+        <div style="display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <span style="height: 32px; padding: 0 10px; display: inline-flex; align-items: center; background: rgba(212,168,83,0.1); border: 1px solid #B8912E; border-radius: 9999px; color: #D4A853; font: 600 12px 'Inter', sans-serif;">Carte</span>
+          <span style="flex: 1;"></span>
+          <button style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer;" title="Position précédente" aria-label="Position précédente"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+          <button style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #3A3F48; cursor: not-allowed;" title="Position suivante" aria-label="Position suivante"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></button>
+          <button style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer;" title="Fermer" aria-label="Fermer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+        </div>
+        <div style="position: relative; height: 240px; margin: 12px; background: #0C0D10; border-radius: 8px; overflow: hidden;">
+          <div style="position: absolute; left: 50%; top: 50%; width: 170px; height: 170px; transform: translate(-50%, -50%) rotate(45deg); background: linear-gradient(135deg, #2b3f2e 0%, #24372c 40%, #1f2e33 70%, #2b3f2e 100%); border: 1px solid rgba(255,255,255,0.12);"></div>
+          <div style="position: absolute; left: 150px; top: 92px; width: 6px; height: 6px; background: #D4A853;"></div>
+          <div style="position: absolute; left: 166px; top: 110px; width: 6px; height: 6px; background: #D4A853;"></div>
+          <div style="position: absolute; left: 182px; top: 128px; width: 6px; height: 6px; background: #EF4444;"></div>
+          <div style="position: absolute; left: 200px; top: 98px; width: 6px; height: 6px; background: #7D8492;"></div>
+          <div style="position: absolute; left: 138px; top: 140px; width: 6px; height: 6px; background: #7D8492;"></div>
+          <div style="position: absolute; left: 156px; top: 104px; width: 40px; height: 26px; border: 1px solid #F0F0F2;"></div>
+          <div style="position: absolute; left: 0; top: 0; width: 60px; height: 240px; background: linear-gradient(to right, rgba(12,13,16,0.85), transparent);"></div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 0 12px 10px; font-size: 11px; color: #9CA1AC;">
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #D4A853;"></span>Mes bâtiments</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #EF4444;"></span>Déficitaires</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #7D8492;"></span>Autres</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 8px; border: 1px solid #F0F0F2;"></span>Vue actuelle</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: rgba(255,255,255,0.15);"></span>Non exploré</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 12px 12px;">
+          <button style="height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer; text-align: left;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D4A853" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22h18"></path><path d="M6 18v-7"></path><path d="M10 18v-7"></path><path d="M14 18v-7"></path><path d="M18 18v-7"></path><path d="m3 9 9-7 9 7z"></path></svg>Aller à l'hôtel de ville le plus proche</button>
+          <button style="height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer; text-align: left;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D4A853" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path></svg>Favoris <span style="color: #7D8492; font-weight: 400;">· Usine textile, Entrepôt Nord, Capitole</span></button>
+          <button style="height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer; text-align: left;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D4A853" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"></path><path d="m22 12.5-9.17 4.17a2 2 0 0 1-1.66 0L2 12.5"></path></svg>Calques <span style="color: #7D8492; font-weight: 400;">· Zones, Pollution, Criminalité…</span></button>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #C4C8D0; line-height: 1.6;">
+        <p style="margin: 0;"><strong style="color: #F0F0F2;">Pourquoi une tuile « Carte »</strong> — sur une grande surface, le joueur doit pouvoir <em>voir où il est</em> et <em>sauter loin</em>. Voyager avait une minicarte de données (couleur par classe de bâtiment, vos bâtiments déficitaires en rouge, brouillard sur l'inexploré, rectangle de vue, clic = sauter, zoom propre — <code style="font-family: 'JetBrains Mono', monospace;">Map.pas:3512-3626</code>, <code style="font-family: 'JetBrains Mono', monospace;">IsometricMap.pas:438-451</code>), des boutons BACK / NEXT (historique 100 positions, <code style="font-family: 'JetBrains Mono', monospace;">MapIsoView.pas:1009-1036</code>), GO TOWN HALL (<code style="font-family: 'JetBrains Mono', monospace;">MapIsoView.pas:978-1007</code>) et des LINKS (favoris de position, <code style="font-family: 'JetBrains Mono', monospace;">MapIsoView.pas:683-716</code>).</p>
+        <p style="margin: 0;"><strong style="color: #F0F0F2;">Le WebClient n'a aujourd'hui</strong> qu'une minicarte terrain (clic = recentrer) et le zoom. La vue « Carte » ci-contre regroupe ces quatre outils dans une feuille ; clic sur la carte = sauter, molette = zoom de la minicarte, le rectangle de vue se déplace avec la caméra. Sur mobile, la même feuille à mi-hauteur, la carte en haut.</p>
+        <p style="margin: 0;"><strong style="color: #F0F0F2;">À implémenter</strong> (voir <code style="font-family: 'JetBrains Mono', monospace;">doc/ux/missing-features.md</code>) : bâtiments et déficitaires sur la minicarte, brouillard, historique Back/Next, hôtel de ville le plus proche (membre RDO à vérifier), favoris de position (stockage local ou cookies serveur).</p>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1200,"height":1160}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

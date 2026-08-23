@@ -43,7 +43,7 @@
 }
 
 .fluidName {
-  color: var(--accent);
+  color: var(--accent-gold);
 }
 
 .closeBtn {
@@ -86,7 +86,7 @@
 
 .filterLabel {
   display: block;
-  font-size: var(--text-xxs);
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   margin-bottom: 2px;
 }
@@ -203,7 +203,7 @@
 }
 
 .resultMeta {
-  font-size: var(--text-xxs);
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -259,4 +259,11 @@
 .connectBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Focus ring restored (design-tokens.test.ts): removing the outline on :focus is fine only
+   because keyboard focus gets the shared gold ring. */
+.filterInput:focus-visible {
+  outline: 2px solid var(--accent-gold);
+  outline-offset: 2px;
 }

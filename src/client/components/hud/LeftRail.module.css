@@ -9,7 +9,7 @@
   flex-direction: column;
   gap: var(--space-2);
   align-items: center;
-  transition: left 250ms var(--ease-out);
+  transition: left var(--duration-panel) var(--ease-out);
 }
 
 .shifted {
