@@ -61,9 +61,9 @@ Légende : ✅ existe · 🟡 partiel · ❌ manquant · **V** = Voyager l'avait
 
 | # | Fonction supposée | WebClient | Voyager | À implémenter |
 |---|---|---|---|---|
-| M1 | Répondre pré-remplit le destinataire | ❌ **bug** : `MailPanel.tsx:70-72` lit le store une fois au montage | V | Synchroniser store → local (ou contrôler les champs par le store) |
-| M2 | Suppression avec confirmation + refetch | ❌ `client-bridge.ts:646-653` | — | Confirmation + rafraîchir le dossier |
-| M3 | Échec d'envoi visible, brouillon conservé | ❌ branche `success: false` vide, brouillon effacé avant réponse (`:638-644`) | — | Toast `alert` + conservation |
+| M1 | Répondre pré-remplit le destinataire | ✅ **fait (T6)** — formulaire piloté par le store ; avant : ❌ **bug** `MailPanel.tsx:70-72` | V | — |
+| M2 | Suppression avec confirmation + refetch | ✅ **fait (T6)** — Dialog destructif, ligne retirée localement à la réponse (aucune requête en plus) ; avant : ❌ `client-bridge.ts:646-653` | — | — |
+| M3 | Échec d'envoi visible, brouillon conservé | ✅ **fait (T6)** — brouillon gardé jusqu'à la réponse, Envoyer verrouillé pendant, toast d'échec ; avant : ❌ branche `success: false` vide | — | — |
 | S1 | **Recherche de bâtiment par nom** | ❌ aucun membre RDO ni route ; la palette « Find Building by Name » ouvre le panneau Recherche qui ne le fait pas | — (Voyager : pas de recherche générale ; `FindSuppliers`/`FindClients` filtrent par nom mais par fluide et autour d'un bâtiment) | Décider : recherche **locale** dans « Mes bâtiments » (favoris déjà lus) + villes + joueurs ; pas de nouveau RDO tant que non justifié |
 | S2 | Palette sur mobile | ✅ **fait (socle-4c)** — entrée du menu mobile ; desktop : ligne recherche de la CommandBar ; avant : ❌ montée mais sans déclencheur tactile (`useKeyboardShortcuts.ts:25-29` seulement) | — | Champ de recherche de la barre de commande (planche HUD / Mobile) |
 

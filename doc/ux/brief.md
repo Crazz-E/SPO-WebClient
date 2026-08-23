@@ -105,8 +105,9 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 | #58 | **socle-4** raccourcis, StatusPill, CommandBar + barre de mode, menu mobile | H1, H5, S2, P9 |
 | #59 | **T1 Construire** | H2, H4, H8, B5 dépense |
 | #60 | **T3 Fournisseur** | B4, N9, B5 déconnexion |
+| #62 | **T6 Courrier** — réponse pré-remplie (bug), brouillon conservé jusqu'à la réponse, suppression confirmée et retrait local, état de chargement | M1, M2, M3 |
 
-Restent (dans l'ordre proposé) : T6 courrier (bug réponse sans destinataire, suppression, échec d'envoi), T2 diagnostic (parseur de hints B7), T5 taxes (entrée directe depuis Government — déjà joignable), T7 recherche (S1 locale, N5), T8 modes carte, vue Carte (N1–N4), mobile : barre de commande complète, feuille flottante 472 px.
+Restent (dans l'ordre proposé) : T2 diagnostic (parseur de hints B7), T5 taxes (entrée directe depuis Government — déjà joignable), T7 recherche (S1 locale, N5), T8 modes carte, vue Carte (N1–N4), mobile : barre de commande complète, feuille flottante 472 px.
 
 ## 7. Livrables attendus de la phase Design
 
