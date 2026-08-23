@@ -34,7 +34,7 @@ Légende : ✅ existe · 🟡 partiel · ❌ manquant · **V** = Voyager l'avait
 | B2 | Bloc Inspect (« Storing », ventes, hints) poussé en continu | ✅ `map-parsers.ts:170,257-266`, push `RefreshObject` ~5 s, texte mis à jour à chaque push (`event-handler.ts:141`) ; **deux parseurs** (`RichDetails.tsx:124`, `QuickStats.tsx:123`) | V | Filtre + tri locaux sur le bloc ; fusionner les deux parseurs au portage |
 | B3 | Onglets Approvisionnements / Produits : noms à l'ouverture de l'onglet, détail à l'ouverture de la ligne | ✅ déjà ainsi — 1 RDO (`GetInputNames`/`GetOutputNames`) à l'ouverture, puis `SetPath` + `GetPropertyList` + `GetSubObjectProps` ×connexions (max 20, 3 à la fois) à l'ouverture (`building-details-handler.ts:364,1264`) | V | **Ne rien ajouter** sur les lignes repliées ; filtre de noms local |
 | B4 | Recherche fournisseur : Entrée lance, filtres conservés | ❌ Entrée ne fait rien (`ConnectionPickerModal.tsx:124-131`), filtres réinitialisés à chaque ouverture (`:44-53`) | — | Entrée + mémoire des filtres (store) |
-| B5 | Confirmation des actions destructives / coûteuses | 🟡 **Dialog généralisé disponible (socle-2), branché sur démolir** ; déconnexion, routes, dépense → T1/T3 ; état initial : `requestConfirm` : **démolir seulement** (`building-action-handler.ts:462`) ; rien sur déconnexion, démolition de route, rétrogradation, dépense | — | Dialogue de confirmation généralisé (planche Surfaces) |
+| B5 | Confirmation des actions destructives / coûteuses | 🟡 **Dialog (socle-2) branché sur démolir et sur la dépense de construction (T1)** ; déconnexion → T3, routes → plus tard ; état initial : `requestConfirm` : **démolir seulement** (`building-action-handler.ts:462`) ; rien sur déconnexion, démolition de route, rétrogradation, dépense | — | Dialogue de confirmation généralisé (planche Surfaces) |
 | B6 | SaveIndicator sur toute écriture | 🟡 **échec lisible + annoncé (socle-2)** ; généralisation → T3 ; `PropertyInputs`, `WorkforceTable`, `TaxesTab`, `MinistriesTab`, `JobsTab`, `TownsTab` ; **pas** sur renommer, connexions, curseurs fournisseurs | — | Généraliser ; ajouter l'état « en attente de relecture » (OB-29) |
 | B7 | Diagnostic en tête (« Production arrêtée — il manque du coton ») | 🟡 `hintsText` brut affiché (`StatusOverlay.tsx:443`, `RichDetails.tsx:532`), sans sévérité ni action | V (texte brut aussi) | Parser les hints connus → sévérité + action (« Trouver un fournisseur ») ; fallback texte brut |
 | B8 | Bouton « Trouver un fournisseur » depuis une porte vide | ✅ Hire → `ConnectionPickerModal` | V | — (le placer aussi dans le diagnostic) |
@@ -44,9 +44,9 @@ Légende : ✅ existe · 🟡 partiel · ❌ manquant · **V** = Voyager l'avait
 | # | Fonction supposée | WebClient | Voyager | À implémenter |
 |---|---|---|---|---|
 | H1 | Indicateur de mode persistant (placement / route / zone) sur desktop | ✅ **fait (socle-4b)** — barre de mode de la CommandBar ; avant : ❌ rien (`isPlacingBuilding` lu par `MobileShell` seulement) ; route/zone = bouton surligné | — | Barre de mode (planche HUD) |
-| H2 | Confirmer / annuler la pose sur desktop | 🟡 **Done/Annuler + Tourner la vue dans la barre de mode (socle-4b)** ; la confirmation de dépense (Dialog) arrive avec T1 ; avant : ❌ clic gauche pose, clic droit annule, Échap — non affiché | — | Boutons dans la barre de mode ; le mobile a déjà `PlacementHUD` |
+| H2 | Confirmer / annuler la pose sur desktop | ✅ **fait (socle-4b + T1)** — barre de mode + Dialog de dépense au clic carte (opt-out de session) ; avant : ❌ clic gauche pose, clic droit annule, Échap — non affiché | — | Boutons dans la barre de mode ; le mobile a déjà `PlacementHUD` |
 | H3 | **« Tourner » en placement** | ⚠️ **tourne la carte**, pas le bâtiment (`MobileShell.tsx:136` → `rotateCW`) ; **aucune orientation de bâtiment** n'existe | **V** idem : pas d'orientation de bâtiment | Libeller « Tourner la vue » ; ne pas promettre une rotation de bâtiment |
-| H4 | Coût vs trésorerie avant la pose, trésorerie après | 🟡 **coût + trésorerie après dans la barre de mode (socle-4b)** ; blocage si insuffisant → T1 ; avant : ❌ coût affiché (`BuildMenu.tsx:115`), jamais comparé au cash ; aucune désactivation | — | Comparaison locale (`tycoonStats.cash`) dans la barre de mode et le dialogue |
+| H4 | Coût vs trésorerie avant la pose, trésorerie après | ✅ **fait (socle-4b + T1)** — barre de mode, carte dépliée (« Cash after »), Placer désactivé si insuffisant ; avant : ❌ coût affiché (`BuildMenu.tsx:115`), jamais comparé au cash ; aucune désactivation | — | Comparaison locale (`tycoonStats.cash`) dans la barre de mode et le dialogue |
 | H5 | Liste des raccourcis à jour | ✅ **fait (socle-4a)** — table unique `SHORTCUTS`, M = carte, L = courrier, P = gouvernement, W = tourner la vue, modificateurs laissés au navigateur ; avant : 🟡 `SettingsDialog.tsx:136-145` (B E M R ⌘K Esc D) ; Q, +/−, 1–5 absents ; collision M (mail vs minimap dans le registre mort) | — | Générer la liste depuis le registre ; réattribuer M = Carte, L = Courrier |
 | H6 | Pastille d'état avec alertes cliquables (bâtiments en difficulté) | 🟡 `InfoWidget` a la teinte dette (`failureLevel`) ; **pas de liste** des bâtiments en difficulté | — | Liste dérivée des `hintsText` / revenus négatifs déjà reçus (pas de RDO en plus) |
 
@@ -192,7 +192,7 @@ aucune dépendance serveur.
 | # | Fonction | WebClient | Voyager | À faire |
 |---|---|---|---|---|
 | H7 | Aperçu du coût d'une route avant le tracé | ❌ (le serveur répond « fonds insuffisants » après coup) | `[UNKNOWN]` — à instruire avec `delphi-archaeologist` (coût par tuile dans le modèle ?) | Si le modèle l'expose, calcul local ; sinon la barre reste « n tuiles » |
-| H8 | Cache de session du menu de construction | ❌ re-demandé à chaque ouverture | n/a | client, réduit les requêtes |
+| H8 | Cache de session du menu de construction | ✅ **fait (T1)** — catégories + liste par catégorie gardées pour la session | n/a | — |
 
 ---
 
