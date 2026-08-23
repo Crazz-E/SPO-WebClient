@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders, resetStores } from '../../__tests__/setup/render-helpers';
 import { useUiStore } from '../../store/ui-store';
 import { BuildMenu } from './BuildMenu';
@@ -48,6 +48,15 @@ describe('SettingsDialog', () => {
     useUiStore.getState().openModal('settings');
     renderWithProviders(<SettingsDialog />);
     expect(screen.getByText('Settings')).toBeTruthy();
+  });
+
+  it('its toggles are real switches that flip on click (keyboard-usable)', () => {
+    useUiStore.getState().openModal('settings');
+    renderWithProviders(<SettingsDialog />);
+    const sw = screen.getByRole('switch', { name: 'Vehicle animations' }) as HTMLInputElement;
+    const before = sw.checked;
+    fireEvent.click(sw);
+    expect((screen.getByRole('switch', { name: 'Vehicle animations' }) as HTMLInputElement).checked).toBe(!before);
   });
 });
 
