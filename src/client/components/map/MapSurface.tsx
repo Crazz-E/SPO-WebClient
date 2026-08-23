@@ -9,13 +9,17 @@
  * Click = jump there. Wheel = zoom around the cursor (1× … 8×), drag = pan when zoomed.
  * Toolbar: Back / Next through the camera history (`map-store`), nearest Town Hall from the
  * towns page Search / Government already hold (`search-store`), reset zoom.
+ * Bookmarks (N4): named places kept in this browser per world and player (`map-store`) —
+ * add the current view, go, rename, delete. Voyager kept its LINKS as server cookies
+ * (`MapIsoView.pas:683-716`); writing them back would need an RDO member this lot does not add.
  *
  * The docked diamond stays available from the More menu; this surface is the large, readable
  * version the brief asked for (« bouton Carte »).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Landmark, Locate, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bookmark, BookmarkPlus, Landmark, Locate, Pencil, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { useUiStore } from '../../store/ui-store';
 import { useMapStore } from '../../store/map-store';
 import { useGameStore } from '../../store/game-store';
 import { useSearchStore } from '../../store/search-store';
@@ -76,6 +80,13 @@ export function MapSurface() {
   const goNext = useMapStore((s) => s.goNext);
   const recordPosition = useMapStore((s) => s.recordPosition);
   const towns = useSearchStore((s) => s.townsData?.towns);
+  const bookmarks = useMapStore((s) => s.bookmarks);
+  const loadBookmarks = useMapStore((s) => s.loadBookmarks);
+  const addBookmark = useMapStore((s) => s.addBookmark);
+  const renameBookmark = useMapStore((s) => s.renameBookmark);
+  const removeBookmark = useMapStore((s) => s.removeBookmark);
+  const worldName = useGameStore((s) => s.worldName);
+  const username = useGameStore((s) => s.username);
   const tycoonIdRaw = useGameStore((s) => s.tycoonId);
   const myTycoonId = parseInt(tycoonIdRaw || '0', 10) || 0;
   const client = useClient();
@@ -93,6 +104,11 @@ export function MapSurface() {
   useEffect(() => {
     if (!towns) client.onSearchMenuTowns();
   }, [client, towns]);
+
+  // Bookmarks live per world and player.
+  useEffect(() => {
+    loadBookmarks(worldName, username);
+  }, [loadBookmarks, worldName, username]);
 
   // Fit the square canvas to the surface width.
   useEffect(() => {
@@ -240,6 +256,16 @@ export function MapSurface() {
     return zoom === 1 ? { zoom: 1, panX: 0, panY: 0 } : { ...v, zoom };
   });
 
+  const onAddBookmark = () => {
+    if (!camera) return;
+    const x = Math.round(camera.x);
+    const y = Math.round(camera.y);
+    useUiStore.getState().requestPrompt('Bookmark this place', `The view is at (${x}, ${y}). Name it:`, (name) => { addBookmark(name, x, y); }, { placeholder: 'e.g. Cotton farms', defaultValue: `(${x}, ${y})` });
+  };
+  const onRenameBookmark = (id: string, current: string) => {
+    useUiStore.getState().requestPrompt('Rename bookmark', 'New name:', (name) => renameBookmark(id, name), { defaultValue: current });
+  };
+
   const camera = source?.getCameraPosition();
   const nearest = useMemo(() => (camera ? nearestTown(towns, camera.x, camera.y) : null), [towns, camera?.x, camera?.y]); // eslint-disable-line react-hooks/exhaustive-deps
   const canBack = historyIndex > 0;
@@ -286,6 +312,31 @@ export function MapSurface() {
           <p className={styles.empty}>The map is not ready yet.</p>
         )}
       </div>
+
+      <section className={styles.bookmarks} aria-labelledby="map-bookmarks">
+        <div className={styles.bookmarksHead}>
+          <h3 id="map-bookmarks" className={styles.bookmarksTitle}><Bookmark size={14} aria-hidden="true" /> Bookmarks</h3>
+          <Button size="sm" variant="secondary" iconLeft={<BookmarkPlus size={14} />} disabled={!camera} onClick={onAddBookmark}>
+            Bookmark this place
+          </Button>
+        </div>
+        {bookmarks.length === 0 ? (
+          <p className={styles.bookmarksEmpty}>No bookmarks yet — keep a place you come back to.</p>
+        ) : (
+          <ul className={styles.bookmarkList} role="list">
+            {bookmarks.map((b) => (
+              <li key={b.id} className={styles.bookmarkRow}>
+                <button type="button" className={styles.bookmarkGo} onClick={() => jumpTo(b.x, b.y)} aria-label={`Go to ${b.name} (${b.x}, ${b.y})`}>
+                  <span className={styles.bookmarkName}>{b.name}</span>
+                  <span className={styles.bookmarkCoords}>({b.x}, {b.y})</span>
+                </button>
+                <Button size="sm" variant="ghost" aria-label={`Rename ${b.name}`} iconLeft={<Pencil size={14} />} onClick={() => onRenameBookmark(b.id, b.name)} />
+                <Button size="sm" variant="ghost" aria-label={`Delete ${b.name}`} iconLeft={<Trash2 size={14} />} onClick={() => removeBookmark(b.id)} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className={styles.footer}>
         <span className={styles.legend}>

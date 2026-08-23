@@ -1,4 +1,4 @@
-# Handoff — la surface « Map » (Carte-1, PR #67 ; Carte-2 à venir)
+# Handoff — la surface « Map » (Carte-1 PR #67, Carte-2 PR #68)
 
 Le brief demandait un bouton **Carte** : une vue lisible du monde pour se déplacer sur une
 grande surface, ce que le losange ancré (terrain seul, 3 tailles) ne permettait pas. La
@@ -29,4 +29,8 @@ contrat commun (déplacé dans `minimap-colormap.ts`, ré-exporté par `minimap-
   entier et les bâtiments déjà chargés (l'inexploré est donc vide, pas gris).
 - Pas de couleur **par classe** de bâtiment (Voyager `GetBuildingColor`) : trois couleurs suffisent
   pour la lecture visée (où sont les miens, lesquels perdent de l'argent).
-- **Favoris de position** (N4) → Carte-2.
+- **Favoris de position** (N4, Carte-2) : section « Bookmarks » sous la carte — « Bookmark this
+  place » ouvre le PromptDialog (nom, défaut = coordonnées de la vue), chaque ligne = aller
+  (bouton nommé `Go to <nom> (x, y)`), renommer (Prompt), supprimer. Stockage **local**
+  (`localStorage`, clé `spo.bookmarks.<monde>.<joueur>`, 50 max) ; Voyager les gardait en
+  cookies serveur — l'écriture RDO est un ticket séparé.
