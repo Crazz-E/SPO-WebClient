@@ -107,8 +107,9 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 | #60 | **T3 Fournisseur** | B4, N9, B5 déconnexion |
 | #63 | **T2 Diagnostic** — parseur des hints serveur (sévérité + action) ; bandeau dans l'inspecteur et l'aperçu | B7 |
 | #62 | **T6 Courrier** — réponse pré-remplie (bug), brouillon conservé jusqu'à la réponse, suppression confirmée et retrait local, état de chargement | M1, M2, M3 |
+| #64 | **T7 Recherche** — palette : mes bâtiments (favoris lus une fois), villes, coordonnées « x,y » ; commandes mortes retirées | S1 (local), N5 (palette) |
 
-Restent (dans l'ordre proposé) : T5 taxes (entrée directe depuis Government — déjà joignable), T7 recherche (S1 locale, N5), T8 modes carte, vue Carte (N1–N4), mobile : barre de commande complète, feuille flottante 472 px.
+Restent (dans l'ordre proposé) : T5 taxes (entrée directe depuis Government — déjà joignable), T8 modes carte, vue Carte (N1–N4), mobile : barre de commande complète, feuille flottante 472 px.
 
 ## 7. Livrables attendus de la phase Design
 

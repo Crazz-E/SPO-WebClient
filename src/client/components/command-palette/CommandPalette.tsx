@@ -1,12 +1,15 @@
 /**
  * CommandPalette — Floating command search overlay.
  *
- * Triggered by Cmd+K. Fuzzy-searches over all registered commands.
+ * Triggered by Cmd+K (T7). Fuzzy-searches the registered commands, and — from what the client
+ * already holds, no request per keystroke — my facilities, the towns, and "x,y" coordinates.
  * Center-top floating, 560px wide, z-500.
  */
 
-import { useEffect, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { useUiStore } from '../../store/ui-store';
+import { useEmpireStore } from '../../store/empire-store';
+import { useSearchStore } from '../../store/search-store';
 import { useClient } from '../../context';
 import { useCommandPalette, type Command } from '../../hooks/useCommandPalette';
 import styles from './CommandPalette.module.css';
@@ -79,14 +82,8 @@ export function CommandPalette() {
         execute: () => openModal('settings'),
       },
       {
-        id: 'find-building',
-        label: 'Find Building by Name',
-        category: 'search',
-        execute: () => toggleRightPanel('search'),
-      },
-      {
-        id: 'find-player',
-        label: 'Find Player',
+        id: 'search-directory',
+        label: 'Search the directory (towns, players, rankings)',
         category: 'search',
         execute: () => toggleRightPanel('search'),
       },
@@ -103,8 +100,48 @@ export function CommandPalette() {
     [openModal, toggleLeftPanel, toggleRightPanel, client],
   );
 
-  const { query, setQuery, filteredCommands, groupedCommands, resetQuery } =
-    useCommandPalette(commands);
+  // Dynamic entries (T7, missing-features S1 / N5): my facilities (the favorites list the
+  // client already reads), towns (directory page already read by Search/Government) and
+  // "x,y" coordinates. All local — no request is made by typing.
+  const facilities = useEmpireStore((s) => s.facilities);
+  const towns = useSearchStore((s) => s.townsData?.towns);
+  const [rawQuery, setRawQuery] = useState('');
+  const dynamicCommands: Command[] = useMemo(() => {
+    const q = rawQuery.trim().toLowerCase();
+    if (!q) return [];
+    const out: Command[] = [];
+    const coord = rawQuery.match(/^\s*(\d{1,4})\s*[,; ]\s*(\d{1,4})\s*$/);
+    if (coord) {
+      const x = parseInt(coord[1], 10);
+      const y = parseInt(coord[2], 10);
+      out.push({ id: `goto-${x}-${y}`, label: `Go to (${x}, ${y})`, category: 'navigation', execute: () => client.onNavigateToBuilding(x, y) });
+    }
+    for (const f of facilities) {
+      if (f.name.toLowerCase().includes(q)) {
+        out.push({ id: `fac-${f.id}`, label: `My facility: ${f.name}`, category: 'search', execute: () => client.onNavigateToBuilding(f.x, f.y) });
+      }
+      if (out.length > 12) break;
+    }
+    for (const t of towns ?? []) {
+      if (t.name.toLowerCase().includes(q)) {
+        out.push({ id: `town-${t.name}`, label: `Town: ${t.name}${t.mayor ? ` (mayor ${t.mayor})` : ''}`, category: 'search', execute: () => client.onNavigateToBuilding(t.x, t.y) });
+      }
+    }
+    return out;
+  }, [rawQuery, facilities, towns, client]);
+
+  const allCommands = useMemo(() => [...dynamicCommands, ...commands], [dynamicCommands, commands]);
+  const { query, setQuery: setQueryInner, filteredCommands, groupedCommands, resetQuery: resetQueryInner } =
+    useCommandPalette(allCommands);
+  const setQuery = useCallback((v: string) => { setRawQuery(v); setQueryInner(v); }, [setQueryInner]);
+  const resetQuery = useCallback(() => { setRawQuery(''); resetQueryInner(); }, [resetQueryInner]);
+
+  // The facilities list is read once per session, the first time the palette opens.
+  useEffect(() => {
+    if (open && facilities.length === 0 && !useEmpireStore.getState().isLoading) {
+      client.onRequestFacilities();
+    }
+  }, [open, facilities.length, client]);
 
   // Focus input on open
   useEffect(() => {
@@ -166,7 +203,7 @@ export function CommandPalette() {
           ref={inputRef}
           type="text"
           className={styles.input}
-          placeholder="Type a command or search..."
+          placeholder="My facilities, a town, x,y — or a command…"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
