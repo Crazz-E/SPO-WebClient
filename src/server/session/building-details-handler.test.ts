@@ -532,6 +532,27 @@ describe('property collection and grouping', () => {
     for (const [, names] of batches) expect(names.length).toBeLessThanOrEqual(50);
   });
 
+  it('never publishes a gate group in `groups` — its values do not come from the property bag', async () => {
+    const fake = makeDetailsCtx();
+    // `Supplies` declares `ObjectId` as its "Gate Object" column, and `ObjectId` is
+    // also a HEADER property read for every building. The opening read therefore had
+    // a value for it, `groups['supplies']` came back holding the BUILDING's object id
+    // under a name that means the GATE's, and the client read the mere presence of
+    // the key as "this gate is loaded" — so it never sent REQ_BUILDING_TAB_DATA and
+    // the Supplies tab said "No supply inputs" on every building.
+    registerTabs('9101', ['IndGeneral', 'Supplies']);
+    focusReturns(fake, '40133602');
+    cacheValues(fake, { Name: 'Liquor plant', ObjectId: '40133602', Cost: '$500K' });
+
+    const details = await getBuildingBasicDetails(fake.ctx, X, Y, '9101');
+
+    // The tab is still offered — only its property bag is absent.
+    expect(details.tabs.map(t => t.id)).toContain('supplies');
+    expect(Object.keys(details.groups)).not.toContain('supplies');
+    // The header group is unaffected: it IS a property group.
+    expect(details.groups['indGeneral']).toBeDefined();
+  });
+
   it('drops a property the cache answered "error" for', async () => {
     const fake = makeDetailsCtx();
     registerTabs('4722', ['unkGeneral']);

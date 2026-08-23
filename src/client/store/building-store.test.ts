@@ -825,6 +825,46 @@ describe('Building Store — Lazy tab data preservation', () => {
     expect(useBuildingStore.getState().details!.products).toBeUndefined();
   });
 
+  it('a group key never settles a GATE — that is what emptied the Supplies tab', () => {
+    const details = makeBuildingDetails(100, 200);
+    // What the server used to send: `supplies` in the property bag, because the
+    // supplies group declares `ObjectId` and `ObjectId` is a header property.
+    details.groups = {
+      indGeneral: [{ name: 'ROI', value: '12%' }],
+      supplies: [{ name: 'ObjectId', value: '40133602' }],
+    };
+    useBuildingStore.getState().setDetails(details);
+
+    // 'loaded' is exactly what makes requestTabData return early, so the gate read
+    // never went out and the tab said "No supply inputs" forever.
+    expect(useBuildingStore.getState().tabLoadingStates['supplies']).toBeUndefined();
+    expect(useBuildingStore.getState().tabLoadingStates['indGeneral']).toBe('loaded');
+  });
+
+  it('the same protection covers products and company inputs', () => {
+    const details = makeBuildingDetails(100, 200);
+    details.groups = {
+      products: [{ name: 'MetaFluid', value: 'Fabric' }],
+      compInputs: [{ name: 'MetaFluid', value: 'Ads' }],
+      whGeneral: [{ name: 'Name', value: 'Store' }],
+    };
+    useBuildingStore.getState().setDetails(details);
+
+    expect(useBuildingStore.getState().tabLoadingStates['products']).toBeUndefined();
+    expect(useBuildingStore.getState().tabLoadingStates['compInputs']).toBeUndefined();
+    // `whGeneral` is a real property group, not a gate: it stays settled.
+    expect(useBuildingStore.getState().tabLoadingStates['whGeneral']).toBe('loaded');
+  });
+
+  it('the gate data itself still settles the gate', () => {
+    const details = makeBuildingDetails(100, 200);
+    details.groups = { supplies: [{ name: 'ObjectId', value: '40133602' }] };
+    details.supplies = mockSupplies as never;
+    useBuildingStore.getState().setDetails(details);
+
+    expect(useBuildingStore.getState().tabLoadingStates['supplies']).toBe('loaded');
+  });
+
   it('invalidateTabs clears the load state so requestTabData will run again', () => {
     const details = makeBuildingDetails(100, 200);
     useBuildingStore.getState().setDetails(details);

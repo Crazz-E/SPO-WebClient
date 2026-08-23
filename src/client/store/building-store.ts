@@ -12,7 +12,7 @@ import type {
   ResearchCategoryData,
   ResearchInventionDetails,
 } from '@/shared/types';
-import { registerInspectorTabs } from '@/shared/building-details';
+import { registerInspectorTabs, isGateTab } from '@/shared/building-details';
 
 interface ResearchState {
   /** Cached inventory per category tab (key = categoryIndex 0..4). */
@@ -251,7 +251,14 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       // carries the header group alone. Marking those loaded is what tells the
       // panel it owes the server nothing for them; every other section stays
       // unmarked and is read when its menu entry is opened.
-      for (const groupId of Object.keys(details.groups)) preloaded[groupId] = 'loaded';
+      for (const groupId of Object.keys(details.groups)) {
+        // A GATE is loaded by its own read, never by a property group that happens to
+        // share its name. The server no longer publishes one, and this is the second
+        // line: a group key must never settle `supplies` / `products` / `compInputs`,
+        // or the gate read is skipped and the tab stays empty forever.
+        if (isGateTab(groupId)) continue;
+        preloaded[groupId] = 'loaded';
+      }
 
       // Carry forward lazy tab data when refreshing the same building.
       // EVENT_BUILDING_REFRESH sends basic details (products/supplies/warehouseWares

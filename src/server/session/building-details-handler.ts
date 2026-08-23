@@ -27,6 +27,7 @@ import {
   collectTemplatePropertyNamesStructured,
   collectTemplatePropertyNamesForGroups,
   collectHeaderPropertyNames,
+  isGateTab,
 } from '../../shared/building-details';
 import type { CollectedPropertyNames } from '../../shared/building-details';
 import { cleanPayload as cleanPayloadHelper, parsePropertyResponse as parsePropertyResponseHelper } from '../rdo-helpers';
@@ -801,6 +802,13 @@ async function fetchPropertiesAndGroups(
   const groups: { [groupId: string]: BuildingPropertyValue[] } = {};
 
   for (const group of template.groups) {
+    // A gate group's values come from the gate read, never from here. Publishing one
+    // meant sending the BUILDING's `ObjectId` under the supplies group's "Gate Object"
+    // column — a wrong value — and the client read the key's presence as "already
+    // loaded", so it never asked for the gates (Supplies said "No supply inputs" on
+    // every building).
+    if (isGateTab(group.special) || isGateTab(group.id)) continue;
+
     const groupValues: BuildingPropertyValue[] = [];
     const includedCountProps = new Set<string>();
 
