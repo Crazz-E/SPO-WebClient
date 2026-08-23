@@ -28,4 +28,10 @@ describe('MobileMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: /Command palette/ }));
     expect(useUiStore.getState().commandPaletteOpen).toBe(true);
   });
+
+  it('My facilities opens the facilities surface (the former Fav tab)', () => {
+    renderWithProviders(<MobileMenu />);
+    fireEvent.click(screen.getByRole('button', { name: /My facilities/ }));
+    expect(useUiStore.getState().stack.map((s) => s.kind)).toEqual(['facilities']);
+  });
 });

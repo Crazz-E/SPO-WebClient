@@ -3,6 +3,7 @@
 .backdrop {
   position: fixed;
   inset: 0;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px)); /* the command bar stays tappable under a sheet */
   background: rgba(0, 0, 0, 0.25); /* Semi-transparent — map visible behind */
   z-index: calc(var(--z-modal) - 50);
   pointer-events: auto; /* override inherited none from .shell */

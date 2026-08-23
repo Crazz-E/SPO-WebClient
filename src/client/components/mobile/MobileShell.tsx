@@ -10,7 +10,6 @@ import { useEffect } from 'react';
 import { useUiStore, type MobileTab } from '../../store/ui-store';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useClient } from '../../context';
-import { EmpireOverview } from '../empire';
 import { ChatStrip } from '../chat';
 import { ErrorBoundary } from '../common';
 import { SurfaceContent, SURFACE_TITLES } from '../sheet';
@@ -20,7 +19,7 @@ import { BottomSheet } from './BottomSheet';
 import { ChatBanner } from './ChatBanner';
 import { MobileBuildContent } from './MobileBuildContent';
 import { MobileInfoBar } from './MobileInfoBar';
-import { MinimapToggleButton } from './MinimapToggleButton';
+import { MobileSearchPill } from './MobileSearchPill';
 import { MobileMenu } from './MobileMenu';
 import { PlacementHUD } from './PlacementHUD';
 import styles from './MobileShell.module.css';
@@ -30,7 +29,6 @@ const SHEET_TITLES: Record<MobileTab, string> = {
   map: '',
   chat: 'Chat',
   build: 'Build',
-  favorites: 'My Facilities',
   more: 'Menu',
 };
 
@@ -53,8 +51,6 @@ function SheetContent() {
       return <ChatStrip mode="embedded" />;
     case 'build':
       return <MobileBuildContent />;
-    case 'favorites':
-      return <EmpireOverview />;
     case 'more':
       return <MobileMenu />;
     default:
@@ -96,13 +92,11 @@ export function MobileShell() {
       {/* Compact info bar at top */}
       <MobileInfoBar />
 
-      {/* Minimap trigger — top-right triangle, only on map tab */}
-      {mobileTab === 'map' && !hasRightPanel && !isPlacingBuilding && (
-        <MinimapToggleButton />
-      )}
-
       {/* Chat banner — only visible on map tab */}
       {mobileTab === 'map' && !hasRightPanel && <ChatBanner />}
+
+      {/* Search row of the command bar — map tab, no sheet, no placement */}
+      {mobileTab === 'map' && !hasRightPanel && !isPlacingBuilding && <MobileSearchPill />}
 
       {/* Universal BottomSheet — all non-map content goes here */}
       <BottomSheet

@@ -12,11 +12,9 @@ jest.mock('../sheet', () => ({
   SURFACE_TITLES: { building: 'Building Inspector', mail: 'Mail', search: 'Search', transport: 'Transport', politics: 'Government', empire: 'Profile', facilities: 'My Facilities', overlays: 'Map Overlays' },
 }));
 jest.mock('./MobileInfoBar', () => ({ MobileInfoBar: () => null }));
-jest.mock('./MinimapToggleButton', () => ({ MinimapToggleButton: () => null }));
 jest.mock('./ChatBanner', () => ({ ChatBanner: () => null }));
 jest.mock('./BottomNav', () => ({ BottomNav: () => <nav>NAV</nav> }));
 jest.mock('./PlacementHUD', () => ({ PlacementHUD: () => <div>PLACEMENT</div> }));
-jest.mock('../empire', () => ({ EmpireOverview: () => <div>FAVORITES</div> }));
 jest.mock('../chat', () => ({ ChatStrip: () => <div>CHAT</div> }));
 jest.mock('./MobileBuildContent', () => ({ MobileBuildContent: () => <div>BUILD</div> }));
 jest.mock('./MobileMenu', () => ({ MobileMenu: () => <div>MENU</div> }));
@@ -53,11 +51,27 @@ describe('MobileShell and the surface stack', () => {
     expect(screen.getByText('SURFACE:building')).toBeTruthy();
   });
 
-  it('falls back to the tab content when the stack is empty', () => {
-    act(() => useUiStore.getState().setMobileTab('favorites'));
+  it('falls back to the tab content when the stack is empty (Fav moved to More › My facilities)', () => {
+    act(() => useUiStore.getState().setMobileTab('build'));
     renderWithProviders(<MobileShell />);
-    expect(screen.getByText('FAVORITES')).toBeTruthy();
-    expect(screen.getByText('My Facilities')).toBeTruthy();
+    expect(screen.getByText('BUILD')).toBeTruthy();
+    expect(screen.getByText('Build')).toBeTruthy();
+  });
+
+  it('the search row shows on the map tab only — not over a sheet, not during placement', () => {
+    const { unmount } = renderWithProviders(<MobileShell />);
+    expect(screen.getByRole('button', { name: 'Search or run a command' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Search or run a command' }));
+    expect(useUiStore.getState().commandPaletteOpen).toBe(true);
+    unmount();
+    useUiStore.setState({ commandPaletteOpen: false });
+    act(() => useUiStore.getState().setRootSurface({ kind: 'mail' }));
+    const r2 = renderWithProviders(<MobileShell />);
+    expect(screen.queryByRole('button', { name: 'Search or run a command' })).toBeNull();
+    r2.unmount();
+    act(() => { useUiStore.getState().clearSurfaces(); useUiStore.getState().setIsPlacingBuilding(true); });
+    renderWithProviders(<MobileShell />);
+    expect(screen.queryByRole('button', { name: 'Search or run a command' })).toBeNull();
   });
 
   it('shows the placement HUD instead of the nav while placing', () => {

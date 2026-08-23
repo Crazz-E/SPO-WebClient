@@ -136,12 +136,17 @@ export function CommandPalette() {
   const setQuery = useCallback((v: string) => { setRawQuery(v); setQueryInner(v); }, [setQueryInner]);
   const resetQuery = useCallback(() => { setRawQuery(''); resetQueryInner(); }, [resetQueryInner]);
 
-  // The facilities list is read once per session, the first time the palette opens.
+  // The facilities list and the towns page are read once per session, the first time the
+  // palette opens (the same store slots Empire / Search / Government fill).
   useEffect(() => {
-    if (open && facilities.length === 0 && !useEmpireStore.getState().isLoading) {
+    if (!open) return;
+    if (facilities.length === 0 && !useEmpireStore.getState().isLoading) {
       client.onRequestFacilities();
     }
-  }, [open, facilities.length, client]);
+    if (!towns && !useSearchStore.getState().isLoading) {
+      client.onSearchMenuTowns();
+    }
+  }, [open, facilities.length, towns, client]);
 
   // Focus input on open
   useEffect(() => {
@@ -184,9 +189,13 @@ export function CommandPalette() {
         e.preventDefault();
         const cmd = filteredCommands[selectedRef.current];
         if (cmd) executeCommand(cmd);
+      } else if (e.key === 'Escape') {
+        // The global shortcut ignores keys typed in a text field — the input closes itself.
+        e.preventDefault();
+        close();
       }
     },
-    [filteredCommands, executeCommand],
+    [filteredCommands, executeCommand, close],
   );
 
   if (!open) return null;
