@@ -109,6 +109,7 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
    (T1-1…T1-5 + mobile, T3-1…T3-5 + mobile), générées par [design/flows/gen.py](design/flows/gen.py). Audit de
    branchement de chaque élément visuel : [missing-features.md §9](missing-features.md). **À valider.**
 4. **Handoff par flux** (`doc/ux/handoff/<flux>.md`) : tokens, composants, props, états, breakpoints, animations, cas limites.
+   **Fait (v1)** : [handoff/00-socle.md](handoff/00-socle.md) (tokens, composants partagés, feuille universelle + pile, HUD, ordre des 4 PR socle), [handoff/01-t1-construire.md](handoff/01-t1-construire.md), [handoff/02-t3-fournisseur.md](handoff/02-t3-fournisseur.md).
 
 ---
 
