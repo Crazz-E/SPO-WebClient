@@ -6,16 +6,14 @@
  * Tab content is routed into the BottomSheet — no opaque content layer.
  */
 
+import { useEffect } from 'react';
 import { useUiStore, type MobileTab } from '../../store/ui-store';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useClient } from '../../context';
 import { EmpireOverview } from '../empire';
-import { MailPanel } from '../mail';
-import { BuildingInspector } from '../building';
 import { ChatStrip } from '../chat';
-import { SearchPanel } from '../search';
-import { TransportPanel } from '../transport';
 import { ErrorBoundary } from '../common';
+import { SurfaceContent, SURFACE_TITLES } from '../sheet';
 import { useChatStore } from '../../store/chat-store';
 import { BottomNav } from './BottomNav';
 import { BottomSheet } from './BottomSheet';
@@ -36,31 +34,19 @@ const SHEET_TITLES: Record<MobileTab, string> = {
   more: 'Menu',
 };
 
-/** Right panel override titles */
-const PANEL_TITLES: Record<string, string> = {
-  building: 'Building Inspector',
-  mail: 'Mail',
-  search: 'Search',
-  transport: 'Transport',
-  politics: 'Capitol',
-};
-
-/** Content rendered inside the BottomSheet based on active tab or right panel */
+/** Content rendered inside the BottomSheet: the top of the surface stack wins, then the tab */
 function SheetContent() {
   const mobileTab = useUiStore((s) => s.mobileTab);
-  const rightPanel = useUiStore((s) => s.rightPanel);
+  const top = useUiStore((s) => s.stack[s.stack.length - 1]);
   const resetUnreadChat = useChatStore((s) => s.resetUnreadChat);
 
-  // Reset unread chat count when chat tab is active
-  if (mobileTab === 'chat' && !rightPanel) {
-    resetUnreadChat();
-  }
+  // Reset unread chat count when the chat tab is shown (after render, not during it)
+  useEffect(() => {
+    if (mobileTab === 'chat' && !top) resetUnreadChat();
+  }, [mobileTab, top, resetUnreadChat]);
 
-  // Right panel overrides take priority
-  if (rightPanel === 'building') return <BuildingInspector />;
-  if (rightPanel === 'mail') return <MailPanel />;
-  if (rightPanel === 'search') return <SearchPanel />;
-  if (rightPanel === 'transport') return <TransportPanel />;
+  // The surface stack takes priority — every desktop surface (politics and profile included) is reachable here
+  if (top) return <SurfaceContent kind={top.kind} />;
 
   switch (mobileTab) {
     case 'chat':
@@ -79,8 +65,9 @@ function SheetContent() {
 export function MobileShell() {
   const { isMobile } = useResponsive();
   const mobileTab = useUiStore((s) => s.mobileTab);
-  const rightPanel = useUiStore((s) => s.rightPanel);
-  const closeRightPanel = useUiStore((s) => s.closeRightPanel);
+  const top = useUiStore((s) => s.stack[s.stack.length - 1]);
+  const stackDepth = useUiStore((s) => s.stack.length);
+  const popSurface = useUiStore((s) => s.popSurface);
   const setMobileTab = useUiStore((s) => s.setMobileTab);
   const isPlacingBuilding = useUiStore((s) => s.isPlacingBuilding);
   const placementValid = useUiStore((s) => s.placementValid);
@@ -89,17 +76,16 @@ export function MobileShell() {
   if (!isMobile) return null;
 
   // Determine if the BottomSheet should be open
-  const hasRightPanel = rightPanel != null;
+  const hasRightPanel = top != null;
   const sheetOpen = mobileTab !== 'map' || hasRightPanel;
 
-  // Sheet title from right panel override or active tab
-  const sheetTitle = hasRightPanel
-    ? (PANEL_TITLES[rightPanel] ?? '')
-    : SHEET_TITLES[mobileTab];
+  // Sheet title from the top surface or the active tab
+  const sheetTitle = top ? SURFACE_TITLES[top.kind] : SHEET_TITLES[mobileTab];
 
+  // Closing unstacks one surface (a supplier search returns to its building); the tab closes last.
   const handleSheetClose = () => {
-    if (hasRightPanel) {
-      closeRightPanel();
+    if (stackDepth > 0) {
+      popSurface();
     } else {
       setMobileTab('map');
     }

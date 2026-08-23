@@ -2,7 +2,7 @@
  * Tests for building-focus-handler — map click routing and inspector switching.
  */
 
-import { handleMapClick } from './building-focus-handler';
+import { handleMapClick, focusBuilding } from './building-focus-handler';
 import { useBuildingStore } from '../store/building-store';
 import { useUiStore } from '../store/ui-store';
 import type { ClientHandlerContext } from './client-context';
@@ -129,5 +129,34 @@ describe('handleMapClick', () => {
 
     // Should NOT send any request — already inspecting this one
     expect(ctx.sendRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('focusBuilding and the universal sheet', () => {
+  beforeEach(() => {
+    useUiStore.getState().clearSurfaces();
+    useUiStore.getState().setPinned(false);
+    useUiStore.setState({ modal: null, modalBeneath: null });
+  });
+
+  it('a fresh focus opens the building as the root surface', async () => {
+    const ctx = makeCtx({ getRenderer: () => ({ centerOn: jest.fn(), getVisualClassAt: () => '100' }) as never });
+    useUiStore.getState().setRootSurface({ kind: 'mail' });
+    await focusBuilding(ctx, 10, 20);
+    expect(useUiStore.getState().stack.map((s) => s.kind)).toEqual(['building']);
+  });
+
+  it('when the sheet is pinned, the building stacks on top of what is shown', async () => {
+    const ctx = makeCtx({ getRenderer: () => ({ centerOn: jest.fn(), getVisualClassAt: () => '100' }) as never });
+    useUiStore.getState().setRootSurface({ kind: 'politics' });
+    useUiStore.getState().setPinned(true);
+    await focusBuilding(ctx, 10, 20);
+    expect(useUiStore.getState().stack.map((s) => s.kind)).toEqual(['politics', 'building']);
+  });
+
+  it('a civic building still opens the civic modal (folded into the sheet in socle-3c)', async () => {
+    const ctx = makeCtx({ getRenderer: () => ({ centerOn: jest.fn(), getVisualClassAt: () => '9999' }) as never });
+    await focusBuilding(ctx, 10, 20);
+    expect(useUiStore.getState().modal).toBe('buildingInspector');
   });
 });

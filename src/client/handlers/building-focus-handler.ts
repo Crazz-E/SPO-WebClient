@@ -217,7 +217,10 @@ export async function focusBuilding(ctx: ClientHandlerContext, x: number, y: num
     if (isCivicBuilding(visualClass || '0')) {
       useUiStore.getState().openModal('buildingInspector');
     } else {
-      useUiStore.getState().openRightPanel('building');
+      const ui = useUiStore.getState();
+      // A pinned sheet keeps what it shows: the building stacks on top instead of replacing it.
+      if (ui.pinned && ui.stack.length > 0) ui.pushSurface({ kind: 'building' });
+      else ui.openRightPanel('building');
     }
 
     const gen = ctx.nextGeneration('buildingDetails');
