@@ -33,12 +33,20 @@
       "h": 1000
     },
     {
+      "file": "HUD.dc.html",
+      "title": "5 · HUD desktop (option C)",
+      "x": 2960,
+      "y": 1140,
+      "w": 1200,
+      "h": 1160
+    },
+    {
       "file": "Mobile.dc.html",
-      "title": "5 · Mobile (option C)",
+      "title": "6 · Mobile (option C)",
       "x": 2560,
       "y": 0,
-      "w": 900,
-      "h": 900
+      "w": 860,
+      "h": 880
     }
   ],
   "annotations": [
@@ -58,8 +66,8 @@
     },
     {
       "id": "sys-map",
-      "x": 2560,
-      "y": -200,
+      "x": 2960,
+      "y": 1000,
       "w": 520,
       "text": "CARTE — tuile « Carte » ajoutée à la barre de commande (desktop et mobile). Elle ouvre la vue carte : la minicarte de données de Voyager (couleur par classe de bâtiment, vos bâtiments déficitaires en rouge, brouillard, rectangle de vue, clic = sauter, zoom propre), plus BACK / NEXT, GO TOWN HALL et les favoris de position. Voir doc/ux/missing-features.md pour ce qui manque au WebClient."
     }

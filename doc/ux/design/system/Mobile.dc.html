@@ -14,11 +14,11 @@
     * { box-sizing: border-box; }
   </style>
 </helmet>
-<div style="width: 900px; height: 900px; padding: 24px; background: #0C0D10; display: flex; gap: 32px; overflow: hidden;">
+<div style="width: 860px; height: 880px; padding: 24px; background: #0C0D10; display: flex; gap: 32px; overflow: hidden;">
 
   <!-- PHONE 1: map + command bar + sheet at half -->
   <div style="display: flex; flex-direction: column; gap: 10px;">
-    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Mobile — même modèle : feuille à mi-hauteur</h2>
+    <h2 style="margin: 0; min-height: 28px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Mobile — même modèle : feuille à mi-hauteur</h2>
     <div style="position: relative; width: 390px; height: 780px; overflow: hidden; border-radius: 24px; border: 1px solid rgba(255,255,255,0.12); background-color: #17211c; background-image: repeating-linear-gradient(60deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 36px), repeating-linear-gradient(-60deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 36px);">
       <div style="position: absolute; left: 140px; top: 150px; width: 70px; height: 70px; background: rgba(16,185,129,0.14); transform: skewX(-30deg) rotate(15deg); border: 1px solid rgba(16,185,129,0.3);"></div>
       <div style="position: absolute; left: 220px; top: 110px; width: 60px; height: 40px; background: rgba(255,255,255,0.07); transform: skewX(-30deg) rotate(15deg); border: 1px solid rgba(255,255,255,0.1);"></div>
@@ -60,7 +60,7 @@
 
   <!-- PHONE 2: map with command bar (no sheet) + mode bar -->
   <div style="display: flex; flex-direction: column; gap: 10px;">
-    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Mobile — barre de mode au-dessus des tuiles (placement actif)</h2>
+    <h2 style="margin: 0; min-height: 28px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Mobile — barre de mode au-dessus des tuiles (placement actif)</h2>
     <div style="position: relative; width: 390px; height: 780px; overflow: hidden; border-radius: 24px; border: 1px solid rgba(255,255,255,0.12); background-color: #17211c; background-image: repeating-linear-gradient(60deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 36px), repeating-linear-gradient(-60deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 36px);">
       <div style="position: absolute; left: 150px; top: 330px; width: 80px; height: 80px; background: rgba(212,168,83,0.18); transform: skewX(-30deg) rotate(15deg); border: 2px dashed #D4A853;"></div>
       <div style="position: absolute; left: 100px; top: 440px; width: 90px; height: 50px; background: rgba(255,255,255,0.07); transform: skewX(-30deg) rotate(15deg); border: 1px solid rgba(255,255,255,0.1);"></div>
@@ -102,7 +102,7 @@
   </div>
 </div>
 </x-dc>
-<script data-dc-script data-props='{"$preview":{"width":900,"height":900}}'>
+<script data-dc-script data-props='{"$preview":{"width":860,"height":880}}'>
 class Component extends DCLogic {
   renderVals() { return {}; }
 }
