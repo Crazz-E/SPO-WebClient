@@ -15,7 +15,8 @@ import type { MouseEventHandler, ReactNode } from 'react';
 import styles from './Chip.module.css';
 
 export type ChipVariant = 'stack' | 'filter' | 'status';
-export type ChipSize = 'md' | 'lg';
+/** sm = 24 px status tag inline with text; md = 32 px control; lg = 44 px touch target. */
+export type ChipSize = 'sm' | 'md' | 'lg';
 export type ChipTone = 'neutral' | 'success' | 'warning' | 'error';
 
 export interface ChipProps {

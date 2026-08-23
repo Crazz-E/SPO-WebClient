@@ -83,4 +83,9 @@ describe('Chip', () => {
     fireEvent.click(btn);
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  it('size sm renders the 24 px status tag class', () => {
+    renderWithProviders(<Chip variant="status" tone="error" size="sm">Stopped</Chip>);
+    expect(screen.getByText('Stopped').closest('span,button')?.className).toContain('sm');
+  });
 });
