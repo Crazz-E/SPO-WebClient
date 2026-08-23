@@ -13,6 +13,7 @@ jest.mock('../empire', () => ({ ProfilePanel: () => <div>PROFILE CONTENT</div>, 
 jest.mock('../hud/OverlayMenu', () => ({ OverlayMenu: () => <div>OVERLAYS CONTENT</div> }));
 jest.mock('../politics/PoliticsHome', () => ({ PoliticsHome: () => <div>POLITICS CONTENT</div> }));
 jest.mock('../modals/BuildMenu', () => ({ BuildMenu: ({ embedded }: { embedded?: boolean }) => <div>BUILD CONTENT {embedded ? 'embedded' : ''}</div> }));
+jest.mock('../modals/ConnectionPickerModal', () => ({ ConnectionPickerContent: ({ onClose }: { onClose: () => void }) => <button onClick={onClose}>PICKER CONTENT</button> }));
 
 describe('Sheet', () => {
   beforeEach(() => {
@@ -90,5 +91,24 @@ describe('Sheet', () => {
       expect(screen.getByText(text)).toBeTruthy();
       unmount();
     }
+  });
+
+  it('the supplier search surface shows the picker while one is open and pops back on close', () => {
+    const { useBuildingStore } = jest.requireActual('../../store/building-store') as typeof import('../../store/building-store');
+    act(() => {
+      useUiStore.getState().setRootSurface({ kind: 'building' });
+      useBuildingStore.getState().setConnectionPicker({ fluidName: 'Cotton', fluidId: 'Cotton', direction: 'input', buildingX: 1, buildingY: 2 });
+      useUiStore.getState().pushSurface({ kind: 'supplierSearch' });
+    });
+    renderWithProviders(<Sheet />);
+    expect(screen.getByRole('region', { name: 'Find Suppliers' })).toBeTruthy();
+    fireEvent.click(screen.getByText('PICKER CONTENT'));
+    expect(useUiStore.getState().stack.map((s) => s.kind)).toEqual(['building']);
+    act(() => {
+      useBuildingStore.getState().clearConnectionPicker();
+      useUiStore.getState().pushSurface({ kind: 'supplierSearch' });
+    });
+    // no picker data → nothing rendered in the body
+    expect(screen.queryByText('PICKER CONTENT')).toBeNull();
   });
 });

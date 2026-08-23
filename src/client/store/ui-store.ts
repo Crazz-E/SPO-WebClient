@@ -35,7 +35,19 @@ export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
  * return to. `rightPanel` / `leftPanel` are kept as DERIVED read-only views of the top of
  * the stack so the components written against them keep working while they migrate.
  */
-export type SurfaceKind = RightPanelType | LeftPanelType | 'build';
+export type SurfaceKind = RightPanelType | LeftPanelType | 'build' | 'supplierSearch';
+
+/** Remembered supplier-search filters (T3, B4): a player usually searches several fluids in a row. */
+export interface ConnectionFilters {
+  company: string;
+  town: string;
+  maxResults: string;
+  roles: { producer: boolean; distributer: boolean; importer: boolean; buyer: boolean; exporter: boolean };
+}
+export const DEFAULT_CONNECTION_FILTERS: ConnectionFilters = {
+  company: '', town: '', maxResults: '20',
+  roles: { producer: true, distributer: true, importer: true, buyer: true, exporter: true },
+};
 export interface Surface {
   kind: SurfaceKind;
   /** Free-form parameters the content reads (e.g. a tab to open, a fluid id). */
@@ -105,6 +117,7 @@ interface UiState {
   placementValid: boolean;
   /** What is being placed — the mode bar shows its name and cost (handoff 00 §4.2). */
   placingFacility: { name: string; cost: number } | null;
+  connectionFilters: ConnectionFilters;
 
   // Actions — Surfaces
   /** Push a surface on top (never replaces). No-op if the top already is that kind+params. */
@@ -161,6 +174,7 @@ interface UiState {
   setIsPlacingBuilding: (v: boolean) => void;
   setPlacementValid: (v: boolean) => void;
   setPlacingFacility: (f: { name: string; cost: number } | null) => void;
+  setConnectionFilters: (f: ConnectionFilters) => void;
 
   // Actions — Escape (close topmost layer)
   dismissTopmost: () => void;
@@ -185,6 +199,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   isPlacingBuilding: false,
   placementValid: false,
   placingFacility: null,
+  connectionFilters: DEFAULT_CONNECTION_FILTERS,
 
   // Surfaces — one stack; the legacy panel fields follow its top
   pushSurface: (surface) => {
@@ -299,6 +314,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   setIsPlacingBuilding: (v) => set({ isPlacingBuilding: v }),
   setPlacementValid: (v) => set({ placementValid: v }),
   setPlacingFacility: (f) => set({ placingFacility: f }),
+  setConnectionFilters: (f) => set({ connectionFilters: f }),
 
   // Escape — dismiss topmost layer in priority order
   dismissTopmost: () => {

@@ -1099,9 +1099,10 @@ export async function connectFacilities(
       connectionList,
     });
 
-    ctx.showNotification(
-      `Connected ${selectedCoords.length} ${direction === 'input' ? 'supplier' : 'client'}${selectedCoords.length !== 1 ? 's' : ''}`,
-      'success'
+    showToast(
+      `${selectedCoords.length} ${direction === 'input' ? 'supplier' : 'client'}${selectedCoords.length !== 1 ? 's' : ''} connected.`,
+      'success',
+      { title: 'Connected' },
     );
 
     // Lightweight refresh — building is already focused, skip SwitchFocusEx.

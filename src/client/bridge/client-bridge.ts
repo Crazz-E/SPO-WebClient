@@ -877,7 +877,8 @@ export const ClientBridge = {
     buildingY: number;
   }): void {
     useBuildingStore.getState().setConnectionPicker(data);
-    useUiStore.getState().openModal('connectionPicker');
+    // Stacked on the building surface (T3): the inspector stays one chip away
+    useUiStore.getState().pushSurface({ kind: 'supplierSearch' });
   },
 
   updateConnectionResults(results: ConnectionSearchResult[]): void {
@@ -890,6 +891,9 @@ export const ClientBridge = {
     if (uiState.modal === 'connectionPicker') {
       uiState.closeModal();
     }
+    // Sheet surface: pop it if it is on top (back to the building)
+    const top = uiState.stack[uiState.stack.length - 1];
+    if (top?.kind === 'supplierSearch') uiState.popSurface();
   },
 
   // ---- Company creation / cluster browsing ----
