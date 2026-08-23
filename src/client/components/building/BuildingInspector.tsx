@@ -35,6 +35,8 @@ import {
 } from '../politics';
 import type { CivicTabId } from '../politics/CivicTabConfig';
 import styles from './BuildingInspector.module.css';
+import { SaveIndicator } from './SaveIndicator';
+import { RENAME_PENDING_KEY } from '../../handlers/building-action-handler';
 
 /** Auto-refresh interval for open building panel (ms). */
 const AUTO_REFRESH_INTERVAL = 30_000;
@@ -336,13 +338,17 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
               </>
             ) : undefined}
             actions={!isRenaming && isOwner ? (
-              <IconButton
-                icon={<Edit3 size={14} />}
-                label="Rename building"
-                size="sm"
-                variant="ghost"
-                onClick={handleStartRename}
-              />
+              <>
+                <IconButton
+                  icon={<Edit3 size={14} />}
+                  label="Rename building"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleStartRename}
+                />
+                {/* The rename now says whether it took, and why not (B6). */}
+                <SaveIndicator propertyKey={RENAME_PENDING_KEY} />
+              </>
             ) : undefined}
           />
         </div>

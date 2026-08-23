@@ -11,6 +11,8 @@ import type { BuildingSupplyData, BuildingConnectionData } from '@/shared/types'
 import { useClient } from '../../context';
 import { useUiStore } from '../../store/ui-store';
 import { useGateConnections } from './useGateConnections';
+import { connectionPendingKey } from '../../handlers/connection-pending-key';
+import { SaveIndicator } from './SaveIndicator';
 import styles from './PropertyGroup.module.css';
 
 /**
@@ -258,6 +260,7 @@ const SupplyCard = memo(function SupplyCard({
                 onChange={handleMaxPriceChange}
               />
               <span className={styles.sliderValue}>{localMaxPrice}%</span>
+              {fluidId && <SaveIndicator propertyKey={`RDOSetInputMaxPrice:${JSON.stringify({ fluidId })}`} />}
             </div>
           ) : supply.maxPrice !== undefined ? (
             <div className={styles.row}>
@@ -280,6 +283,7 @@ const SupplyCard = memo(function SupplyCard({
                 onChange={handleMinKChange}
               />
               <span className={styles.sliderValue}>{localMinK}%</span>
+              {fluidId && <SaveIndicator propertyKey={`RDOSetInputMinK:${JSON.stringify({ fluidId })}`} />}
             </div>
           ) : supply.minK !== undefined ? (
             <div className={styles.row}>
@@ -386,6 +390,14 @@ const SupplyCard = memo(function SupplyCard({
               >
                 Fire
               </button>
+              {/* Connecting and disconnecting are writes like any other — they say so here
+                  instead of only in a toast that has already gone (B6). */}
+              {fluidId && (
+                <>
+                  <SaveIndicator propertyKey={connectionPendingKey('RDOConnectInput', fluidId)} />
+                  <SaveIndicator propertyKey={connectionPendingKey('RDODisconnectInput', fluidId)} />
+                </>
+              )}
             </div>
           )}
         </div>
