@@ -214,6 +214,27 @@ export interface PropertyGroup {
 }
 
 /**
+ * The groups whose content is read GATE BY GATE, never from the building's property bag.
+ *
+ * `Supplies`, `Products` and `Company inputs` list gates: each one is a sub-object the
+ * client opens on demand (`REQ_BUILDING_TAB_DATA`, then `getBuildingGateConnections`).
+ * Their `properties` describe a GATE's columns — `MetaFluid`, `MaxPrice`, `cnxCount`,
+ * and, for supplies, `ObjectId` meaning *the gate's* object id.
+ *
+ * That last one is why this set exists. `ObjectId` is also a header property read for
+ * every building, so the opening read had a value for it and published
+ * `groups['supplies'] = [{ name: 'ObjectId', value: <the BUILDING's id> }]` — a wrong
+ * value under a right-looking name. The client then read the mere presence of that key
+ * as "this gate is already loaded" and never asked for the gates at all.
+ */
+export const GATE_TAB_IDS: ReadonlySet<string> = new Set(['supplies', 'products', 'compInputs']);
+
+/** True for a tab or `special` marker whose content comes from a gate read. */
+export function isGateTab(id: string | undefined): boolean {
+  return id !== undefined && GATE_TAB_IDS.has(id);
+}
+
+/**
  * Template defining which properties to fetch for a building type.
  * The template itself represents a building category (e.g., Retail, Industry, Public Service).
  */

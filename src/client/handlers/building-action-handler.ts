@@ -41,6 +41,7 @@ import { useGameStore } from '../store/game-store';
 import { useUiStore } from '../store/ui-store';
 import type { ClientHandlerContext } from './client-context';
 import { connectionPendingKey } from './connection-pending-key';
+import { isGateTab } from '@/shared/building-details';
 
 // ── Building Details ────────────────────────────────────────────────────────
 
@@ -149,10 +150,9 @@ export async function requestBuildingRefreshProperties(
  * but through the `groupIds` path, so this set stays what it always was: the
  * three specials.
  */
-const LAZY_TAB_IDS = new Set(['supplies', 'products', 'compInputs']);
-
+/** The gate-backed tabs, named once in `shared/building-details` and read from there. */
 export function isLazyTab(tabId: string): boolean {
-  return LAZY_TAB_IDS.has(tabId);
+  return isGateTab(tabId);
 }
 
 export async function requestTabData(
