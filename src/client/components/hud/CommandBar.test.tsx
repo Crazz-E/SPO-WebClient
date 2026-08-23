@@ -186,4 +186,13 @@ describe('CommandBar', () => {
     act(() => useGameStore.setState({ isZonePaintingMode: false, isRoadBuildingMode: true, overlayBeforeMode: null }));
     expect(screen.getByRole('status').textContent).toContain('$2,000,000 per tile');
   });
+  it('placement cash after the spend is negative when the building costs more than the cash', () => {
+    useGameStore.setState({ tycoonStats: { cash: '1,000', incomePerHour: '0', failureLevel: 0 } as never });
+    renderWithProviders(<CommandBar />);
+    act(() => {
+      useUiStore.getState().setPlacingFacility({ name: 'Textile Mill', cost: 240000 });
+      useUiStore.getState().setIsPlacingBuilding(true);
+    });
+    expect(screen.getByRole('status').textContent).toContain('-$239,000');
+  });
 });

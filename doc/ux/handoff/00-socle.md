@@ -241,6 +241,12 @@ point or · KIND 12 caps · nom 14/500 · coût mono 12/700 or · « après : $ 
 (`flex: 1; min-width: 0; ellipsis`) · actions (`flex-shrink: 0`) : « Tourner la vue `R` »
 (`rotateCW`), « Terminer `Échap` ». Pose invalide : indication en `--error` + raison. Route :
 « n tuiles » (pas de coût — H7). Après pose : « Posée · encore une ? », le mode reste actif.
+**Portée sur mobile (PR #72)** : `MobileModeBar` prend la place de la rangée de tuiles tant qu'un mode
+route / zone tourne (nature en petites capitales or, nom, indication sur une seconde ligne, note de
+calque ; un bouton « Done » de 44 px sort du mode) et la pastille de recherche est masquée. Les deux
+barres lisent la même description (`components/hud/use-mode-descriptor.ts`) : mêmes mots, même sortie.
+**Écart voulu** : le **placement** garde `PlacementHUD` (Cancel / Rotate / Confirm), dont les trois
+cibles pleine largeur valent mieux au pouce qu'une ligne de texte.
 
 Zoom : `right: 504px; bottom: 150px` (desktop), `right: 12px; bottom: 150px` (mobile), 40 / 44
 px. Pastille chat : `left: 16px; bottom: 150px`, ouvre `ChatStrip` étendu.

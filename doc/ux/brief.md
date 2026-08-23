@@ -115,8 +115,9 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 | #69 | **Feuille flottante** — desktop : cadre 472 px (420 en desktop étroit), 64 px du haut, 16 px des bords, arrondi + ombre, la carte reste visible autour ; la barre de commande, le rail et la pastille se décalent (rail pour toute surface, pastille dégagée de la minicarte) ; tablette : panneau ancré conservé | handoff 00 §3.2 |
 | #70 | **Barre de commande mobile** — les six tuiles du desktop (Build · Map · Chat · Government · Mail · More), rangée de recherche (palette) au-dessus sur la carte ; Fav → More › My facilities ; la barre d'info ouvre le Profil | handoff 00 §4.2 (mobile), S2, T7 mobile |
 | #71 | **socle-5 (docs)** — canevas Système et Flux alignés sur le code de `main` : planches Surfaces / HUD / Mobile redessinées (cadre flottant, pastille repliable, vue Carte portée, six tuiles + pastille de recherche), notes d'état consolidées ; base de référence pour les travaux hors plan | — |
+| #72 | **Barre de mode mobile** — routes et zones : la rangée de tuiles cède la place à la barre de mode (nature, nom, ce qu'il faut faire, tarif de la route, sort du calque), « Terminer » quitte le mode ; la pastille de recherche disparaît pendant un mode ; le placement garde `PlacementHUD`. Les deux barres lisent la **même** description (`use-mode-descriptor.ts`) | hors lot « barre de mode mobile » |
 
-**Tous les lots du plan sont portés.** Restent, hors lot : la barre de mode mobile pour routes/zones (le placement garde `PlacementHUD`), la tablette (panneau ancré), et les points 🟡 de [missing-features](missing-features.md) (N5 chat, N6/N7, B5 rétrogradation, B6, H3, H6, N10).
+**Tous les lots du plan sont portés**, et la barre de mode mobile avec (#72). Restent, hors lot : la tablette (panneau ancré), et les points 🟡 de [missing-features](missing-features.md) (N5 chat, N6/N7, B5 rétrogradation, B6, H3, H6, N10).
 
 ## 7. Livrables attendus de la phase Design
 

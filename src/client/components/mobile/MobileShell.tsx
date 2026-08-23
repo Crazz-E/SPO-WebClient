@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 import { useUiStore, type MobileTab } from '../../store/ui-store';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useClient } from '../../context';
+import { useModeDescriptor } from '../hud/use-mode-descriptor';
 import { ChatStrip } from '../chat';
 import { ErrorBoundary } from '../common';
 import { SurfaceContent, SURFACE_TITLES } from '../sheet';
@@ -21,6 +22,7 @@ import { MobileBuildContent } from './MobileBuildContent';
 import { MobileInfoBar } from './MobileInfoBar';
 import { MobileSearchPill } from './MobileSearchPill';
 import { MobileMenu } from './MobileMenu';
+import { MobileModeBar } from './MobileModeBar';
 import { PlacementHUD } from './PlacementHUD';
 import styles from './MobileShell.module.css';
 
@@ -67,6 +69,7 @@ export function MobileShell() {
   const setMobileTab = useUiStore((s) => s.setMobileTab);
   const isPlacingBuilding = useUiStore((s) => s.isPlacingBuilding);
   const placementValid = useUiStore((s) => s.placementValid);
+  const mode = useModeDescriptor();
   const client = useClient();
 
   if (!isMobile) return null;
@@ -96,7 +99,7 @@ export function MobileShell() {
       {mobileTab === 'map' && !hasRightPanel && <ChatBanner />}
 
       {/* Search row of the command bar — map tab, no sheet, no placement */}
-      {mobileTab === 'map' && !hasRightPanel && !isPlacingBuilding && <MobileSearchPill />}
+      {mobileTab === 'map' && !hasRightPanel && !mode && <MobileSearchPill />}
 
       {/* Universal BottomSheet — all non-map content goes here */}
       <BottomSheet
@@ -109,7 +112,7 @@ export function MobileShell() {
         </ErrorBoundary>
       </BottomSheet>
 
-      {/* Bottom navigation — replaced by PlacementHUD during building placement */}
+      {/* Bottom navigation — PlacementHUD while placing, the mode bar for roads and zones */}
       {isPlacingBuilding ? (
         <PlacementHUD
           onCancel={() => client.onCancelBuildingPlacement()}
@@ -117,6 +120,8 @@ export function MobileShell() {
           onConfirm={() => client.onConfirmBuildingPlacement()}
           canConfirm={placementValid}
         />
+      ) : mode ? (
+        <MobileModeBar mode={mode} />
       ) : (
         <BottomNav />
       )}

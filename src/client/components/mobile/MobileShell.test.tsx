@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { screen, fireEvent, act } from '@testing-library/react';
 import { renderWithProviders } from '../../__tests__/setup/render-helpers';
 import { useUiStore } from '../../store/ui-store';
+import { useGameStore } from '../../store/game-store';
 import { MobileShell } from './MobileShell';
 
 jest.mock('../../hooks/useResponsive', () => ({
@@ -24,6 +25,7 @@ describe('MobileShell and the surface stack', () => {
     useUiStore.getState().clearSurfaces();
     useUiStore.getState().setMobileTab('map');
     useUiStore.getState().setIsPlacingBuilding(false);
+    useGameStore.setState({ isRoadBuildingMode: false, isRoadDemolishMode: false, isZonePaintingMode: false, overlayBeforeMode: null });
   });
 
   it('routes the top surface into the bottom sheet — politics included', () => {
@@ -79,5 +81,14 @@ describe('MobileShell and the surface stack', () => {
     renderWithProviders(<MobileShell />);
     expect(screen.getByText('PLACEMENT')).toBeTruthy();
     expect(screen.queryByText('NAV')).toBeNull();
+  });
+  it('the mode bar takes the place of the nav while a road mode runs, and hides the search row', () => {
+    act(() => useGameStore.setState({ isRoadBuildingMode: true }));
+    renderWithProviders(<MobileShell />);
+    expect(screen.queryByText('NAV')).toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('Road');
+    expect(screen.queryByRole('button', { name: 'Search or run a command' })).toBeNull();
+    act(() => useGameStore.setState({ isRoadBuildingMode: false }));
+    expect(screen.getByText('NAV')).toBeTruthy();
   });
 });
