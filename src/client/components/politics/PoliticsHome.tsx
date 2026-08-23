@@ -7,14 +7,18 @@
  *  - the Capitol (`onOpenCapitol`, which resolves the capitol coordinates the server sent),
  *  - the list of towns (`onSearchMenuTowns`, the directory page the Search panel reads),
  *    each opening its Town Hall through `onNavigateToBuilding(x, y)` — the same focus path a
- *    click on the map takes, so no new RDO member is involved.
+ *    click on the map takes, so no new RDO member is involved;
+ *  - a direct « Taxes » entry per town (T5): the same Town Hall, opened on its Administration
+ *    section, where the tax table lives (`CivicTabConfig.ts`, `townTaxes`). The section is
+ *    chosen before the focus so the lazy read targets it as soon as the details land.
  */
 
 import { useEffect } from 'react';
-import { Landmark, Building2, Users, ChevronRight } from 'lucide-react';
+import { Landmark, Building2, Users, ChevronRight, Percent } from 'lucide-react';
 import { useClient } from '../../context';
 import { useSearchStore } from '../../store/search-store';
 import { useGameStore } from '../../store/game-store';
+import { useBuildingStore } from '../../store/building-store';
 import { Button, ErrorState, Skeleton } from '../common';
 import type { TownInfo } from '@/shared/types';
 import styles from './PoliticsHome.module.css';
@@ -73,7 +77,7 @@ export function PoliticsHome() {
         {towns.length > 0 && (
           <ul className={styles.list} role="list">
             {towns.map((town) => (
-              <li key={town.name}>
+              <li key={town.name} className={styles.townItem}>
                 <button
                   type="button"
                   className={styles.townRow}
@@ -91,6 +95,19 @@ export function PoliticsHome() {
                     </span>
                   </span>
                   <ChevronRight size={16} className={styles.chevron} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className={styles.taxesButton}
+                  aria-label={`Taxes of ${town.name}`}
+                  title={`Taxes of ${town.name}`}
+                  onClick={() => {
+                    useBuildingStore.getState().setCurrentTab('administration');
+                    client.onNavigateToBuilding(town.x, town.y);
+                  }}
+                >
+                  <Percent size={14} aria-hidden="true" />
+                  <span>Taxes</span>
                 </button>
               </li>
             ))}

@@ -187,4 +187,17 @@ describe('TaxesTab', () => {
       expect(sent.map((s) => s[1])).toEqual(['10']);
     });
   });
+
+  it('a mayor reaches each row from the keyboard (the name is a button, pressed when selected); a visitor reads plain text', () => {
+    const { unmount } = renderWithProviders(<TaxesTab properties={TAXES} buildingX={1} buildingY={2} canGovern />);
+    const farms = screen.getByRole('button', { name: 'Farms' });
+    expect(farms.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(farms);
+    expect(farms.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'CD Stores' }).getAttribute('aria-pressed')).toBe('false');
+    unmount();
+    renderWithProviders(<TaxesTab properties={TAXES} buildingX={1} buildingY={2} canGovern={false} />);
+    expect(screen.queryByRole('button', { name: 'Farms' })).toBeNull();
+    expect(screen.getByText('Farms')).toBeTruthy();
+  });
 });

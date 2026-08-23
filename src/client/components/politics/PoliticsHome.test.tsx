@@ -3,6 +3,7 @@ import { screen, fireEvent, act } from '@testing-library/react';
 import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup/render-helpers';
 import { useSearchStore } from '../../store/search-store';
 import { useGameStore } from '../../store/game-store';
+import { useBuildingStore } from '../../store/building-store';
 import { PoliticsHome } from './PoliticsHome';
 import type { WsRespSearchMenuTowns } from '@/shared/types';
 
@@ -68,5 +69,15 @@ describe('PoliticsHome', () => {
     useSearchStore.setState({ townsData: null, isLoading: true });
     const { container } = renderWithProviders(<PoliticsHome />);
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+  });
+
+  it('"Taxes" opens the Town Hall on its Administration section (where the tax table lives)', () => {
+    useSearchStore.setState({ townsData: TOWNS });
+    useBuildingStore.setState({ currentTab: 'overview' });
+    const onNavigateToBuilding = jest.fn();
+    renderWithProviders(<PoliticsHome />, { clientCallbacks: createSpiedCallbacks({ onNavigateToBuilding }) });
+    fireEvent.click(screen.getByRole('button', { name: 'Taxes of Helartia' }));
+    expect(useBuildingStore.getState().currentTab).toBe('administration');
+    expect(onNavigateToBuilding).toHaveBeenCalledWith(120, 340);
   });
 });
