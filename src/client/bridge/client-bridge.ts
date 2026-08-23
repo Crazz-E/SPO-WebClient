@@ -476,10 +476,9 @@ export const ClientBridge = {
       usePoliticsStore.getState().setTownContext(
         townName, details.x, details.y, isCapitolBuilding(details.tabs),
       );
-      useUiStore.getState().openModal('buildingInspector');
-    } else {
-      useUiStore.getState().openRightPanel('building');
     }
+    // One surface for every building (socle-3c) — the sheet renders the civic header itself
+    useUiStore.getState().openBuildingSurface();
   },
 
   /** Update building details in-place (smart refresh). */
@@ -549,7 +548,8 @@ export const ClientBridge = {
     if (uiState.modal === 'buildingInspector') {
       uiState.closeModal();
     } else if (uiState.rightPanel === 'building') {
-      uiState.closeRightPanel();
+      // Unstack the building; whatever was under it (politics, a search) comes back.
+      uiState.popSurface();
     }
   },
 

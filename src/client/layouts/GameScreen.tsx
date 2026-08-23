@@ -7,8 +7,7 @@
  * - LeftRail (z-200): action buttons
  * - RightRail (z-200): map controls
  * - ChatStrip (z-150): bottom-edge persistent chat
- * - RightPanel (z-350): slide-in from right (building inspector, mail, search, etc.)
- * - LeftPanel (z-350): slide-in from left (empire overview)
+ * - Sheet (z-400): the universal surface — one stack (inspector, mail, search, politics, profile…)
  * - Modals (z-400): build menu, settings
  * - CommandPalette (z-500)
  */
@@ -16,21 +15,14 @@
 import { lazy, Suspense } from 'react';
 import { useUiStore } from '../store';
 import { InfoWidget, LeftRail, RightRail, VersionBadge } from '../components/hud';
-import { RightPanel, LeftPanel } from '../components/panels';
 import { ChatStrip } from '../components/chat';
-import { BuildingInspector, StatusOverlay } from '../components/building';
-import { ProfilePanel, EmpireOverview } from '../components/empire';
-import { MailPanel } from '../components/mail';
-import { SearchPanel } from '../components/search';
-import { TransportPanel } from '../components/transport';
-import { OverlayMenu } from '../components/hud/OverlayMenu';
+import { StatusOverlay } from '../components/building';
 import { ServerSwitchOverlay, ZoneTypePicker } from '../components/modals';
 import { useChangelogCheck } from '../hooks/useChangelogCheck';
 import { CommandPalette } from '../components/command-palette';
 import { MobileShell } from '../components/mobile';
-import { ErrorBoundary, ConfirmDialog, PromptDialog } from '../components/common';
-import { User, Heart, Layers } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ConfirmDialog, PromptDialog } from '../components/common';
+import { Sheet } from '../components/sheet';
 
 // Lazy-loaded modals — not needed on initial render
 const BuildMenu = lazy(() => import('../components/modals/BuildMenu').then(m => ({ default: m.BuildMenu })));
@@ -41,47 +33,13 @@ const NewspaperModal = lazy(() => import('../components/modals/NewspaperModal').
 const SettingsDialog = lazy(() => import('../components/modals/SettingsDialog').then(m => ({ default: m.SettingsDialog })));
 const SupplierSearchModal = lazy(() => import('../components/modals/SupplierSearchModal').then(m => ({ default: m.SupplierSearchModal })));
 
-/** Config for each left panel type */
-const LEFT_PANEL_CONFIG: Record<string, { title: string; icon: ReactNode }> = {
-  empire: { title: 'Profile', icon: <User size={18} /> },
-  facilities: { title: 'My Facilities', icon: <Heart size={18} /> },
-  overlays: { title: 'Map Overlays', icon: <Layers size={18} /> },
-};
 import styles from './GameScreen.module.css';
 
-/** Title labels for each right panel type */
-const RIGHT_PANEL_TITLES: Record<string, string> = {
-  building: 'Building Inspector',
-  mail: 'Mail',
-  search: 'Search',
-  transport: 'Transport',
-};
-
-/** Renders the correct content component for the active right panel type */
-function RightPanelContent({ type }: { type: string | null }) {
-  switch (type) {
-    case 'building':
-      return <BuildingInspector />;
-    case 'mail':
-      return <MailPanel />;
-    case 'search':
-      return <SearchPanel />;
-    case 'transport':
-      return <TransportPanel />;
-    default:
-      return null;
-  }
-}
-
 export function GameScreen() {
-  const rightPanel = useUiStore((s) => s.rightPanel);
-  const leftPanel = useUiStore((s) => s.leftPanel);
   const modal = useUiStore((s) => s.modal);
   const confirmPayload = useUiStore((s) => s.confirmPayload);
   const promptPayload = useUiStore((s) => s.promptPayload);
   const closeModal = useUiStore((s) => s.closeModal);
-  const closeRightPanel = useUiStore((s) => s.closeRightPanel);
-  const closeLeftPanel = useUiStore((s) => s.closeLeftPanel);
 
   useChangelogCheck();
 
@@ -105,32 +63,8 @@ export function GameScreen() {
       {/* ChatStrip — bottom-edge persistent chat */}
       <ChatStrip />
 
-      {/* Right Panel — building inspector, mail, search, politics, transport */}
-      <RightPanel
-        open={rightPanel !== null}
-        onClose={closeRightPanel}
-        title={rightPanel ? RIGHT_PANEL_TITLES[rightPanel] ?? rightPanel : ''}
-        hideHeader={rightPanel === 'building'}
-        noScrim={rightPanel === 'building'}
-      >
-        <ErrorBoundary>
-          <RightPanelContent type={rightPanel} />
-        </ErrorBoundary>
-      </RightPanel>
-
-      {/* Left Panel — Profile / Facilities */}
-      <LeftPanel
-        open={leftPanel !== null}
-        onClose={closeLeftPanel}
-        title={leftPanel ? LEFT_PANEL_CONFIG[leftPanel]?.title ?? '' : ''}
-        icon={leftPanel ? LEFT_PANEL_CONFIG[leftPanel]?.icon : undefined}
-      >
-        <ErrorBoundary>
-          {leftPanel === 'empire' && <ProfilePanel />}
-          {leftPanel === 'facilities' && <EmpireOverview />}
-          {leftPanel === 'overlays' && <OverlayMenu />}
-        </ErrorBoundary>
-      </LeftPanel>
+      {/* The universal sheet — one stack of surfaces (inspector, mail, search, politics, profile…) */}
+      <Sheet />
 
       {/* Modals — z-400 (lazy-loaded, not needed on initial render) */}
       <Suspense fallback={null}>

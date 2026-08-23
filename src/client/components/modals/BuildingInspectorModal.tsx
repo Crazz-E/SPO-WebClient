@@ -12,47 +12,8 @@ import { usePoliticsStore } from '../../store/politics-store';
 import { useClient } from '../../context';
 import { BuildingInspector } from '../building/BuildingInspector';
 import { ErrorBoundary, IconButton } from '../common';
-import { isCapitolBuilding } from '../politics/CivicTabConfig';
+import { getCivicSubtitle } from '../building/civic-subtitle';
 import styles from './BuildingInspectorModal.module.css';
-
-/**
- * Derive the subtitle for civic modals.
- * Capitol → "President: {rulerName}"
- * TownHall → "Mayor: {mayorName}"
- * Uses ActualRuler from building data or mayorName from PoliticsData.
- */
-function getCivicSubtitle(
-  details: NonNullable<ReturnType<typeof useBuildingStore.getState>['details']>,
-  politicsData: ReturnType<typeof usePoliticsStore.getState>['data'],
-): string {
-  const isCapitol = isCapitolBuilding(details.tabs);
-
-  // Try ActualRuler from building groups (capitolTowns or ministeries both have it)
-  const rulerFromGroups = findPropertyValue(details, 'ActualRuler')
-    ?? findPropertyValue(details, 'RulerName');
-
-  if (isCapitol) {
-    const name = rulerFromGroups ?? details.ownerName;
-    return `President: ${name}`;
-  }
-
-  // TownHall: use mayorName from PoliticsData, or ActualRuler, or ownerName
-  const name = politicsData?.mayorName ?? rulerFromGroups ?? details.ownerName;
-  return `Mayor: ${name}`;
-}
-
-/** Search all property groups for a named value. */
-function findPropertyValue(
-  details: NonNullable<ReturnType<typeof useBuildingStore.getState>['details']>,
-  propName: string,
-): string | undefined {
-  for (const group of Object.values(details.groups)) {
-    for (const prop of group) {
-      if (prop.name === propName && prop.value) return prop.value;
-    }
-  }
-  return undefined;
-}
 
 export function BuildingInspectorModal() {
   const modal = useUiStore((s) => s.modal);

@@ -65,6 +65,12 @@ export function CommandPalette() {
         execute: () => toggleRightPanel('transport'),
       },
       {
+        id: 'politics',
+        label: 'Open Government (Capitol, towns)',
+        category: 'navigation',
+        execute: () => toggleRightPanel('politics'),
+      },
+      {
         id: 'settings',
         label: 'Open Settings',
         shortcut: 'Cmd+,',

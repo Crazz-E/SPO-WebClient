@@ -27,11 +27,43 @@ export interface ConfirmOptions {
 
 export type RightPanelType = 'building' | 'mail' | 'politics' | 'search' | 'transport';
 export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
+
+/**
+ * The universal sheet (doc/ux/handoff/00-socle.md §3) shows ONE stack of surfaces. Pushing
+ * never destroys what is underneath — that is the whole point: opening a supplier search
+ * from a building, or a town hall from the politics page, stacks a chip the player can
+ * return to. `rightPanel` / `leftPanel` are kept as DERIVED read-only views of the top of
+ * the stack so the components written against them keep working while they migrate.
+ */
+export type SurfaceKind = RightPanelType | LeftPanelType;
+export interface Surface {
+  kind: SurfaceKind;
+  /** Free-form parameters the content reads (e.g. a tab to open, a fluid id). */
+  params?: Record<string, unknown>;
+}
+
+const RIGHT_KINDS: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['building', 'mail', 'politics', 'search', 'transport']);
+const LEFT_KINDS: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['empire', 'facilities', 'overlays']);
+
+/** The legacy panel fields, derived from the top of the stack. */
+function legacyView(stack: Surface[]): { rightPanel: RightPanelType | null; leftPanel: LeftPanelType | null } {
+  const top = stack[stack.length - 1];
+  if (!top) return { rightPanel: null, leftPanel: null };
+  return {
+    rightPanel: RIGHT_KINDS.has(top.kind) ? (top.kind as RightPanelType) : null,
+    leftPanel: LEFT_KINDS.has(top.kind) ? (top.kind as LeftPanelType) : null,
+  };
+}
 export type ModalType = 'buildMenu' | 'settings' | 'confirm' | 'prompt' | 'createCompany' | 'connectionPicker' | 'zonePicker' | 'supplierSearch' | 'buildingInspector' | 'newspaper' | 'changelog';
 export type MobileTab = 'map' | 'chat' | 'build' | 'favorites' | 'more';
 
 interface UiState {
-  // Panels
+  // Surfaces — the universal sheet's stack (source of truth)
+  stack: Surface[];
+  /** When pinned, clicking another building on the map stacks it instead of replacing the root. */
+  pinned: boolean;
+
+  // Panels — DERIVED from `stack` (top surface); read-only for callers
   rightPanel: RightPanelType | null;
   leftPanel: LeftPanelType | null;
 
@@ -71,7 +103,23 @@ interface UiState {
   isPlacingBuilding: boolean;
   placementValid: boolean;
 
-  // Actions — Panels
+  // Actions — Surfaces
+  /** Push a surface on top (never replaces). No-op if the top already is that kind+params. */
+  pushSurface: (surface: Surface) => void;
+  /** Remove the top surface. */
+  popSurface: () => void;
+  /** Return to the surface at index i (chips in the sheet header). */
+  popToSurface: (index: number) => void;
+  /** Replace the whole stack with one surface (a fresh open from the HUD). */
+  setRootSurface: (surface: Surface) => void;
+  /** Replace only the top surface (same place in the stack). */
+  replaceTopSurface: (surface: Surface) => void;
+  clearSurfaces: () => void;
+  setPinned: (pinned: boolean) => void;
+  /** Open the building surface the way the sheet wants it: fresh root, or stacked when pinned. */
+  openBuildingSurface: () => void;
+
+  // Actions — Panels (legacy wrappers over the stack; kept for existing callers)
   openRightPanel: (type: RightPanelType) => void;
   closeRightPanel: () => void;
   toggleRightPanel: (type: RightPanelType) => void;
@@ -119,6 +167,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   modalBeneath: null,
   confirmPayload: null,
   promptPayload: null,
+  stack: [],
+  pinned: false,
   buildMenuCategories: [],
   buildMenuFacilities: [],
   capitolIconUrl: '',
@@ -129,44 +179,60 @@ export const useUiStore = create<UiState>((set, get) => ({
   isPlacingBuilding: false,
   placementValid: false,
 
-  // Panels — mutual exclusion below 1200px to prevent overlap
-  openRightPanel: (type) => {
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 9999;
-    set({ rightPanel: type, ...(vw < 1200 ? { leftPanel: null } : {}) });
+  // Surfaces — one stack; the legacy panel fields follow its top
+  pushSurface: (surface) => {
+    const stack = get().stack;
+    const top = stack[stack.length - 1];
+    if (top && top.kind === surface.kind && JSON.stringify(top.params ?? {}) === JSON.stringify(surface.params ?? {})) return;
+    const next = [...stack, surface];
+    set({ stack: next, ...legacyView(next) });
   },
-  closeRightPanel: () => set({ rightPanel: null }),
+  popSurface: () => {
+    const next = get().stack.slice(0, -1);
+    set({ stack: next, ...legacyView(next) });
+  },
+  popToSurface: (index) => {
+    const next = get().stack.slice(0, Math.max(0, index) + 1);
+    set({ stack: next, ...legacyView(next) });
+  },
+  setRootSurface: (surface) => {
+    const next = [surface];
+    set({ stack: next, ...legacyView(next) });
+  },
+  replaceTopSurface: (surface) => {
+    const stack = get().stack;
+    const next = stack.length ? [...stack.slice(0, -1), surface] : [surface];
+    set({ stack: next, ...legacyView(next) });
+  },
+  clearSurfaces: () => set({ stack: [], ...legacyView([]) }),
+  setPinned: (pinned) => set({ pinned }),
+  openBuildingSurface: () => {
+    const { pinned, stack } = get();
+    if (pinned && stack.length > 0) get().pushSurface({ kind: 'building' });
+    else get().setRootSurface({ kind: 'building' });
+  },
+
+  // Legacy panel API — thin wrappers. "open" = fresh root (what the HUD buttons mean),
+  // "close" = clear, "toggle" = close if it is already on top.
+  openRightPanel: (type) => get().setRootSurface({ kind: type }),
+  closeRightPanel: () => get().clearSurfaces(),
   toggleRightPanel: (type) => {
-    const current = get().rightPanel;
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 9999;
-    if (current === type) {
-      set({ rightPanel: null });
-    } else {
-      set({ rightPanel: type, ...(vw < 1200 ? { leftPanel: null } : {}) });
-    }
+    if (get().rightPanel === type) get().clearSurfaces();
+    else get().setRootSurface({ kind: type });
   },
-
-  openLeftPanel: (type) => {
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 9999;
-    set({ leftPanel: type, ...(vw < 1200 ? { rightPanel: null } : {}) });
-  },
-  closeLeftPanel: () => set({ leftPanel: null }),
+  openLeftPanel: (type) => get().setRootSurface({ kind: type }),
+  closeLeftPanel: () => get().clearSurfaces(),
   toggleLeftPanel: (type) => {
-    const current = get().leftPanel;
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 9999;
-    if (current === type) {
-      set({ leftPanel: null });
-    } else {
-      set({ leftPanel: type, ...(vw < 1200 ? { rightPanel: null } : {}) });
-    }
+    if (get().leftPanel === type) get().clearSurfaces();
+    else get().setRootSurface({ kind: type });
   },
-
-  closeAllPanels: () => set({ rightPanel: null, leftPanel: null }),
+  closeAllPanels: () => get().clearSurfaces(),
 
   // Modals
   openModal: (type) => {
     // Civic building modal replaces the right-panel building inspector
     if (type === 'buildingInspector') {
-      set({ modal: type, rightPanel: null });
+      set({ modal: type, stack: [], ...legacyView([]) });
     } else {
       set({ modal: type });
     }
@@ -250,10 +316,9 @@ export const useUiStore = create<UiState>((set, get) => ({
           useBuildingStore.getState().clearFocus();
         }
         set({ modal: null, confirmPayload: null, promptPayload: null });
-      } else if (state.rightPanel) {
-        set({ rightPanel: null });
-      } else if (state.leftPanel) {
-        set({ leftPanel: null });
+      } else if (state.stack.length > 0) {
+        // Escape unstacks one surface — a supplier search returns to its building.
+        get().popSurface();
       }
     }
   },
