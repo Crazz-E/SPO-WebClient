@@ -74,6 +74,9 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 ## 7. Livrables attendus de la phase Design
 
 1. **Canevas « Direction »** — 3 artboards low-fi du HUD de jeu sur des axes nommés, un choix.
+   **Fait (v1)** : https://claude.ai/code/artifact/b7719533-668e-46c6-97a0-aca177da9af1 — sources dans
+   [design/direction/](design/direction/). Options : **A** HUD flottant consolidé · **B** cockpit
+   ancré · **C** carte pure + feuille universelle. **Décision : en attente.**
 2. **Canevas « Système »** — Button, Field, Dialog/Sheet, PanelHeader, Tabs, DataTable, StatCard, Toast, SaveIndicator, dans leurs états (repos / hover / focus / désactivé / chargement / vide / erreur), desktop et mobile.
 3. **Canevas par flux** P1 puis P2 : écrans desktop et mobile côte à côte, états réels (données du mock server), copy finale (`design:ux-copy`).
 4. **Handoff par flux** (`doc/ux/handoff/<flux>.md`) : tokens, composants, props, états, breakpoints, animations, cas limites.
