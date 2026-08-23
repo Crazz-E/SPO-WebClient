@@ -43,10 +43,11 @@ describe('SaveIndicator', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('shows a pulsing dot while the write is in flight', () => {
+  it('shows a pulsing dot while the write is in flight, with a spoken label', () => {
     act(() => useBuildingStore.getState().setPending(KEY, '37'));
     const { container } = renderWithProviders(<SaveIndicator propertyKey={KEY} />);
     expect(container.querySelector('.pendingDot')).not.toBeNull();
+    expect(container.textContent).toContain('Saving');
   });
 
   it('shows a checkmark when no message is supplied', () => {
@@ -88,6 +89,8 @@ describe('SaveIndicator', () => {
     act(() => useBuildingStore.getState().failPending(KEY, '12', 'Server rejected the change'));
     const { container } = renderWithProviders(<SaveIndicator propertyKey={KEY} />);
     expect(container.textContent).toContain('Failed');
+    // the reason is visible text and the failure is announced, not hidden in a tooltip
+    expect(screen.getByRole('alert').textContent).toContain('Server rejected the change');
 
     advance(4000);
     expect(useBuildingStore.getState().failedUpdates.has(KEY)).toBe(false);

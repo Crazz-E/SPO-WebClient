@@ -1,0 +1,175 @@
+/* Switch · Checkbox · Radio — design system (handoff 00 §2.6).
+   The native input IS the drawn control (appearance: none); the thumb / check / dash are
+   decorative siblings laid over it, driven by `:checked`. */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+}
+
+.labelStart {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.row:has(.input:disabled) {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 13px;
+  line-height: var(--leading-tight);
+}
+
+.description {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  line-height: var(--leading-tight);
+}
+
+/* ---- the control: the input paints the box / track, siblings paint the marks ---- */
+.control {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.input {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  cursor: inherit;
+  display: block;
+  transition:
+    background var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.input:disabled {
+  cursor: not-allowed;
+}
+
+/* ---- Switch ---- */
+.switchTrack .input {
+  width: 40px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--text-disabled);
+  border: 0;
+}
+
+.switchTrack .input:checked {
+  background: var(--primary);
+}
+
+.switchThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--text-tertiary);
+  pointer-events: none;
+  transition:
+    transform var(--duration-fast) var(--ease-default),
+    background var(--duration-fast) var(--ease-default);
+}
+
+.switchTrack .input:checked ~ .switchThumb {
+  transform: translateX(18px);
+  background: var(--text-primary);
+}
+
+.switchLg .input {
+  width: 48px;
+  height: 28px;
+}
+
+.switchLg .switchThumb {
+  width: 24px;
+  height: 24px;
+}
+
+.switchLg .input:checked ~ .switchThumb {
+  transform: translateX(20px);
+}
+
+/* ---- Checkbox ---- */
+.box .input {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-border-strong);
+  background: transparent;
+}
+
+.box .input:checked,
+.box .input:indeterminate {
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+}
+
+.check,
+.dash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--bg-primary);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.dash {
+  width: 10px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--bg-primary);
+}
+
+.box .input:checked:not(:indeterminate) ~ .check {
+  opacity: 1;
+}
+
+.box .input:indeterminate ~ .dash {
+  opacity: 1;
+}
+
+/* ---- Radio ---- */
+.circle .input {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--surface-border-strong);
+  background: transparent;
+  transition:
+    box-shadow var(--duration-fast) var(--ease-default),
+    border-color var(--duration-fast) var(--ease-default);
+}
+
+.circle .input:checked {
+  background: var(--bg-primary);
+  border-color: var(--accent-gold);
+  box-shadow: inset 0 0 0 5px var(--accent-gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .switchThumb {
+    transition: none;
+  }
+}

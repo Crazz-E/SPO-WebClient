@@ -10,6 +10,7 @@ import { useGameStore, type GameSettings, type MinimapSize } from '../../store/g
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
 import { showToast } from '../common/Toast';
+import { Switch } from '../common';
 import styles from './SettingsDialog.module.css';
 
 export function SettingsDialog() {
@@ -169,6 +170,7 @@ export function SettingsDialog() {
   );
 }
 
+/** A labelled switch row — a real checkbox under the hood, so keyboard and screen readers work. */
 function ToggleRow({
   label,
   checked,
@@ -179,12 +181,13 @@ function ToggleRow({
   onChange: (val: boolean) => void;
 }) {
   return (
-    <label className={styles.toggleRow}>
-      <span className={styles.toggleLabel}>{label}</span>
-      <div className={`${styles.toggle} ${checked ? styles.toggleOn : ''}`} onClick={() => onChange(!checked)}>
-        <div className={styles.toggleThumb} />
-      </div>
-    </label>
+    <Switch
+      className={styles.toggleRow}
+      label={label}
+      labelPosition="start"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+    />
   );
 }
 
@@ -205,7 +208,9 @@ function SizeSelector({
         {options.map((opt) => (
           <button
             key={opt}
+            type="button"
             className={`${styles.sizeBtn} ${value === opt ? styles.sizeBtnActive : ''}`}
+            aria-pressed={value === opt}
             onClick={() => onChange(opt)}
           >
             {opt.charAt(0).toUpperCase() + opt.slice(1)}

@@ -65,4 +65,15 @@ describe('PromptDialog smoke tests', () => {
     fireEvent.click(screen.getByText('Submit'));
     expect(submitted).toBe('My Building');
   });
+
+  it('Enter submits the trimmed value; Enter on an empty field does nothing', () => {
+    let submitted = '';
+    renderWithProviders(<PromptDialog {...defaultProps} onSubmit={(v) => { submitted = v; }} />);
+    const input = document.querySelector('input') as HTMLInputElement;
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(submitted).toBe('');
+    fireEvent.change(input, { target: { value: '  Mill  ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(submitted).toBe('Mill');
+  });
 });

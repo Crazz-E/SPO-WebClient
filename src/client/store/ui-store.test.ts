@@ -237,3 +237,51 @@ describe('ui-store stacked modals', () => {
     expect(useUiStore.getState().modal).toBeNull();
   });
 });
+
+describe('ui-store requestConfirm options', () => {
+  // The unit project runs under node: give the store the tiny sessionStorage it reads.
+  const mem = new Map<string, string>();
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'sessionStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => mem.get(k) ?? null,
+        setItem: (k: string, v: string) => { mem.set(k, v); },
+        removeItem: (k: string) => { mem.delete(k); },
+        clear: () => { mem.clear(); },
+      },
+    });
+  });
+  afterAll(() => {
+    // @ts-expect-error — removing the stub we installed
+    delete globalThis.sessionStorage;
+  });
+  beforeEach(() => {
+    mem.clear();
+    useUiStore.setState({ modal: null, modalBeneath: null, confirmPayload: null });
+  });
+
+  it('carries the options into the payload', () => {
+    const onConfirm = jest.fn();
+    useUiStore.getState().requestConfirm('Demolish', 'Sure?', onConfirm, { kind: 'destructive', typeToConfirm: 'CONFIRM', confirmLabel: 'Demolish' });
+    const s = useUiStore.getState();
+    expect(s.modal).toBe('confirm');
+    expect(s.confirmPayload?.options).toEqual({ kind: 'destructive', typeToConfirm: 'CONFIRM', confirmLabel: 'Demolish' });
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('skips the dialog and confirms at once when the player opted out for the session', () => {
+    sessionStorage.setItem('spo.dialog.dontAsk.build', '1');
+    const onConfirm = jest.fn();
+    useUiStore.getState().requestConfirm('Build?', 'cost', onConfirm, { kind: 'spend', dontAskAgainKey: 'build' });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(useUiStore.getState().modal).toBeNull();
+  });
+
+  it('still asks when the opt-out key is not set', () => {
+    const onConfirm = jest.fn();
+    useUiStore.getState().requestConfirm('Build?', 'cost', onConfirm, { kind: 'spend', dontAskAgainKey: 'build' });
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(useUiStore.getState().modal).toBe('confirm');
+  });
+});

@@ -4,7 +4,7 @@
  * Renders next to slider/input values to show:
  *  - Pending: pulsing gold dot while server processes the change
  *  - Confirmed: brief green checkmark that auto-fades
- *  - Failed: red "!" with error text that auto-clears
+ *  - Failed: red "!" + "Failed — reason", announced as an alert, auto-clears
  *
  * `confirmedMessage` replaces the checkmark with a sentence. It exists because
  * a checkmark is a claim — "the server holds this value now" — and some members
@@ -59,8 +59,9 @@ export function SaveIndicator({ propertyKey, confirmedMessage }: SaveIndicatorPr
 
   if (pending) {
     return (
-      <span className={`${styles.indicator} ${styles.pending}`}>
-        <span className={styles.pendingDot} />
+      <span className={`${styles.indicator} ${styles.pending}`} title="Saving…">
+        <span className={styles.pendingDot} aria-hidden="true" />
+        <span className={styles.srOnly}>Saving…</span>
       </span>
     );
   }
@@ -74,17 +75,21 @@ export function SaveIndicator({ propertyKey, confirmedMessage }: SaveIndicatorPr
       );
     }
     return (
-      <span className={`${styles.indicator} ${styles.confirmed}`}>
-        <span className={styles.checkmark}>&#10003;</span>
+      <span className={`${styles.indicator} ${styles.confirmed}`} title="Saved">
+        <span className={styles.checkmark} aria-hidden="true">&#10003;</span>
+        <span className={styles.srOnly}>Saved</span>
       </span>
     );
   }
 
+  // A failure is said in words and announced (role="alert"); the server's reason is
+  // visible, not hidden in a tooltip — audit §3.2 found the failed state was silent.
   if (failed) {
     return (
-      <span className={`${styles.indicator} ${styles.failed}`} title={failed.error}>
-        <span className={styles.failedIcon}>!</span>
+      <span className={`${styles.indicator} ${styles.failed}`} role="alert" title={failed.error}>
+        <span className={styles.failedIcon} aria-hidden="true">!</span>
         <span className={styles.failedText}>Failed</span>
+        {failed.error && <span className={styles.failedReason}>— {failed.error}</span>}
       </span>
     );
   }

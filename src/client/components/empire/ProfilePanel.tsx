@@ -14,7 +14,7 @@ import {
   GraduationCap, Landmark, TrendingUp, Factory, Link, Flag, X, Plus,
   RotateCcw, LogOut, Wrench, ChevronUp, ChevronRight, ArrowLeft,
 } from 'lucide-react';
-import { Skeleton, SkeletonLines, ConfirmDialog } from '../common';
+import { Skeleton, SkeletonLines, ConfirmDialog, Switch } from '../common';
 import { useProfileStore, type ProfileTab } from '../../store/profile-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
@@ -695,26 +695,22 @@ function AutoConnectionsTab() {
         <div key={fluid.fluidId} className={styles.section}>
           <h4 className={styles.sectionTitle}>{fluid.fluidName}</h4>
 
-          {/* Toggle switches */}
+          {/* Toggle switches — real checkboxes (keyboard + screen reader), see handoff 00 §2.6 */}
           <div className={styles.toggleGroup}>
-            <div
+            <Switch
               className={styles.toggleRow}
-              onClick={() => toggleOption(fluid.fluidId, fluid.hireTradeCenter, 'hireTradeCenter', 'dontHireTradeCenter')}
-            >
-              <span className={styles.toggleLabel}>Also hire a Trade Center</span>
-              <div className={`${styles.toggle} ${fluid.hireTradeCenter ? styles.toggleOn : ''}`}>
-                <div className={styles.toggleThumb} />
-              </div>
-            </div>
-            <div
+              label="Also hire a Trade Center"
+              labelPosition="start"
+              checked={fluid.hireTradeCenter}
+              onChange={() => toggleOption(fluid.fluidId, fluid.hireTradeCenter, 'hireTradeCenter', 'dontHireTradeCenter')}
+            />
+            <Switch
               className={styles.toggleRow}
-              onClick={() => toggleOption(fluid.fluidId, fluid.onlyWarehouses, 'onlyWarehouses', 'dontOnlyWarehouses')}
-            >
-              <span className={styles.toggleLabel}>Auto-include only warehouses</span>
-              <div className={`${styles.toggle} ${fluid.onlyWarehouses ? styles.toggleOn : ''}`}>
-                <div className={styles.toggleThumb} />
-              </div>
-            </div>
+              label="Auto-include only warehouses"
+              labelPosition="start"
+              checked={fluid.onlyWarehouses}
+              onChange={() => toggleOption(fluid.fluidId, fluid.onlyWarehouses, 'onlyWarehouses', 'dontOnlyWarehouses')}
+            />
           </div>
 
           {/* Supplier list */}
