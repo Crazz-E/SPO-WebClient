@@ -1,6 +1,6 @@
 # Brief d'ergonomie — refonte de l'interface du WebClient
 
-**Statut : brouillon v0** (2026-08-23). Tiré du code et de l'[audit](audit.md), pas encore
+**Statut : v1 — cadrage validé, socle et flux T1/T3 livrés** (2026-08-23). Tiré du code et de l'[audit](audit.md), pas encore
 d'entretiens joueurs. Les lignes marquées **[À CONFIRMER]** sont des hypothèses du rédacteur à
 valider par le porteur du projet ; les autres découlent de faits du code ou du dépôt.
 
@@ -94,6 +94,19 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 | Maquettes statiques ou prototype cliquable ? | **Statiques** pour la direction et le système ; cliquable seulement pour T1 et T3 (transitions de surfaces) **[À CONFIRMER]** | La friction de ces deux flux est dans les transitions, pas dans les écrans |
 | Premier lot | **Cœur de jeu** : HUD (T4) + construction (T1) + inspecteur & fournisseurs (T2, T3) **[À CONFIRMER]** | C'est là que passe le temps de jeu et là que se concentrent les défauts 🔴/🟠 |
 | Thème clair | **Plus tard** **[À CONFIRMER]** | Double les états à maquetter ; les tokens sont mono-thème aujourd'hui |
+
+## 6bis. Avancement du portage (main, 2026-08-23)
+
+| PR | Contenu | Ferme |
+|---|---|---|
+| #55 | cadrage + **socle-1** tokens (garde-fou Jest, 0 token inconnu, focus or, 12 px mobile) | audit §2.1, §2.3 focus |
+| #56 | **socle-2** composants : Button, Dialog (focus trap/restore), Toast, SaveIndicator, Field, Chip, Switch/Checkbox/Radio, Tabs APG, Empty/Error | audit §3 (Settings au clavier, dialogues) |
+| #57 | **socle-3** pile de surfaces + feuille universelle + surface Government + civique dans la feuille | P1, P2, P6, E1, E2 |
+| #58 | **socle-4** raccourcis, StatusPill, CommandBar + barre de mode, menu mobile | H1, H5, S2, P9 |
+| #59 | **T1 Construire** | H2, H4, H8, B5 dépense |
+| #60 | **T3 Fournisseur** | B4, N9, B5 déconnexion |
+
+Restent (dans l'ordre proposé) : T6 courrier (bug réponse sans destinataire, suppression, échec d'envoi), T2 diagnostic (parseur de hints B7), T5 taxes (entrée directe depuis Government — déjà joignable), T7 recherche (S1 locale, N5), T8 modes carte, vue Carte (N1–N4), mobile : barre de commande complète, feuille flottante 472 px.
 
 ## 7. Livrables attendus de la phase Design
 

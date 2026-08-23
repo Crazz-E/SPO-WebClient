@@ -140,6 +140,13 @@ le premier soit fusionné. Cela garde chaque PR lisible et la couverture ≥ 93 
 
 ---
 
+## 4bis. État au 2026-08-23
+
+Phases 0 → 4 faites ([brief](ux/brief.md), [audit](ux/audit.md), canevas Direction / Système /
+Flux, [handoff](ux/handoff/)). Phase 5 en cours : socle-1 → 4 et flux T1, T3 fusionnés (PR #55–#60) ;
+suivi des fonctions dans [missing-features.md](ux/missing-features.md) ; les canevas portent une
+note « état d'implémentation » tenue à jour à chaque PR.
+
 ## 5. Les règles du dépôt que la refonte ne peut pas ignorer
 
 - **Aucun bouton mort** — un élément d'interface n'est porté que si son action est câblée.
