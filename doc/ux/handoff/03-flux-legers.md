@@ -1,6 +1,6 @@
-# Handoff — flux légers T6, T2, T7, T5 (tels que portés)
+# Handoff — flux légers T6, T2, T7, T5, T8 (tels que portés)
 
-Ces quatre flux n'ont pas eu de planche dédiée : leur friction tenait à un écran existant, pas
+Ces cinq flux n'ont pas eu de planche dédiée : leur friction tenait à un écran existant, pas
 à une transition de surfaces. Ils ont été spécifiés depuis le [brief](../brief.md) §3 et
 [missing-features](../missing-features.md), et portés en une PR chacun. Cette fiche fixe ce
 qui a été livré, pour que le code et les canevas restent lisibles côte à côte.
@@ -11,6 +11,7 @@ qui a été livré, pour que le code et les canevas restent lisibles côte à c�
 | T2 Diagnostic | #63 | B7 |
 | T7 Recherche | #64 | S1 (local), N5 (palette) |
 | T5 Taxes | #65 | P2 (complément), audit §3 lignes cliquables |
+| T8 Modes carte | #66 | B5 (routes), H7, audit « Overlays » |
 
 ## T6 — lire et répondre à un mail (`MailPanel`, `mail-store`)
 
@@ -53,3 +54,18 @@ qui a été livré, pour que le code et les canevas restent lisibles côte à c�
   (clavier) ; un visiteur lit du texte. L'éditeur reste sous le tableau, la ligne en main
   seulement, et le `SaveIndicator` garde sa phrase « prend effet… » (pas de tick — voir
   l'en-tête de `TaxesTab.tsx`).
+
+## T8 — changer d'overlay, peindre une zone, tracer une route
+
+- **Overlay** : `handlers/overlay-mode.ts` — `enterZonesOverlayForMode` / `leaveZonesOverlayAfterMode`
+  servent le placement **et** le zonage ; ce qui était affiché avant (rien, Zones, ou un autre
+  overlay) est mémorisé (`game-store.overlayBeforeMode`) et revient à la sortie. La barre de
+  mode le dit (« Zones overlay shown — Crime comes back when done »).
+- **Route** : la barre de mode affiche le tarif (`$2,000,000 per tile`, constante partagée
+  `src/shared/road-cost.ts`, égale à celle de la passerelle — test croisé) ; à la relâche,
+  Dialog de dépense (Tiles / Cost / Cash after, `dontAskAgainKey: 'road'`) **puis** la
+  requête ; l'infobulle canvas du renderer (tuiles + coût) reste. Coût = longueur Manhattan,
+  parce que la passerelle envoie une requête par tuile d'escalier.
+- **Démolition de route** : Dialog destructif, clic ou zone, `dontAskAgainKey: 'roadDemolish'`.
+- Hors lot (question serveur) : tarif des ponts et gratuité des tuiles déjà routées, que
+  Voyager appliquait (`Map.pas:55-59`) et que la passerelle ignore.

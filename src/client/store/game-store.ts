@@ -124,6 +124,8 @@ interface GameState {
 
   // Overlays
   isCityZonesEnabled: boolean;
+  /** What a map mode (placement, zone painting) hid to show Zones — null outside a mode or when Zones was already on (T8). */
+  overlayBeforeMode: { type: 'zones' | 'overlay' | 'none'; overlay?: SurfaceType } | null;
   activeOverlay: SurfaceType | null;
 
   // Login flow
@@ -172,6 +174,7 @@ interface GameState {
   setSelectedZoneType: (zoneType: number) => void;
   setPublicOfficeRole: (isPublicOffice: boolean, role?: string) => void;
   setCityZonesEnabled: (enabled: boolean) => void;
+  setOverlayBeforeMode: (v: { type: 'zones' | 'overlay' | 'none'; overlay?: SurfaceType } | null) => void;
   setActiveOverlay: (overlay: SurfaceType | null) => void;
   setLoginWorlds: (worlds: WorldInfo[]) => void;
   setLoginCompanies: (companies: CompanyInfo[]) => void;
@@ -216,6 +219,7 @@ export const useGameStore = create<GameState>((set) => ({
   isPublicOfficeRole: false,
   ownerRole: '',
   isCityZonesEnabled: false,
+  overlayBeforeMode: null,
   activeOverlay: null,
   loginWorlds: [],
   loginStage: 'auth',
@@ -259,6 +263,7 @@ export const useGameStore = create<GameState>((set) => ({
   setSelectedZoneType: (zoneType) => set({ selectedZoneType: zoneType }),
   setPublicOfficeRole: (isPublicOffice, role) => set({ isPublicOfficeRole: isPublicOffice, ownerRole: role ?? '' }),
   setCityZonesEnabled: (enabled) => set({ isCityZonesEnabled: enabled }),
+  setOverlayBeforeMode: (v) => set({ overlayBeforeMode: v }),
   setActiveOverlay: (overlay) => set({ activeOverlay: overlay }),
 
   setLoginWorlds: (worlds) => set({ loginWorlds: worlds, loginStage: 'worlds', loginLoading: false }),
@@ -330,6 +335,7 @@ export const useGameStore = create<GameState>((set) => ({
       isPublicOfficeRole: false,
       ownerRole: '',
       isCityZonesEnabled: false,
+  overlayBeforeMode: null,
       loginWorlds: [],
       loginStage: 'auth',
       loginLoading: false,

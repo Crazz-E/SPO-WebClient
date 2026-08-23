@@ -109,8 +109,9 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 | #62 | **T6 Courrier** — réponse pré-remplie (bug), brouillon conservé jusqu'à la réponse, suppression confirmée et retrait local, état de chargement | M1, M2, M3 |
 | #64 | **T7 Recherche** — palette : mes bâtiments (favoris lus une fois), villes, coordonnées « x,y » ; commandes mortes retirées | S1 (local), N5 (palette) |
 | #65 | **T5 Taxes** — entrée « Taxes » par ville dans Government (hôtel de ville ouvert sur Administration) ; lignes du tableau des taxes atteignables au clavier | P2 (complément), audit §3 (lignes cliquables non-boutons) |
+| #66 | **T8 Modes carte** — overlay Zones : même entrée/sortie pour placement et zonage, expliqué dans la barre de mode ; route : tarif dans la barre de mode, Dialog de dépense à la relâche, démolition confirmée | B5 (routes), H7, audit « Overlays » |
 
-Restent (dans l'ordre proposé) : T8 modes carte, vue Carte (N1–N4), mobile : barre de commande complète, feuille flottante 472 px.
+Restent (dans l'ordre proposé) : vue Carte (N1–N4), mobile : barre de commande complète, feuille flottante 472 px.
 
 ## 7. Livrables attendus de la phase Design
 

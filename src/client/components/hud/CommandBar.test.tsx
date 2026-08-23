@@ -10,7 +10,7 @@ describe('CommandBar', () => {
   beforeEach(() => {
     useUiStore.getState().clearSurfaces();
     useUiStore.setState({ modal: null, commandPaletteOpen: false, isPlacingBuilding: false, placementValid: false, placingFacility: null });
-    useGameStore.setState({ isRoadBuildingMode: false, isRoadDemolishMode: false, isZonePaintingMode: false, isPublicOfficeRole: false, tycoonStats: null });
+    useGameStore.setState({ isRoadBuildingMode: false, isRoadDemolishMode: false, isZonePaintingMode: false, isPublicOfficeRole: false, tycoonStats: null, overlayBeforeMode: null });
     useMailStore.setState({ unreadCount: 0 });
   });
 
@@ -168,5 +168,17 @@ describe('CommandBar', () => {
     renderWithProviders(<CommandBar />);
     fireEvent.click(screen.getByRole('button', { name: /Mail/ }));
     expect(useUiStore.getState().rightPanel).toBe('mail');
+  });
+
+  it('the mode bar says what happened to the overlay, and the road tariff', () => {
+    renderWithProviders(<CommandBar />);
+    act(() => useGameStore.setState({ isZonePaintingMode: true, overlayBeforeMode: { type: 'none' } }));
+    expect(screen.getByRole('status').textContent).toContain('Zones overlay shown for this mode');
+    act(() => useGameStore.setState({ overlayBeforeMode: { type: 'overlay', overlay: 'Crime' as never } }));
+    expect(screen.getByRole('status').textContent).toContain('Crime comes back when done');
+    act(() => useGameStore.setState({ overlayBeforeMode: { type: 'zones' } }));
+    expect(screen.getByRole('status').textContent).not.toContain('overlay shown');
+    act(() => useGameStore.setState({ isZonePaintingMode: false, isRoadBuildingMode: true, overlayBeforeMode: null }));
+    expect(screen.getByRole('status').textContent).toContain('$2,000,000 per tile');
   });
 });

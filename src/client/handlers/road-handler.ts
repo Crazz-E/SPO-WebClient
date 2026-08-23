@@ -17,6 +17,10 @@ import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';
 import type { ClientHandlerContext } from './client-context';
 import { setupEscapeHandler } from './handler-utils';
+import { useUiStore } from '../store/ui-store';
+import { useGameStore } from '../store/game-store';
+import { estimateRoadCost } from '@/shared/road-cost';
+import { formatMoney } from '../format-utils';
 
 export function toggleRoadBuildingMode(ctx: ClientHandlerContext): void {
   ctx.isRoadBuildingMode = !ctx.isRoadBuildingMode;
@@ -31,7 +35,7 @@ export function toggleRoadBuildingMode(ctx: ClientHandlerContext): void {
       }
 
       renderer.setRoadSegmentCompleteCallback((x1, y1, x2, y2) => {
-        buildRoadSegment(ctx, x1, y1, x2, y2);
+        void buildRoadSegment(ctx, x1, y1, x2, y2);
       });
 
       renderer.setCancelRoadDrawingCallback(() => {
@@ -61,8 +65,13 @@ export function cancelRoadBuildingMode(ctx: ClientHandlerContext): void {
   ClientBridge.log('Road', 'Road building mode cancelled');
 }
 
-async function buildRoadSegment(ctx: ClientHandlerContext, x1: number, y1: number, x2: number, y2: number): Promise<void> {
-  if (ctx.isBuildingRoad) return;
+/**
+ * A drag released in road mode. The spend is CONFIRMED first (T8, B5 roads), like a building
+ * placement: tiles, cost — the very amount the gateway will charge — and the cash after; the
+ * player can opt out for the session ("Don't ask again"). Only then does the request leave.
+ */
+export function buildRoadSegment(ctx: ClientHandlerContext, x1: number, y1: number, x2: number, y2: number): Promise<void> {
+  if (ctx.isBuildingRoad) return Promise.resolve();
 
   const renderer = ctx.getRenderer();
   if (renderer) {
@@ -70,10 +79,32 @@ async function buildRoadSegment(ctx: ClientHandlerContext, x1: number, y1: numbe
     if (!validation.valid) {
       ClientBridge.log('Road', `Cannot build road: ${validation.error}`);
       ctx.showNotification(validation.error || 'Invalid road placement', 'error');
-      return;
+      return Promise.resolve();
     }
   }
 
+  const { tileCount, cost } = estimateRoadCost(x1, y1, x2, y2);
+  const cashRaw = useGameStore.getState().tycoonStats?.cash;
+  const cashNum = cashRaw ? parseFloat(String(cashRaw).replace(/,/g, '')) : NaN;
+  const rows = [
+    { label: 'Tiles', value: String(tileCount) },
+    { label: 'Cost', value: formatMoney(cost), tone: 'gold' as const },
+  ];
+  if (!Number.isNaN(cashNum)) {
+    const after = cashNum - cost;
+    rows.push({ label: 'Cash after', value: formatMoney(after), tone: (after < 0 ? 'negative' : 'positive') as never });
+  }
+  return new Promise<void>((resolve) => {
+    useUiStore.getState().requestConfirm(
+      'Build this road?',
+      `From (${x1}, ${y1}) to (${x2}, ${y2}).`,
+      () => { void sendBuildRoad(ctx, x1, y1, x2, y2).then(resolve); },
+      { kind: 'spend', confirmLabel: 'Build', typeToConfirm: null, rows, dontAskAgainKey: 'road' },
+    );
+  });
+}
+
+async function sendBuildRoad(ctx: ClientHandlerContext, x1: number, y1: number, x2: number, y2: number): Promise<void> {
   ctx.isBuildingRoad = true;
   ClientBridge.log('Road', `Building road from (${x1}, ${y1}) to (${x2}, ${y2})...`);
 
@@ -129,10 +160,10 @@ export function toggleRoadDemolishMode(ctx: ClientHandlerContext): void {
       }
 
       renderer.setRoadDemolishClickCallback((x: number, y: number) => {
-        demolishRoadAt(ctx, x, y);
+        void demolishRoadAt(ctx, x, y);
       });
       renderer.setRoadDemolishAreaCompleteCallback((x1: number, y1: number, x2: number, y2: number) => {
-        demolishRoadArea(ctx, x1, y1, x2, y2);
+        void demolishRoadArea(ctx, x1, y1, x2, y2);
       });
       renderer.setCancelRoadDemolishCallback(() => {
         cancelRoadDemolishMode(ctx);
@@ -162,7 +193,23 @@ export function cancelRoadDemolishMode(ctx: ClientHandlerContext): void {
   // Store is updated automatically via ctx.isRoadDemolishMode setter
 }
 
-async function demolishRoadAt(ctx: ClientHandlerContext, x: number, y: number): Promise<void> {
+/** Demolition is destructive: a Dialog first (T8, B5), with a session opt-out shared by click and area. */
+function confirmRoadDemolition(message: string, onConfirm: () => void): void {
+  useUiStore.getState().requestConfirm(
+    'Demolish road?',
+    message,
+    onConfirm,
+    { kind: 'destructive', confirmLabel: 'Demolish', typeToConfirm: null, dontAskAgainKey: 'roadDemolish' },
+  );
+}
+
+export function demolishRoadAt(ctx: ClientHandlerContext, x: number, y: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    confirmRoadDemolition(`The road tile at (${x}, ${y}) will be removed.`, () => { void sendDemolishRoadAt(ctx, x, y).then(resolve); });
+  });
+}
+
+async function sendDemolishRoadAt(ctx: ClientHandlerContext, x: number, y: number): Promise<void> {
   ClientBridge.log('Road', `Demolishing road at (${x}, ${y})...`);
 
   try {
@@ -187,12 +234,20 @@ async function demolishRoadAt(ctx: ClientHandlerContext, x: number, y: number): 
   }
 }
 
-async function demolishRoadArea(ctx: ClientHandlerContext, x1: number, y1: number, x2: number, y2: number): Promise<void> {
+export function demolishRoadArea(ctx: ClientHandlerContext, x1: number, y1: number, x2: number, y2: number): Promise<void> {
   const nx1 = Math.min(x1, x2);
   const ny1 = Math.min(y1, y2);
   const nx2 = Math.max(x1, x2);
   const ny2 = Math.max(y1, y2);
+  return new Promise<void>((resolve) => {
+    confirmRoadDemolition(
+      `Every road tile from (${nx1}, ${ny1}) to (${nx2}, ${ny2}) will be removed.`,
+      () => { void sendDemolishRoadArea(ctx, nx1, ny1, nx2, ny2).then(resolve); },
+    );
+  });
+}
 
+async function sendDemolishRoadArea(ctx: ClientHandlerContext, nx1: number, ny1: number, nx2: number, ny2: number): Promise<void> {
   ClientBridge.log('Road', `Demolishing road area (${nx1},${ny1})→(${nx2},${ny2})...`);
 
   try {

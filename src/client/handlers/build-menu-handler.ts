@@ -18,7 +18,6 @@ import {
   BuildingCategory,
   BuildingInfo,
   FacilityDimensions,
-  SurfaceType,
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';
@@ -27,6 +26,7 @@ import { useGameStore } from '../store/game-store';
 import { getFacilityDimensionsCache } from '../facility-dimensions-cache';
 import { registerCivicVisualClass } from '../../shared/building-details/civic-buildings';
 import type { ClientHandlerContext } from './client-context';
+import { enterZonesOverlayForMode, leaveZonesOverlayAfterMode } from './overlay-mode';
 import { setupEscapeHandler } from './handler-utils';
 import { showToast } from '../components/common/Toast';
 import { formatMoney } from '../format-utils';
@@ -302,7 +302,7 @@ async function startBuildingPlacement(ctx: ClientHandlerContext, building: Build
   }
 
   setupPlacementKeyboardHandler(ctx);
-  enableCityZonesForPlacement(ctx);
+  enterZonesOverlayForMode(ctx);
 }
 
 function setupPlacementKeyboardHandler(ctx: ClientHandlerContext): void {
@@ -389,42 +389,6 @@ async function sendPlaceBuilding(ctx: ClientHandlerContext, building: BuildingIn
   }
 }
 
-function enableCityZonesForPlacement(ctx: ClientHandlerContext): void {
-  if (ctx.isCityZonesEnabled) {
-    ctx.overlayBeforePlacement = { type: 'zones' };
-  } else if (ctx.activeOverlayType !== null) {
-    ctx.overlayBeforePlacement = { type: 'overlay', overlay: ctx.activeOverlayType };
-    ctx.toggleZoneOverlay(false, ctx.activeOverlayType);
-    ctx.activeOverlayType = null;
-    // Store is updated automatically via ctx.activeOverlayType setter
-  } else {
-    ctx.overlayBeforePlacement = { type: 'none' };
-  }
-
-  if (!ctx.isCityZonesEnabled) {
-    ctx.isCityZonesEnabled = true;
-    // Store is updated automatically via ctx.isCityZonesEnabled setter
-    ctx.toggleZoneOverlay(true, SurfaceType.ZONES);
-  }
-}
-
-function restoreOverlayAfterPlacement(ctx: ClientHandlerContext): void {
-  const prev = ctx.overlayBeforePlacement;
-  ctx.overlayBeforePlacement = { type: 'none' };
-
-  if (prev.type === 'zones') return;
-
-  ctx.isCityZonesEnabled = false;
-  // Store is updated automatically via ctx.isCityZonesEnabled setter
-  ctx.toggleZoneOverlay(false, SurfaceType.ZONES);
-
-  if (prev.type === 'overlay' && prev.overlay) {
-    ctx.activeOverlayType = prev.overlay;
-    // Store is updated automatically via ctx.activeOverlayType setter
-    ctx.toggleZoneOverlay(true, prev.overlay);
-  }
-}
-
 export function cancelBuildingPlacement(ctx: ClientHandlerContext): void {
   ctx.currentBuildingToPlace = null;
 
@@ -440,5 +404,5 @@ export function cancelBuildingPlacement(ctx: ClientHandlerContext): void {
     renderer.setPlacementMode(false);
   }
 
-  restoreOverlayAfterPlacement(ctx);
+  leaveZonesOverlayAfterMode(ctx);
 }

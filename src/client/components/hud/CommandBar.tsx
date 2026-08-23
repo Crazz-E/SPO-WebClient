@@ -12,6 +12,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Hammer, Map, User, Landmark, Mail, MoreHorizontal, Search, RotateCw, Settings, Layers, Heart, Server, Route, Eraser, Grid2x2 } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useGameStore } from '../../store/game-store';
+import { overlayModeNote } from '../../handlers/overlay-mode';
+import { ROAD_COST_PER_TILE } from '../../../shared/road-cost';
 import { useMailStore } from '../../store/mail-store';
 import { useClient } from '../../context';
 import { formatMoney } from '../../format-utils';
@@ -37,6 +39,7 @@ function ModeRow() {
   const isRoadDemolish = useGameStore((s) => s.isRoadDemolishMode);
   const isZone = useGameStore((s) => s.isZonePaintingMode);
   const cash = useGameStore((s) => s.tycoonStats?.cash);
+  const overlayNote = overlayModeNote(useGameStore((s) => s.overlayBeforeMode));
 
   let kind = '';
   let title = '';
@@ -64,7 +67,7 @@ function ModeRow() {
   } else if (isRoadBuild) {
     kind = 'Road';
     title = 'Build';
-    hint = 'Drag on the map';
+    hint = `Drag on the map — ${formatMoney(ROAD_COST_PER_TILE)} per tile`;
     onDone = () => client.onBuildRoad();
   } else if (isRoadDemolish) {
     kind = 'Road';
@@ -85,6 +88,7 @@ function ModeRow() {
       <span className={styles.modeTitle}>{title}</span>
       {extra}
       <span className={styles.hint}>{hint}</span>
+      {overlayNote && <span className={styles.hint}>· {overlayNote}</span>}
       <span className={styles.spacer} />
       {isPlacing && (
         <Button size="sm" variant="secondary" kbd="W" iconLeft={<RotateCw size={14} />} onClick={() => client.onRotateCW()}>
