@@ -8,7 +8,7 @@
 
 import {
   Mail, Search, Train, Landmark,
-  ZoomIn, ZoomOut, Layers, RefreshCw,
+  ZoomIn, ZoomOut, Layers, RefreshCw, RotateCw,
   Settings, Globe, Bug, Command, User, Heart,
 } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
@@ -74,6 +74,7 @@ export function MobileMenu() {
       items: [
         { label: 'Zoom In', icon: ZoomIn, action: () => doAction(() => client.onZoomIn()) },
         { label: 'Zoom Out', icon: ZoomOut, action: () => doAction(() => client.onZoomOut()) },
+        { label: 'Rotate view', icon: RotateCw, action: () => doAction(() => client.onRotateCW()) },
         { label: 'Map Overlays', icon: Layers, action: () => doAction(() => toggleLeftPanel('overlays')) },
         { label: 'Refresh Map', icon: RefreshCw, action: () => doAction(() => client.onRefreshMap()) },
       ],

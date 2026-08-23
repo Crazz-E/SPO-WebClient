@@ -8,8 +8,8 @@
  *    cancels a chat line or an inline edit before it unstacks a surface;
  *  - the table is the single source of truth — Settings renders its list from SHORTCUTS.
  *
- * Keys the renderer binds itself (Q rotate, + / − zoom, 1–5 debug sub-overlays) are listed
- * here for the Settings page but not handled again (one owner per key).
+ * Keys the renderer binds itself (arrows pan, + / − zoom, 1–5 debug sub-overlays) are
+ * listed here for the Settings page but not handled again (one owner per key).
  */
 
 import { useEffect } from 'react';
@@ -31,7 +31,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { keys: 'P', action: 'Government' },
   { keys: 'L', action: 'Mail' },
   { keys: 'R', action: 'Refresh map' },
-  { keys: 'Q / W', action: 'Rotate view', rendererOwned: true },
+  { keys: 'Q / W', action: 'Rotate view' },
+  { keys: 'Arrows', action: 'Pan the map', rendererOwned: true },
   { keys: '+ / −', action: 'Zoom', rendererOwned: true },
   { keys: 'D', action: 'Debug overlay' },
   { keys: 'Ctrl+K', action: 'Command palette' },
@@ -96,6 +97,10 @@ export function useKeyboardShortcuts(client: ClientCallbacks | null): void {
         case 'm':
           e.preventDefault();
           store.toggleMapSurface();
+          break;
+        case 'q':
+          e.preventDefault();
+          client?.onRotateCCW();
           break;
         case 'w':
           e.preventDefault();

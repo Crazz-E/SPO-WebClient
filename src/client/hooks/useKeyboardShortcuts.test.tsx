@@ -17,6 +17,7 @@ function makeClient(): ClientCallbacks {
     onToggleDebugOverlay: jest.fn(),
     onToggleMinimap: jest.fn(),
     onRotateCW: jest.fn(),
+    onRotateCCW: jest.fn(),
   } as unknown as ClientCallbacks;
 }
 
@@ -88,6 +89,13 @@ describe('useKeyboardShortcuts', () => {
     expect(useUiStore.getState().stack).toEqual([]);
     expect(client.onRotateCW).toHaveBeenCalledTimes(1);
     expect(client.onToggleDebugOverlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('Q rotates counter-clockwise — the hook owns the key, not the renderer (N7)', () => {
+    renderHook(() => useKeyboardShortcuts(client));
+    press('q');
+    expect(client.onRotateCCW).toHaveBeenCalledTimes(1);
+    expect(client.onRotateCW).not.toHaveBeenCalled();
   });
 
   it('letters are inert while a modal or the palette owns the keyboard', () => {

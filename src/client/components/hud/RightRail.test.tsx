@@ -34,4 +34,14 @@ describe('RightRail', () => {
     expect(onToggleDebugOverlay).toHaveBeenCalledTimes(1);
     expect(onRefreshMap).toHaveBeenCalledTimes(1);
   });
+
+  it('rotates the view both ways (N7 — Voyager FiveControl.pas:665-693)', () => {
+    const onRotateCW = jest.fn(), onRotateCCW = jest.fn();
+    renderWithProviders(<RightRail />, { clientCallbacks: createSpiedCallbacks({ onRotateCW, onRotateCCW }) });
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate view (Q)' }));
+    expect(onRotateCCW).toHaveBeenCalledTimes(1);
+    expect(onRotateCW).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate view (W)' }));
+    expect(onRotateCW).toHaveBeenCalledTimes(1);
+  });
 });
