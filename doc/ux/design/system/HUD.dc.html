@@ -14,7 +14,7 @@
     * { box-sizing: border-box; }
   </style>
 </helmet>
-<div style="width: 1200px; height: 1160px; padding: 32px; background: #0C0D10; display: flex; flex-direction: column; gap: 20px; overflow: hidden;">
+<div style="width: 1200px; height: 1300px; padding: 32px; background: #0C0D10; display: flex; flex-direction: column; gap: 20px; overflow: hidden;">
 
   <div style="display: flex; flex-direction: column; gap: 4px;">
     <h1 style="margin: 0; font-size: 20px; font-weight: 600;">HUD desktop — option C</h1>
@@ -23,7 +23,7 @@
 
   <!-- STATUS PILL -->
   <section style="display: flex; flex-direction: column; gap: 10px;">
-    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Pastille d'état — tout ce que l'InfoWidget savait, en une ligne (mobile : cash, revenu, rang)</h2>
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Pastille d'état — tout ce que l'InfoWidget savait, en une ligne ; feuille ouverte : elle se recentre entre minicarte et feuille et replie compagnie / fraîcheur / rôle / capacité, puis monde / date / courbe (&lt; 1400), puis revenu / rang (tablette) — PR #69</h2>
     <div style="display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 16px; background: rgba(20,22,24,0.88); border: 1px solid rgba(255,255,255,0.06); border-radius: 9999px; align-self: flex-start;">
       <span style="color: #D4A853; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;">Planitia</span>
       <span style="color: #7D8492; font-size: 12px; font-variant-numeric: tabular-nums;">12 mars 2334</span>
@@ -57,12 +57,12 @@
         <button style="height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer; font: 500 11px 'Inter', sans-serif;"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>Plus</button>
       </div>
     </div>
-    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">« Plus » ouvre Routes, Zones (charge publique), Calques, Réglages, Changer de serveur. La recherche est la Command Palette d'aujourd'hui, élargie à <em>mes</em> bâtiments (favoris déjà lus, recherche locale), aux joueurs et villes (routes existantes) et aux coordonnées (voir missing-features S1, N5). Raccourci « M » repris pour Carte ; le courrier passe à « L » (lettre).</p>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">« Plus » ouvre Routes (construire / démolir), Zones (charge publique), Calques, <strong>Docked minimap</strong> (le losange ancré), Mes bâtiments, Réglages, Changer de serveur. La recherche est la Command Palette, élargie à <em>mes</em> bâtiments (favoris lus une fois, recherche locale), aux villes (annuaire déjà lu) et aux coordonnées « x,y » (portée : T7, PR #64) ; pas de recherche de joueur (aucune route). Raccourci « M » = surface Map ; courrier « L » ; tourner la vue « W » (portés : socle-4).</p>
   </section>
 
   <!-- COMMAND BAR mode -->
   <section style="display: flex; flex-direction: column; gap: 10px;">
-    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Barre de commande — en mode (placement, route, zone) : la ligne du haut devient la barre de mode</h2>
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Barre de commande — en mode (placement, route, zone) : la ligne du haut devient la barre de mode (route : « $2,000,000 per tile », Dialog de dépense à la relâche ; Zones : ce qui était affiché revient à la sortie — T8 PR #66)</h2>
     <div style="width: 760px; display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 8px 0 8px; background: rgba(20,22,24,0.88); border: 1px solid #B8912E; border-radius: 12px; box-shadow: 0 0 12px rgba(212,168,83,0.2);">
       <button style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #9CA1AC; cursor: pointer;" title="Rechercher ou commander" aria-label="Rechercher ou commander"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
       <span style="width: 8px; height: 8px; border-radius: 9999px; background: #D4A853;"></span>
@@ -71,7 +71,7 @@
       <span style="font: 700 12px 'JetBrains Mono', monospace; color: #D4A853;">$ 240 000</span>
       <span style="font-size: 12px; color: #9CA1AC;">après : <span style="color: #4ADE80;">$ 12 240 300</span></span>
       <span style="flex: 1;"></span>
-      <button style="height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Tourner la vue <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">R</kbd></button>
+      <button style="height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Tourner la vue <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">W</kbd></button>
       <button style="height: 32px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #F0F0F2; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Terminer <kbd style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 0 4px;">Échap</kbd></button>
     </div>
     <div style="width: 760px; display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 8px; background: rgba(20,22,24,0.88); border: 1px solid #B8912E; border-radius: 12px; box-shadow: 0 0 12px rgba(212,168,83,0.2);">
@@ -89,7 +89,7 @@
 
   <!-- MAP VIEW -->
   <section style="display: flex; flex-direction: column; gap: 10px;">
-    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Vue « Carte » — ce que la tuile ouvre (la minicarte de données de Voyager, en feuille)</h2>
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Vue « Carte » — ce que la tuile ouvre (portée : surface « Map » de la feuille, PR #67/#68)</h2>
     <div style="display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px;">
       <div style="display: flex; flex-direction: column; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden;">
         <div style="display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);">
@@ -114,24 +114,25 @@
           <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #EF4444;"></span>Déficitaires</span>
           <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: #7D8492;"></span>Autres</span>
           <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 8px; border: 1px solid #F0F0F2;"></span>Vue actuelle</span>
-          <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 8px; height: 8px; background: rgba(255,255,255,0.15);"></span>Non exploré</span>
         </div>
         <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 12px 12px;">
-          <button style="height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer; text-align: left;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D4A853" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22h18"></path><path d="M6 18v-7"></path><path d="M10 18v-7"></path><path d="M14 18v-7"></path><path d="M18 18v-7"></path><path d="m3 9 9-7 9 7z"></path></svg>Aller à l'hôtel de ville le plus proche</button>
-          <button style="height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer; text-align: left;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D4A853" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"></path></svg>Favoris <span style="color: #7D8492; font-weight: 400;">· Usine textile, Entrepôt Nord, Capitole</span></button>
-          <button style="height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer; text-align: left;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D4A853" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"></path><path d="m22 12.5-9.17 4.17a2 2 0 0 1-1.66 0L2 12.5"></path></svg>Calques <span style="color: #7D8492; font-weight: 400;">· Zones, Pollution, Criminalité…</span></button>
+          <div style="display: flex; align-items: center; gap: 6px; padding: 4px 0 8px; flex-wrap: wrap;"><span style="height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif;">← Back</span><span style="height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif;">Next →</span><span style="height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif;">Nearest Town Hall</span><span style="flex: 1;"></span><span style="height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif;">−</span><span style="font: 600 12px 'JetBrains Mono', monospace; color: #C4C8D0;">100%</span><span style="height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif;">+</span><span style="height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #C4C8D0; font: 500 12px 'Inter', sans-serif;">⌖</span></div>
+          <div style="font: 600 11px 'Inter', sans-serif; letter-spacing: 0.06em; text-transform: uppercase; color: #7D8492; padding: 4px 0;">Bookmarks <span style="float: right; color: #D4A853; text-transform: none; letter-spacing: 0;">+ Bookmark this place</span></div>
+          <button style="height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer; text-align: left;">Usine textile <span style="color: #7D8492; font-size: 11px;">(937, 1035)</span></button>
+          <button style="height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer; text-align: left;">Entrepôt Nord <span style="color: #7D8492; font-size: 11px;">(1210, 880)</span></button>
+          <button style="height: 36px; padding: 0 10px; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer; text-align: left;">Capitole <span style="color: #7D8492; font-size: 11px;">(578, 187)</span></button>
         </div>
       </div>
       <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #C4C8D0; line-height: 1.6;">
         <p style="margin: 0;"><strong style="color: #F0F0F2;">Pourquoi une tuile « Carte »</strong> — sur une grande surface, le joueur doit pouvoir <em>voir où il est</em> et <em>sauter loin</em>. Voyager avait une minicarte de données (couleur par classe de bâtiment, vos bâtiments déficitaires en rouge, brouillard sur l'inexploré, rectangle de vue, clic = sauter, zoom propre — <code style="font-family: 'JetBrains Mono', monospace;">Map.pas:3512-3626</code>, <code style="font-family: 'JetBrains Mono', monospace;">IsometricMap.pas:438-451</code>), des boutons BACK / NEXT (historique 100 positions, <code style="font-family: 'JetBrains Mono', monospace;">MapIsoView.pas:1009-1036</code>), GO TOWN HALL (<code style="font-family: 'JetBrains Mono', monospace;">MapIsoView.pas:978-1007</code>) et des LINKS (favoris de position, <code style="font-family: 'JetBrains Mono', monospace;">MapIsoView.pas:683-716</code>).</p>
-        <p style="margin: 0;"><strong style="color: #F0F0F2;">Le WebClient n'a aujourd'hui</strong> qu'une minicarte terrain (clic = recentrer) et le zoom. La vue « Carte » ci-contre regroupe ces quatre outils dans une feuille ; clic sur la carte = sauter, molette = zoom de la minicarte, le rectangle de vue se déplace avec la caméra. Sur mobile, la même feuille à mi-hauteur, la carte en haut.</p>
-        <p style="margin: 0;"><strong style="color: #F0F0F2;">À implémenter</strong> (voir <code style="font-family: 'JetBrains Mono', monospace;">doc/ux/missing-features.md</code>) : bâtiments et déficitaires sur la minicarte, brouillard, historique Back/Next, hôtel de ville le plus proche (membre RDO à vérifier), favoris de position (stockage local ou cookies serveur).</p>
+        <p style="margin: 0;"><strong style="color: #F0F0F2;">Porté (Carte-1 PR #67, Carte-2 PR #68)</strong> — surface « Map » de la feuille (M, tuile Map, triangle mobile supprimé au profit de la tuile) : terrain (colormap partagée avec le losange ancré), tous les bâtiments chargés (or = miens, rouge = déficitaires, atténués = autres), rectangle de vue, clic = sauter, molette / boutons = zoom 1–8 × autour du curseur, glisser = déplacer ; Back / Next (100 positions, seuil 8 tuiles, nourris par la caméra toutes les secondes) ; Nearest Town Hall (villes de l'annuaire, sans RDO) ; Bookmarks (ajouter la vue, aller, renommer, supprimer — locaux par monde et joueur). Le losange ancré reste : Plus › Docked minimap.</p>
+        <p style="margin: 0;"><strong style="color: #F0F0F2;">Hors lot</strong> (voir <code style="font-family: 'JetBrains Mono', monospace;">doc/ux/missing-features.md</code>) : brouillard sur l'inexploré (le client ne suit pas « ce qui a été vu »), couleur par classe de bâtiment, favoris côté serveur (cookies LINKS de Voyager = membre RDO à cataloguer).</p>
       </div>
     </div>
   </section>
 </div>
 </x-dc>
-<script data-dc-script data-props='{"$preview":{"width":1200,"height":1160}}'>
+<script data-dc-script data-props='{"$preview":{"width":1200,"height":1300}}'>
 class Component extends DCLogic {
   renderVals() { return {}; }
 }

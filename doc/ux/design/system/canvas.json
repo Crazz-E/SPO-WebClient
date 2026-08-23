@@ -38,7 +38,7 @@
       "x": 2960,
       "y": 1140,
       "w": 1200,
-      "h": 1160
+      "h": 1300
     },
     {
       "file": "Mobile.dc.html",
@@ -55,7 +55,7 @@
       "x": 0,
       "y": -480,
       "w": 720,
-      "text": "SYSTÈME — la boîte à outils de l'option C.\nCinq planches : fondations (tokens assainis, un seul focus, une seule échelle de texte et de z-index), contrôles (Button, IconButton, Chip, Field, Switch/Checkbox/Radio, Slider, Tabs), surfaces (la feuille universelle, le dialogue de confirmation, les toasts, le SaveIndicator, les états de contenu), listes (DataTable et la LISTE LONGUE — entrepôts et supermarchés Magna à plusieurs dizaines de produits), et la déclinaison mobile.\nTout est écrit avec les valeurs exactes des tokens actuels ; ce qui est nouveau est marqué NOUVEAU. À valider avant les flux T1/T3."
+      "text": "RÉFÉRENCE (23/08, après PR #55–#70) : ces planches dessinent CE QUI EST PORTÉ dans le code ; chaque écart voulu est noté sur la planche ou dans sys-impl. Base commune pour la suite (hors plan : doc/ux/brief.md « Restent »).\n\nSYSTÈME — la boîte à outils de l'option C.\nSix planches : fondations (tokens assainis, un seul focus, une seule échelle de texte et de z-index), contrôles (Button, IconButton, Chip, Field, Switch/Checkbox/Radio, Slider, Tabs), surfaces (la feuille universelle, le dialogue de confirmation, les toasts, le SaveIndicator, les états de contenu), listes (DataTable et la LISTE LONGUE — entrepôts et supermarchés Magna à plusieurs dizaines de produits), et la déclinaison mobile.\nTout est écrit avec les valeurs exactes des tokens actuels ; ce qui est nouveau est marqué NOUVEAU. À valider avant les flux T1/T3."
     },
     {
       "id": "sys-long-list",
@@ -69,14 +69,14 @@
       "x": 1280,
       "y": -320,
       "w": 720,
-      "text": "ÉTAT D'IMPLÉMENTATION (2026-08-23, tout fusionné sur main)\n✅ socle-1 (PR #55) — tokens : 0 token inconnu, focus or partout, 12 px plancher mobile, --scrim / --z-* / --sai-bottom ; garde-fou Jest design-tokens.test.ts.\n✅ socle-2 (PR #56) — Button (5 variantes, 3 tailles, loading, kbd), Dialog (focus piégé/restitué, dépense/destructif, « taper CONFIRM », opt-out de session) sur requestConfirm/requestPrompt, Toast (mot + icône, erreurs persistantes, régions permanentes), SaveIndicator (échec lisible + annoncé), Field, Chip, Switch/Checkbox/Radio natifs, Tabs APG, EmptyState/ErrorState.\n✅ socle-3 (PR #57) — pile de surfaces (push/pop/popTo, Échap dépile), Sheet desktop (jetons, épingler, fermer) + même pile sur mobile ; surface Government ; bâtiments civiques dans la feuille — plus de modale civique.\n✅ socle-4 (PR #58) — raccourcis, StatusPill, CommandBar (recherche → palette, 6 tuiles, Plus, barre de mode placement/route/zone), menu mobile : Profil + palette.\n✅ Flux portés (PR #59–#66) : T1 Construire, T3 Fournisseur, T6 Courrier, T2 Diagnostic, T7 Recherche, T5 Taxes, T8 Modes carte, Carte-1/2 (surface Map + favoris) — détail sur le canevas Flux.\n✅ Feuille flottante (PR #69) — desktop : cadre 472 px (420 en desktop étroit), 64 px du haut, 16 px des bords, arrondi + ombre, la carte visible autour ; barre de commande, rail et pastille décalés (la pastille replie compagnie/fraîcheur, puis monde/date/courbe, puis revenu/rang selon la place) ; tablette : panneau ancré conservé (écart voulu).\n✅ Barre de commande mobile (PR #70) — six tuiles comme le desktop (Build · Map · Chat · Government · Mail · More), pastille de recherche → palette, Fav → More › My facilities, barre d'info → Profil.\nTous les lots du plan sont portés. Restent hors lot : barre de mode mobile routes/zones, tablette, B6 SaveIndicator généralisé, et les 🟡 de missing-features.\nLibellés implémentés en anglais (langue actuelle du client) ; les planches restent en français pour la lecture."
+      "text": "ÉTAT D'IMPLÉMENTATION — RÉFÉRENCE (23/08, PR #55–#70 fusionnées sur main)\n✅ socle-1 tokens (#55) · ✅ socle-2 composants Button / Dialog / Toast / SaveIndicator / Field / Chip / Switch-Checkbox-Radio / Tabs / Empty-Error (#56) · ✅ socle-3 pile de surfaces + feuille universelle + Government (#57) · ✅ socle-4 raccourcis, StatusPill, CommandBar + barre de mode, menu mobile (#58).\n✅ Flux T1, T3, T6, T2, T7, T5, T8 (#59–#66) · ✅ Carte-1/2 : surface Map + Bookmarks (#67/#68) · ✅ Feuille flottante 472 px, HUD décalé, pastille repliable (#69) · ✅ Barre de commande mobile : six tuiles + pastille de recherche (#70).\nÉcarts voulus (notés sur les planches) : tablette = panneau ancré 360 ; mobile : Chat reste une tuile, Plus garde Search / Transport / Profile / My facilities / calques / zoom / réglages / serveur ; placement mobile = PlacementHUD.\nReste hors plan : barre de mode mobile routes/zones, tablette, B6 SaveIndicator généralisé, et les 🟡 de doc/ux/missing-features.md. Libellés implémentés en anglais ; planches en français."
     },
     {
       "id": "sys-map",
       "x": 2960,
       "y": 1000,
       "w": 520,
-      "text": "CARTE — tuile « Carte » ajoutée à la barre de commande (desktop et mobile). Elle ouvre la vue carte : la minicarte de données de Voyager (couleur par classe de bâtiment, vos bâtiments déficitaires en rouge, brouillard, rectangle de vue, clic = sauter, zoom propre), plus BACK / NEXT, GO TOWN HALL et les favoris de position. Voir doc/ux/missing-features.md pour ce qui manque au WebClient."
+      "text": "CARTE — tuile « Map » (M) de la barre de commande, desktop et mobile : ouvre la surface Map de la feuille (PR #67/#68) — minicarte de données (terrain, bâtiments chargés, rectangle de vue), clic = sauter, zoom 1–8×, Back/Next, Nearest Town Hall, Bookmarks locaux. Le losange ancré reste via Plus › Docked minimap. Hors lot : brouillard, couleur par classe, favoris serveur."
     }
   ],
   "launch": {

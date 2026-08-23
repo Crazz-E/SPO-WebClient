@@ -4,6 +4,12 @@ Chaque sous-dossier contient les fichiers de travail d'un canevas (`*.dc.html` =
 `canvas.json` = disposition + notes). Le canevas publié se régénère depuis ces fichiers avec
 `/design` (le fichier assemblé, ~2 Mo, n'est pas versionné).
 
+**Depuis le 23/08 (PR #71, « socle-5 »), les planches sont la RÉFÉRENCE de ce qui est porté** : Surfaces (cadre
+flottant 472 px), HUD (pastille repliable, Plus › Docked minimap, vue Carte = surface Map avec Back/Next,
+Nearest Town Hall, Bookmarks), Mobile (six tuiles + pastille de recherche) dessinent le code de `main` ;
+chaque écart voulu est écrit sur la planche. Une planche qui diverge du code est un bug de doc, à corriger
+dans la même PR que le code.
+
 | Dossier | Canevas | Lien |
 |---|---|---|
 | `direction/` | Direction HUD — 3 options (A flottant consolidé, B cockpit ancré, C carte pure + feuille universelle) | https://claude.ai/code/artifact/b7719533-668e-46c6-97a0-aca177da9af1 |
