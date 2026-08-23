@@ -15,6 +15,7 @@ import { getErrorMessage } from '../shared/error-codes';
 import { toErrorMessage } from '../shared/error-utils';
 import { MapNavigationUI } from './ui/map-navigation-ui';
 import { MinimapUI } from './ui/minimap-ui';
+import { useMapStore } from './store/map-store';
 import { ClientBridge, setWorldToScreenFn, setWorldToScreenCenteredFn, type ClientCallbacks } from './bridge/client-bridge';
 import { useGameStore } from './store/game-store';
 import type { GameSettings } from './store/game-store';
@@ -732,6 +733,8 @@ export class StarpeaceClient implements ClientHandlerContext {
     if (renderer) {
       this.minimapUI.setRenderer(renderer);
     }
+    // The Map surface reads the same renderer through the same contract (Carte lot).
+    useMapStore.getState().setSource(renderer ?? null);
 
     ClientBridge.loadPersistedSettings();
     const initialSettings = ClientBridge.getSettings();

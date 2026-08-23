@@ -39,10 +39,15 @@ describe('CommandBar', () => {
     expect(screen.getByRole('button', { name: 'Mail, 3 unread' })).toBeTruthy();
   });
 
-  it('Map toggles the minimap; the search row opens the palette', () => {
+  it('Map opens the Map surface (and closes it again); the docked minimap lives in More; the search row opens the palette', () => {
     const onToggleMinimap = jest.fn();
     renderWithProviders(<CommandBar />, { clientCallbacks: createSpiedCallbacks({ onToggleMinimap }) });
     fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+    expect(useUiStore.getState().stack.map((s) => s.kind)).toEqual(['map']);
+    fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+    expect(useUiStore.getState().stack).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Docked minimap' }));
     expect(onToggleMinimap).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: /Search or run a command/ }));
     expect(useUiStore.getState().commandPaletteOpen).toBe(true);

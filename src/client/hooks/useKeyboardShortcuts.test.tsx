@@ -78,12 +78,14 @@ describe('useKeyboardShortcuts', () => {
     expect(useUiStore.getState().stack[useUiStore.getState().stack.length - 1]?.kind).toBe('build');
   });
 
-  it('M toggles the minimap, W rotates the view, D toggles debug', () => {
+  it('M toggles the Map surface, W rotates the view, D toggles debug', () => {
     renderHook(() => useKeyboardShortcuts(client));
     press('m');
     press('w');
     press('d');
-    expect(client.onToggleMinimap).toHaveBeenCalledTimes(1);
+    expect(useUiStore.getState().stack[useUiStore.getState().stack.length - 1]?.kind).toBe('map');
+    press('m');
+    expect(useUiStore.getState().stack).toEqual([]);
     expect(client.onRotateCW).toHaveBeenCalledTimes(1);
     expect(client.onToggleDebugOverlay).toHaveBeenCalledTimes(1);
   });

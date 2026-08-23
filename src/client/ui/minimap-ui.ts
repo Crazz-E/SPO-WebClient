@@ -23,25 +23,14 @@
 
 import { useUiStore } from '../store/ui-store';
 import type { MinimapSize } from '../store/game-store';
-import type { AtlasManifest } from '../renderer/texture-atlas-cache';
+import { buildTerrainColormap, sampleAtlasColors, type MinimapRendererAPI, type RGB } from './minimap-colormap';
 
 // ---------------------------------------------------------------------------
 // Public interfaces
 // ---------------------------------------------------------------------------
 
 /** Renderer interface — only the subset MinimapUI needs. */
-export interface MinimapRendererAPI {
-  getCameraPosition(): { x: number; y: number };
-  centerOn(x: number, y: number): void;
-  getMapDimensions(): { width: number; height: number };
-  getMapName(): string;
-  getSeason(): number;
-  getTerrainType(): string;
-  getVisibleTileBounds(): { minI: number; maxI: number; minJ: number; maxJ: number };
-  getTerrainPixelData(): { pixelData: Uint8Array; width: number; height: number } | null;
-  /** Atlas image + manifest for season-aware color sampling (optional). */
-  getAtlasData?(): { atlas: ImageBitmap; manifest: AtlasManifest } | null;
-}
+export type { MinimapRendererAPI } from './minimap-colormap';
 
 // ---------------------------------------------------------------------------
 // Layout & interaction constants
@@ -77,21 +66,7 @@ const FILTER_BASE = 'drop-shadow(0 0 10px rgba(56,189,248,0.28)) drop-shadow(0 0
 /** Fraction of diamond size reserved as padding on each side. */
 const DIAMOND_PAD = 0.06;
 
-/** Max colormap resolution (tiles per side). */
-const COLORMAP_MAX = 128;
-
 const COS45 = Math.SQRT2 / 2;
-
-/**
- * LandClass → RGB fallback color for the minimap (used when atlas is unavailable).
- * Index: 0=ZoneA (Grass), 1=ZoneB (MidGrass), 2=ZoneC (DryGround), 3=ZoneD (Water)
- */
-const FALLBACK_COLORS: [number, number, number][] = [
-  [74, 140, 82],    // Grass — green
-  [128, 140, 68],   // MidGrass — olive
-  [180, 148, 90],   // DryGround — sandy brown
-  [24, 56, 90],     // Water — deep blue
-];
 
 // ---------------------------------------------------------------------------
 // MinimapUI class
@@ -128,7 +103,7 @@ export class MinimapUI {
   private terrainCacheKey = '';
 
   /** Atlas-sampled per-landId RGB colors (season-aware). */
-  private atlasColorMap: Map<number, [number, number, number]> = new Map();
+  private atlasColorMap: Map<number, RGB> | null = null;
   private atlasColorKey = '';
 
   // ---------------------------------------------------------------------------
@@ -198,7 +173,7 @@ export class MinimapUI {
     this.ctx = null;
     this.terrainCanvas = null;
     this.terrainCacheKey = '';
-    this.atlasColorMap.clear();
+    this.atlasColorMap = null;
     this.atlasColorKey = '';
   }
 
@@ -549,51 +524,15 @@ export class MinimapUI {
   // Terrain colormap — built from pixel data, cached until map changes
   // ---------------------------------------------------------------------------
 
-  /**
-   * Sample representative RGB colors from atlas tiles.
-   * Builds a landId → [r,g,b] map by reading the center pixel of each atlas tile.
-   */
+  /** Sample atlas colors once per terrain/season (null → land-class fallbacks). */
   private buildAtlasColorMap(): void {
     if (!this.renderer?.getAtlasData) return;
     const atlasData = this.renderer.getAtlasData();
     if (!atlasData) return;
-
-    const season = this.renderer.getSeason();
-    const terrainType = this.renderer.getTerrainType();
-    const key = `${terrainType}:${season}`;
-    if (this.atlasColorKey === key && this.atlasColorMap.size > 0) return;
-
-    const { atlas, manifest } = atlasData;
-
-    // Draw atlas to a temporary canvas to read pixels
-    const sampleCanvas = document.createElement('canvas');
-    sampleCanvas.width = atlas.width;
-    sampleCanvas.height = atlas.height;
-    const sampleCtx = sampleCanvas.getContext('2d');
-    if (!sampleCtx) return;
-    sampleCtx.drawImage(atlas, 0, 0);
-    const imageData = sampleCtx.getImageData(0, 0, atlas.width, atlas.height);
-    const pixels = imageData.data;
-
-    this.atlasColorMap.clear();
-    for (const [idStr, tile] of Object.entries(manifest.tiles)) {
-      const landId = Number(idStr);
-      // Sample center pixel of this tile
-      const cx = Math.floor(tile.x + tile.width / 2);
-      const cy = Math.floor(tile.y + tile.height / 2);
-      const idx = (cy * atlas.width + cx) * 4;
-      this.atlasColorMap.set(landId, [pixels[idx], pixels[idx + 1], pixels[idx + 2]]);
-    }
-
+    const key = `${this.renderer.getTerrainType()}:${this.renderer.getSeason()}`;
+    if (this.atlasColorKey === key && this.atlasColorMap && this.atlasColorMap.size > 0) return;
+    this.atlasColorMap = sampleAtlasColors(atlasData.atlas, atlasData.manifest);
     this.atlasColorKey = key;
-  }
-
-  /** Get RGB color for a land ID — atlas-sampled if available, else fallback. */
-  private getLandColor(landId: number): [number, number, number] {
-    const atlasColor = this.atlasColorMap.get(landId);
-    if (atlasColor) return atlasColor;
-    const landClass = (landId >> 6) & 3;
-    return FALLBACK_COLORS[landClass];
   }
 
   private buildTerrainColormap(): void {
@@ -602,49 +541,13 @@ export class MinimapUI {
     if (!data) return;
 
     const { pixelData, width, height } = data;
-    const mapName = this.renderer.getMapName();
-    const season = this.renderer.getSeason();
-    const terrainType = this.renderer.getTerrainType();
-    const key = `${mapName}:${terrainType}:${season}:${width}:${height}`;
+    const key = `${this.renderer.getMapName()}:${this.renderer.getTerrainType()}:${this.renderer.getSeason()}:${width}:${height}`;
     if (this.terrainCacheKey === key && this.terrainCanvas) return;
 
-    // Sample atlas colors (rebuilds only when season/terrain changes)
     this.buildAtlasColorMap();
-
-    // Downsample to COLORMAP_MAX on the largest side
-    const ds = Math.max(1, Math.ceil(Math.max(width, height) / COLORMAP_MAX));
-    // Swap dimensions: colormap columns = i-dimension, rows = j-dimension
-    // so that after 45° rotation the diamond vertices match isometric orientation
-    const cw = Math.ceil(height / ds);
-    const ch = Math.ceil(width / ds);
-
-    const offscreen = document.createElement('canvas');
-    offscreen.width = cw;
-    offscreen.height = ch;
-    const offCtx = offscreen.getContext('2d');
-    if (!offCtx) return;
-
-    const imgData = offCtx.createImageData(cw, ch);
-    const px = imgData.data;
-
-    for (let dy = 0; dy < ch; dy++) {
-      for (let dx = 0; dx < cw; dx++) {
-        // Swap + flip: dx → i (flipped), dy → j (flipped)
-        // Top-left (0,0) → top of diamond → tile (maxI, maxJ)
-        const i = height - 1 - Math.min(dx * ds, height - 1);
-        const j = width - 1 - Math.min(dy * ds, width - 1);
-        const landId = pixelData[i * width + j];
-        const [r, g, b] = this.getLandColor(landId);
-        const idx = (dy * cw + dx) * 4;
-        px[idx]     = r;
-        px[idx + 1] = g;
-        px[idx + 2] = b;
-        px[idx + 3] = 255;
-      }
-    }
-
-    offCtx.putImageData(imgData, 0, 0);
-    this.terrainCanvas = offscreen;
+    const cm = buildTerrainColormap(pixelData, width, height, this.atlasColorMap);
+    if (!cm) return;
+    this.terrainCanvas = cm.canvas;
     this.terrainCacheKey = key;
   }
 

@@ -1,0 +1,32 @@
+# Handoff — la surface « Map » (Carte-1, PR #67 ; Carte-2 à venir)
+
+Le brief demandait un bouton **Carte** : une vue lisible du monde pour se déplacer sur une
+grande surface, ce que le losange ancré (terrain seul, 3 tailles) ne permettait pas. La
+recherche sur Voyager (`Map.pas:3512-3626`, `MapIsoView.pas:978-1036`) a fixé la cible :
+bâtiments colorés, déficitaires en rouge, clic = sauter, Retour / Suivant, hôtel de ville le
+plus proche, favoris de position.
+
+## Ce qui est porté (Carte-1)
+
+| Élément | Implémentation | Source de données |
+|---|---|---|
+| Surface `map` de la feuille | `components/map/MapSurface.tsx` ; `M`, tuile **Map** de la CommandBar, triangle mobile (`MinimapToggleButton`) → `toggleMapSurface` | — |
+| Terrain | colormap partagée `ui/minimap-colormap.ts` (extraite de `MinimapUI`, qui l'utilise aussi) | `getTerrainPixelData` / atlas du renderer |
+| Bâtiments | un point par bâtiment **chargé** : or = miens (`tycoonId` = le mien), rouge = déficitaire (`MapBuilding.alert`, bit du serveur), autres atténués | `renderer.getAllBuildings()` — rien n'est demandé |
+| Rectangle de vue | ce que la vue iso montre | `getVisibleTileBounds` |
+| Clic = sauter | `source.centerOn(x, y)` + entrée d'historique | — |
+| Zoom | molette (autour du curseur) et boutons, 1–8 × ; glisser = déplacer quand zoomé ; Reset | local |
+| Back / Next | `store/map-store.ts` : 100 positions (Voyager), seuil 8 tuiles, nourri par `hooks/useCameraHistory` (1 s) et par chaque saut | caméra |
+| Nearest Town Hall | villes de la page annuaire (déjà lue par Recherche / Government), distance de Chebyshev à la caméra | `search-store.townsData` |
+| Légende + coordonnées | « Mine / Losing money / Others » ; tuile survolée ou centre de la vue | — |
+
+Le losange ancré reste disponible (menu **Plus › Docked minimap**). `MinimapRendererAPI` est le
+contrat commun (déplacé dans `minimap-colormap.ts`, ré-exporté par `minimap-ui.ts`).
+
+## Écarts voulus / hors lot
+
+- Pas de **brouillard** : le client ne suit pas « ce qui a été vu » ; la carte montre le terrain
+  entier et les bâtiments déjà chargés (l'inexploré est donc vide, pas gris).
+- Pas de couleur **par classe** de bâtiment (Voyager `GetBuildingColor`) : trois couleurs suffisent
+  pour la lecture visée (où sont les miens, lesquels perdent de l'argent).
+- **Favoris de position** (N4) → Carte-2.

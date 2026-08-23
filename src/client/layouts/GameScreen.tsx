@@ -19,6 +19,7 @@ import { ChatStrip } from '../components/chat';
 import { StatusOverlay } from '../components/building';
 import { ServerSwitchOverlay, ZoneTypePicker } from '../components/modals';
 import { useChangelogCheck } from '../hooks/useChangelogCheck';
+import { useCameraHistory } from '../hooks/useCameraHistory';
 import { CommandPalette } from '../components/command-palette';
 import { MobileShell } from '../components/mobile';
 import { ConfirmDialog, PromptDialog } from '../components/common';
@@ -42,6 +43,7 @@ export function GameScreen() {
   const closeModal = useUiStore((s) => s.closeModal);
 
   useChangelogCheck();
+  useCameraHistory();
 
   return (
     <div className={styles.screen}>
