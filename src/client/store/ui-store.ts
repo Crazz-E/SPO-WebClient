@@ -102,6 +102,8 @@ interface UiState {
   // Placement mode (building placement on map)
   isPlacingBuilding: boolean;
   placementValid: boolean;
+  /** What is being placed — the mode bar shows its name and cost (handoff 00 §4.2). */
+  placingFacility: { name: string; cost: number } | null;
 
   // Actions — Surfaces
   /** Push a surface on top (never replaces). No-op if the top already is that kind+params. */
@@ -155,6 +157,7 @@ interface UiState {
   // Actions — Placement
   setIsPlacingBuilding: (v: boolean) => void;
   setPlacementValid: (v: boolean) => void;
+  setPlacingFacility: (f: { name: string; cost: number } | null) => void;
 
   // Actions — Escape (close topmost layer)
   dismissTopmost: () => void;
@@ -178,6 +181,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   minimapFullscreen: false,
   isPlacingBuilding: false,
   placementValid: false,
+  placingFacility: null,
 
   // Surfaces — one stack; the legacy panel fields follow its top
   pushSurface: (surface) => {
@@ -286,6 +290,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   // Placement
   setIsPlacingBuilding: (v) => set({ isPlacingBuilding: v }),
   setPlacementValid: (v) => set({ placementValid: v }),
+  setPlacingFacility: (f) => set({ placingFacility: f }),
 
   // Escape — dismiss topmost layer in priority order
   dismissTopmost: () => {

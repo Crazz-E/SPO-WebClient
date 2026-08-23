@@ -257,6 +257,7 @@ async function startBuildingPlacement(ctx: ClientHandlerContext, building: Build
 
   useUiStore.getState().setIsPlacingBuilding(true);
   useUiStore.getState().setPlacementValid(true);
+  useUiStore.getState().setPlacingFacility({ name: building.name, cost: building.cost });
 
   const renderer = ctx.getRenderer();
   if (renderer) {
@@ -388,6 +389,7 @@ export function cancelBuildingPlacement(ctx: ClientHandlerContext): void {
 
   useUiStore.getState().setIsPlacingBuilding(false);
   useUiStore.getState().setPlacementValid(false);
+  useUiStore.getState().setPlacingFacility(null);
 
   const notification = document.getElementById('placement-notification');
   if (notification) notification.remove();

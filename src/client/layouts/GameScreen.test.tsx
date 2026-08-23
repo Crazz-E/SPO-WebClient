@@ -6,8 +6,8 @@ import { GameScreen } from './GameScreen';
 
 // The screen composes the HUD; stub the parts that touch the canvas or fetch on mount.
 jest.mock('../components/hud', () => ({
-  InfoWidget: () => <div>INFO</div>,
-  LeftRail: () => <nav>LEFTRAIL</nav>,
+  StatusPill: () => <header>PILL</header>,
+  CommandBar: () => <nav>COMMANDBAR</nav>,
   RightRail: () => <nav>RIGHTRAIL</nav>,
   VersionBadge: () => null,
 }));
@@ -27,7 +27,8 @@ describe('GameScreen', () => {
   it('mounts the HUD and the universal sheet', () => {
     renderWithProviders(<GameScreen />);
     expect(screen.getByText('SHEET')).toBeTruthy();
-    expect(screen.getByText('LEFTRAIL')).toBeTruthy();
+    expect(screen.getByText('COMMANDBAR')).toBeTruthy();
+    expect(screen.getByText('PILL')).toBeTruthy();
   });
 
   it('renders the confirm dialog from the store with its options', () => {

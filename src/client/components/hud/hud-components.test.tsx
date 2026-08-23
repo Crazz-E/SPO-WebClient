@@ -31,7 +31,7 @@ describe('LeftRail', () => {
 
   it('renders Mail and Settings buttons', () => {
     renderWithProviders(<LeftRail />);
-    expect(screen.getByLabelText('Mail (M)')).toBeTruthy();
+    expect(screen.getByLabelText('Mail (L)')).toBeTruthy(); // M is the map now (socle-4a)
     expect(screen.getByLabelText('Settings')).toBeTruthy();
   });
 });
