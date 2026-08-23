@@ -8,6 +8,10 @@
 # Loop guard: Claude Code sets stop_hook_active=true when it is re-invoking after
 # a blocked stop. We never block twice in a row.
 
+# A session is alive here — stamp the heartbeat finish.sh reads before reaping a worktree.
+. "$(dirname "$0")/session-heartbeat.sh"
+spo_stamp_heartbeat
+
 PAYLOAD=$(cat)
 
 STOP_ACTIVE=$(node -e "

@@ -8,7 +8,8 @@
  * into the scratch origin that only records it ran.
  */
 
-import { execFileSync, spawnSync } from 'child_process';
+import { execFileSync, spawn, spawnSync } from 'child_process';
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -40,6 +41,8 @@ interface Bench {
   worktree: string;
   branch: string;
   installLog: string;
+  /** Stands in for ~/.spo-bench/sessions: heartbeats and the retired markers. */
+  sessions: string;
 }
 
 interface FinishRun {
@@ -111,7 +114,25 @@ function scratchBench(): Bench {
     worktree,
     branch,
     installLog: path.join(scratch('spo-finish-log-'), 'install.log'),
+    sessions: scratch('spo-finish-sessions-'),
   };
+}
+
+/** The key finish.sh files a worktree under in SESSIONS_DIR — sha1 of its real path. */
+function sessionKey(dir: string): string {
+  return createHash('sha1').update(fs.realpathSync(dir)).digest('hex').slice(0, 16);
+}
+
+/** A session stamped its heartbeat in `dir` this many minutes ago. */
+function heartbeat(bench: Bench, dir: string, minutesAgo: number): void {
+  const file = path.join(bench.sessions, `${sessionKey(dir)}.alive`);
+  fs.writeFileSync(file, `${fs.realpathSync(dir)}\n`, 'utf8');
+  const when = new Date(Date.now() - minutesAgo * 60_000);
+  fs.utimesSync(file, when, when);
+}
+
+function isRetired(bench: Bench, dir: string): boolean {
+  return fs.existsSync(path.join(bench.sessions, `${sessionKey(dir)}.finished`));
 }
 
 /**
@@ -135,6 +156,7 @@ function runFinish(bench: Bench, cwd: string, env: NodeJS.ProcessEnv = {}, args:
       ...process.env,
       PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ''}`,
       SPO_MAIN_REPO: bench.mainRepo,
+      SPO_SESSION_DIR: bench.sessions,
       BENCH_INSTALL_LOG: bench.installLog,
       FAKE_GH_STATE: 'NONE',
       ...env,
@@ -202,7 +224,12 @@ describe('from the main checkout on main', () => {
 });
 
 describe('after a merge', () => {
-  it('fast-forwards main, removes the worktree, deletes the branch and prunes', () => {
+  /**
+   * The directory the session stands in is NOT pulled away by default. Removing it from
+   * inside it is what left sessions running in a path that no longer existed: every later
+   * command failed, and an autonomous loop that finishes and carries on hit exactly that.
+   */
+  it('fast-forwards main and retires the worktree, keeping the directory usable', () => {
     const bench = scratchBench();
     const mergeSha = mergeOnOrigin(bench, 'doc/merged.md');
     const run = runFinish(bench, bench.worktree, {
@@ -210,14 +237,120 @@ describe('after a merge', () => {
       FAKE_GH_MERGE_SHA: mergeSha,
     });
     expect(run.code).toBe(0);
-    expect(run.stdout).toMatch(/== removing worktree/);
-    expect(run.stdout).toMatch(/== deleting local branch feature\/x/);
+    expect(run.stdout).toMatch(/== retiring worktree/);
+    expect(run.stdout).not.toMatch(/== removing worktree/);
     expect(run.stdout).toMatch(/^finished: main at [0-9a-f]{7}/m);
     expect(headOf(bench.mainRepo)).toBe(mergeSha);
+    expect(fs.existsSync(bench.worktree)).toBe(true);
+    expect(isRetired(bench, bench.worktree)).toBe(true);
+    // The branch cannot go while it is checked out here; it is reaped with the worktree.
+    expect(branchExists(bench)).toBe(true);
+    expect(git(bench.mainRepo, 'status', '--porcelain')).toBe('');
+  });
+
+  it('removes the worktree and the branch at once with --now', () => {
+    const bench = scratchBench();
+    const mergeSha = mergeOnOrigin(bench, 'doc/merged.md');
+    const run = runFinish(
+      bench,
+      bench.worktree,
+      { FAKE_GH_STATE: 'MERGED', FAKE_GH_MERGE_SHA: mergeSha },
+      ['--now'],
+    );
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(/== removing worktree/);
+    expect(run.stdout).toMatch(/== deleting local branch feature\/x/);
     expect(fs.existsSync(bench.worktree)).toBe(false);
     expect(branchExists(bench)).toBe(false);
     expect(git(bench.mainRepo, 'worktree', 'list', '--porcelain')).not.toContain(bench.worktree);
-    expect(git(bench.mainRepo, 'status', '--porcelain')).toBe('');
+  });
+
+  it('rejects an unknown option instead of taking it for a branch name', () => {
+    const bench = scratchBench();
+    const run = runFinish(bench, bench.worktree, { FAKE_GH_STATE: 'MERGED' }, ['--wipe']);
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/unknown option '--wipe'/);
+    expect(fs.existsSync(bench.worktree)).toBe(true);
+  });
+
+  it('reaps a retired worktree on the next run, once nobody is standing in it', () => {
+    const bench = scratchBench();
+    const base = path.join(bench.mainRepo, '.claude', 'worktrees');
+    fs.mkdirSync(base, { recursive: true });
+    const retired = path.join(base, 'retired');
+    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/retired', retired);
+    commitFile(retired, 'src/done.ts', 'export const d = 1;\n', 'feat: done');
+    const key = sessionKey(retired); // the directory is gone by the time we check it
+    fs.writeFileSync(
+      path.join(bench.sessions, `${key}.finished`),
+      `${retired}\tclaude-x/retired\n`,
+      'utf8',
+    );
+    // Its session signed off well past the retired idle window; gh is never consulted.
+    heartbeat(bench, retired, 60);
+
+    const run = runFinish(bench, bench.mainRepo);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(/== reaping retired worktree .*retired/);
+    expect(fs.existsSync(retired)).toBe(false);
+    expect(fs.existsSync(path.join(bench.sessions, `${key}.finished`))).toBe(false);
+    expect(
+      spawnSync('git', ['-C', bench.mainRepo, 'rev-parse', '--verify', '-q', 'claude-x/retired'])
+        .status,
+    ).not.toBe(0);
+  });
+
+  it('keeps a worktree whose session stamped a heartbeat inside the idle window', () => {
+    const bench = scratchBench();
+    const base = path.join(bench.mainRepo, '.claude', 'worktrees');
+    fs.mkdirSync(base, { recursive: true });
+    const live = path.join(base, 'live');
+    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/live', live);
+    heartbeat(bench, live, 3);
+
+    const run = runFinish(bench, bench.mainRepo);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(/== keeping .*live — a session was working there 3 min ago/);
+    expect(fs.existsSync(live)).toBe(true);
+  });
+
+  /**
+   * The regression that started this: liveness was "some process has this exact directory
+   * as its cwd". A shell that had `cd src/` inside the worktree did not match, and the
+   * directory was removed under a session that was working in it.
+   */
+  it('keeps a worktree a process is standing in through a subdirectory', () => {
+    const bench = scratchBench();
+    const base = path.join(bench.mainRepo, '.claude', 'worktrees');
+    fs.mkdirSync(base, { recursive: true });
+    const busy = path.join(base, 'busy');
+    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/busy', busy);
+    const inside = path.join(busy, 'src', 'client');
+    fs.mkdirSync(inside, { recursive: true });
+
+    const held = spawn('sleep', ['30'], { cwd: inside, stdio: 'ignore' });
+    try {
+      // spawn is asynchronous: wait until the kernel actually shows the cwd, otherwise the
+      // test would pass or fail on how fast exec happened to be.
+      const target = fs.realpathSync(inside);
+      let seen = '';
+      for (let i = 0; i < 100 && seen !== target; i++) {
+        try {
+          seen = fs.readlinkSync(`/proc/${held.pid}/cwd`);
+        } catch {
+          seen = '';
+        }
+        if (seen !== target) spawnSync('sleep', ['0.05']);
+      }
+      expect(seen).toBe(target);
+
+      const run = runFinish(bench, bench.mainRepo);
+      expect(run.code).toBe(0);
+      expect(run.stdout).not.toMatch(/busy/);
+      expect(fs.existsSync(busy)).toBe(true);
+    } finally {
+      held.kill('SIGKILL');
+    }
   });
 
   it('finishes a named branch that is checked out nowhere, leaving the current worktree alone', () => {
@@ -292,10 +425,12 @@ describe('after a merge', () => {
     (file) => {
       const bench = scratchBench();
       const mergeSha = mergeOnOrigin(bench, file);
-      const run = runFinish(bench, bench.worktree, {
-        FAKE_GH_STATE: 'MERGED',
-        FAKE_GH_MERGE_SHA: mergeSha,
-      });
+      const run = runFinish(
+        bench,
+        bench.worktree,
+        { FAKE_GH_STATE: 'MERGED', FAKE_GH_MERGE_SHA: mergeSha },
+        ['--now'],
+      );
       expect(run.code).toBe(0);
       expect(run.stdout).toMatch(/the merge touched the bench worker — reinstalling it from main/);
       expect(fs.readFileSync(bench.installLog, 'utf8')).toBe('bench-install ran\n');

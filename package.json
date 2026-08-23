@@ -14,7 +14,7 @@
     "start:cache-sync": "node --disable-warning=DEP0040 dist/server/cache-sync-service.js",
     "dev": "bash scripts/bench-submit.sh --type=lease --wait",
     "dev:release": "bash scripts/bench-release.sh",
-    "dev:local": "npm run build && npm start",
+    "dev:local": "bash scripts/dev-local.sh",
     "dev:react": "vite",
     "test": "jest",
     "test:watch": "jest --watch",
