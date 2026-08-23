@@ -38,8 +38,12 @@ import styles from './PropertyGroup.module.css';
 // Re-export utility functions for backward compatibility (tests import from here)
 export { resolveRdoCommand, computePendingKey, parseCloneMenu, getColorClass } from './property-utils';
 
-/** The values the UPGRADE_ACTIONS control prints inside itself. */
+/** The five values the upgrade group carries alongside its control. */
 const UPGRADE_VALUE_NAMES = ['UpgradeLevel', 'MaxUpgrade', 'NextUpgCost', 'Upgrading', 'Pending'];
+/** The subset the UPGRADE_ACTIONS control prints inside itself — a row would
+ *  repeat these. NextUpgCost is NOT among them: the control never shows the
+ *  cost, so its row stays. */
+const UPGRADE_WIDGET_OWNED_NAMES = ['UpgradeLevel', 'MaxUpgrade', 'Upgrading', 'Pending'];
 
 interface PropertyGroupProps {
   properties: BuildingPropertyValue[];
@@ -263,10 +267,17 @@ function DefinedProperties({
     [definitions, valueMap, client],
   );
 
+  // The UPGRADE_ACTIONS control shares its rdoName ('UpgradeActions') with the
+  // raw server property on the hide list. Hiding the raw VALUE must not hide
+  // the CONTROL: its Upgrade / Downgrade / Stop buttons have no other home
+  // (Voyager's Management sheet carries them, ManagementSheet.pas), and hiding
+  // it made the whole upgrade path unreachable from the UI.
+  const upgradeControlShown = definitions.some((d) => d.type === PropertyType.UPGRADE_ACTIONS);
+
   for (const def of definitions) {
     // Hidden by design — see HIDDEN_PROPERTY_NAMES. Marked as rendered so the
     // unmatched-property fallback below does not print the raw row instead.
-    if (isHiddenProperty(def.rdoName)) {
+    if (isHiddenProperty(def.rdoName) && def.type !== PropertyType.UPGRADE_ACTIONS) {
       rendered.add(def.rdoName);
       continue;
     }
@@ -520,12 +531,12 @@ function DefinedProperties({
 
     // Skip hidden empties
     if (def.hideEmpty && (!value || value.trim() === '' || value === '0')) continue;
-    // Upgrade values have no renderer of their own: the UPGRADE_ACTIONS control
-    // prints them inside itself, so a row here would repeat them. Once that
-    // control is on the hide list they lose their only display, and hiding ONE
-    // entry would silently take five values with it — so they fall through to
-    // an ordinary row instead. Only the buttons go.
-    if (!isHiddenProperty('UpgradeActions') && UPGRADE_VALUE_NAMES.includes(def.rdoName)) {
+    // The UPGRADE_ACTIONS control prints level / max / pending inside itself —
+    // a row here would repeat them. When the group has no control (or it were
+    // hidden again) they fall through to ordinary rows instead, so no value is
+    // ever silently lost. NextUpgCost always renders as a row: the control
+    // never shows the cost of the spend it triggers.
+    if (upgradeControlShown && UPGRADE_WIDGET_OWNED_NAMES.includes(def.rdoName)) {
       rendered.add(def.rdoName);
       continue;
     }

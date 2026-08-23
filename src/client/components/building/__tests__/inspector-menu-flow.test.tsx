@@ -205,11 +205,15 @@ describe('INSPECT hidden properties', () => {
   });
 
   /**
-   * `UpgradeActions` is the buttons, not a value. Hiding it must not take the
-   * level, the cap and the cost down with it: the control was their only
-   * renderer, so they fall through to ordinary rows.
+   * `UpgradeActions` names two things: the raw server VALUE (hidden, no reading
+   * for a player) and the CONTROL carrying the Upgrade / Downgrade buttons.
+   * This test used to pin the opposite — control hidden, values as plain rows —
+   * which left the whole upgrade path unreachable from the UI (found by the B5
+   * live QA, PR #79). Now: the control renders (Voyager's Management sheet has
+   * the buttons, ManagementSheet.pas), it states the level itself, and the cost
+   * it never shows keeps its own row.
    */
-  it('keeps the upgrade values on screen once the upgrade control is hidden', () => {
+  it('renders the upgrade control, its level line, and the cost row', () => {
     const upgradeTabs: BuildingDetailsTab[] = [
       { id: 'upgrade', name: 'UPGRADE', order: 0, icon: 'U', handlerName: 'Upgrade' },
     ];
@@ -230,11 +234,12 @@ describe('INSPECT hidden properties', () => {
     renderWithProviders(<BuildingInspector />);
 
     const drawer = screen.getByLabelText('UPGRADE');
-    expect(drawer.textContent).toContain('Current Level');
-    expect(drawer.textContent).toContain('Max Level');
+    // The control owns the level line — no duplicate plain rows for it
+    expect(drawer.textContent).toContain('Level 3');
+    expect(drawer.textContent).not.toContain('Current Level');
+    // The cost the control never shows keeps its row
     expect(drawer.textContent).toContain('Upgrade Cost');
-    // …and the buttons the control offered are gone with it.
-    expect(screen.queryByText('STOP')).toBeNull();
-    expect(screen.queryByText('Upgrade')).toBeNull();
+    // The raw value never prints
+    expect(drawer.textContent).not.toContain('UpgradeActions');
   });
 });
