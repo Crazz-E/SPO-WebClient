@@ -48,7 +48,7 @@ export function CommandPalette() {
       {
         id: 'mail',
         label: 'Open Mail',
-        shortcut: 'M',
+        shortcut: 'L',
         category: 'navigation',
         execute: () => toggleRightPanel('mail'),
       },
@@ -67,6 +67,7 @@ export function CommandPalette() {
       {
         id: 'politics',
         label: 'Open Government (Capitol, towns)',
+        shortcut: 'P',
         category: 'navigation',
         execute: () => toggleRightPanel('politics'),
       },

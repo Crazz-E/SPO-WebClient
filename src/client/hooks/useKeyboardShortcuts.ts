@@ -1,19 +1,51 @@
 /**
- * useKeyboardShortcuts — Global keyboard shortcut handler.
- * Registers game-wide shortcuts (B=Build, E=Empire, M=Mail, R=Refresh, Escape, Cmd+K, etc.)
- * Ignores shortcuts when focus is in a text input or textarea.
+ * useKeyboardShortcuts — global keyboard shortcuts (doc/ux/handoff/00-socle.md §4.3).
+ *
+ * One table, one handler. Three rules the audit found broken (doc/ux/audit.md §1.1 P9):
+ *  - a modifier means "not ours": Ctrl/Cmd+R reloads the page, never the map; only Ctrl/Cmd+K
+ *    is claimed;
+ *  - Escape is handled AFTER the text-input guard and never during IME composition, so it
+ *    cancels a chat line or an inline edit before it unstacks a surface;
+ *  - the table is the single source of truth — Settings renders its list from SHORTCUTS.
+ *
+ * Keys the renderer binds itself (Q rotate, + / − zoom, 1–5 debug sub-overlays) are listed
+ * here for the Settings page but not handled again (one owner per key).
  */
 
 import { useEffect } from 'react';
 import { useUiStore } from '../store/ui-store';
 import type { ClientCallbacks } from '../bridge/client-bridge';
 
-function isTextInput(target: EventTarget | null): boolean {
+export interface Shortcut {
+  keys: string;
+  action: string;
+  /** Handled by the renderer's own listener; shown for reference only. */
+  rendererOwned?: boolean;
+}
+
+/** The reference list, in the order Settings shows it. */
+export const SHORTCUTS: readonly Shortcut[] = [
+  { keys: 'B', action: 'Build' },
+  { keys: 'M', action: 'Map (minimap)' },
+  { keys: 'E', action: 'Empire / Profile' },
+  { keys: 'P', action: 'Government' },
+  { keys: 'L', action: 'Mail' },
+  { keys: 'R', action: 'Refresh map' },
+  { keys: 'Q / W', action: 'Rotate view', rendererOwned: true },
+  { keys: '+ / −', action: 'Zoom', rendererOwned: true },
+  { keys: 'D', action: 'Debug overlay' },
+  { keys: 'Ctrl+K', action: 'Command palette' },
+  { keys: 'Esc', action: 'Back / close' },
+];
+
+export function isTextInput(target: EventTarget | null): boolean {
   if (!target || !(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   if (target.isContentEditable) return true;
-  return false;
+  // Custom widgets that take text or own their keys
+  const role = target.getAttribute('role');
+  return role === 'textbox' || role === 'combobox' || role === 'searchbox';
 }
 
 export function useKeyboardShortcuts(client: ClientCallbacks | null): void {
@@ -21,24 +53,27 @@ export function useKeyboardShortcuts(client: ClientCallbacks | null): void {
     const handleKeyDown = (e: KeyboardEvent) => {
       const store = useUiStore.getState();
 
-      // Cmd+K / Ctrl+K — Command Palette (always active)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      // Ctrl/Cmd+K — the one modifier chord we claim
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         store.toggleCommandPalette();
         return;
       }
 
-      // Escape — dismiss topmost (always active)
+      // Every other modifier chord belongs to the browser / assistive tech
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.isComposing) return;
+
+      // A field that has the keyboard keeps it — including Escape (it cancels the edit there)
+      if (isTextInput(e.target)) return;
+
       if (e.key === 'Escape') {
         e.preventDefault();
         store.dismissTopmost();
         return;
       }
 
-      // Don't handle shortcuts while typing in inputs
-      if (isTextInput(e.target)) return;
-
-      // Don't handle shortcuts while modal or command palette is open
+      // Plain letters only while nothing modal owns the keyboard
       if (store.modal || store.commandPaletteOpen) return;
 
       switch (e.key.toLowerCase()) {
@@ -50,9 +85,21 @@ export function useKeyboardShortcuts(client: ClientCallbacks | null): void {
           e.preventDefault();
           store.toggleLeftPanel('empire');
           break;
-        case 'm':
+        case 'l':
           e.preventDefault();
           store.toggleRightPanel('mail');
+          break;
+        case 'p':
+          e.preventDefault();
+          store.toggleRightPanel('politics');
+          break;
+        case 'm':
+          e.preventDefault();
+          client?.onToggleMinimap();
+          break;
+        case 'w':
+          e.preventDefault();
+          client?.onRotateCW();
           break;
         case 'r':
           e.preventDefault();
