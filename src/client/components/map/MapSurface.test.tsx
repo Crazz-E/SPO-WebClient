@@ -4,6 +4,7 @@ import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup
 import { useMapStore } from '../../store/map-store';
 import { useGameStore } from '../../store/game-store';
 import { useSearchStore } from '../../store/search-store';
+import { useUiStore } from '../../store/ui-store';
 import { MapSurface, buildingColor, nearestTown } from './MapSurface';
 import type { MinimapRendererAPI } from '../../ui/minimap-colormap';
 import type { TownInfo } from '@/shared/types';
@@ -67,7 +68,9 @@ describe('MapSurface', () => {
     HTMLCanvasElement.prototype.getContext = jest.fn(() => ctx) as never;
     HTMLCanvasElement.prototype.getBoundingClientRect = () => ({ left: 0, top: 0, width: 320, height: 320, right: 320, bottom: 320, x: 0, y: 0, toJSON: () => ({}) });
     useMapStore.getState().reset();
-    useGameStore.setState({ tycoonId: '37' });
+    useGameStore.setState({ tycoonId: '37', worldName: 'planitia', username: 'SPO_test3' });
+    localStorage.clear();
+    useUiStore.setState({ modal: null, promptPayload: null });
     useSearchStore.setState({ townsData: null, isLoading: false });
   });
   afterEach(() => {
@@ -166,5 +169,25 @@ describe('MapSurface', () => {
     act(() => { jest.advanceTimersByTime(1100); });
     expect((ctx.drawImage as jest.Mock).mock.calls.length).toBeGreaterThan(before);
     jest.useRealTimers();
+  });
+
+  it('bookmarks: add the current view through a prompt, go, rename, delete — kept per world and player', () => {
+    const src = fakeSource();
+    useMapStore.getState().setSource(src);
+    renderWithProviders(<MapSurface />);
+    expect(screen.getByText(/No bookmarks yet/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Bookmark this place/ }));
+    const prompt = useUiStore.getState().promptPayload;
+    expect(prompt?.title).toBe('Bookmark this place');
+    expect(prompt?.defaultValue).toBe('(20, 20)');
+    act(() => prompt?.onSubmit('Home'));
+    fireEvent.click(screen.getByRole('button', { name: /Go to Home/ }));
+    expect(src.centerOn).toHaveBeenLastCalledWith(20, 20);
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Home' }));
+    act(() => useUiStore.getState().promptPayload?.onSubmit('Base'));
+    expect(screen.getByText('Base')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('spo.bookmarks.planitia.SPO_test3') ?? '[]')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Base' }));
+    expect(screen.getByText(/No bookmarks yet/)).toBeTruthy();
   });
 });

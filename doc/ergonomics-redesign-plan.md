@@ -143,7 +143,7 @@ le premier soit fusionné. Cela garde chaque PR lisible et la couverture ≥ 93 
 ## 4bis. État au 2026-08-23
 
 Phases 0 → 4 faites ([brief](ux/brief.md), [audit](ux/audit.md), canevas Direction / Système /
-Flux, [handoff](ux/handoff/)). Phase 5 en cours : socle-1 → 4 et flux T1, T3, T6, T2, T7, T5, T8, Carte-1 fusionnés (PR #55–#67 ; suivi dans le brief §6bis) ;
+Flux, [handoff](ux/handoff/)). Phase 5 en cours : socle-1 → 4 et flux T1, T3, T6, T2, T7, T5, T8, Carte-1/2 fusionnés (PR #55–#68 ; suivi dans le brief §6bis) ;
 suivi des fonctions dans [missing-features.md](ux/missing-features.md) ; les canevas portent une
 note « état d'implémentation » tenue à jour à chaque PR.
 
