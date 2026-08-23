@@ -35,7 +35,7 @@ export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
  * return to. `rightPanel` / `leftPanel` are kept as DERIVED read-only views of the top of
  * the stack so the components written against them keep working while they migrate.
  */
-export type SurfaceKind = RightPanelType | LeftPanelType | 'build' | 'supplierSearch';
+export type SurfaceKind = RightPanelType | LeftPanelType | 'build' | 'supplierSearch' | 'map';
 
 /** Remembered supplier-search filters (T3, B4): a player usually searches several fluids in a row. */
 export interface ConnectionFilters {
@@ -136,6 +136,8 @@ interface UiState {
   openBuildingSurface: () => void;
   /** Open (or close when already shown) the Build surface. */
   toggleBuildSurface: () => void;
+  /** The Map surface (Carte): M / the Map tile — close if on top, else open as root. */
+  toggleMapSurface: () => void;
 
   // Actions — Panels (legacy wrappers over the stack; kept for existing callers)
   openRightPanel: (type: RightPanelType) => void;
@@ -232,6 +234,11 @@ export const useUiStore = create<UiState>((set, get) => ({
     const top = get().stack[get().stack.length - 1];
     if (top?.kind === 'build') get().clearSurfaces();
     else get().setRootSurface({ kind: 'build' });
+  },
+  toggleMapSurface: () => {
+    const top = get().stack[get().stack.length - 1];
+    if (top?.kind === 'map') get().clearSurfaces();
+    else get().setRootSurface({ kind: 'map' });
   },
   openBuildingSurface: () => {
     const { pinned, stack } = get();

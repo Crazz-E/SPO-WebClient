@@ -26,7 +26,7 @@ export interface Shortcut {
 /** The reference list, in the order Settings shows it. */
 export const SHORTCUTS: readonly Shortcut[] = [
   { keys: 'B', action: 'Build' },
-  { keys: 'M', action: 'Map (minimap)' },
+  { keys: 'M', action: 'Map' },
   { keys: 'E', action: 'Empire / Profile' },
   { keys: 'P', action: 'Government' },
   { keys: 'L', action: 'Mail' },
@@ -95,7 +95,7 @@ export function useKeyboardShortcuts(client: ClientCallbacks | null): void {
           break;
         case 'm':
           e.preventDefault();
-          client?.onToggleMinimap();
+          store.toggleMapSurface();
           break;
         case 'w':
           e.preventDefault();

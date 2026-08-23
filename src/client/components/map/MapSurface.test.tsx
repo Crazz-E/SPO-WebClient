@@ -1,0 +1,170 @@
+import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from '@jest/globals';
+import { screen, fireEvent, act } from '@testing-library/react';
+import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup/render-helpers';
+import { useMapStore } from '../../store/map-store';
+import { useGameStore } from '../../store/game-store';
+import { useSearchStore } from '../../store/search-store';
+import { MapSurface, buildingColor, nearestTown } from './MapSurface';
+import type { MinimapRendererAPI } from '../../ui/minimap-colormap';
+import type { TownInfo } from '@/shared/types';
+
+const W = 40, H = 40;
+
+// jsdom has no PointerEvent: without this, pointer events carry no clientX/clientY.
+class FakePointerEvent extends MouseEvent {
+  pointerId: number;
+  constructor(type: string, props: MouseEventInit & { pointerId?: number } = {}) {
+    super(type, props);
+    this.pointerId = props.pointerId ?? 0;
+  }
+}
+(globalThis as unknown as { PointerEvent: unknown }).PointerEvent = FakePointerEvent;
+
+function fakeCtx() {
+  return {
+    createImageData: (w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+    putImageData: jest.fn(), drawImage: jest.fn(), getImageData: jest.fn(() => ({ data: new Uint8ClampedArray(0) })),
+    fillRect: jest.fn(), strokeRect: jest.fn(), save: jest.fn(), restore: jest.fn(), translate: jest.fn(), rotate: jest.fn(), scale: jest.fn(),
+    fillStyle: '', strokeStyle: '', lineWidth: 1, imageSmoothingEnabled: true,
+  };
+}
+
+function fakeSource(): MinimapRendererAPI & { centerOn: jest.Mock; camera: { x: number; y: number } } {
+  const src = {
+    camera: { x: 20, y: 20 },
+    getCameraPosition() { return this.camera; },
+    centerOn: jest.fn(),
+    getMapDimensions: () => ({ width: W, height: H }),
+    getMapName: () => 'planitia',
+    getSeason: () => 0,
+    getTerrainType: () => 'temperate',
+    getVisibleTileBounds: () => ({ minI: 15, maxI: 25, minJ: 15, maxJ: 25 }),
+    getTerrainPixelData: () => ({ pixelData: new Uint8Array(W * H), width: W, height: H }),
+    getAllBuildings: () => [
+      { visualClass: '1', tycoonId: 37, options: 0, x: 5, y: 5, level: 0, alert: false, attack: 0 },
+      { visualClass: '2', tycoonId: 99, options: 1, x: 30, y: 30, level: 0, alert: true, attack: 0 },
+    ],
+  };
+  return src as never;
+}
+
+const TOWN_LIST: TownInfo[] = [
+  { name: 'Helartia', iconUrl: '', mayor: 'SPO_test3', population: 1, unemploymentPercent: 0, qualityOfLife: 0, x: 10, y: 10, path: '', classId: 'TownHall' },
+  { name: 'Faraway', iconUrl: '', mayor: null, population: 1, unemploymentPercent: 0, qualityOfLife: 0, x: 39, y: 0, path: '', classId: 'TownHall' },
+];
+const TOWNS = { towns: TOWN_LIST } as never;
+
+describe('MapSurface', () => {
+  const origGetContext = HTMLCanvasElement.prototype.getContext;
+  const origRect = HTMLCanvasElement.prototype.getBoundingClientRect;
+  let ctx: ReturnType<typeof fakeCtx>;
+
+  beforeAll(() => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 320 });
+  });
+  beforeEach(() => {
+    ctx = fakeCtx();
+    HTMLCanvasElement.prototype.getContext = jest.fn(() => ctx) as never;
+    HTMLCanvasElement.prototype.getBoundingClientRect = () => ({ left: 0, top: 0, width: 320, height: 320, right: 320, bottom: 320, x: 0, y: 0, toJSON: () => ({}) });
+    useMapStore.getState().reset();
+    useGameStore.setState({ tycoonId: '37' });
+    useSearchStore.setState({ townsData: null, isLoading: false });
+  });
+  afterEach(() => {
+    HTMLCanvasElement.prototype.getContext = origGetContext;
+    HTMLCanvasElement.prototype.getBoundingClientRect = origRect;
+  });
+
+  it('colours buildings: losing money red first, mine gold, others muted; nearest town by Chebyshev distance', () => {
+    expect(buildingColor({ alert: true, tycoonId: 37 } as never, 37)).toBe('#ef4444');
+    expect(buildingColor({ alert: false, tycoonId: 37 } as never, 37)).toBe('#f59e0b');
+    expect(buildingColor({ alert: false, tycoonId: 2 } as never, 37)).toBe('rgba(226,232,240,0.75)');
+    expect(nearestTown(TOWN_LIST, 12, 12)?.name).toBe('Helartia');
+    expect(nearestTown(TOWN_LIST, 39, 2)?.name).toBe('Faraway');
+    expect(nearestTown(undefined, 0, 0)).toBeNull();
+  });
+
+  it('says when the map is not ready, and asks for the towns once', () => {
+    const onSearchMenuTowns = jest.fn();
+    renderWithProviders(<MapSurface />, { clientCallbacks: createSpiedCallbacks({ onSearchMenuTowns }) });
+    expect(screen.getByText('The map is not ready yet.')).toBeTruthy();
+    expect(onSearchMenuTowns).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws the terrain, the buildings and the viewport; a click jumps there and records the trip', () => {
+    const src = fakeSource();
+    useMapStore.getState().setSource(src);
+    renderWithProviders(<MapSurface />);
+    const canvas = screen.getByRole('img', { name: /World map/ });
+    expect(ctx.drawImage).toHaveBeenCalled();
+    expect(ctx.strokeRect).toHaveBeenCalled();
+    // centre of the canvas = centre of the map
+    fireEvent.pointerDown(canvas, { clientX: 160, clientY: 160, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 160, clientY: 160, pointerId: 1 });
+    expect(src.centerOn).toHaveBeenCalledTimes(1);
+    const [x, y] = src.centerOn.mock.calls[0] as [number, number];
+    expect(Math.abs(x - W / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(y - H / 2)).toBeLessThanOrEqual(1);
+    expect(useMapStore.getState().history).toHaveLength(1);
+    // outside the diamond: nothing happens
+    fireEvent.pointerDown(canvas, { clientX: 2, clientY: 2, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 2, clientY: 2, pointerId: 1 });
+    expect(src.centerOn).toHaveBeenCalledTimes(1);
+  });
+
+  it('Back / Next walk the history and move the camera; Nearest Town Hall jumps to the closest hall', () => {
+    const src = fakeSource();
+    useMapStore.getState().setSource(src);
+    useMapStore.getState().recordPosition(0, 0);
+    useMapStore.getState().recordPosition(30, 30);
+    useSearchStore.setState({ townsData: TOWNS });
+    renderWithProviders(<MapSurface />);
+    const back = screen.getByRole('button', { name: /Back/ }) as HTMLButtonElement;
+    const next = screen.getByRole('button', { name: /Next/ }) as HTMLButtonElement;
+    expect(next.disabled).toBe(true);
+    fireEvent.click(back);
+    expect(src.centerOn).toHaveBeenLastCalledWith(0, 0);
+    expect((screen.getByRole('button', { name: /Back/ }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+    expect(src.centerOn).toHaveBeenLastCalledWith(30, 30);
+    fireEvent.click(screen.getByRole('button', { name: /Nearest Town Hall/ }));
+    expect(src.centerOn).toHaveBeenLastCalledWith(10, 10);
+  });
+
+  it('zooms with the wheel and the buttons (1× … 8×), pans by dragging when zoomed, resets', () => {
+    useMapStore.getState().setSource(fakeSource());
+    renderWithProviders(<MapSurface />);
+    const canvas = screen.getByRole('img', { name: /World map/ });
+    expect(screen.getByText('100%')).toBeTruthy();
+    fireEvent.wheel(canvas, { deltaY: -100, clientX: 160, clientY: 160 });
+    expect(screen.getByText('125%')).toBeTruthy();
+    for (let i = 0; i < 20; i++) fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(screen.getByText('800%')).toBeTruthy();
+    // drag pans, and a drag is not a click
+    const src = useMapStore.getState().source as ReturnType<typeof fakeSource>;
+    fireEvent.pointerDown(canvas, { clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 140, clientY: 130, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 140, clientY: 130, pointerId: 1 });
+    expect(src.centerOn).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    expect(screen.getByText('640%')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset zoom' }));
+    expect(screen.getByText('100%')).toBeTruthy();
+    fireEvent.wheel(canvas, { deltaY: 100, clientX: 160, clientY: 160 });
+    expect(screen.getByText('100%')).toBeTruthy();
+    fireEvent.pointerLeave(canvas);
+  });
+
+  it('shows the hovered tile, and redraws on its own clock', () => {
+    jest.useFakeTimers();
+    useMapStore.getState().setSource(fakeSource());
+    renderWithProviders(<MapSurface />);
+    const canvas = screen.getByRole('img', { name: /World map/ });
+    fireEvent.pointerMove(canvas, { clientX: 160, clientY: 160, pointerId: 1 });
+    expect(screen.getByText(/^\(\d+, \d+\)$/)).toBeTruthy();
+    const before = (ctx.drawImage as jest.Mock).mock.calls.length;
+    act(() => { jest.advanceTimersByTime(1100); });
+    expect((ctx.drawImage as jest.Mock).mock.calls.length).toBeGreaterThan(before);
+    jest.useRealTimers();
+  });
+});

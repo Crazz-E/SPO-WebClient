@@ -151,6 +151,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
       {item(isRoadDemolish ? 'Stop demolishing roads' : 'Demolish road', <Eraser size={16} />, () => client.onDemolishRoad(), isRoadDemolish)}
       {isPublicOfficeRole && item(isZone ? 'Stop zone painting' : 'Zone painting', <Grid2x2 size={16} />, () => (isZone ? client.onCancelZonePainting() : openModal('zonePicker')), isZone)}
       {item('Map overlays', <Layers size={16} />, () => toggleLeftPanel('overlays'))}
+      {item('Docked minimap', <Map size={16} />, () => client.onToggleMinimap())}
       {item('My facilities', <Heart size={16} />, () => toggleLeftPanel('facilities'))}
       {item('Settings', <Settings size={16} />, () => openModal('settings'))}
       {item('Switch server', <Server size={16} />, () => client.onSwitchServer())}
@@ -159,7 +160,6 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
 }
 
 export function CommandBar() {
-  const client = useClient();
   const stack = useUiStore((s) => s.stack);
   const rightPanel = useUiStore((s) => s.rightPanel);
   const leftPanel = useUiStore((s) => s.leftPanel);
@@ -178,7 +178,7 @@ export function CommandBar() {
 
   const tiles: Tile[] = [
     { id: 'build', label: 'Build', kbd: 'B', icon: <Hammer size={20} />, active: stack[stack.length - 1]?.kind === 'build' || isPlacing, onClick: toggleBuildSurface },
-    { id: 'map', label: 'Map', kbd: 'M', icon: <Map size={20} />, active: false, onClick: () => client.onToggleMinimap() },
+    { id: 'map', label: 'Map', kbd: 'M', icon: <Map size={20} />, active: stack[stack.length - 1]?.kind === 'map', onClick: () => useUiStore.getState().toggleMapSurface() },
     { id: 'empire', label: 'Empire', kbd: 'E', icon: <User size={20} />, active: leftPanel === 'empire', onClick: () => toggleLeftPanel('empire') },
     { id: 'politics', label: 'Government', kbd: 'P', icon: <Landmark size={20} />, active: rightPanel === 'politics', onClick: () => toggleRightPanel('politics') },
     { id: 'mail', label: 'Mail', kbd: 'L', icon: <Mail size={20} />, active: rightPanel === 'mail', badge: unread, onClick: () => toggleRightPanel('mail') },
