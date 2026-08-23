@@ -248,12 +248,8 @@ export function MapSurface() {
   return (
     <div className={styles.root}>
       <div className={styles.toolbar} role="toolbar" aria-label="Map tools">
-        <Button size="sm" variant="secondary" iconLeft={<ArrowLeft size={14} />} disabled={!canBack} onClick={() => { const p = goBack(); if (p && source) source.centerOn(p.x, p.y); }} title="Back to the previous place">
-          Back
-        </Button>
-        <Button size="sm" variant="secondary" iconLeft={<ArrowRight size={14} />} disabled={!canNext} onClick={() => { const p = goNext(); if (p && source) source.centerOn(p.x, p.y); }} title="Forward again">
-          Next
-        </Button>
+        <Button size="sm" variant="secondary" aria-label="Back" iconLeft={<ArrowLeft size={14} />} disabled={!canBack} onClick={() => { const p = goBack(); if (p && source) source.centerOn(p.x, p.y); }} title="Back to the previous place" />
+        <Button size="sm" variant="secondary" aria-label="Next" iconLeft={<ArrowRight size={14} />} disabled={!canNext} onClick={() => { const p = goNext(); if (p && source) source.centerOn(p.x, p.y); }} title="Forward again" />
         <Button
           size="sm"
           variant="secondary"
