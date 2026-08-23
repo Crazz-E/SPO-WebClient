@@ -258,9 +258,13 @@ describe('ToastContainer', () => {
     resetToasts();
   });
 
-  it('renders nothing when no toasts', () => {
-    const { container } = renderWithProviders(<ToastContainer />);
-    expect(container.innerHTML).toBe('');
+  // Criterion changed by doc/ux/handoff/00-socle.md §2.9: the live regions are mounted
+  // permanently (a region created in the same tick as its first message is not announced),
+  // but they are empty until a toast arrives.
+  it('mounts empty live regions when there are no toasts', () => {
+    renderWithProviders(<ToastContainer />);
+    expect(screen.getByRole('status').textContent).toBe('');
+    expect(screen.getByRole('alert').textContent).toBe('');
   });
 
   it('renders toast message after showToast()', () => {

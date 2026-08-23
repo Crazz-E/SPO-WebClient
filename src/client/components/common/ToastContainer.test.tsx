@@ -63,12 +63,12 @@ describe('ToastContainer', () => {
     expect(screen.queryByText('Textile Mill placed.')).toBeNull();
   });
 
-  it('the dismiss button is named after the toast title', () => {
+  it('the dismiss button removes its toast', () => {
     renderWithProviders(<ToastContainer />);
     act(() => {
       showToast('careful', 'warning');
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss: Warning' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByText('careful')).toBeNull();
   });
 

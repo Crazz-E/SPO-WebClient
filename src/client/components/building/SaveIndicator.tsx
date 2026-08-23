@@ -86,7 +86,7 @@ export function SaveIndicator({ propertyKey, confirmedMessage }: SaveIndicatorPr
   // visible, not hidden in a tooltip — audit §3.2 found the failed state was silent.
   if (failed) {
     return (
-      <span className={`${styles.indicator} ${styles.failed}`} role="alert">
+      <span className={`${styles.indicator} ${styles.failed}`} role="alert" title={failed.error}>
         <span className={styles.failedIcon} aria-hidden="true">!</span>
         <span className={styles.failedText}>Failed</span>
         {failed.error && <span className={styles.failedReason}>— {failed.error}</span>}

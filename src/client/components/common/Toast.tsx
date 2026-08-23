@@ -172,7 +172,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: 
           {toast.action.label}
         </button>
       )}
-      <button type="button" className={styles.dismiss} onClick={() => onDismiss(toast.id)} aria-label={`Dismiss: ${title}`}>
+      <button type="button" className={styles.dismiss} onClick={() => onDismiss(toast.id)} aria-label="Dismiss">
         &times;
       </button>
       {toast.variant !== 'error' && (
