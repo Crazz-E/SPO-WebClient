@@ -9,7 +9,7 @@
 import {
   Mail, Search, Train, Landmark,
   ZoomIn, ZoomOut, Layers, RefreshCw,
-  Settings, Globe, Bug,
+  Settings, Globe, Bug, Command, User,
 } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useMailStore } from '../../store/mail-store';
@@ -33,6 +33,8 @@ export function MobileMenu() {
   const openRightPanel = useUiStore((s) => s.openRightPanel);
   const openModal = useUiStore((s) => s.openModal);
   const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
+  const openLeftPanel = useUiStore((s) => s.openLeftPanel);
+  const openCommandPalette = useUiStore((s) => s.openCommandPalette);
   const setMobileTab = useUiStore((s) => s.setMobileTab);
   const unreadCount = useMailStore((s) => s.unreadCount);
   const client = useClient();
@@ -60,8 +62,10 @@ export function MobileMenu() {
       label: 'Exploration',
       items: [
         { label: 'Search', icon: Search, action: () => openPanel(() => openRightPanel('search')) },
+        { label: 'Command palette', icon: Command, action: () => doAction(() => openCommandPalette()) },
+        { label: 'Profile', icon: User, action: () => openPanel(() => openLeftPanel('empire')) },
         { label: 'Transport', icon: Train, action: () => openPanel(() => openRightPanel('transport')) },
-        { label: 'Capitol / Politics', icon: Landmark, action: () => openPanel(() => openRightPanel('politics')) },
+        { label: 'Government', icon: Landmark, action: () => openPanel(() => openRightPanel('politics')) },
       ],
     },
     {
