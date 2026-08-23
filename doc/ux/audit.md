@@ -131,6 +131,86 @@ Les écrans et flux concernés sont repris, par priorité, dans [brief.md](brief
 
 ---
 
+## 5. Données techniques affichées — propriétés RDO nécessaires au code, inutiles à l'écran
+
+Règle pour la refonte : **une valeur technique reste *disponible* dans la page (store, props,
+`data-*`) parce qu'une action en a besoin, mais n'est *jamais rendue* en texte.** Le code a déjà
+le mécanisme (`src/shared/building-details/hidden-properties.ts`, commentaire « lu mais jamais
+montré ») et deux bons précédents : `failureLevel` ne pilote qu'une classe CSS
+(`hud/InfoWidget.tsx:63-68`), le bitmask de noblesse est décodé en libellés
+(`chat/NobilityBadge.tsx:47-53`).
+
+### 5.1 Rendues aujourd'hui alors qu'elles ne devraient pas l'être
+
+| Valeur | Rendue à | Qui en a besoin (doit rester disponible) | Visible par défaut ? |
+|---|---|---|---|
+| **Coordonnées de tuile `x, y`** | `building/InspectorHeader.tsx:104-106` (3e stat de l'en-tête), `modals/BuildingInspectorModal.tsx:90-92`, `empire/FacilityList.tsx:26` (sous-titre de chaque ligne) | adresse RDO de tout appel bâtiment : `BuildingInspector.tsx:110,115,131,188,361-379`, `useGateConnections.ts:68`, `FacilityList.tsx:42` (`onNavigateToBuilding`), positionnement `StatusOverlay.tsx:348-351` ; les `conn.x/y` servent de clé et d'argument de déconnexion (`SuppliesGroup.tsx:82,187`, `ProductsGroup.tsx:106`, `ConnectionPickerModal.tsx:118`, `SupplierSearchModal.tsx:124`) | Oui |
+| **`ObjectId`** (« Object ID », « Gate Object ») | `shared/building-details/template-groups.ts:24,442` → `building/PropertyGroup.tsx:591-593` ; absent de `HIDDEN_PROPERTY_NAMES` alors que la boucle de repli l'exclut (`PropertyGroup.tsx:566`) — intention claire, fuite par le chemin « défini » | handle **serveur** uniquement (`server/spo_session.ts:761-788`, `ConnectFacilities`) ; le navigateur n'en a pas besoin | Oui |
+| **`GateMap`** (« Gate Map », bitmask brut) | `template-groups.ts:1032` ; les deux autres membres de `TRADE_GROUP` étant masqués, la section Trade peut n'afficher **que** ce bitmask | pilote la `WARE_CHECKLIST` (`template-groups.ts:277`) et `WarehouseWareData.enabled` (`shared/types/domain-types.ts:585-591`) | Oui |
+| **`SecurityId`, `CurrBlock`, `Trouble`, noms RDO bruts** (`hiPrivateWorkDemand`, `cInputRatio3`…) | masqués par `isHiddenProperty` (`PropertyGroup.tsx:269-272`) **sauf** dans le repli sans template `PropertyGroup.tsx:165-169` (`RawPropertyRow`, `:607-610`) qui n'applique aucun filtre | `securityId` → `canGovern` calculé côté gateway (`domain-types.ts:633-645`) ; `CurrBlock` = adresse de bloc pour `RDOVoteOf` / `AcceptCloning` (`server/session/politics-handler.ts:862-871`) | Oui dès qu'un onglet n'a pas de template |
+| **`inventionId`** (`GreenTech.Level1`) | `building/ResearchPanel.tsx:345` (**toujours** l'id en titre du détail), `:276` (repli de libellé) ; `:347` rend `details.properties`, texte serveur brut multi-lignes | `ResearchPanel.tsx:72,79,86` (`onResearchGetDetails / Queue / Cancel`) | Oui |
+| **`metaFluid`** (classe de fluide interne) | `building/SuppliesGroup.tsx:203` (repli de titre), `template-groups.ts:434` (« Product ») | `fluidId` de tous les appels fourniture (`SuppliesGroup.tsx:68-187`, `ProductsGroup.tsx:99,106`) | Si le serveur n'envoie pas de `name` |
+| **Enums bruts** `SortMode` (0/1), `QPSorted` (`yes`/`0`) | `template-groups.ts:439-440` → `PropertyGroup.tsx:591-593` | sens documenté `domain-types.ts:516-517` ; `TradeRole`/`TradeLevel` ont des `enumLabels` — à généraliser | Oui |
+| **Chaînes serveur non formatées** | `StatusOverlay.tsx:406` (`detailsText` brut si `parseRichDetails` échoue), `:434` (`salesInfo`), `:439` (`hintsText`) ; `mail/MailPanel.tsx:45,175` (`msg.date` = **float de date de jeu** en repli de `dateFmt`) ; `building/InspectorMenu.tsx:46-47,65` (`tab.name` = chaîne CLASSES.BIN `GENERAL`/`JOBS`, `tab.icon` = caractère brut) | `tab.id` est la moitié fonctionnelle (`InspectorMenu.tsx:44` → `onRequestTabData`) | Oui |
+| **Clé interne de panneau** | `layouts/GameScreen.tsx:112` — `RIGHT_PANEL_TITLES[rightPanel] ?? rightPanel` imprime `'building'`/`'transport'` si l'entrée manque | — | Si entrée manquante |
+| **Métadonnées de build / horloge** | `hud/VersionBadge.tsx:16` (`Beta v (date heure #n)`), `hud/InfoWidget.tsx:33-35,176` (« 14s ago » depuis un epoch), `login/AuthErrorModal.tsx:43-45` (« Error code: n », résultat brut `RDOLogonUser`) | diagnostic | Oui / erreur seulement |
+
+### 5.2 Déjà correctement hors DOM (référence pour le portage)
+
+`companyId` (clé + `onProfileSwitchCompany`, `ProfilePanel.tsx:610,633`), `visualClass`/`visualClassId`
+(`BuildingInspector.tsx:57,175,188`, `BuildMenu.tsx:230`), `MinistryId` (`MinistriesTab.tsx:29,39,52`),
+le bitmask de rôles du picker (`ConnectionPickerModal.tsx:15-20,66-72`), `fluid.fluidId`
+(`ProfilePanel.tsx:695`), `supply.path`/`product.path` (clés + `onRequestGateConnections`),
+`messageId`, `buildingId`, `templateName`, `timestamp`, `refreshedGroups`, `TownInfo.x/y/path/classId`.
+
+### 5.3 Champs des types partagés — technique vs joueur
+
+| Type (`src/shared/types/…`) | Techniques (disponibles, non rendus) | Joueur |
+|---|---|---|
+| `BuildingFocusInfo` (`domain-types.ts:169-188`) | `buildingId`, `x`, `y`, `xsize`, `ysize`, `visualClass` | `buildingName`, `ownerName`, `revenue`, `demographics` ; `salesInfo`/`detailsText`/`hintsText` **après parsing seulement** |
+| `BuildingDetailsResponse` (`:616-661`) | `buildingId`, `x`, `y`, `visualClass`, `templateName`, `securityId`, `timestamp`, `refreshedGroups`, `tabs[].id/handlerName/order/special` | `buildingName`, `ownerName`, **`canGovern`** (dérivé), `moneyGraph`, `supplies/products/compInputs/warehouseWares` (valeurs) |
+| `BuildingDetailsTab` (`:601-614`) | `id`, `order`, `special`, `handlerName` | `name`, `icon` — chaînes brutes à **mapper** en libellés |
+| `BuildingSupplyData` / `ProductData` (`:499-…`) | `path`, `metaFluid`, `qpSorted`, `sortMode` | `name`, `fluidValue`, `lastCostPerc`, `minK`, `maxPrice`, `lastFluid`, `connectionCount`, `connections` |
+| `BuildingConnectionData` (`:455-478`) | `x`, `y` | tout le reste |
+| `BuildingInfo` / `BuildingCategory` (`:235-256`) | `facilityClass`, `visualClassId`, `xsize`, `ysize`, `kind`, `cluster`, `folder` | `name`, `cost`, `area`, `description`, `zoneRequirement`, `available`, `kindName`, `tycoonLevel` |
+| `FacilityDimensions` (`:295-307`) | tout sauf `name` | `name` |
+| `FavoritesItem` (`message-types.ts:1574-1579`) | `id`, `x`, `y` | `name` |
+| `TycoonProfileFull` (`domain-types.ts:786-802`) | `licenceLevel`, `levelTier`, `failureLevel` (→ état visuel) | `name`, `ranking`, `prestige`, `facCount/facMax`, `nobPoints`, `levelName`, `budget`, `area` (**sans unité aujourd'hui**, `ProfilePanel.tsx:295`) |
+| `TownInfo` (`:672-683`) | `x`, `y`, `path`, `classId` | `name`, `mayor`, `population`, `unemploymentPercent`, `qualityOfLife` |
+| `TycoonProfile` (`:687-698`) | `profileUrl`, `companiesUrl` | le reste |
+| `MailMessageHeader` (`:750-766`) | `messageId`, `date` (float), `stamp`, `noReply` ; `fromAddr`/`toAddr` en repli seulement | `from`, `to`, `subject`, `dateFmt`, `read` |
+| `ResearchInventionItem/Details` (`message-types.ts:1595-1624`) | `inventionId`, `enabled`, `volatile`, `parent`, `categoryIndex` | `name`, `cost` ; `properties`/`description` à **formater** |
+| `CompInputData` / `WarehouseWareData` (`domain-types.ts:563-592`) | `editable`, `index` | `name`, `supplied`, `demanded`, `ratio`, `maxDemand`, `units`, `enabled` |
+| `SurfaceData`, `ZoneOverlayState`, `SurfaceType` | tout (renderer) | — |
+
+### 5.4 Le mode Debug (`D`, `RightRail.tsx:50-57`, `MobileMenu.tsx:81`)
+
+Livré à tous les joueurs (aucune garde dev). Tout est dessiné sur le canvas
+(`renderer/isometric-map-renderer.ts:4707-4812`, `isometric-terrain-renderer.ts:649-681`) : légende,
+tuile sous la souris (`LandId` hex, routes, béton + bitfield voisins, texture), et avec `2` le
+`visualClass` d'un bâtiment — **seul endroit où cet id apparaît à l'écran**. Aucune des fuites
+de §5.1 n'est derrière ce mode : elles sont visibles par défaut. Pour la refonte : le Debug est
+la **bonne maison** des valeurs techniques (coordonnées, ids, classes) — un panneau « Détails
+techniques » repliable dans l'inspecteur, ou le mode `D`, jamais le flux nominal.
+
+### 5.5 Ce que la refonte en tire
+
+1. Compléter `HIDDEN_PROPERTY_NAMES` (`ObjectId`, `GateMap`) et faire passer le repli sans
+   template (`PropertyGroup.tsx:165-169`) par le même filtre — ou mieux, que **plus aucun chemin
+   ne rende un nom RDO brut** : une propriété sans template devient une ligne « Détails
+   techniques » repliée.
+2. Retirer `x, y` de l'en-tête de l'inspecteur et du sous-titre des favoris ; les garder en
+   `data-x`/`data-y` ou dans l'item pour `onNavigateToBuilding`. Les remplacer par la ville, la
+   distance, ou rien.
+3. Toujours afficher un libellé, jamais un id de repli : `inventionId` → nom ; `metaFluid` →
+   nom ; `tab.name` CLASSES.BIN → table de libellés ; `msg.date` → formateur de date de jeu.
+4. Tout enum a ses `enumLabels` ; les chaînes serveur brutes passent par un parseur ou sont
+   marquées « détails indisponibles », jamais imprimées telles quelles.
+5. `VersionBadge`, « Xs ago », « Error code » : utiles au support, à déplacer dans Réglages › À
+   propos / un tooltip, pas dans le HUD permanent.
+
+---
+
 *Skills utilisés : `design:design-critique`, `design:accessibility-review`, `web-accessibility`,
 `design:design-system`, `mobile-ux-optimizer` (grilles de lecture) ; trois agents `Explore` en
 parallèle pour la collecte.*
