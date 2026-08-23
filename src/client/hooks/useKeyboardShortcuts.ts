@@ -79,7 +79,7 @@ export function useKeyboardShortcuts(client: ClientCallbacks | null): void {
       switch (e.key.toLowerCase()) {
         case 'b':
           e.preventDefault();
-          store.openModal('buildMenu');
+          store.toggleBuildSurface();
           break;
         case 'e':
           e.preventDefault();

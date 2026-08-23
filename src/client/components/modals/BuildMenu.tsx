@@ -54,13 +54,17 @@ function ZoneTag({ zone }: { zone: string }) {
   );
 }
 
-function FacilityCard({ facility, isExpanded, onToggleExpand, onSelect }: {
+function FacilityCard({ facility, isExpanded, onToggleExpand, onSelect, cash }: {
   facility: BuildingInfo;
   isExpanded: boolean;
   onToggleExpand: (facilityClass: string) => void;
   onSelect: (f: { facilityClass: string; visualClassId: string; available: boolean }) => void;
+  /** Player cash, when known — shows "cash after" and blocks an unaffordable placement (T1, H4). */
+  cash?: number;
 }) {
   const hasDims = facility.xsize != null && facility.ysize != null && facility.xsize > 0 && facility.ysize > 0;
+  const after = cash !== undefined ? cash - facility.cost : undefined;
+  const unaffordable = after !== undefined && after < 0;
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -135,6 +139,11 @@ function FacilityCard({ facility, isExpanded, onToggleExpand, onSelect }: {
               <span className={styles.metaLine}>
                 Cost: ${facility.cost.toLocaleString()}
               </span>
+              {after !== undefined && (
+                <span className={`${styles.metaLine} ${unaffordable ? styles.metaNegative : styles.metaPositive}`}>
+                  Cash after: {after < 0 ? '-' : ''}${Math.abs(after).toLocaleString()}
+                </span>
+              )}
               {hasDims && (
                 <span className={styles.metaLine}>
                   Tiles: {facility.xsize} × {facility.ysize} ({facility.xsize! * facility.ysize!} tiles)
@@ -144,9 +153,11 @@ function FacilityCard({ facility, isExpanded, onToggleExpand, onSelect }: {
           </div>
           <button
             className={styles.placeBtn}
+            disabled={unaffordable}
+            title={unaffordable ? 'Not enough cash' : undefined}
             onClick={(e) => {
               e.stopPropagation();
-              onSelect(facility);
+              if (!unaffordable) onSelect(facility);
             }}
           >
             Place Building
@@ -177,14 +188,22 @@ export function BuildMenu({ embedded = false, onClose }: BuildMenuProps = {}) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [expandedFacility, setExpandedFacility] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  const cash = useGameStore((s) => s.tycoonStats?.cash);
+  const cashNum = cash ? parseFloat(String(cash).replace(/,/g, '')) : NaN;
 
-  // Load categories when opened (modal mode or embedded mode)
+  // Load categories when opened (modal mode or embedded mode). The list is kept for the
+  // session (T1 handoff: one request, then cache) — only an empty store triggers a read.
   useEffect(() => {
     if (!embedded && modal !== 'buildMenu') return;
     setPhase('categories');
-    setIsLoading(true);
     setExpandedFacility(null);
-    client.onRequestBuildingCategories();
+    if (useUiStore.getState().buildMenuCategories.length === 0) {
+      setIsLoading(true);
+      client.onRequestBuildingCategories();
+    } else {
+      setIsLoading(false);
+    }
   }, [modal, client, embedded]);
 
   // Stop loading when store receives data
@@ -249,8 +268,20 @@ export function BuildMenu({ embedded = false, onClose }: BuildMenuProps = {}) {
       isExpanded={expandedFacility === fac.facilityClass}
       onToggleExpand={handleToggleExpand}
       onSelect={handleFacilitySelect}
+      cash={Number.isNaN(cashNum) ? undefined : cashNum}
     />
-  ), [expandedFacility, handleToggleExpand, handleFacilitySelect]);
+  ), [expandedFacility, handleToggleExpand, handleFacilitySelect, cashNum]);
+
+  // Local filter — no request. Matches on name (and description) of the loaded list.
+  const q = filter.trim().toLowerCase();
+  const visibleFacilities = useMemo(
+    () => (q ? facilities.filter((f) => f.name.toLowerCase().includes(q) || f.description?.toLowerCase().includes(q)) : facilities),
+    [facilities, q],
+  );
+  const visibleCategories = useMemo(
+    () => (q ? categories.filter((c) => c.kindName.toLowerCase().includes(q)) : categories),
+    [categories, q],
+  );
 
   if (!embedded && modal !== 'buildMenu') return null;
 
@@ -266,8 +297,18 @@ export function BuildMenu({ embedded = false, onClose }: BuildMenuProps = {}) {
             </button>
           )}
           <h2 className={styles.title}>
-            {phase === 'categories' ? 'Buildings' : selectedCategory}
+            {phase === 'categories' ? 'Build' : selectedCategory}
           </h2>
+        </div>
+        <div className={styles.filterRow}>
+          <input
+            type="search"
+            className={styles.filterInput}
+            placeholder={phase === 'categories' ? 'Filter categories…' : 'Filter buildings by name…'}
+            aria-label={phase === 'categories' ? 'Filter categories' : 'Filter buildings by name'}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
         </div>
 
         {/* Content */}
@@ -282,7 +323,7 @@ export function BuildMenu({ embedded = false, onClose }: BuildMenuProps = {}) {
 
           {!isLoading && phase === 'categories' && (
             <div className={styles.categoryGrid}>
-              {categories.map((cat) => (
+              {visibleCategories.map((cat) => (
                 <GlassCard
                   key={cat.kind}
                   className={styles.categoryCard}
@@ -312,7 +353,7 @@ export function BuildMenu({ embedded = false, onClose }: BuildMenuProps = {}) {
               {hasResidenceGroups
                 ? <>
                     {RESIDENCE_GROUPS.map(({ key, label, styleClass }) => {
-                      const group = facilities.filter((f) => f.residenceClass === key);
+                      const group = visibleFacilities.filter((f) => f.residenceClass === key);
                       if (group.length === 0) return null;
                       return (
                         <div key={key} className={styles.resGroup}>
@@ -321,11 +362,14 @@ export function BuildMenu({ embedded = false, onClose }: BuildMenuProps = {}) {
                         </div>
                       );
                     })}
-                    {facilities.filter((f) => !f.residenceClass).map(renderFacilityCard)}
+                    {visibleFacilities.filter((f) => !f.residenceClass).map(renderFacilityCard)}
                   </>
-                : facilities.map(renderFacilityCard)}
+                : visibleFacilities.map(renderFacilityCard)}
               {facilities.length === 0 && (
                 <div className={styles.empty}>No buildings available in this category</div>
+              )}
+              {facilities.length > 0 && visibleFacilities.length === 0 && (
+                <div className={styles.empty}>No building matches “{filter.trim()}”</div>
               )}
             </div>
           )}

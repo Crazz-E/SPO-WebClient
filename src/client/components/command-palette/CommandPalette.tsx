@@ -36,7 +36,7 @@ export function CommandPalette() {
         label: 'Open Build Menu',
         shortcut: 'B',
         category: 'navigation',
-        execute: () => openModal('buildMenu'),
+        execute: () => useUiStore.getState().toggleBuildSurface(),
       },
       {
         id: 'empire',

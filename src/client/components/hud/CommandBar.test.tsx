@@ -29,7 +29,8 @@ describe('CommandBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Empire' }));
     expect(useUiStore.getState().leftPanel).toBe('empire');
     fireEvent.click(screen.getByRole('button', { name: 'Build' }));
-    expect(useUiStore.getState().modal).toBe('buildMenu');
+    expect(useUiStore.getState().stack[0]?.kind).toBe('build');
+    expect(screen.getByRole('button', { name: 'Build' }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('the mail tile names its unread count', () => {

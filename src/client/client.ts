@@ -178,6 +178,7 @@ export class StarpeaceClient implements ClientHandlerContext {
   // Building construction state
   public buildingCategories: BuildingCategory[] = [];
   public lastLoadedFacilities: BuildingInfo[] = [];
+  public buildingFacilitiesCache: Map<string, BuildingInfo[]> = new Map();
   public currentBuildingToPlace: BuildingInfo | null = null;
   public currentBuildingXSize: number = 1;
   public currentBuildingYSize: number = 1;
