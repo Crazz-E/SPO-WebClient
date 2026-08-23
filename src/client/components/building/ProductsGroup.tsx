@@ -12,6 +12,8 @@ import { useClient } from '../../context';
 import { useUiStore } from '../../store/ui-store';
 import { PriceSliderWithMarker } from './PropertyTables';
 import { useGateConnections } from './useGateConnections';
+import { connectionPendingKey } from '../../handlers/connection-pending-key';
+import { SaveIndicator } from './SaveIndicator';
 import styles from './PropertyGroup.module.css';
 
 /**
@@ -180,6 +182,7 @@ const ProductCard = memo(function ProductCard({
               {dollarPrice > 0 && (
                 <span className={styles.productDollarPrice}>{formatCurrency(dollarPrice)}</span>
               )}
+              {fluidId && <SaveIndicator propertyKey={`PricePc:${JSON.stringify({ fluidId })}`} />}
             </div>
           ) : (
             pricePc > 0 && dollarPrice > 0 && (
@@ -256,6 +259,13 @@ const ProductCard = memo(function ProductCard({
               >
                 Remove
               </button>
+              {/* Same as the supply side: a connection change says so where it happened. */}
+              {fluidId && (
+                <>
+                  <SaveIndicator propertyKey={connectionPendingKey('RDOConnectOutput', fluidId)} />
+                  <SaveIndicator propertyKey={connectionPendingKey('RDODisconnectOutput', fluidId)} />
+                </>
+              )}
             </div>
           )}
         </div>

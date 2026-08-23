@@ -144,6 +144,16 @@ Quatre états **tous en texte et annoncés** : `pending` (« Enregistrement… �
 (« En attente de relecture · la valeur affichée peut être ancienne » — OB-29). Prop
 `note?: string` (ex. `TAX_EFFECTIVE_NOTICE`).
 
+**Porté (PR #73)** — l'indicateur couvre maintenant **toute** écriture de bâtiment : les six
+composants du plan (`PropertyInputs`, `WorkforceTable`, `TaxesTab`, `MinistriesTab`, `JobsTab`,
+`TownsTab`) l'avaient déjà ; s'y ajoutent les **curseurs fournisseurs** (Prix max, Qualité min,
+Prix produit), les **connexions** (brancher et débrancher, un indicateur par porte) et le
+**renommage**. L'état « en attente de relecture » reste la phrase `confirmedMessage`
+(`TAX_EFFECTIVE_NOTICE`), le seul cas où le serveur ne confirme pas (OB-29).
+La clé d'une connexion est `<membre>:<fluide>` (`handlers/connection-pending-key.ts`) et non la
+clé par défaut : `connectionList` porte les coordonnées, donc la clé par défaut changeait à
+chaque clic et aucun contrôle ne pouvait la suivre.
+
 ### 2.11 `EmptyState` / `ErrorState` / `Skeleton`
 
 Toujours **dans la zone concernée**, jamais toute la feuille. `ErrorState` porte un

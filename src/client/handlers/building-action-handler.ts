@@ -40,6 +40,8 @@ import type { GateTabId } from '../store/building-store';
 import { useGameStore } from '../store/game-store';
 import { useUiStore } from '../store/ui-store';
 import type { ClientHandlerContext } from './client-context';
+import { connectionPendingKey } from './connection-pending-key';
+import { isGateTab } from '@/shared/building-details';
 
 // ── Building Details ────────────────────────────────────────────────────────
 
@@ -148,10 +150,9 @@ export async function requestBuildingRefreshProperties(
  * but through the `groupIds` path, so this set stays what it always was: the
  * three specials.
  */
-const LAZY_TAB_IDS = new Set(['supplies', 'products', 'compInputs']);
-
+/** The gate-backed tabs, named once in `shared/building-details` and read from there. */
 export function isLazyTab(tabId: string): boolean {
-  return LAZY_TAB_IDS.has(tabId);
+  return isGateTab(tabId);
 }
 
 export async function requestTabData(
@@ -266,13 +267,21 @@ export async function requestGateConnections(
 
 // ── Set Property ────────────────────────────────────────────────────────────
 
+/**
+ * `pendingKey` names the write for the SaveIndicator. It defaults to the member plus its
+ * parameters, which is right for a property — one control, one key. It is wrong for the
+ * connection family: `connectionList` carries the coordinates being connected, so the key
+ * changes with every click and no control can watch it. Those callers pass a key of their
+ * own, one per gate, which is the granularity the panel actually shows (B6).
+ */
 export function setBuildingProperty(
   ctx: ClientHandlerContext,
   x: number,
   y: number,
   propertyName: string,
   value: string,
-  additionalParams?: Record<string, string>
+  additionalParams?: Record<string, string>,
+  pendingKey?: string
 ): Promise<boolean> {
   const dedupKey = `${x},${y}:${propertyName}:${JSON.stringify(additionalParams ?? {})}`;
   const existing = ctx.inFlightSetProperty.get(dedupKey);
@@ -280,7 +289,7 @@ export function setBuildingProperty(
     ClientBridge.log('Building', `Dedup: reusing in-flight setBuildingProperty for ${dedupKey}`);
     return existing;
   }
-  const promise = setBuildingPropertyImpl(ctx, x, y, propertyName, value, additionalParams);
+  const promise = setBuildingPropertyImpl(ctx, x, y, propertyName, value, additionalParams, pendingKey);
   ctx.inFlightSetProperty.set(dedupKey, promise);
   promise.finally(() => ctx.inFlightSetProperty.delete(dedupKey));
   return promise;
@@ -292,13 +301,14 @@ async function setBuildingPropertyImpl(
   y: number,
   propertyName: string,
   value: string,
-  additionalParams?: Record<string, string>
+  additionalParams?: Record<string, string>,
+  pendingKeyOverride?: string
 ): Promise<boolean> {
   ClientBridge.log('Building', `Setting ${propertyName}=${value} at (${x}, ${y})`);
 
-  const pendingKey = additionalParams
+  const pendingKey = pendingKeyOverride ?? (additionalParams
     ? `${propertyName}:${JSON.stringify(additionalParams)}`
-    : propertyName;
+    : propertyName);
 
   ClientBridge.setPendingUpdate(pendingKey, value);
 
@@ -378,8 +388,15 @@ export async function upgradeBuildingAction(
   }
 }
 
+/** The SaveIndicator key for a rename — one building, one name, one key. */
+export const RENAME_PENDING_KEY = 'RenameFacility';
+
 export async function renameFacility(ctx: ClientHandlerContext, x: number, y: number, newName: string): Promise<boolean> {
   ClientBridge.log('Building', `Renaming building at (${x}, ${y}) to "${newName}"`);
+
+  // Renaming was the one write with no visible state at all: the name changed when the
+  // refresh came back, or nothing happened and nothing said why (B6).
+  ClientBridge.setPendingUpdate(RENAME_PENDING_KEY, newName);
 
   try {
     const req: WsReqRenameFacility = {
@@ -390,13 +407,16 @@ export async function renameFacility(ctx: ClientHandlerContext, x: number, y: nu
     const response = await ctx.sendRequest(req) as WsRespRenameFacility;
 
     if (response.success) {
+      ClientBridge.confirmPendingUpdate(RENAME_PENDING_KEY);
       ClientBridge.log('Building', `Building renamed to "${response.newName}"`);
       return true;
     } else {
+      ClientBridge.failPendingUpdate(RENAME_PENDING_KEY, newName, response.message || 'The server refused the new name');
       ClientBridge.log('Error', response.message || 'Failed to rename building');
       return false;
     }
   } catch (err: unknown) {
+    ClientBridge.failPendingUpdate(RENAME_PENDING_KEY, newName, toErrorMessage(err));
     ClientBridge.log('Error', `Failed to rename building: ${toErrorMessage(err)}`);
     return false;
   }
@@ -1097,7 +1117,7 @@ export async function connectFacilities(
     await setBuildingProperty(ctx, buildingX, buildingY, rdoCommand, '0', {
       fluidId,
       connectionList,
-    });
+    }, connectionPendingKey(rdoCommand, fluidId));
 
     showToast(
       `${selectedCoords.length} ${direction === 'input' ? 'supplier' : 'client'}${selectedCoords.length !== 1 ? 's' : ''} connected.`,

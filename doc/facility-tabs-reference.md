@@ -984,6 +984,33 @@ Close button's caption to Reopen.
 | `compInputs` | `cInputCount` plus indexed `cInput{i}.*` | `ADVERTISEMENT_GROUP` |
 | `Supplies` (Config 6 HQ only) | `GetInputNames` then `SetPath` then per-gate `GetPropertyList` | `SUPPLIES_GROUP` |
 
+### A gate group is not a property group — and never rides in `groups`
+
+Three tabs are **gate-backed**: `supplies`, `products`, `compInputs` (plus `ads` and
+`advertisement`, whose ids differ but whose `special` marker is one of those three). Their
+content is a list of gates, each one a sub-object read on demand — `REQ_BUILDING_TAB_DATA`,
+then `getBuildingGateConnections` per gate. Nothing about them comes from the building's
+property bag.
+
+Their `properties` array describes a **gate's** columns, not the building's, and that is a
+trap: `SUPPLIES_GROUP` declares `ObjectId` meaning *the gate's* object id, while `ObjectId`
+is also a **header property** (`HEADER_PROPERTY_NAMES`) read for every building. So the
+opening read had a value for the name, `fetchPropertiesAndGroups` published
+`groups['supplies'] = [{ name: 'ObjectId', value: <the BUILDING's id> }]` — a wrong value
+under a right-looking name — and the client read the mere *presence* of that key as "this
+gate is already loaded". `REQ_BUILDING_TAB_DATA` was never sent and the Supplies tab said
+**"No supply inputs" on every building** (fixed 2026-08-23).
+
+The rule now holds on both sides of the socket, from one list —
+`isGateTab` / `GATE_TAB_IDS` in `shared/building-details/property-definitions.ts`:
+
+- the gateway **skips gate groups** when it builds `groups` (`building-details-handler.ts`);
+- the client **never settles a gate's load state from a group key** (`building-store.ts`);
+  only the gate data itself (`details.supplies` / `products` / `compInputs`) does that.
+
+`products` and `compInputs` were structurally exposed to the same collision but declare no
+header name, so only `supplies` — and `ads`, which shares its key — ever broke.
+
 ### Embedded ASP URLs
 
 Non-operational (no ASP server runs these paths today). Kept for the parameter shapes.
