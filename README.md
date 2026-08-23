@@ -67,7 +67,7 @@ Browser Client ──WebSocket──> Node.js Gateway ──RDO/TCP──> Game 
 
 ```bash
 npm install
-npm run dev:local  # Build all + start server on port 8080
+npm run dev:local  # Build all + start the server (first free port from 8081 up)
 ```
 
 Then open `http://localhost:8080` in your browser.
@@ -107,7 +107,7 @@ npm run build:client       # Build client only (Vite)
 npm run build:terrain-test # Build terrain test (esbuild)
 
 # Run
-npm run dev:local          # Build all + start server (PORT, default 8080) — on the bench machine use PORT=8081: the worker owns 8080
+npm run dev:local          # Build all + start the server on the first free port from 8081 up (PORT=<n> to choose); never 8080 — the bench worker owns it
 npm run dev                # On the shared test machine: lease the bench worker's gateway (doc/bench-worker.md)
 npm run dev:react          # Vite dev server only (hot reload, no backend)
 npm start                  # Start server (must build first)

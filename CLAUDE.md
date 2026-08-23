@@ -186,12 +186,16 @@ npm run dev:release  # end your lease early (otherwise it expires, 30 min defaul
 npm run bench:status # worker liveness + queue
 npm run e2e:unlock   # clear a world-dirty lock after a human restore
 npm run finish       # THE END of an update — after the PR is merged: main ff'd, refs pruned, worker
-                     # reinstalled if its sources changed, this worktree + branch removed. Last command.
+                     # reinstalled if its sources changed, this worktree RETIRED (kept while you are in
+                     # it; the next run reaps it). Safe to keep working afterwards.
                      # `npm run finish -- <branch>` finishes a merged branch checked out nowhere (keeps this worktree).
+                     # `npm run finish -- --now` removes this worktree immediately — you lose your cwd.
 npm run deps:gate    # Dependabot PRs: merges main in, installs, gates, pushes and auto-merges them one by one;
                      # a lockfile change routes to spine + building-details
 
-PORT=8081 npm run dev:local   # build + start yourself, OFF 8080 — the CONSCIOUS EXCEPTION (see below)
+npm run dev:local    # build + start yourself, on the first free port from 8081 up — never 8080.
+                     # The CONSCIOUS EXCEPTION (see below); PORT=<n> to choose. A hook refuses any
+                     # other way of taking the bench port.
 npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push
 ```
 
@@ -204,8 +208,14 @@ gateway, never kill a process, never hold a lock: they deposit a job (`npm run g
 shell command, zero tokens. Jobs run strictly one at a time, oldest first, each in the
 depositing session's worktree (uncommitted changes included; the worker builds it). A dead
 worker is announced at deposit time (exit 3). Starting a gateway yourself (`npm run
-dev:local`, on a port other than 8080) is the conscious exception, for debugging only —
-its results attest nothing. Full spec: [doc/bench-worker.md](doc/bench-worker.md).
+dev:local`, which picks a free port from 8081 up) is the conscious exception, for debugging
+only — its results attest nothing. **`.claude/hooks/bench-port-guard.sh` enforces it**:
+anything that would bind the bench port (`npm start`, `node dist/server/server.js`, an
+explicit `PORT=8080`) or drive the live world outside the worker (`test:live:local`,
+`dist/e2e/run.js`) is refused with the sanctioned form named in the message. The worker
+SIGKILLs whatever it finds on 8080 before a job, so a session's gateway there is either
+killed mid-run or blocks every session's gate until a human frees the port.
+Full spec: [doc/bench-worker.md](doc/bench-worker.md).
 
 
 ## Automation (`.claude/hooks/`)
@@ -216,6 +226,8 @@ its results attest nothing. Full spec: [doc/bench-worker.md](doc/bench-worker.md
 | `typecheck-guard.sh` | PostToolUse (Edit\|Write) | Flags the tree dirty on `.ts`/`.tsx` writes — no work, ~0 ms |
 | `sanctuarize.sh` | Stop | Runs `npm run typecheck` once per turn if dirty; blocks the turn on failure |
 | `pre-push-gate.sh` | PreToolUse (Bash) | Blocks `git push` unless the bench worker has attested HEAD: PASS, fingerprint-stable, this worktree, < 60 min — see **The push gate** below |
+| `bench-port-guard.sh` | PreToolUse (Bash) | Blocks anything that would take the bench port (8080) or drive the live world outside the worker; names the sanctioned form |
+| `session-heartbeat.sh` | *sourced by the others* | Stamps `~/.spo-bench/sessions/<key>.alive` so `finish` never reaps a worktree a session is working in |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.
 
@@ -387,11 +399,19 @@ otherwise patch), builds the installer, tags and publishes the GitHub Release �
 merge (`delete_branch_on_merge`); the local side does not clean itself. `finish` refuses
 unless the PR is MERGED, fast-forwards `~/SPO-WebClient` to `origin/main`, prunes stale
 `origin/*` refs, reinstalls the bench worker when the merge touched `src/e2e/bench/` or
-`scripts/bench-*`, then removes this worktree and its branch, prunes any orphan session
-worktree (clean, nothing ahead of `main`, no process inside) and finishes any clean
-worktree whose PR is already MERGED — a session that forgot `finish` is healed by the next
-one. Run it as the
-session's last command — the end state is `main` alone, locally and on origin.
+`scripts/bench-*`, then **retires** this worktree — it stays on disk with its branch while
+a session is standing in it, and the next run reaps it. It also prunes any orphan session
+worktree (clean, nothing ahead of `main`, nobody inside) and finishes any clean worktree
+whose PR is already MERGED — a session that forgot `finish` is healed by the next one. The
+end state is `main` alone, locally and on origin.
+
+**A session may keep working after `finish`** — that is the point of retiring rather than
+removing. Removing the directory from inside it left sessions running in a path that no
+longer existed, and every later tool call failed. Two proofs of life protect a worktree
+from being reaped: a process standing in it (or in any subdirectory), and the heartbeat
+every hook stamps in `~/.spo-bench/sessions/` (`.claude/hooks/session-heartbeat.sh`) —
+idle windows `SPO_WORKTREE_IDLE_MIN` (120 min) and `SPO_RETIRED_IDLE_MIN` (15 min).
+`npm run finish -- --now` removes immediately, for a human on the way out.
 
 Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description — or the session worktree
 branch (`claude-<user>/…`); the hook accepts any branch but `main`.

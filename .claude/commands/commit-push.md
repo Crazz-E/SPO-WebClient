@@ -109,8 +109,10 @@ npm run finish
 ```
 
 It refuses unless the PR is MERGED; fast-forwards `~/SPO-WebClient`, prunes refs, reinstalls
-the worker if `src/e2e/bench/` or `scripts/bench-*` changed, removes this worktree and branch.
-Nothing survives but `main`.
+the worker if `src/e2e/bench/` or `scripts/bench-*` changed, then **retires** this worktree —
+it stays usable while you are in it, and the next run reaps it once nobody is. Nothing
+survives but `main`. You can keep working after it; `npm run finish -- --now` removes the
+directory immediately instead.
 
 ### 8. Report
 
