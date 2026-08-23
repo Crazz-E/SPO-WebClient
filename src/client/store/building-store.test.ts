@@ -48,6 +48,9 @@ function resetStore() {
     details: null,
     currentTab: 'overview',
     isLoading: false,
+    tabLoadingStates: {},
+    gateLoadingStates: {},
+    expandedGates: new Set<string>(),
     currentCompanyName: '',
     ownedCompanyNames: new Set<string>(),
     isOwner: false,
@@ -915,5 +918,144 @@ describe('Building Store — Lazy tab data preservation', () => {
 
     expect(() => useBuildingStore.getState().invalidateTabs(['supplies', 'products'])).not.toThrow();
     expect(useBuildingStore.getState().tabLoadingStates).toEqual({});
+  });
+});
+
+// ===========================================================================
+// THE PER-GATE MEMO AND THE ROWS IT WAS RECORDED AGAINST
+//
+// `gateLoadingStates[tab:path] === 'loaded'` means "this gate's rows were read
+// and are on screen". It is only true for as long as those rows are there.
+// Every path that re-lists a gate tab replaces them with headers carrying no
+// connections; a memo left behind then says "already loaded" over an empty
+// list, the gate is never re-read, and the panel claims "No suppliers
+// connected" about a gate it never asked about. That is the defect below, in
+// each of the three ways the rows can go away underneath it.
+// ===========================================================================
+
+describe('Building Store — gate memo never outlives its rows', () => {
+  beforeEach(resetStore);
+
+  const gate = (path: string, connections: unknown[] = []) => ({
+    path, name: 'Fresh Food', metaFluid: 'Food', connectionCount: connections.length, connections,
+  });
+
+  /** A gate opened and read: rows on screen, memo settled. */
+  function seedLoadedGate() {
+    useBuildingStore.getState().setDetails(makeBuildingDetails(908, 820));
+    useBuildingStore.getState().mergeTabData(
+      'supplies', { supplies: [gate('SegA')] as never }, 908, 820,
+    );
+    useBuildingStore.getState().toggleGateExpanded('supplies', 'SegA');
+    useBuildingStore.getState().setGateLoading('supplies', 'SegA');
+    useBuildingStore.getState().mergeGateData(
+      'supplies', 'SegA', gate('SegA', [{ facilityName: 'Large Farm 1' }]) as never, 908, 820,
+    );
+    expect(useBuildingStore.getState().gateLoadingStates['supplies:SegA']).toBe('loaded');
+  }
+
+  it('a re-listed tab takes the gate memo with the rows it replaces', () => {
+    seedLoadedGate();
+
+    // What the tab read returns: headers, `connections: []`. The rows the memo
+    // was recorded against are gone with it.
+    useBuildingStore.getState().mergeTabData(
+      'supplies', { supplies: [gate('SegA')] as never }, 908, 820,
+    );
+
+    expect(useBuildingStore.getState().gateLoadingStates['supplies:SegA']).toBeUndefined();
+    // The gate stays open — the user did not close it; it re-reads itself.
+    expect(useBuildingStore.getState().expandedGates.has('supplies:SegA')).toBe(true);
+  });
+
+  it('leaves the other tab\'s gates alone when only one is re-listed', () => {
+    seedLoadedGate();
+    useBuildingStore.getState().mergeTabData(
+      'products', { products: [gate('GateA')] as never }, 908, 820,
+    );
+
+    expect(useBuildingStore.getState().gateLoadingStates['supplies:SegA']).toBe('loaded');
+  });
+
+  it('a details response carrying a fresh gate list drops the memo too', () => {
+    seedLoadedGate();
+
+    // The legacy full-fetch path delivers `supplies` through setDetails, and it
+    // lists gates exactly as the lazy path does: headers, no connections.
+    const refreshed = makeBuildingDetails(908, 820);
+    refreshed.supplies = [gate('SegA')] as never;
+    useBuildingStore.getState().setDetails(refreshed);
+
+    expect(useBuildingStore.getState().gateLoadingStates['supplies:SegA']).toBeUndefined();
+  });
+
+  it('a header-only refresh of the same building keeps the memo, because it keeps the rows', () => {
+    seedLoadedGate();
+
+    // EVENT_BUILDING_REFRESH sends no gate list; `setDetails` carries the rows
+    // forward, so re-reading the gate would cost a round-trip for nothing.
+    useBuildingStore.getState().setDetails(makeBuildingDetails(908, 820));
+
+    expect(useBuildingStore.getState().gateLoadingStates['supplies:SegA']).toBe('loaded');
+    expect(useBuildingStore.getState().details!.supplies).toHaveLength(1);
+  });
+
+  it('another building starts with no memo and nothing expanded', () => {
+    seedLoadedGate();
+
+    // Gate paths are building-relative — `SegA` on one facility is `SegA` on
+    // the next. Keeping the memo would answer for the wrong building.
+    useBuildingStore.getState().setDetails(makeBuildingDetails(100, 200));
+
+    expect(useBuildingStore.getState().gateLoadingStates).toEqual({});
+    expect(useBuildingStore.getState().expandedGates.size).toBe(0);
+  });
+
+  it('a reply that cannot be placed does not count as read', () => {
+    seedLoadedGate();
+    useBuildingStore.getState().setGateLoading('supplies', 'SegA');
+    // A refresh lands while the gate read is in flight: `resetTabLoadingStates`
+    // wipes the list the reply was going to be merged into.
+    useBuildingStore.getState().resetTabLoadingStates();
+
+    useBuildingStore.getState().mergeGateData(
+      'supplies', 'SegA', gate('SegA', [{ facilityName: 'Large Farm 1' }]) as never, 908, 820,
+    );
+
+    // Nothing was stored, so nothing may be marked read — this is the state
+    // that rendered "No suppliers connected" over a gate with three suppliers.
+    expect(useBuildingStore.getState().gateLoadingStates['supplies:SegA']).toBeUndefined();
+  });
+
+  it('the mark left on a gate the list dropped does not survive the next re-list', () => {
+    // A reply for a gate the reloaded list no longer holds is marked 'loaded'
+    // so a ghost is not chased (`building-store-gates.test.ts`). That mark is
+    // safe only because it is temporary: if the gate comes back — a warehouse
+    // ware switched on again — the re-list that brings it clears it first.
+    seedLoadedGate();
+    useBuildingStore.getState().mergeTabData(
+      'supplies', { supplies: [gate('SegB')] as never }, 908, 820,
+    );
+    useBuildingStore.getState().mergeGateData(
+      'supplies', 'SegA', gate('SegA', [{ facilityName: 'Large Farm 1' }]) as never, 908, 820,
+    );
+    expect(useBuildingStore.getState().gateLoadingStates['supplies:SegA']).toBe('loaded');
+
+    useBuildingStore.getState().mergeTabData(
+      'supplies', { supplies: [gate('SegA'), gate('SegB')] as never }, 908, 820,
+    );
+
+    expect(useBuildingStore.getState().gateLoadingStates['supplies:SegA']).toBeUndefined();
+  });
+
+  it('a reply for the building the user just left changes nothing', () => {
+    seedLoadedGate();
+
+    useBuildingStore.getState().mergeGateData(
+      'supplies', 'SegA', gate('SegA', [{ facilityName: 'Ghost' }]) as never, 111, 222,
+    );
+
+    expect(useBuildingStore.getState().details!.supplies![0].connections).toHaveLength(1);
+    expect(useBuildingStore.getState().gateLoadingStates['supplies:SegA']).toBe('loaded');
   });
 });

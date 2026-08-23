@@ -532,3 +532,156 @@ describe('disconnecting asks first (T3, B5)', () => {
     useUiStore.getState().closeModal();
   });
 });
+
+
+// ===========================================================================
+// THE MEMO AND THE ROWS, ON SCREEN
+//
+// Live, on `Liquor plant 2` (908,820): the Fresh Food gate was opened and
+// filled with three suppliers; a re-open of the same building showed the same
+// gate as "No suppliers connected", with no REQ_BUILDING_GATE_CONNECTIONS on
+// the wire. The rows had been replaced by a fresh listing while the memo that
+// said they were read stayed behind — a load state outliving its data, one
+// level down from the Supplies-tab defect that made the gates load at all.
+// ===========================================================================
+
+describe('a gate whose rows were replaced under it', () => {
+  const READ_GATE = (): BuildingSupplyData => ({
+    path: 'SegA', name: 'Books', metaFluid: 'Books', maxPrice: '400', minK: '20',
+    connectionCount: 1, connections: [conn('Large Farm 1')],
+  });
+
+  function openAndRead(onRequest: (...a: unknown[]) => unknown) {
+    renderWithProviders(
+      <SuppliesHost canEdit />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: onRequest }) },
+    );
+    fireEvent.click(screen.getByText('Books'));
+    act(() => {
+      useBuildingStore.getState().mergeGateData('supplies', 'SegA', READ_GATE(), X, Y);
+    });
+    expect(screen.getByText('Large Farm 1')).toBeTruthy();
+  }
+
+  it('reads itself again when the tab is re-listed, instead of claiming there are none', () => {
+    const onRequest = jest.fn();
+    openAndRead(onRequest);
+
+    // What re-opening the panel does: the tab is listed again, and a listing
+    // carries headers with `connections: []`.
+    act(() => {
+      useBuildingStore.getState().mergeTabData('supplies', { supplies: SUPPLIES }, X, Y);
+    });
+
+    expect(onRequest).toHaveBeenCalledTimes(2);
+    // Never the contradiction: the gate said "1 supplier" a moment ago.
+    expect(screen.queryByText('No suppliers connected')).toBeNull();
+    expect(screen.getByText(/Loading suppliers/)).toBeTruthy();
+  });
+
+  it('recovers when the read lands while the list is being replaced', () => {
+    // The race behind the live sighting: a refresh wipes the rows
+    // (`resetTabLoadingStates`) with the gate read still in flight, so the
+    // reply has nowhere to go. Marking the gate read there is what left it
+    // empty and silent for the rest of the session.
+    const onRequest = jest.fn();
+    openAndRead(onRequest);
+
+    act(() => {
+      useBuildingStore.getState().setGateLoading('supplies', 'SegA');
+      useBuildingStore.getState().resetTabLoadingStates();
+      useBuildingStore.getState().mergeGateData('supplies', 'SegA', READ_GATE(), X, Y);
+      useBuildingStore.getState().mergeTabData('supplies', { supplies: SUPPLIES }, X, Y);
+    });
+
+    expect(onRequest).toHaveBeenCalledTimes(2);
+    act(() => {
+      useBuildingStore.getState().mergeGateData('supplies', 'SegA', READ_GATE(), X, Y);
+    });
+    expect(screen.getByText('Large Farm 1')).toBeTruthy();
+  });
+
+  it('shows the price the server sent, not the default it started on', () => {
+    // Max Price is a gate-header property: at first render there is none, and
+    // the slider starts on its 200 % default. Live it stayed there over a gate
+    // the server had answered 400 % for.
+    const { container } = renderWithProviders(
+      <SuppliesHost canEdit />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn() }) },
+    );
+    fireEvent.click(screen.getByText('Books'));
+    expect(container.querySelector('input[type="range"]')).toBeNull();
+
+    act(() => {
+      useBuildingStore.getState().mergeGateData('supplies', 'SegA', READ_GATE(), X, Y);
+    });
+
+    const sliders = container.querySelectorAll('input[type="range"]');
+    expect((sliders[0] as HTMLInputElement).value).toBe('400');
+    expect((sliders[1] as HTMLInputElement).value).toBe('20');
+    expect(screen.getByText('400%')).toBeTruthy();
+  });
+
+  it('follows a value the server changed, and leaves a drag alone', () => {
+    const { container } = renderWithProviders(
+      <SuppliesHost canEdit />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn() }) },
+    );
+    fireEvent.click(screen.getByText('Books'));
+    act(() => {
+      useBuildingStore.getState().mergeGateData('supplies', 'SegA', READ_GATE(), X, Y);
+    });
+
+    const slider = container.querySelector('input[type="range"]') as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: '300' } });
+    expect((container.querySelector('input[type="range"]') as HTMLInputElement).value).toBe('300');
+
+    // A re-read that carries the same value the card already showed must not
+    // pull the thumb back out from under the user.
+    act(() => {
+      useBuildingStore.getState().mergeGateData('supplies', 'SegA', READ_GATE(), X, Y);
+    });
+    expect((container.querySelector('input[type="range"]') as HTMLInputElement).value).toBe('300');
+
+    // A value it has never shown is the server saying something new: follow it.
+    act(() => {
+      useBuildingStore.getState().mergeGateData(
+        'supplies', 'SegA', { ...READ_GATE(), maxPrice: '150' }, X, Y,
+      );
+    });
+    expect((container.querySelector('input[type="range"]') as HTMLInputElement).value).toBe('150');
+  });
+});
+
+describe('two buildings, one gate path', () => {
+  it('does not answer for the building the user just left', () => {
+    // `SegA` is a building-relative Delphi path: the same string names a gate
+    // on every facility of the type. A memo kept across the switch would make
+    // the next building's gate look already read.
+    const onRequest = jest.fn();
+    renderWithProviders(
+      <SuppliesHost />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: onRequest }) },
+    );
+    fireEvent.click(screen.getByText('Books'));
+    act(() => {
+      useBuildingStore.getState().mergeGateData(
+        'supplies', 'SegA', { ...SUPPLIES[0], connections: [conn('Large Farm 1')] }, X, Y,
+      );
+    });
+
+    act(() => {
+      useBuildingStore.getState().setDetails({ ...makeDetails(), x: 500, y: 600 });
+      useBuildingStore.getState().mergeTabData('supplies', { supplies: SUPPLIES }, 500, 600);
+    });
+
+    expect(useBuildingStore.getState().gateLoadingStates).toEqual({});
+    expect(useBuildingStore.getState().expandedGates.size).toBe(0);
+
+    // Opening it on the new building reads it, rather than showing the rows —
+    // or the emptiness — of the old one. (The host names its own coordinates,
+    // so the assertion is that a read happened at all.)
+    fireEvent.click(screen.getByText('Books'));
+    expect(onRequest).toHaveBeenCalledTimes(2);
+  });
+});

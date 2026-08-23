@@ -63,6 +63,39 @@ export function gateKey(tabId: GateTabId, path: string): string {
   return `${tabId}:${path}`;
 }
 
+/**
+ * Forget the per-gate memo of the given tabs.
+ *
+ * A gate's load state means "these rows were read and are on screen", and it is
+ * true only for as long as those rows are there. Every path that re-lists a
+ * gate tab replaces them with headers carrying `connections: []`, so the memo
+ * has to go with them: one left behind reads as "already loaded" over an empty
+ * list, the gate is never read again, and the panel says "No suppliers
+ * connected" about a gate it never asked about.
+ */
+function forgetGateStates(
+  states: Record<string, TabLoadState>,
+  tabIds: readonly string[],
+): Record<string, TabLoadState> {
+  if (tabIds.length === 0) return states;
+  const next: Record<string, TabLoadState> = {};
+  for (const [key, value] of Object.entries(states)) {
+    if (!tabIds.some((id) => key.startsWith(`${id}:`))) next[key] = value;
+  }
+  return next;
+}
+
+/** The gate tabs a response re-lists — the ones whose rows it replaces. */
+function relistedGateTabs(data: {
+  supplies?: unknown;
+  products?: unknown;
+}): GateTabId[] {
+  const tabs: GateTabId[] = [];
+  if (data.supplies !== undefined) tabs.push('supplies');
+  if (data.products !== undefined) tabs.push('products');
+  return tabs;
+}
+
 interface BuildingState {
   // Focus
   focusedBuilding: BuildingFocusInfo | null;
@@ -288,9 +321,20 @@ export const useBuildingStore = create<BuildingState>((set) => ({
         tabLoadingStates: isSameBuilding
           ? { ...state.tabLoadingStates, ...preloaded }
           : preloaded,
+        // The per-gate memo follows the rows. A response that carries a gate
+        // list carries it freshly listed — headers, no connections — so the
+        // gates it re-lists are no longer read. One that carries none (the
+        // header-only refresh) leaves the rows alone, and the memo with them.
+        gateLoadingStates: isSameBuilding
+          ? forgetGateStates(state.gateLoadingStates, relistedGateTabs(details))
+          : {},
         // Clear optimistic feedback when switching to a different building
         // to prevent phantom SaveIndicator from cross-building leaks
         ...(isSameBuilding ? {} : {
+          // Gate paths are building-relative: `SegA` on one facility is `SegA`
+          // on the next, so a memo kept across the switch would answer for the
+          // wrong building — and an open gate would stay open on it.
+          expandedGates: new Set<string>(),
           pendingUpdates: new Map(),
           failedUpdates: new Map(),
           confirmedUpdates: new Map(),
@@ -407,6 +451,9 @@ export const useBuildingStore = create<BuildingState>((set) => ({
             : {}),
         },
         tabLoadingStates: { ...state.tabLoadingStates, [tabId]: 'loaded' as TabLoadState },
+        // Same rule as `setDetails`: a re-listed gate tab arrives with its rows
+        // stripped, so the memo that said they were read goes with them.
+        gateLoadingStates: forgetGateStates(state.gateLoadingStates, relistedGateTabs(data)),
       };
     }),
 
@@ -429,11 +476,7 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       // read of rows already held, and after a connection change those rows are
       // exactly what is wrong — leaving the memo would freeze an open gate on
       // the list it had before the mutation.
-      const nextGates: Record<string, TabLoadState> = {};
-      for (const [key, value] of Object.entries(state.gateLoadingStates)) {
-        if (!tabIds.some((id) => key.startsWith(`${id}:`))) nextGates[key] = value;
-      }
-      return { tabLoadingStates: next, gateLoadingStates: nextGates };
+      return { tabLoadingStates: next, gateLoadingStates: forgetGateStates(state.gateLoadingStates, tabIds) };
     }),
 
   resetTabLoadingStates: () => set((state) => ({
@@ -483,7 +526,23 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       const key = gateKey(tabId, path);
       const list = tabId === 'supplies' ? state.details.supplies : state.details.products;
       const index = list?.findIndex((g) => g.path === path) ?? -1;
-      if (!list || index === -1) {
+      if (!list) {
+        // The tab holds no list at all: it is being re-listed under the request
+        // (`resetTabLoadingStates` wipes the rows before the re-read), and the
+        // reply has nowhere to go. Nothing was stored, so nothing may be marked
+        // read — a 'loaded' with no rows behind it is what renders an unread
+        // gate as "No suppliers connected", and it blocks the re-read that
+        // would correct it. The gate is not on screen either, so clearing the
+        // mark cannot spin: the row that asks comes back with the list.
+        const cleared = { ...state.gateLoadingStates };
+        delete cleared[key];
+        return { gateLoadingStates: cleared };
+      }
+      if (index === -1) {
+        // The list is there but no longer holds this gate — a warehouse ware
+        // switched off, say. Nothing to merge and nothing on screen to ask
+        // again, so the mark stops a ghost from being chased. It cannot go
+        // stale: the next re-list of this tab drops it with every other.
         return { gateLoadingStates: { ...state.gateLoadingStates, [key]: 'loaded' as TabLoadState } };
       }
 

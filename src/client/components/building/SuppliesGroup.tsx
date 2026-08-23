@@ -134,6 +134,12 @@ function OverpaymentPopover({
   );
 }
 
+/** A gate's percentage property as a slider position, with its default. */
+function toPercent(value: string | undefined, fallback: number): number {
+  const parsed = parseInt(value || String(fallback), 10);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
 const SupplyCard = memo(function SupplyCard({
   supply,
   canEdit,
@@ -156,10 +162,30 @@ const SupplyCard = memo(function SupplyCard({
   const maxPriceTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const minKTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const currentMaxPrice = parseInt(supply.maxPrice || '200', 10);
-  const currentMinK = parseInt(supply.minK || '0', 10);
-  const [localMaxPrice, setLocalMaxPrice] = useState(isNaN(currentMaxPrice) ? 200 : currentMaxPrice);
-  const [localMinK, setLocalMinK] = useState(isNaN(currentMinK) ? 0 : currentMinK);
+  // Both sliders are local state because the thumb has to move under the finger
+  // before the debounced write goes out. That local copy is seeded from the
+  // server value — and the server value is not there when the card first
+  // renders: `maxPrice` and `minK` are gate-header properties, read only once
+  // the gate is opened. Seeding once left the slider on its 200 % default over
+  // a gate the server says is at 400 %, so it re-seeds whenever the server
+  // sends a value it has not shown yet. Adjusting state during render is the
+  // React-documented way to follow a changing input without a second pass; a
+  // drag is not stomped, because only a value the card has never shown counts.
+  const [seenMaxPrice, setSeenMaxPrice] = useState(supply.maxPrice);
+  const [seenMinK, setSeenMinK] = useState(supply.minK);
+  const [localMaxPrice, setLocalMaxPrice] = useState(() => toPercent(supply.maxPrice, 200));
+  const [localMinK, setLocalMinK] = useState(() => toPercent(supply.minK, 0));
+
+  if (supply.maxPrice !== seenMaxPrice) {
+    setSeenMaxPrice(supply.maxPrice);
+    // A gate being re-listed drops back to undefined for the length of the
+    // re-read; the slider is hidden then, and there is nothing to follow.
+    if (supply.maxPrice !== undefined) setLocalMaxPrice(toPercent(supply.maxPrice, 200));
+  }
+  if (supply.minK !== seenMinK) {
+    setSeenMinK(supply.minK);
+    if (supply.minK !== undefined) setLocalMinK(toPercent(supply.minK, 0));
+  }
 
   // Every mutation below addresses the gate by its fluid id, and that id is a
   // header property — unknown until this gate has been opened and read. The
