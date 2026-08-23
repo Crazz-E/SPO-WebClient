@@ -159,8 +159,7 @@ export function CommandBar() {
   const stack = useUiStore((s) => s.stack);
   const rightPanel = useUiStore((s) => s.rightPanel);
   const leftPanel = useUiStore((s) => s.leftPanel);
-  const modal = useUiStore((s) => s.modal);
-  const openModal = useUiStore((s) => s.openModal);
+  const toggleBuildSurface = useUiStore((s) => s.toggleBuildSurface);
   const toggleLeftPanel = useUiStore((s) => s.toggleLeftPanel);
   const toggleRightPanel = useUiStore((s) => s.toggleRightPanel);
   const openCommandPalette = useUiStore((s) => s.openCommandPalette);
@@ -174,7 +173,7 @@ export function CommandBar() {
   const modeActive = isPlacing || isRoadBuild || isRoadDemolish || isZone;
 
   const tiles: Tile[] = [
-    { id: 'build', label: 'Build', kbd: 'B', icon: <Hammer size={20} />, active: modal === 'buildMenu' || isPlacing, onClick: () => openModal('buildMenu') },
+    { id: 'build', label: 'Build', kbd: 'B', icon: <Hammer size={20} />, active: stack[stack.length - 1]?.kind === 'build' || isPlacing, onClick: toggleBuildSurface },
     { id: 'map', label: 'Map', kbd: 'M', icon: <Map size={20} />, active: false, onClick: () => client.onToggleMinimap() },
     { id: 'empire', label: 'Empire', kbd: 'E', icon: <User size={20} />, active: leftPanel === 'empire', onClick: () => toggleLeftPanel('empire') },
     { id: 'politics', label: 'Government', kbd: 'P', icon: <Landmark size={20} />, active: rightPanel === 'politics', onClick: () => toggleRightPanel('politics') },

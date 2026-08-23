@@ -12,6 +12,7 @@ jest.mock('../transport', () => ({ TransportPanel: () => <div>TRANSPORT CONTENT<
 jest.mock('../empire', () => ({ ProfilePanel: () => <div>PROFILE CONTENT</div>, EmpireOverview: () => <div>FACILITIES CONTENT</div> }));
 jest.mock('../hud/OverlayMenu', () => ({ OverlayMenu: () => <div>OVERLAYS CONTENT</div> }));
 jest.mock('../politics/PoliticsHome', () => ({ PoliticsHome: () => <div>POLITICS CONTENT</div> }));
+jest.mock('../modals/BuildMenu', () => ({ BuildMenu: ({ embedded }: { embedded?: boolean }) => <div>BUILD CONTENT {embedded ? 'embedded' : ''}</div> }));
 
 describe('Sheet', () => {
   beforeEach(() => {
@@ -82,6 +83,7 @@ describe('Sheet', () => {
       ['facilities', 'FACILITIES CONTENT'],
       ['overlays', 'OVERLAYS CONTENT'],
       ['transport', 'TRANSPORT CONTENT'],
+      ['build', 'BUILD CONTENT embedded'],
     ] as const) {
       act(() => useUiStore.getState().setRootSurface({ kind }));
       const { unmount } = renderWithProviders(<Sheet />);

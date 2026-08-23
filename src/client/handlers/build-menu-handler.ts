@@ -28,6 +28,8 @@ import { getFacilityDimensionsCache } from '../facility-dimensions-cache';
 import { registerCivicVisualClass } from '../../shared/building-details/civic-buildings';
 import type { ClientHandlerContext } from './client-context';
 import { setupEscapeHandler } from './handler-utils';
+import { showToast } from '../components/common/Toast';
+import { formatMoney } from '../format-utils';
 
 export async function openBuildMenu(ctx: ClientHandlerContext): Promise<void> {
   if (!ctx.currentCompanyName) {
@@ -55,6 +57,17 @@ export async function openBuildMenu(ctx: ClientHandlerContext): Promise<void> {
 }
 
 async function loadBuildingFacilities(ctx: ClientHandlerContext, category: BuildingCategory): Promise<void> {
+  // Session cache — the list of a category does not change while the player is logged in,
+  // and every reopen used to cost a round trip (audit §1.2). Publish a fresh array so the
+  // store subscribers re-render.
+  const cacheKey = `${category.cluster}/${category.kind}`;
+  const cached = ctx.buildingFacilitiesCache?.get(cacheKey);
+  if (cached) {
+    ctx.lastLoadedFacilities = cached;
+    ClientBridge.setBuildMenuFacilities([...cached]);
+    return;
+  }
+
   ClientBridge.log('Build', `Loading facilities for ${category.kindName}...`);
 
   try {
@@ -77,6 +90,7 @@ async function loadBuildingFacilities(ctx: ClientHandlerContext, category: Build
     });
 
     ctx.lastLoadedFacilities = enriched;
+    ctx.buildingFacilitiesCache?.set(cacheKey, enriched);
     ClientBridge.setBuildMenuFacilities(enriched);
 
     ClientBridge.log('Build', `Loaded ${enriched.length} facilities`);
@@ -303,10 +317,34 @@ function setupPlacementKeyboardHandler(ctx: ClientHandlerContext): void {
   );
 }
 
-export async function placeBuilding(ctx: ClientHandlerContext, x: number, y: number): Promise<void> {
-  if (!ctx.currentBuildingToPlace) return;
-
+/**
+ * A map click in placement mode. The spend is CONFIRMED first (T1 handoff, B5): a Dialog with
+ * the cost and the cash after; the player can opt out for the session ("Don't ask again"),
+ * in which case requestConfirm calls straight through. Only then does the request leave.
+ */
+export function placeBuilding(ctx: ClientHandlerContext, x: number, y: number): Promise<void> {
+  if (!ctx.currentBuildingToPlace) return Promise.resolve();
   const building = ctx.currentBuildingToPlace;
+  const cashRaw = useGameStore.getState().tycoonStats?.cash;
+  const cashNum = cashRaw ? parseFloat(String(cashRaw).replace(/,/g, '')) : NaN;
+  const rows = [{ label: 'Cost', value: formatMoney(building.cost), tone: 'gold' as const }];
+  if (!Number.isNaN(cashNum)) {
+    const after = cashNum - building.cost;
+    rows.push({ label: 'Cash after', value: formatMoney(after), tone: (after < 0 ? 'negative' : 'positive') as never });
+  }
+  return new Promise<void>((resolve) => {
+    useUiStore.getState().requestConfirm(
+      `Build a ${building.name}?`,
+      `At (${x}, ${y})${building.zoneRequirement ? `, ${building.zoneRequirement} zone` : ''}.`,
+      () => {
+        void sendPlaceBuilding(ctx, building, x, y).then(resolve);
+      },
+      { kind: 'spend', confirmLabel: 'Build', typeToConfirm: null, rows, dontAskAgainKey: 'build' },
+    );
+  });
+}
+
+async function sendPlaceBuilding(ctx: ClientHandlerContext, building: BuildingInfo, x: number, y: number): Promise<void> {
   ClientBridge.log('Build', `Placing ${building.name} at (${x}, ${y})...`);
 
   try {
@@ -319,7 +357,10 @@ export async function placeBuilding(ctx: ClientHandlerContext, x: number, y: num
     await ctx.sendRequest(req);
 
     ClientBridge.log('Build', `Successfully placed ${building.name}!`);
-    ctx.showNotification(`${building.name} built successfully!`, 'success');
+    showToast(`${building.name} placed.`, 'success', {
+      title: 'Built',
+      action: { label: 'View', onClick: () => { void ctx.focusBuilding(x, y); } },
+    });
 
     const buildingMargin = Math.max(ctx.currentBuildingXSize, ctx.currentBuildingYSize);
     ctx.loadAlignedMapArea(x, y, buildingMargin);

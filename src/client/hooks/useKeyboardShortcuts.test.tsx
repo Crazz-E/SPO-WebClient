@@ -75,7 +75,7 @@ describe('useKeyboardShortcuts', () => {
     press('e');
     expect(useUiStore.getState().leftPanel).toBe('empire');
     press('b');
-    expect(useUiStore.getState().modal).toBe('buildMenu');
+    expect(useUiStore.getState().stack[useUiStore.getState().stack.length - 1]?.kind).toBe('build');
   });
 
   it('M toggles the minimap, W rotates the view, D toggles debug', () => {

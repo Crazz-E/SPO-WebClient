@@ -12,7 +12,7 @@
  */
 
 import { Suspense, type ReactNode } from 'react';
-import { ChevronRight, Pin, PinOff, X, Building2, Mail, Search, Truck, Landmark, User, Heart, Layers } from 'lucide-react';
+import { ChevronRight, Pin, PinOff, X, Building2, Mail, Search, Truck, Landmark, User, Heart, Layers, Hammer } from 'lucide-react';
 import { useUiStore, type SurfaceKind } from '../../store/ui-store';
 import { usePanel } from '../../hooks/usePanel';
 import { Chip, IconButton, ErrorBoundary } from '../common';
@@ -23,6 +23,7 @@ import { TransportPanel } from '../transport';
 import { ProfilePanel, EmpireOverview } from '../empire';
 import { OverlayMenu } from '../hud/OverlayMenu';
 import { PoliticsHome } from '../politics/PoliticsHome';
+import { BuildMenu } from '../modals/BuildMenu';
 import styles from './Sheet.module.css';
 
 export const SURFACE_TITLES: Record<SurfaceKind, string> = {
@@ -34,6 +35,7 @@ export const SURFACE_TITLES: Record<SurfaceKind, string> = {
   empire: 'Profile',
   facilities: 'My Facilities',
   overlays: 'Map Overlays',
+  build: 'Build',
 };
 
 const SURFACE_ICONS: Record<SurfaceKind, ReactNode> = {
@@ -45,10 +47,11 @@ const SURFACE_ICONS: Record<SurfaceKind, ReactNode> = {
   empire: <User size={16} />,
   facilities: <Heart size={16} />,
   overlays: <Layers size={16} />,
+  build: <Hammer size={16} />,
 };
 
 /** Contents that draw their own header (name, status, refresh…). */
-const OWN_HEADER: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['building']);
+const OWN_HEADER: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['building', 'build']);
 
 export function SurfaceContent({ kind }: { kind: SurfaceKind }) {
   switch (kind) {
@@ -68,6 +71,8 @@ export function SurfaceContent({ kind }: { kind: SurfaceKind }) {
       return <EmpireOverview />;
     case 'overlays':
       return <OverlayMenu />;
+    case 'build':
+      return <BuildMenu embedded onClose={() => useUiStore.getState().popSurface()} />;
     default:
       return null;
   }

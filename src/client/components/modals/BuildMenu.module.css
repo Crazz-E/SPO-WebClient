@@ -487,3 +487,38 @@
     flex-wrap: wrap;
   }
 }
+
+/* ---- T1: filter row and cash-after ---- */
+.filterRow {
+  padding: 0 var(--space-4) var(--space-2);
+}
+
+.filterInput {
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.filterInput::placeholder {
+  color: var(--text-placeholder);
+}
+
+.metaPositive {
+  color: var(--money-positive);
+}
+
+.metaNegative {
+  color: var(--money-negative);
+}
+
+.placeBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

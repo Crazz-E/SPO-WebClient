@@ -395,3 +395,55 @@ describe('Build Menu — residential grouping', () => {
     expect(screen.getByText('Small Store')).toBeTruthy();
   });
 });
+
+describe('Build Menu — T1 sheet behaviour (embedded)', () => {
+  beforeEach(() => {
+    resetStores();
+    useUiStore.setState({ buildMenuCategories: [], buildMenuFacilities: [], capitolIconUrl: '' });
+    useGameStore.setState({ tycoonStats: null });
+  });
+
+  it('does not re-request categories when the store already has them (session cache)', () => {
+    const catSpy = jest.fn();
+    useUiStore.setState({ buildMenuCategories: mockCategories });
+    renderWithProviders(<BuildMenu embedded />, { clientCallbacks: createSpiedCallbacks({ onRequestBuildingCategories: catSpy }) });
+    expect(catSpy).not.toHaveBeenCalled();
+    expect(screen.getByText('Commerce')).toBeTruthy();
+  });
+
+  it('filters categories and buildings locally', () => {
+    useUiStore.setState({ buildMenuCategories: mockCategories });
+    renderWithProviders(<BuildMenu embedded />);
+    fireEvent.change(screen.getByLabelText('Filter categories'), { target: { value: 'zzz' } });
+    expect(screen.queryByText('Commerce')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Filter categories'), { target: { value: '' } });
+    goToFacilitiesPhase();
+    fireEvent.change(screen.getByLabelText('Filter buildings by name'), { target: { value: 'large' } });
+    expect(screen.getByText('Large Store')).toBeTruthy();
+    expect(screen.queryByText('Small Store')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Filter buildings by name'), { target: { value: 'nothing here' } });
+    expect(screen.getByText(/No building matches/)).toBeTruthy();
+  });
+
+  it('shows cash after and blocks an unaffordable placement', () => {
+    useUiStore.setState({ buildMenuCategories: mockCategories });
+    useGameStore.setState({ tycoonStats: { cash: '40000', incomePerHour: '0', failureLevel: 0 } as never });
+    renderWithProviders(<BuildMenu embedded />);
+    goToFacilitiesPhase();
+    fireEvent.click(screen.getByText('Small Store')); // costs 50 000, cash 40 000
+    expect(screen.getByText(/Cash after:/).textContent).toContain('-');
+    expect((screen.getByText('Place Building') as HTMLButtonElement).disabled).toBe(true);
+    act(() => useGameStore.setState({ tycoonStats: { cash: '90000', incomePerHour: '0', failureLevel: 0 } as never }));
+    expect(screen.getByText(/Cash after:/).textContent).not.toContain('-');
+    expect((screen.getByText('Place Building') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('filters residential groups too', () => {
+    useUiStore.setState({ buildMenuCategories: mockCategories });
+    renderWithProviders(<BuildMenu embedded />);
+    goToFacilitiesPhase(mockResidentialFacilities);
+    fireEvent.change(screen.getByLabelText('Filter buildings by name'), { target: { value: 'luxury' } });
+    expect(screen.getByText('Luxury Apartments')).toBeTruthy();
+    expect(screen.queryByText('Town Houses')).toBeNull();
+  });
+});

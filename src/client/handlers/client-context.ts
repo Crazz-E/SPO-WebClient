@@ -62,6 +62,8 @@ export interface ClientHandlerContext {
   // ── Building Construction State ──────────────────────────────────────────
   buildingCategories: BuildingCategory[];
   lastLoadedFacilities: BuildingInfo[];
+  /** Session cache of the build menu lists, keyed by `${cluster}/${kind}` (T1: one read per category). */
+  buildingFacilitiesCache: Map<string, BuildingInfo[]>;
   currentBuildingToPlace: BuildingInfo | null;
   currentBuildingXSize: number;
   currentBuildingYSize: number;

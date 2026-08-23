@@ -130,6 +130,13 @@
       "text": "FLUX T1 — CONSTRUIRE et T3 — RACCORDER UN FOURNISSEUR, option C, desktop + mobile.\nChaque planche porte une note (cadre pointillé or) qui dit ce qu'elle montre. Règles tenues : aucune requête RDO de plus que le code actuel (catégories → liste au clic, détail d'une porte à l'ouverture, recherche à Entrée) ; ligne repliée = nom seul ; diagnostic tiré du bloc Inspect ; confirmation sur dépense et destruction ; « Tourner la vue » (pas de rotation de bâtiment) ; distances calculées localement.\nCe qui suppose une implémentation est dans doc/ux/missing-features.md (H1, H2, H4, B4, B5, B7, N9, N10)."
     },
     {
+      "id": "flows-impl",
+      "x": 800,
+      "y": -420,
+      "w": 620,
+      "text": "ÉTAT D'IMPLÉMENTATION (2026-08-23)\n✅ T1 Construire — le menu est une surface de la feuille (B, tuile, palette) ; catégories et listes gardées pour la session ; filtre local ; « Cash after » dans la carte dépliée et Placer désactivé si insuffisant ; barre de mode (socle-4) avec coût / trésorerie après / Tourner la vue / Done ; Dialog de dépense au clic carte avec « ne plus demander cette session » ; toast « Built — View ». Écart voulu : la feuille ne se réduit pas à 300 px pendant le placement (elle se ferme comme aujourd'hui) — à revoir avec la feuille flottante.\n⏳ T3 Fournisseur — prochaine PR."
+    },
+    {
       "id": "flows-t3",
       "x": 0,
       "y": 2080,

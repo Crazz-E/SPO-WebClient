@@ -35,7 +35,7 @@ export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
  * return to. `rightPanel` / `leftPanel` are kept as DERIVED read-only views of the top of
  * the stack so the components written against them keep working while they migrate.
  */
-export type SurfaceKind = RightPanelType | LeftPanelType;
+export type SurfaceKind = RightPanelType | LeftPanelType | 'build';
 export interface Surface {
   kind: SurfaceKind;
   /** Free-form parameters the content reads (e.g. a tab to open, a fluid id). */
@@ -44,6 +44,7 @@ export interface Surface {
 
 const RIGHT_KINDS: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['building', 'mail', 'politics', 'search', 'transport']);
 const LEFT_KINDS: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['empire', 'facilities', 'overlays']);
+// 'build' is neither a legacy right nor left panel; it only lives in the stack.
 
 /** The legacy panel fields, derived from the top of the stack. */
 function legacyView(stack: Surface[]): { rightPanel: RightPanelType | null; leftPanel: LeftPanelType | null } {
@@ -120,6 +121,8 @@ interface UiState {
   setPinned: (pinned: boolean) => void;
   /** Open the building surface the way the sheet wants it: fresh root, or stacked when pinned. */
   openBuildingSurface: () => void;
+  /** Open (or close when already shown) the Build surface. */
+  toggleBuildSurface: () => void;
 
   // Actions — Panels (legacy wrappers over the stack; kept for existing callers)
   openRightPanel: (type: RightPanelType) => void;
@@ -210,6 +213,11 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
   clearSurfaces: () => set({ stack: [], ...legacyView([]) }),
   setPinned: (pinned) => set({ pinned }),
+  toggleBuildSurface: () => {
+    const top = get().stack[get().stack.length - 1];
+    if (top?.kind === 'build') get().clearSurfaces();
+    else get().setRootSurface({ kind: 'build' });
+  },
   openBuildingSurface: () => {
     const { pinned, stack } = get();
     if (pinned && stack.length > 0) get().pushSurface({ kind: 'building' });
