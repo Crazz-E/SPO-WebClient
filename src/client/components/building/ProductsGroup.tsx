@@ -9,9 +9,25 @@ import { memo, useState } from 'react';
 import type { BuildingProductData } from '@/shared/types';
 import { formatCurrency } from '@/shared/building-details';
 import { useClient } from '../../context';
+import { useUiStore } from '../../store/ui-store';
 import { PriceSliderWithMarker } from './PropertyTables';
 import { useGateConnections } from './useGateConnections';
 import styles from './PropertyGroup.module.css';
+
+/**
+ * Disconnecting is destructive and used to fire at once (Fire button, Delete key). It now goes
+ * through the shared Dialog (T3, B5): focus lands on Cancel, Escape cancels.
+ */
+function confirmDisconnect(name: string, fluidLabel: string, direction: 'input' | 'output', onConfirm: () => void): void {
+  useUiStore.getState().requestConfirm(
+    `Disconnect ${name}?`,
+    direction === 'input'
+      ? `This building will stop receiving ${fluidLabel} from ${name}. You can reconnect it later.`
+      : `${name} will stop buying ${fluidLabel} here. You can reconnect it later.`,
+    onConfirm,
+    { kind: 'destructive', confirmLabel: 'Disconnect', typeToConfirm: null },
+  );
+}
 
 // =============================================================================
 // PRODUCTS PANEL (special === 'products')
@@ -103,8 +119,10 @@ const ProductCard = memo(function ProductCard({
     if (selectedIdx === null || !fluidId) return;
     const conn = product.connections[selectedIdx];
     if (!conn) return;
-    client.onDisconnectConnection(buildingX, buildingY, fluidId, 'output', conn.x, conn.y);
-    setSelectedIdx(null);
+    confirmDisconnect(conn.facilityName, product.name || fluidId, 'output', () => {
+      client.onDisconnectConnection(buildingX, buildingY, fluidId, 'output', conn.x, conn.y);
+      setSelectedIdx(null);
+    });
   };
 
   const handlePriceChange = (rdoName: string, value: number) => {

@@ -24,6 +24,8 @@ import { ProfilePanel, EmpireOverview } from '../empire';
 import { OverlayMenu } from '../hud/OverlayMenu';
 import { PoliticsHome } from '../politics/PoliticsHome';
 import { BuildMenu } from '../modals/BuildMenu';
+import { ConnectionPickerContent } from '../modals/ConnectionPickerModal';
+import { useBuildingStore } from '../../store/building-store';
 import styles from './Sheet.module.css';
 
 export const SURFACE_TITLES: Record<SurfaceKind, string> = {
@@ -36,6 +38,7 @@ export const SURFACE_TITLES: Record<SurfaceKind, string> = {
   facilities: 'My Facilities',
   overlays: 'Map Overlays',
   build: 'Build',
+  supplierSearch: 'Find Suppliers',
 };
 
 const SURFACE_ICONS: Record<SurfaceKind, ReactNode> = {
@@ -48,10 +51,18 @@ const SURFACE_ICONS: Record<SurfaceKind, ReactNode> = {
   facilities: <Heart size={16} />,
   overlays: <Layers size={16} />,
   build: <Hammer size={16} />,
+  supplierSearch: <Search size={16} />,
 };
 
 /** Contents that draw their own header (name, status, refresh…). */
-const OWN_HEADER: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['building', 'build']);
+const OWN_HEADER: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['building', 'build', 'supplierSearch']);
+
+/** The picker as a sheet surface: its own heading names the fluid; closing pops back to the building. */
+function SupplierSearchSurface() {
+  const picker = useBuildingStore((s) => s.connectionPicker);
+  if (!picker) return null;
+  return <ConnectionPickerContent onClose={() => useUiStore.getState().popSurface()} />;
+}
 
 export function SurfaceContent({ kind }: { kind: SurfaceKind }) {
   switch (kind) {
@@ -73,6 +84,8 @@ export function SurfaceContent({ kind }: { kind: SurfaceKind }) {
       return <OverlayMenu />;
     case 'build':
       return <BuildMenu embedded onClose={() => useUiStore.getState().popSurface()} />;
+    case 'supplierSearch':
+      return <SupplierSearchSurface />;
     default:
       return null;
   }

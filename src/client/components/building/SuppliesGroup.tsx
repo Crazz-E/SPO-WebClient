@@ -9,8 +9,24 @@
 import { memo, useState, useCallback, useRef } from 'react';
 import type { BuildingSupplyData, BuildingConnectionData } from '@/shared/types';
 import { useClient } from '../../context';
+import { useUiStore } from '../../store/ui-store';
 import { useGateConnections } from './useGateConnections';
 import styles from './PropertyGroup.module.css';
+
+/**
+ * Disconnecting is destructive and used to fire at once (Fire button, Delete key). It now goes
+ * through the shared Dialog (T3, B5): focus lands on Cancel, Escape cancels.
+ */
+function confirmDisconnect(name: string, fluidLabel: string, direction: 'input' | 'output', onConfirm: () => void): void {
+  useUiStore.getState().requestConfirm(
+    `Disconnect ${name}?`,
+    direction === 'input'
+      ? `This building will stop receiving ${fluidLabel} from ${name}. You can reconnect it later.`
+      : `${name} will stop buying ${fluidLabel} here. You can reconnect it later.`,
+    onConfirm,
+    { kind: 'destructive', confirmLabel: 'Disconnect', typeToConfirm: null },
+  );
+}
 
 // =============================================================================
 // SUPPLIES PANEL (special === 'supplies')
@@ -79,7 +95,9 @@ function OverpaymentPopover({
 
   const handleDelete = () => {
     if (!fluidId) return;
-    client.onDisconnectConnection(buildingX, buildingY, fluidId, 'input', conn.x, conn.y);
+    confirmDisconnect(conn.facilityName, supply.name || fluidId, 'input', () => {
+      client.onDisconnectConnection(buildingX, buildingY, fluidId, 'input', conn.x, conn.y);
+    });
     onClose();
   };
 
@@ -184,8 +202,10 @@ const SupplyCard = memo(function SupplyCard({
     if (selectedIdx === null || !fluidId) return;
     const conn = supply.connections[selectedIdx];
     if (!conn) return;
-    client.onDisconnectConnection(buildingX, buildingY, fluidId, 'input', conn.x, conn.y);
-    setSelectedIdx(null);
+    confirmDisconnect(conn.facilityName, supply.name || fluidId, 'input', () => {
+      client.onDisconnectConnection(buildingX, buildingY, fluidId, 'input', conn.x, conn.y);
+      setSelectedIdx(null);
+    });
   };
 
   const handleRowClick = (idx: number) => {

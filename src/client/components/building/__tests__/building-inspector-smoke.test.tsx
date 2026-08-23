@@ -6,9 +6,9 @@
  * They run in jsdom and use @testing-library/react.
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
-import { screen } from '@testing-library/react';
-import { renderWithProviders, resetStores } from '../../../__tests__/setup/render-helpers';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { screen, fireEvent } from '@testing-library/react';
+import { renderWithProviders, resetStores, createSpiedCallbacks } from '../../../__tests__/setup/render-helpers';
 import { useBuildingStore } from '../../../store/building-store';
 import { BuildingInspector } from '../BuildingInspector';
 import { QuickStats } from '../QuickStats';
@@ -195,6 +195,15 @@ describe('BuildingInspector toolbar', () => {
     renderWithProviders(<BuildingInspector />);
     expect(screen.getByLabelText('Refresh')).toBeTruthy();
     expect(screen.getByLabelText('Close')).toBeTruthy();
+  });
+
+  it('"View on map" recentres the camera on the building (T3, N9)', () => {
+    useBuildingStore.getState().setFocus(mockFocus);
+    useBuildingStore.setState({ details: mockDetails, isLoading: false });
+    const onNavigateToBuilding = jest.fn();
+    renderWithProviders(<BuildingInspector />, { clientCallbacks: createSpiedCallbacks({ onNavigateToBuilding }) });
+    fireEvent.click(screen.getByLabelText('View on map'));
+    expect(onNavigateToBuilding).toHaveBeenCalledWith(mockDetails.x, mockDetails.y);
   });
 });
 

@@ -261,3 +261,23 @@ describe('Quick Trade buttons', () => {
     expect(useBuildingStore.getState().tabLoadingStates['products']).toBe('loaded');
   });
 });
+
+describe('connectFacilities', () => {
+  it('sends the coordinate list with the trailing comma and announces "Connected" (T3)', async () => {
+    const { connectFacilities } = await import('./building-action-handler');
+    const { showToast } = await import('../components/common/Toast');
+    const ctx = {
+      ...makeCtx(),
+      sendRequest: jest.fn().mockImplementation(async (req: { type?: string }) =>
+        req.type === 'REQ_BUILDING_SET_PROPERTY' ? { success: true } : { details: makeDetails(10, 20) }),
+      refreshBuildingDetails: jest.fn().mockResolvedValue(undefined),
+      getRenderer: () => null,
+      inFlightSetProperty: new Map(),
+    } as unknown as ClientHandlerContext;
+    await connectFacilities(ctx, 10, 20, 'Cotton', 'input', [{ x: 1, y: 2 }, { x: 3, y: 4 }]);
+    const sent = (ctx.sendRequest as jest.Mock).mock.calls.map((c) => c[0] as { propertyName?: string; additionalParams?: { connectionList?: string } });
+    const setReq = sent.find((r) => r.propertyName === 'RDOConnectInput');
+    expect(setReq?.additionalParams?.connectionList).toBe('1,2,3,4,');
+    expect(showToast).toHaveBeenCalledWith('2 suppliers connected.', 'success', { title: 'Connected' });
+  });
+});

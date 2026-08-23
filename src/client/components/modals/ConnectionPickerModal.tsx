@@ -1,11 +1,17 @@
 /**
- * ConnectionPickerModal — Find suppliers/clients for a building fluid connection.
+ * ConnectionPicker — find suppliers / clients for a building fluid connection.
  *
- * Replaces the legacy ConnectionPickerDialog.
- * Managed by ui-store modal state ('connectionPicker') + building-store connectionPicker data.
+ * `ConnectionPickerContent` is the body (filters, results, footer) and is what the universal
+ * sheet shows as the `supplierSearch` surface, STACKED on the building (T3 handoff): the
+ * inspector stays underneath, one chip away. `ConnectionPickerModal` keeps the historical
+ * modal shape for the legacy `modal: 'connectionPicker'` path.
+ *
+ * Filters are remembered for the session (ui-store.connectionFilters) and Enter in any filter
+ * field runs the search — the audit found both missing (B4). Results are sorted by distance
+ * from the building, computed locally from the coordinates the server already returns.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { X, Search } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useBuildingStore } from '../../store/building-store';
@@ -19,38 +25,34 @@ const ROLE_BUYER = 4;
 const ROLE_EXPORTER = 8;
 const ROLE_IMPORTER = 16;
 
-export function ConnectionPickerModal() {
-  const modal = useUiStore((s) => s.modal);
-  const closeModal = useUiStore((s) => s.closeModal);
+export interface ConnectionPickerContentProps {
+  /** Called when the picker is dismissed (the sheet pops the surface; the modal closes). */
+  onClose: () => void;
+  /** Show the "Find Suppliers for: X" heading (the sheet already names the surface). */
+  showTitle?: boolean;
+  /** Wrap in the modal frame's scrollable body (legacy modal). */
+  className?: string;
+}
+
+export function ConnectionPickerContent({ onClose, showTitle = true, className }: ConnectionPickerContentProps) {
   const picker = useBuildingStore((s) => s.connectionPicker);
   const clearConnectionPicker = useBuildingStore((s) => s.clearConnectionPicker);
+  const remembered = useUiStore((s) => s.connectionFilters);
+  const setConnectionFilters = useUiStore((s) => s.setConnectionFilters);
 
-  const [company, setCompany] = useState('');
-  const [town, setTown] = useState('');
-  const [maxResults, setMaxResults] = useState('20');
-  const [roles, setRoles] = useState({
-    producer: true,
-    distributer: true,
-    importer: true,
-    buyer: true,
-    exporter: true,
-  });
+  const [company, setCompany] = useState(remembered.company);
+  const [town, setTown] = useState(remembered.town);
+  const [maxResults, setMaxResults] = useState(remembered.maxResults);
+  const [roles, setRoles] = useState(remembered.roles);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
 
   const client = useClient();
   const companyRef = useRef<HTMLInputElement>(null);
 
-  // Reset form when modal opens
+  // Focus the first filter on open; the filter values themselves are remembered
   useEffect(() => {
-    if (modal === 'connectionPicker') {
-      setCompany('');
-      setTown('');
-      setMaxResults('20');
-      setRoles({ producer: true, distributer: true, importer: true, buyer: true, exporter: true });
-      setSelectedIndices(new Set());
-      requestAnimationFrame(() => companyRef.current?.focus());
-    }
-  }, [modal]);
+    requestAnimationFrame(() => companyRef.current?.focus());
+  }, []);
 
   // Clear selection when results change
   useEffect(() => {
@@ -59,8 +61,8 @@ export function ConnectionPickerModal() {
 
   const handleClose = useCallback(() => {
     clearConnectionPicker();
-    closeModal();
-  }, [clearConnectionPicker, closeModal]);
+    onClose();
+  }, [clearConnectionPicker, onClose]);
 
   const handleSearch = useCallback(() => {
     if (!picker) return;
@@ -72,6 +74,7 @@ export function ConnectionPickerModal() {
     if (roles.buyer) rolesMask |= ROLE_BUYER;
     if (roles.exporter) rolesMask |= ROLE_EXPORTER;
 
+    setConnectionFilters({ company, town, maxResults, roles });
     client.onConnectionSearch(
       picker.buildingX,
       picker.buildingY,
@@ -84,7 +87,7 @@ export function ConnectionPickerModal() {
         roles: rolesMask || 255,
       },
     );
-  }, [picker, company, town, maxResults, roles, client]);
+  }, [picker, company, town, maxResults, roles, client, setConnectionFilters]);
 
   const toggleIndex = useCallback((index: number) => {
     setSelectedIndices((prev) => {
@@ -130,61 +133,83 @@ export function ConnectionPickerModal() {
     [handleClose],
   );
 
-  if (modal !== 'connectionPicker' || !picker) return null;
+  // Enter in a filter field runs the search (B4)
+  const onFilterKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSearch();
+      }
+    },
+    [handleSearch],
+  );
+
+  // Results with a local distance from the building, nearest first
+  const sorted = useMemo(() => {
+    if (!picker) return [];
+    const bx = picker.buildingX;
+    const by = picker.buildingY;
+    return picker.results
+      .map((r, i) => ({ r, i, d: Math.round(Math.hypot(r.x - bx, r.y - by)) }))
+      .sort((a, b) => a.d - b.d);
+  }, [picker]);
+
+  if (!picker) return null;
 
   const dirLabel = picker.direction === 'input' ? 'Find Suppliers' : 'Find Clients';
   const results = picker.results;
 
   return (
-    <>
-      <div className={styles.backdrop} onClick={handleClose} aria-hidden="true" />
-      <div
-        className={styles.modal}
-        role="dialog"
-        aria-label={`${dirLabel} for ${picker.fluidName}`}
-        onKeyDown={handleKeyDown}
-      >
+    <div className={`${styles.body} ${className ?? ''}`} onKeyDown={handleKeyDown}>
         {/* Header */}
-        <div className={styles.header}>
-          <h2 className={styles.title}>
-            {dirLabel} for: <span className={styles.fluidName}>{picker.fluidName}</span>
-          </h2>
-          <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">
-            <X size={16} />
-          </button>
-        </div>
+        {showTitle && (
+          <div className={styles.header}>
+            <h2 className={styles.title}>
+              {dirLabel} for: <span className={styles.fluidName}>{picker.fluidName}</span>
+            </h2>
+            <button className={styles.closeBtn} onClick={handleClose} aria-label="Close">
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         {/* Filters */}
         <div className={styles.filters}>
           <div className={styles.filterRow}>
             <div className={styles.filterField}>
-              <label className={styles.filterLabel}>Company</label>
+              <label className={styles.filterLabel} htmlFor="cp-company">Company</label>
               <input
+                id="cp-company"
                 ref={companyRef}
                 className={styles.filterInput}
                 type="text"
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
+                onKeyDown={onFilterKeyDown}
               />
             </div>
             <div className={styles.filterField}>
-              <label className={styles.filterLabel}>Town</label>
+              <label className={styles.filterLabel} htmlFor="cp-town">Town</label>
               <input
+                id="cp-town"
                 className={styles.filterInput}
                 type="text"
                 value={town}
                 onChange={(e) => setTown(e.target.value)}
+                onKeyDown={onFilterKeyDown}
               />
             </div>
             <div className={styles.filterFieldSmall}>
-              <label className={styles.filterLabel}>Max</label>
+              <label className={styles.filterLabel} htmlFor="cp-max">Max</label>
               <input
+                id="cp-max"
                 className={styles.filterInput}
                 type="number"
                 min="1"
                 max="100"
                 value={maxResults}
                 onChange={(e) => setMaxResults(e.target.value)}
+                onKeyDown={onFilterKeyDown}
               />
             </div>
           </div>
@@ -254,7 +279,7 @@ export function ConnectionPickerModal() {
                 : 'No facilities found'}
             </div>
           ) : (
-            results.map((r, i) => (
+            sorted.map(({ r, i, d }) => (
               <div
                 key={`${r.x}-${r.y}`}
                 className={styles.resultRow}
@@ -266,13 +291,16 @@ export function ConnectionPickerModal() {
                   checked={selectedIndices.has(i)}
                   onChange={() => toggleIndex(i)}
                   onClick={(e) => e.stopPropagation()}
+                  aria-label={`Select ${r.facilityName}`}
                 />
                 <div className={styles.resultInfo}>
                   <div className={styles.resultName}>{r.facilityName}</div>
                   <div className={styles.resultMeta}>
                     {r.companyName}
+                    {r.town ? ` · ${r.town}` : ''}
                     {r.price ? ` — $${r.price}` : ''}
                     {r.quality ? ` (Q: ${r.quality})` : ''}
+                    {` · ${d} tiles`}
                   </div>
                 </div>
               </div>
@@ -296,6 +324,24 @@ export function ConnectionPickerModal() {
             Connect Selected ({selectedIndices.size})
           </button>
         </div>
+    </div>
+  );
+}
+
+/** Legacy modal shape — nothing opens it since the picker became a sheet surface, kept for the `modal` path. */
+export function ConnectionPickerModal() {
+  const modal = useUiStore((s) => s.modal);
+  const closeModal = useUiStore((s) => s.closeModal);
+  const picker = useBuildingStore((s) => s.connectionPicker);
+
+  if (modal !== 'connectionPicker' || !picker) return null;
+  const dirLabel = picker.direction === 'input' ? 'Find Suppliers' : 'Find Clients';
+
+  return (
+    <>
+      <div className={styles.backdrop} onClick={closeModal} aria-hidden="true" />
+      <div className={styles.modal} role="dialog" aria-label={`${dirLabel} for ${picker.fluidName}`}>
+        <ConnectionPickerContent onClose={closeModal} />
       </div>
     </>
   );

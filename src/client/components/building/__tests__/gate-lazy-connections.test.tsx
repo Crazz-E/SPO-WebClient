@@ -504,3 +504,31 @@ describe('a gate read that yielded no fluid id', () => {
     expect(onPropertyChange).toHaveBeenCalledWith('PricePc', 150, { fluidId: 'Toys' });
   });
 });
+
+describe('disconnecting asks first (T3, B5)', () => {
+  it('Fire raises a destructive Dialog and only disconnects on confirm', () => {
+    const { useUiStore } = jest.requireActual('../../../store/ui-store') as typeof import('../../../store/ui-store');
+    useUiStore.setState({ modal: null, confirmPayload: null });
+    const onDisconnectConnection = jest.fn();
+    renderWithProviders(
+      <SuppliesHost canEdit />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestGateConnections: jest.fn(), onDisconnectConnection }) },
+    );
+    fireEvent.click(screen.getByText('Books'));
+    act(() => {
+      useBuildingStore.getState().mergeGateData('supplies', 'SegA', {
+        path: 'SegA', name: 'Books', metaFluid: 'Books', connectionCount: 1, connections: [conn('Paper Mill')],
+      }, X, Y);
+    });
+    fireEvent.click(screen.getByText('Paper Mill'));
+    fireEvent.click(screen.getByText('Fire'));
+    const s = useUiStore.getState();
+    expect(s.modal).toBe('confirm');
+    expect(s.confirmPayload?.title).toBe('Disconnect Paper Mill?');
+    expect(s.confirmPayload?.options?.kind).toBe('destructive');
+    expect(onDisconnectConnection).not.toHaveBeenCalled();
+    s.confirmPayload?.onConfirm();
+    expect(onDisconnectConnection).toHaveBeenCalledWith(X, Y, 'Books', 'input', 40, 50);
+    useUiStore.getState().closeModal();
+  });
+});

@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Edit3, RefreshCw, X, Check } from 'lucide-react';
+import { Edit3, RefreshCw, X, Check, Crosshair } from 'lucide-react';
 import { useBuildingStore } from '../../store/building-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store';
@@ -263,6 +263,16 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
       {/* Toolbar — refresh + close (top-right, hidden when modal provides its own) */}
       {!hideHeader && (
         <div className={styles.toolbar}>
+          <IconButton
+            icon={<Crosshair size={16} />}
+            label="View on map"
+            size="sm"
+            variant="ghost"
+            disabled={!details}
+            onClick={() => {
+              if (details) client.onNavigateToBuilding(details.x, details.y);
+            }}
+          />
           <IconButton
             icon={<RefreshCw size={16} />}
             label="Refresh"

@@ -11,6 +11,16 @@ import { SuppliesPanel } from '../SuppliesGroup';
 import type { CompInputData, BuildingProductData, BuildingSupplyData, BuildingConnectionData } from '@/shared/types';
 import { fireEvent } from '@testing-library/react';
 import { useBuildingStore, gateKey } from '../../../store/building-store';
+import { useUiStore } from '../../../store/ui-store';
+
+/** Disconnecting now asks first (T3, B5): the action lands in the confirm Dialog; confirm it. */
+function confirmPendingDialog(): void {
+  const s = useUiStore.getState();
+  expect(s.modal).toBe('confirm');
+  expect(s.confirmPayload?.options?.kind).toBe('destructive');
+  s.confirmPayload?.onConfirm();
+  s.closeModal();
+}
 
 /**
  * Mark a gate's connection rows as already read.
@@ -361,6 +371,8 @@ describe('ProductsPanel', () => {
     // Click Remove
     const removeBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Remove');
     fireEvent.click(removeBtn!);
+    expect(onDisconnectConnection).not.toHaveBeenCalled();
+    confirmPendingDialog();
 
     expect(onDisconnectConnection).toHaveBeenCalledWith(100, 200, 'fluid_chem', 'output', 300, 400);
   });
@@ -628,6 +640,8 @@ describe('SuppliesPanel', () => {
     // Fire
     const fireBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Fire');
     fireEvent.click(fireBtn!);
+    expect(onDisconnectConnection).not.toHaveBeenCalled();
+    confirmPendingDialog();
 
     expect(onDisconnectConnection).toHaveBeenCalledWith(50, 60, 'fluid_steel', 'input', 100, 200);
   });
@@ -741,6 +755,8 @@ describe('SuppliesPanel', () => {
     // Delete
     const deleteBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Delete');
     fireEvent.click(deleteBtn!);
+    expect(onDisconnectConnection).not.toHaveBeenCalled();
+    confirmPendingDialog();
 
     expect(onDisconnectConnection).toHaveBeenCalledWith(50, 60, 'fluid_steel', 'input', 100, 200);
   });

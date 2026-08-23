@@ -267,3 +267,16 @@
   outline: 2px solid var(--accent-gold);
   outline-offset: 2px;
 }
+
+/* Content body — shared by the modal frame and the sheet surface */
+.body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+/* Inside the sheet the results may take the remaining height */
+.inSheet .results {
+  max-height: none;
+}
