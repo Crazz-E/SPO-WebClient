@@ -16,7 +16,7 @@ import { ChevronRight, Pin, PinOff, X, Building2, Mail, Search, Truck, Landmark,
 import { useUiStore, type SurfaceKind } from '../../store/ui-store';
 import { usePanel } from '../../hooks/usePanel';
 import { Chip, IconButton, ErrorBoundary } from '../common';
-import { BuildingInspector } from '../building';
+import { BuildingSurface } from './BuildingSurface';
 import { MailPanel } from '../mail';
 import { SearchPanel } from '../search';
 import { TransportPanel } from '../transport';
@@ -53,7 +53,7 @@ const OWN_HEADER: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['building']);
 export function SurfaceContent({ kind }: { kind: SurfaceKind }) {
   switch (kind) {
     case 'building':
-      return <BuildingInspector />;
+      return <BuildingSurface />;
     case 'mail':
       return <MailPanel />;
     case 'search':

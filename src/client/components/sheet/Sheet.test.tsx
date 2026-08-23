@@ -5,7 +5,7 @@ import { useUiStore } from '../../store/ui-store';
 import { Sheet } from './Sheet';
 
 // The content components are heavy; the sheet's job is chrome + routing. Stub them.
-jest.mock('../building', () => ({ BuildingInspector: () => <div>BUILDING CONTENT</div> }));
+jest.mock('./BuildingSurface', () => ({ BuildingSurface: () => <div>BUILDING CONTENT</div> }));
 jest.mock('../mail', () => ({ MailPanel: () => <div>MAIL CONTENT</div> }));
 jest.mock('../search', () => ({ SearchPanel: () => <div>SEARCH CONTENT</div> }));
 jest.mock('../transport', () => ({ TransportPanel: () => <div>TRANSPORT CONTENT</div> }));

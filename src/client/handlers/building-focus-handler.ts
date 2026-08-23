@@ -137,12 +137,8 @@ export async function openInspectorForFocused(ctx: ClientHandlerContext, x: numb
     useBuildingStore.getState().setLoading(true);
   }
 
-  // Open panel/modal
-  if (isCivicBuilding(vc)) {
-    useUiStore.getState().openModal('buildingInspector');
-  } else {
-    useUiStore.getState().openRightPanel('building');
-  }
+  // Open the building surface — civic or not, the universal sheet shows it (socle-3c)
+  useUiStore.getState().openBuildingSurface();
 
   try {
     const gen = ctx.nextGeneration('buildingDetails');
@@ -214,14 +210,8 @@ export async function focusBuilding(ctx: ClientHandlerContext, x: number, y: num
     }
 
     useBuildingStore.getState().setLoading(true);
-    if (isCivicBuilding(visualClass || '0')) {
-      useUiStore.getState().openModal('buildingInspector');
-    } else {
-      const ui = useUiStore.getState();
-      // A pinned sheet keeps what it shows: the building stacks on top instead of replacing it.
-      if (ui.pinned && ui.stack.length > 0) ui.pushSurface({ kind: 'building' });
-      else ui.openRightPanel('building');
-    }
+    // Civic or not, the universal sheet shows the building; a pinned sheet stacks it instead of replacing.
+    useUiStore.getState().openBuildingSurface();
 
     const gen = ctx.nextGeneration('buildingDetails');
     const req: WsReqBuildingFocus = { type: WsMessageType.REQ_BUILDING_FOCUS, x, y };

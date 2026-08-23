@@ -116,6 +116,8 @@ interface UiState {
   replaceTopSurface: (surface: Surface) => void;
   clearSurfaces: () => void;
   setPinned: (pinned: boolean) => void;
+  /** Open the building surface the way the sheet wants it: fresh root, or stacked when pinned. */
+  openBuildingSurface: () => void;
 
   // Actions — Panels (legacy wrappers over the stack; kept for existing callers)
   openRightPanel: (type: RightPanelType) => void;
@@ -204,6 +206,11 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
   clearSurfaces: () => set({ stack: [], ...legacyView([]) }),
   setPinned: (pinned) => set({ pinned }),
+  openBuildingSurface: () => {
+    const { pinned, stack } = get();
+    if (pinned && stack.length > 0) get().pushSurface({ kind: 'building' });
+    else get().setRootSurface({ kind: 'building' });
+  },
 
   // Legacy panel API — thin wrappers. "open" = fresh root (what the HUD buttons mean),
   // "close" = clear, "toggle" = close if it is already on top.

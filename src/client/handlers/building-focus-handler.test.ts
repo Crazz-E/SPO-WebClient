@@ -154,9 +154,10 @@ describe('focusBuilding and the universal sheet', () => {
     expect(useUiStore.getState().stack.map((s) => s.kind)).toEqual(['politics', 'building']);
   });
 
-  it('a civic building still opens the civic modal (folded into the sheet in socle-3c)', async () => {
+  it('a civic building opens in the same sheet as any other (no modal any more)', async () => {
     const ctx = makeCtx({ getRenderer: () => ({ centerOn: jest.fn(), getVisualClassAt: () => '9999' }) as never });
     await focusBuilding(ctx, 10, 20);
-    expect(useUiStore.getState().modal).toBe('buildingInspector');
+    expect(useUiStore.getState().modal).toBeNull();
+    expect(useUiStore.getState().stack.map((s) => s.kind)).toEqual(['building']);
   });
 });
