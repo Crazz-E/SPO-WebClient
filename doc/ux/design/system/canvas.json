@@ -65,6 +65,13 @@
       "text": "LISTE LONGUE — précision du 23/08 : la liste longue est le BLOC INSPECT (aperçu + en-tête, un bloc poussé en continu) d'un entrepôt ou d'un supermarché Magna ; les onglets Approvisionnements / Produits / Services restent tels quels côté requêtes.\nRéponse : filtre collant + tri par nom (locaux, zéro requête) + lignes compactes + défilement interne + compteur ; sur les onglets, ligne repliée = nom seul, la requête part à l'ouverture du dépliant. Pas de catégories : le jeu n'en fournit aucune (TMetaFluid, Kernel.pas:743-798)."
     },
     {
+      "id": "sys-impl",
+      "x": 1280,
+      "y": -320,
+      "w": 720,
+      "text": "ÉTAT D'IMPLÉMENTATION (2026-08-23)\n✅ socle-1 (PR #55, fusionnée) — tokens : 0 token inconnu, focus or partout, 12 px plancher mobile, --scrim / --z-* / --sai-bottom créés ; garde-fou Jest design-tokens.test.ts.\n✅ socle-2 (PR en cours) — Button (5 variantes, 3 tailles, loading, kbd), Dialog (focus piégé/restitué, aria-modal, dépense/destructif, « taper CONFIRM », opt-out de session) branché sur requestConfirm/requestPrompt, Toast (mot + icône, erreurs persistantes, régions permanentes, action), SaveIndicator (échec lisible + annoncé ; « en attente de relecture » viendra avec la pile au socle-3), Field, Chip (sm 24 / md 32 / lg 44), Switch/Checkbox/Radio natifs (Réglages et Profil branchés), Tabs APG + TabPanel, EmptyState/ErrorState.\n⏳ socle-3 — feuille universelle + pile (planche 3), contenus building/mail/search/empire/politics desktop + mobile.\n⏳ socle-4 — pastille d'état, barre de commande, barre de mode, raccourcis (planches 5–6).\nLibellés implémentés en anglais (langue actuelle du client) ; les planches restent en français pour la lecture."
+    },
+    {
       "id": "sys-map",
       "x": 2960,
       "y": 1000,
