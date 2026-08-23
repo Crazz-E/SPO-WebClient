@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #F0F0F2; background: #0C0D10; }
+    a { color: #D4A853; } a:hover { color: #E8C77B; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="width: 1200px; height: 980px; padding: 32px; background: #0C0D10; display: flex; flex-direction: column; gap: 28px; overflow: hidden;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <h1 style="margin: 0; font-size: 20px; font-weight: 600;">Fondations</h1>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">Les tokens existants de <code style="font-family: 'JetBrains Mono', monospace; color: #C4C8D0;">design-tokens.css</code>, plus les six qui manquent. Une seule règle de focus, une seule échelle de texte, une seule de z-index.</p>
+  </div>
+
+  <!-- Palette -->
+  <section style="display: flex; flex-direction: column; gap: 10px;">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Couleurs — rôles, pas nuances</h2>
+    <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px;">
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 44px; border-radius: 8px; background: #0C0D10; border: 1px solid rgba(255,255,255,0.12);"></div><span style="font-size: 11px; color: #C4C8D0;">bg-primary</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">#0C0D10</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 44px; border-radius: 8px; background: #141618; border: 1px solid rgba(255,255,255,0.06);"></div><span style="font-size: 11px; color: #C4C8D0;">bg-secondary · surface</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">#141618</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 44px; border-radius: 8px; background: #1C1E22;"></div><span style="font-size: 11px; color: #C4C8D0;">bg-tertiary</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">#1C1E22</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 44px; border-radius: 8px; background: #24272C;"></div><span style="font-size: 11px; color: #C4C8D0;">bg-elevated</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">#24272C</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 44px; border-radius: 8px; background: #D4A853;"></div><span style="font-size: 11px; color: #C4C8D0;">accent-gold · action primaire, sélection, mode</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">#D4A853</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 44px; border-radius: 8px; background: #10B981;"></div><span style="font-size: 11px; color: #C4C8D0;">primary · actif / positif</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">#10B981</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 44px; border-radius: 8px; background: #EF4444;"></div><span style="font-size: 11px; color: #C4C8D0;">error · destruction, arrêt</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">#EF4444</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 44px; border-radius: 8px; background: #F59E0B;"></div><span style="font-size: 11px; color: #C4C8D0;">warning · attention</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">#F59E0B</span></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px;">
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 32px; border-radius: 8px; background: #F0F0F2;"></div><span style="font-size: 11px; color: #C4C8D0;">text-primary</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 32px; border-radius: 8px; background: #C4C8D0;"></div><span style="font-size: 11px; color: #C4C8D0;">text-secondary</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 32px; border-radius: 8px; background: #9CA1AC;"></div><span style="font-size: 11px; color: #C4C8D0;">text-tertiary</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 32px; border-radius: 8px; background: #7D8492;"></div><span style="font-size: 11px; color: #C4C8D0;">text-muted (min. sur fond secondary)</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 32px; border-radius: 8px; background: #4ADE80;"></div><span style="font-size: 11px; color: #C4C8D0;">money-positive</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 32px; border-radius: 8px; background: #F87171;"></div><span style="font-size: 11px; color: #C4C8D0;">money-negative</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 32px; border-radius: 8px; background: #06B6D4;"></div><span style="font-size: 11px; color: #C4C8D0;">info</span></div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><div style="height: 32px; border-radius: 8px; background: rgba(0,0,0,0.5); border: 1px dashed rgba(255,255,255,0.2);"></div><span style="font-size: 11px; color: #D4A853;">scrim — NOUVEAU, 0.5 partout</span></div>
+    </div>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">Supprimés au portage : la famille teal/bleue héritée (<code style="font-family: 'JetBrains Mono', monospace;">#4a7a6a</code>, <code style="font-family: 'JetBrains Mono', monospace;">#3b82f6</code>), le deuxième or <code style="font-family: 'JetBrains Mono', monospace;">rgba(212,168,67)</code>, les six rouges ad hoc. Tokens à créer : <code style="font-family: 'JetBrains Mono', monospace;">--scrim</code>, <code style="font-family: 'JetBrains Mono', monospace;">--z-backdrop</code>, <code style="font-family: 'JetBrains Mono', monospace;">--z-bottomnav</code>, <code style="font-family: 'JetBrains Mono', monospace;">--z-ticker</code>, <code style="font-family: 'JetBrains Mono', monospace;">--sai-bottom</code>, <code style="font-family: 'JetBrains Mono', monospace;">--content-top</code>.</p>
+  </section>
+
+  <!-- Type scale + focus + radius -->
+  <div style="display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 24px;">
+    <section style="display: flex; flex-direction: column; gap: 10px;">
+      <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Texte — 12 px minimum, mobile compris</h2>
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;"><span style="font-size: 24px; font-weight: 600;">Titre d'écran</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">2xl 24 / 600</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;"><span style="font-size: 18px; font-weight: 600;">Titre de surface</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">lg 18 / 600</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;"><span style="font-size: 16px; font-weight: 600;">Titre de section</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">base 16 / 600</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;"><span style="font-size: 14px;">Corps, libellés de contrôle</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">sm 14 / 400</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;"><span style="font-size: 12px; color: #C4C8D0;">Données denses, métadonnées, aide</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">xs 12 / 400</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;"><span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Étiquette de section</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">2xs 11 / 600 / caps — seule exception</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;"><span style="font: 700 18px 'JetBrains Mono', monospace; color: #D4A853; font-variant-numeric: tabular-nums;">$ 12 480 300</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">valeur financière — mono, tabulaire, or</span></div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;"><span style="font-size: 12px; color: #C4C8D0; font-variant-numeric: tabular-nums;">1 180 · 84 % · 9 km</span><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">données de table — tabulaire</span></div>
+      </div>
+      <p style="margin: 0; font-size: 12px; color: #9CA1AC;">Les utilitaires de <code style="font-family: 'JetBrains Mono', monospace;">typography.css</code> deviennent les seuls styles de texte (composés, jamais retapés). Le « $ » se place avant, comme dans le client.</p>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 10px;">
+      <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Focus — une seule forme</h2>
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 16px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;">
+        <button style="height: 36px; padding: 0 14px; align-self: flex-start; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; outline: 2px solid #D4A853; outline-offset: 2px;">Bouton focalisé</button>
+        <div style="height: 36px; padding: 0 10px; display: flex; align-items: center; background: #0C0D10; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #F0F0F2; font-size: 13px; outline: 2px solid #D4A853; outline-offset: 2px;">Champ focalisé</div>
+        <div style="display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; background: #1C1E22; border-radius: 8px; outline: 2px solid #D4A853; outline-offset: -2px; font-size: 12px; color: #C4C8D0;">Ligne de liste focalisée (offset négatif)</div>
+        <p style="margin: 0; font-size: 12px; color: #9CA1AC;"><code style="font-family: 'JetBrains Mono', monospace;">:focus-visible</code> → or 2 px, décalage 2 px (−2 px dans les listes). Jamais <code style="font-family: 'JetBrains Mono', monospace;">outline: none</code>, jamais une bordure seule, jamais le vert.</p>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 10px;">
+      <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Rayons, espacement, mouvement</h2>
+      <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;">
+        <div style="display: flex; gap: 10px; align-items: flex-end;">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 36px; height: 36px; background: #24272C; border-radius: 4px;"></div><span style="font-size: 11px; color: #7D8492;">sm 4 · badge</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 36px; height: 36px; background: #24272C; border-radius: 8px;"></div><span style="font-size: 11px; color: #7D8492;">lg 8 · contrôle</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 36px; height: 36px; background: #24272C; border-radius: 12px;"></div><span style="font-size: 11px; color: #7D8492;">xl 12 · surface</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;"><div style="width: 36px; height: 36px; background: #24272C; border-radius: 9999px;"></div><span style="font-size: 11px; color: #7D8492;">full · puce</span></div>
+        </div>
+        <div style="display: flex; gap: 6px; align-items: flex-end;">
+          <div style="width: 4px; height: 16px; background: #D4A853;"></div><div style="width: 8px; height: 16px; background: #D4A853;"></div><div style="width: 12px; height: 16px; background: #D4A853;"></div><div style="width: 16px; height: 16px; background: #D4A853;"></div><div style="width: 24px; height: 16px; background: #D4A853;"></div><div style="width: 32px; height: 16px; background: #D4A853;"></div><span style="font-size: 11px; color: #7D8492; margin-left: 6px;">4 · 8 · 12 · 16 · 24 · 32</span>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: #9CA1AC;">Rayons 2, 3, 10 px supprimés. Durées : 150 / 200 / 300 ms ; les surfaces glissent en 300 ms (<code style="font-family: 'JetBrains Mono', monospace;">--duration-panel</code>, enfin utilisé). <code style="font-family: 'JetBrains Mono', monospace;">prefers-reduced-motion</code> coupe aussi les transforms JS (feuille, fond de connexion).</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- Z scale -->
+  <section style="display: flex; flex-direction: column; gap: 10px;">
+    <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Empilement — une échelle, zéro calc()</h2>
+    <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px;">
+      <div style="padding: 10px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; color: #C4C8D0;">carte<br><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">base 1</span></div>
+      <div style="padding: 10px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; color: #C4C8D0;">overlay bâtiment<br><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">overlay 300</span></div>
+      <div style="padding: 10px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; color: #C4C8D0;">pastille, barre de commande, zoom<br><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">sticky 200 → hud 350</span></div>
+      <div style="padding: 10px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; color: #C4C8D0;">feuille universelle<br><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">panel 400</span></div>
+      <div style="padding: 10px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; color: #C4C8D0;">scrim + dialogue<br><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">backdrop 499 · modal 500</span></div>
+      <div style="padding: 10px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; color: #C4C8D0;">toasts<br><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">toast 600</span></div>
+      <div style="padding: 10px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; color: #C4C8D0;">infobulles<br><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">tooltip 700</span></div>
+      <div style="padding: 10px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; font-size: 12px; color: #C4C8D0;">démarrage, reconnexion<br><span style="font: 500 11px 'JetBrains Mono', monospace; color: #7D8492;">startup 1000</span></div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1200,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

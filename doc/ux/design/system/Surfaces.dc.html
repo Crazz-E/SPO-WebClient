@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #F0F0F2; background: #0C0D10; }
+    a { color: #D4A853; } a:hover { color: #E8C77B; }
+    * { box-sizing: border-box; }
+  </style>
+</helmet>
+<div style="width: 1400px; height: 980px; padding: 32px; background: #0C0D10; display: flex; flex-direction: column; gap: 20px; overflow: hidden;">
+
+  <div style="display: flex; flex-direction: column; gap: 4px;">
+    <h1 style="margin: 0; font-size: 20px; font-weight: 600;">Surfaces</h1>
+    <p style="margin: 0; font-size: 12px; color: #9CA1AC;">Une seule surface empilable — la <strong style="color: #F0F0F2;">feuille universelle</strong> — remplace 5 panneaux, 11 modales et 2 inspecteurs. Un dialogue modal reste pour confirmer ; les toasts et le SaveIndicator disent ce qui s'est passé.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 500px minmax(0, 1fr); gap: 24px; flex: 1; min-height: 0;">
+
+    <!-- SHEET ANATOMY -->
+    <section style="display: flex; flex-direction: column; gap: 10px;">
+      <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Feuille universelle — anatomie (desktop 472 px, tablette 100 % − 16, mobile feuille basse)</h2>
+      <div style="display: flex; flex-direction: column; height: 760px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3); overflow: hidden;">
+        <!-- stack row -->
+        <div style="display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <button style="height: 32px; padding: 0 10px; background: transparent; border: 1px solid rgba(255,255,255,0.06); border-radius: 9999px; color: #9CA1AC; font: 500 12px 'Inter', sans-serif; cursor: pointer; white-space: nowrap;">Usine textile</button>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3A3F48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+          <span style="height: 32px; padding: 0 10px; display: inline-flex; align-items: center; background: rgba(212,168,83,0.1); border: 1px solid #B8912E; border-radius: 9999px; color: #D4A853; font: 600 12px 'Inter', sans-serif; white-space: nowrap;">Approvisionnements</span>
+          <span style="flex: 1;"></span>
+          <button style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer;" title="Épingler la feuille"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg></button>
+          <button style="width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; cursor: pointer;" title="Fermer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+        </div>
+        <!-- header: identity + diagnosis -->
+        <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+              <h2 style="margin: 0; font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Usine textile</h2>
+              <span style="font-size: 12px; color: #7D8492;">SPO_test3 - Green · Helartia · niveau 2</span>
+            </div>
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: 9999px; background: rgba(239,68,68,0.1); color: #F87171; font-size: 11px; font-weight: 600; white-space: nowrap;"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #EF4444;"></span>À l'arrêt</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px;">
+            <span style="font-size: 12px; color: #F0F0F2;"><strong style="color: #F87171;">Coton</strong> — aucun fournisseur. Production arrêtée.</span>
+            <button style="height: 32px; padding: 0 12px; background: #D4A853; border: 1px solid #B8912E; border-radius: 8px; color: #0C0D10; font: 600 12px 'Inter', sans-serif; cursor: pointer; white-space: nowrap;">Trouver un fournisseur</button>
+          </div>
+        </div>
+        <!-- section nav -->
+        <div role="tablist" style="display: flex; gap: 0; padding: 0 8px; border-bottom: 1px solid rgba(255,255,255,0.06); overflow: hidden;">
+          <button role="tab" style="height: 40px; padding: 0 10px; background: transparent; border: 0; border-bottom: 2px solid #D4A853; color: #F0F0F2; font: 600 12px 'Inter', sans-serif; cursor: pointer; white-space: nowrap;">Approvisionnements</button>
+          <button role="tab" style="height: 40px; padding: 0 10px; background: transparent; border: 0; border-bottom: 2px solid transparent; color: #7D8492; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Production</button>
+          <button role="tab" style="height: 40px; padding: 0 10px; background: transparent; border: 0; border-bottom: 2px solid transparent; color: #7D8492; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Personnel</button>
+          <button role="tab" style="height: 40px; padding: 0 10px; background: transparent; border: 0; border-bottom: 2px solid transparent; color: #7D8492; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Finances</button>
+          <button role="tab" style="height: 40px; padding: 0 10px; background: transparent; border: 0; border-bottom: 2px solid transparent; color: #7D8492; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Plus</button>
+        </div>
+        <!-- body (scrolls) -->
+        <div style="flex: 1; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; position: relative;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: grid; grid-template-columns: 1.6fr 1fr 1fr 32px; align-items: center; gap: 8px; height: 40px; padding: 0 10px; background: #1C1E22; border-radius: 8px; font-size: 12px; color: #C4C8D0; font-variant-numeric: tabular-nums;"><span style="display: inline-flex; align-items: center; gap: 8px; color: #F0F0F2;"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #EF4444;"></span>Coton</span><span style="color: #F87171;">0 / 120 t</span><span style="color: #7D8492;">0 fournisseur</span><span style="color: #7D8492; text-align: right;">›</span></div>
+            <div style="display: grid; grid-template-columns: 1.6fr 1fr 1fr 32px; align-items: center; gap: 8px; height: 40px; padding: 0 10px; background: transparent; border-radius: 8px; font-size: 12px; color: #C4C8D0; font-variant-numeric: tabular-nums;"><span style="display: inline-flex; align-items: center; gap: 8px; color: #F0F0F2;"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #22C55E;"></span>Produits chimiques</span><span style="color: #4ADE80;">38 / 40 t</span><span style="color: #7D8492;">1 fournisseur</span><span style="color: #7D8492; text-align: right;">›</span></div>
+            <div style="display: grid; grid-template-columns: 1.6fr 1fr 1fr 32px; align-items: center; gap: 8px; height: 40px; padding: 0 10px; background: transparent; border-radius: 8px; font-size: 12px; color: #C4C8D0; font-variant-numeric: tabular-nums;"><span style="display: inline-flex; align-items: center; gap: 8px; color: #F0F0F2;"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #F59E0B;"></span>Main-d'œuvre</span><span style="color: #F59E0B;">62 %</span><span style="color: #7D8492;">—</span><span style="color: #7D8492; text-align: right;">›</span></div>
+          </div>
+          <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(to bottom, rgba(20,22,24,0), #141618);"></div>
+        </div>
+        <!-- sticky footer -->
+        <div style="padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #7D8492;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"></path><path d="M21 3v6h-6"></path></svg>Actualisé il y a 14 s</span>
+          <div style="display: flex; gap: 8px;">
+            <button style="height: 36px; padding: 0 14px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #F0F0F2; font: 500 13px 'Inter', sans-serif; cursor: pointer;">Renommer</button>
+            <button style="height: 36px; padding: 0 14px; background: #D4A853; border: 1px solid #B8912E; border-radius: 8px; color: #0C0D10; font: 600 13px 'Inter', sans-serif; cursor: pointer;">Voir sur la carte</button>
+          </div>
+        </div>
+      </div>
+      <p style="margin: 0; font-size: 12px; color: #9CA1AC;">De haut en bas : <strong style="color: #C4C8D0;">pile</strong> (jetons cliquables, le milieu se replie en «…»), <strong style="color: #C4C8D0;">identité + diagnostic</strong> (la première chose à lire), <strong style="color: #C4C8D0;">sections</strong> (onglets APG), <strong style="color: #C4C8D0;">corps</strong> (seule zone qui défile), <strong style="color: #C4C8D0;">pied collant</strong> (fraîcheur + 1 action primaire). Ouvrir une surface depuis une autre l'empile ; Échap dépile ; la carte reste cliquable (pas de scrim). Épingler garde la feuille ouverte quand on clique un autre bâtiment.</p>
+    </section>
+
+    <div style="display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+      <!-- DIALOG -->
+      <section style="display: flex; flex-direction: column; gap: 10px;">
+        <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Dialogue de confirmation — dépense, destruction, irréversible</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; background: #141618; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Construire une Usine textile ?</h3>
+              <p style="margin: 0; font-size: 13px; color: #C4C8D0;">À Helartia, 12 × 12 tuiles, zone industrielle.</p>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; background: #0C0D10; border-radius: 8px; font-size: 12px;">
+              <span style="color: #7D8492;">Coût</span><span style="text-align: right; font: 700 13px 'JetBrains Mono', monospace; color: #D4A853;">$ 240 000</span>
+              <span style="color: #7D8492;">Trésorerie après</span><span style="text-align: right; font: 500 13px 'JetBrains Mono', monospace; color: #4ADE80;">$ 12 240 300</span>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button style="height: 36px; padding: 0 14px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; font: 500 13px 'Inter', sans-serif; cursor: pointer;">Annuler</button>
+              <button style="height: 36px; padding: 0 14px; background: #D4A853; border: 1px solid #B8912E; border-radius: 8px; color: #0C0D10; font: 600 13px 'Inter', sans-serif; cursor: pointer; outline: 2px solid #D4A853; outline-offset: 2px;">Construire</button>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; background: #141618; border: 1px solid rgba(239,68,68,0.4); border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Déconnecter Coton du Sud ?</h3>
+              <p style="margin: 0; font-size: 13px; color: #C4C8D0;">L'usine n'aura plus de coton. Vous pourrez reconnecter ce fournisseur plus tard.</p>
+            </div>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #C4C8D0;">Ne plus demander pour ce type d'action
+              <span style="display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #F0F0F2;"><span style="width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2);"></span>Pendant cette session</span>
+            </label>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button style="height: 36px; padding: 0 14px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: #C4C8D0; font: 500 13px 'Inter', sans-serif; cursor: pointer; outline: 2px solid #D4A853; outline-offset: 2px;">Annuler</button>
+              <button style="height: 36px; padding: 0 14px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.4); border-radius: 8px; color: #F87171; font: 600 13px 'Inter', sans-serif; cursor: pointer;">Déconnecter</button>
+            </div>
+          </div>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: #9CA1AC;"><code style="font-family: 'JetBrains Mono', monospace;">role="dialog" aria-modal aria-labelledby</code>, focus piégé puis restitué, Échap = Annuler, scrim 0.5. Le focus initial va sur l'action <em>sûre</em> pour une destruction, sur l'action primaire pour une dépense. Le dialogue est la <em>seule</em> chose qui passe au-dessus de la feuille.</p>
+      </section>
+
+      <!-- TOASTS + SAVE INDICATOR -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <section style="display: flex; flex-direction: column; gap: 10px;">
+          <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">Toast — icône + mot + message, région permanente</h2>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-left: 3px solid #22C55E; border-radius: 8px; font-size: 12px; color: #F0F0F2;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg><span><strong>Construit</strong> — Usine textile posée à Helartia.</span><button style="margin-left: auto; height: 28px; padding: 0 8px; background: transparent; border: 0; color: #D4A853; font: 600 12px 'Inter', sans-serif; cursor: pointer;">Voir</button></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-left: 3px solid #F59E0B; border-radius: 8px; font-size: 12px; color: #F0F0F2;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg><span><strong>Attention</strong> — route partiellement construite (3 tuiles bloquées).</span></div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-left: 3px solid #EF4444; border-radius: 8px; font-size: 12px; color: #F0F0F2;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg><span><strong>Échec</strong> — message non envoyé. Le brouillon est conservé.</span><button style="margin-left: auto; height: 28px; padding: 0 8px; background: transparent; border: 0; color: #D4A853; font: 600 12px 'Inter', sans-serif; cursor: pointer;">Réessayer</button></div>
+          </div>
+          <p style="margin: 0; font-size: 12px; color: #9CA1AC;">Succès et info : <code style="font-family: 'JetBrains Mono', monospace;">role="status"</code> poli ; échec : <code style="font-family: 'JetBrains Mono', monospace;">role="alert"</code>, ne s'efface pas seul. Le conteneur est monté en permanence.</p>
+        </section>
+        <section style="display: flex; flex-direction: column; gap: 10px;">
+          <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">SaveIndicator — sous toute écriture</h2>
+          <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA1AC" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"></path></svg><span style="color: #9CA1AC;">Enregistrement…</span></div>
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg><span style="color: #4ADE80;">Enregistré</span><span style="color: #7D8492;">· prend effet demain</span></div>
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg><span style="color: #F87171;">Échec — le serveur n'a pas confirmé.</span><button style="height: 24px; padding: 0 8px; background: transparent; border: 0; color: #D4A853; font: 600 12px 'Inter', sans-serif; cursor: pointer;">Réessayer</button></div>
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 12px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg><span style="color: #F59E0B;">En attente de relecture</span><span style="color: #7D8492;">· la valeur affichée peut être ancienne</span></div>
+          </div>
+          <p style="margin: 0; font-size: 12px; color: #9CA1AC;">Quatre états, tous en texte et tous annoncés (<code style="font-family: 'JetBrains Mono', monospace;">role="status"</code>, l'échec en <code style="font-family: 'JetBrains Mono', monospace;">alert</code>). « En attente de relecture » est l'état OB-29 : écrit, pas encore relu.</p>
+        </section>
+      </div>
+
+      <!-- EMPTY / LOADING / ERROR -->
+      <section style="display: flex; flex-direction: column; gap: 10px;">
+        <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #7D8492;">États de contenu — chargement · vide · erreur (dans la zone concernée, jamais toute la feuille)</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+          <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;">
+            <div style="height: 40px; border-radius: 8px; background: linear-gradient(90deg, #1C1E22, #24272C, #1C1E22);"></div>
+            <div style="height: 40px; border-radius: 8px; background: linear-gradient(90deg, #1C1E22, #24272C, #1C1E22); opacity: 0.7;"></div>
+            <div style="height: 40px; border-radius: 8px; background: linear-gradient(90deg, #1C1E22, #24272C, #1C1E22); opacity: 0.4;"></div>
+            <span style="font-size: 11px; color: #7D8492;">Squelettes de la forme finale, annoncés « Chargement des approvisionnements ».</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px 12px; background: #141618; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; text-align: center;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#565D68" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>
+            <span style="font-size: 13px; color: #F0F0F2; font-weight: 500;">Aucun message</span>
+            <span style="font-size: 12px; color: #9CA1AC;">Les courriers des autres tycoons arriveront ici.</span>
+            <button style="height: 32px; padding: 0 12px; background: #1C1E22; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; color: #F0F0F2; font: 500 12px 'Inter', sans-serif; cursor: pointer;">Écrire un message</button>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px 12px; background: #141618; border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; text-align: center;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>
+            <span style="font-size: 13px; color: #F0F0F2; font-weight: 500;">Impossible de charger cette section</span>
+            <span style="font-size: 12px; color: #9CA1AC;">Le serveur n'a pas répondu à temps.</span>
+            <button style="height: 32px; padding: 0 12px; background: #D4A853; border: 1px solid #B8912E; border-radius: 8px; color: #0C0D10; font: 600 12px 'Inter', sans-serif; cursor: pointer;">Réessayer</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1400,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

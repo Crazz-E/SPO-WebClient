@@ -90,6 +90,8 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
    [design/direction/](design/direction/). Options : **A** HUD flottant consolidé · **B** cockpit
    ancré · **C** carte pure + feuille universelle. **Décision (2026-08-23) : Option C, sans hésiter.**
 2. **Canevas « Système »** — Button, Field, Dialog/Sheet, PanelHeader, Tabs, DataTable, StatCard, Toast, SaveIndicator, dans leurs états (repos / hover / focus / désactivé / chargement / vide / erreur), desktop et mobile.
+   **Fait (v1)** : https://claude.ai/code/artifact/41b437c4-2db5-4ccf-b4f7-0512d23e10db — sources dans
+   [design/system/](design/system/) : Fondations · Contrôles · Surfaces (feuille universelle, dialogue, toasts, SaveIndicator) · Listes (**liste longue** entrepôt / Magna) · Mobile. **À valider.**
 3. **Canevas par flux** P1 puis P2 : écrans desktop et mobile côte à côte, états réels (données du mock server), copy finale (`design:ux-copy`).
 4. **Handoff par flux** (`doc/ux/handoff/<flux>.md`) : tokens, composants, props, états, breakpoints, animations, cas limites.
 
