@@ -12,11 +12,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Hammer, Map, User, Landmark, Mail, MoreHorizontal, Search, RotateCw, Settings, Layers, Heart, Server, Route, Eraser, Grid2x2 } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useGameStore } from '../../store/game-store';
-import { overlayModeNote } from '../../handlers/overlay-mode';
-import { ROAD_COST_PER_TILE } from '../../../shared/road-cost';
+import { useModeDescriptor, type ModeDescriptor } from './use-mode-descriptor';
 import { useMailStore } from '../../store/mail-store';
 import { useClient } from '../../context';
-import { formatMoney } from '../../format-utils';
 import { Button } from '../common';
 import styles from './CommandBar.module.css';
 
@@ -30,72 +28,28 @@ interface Tile {
   onClick: () => void;
 }
 
-function ModeRow() {
+function ModeRow({ mode }: { mode: ModeDescriptor }) {
   const client = useClient();
-  const isPlacing = useUiStore((s) => s.isPlacingBuilding);
-  const placementValid = useUiStore((s) => s.placementValid);
-  const facility = useUiStore((s) => s.placingFacility);
-  const isRoadBuild = useGameStore((s) => s.isRoadBuildingMode);
-  const isRoadDemolish = useGameStore((s) => s.isRoadDemolishMode);
-  const isZone = useGameStore((s) => s.isZonePaintingMode);
-  const cash = useGameStore((s) => s.tycoonStats?.cash);
-  const overlayNote = overlayModeNote(useGameStore((s) => s.overlayBeforeMode));
-
-  let kind = '';
-  let title = '';
-  let hint: ReactNode = null;
-  let onDone: () => void = () => undefined;
-  let extra: ReactNode = null;
-
-  if (isPlacing) {
-    kind = 'Placement';
-    title = facility?.name ?? 'Building';
-    const cashNum = cash ? parseFloat(String(cash).replace(/,/g, '')) : NaN;
-    const after = facility && !Number.isNaN(cashNum) ? cashNum - facility.cost : null;
-    extra = (
-      <>
-        {facility && <span className={styles.cost}>{formatMoney(facility.cost)}</span>}
-        {after !== null && (
-          <span className={styles.after}>
-            after: <span className={after < 0 ? styles.neg : styles.pos}>{formatMoney(after)}</span>
-          </span>
-        )}
-      </>
-    );
-    hint = placementValid ? 'Click the map to place' : <span className={styles.neg}>Invalid spot — move the ghost</span>;
-    onDone = () => client.onCancelBuildingPlacement();
-  } else if (isRoadBuild) {
-    kind = 'Road';
-    title = 'Build';
-    hint = `Drag on the map — ${formatMoney(ROAD_COST_PER_TILE)} per tile`;
-    onDone = () => client.onBuildRoad();
-  } else if (isRoadDemolish) {
-    kind = 'Road';
-    title = 'Demolish';
-    hint = 'Drag on the map';
-    onDone = () => client.onDemolishRoad();
-  } else if (isZone) {
-    kind = 'Zones';
-    title = 'Paint';
-    hint = 'Drag a rectangle on the map';
-    onDone = () => client.onCancelZonePainting();
-  }
-
   return (
     <div className={styles.modeRow} role="status" aria-live="polite">
       <span className={styles.dot} aria-hidden="true" />
-      <span className={styles.kind}>{kind}</span>
-      <span className={styles.modeTitle}>{title}</span>
-      {extra}
-      <span className={styles.hint}>{hint}</span>
-      {overlayNote && <span className={styles.hint}>· {overlayNote}</span>}
+      <span className={styles.kind}>{mode.kind}</span>
+      <span className={styles.modeTitle}>{mode.title}</span>
+      {mode.cost && <span className={styles.cost}>{mode.cost}</span>}
+      {mode.cashAfter && (
+        <span className={styles.after}>
+          after: <span className={mode.cashAfterNegative ? styles.neg : styles.pos}>{mode.cashAfter}</span>
+        </span>
+      )}
+      <span className={`${styles.hint} ${mode.invalid ? styles.neg : ''}`}>{mode.hint}</span>
+      {mode.overlayNote && <span className={styles.hint}>· {mode.overlayNote}</span>}
       <span className={styles.spacer} />
-      {isPlacing && (
+      {mode.isPlacing && (
         <Button size="sm" variant="secondary" kbd="W" iconLeft={<RotateCw size={14} />} onClick={() => client.onRotateCW()}>
           Rotate view
         </Button>
       )}
-      <Button size="sm" variant="outline" kbd="Esc" onClick={onDone}>
+      <Button size="sm" variant="outline" kbd="Esc" onClick={mode.onDone}>
         Done
       </Button>
     </div>
@@ -172,9 +126,8 @@ export function CommandBar() {
   const isRoadDemolish = useGameStore((s) => s.isRoadDemolishMode);
   const isZone = useGameStore((s) => s.isZonePaintingMode);
   const unread = useMailStore((s) => s.unreadCount);
+  const mode = useModeDescriptor();
   const [moreOpen, setMoreOpen] = useState(false);
-
-  const modeActive = isPlacing || isRoadBuild || isRoadDemolish || isZone;
 
   const tiles: Tile[] = [
     { id: 'build', label: 'Build', kbd: 'B', icon: <Hammer size={20} />, active: stack[stack.length - 1]?.kind === 'build' || isPlacing, onClick: toggleBuildSurface },
@@ -189,8 +142,8 @@ export function CommandBar() {
 
   return (
     <div className={cls}>
-      {modeActive ? (
-        <ModeRow />
+      {mode ? (
+        <ModeRow mode={mode} />
       ) : (
         <button type="button" className={styles.search} onClick={openCommandPalette} aria-label="Search or run a command (Ctrl+K)">
           <Search size={16} aria-hidden="true" />

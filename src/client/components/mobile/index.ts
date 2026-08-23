@@ -5,4 +5,5 @@ export { MobileInfoBar } from './MobileInfoBar';
 export { MobileBuildContent } from './MobileBuildContent';
 export { MobileMenu } from './MobileMenu';
 export { ChatBanner } from './ChatBanner';
+export { MobileModeBar } from './MobileModeBar';
 export { PlacementHUD } from './PlacementHUD';
