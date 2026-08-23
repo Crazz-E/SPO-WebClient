@@ -33,6 +33,18 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 | T10 | Gouverner (ministères, budgets, nominations, campagne) | modale civique | Tout picker détruit l'inspecteur civique | P3 |
 | T11 | Régler ses préférences | 1 | Settings inutilisable au clavier | P3 |
 
+## 2bis. Contraintes de données à prendre en compte
+
+- **Les listes de produits / services peuvent être très longues.** Un entrepôt peut techniquement
+  lister tous les produits échangeables (plusieurs dizaines de portes, chacune avec ses
+  connexions) ; les supermarchés de Magna affichent un nombre important d'articles dans la liste
+  produits/services. La feuille universelle doit donc traiter la **liste longue** comme un
+  composant de première classe : filtre toujours visible, regroupement, lignes compactes,
+  défilement interne (virtualisé au portage), repli par défaut sur ce qui demande attention,
+  « tout afficher (n) » — jamais une page qui s'allonge sans fin.
+- Les valeurs techniques (coordonnées, ids, classes, bitmasks) restent disponibles mais ne se
+  rendent jamais dans le flux nominal ([audit §5](audit.md)).
+
 ## 3. Ce qui ne bouge pas
 
 - La **carte isométrique plein écran** reste le fond ; l'interface est une superposition.
@@ -76,7 +88,7 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 1. **Canevas « Direction »** — 3 artboards low-fi du HUD de jeu sur des axes nommés, un choix.
    **Fait (v1)** : https://claude.ai/code/artifact/b7719533-668e-46c6-97a0-aca177da9af1 — sources dans
    [design/direction/](design/direction/). Options : **A** HUD flottant consolidé · **B** cockpit
-   ancré · **C** carte pure + feuille universelle. **Décision : en attente.**
+   ancré · **C** carte pure + feuille universelle. **Décision (2026-08-23) : Option C, sans hésiter.**
 2. **Canevas « Système »** — Button, Field, Dialog/Sheet, PanelHeader, Tabs, DataTable, StatCard, Toast, SaveIndicator, dans leurs états (repos / hover / focus / désactivé / chargement / vide / erreur), desktop et mobile.
 3. **Canevas par flux** P1 puis P2 : écrans desktop et mobile côte à côte, états réels (données du mock server), copy finale (`design:ux-copy`).
 4. **Handoff par flux** (`doc/ux/handoff/<flux>.md`) : tokens, composants, props, états, breakpoints, animations, cas limites.
