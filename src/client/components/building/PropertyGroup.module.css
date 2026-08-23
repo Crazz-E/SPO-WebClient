@@ -1554,6 +1554,21 @@
   .wareChecklist {
     grid-template-columns: 1fr;
   }
+
+  /* Touch targets ≥ 44 px (doc/ux/brief.md §4) — the upgrade control ships
+     desktop-dense buttons; on a phone they must grow to finger size. */
+  .upgradeBtn,
+  .upgradeOkBtn,
+  .upgradeStopBtn,
+  .downgradeBtn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .upgradeQty {
+    min-height: 44px;
+    width: 48px;
+  }
 }
 
 /* Full-width elements span both columns */

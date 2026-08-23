@@ -362,6 +362,28 @@ export async function upgradeBuildingAction(
   action: 'DOWNGRADE' | 'START_UPGRADE' | 'STOP_UPGRADE',
   count?: number
 ): Promise<boolean> {
+  if (action === 'DOWNGRADE') {
+    // A downgrade destroys a paid level with no undo — Dialog first (B5), like
+    // demolition. The promise resolves only when the player confirms.
+    return new Promise<boolean>((resolve) => {
+      useUiStore.getState().requestConfirm(
+        'Downgrade Building',
+        'This removes one upgrade level. The level and what it cost are not recovered.',
+        () => { void performUpgradeAction(ctx, x, y, action, count).then(resolve); },
+        { kind: 'destructive', confirmLabel: 'Downgrade', typeToConfirm: null },
+      );
+    });
+  }
+  return performUpgradeAction(ctx, x, y, action, count);
+}
+
+async function performUpgradeAction(
+  ctx: ClientHandlerContext,
+  x: number,
+  y: number,
+  action: 'DOWNGRADE' | 'START_UPGRADE' | 'STOP_UPGRADE',
+  count?: number
+): Promise<boolean> {
   const actionName = action === 'DOWNGRADE' ? 'Downgrading' :
                      action === 'START_UPGRADE' ? `Starting ${count} upgrade(s)` :
                      'Stopping upgrade';

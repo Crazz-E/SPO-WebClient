@@ -10,6 +10,7 @@
 
 import { refreshAfterConnectionChange, handleBuildingAction } from './building-action-handler';
 import { useBuildingStore } from '../store/building-store';
+import { useUiStore } from '../store/ui-store';
 import { ClientBridge } from '../bridge/client-bridge';
 import type { ClientHandlerContext } from './client-context';
 import type { BuildingDetailsResponse } from '../../shared/types';
@@ -342,5 +343,59 @@ describe('the SaveIndicator key of a write (B6)', () => {
     } as unknown as ClientHandlerContext;
     await expect(renameFacility(ctx, 10, 20, 'North Mill')).resolves.toBe(false);
     expect(ClientBridge.failPendingUpdate).toHaveBeenCalledWith(RENAME_PENDING_KEY, 'North Mill', 'socket closed');
+  });
+});
+
+describe('downgrade asks first (B5)', () => {
+  beforeEach(() => {
+    useUiStore.setState({ modal: null, modalBeneath: null, confirmPayload: null });
+  });
+
+  it('DOWNGRADE opens a destructive Dialog and sends nothing yet', async () => {
+    const { upgradeBuildingAction } = await import('./building-action-handler');
+    const ctx = {
+      ...makeCtx(),
+      sendRequest: jest.fn().mockResolvedValue({ success: true }),
+    } as unknown as ClientHandlerContext;
+
+    const result = upgradeBuildingAction(ctx, 10, 20, 'DOWNGRADE');
+    const { modal, confirmPayload } = useUiStore.getState();
+    expect(modal).toBe('confirm');
+    expect(confirmPayload?.title).toBe('Downgrade Building');
+    expect(confirmPayload?.options?.kind).toBe('destructive');
+    expect(confirmPayload?.options?.confirmLabel).toBe('Downgrade');
+    expect(ctx.sendRequest).not.toHaveBeenCalled();
+
+    // The player confirms — only now does the request go out
+    confirmPayload?.onConfirm();
+    await expect(result).resolves.toBe(true);
+    expect(ctx.sendRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ x: 10, y: 20, action: 'DOWNGRADE' }),
+    );
+  });
+
+  it('START_UPGRADE and STOP_UPGRADE go straight through, no Dialog', async () => {
+    const { upgradeBuildingAction } = await import('./building-action-handler');
+    const ctx = {
+      ...makeCtx(),
+      sendRequest: jest.fn().mockResolvedValue({ success: true }),
+    } as unknown as ClientHandlerContext;
+
+    await expect(upgradeBuildingAction(ctx, 10, 20, 'START_UPGRADE', 2)).resolves.toBe(true);
+    await expect(upgradeBuildingAction(ctx, 10, 20, 'STOP_UPGRADE')).resolves.toBe(true);
+    expect(useUiStore.getState().modal).toBeNull();
+    expect(ctx.sendRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('a refused downgrade resolves false after the confirm', async () => {
+    const { upgradeBuildingAction } = await import('./building-action-handler');
+    const ctx = {
+      ...makeCtx(),
+      sendRequest: jest.fn().mockResolvedValue({ success: false, message: 'no level' }),
+    } as unknown as ClientHandlerContext;
+
+    const result = upgradeBuildingAction(ctx, 10, 20, 'DOWNGRADE');
+    useUiStore.getState().confirmPayload?.onConfirm();
+    await expect(result).resolves.toBe(false);
   });
 });
