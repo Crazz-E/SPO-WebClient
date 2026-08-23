@@ -116,8 +116,9 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 | #70 | **Barre de commande mobile** — les six tuiles du desktop (Build · Map · Chat · Government · Mail · More), rangée de recherche (palette) au-dessus sur la carte ; Fav → More › My facilities ; la barre d'info ouvre le Profil | handoff 00 §4.2 (mobile), S2, T7 mobile |
 | #71 | **socle-5 (docs)** — canevas Système et Flux alignés sur le code de `main` : planches Surfaces / HUD / Mobile redessinées (cadre flottant, pastille repliable, vue Carte portée, six tuiles + pastille de recherche), notes d'état consolidées ; base de référence pour les travaux hors plan | — |
 | #72 | **Barre de mode mobile** — routes et zones : la rangée de tuiles cède la place à la barre de mode (nature, nom, ce qu'il faut faire, tarif de la route, sort du calque), « Terminer » quitte le mode ; la pastille de recherche disparaît pendant un mode ; le placement garde `PlacementHUD`. Les deux barres lisent la **même** description (`use-mode-descriptor.ts`) | hors lot « barre de mode mobile » |
+| #73 | **B6 — SaveIndicator sur toute écriture** : curseurs fournisseurs (Prix max, Qualité min, Prix produit), connexions (brancher / débrancher, un indicateur par porte) et renommage. La clé d'une connexion devient `<membre>:<fluide>` (`connection-pending-key.ts`) — la clé par défaut portait les coordonnées et changeait à chaque clic | B6 |
 
-**Tous les lots du plan sont portés**, et la barre de mode mobile avec (#72). Restent, hors lot : la tablette (panneau ancré), et les points 🟡 de [missing-features](missing-features.md) (N5 chat, N6/N7, B5 rétrogradation, B6, H3, H6, N10).
+**Tous les lots du plan sont portés**, et la barre de mode mobile avec (#72). Restent, hors lot : la tablette (panneau ancré), et les points 🟡 de [missing-features](missing-features.md) (N5 chat, N6/N7, B5 rétrogradation, H3, H6, N10).
 
 ## 7. Livrables attendus de la phase Design
 

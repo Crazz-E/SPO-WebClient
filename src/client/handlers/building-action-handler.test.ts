@@ -281,3 +281,66 @@ describe('connectFacilities', () => {
     expect(showToast).toHaveBeenCalledWith('2 suppliers connected.', 'success', { title: 'Connected' });
   });
 });
+
+describe('the SaveIndicator key of a write (B6)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useBuildingStore.getState().clearDetails();
+  });
+
+  const setPropCtx = (success: boolean, confirmed?: boolean) => ({
+    ...makeCtx(),
+    sendRequest: jest.fn().mockImplementation(async (req: { type?: string }) =>
+      req.type === 'REQ_BUILDING_SET_PROPERTY'
+        ? { success, confirmed }
+        : { details: makeDetails(10, 20) }),
+    refreshBuildingDetails: jest.fn().mockResolvedValue(undefined),
+    getRenderer: () => null,
+    inFlightSetProperty: new Map(),
+  } as unknown as ClientHandlerContext);
+
+  it('a connection is keyed by its gate, not by the coordinates it happens to carry', async () => {
+    const { connectFacilities } = await import('./building-action-handler');
+    await connectFacilities(setPropCtx(true), 10, 20, 'Cotton', 'input', [{ x: 1, y: 2 }]);
+    expect(ClientBridge.setPendingUpdate).toHaveBeenCalledWith('RDOConnectInput:Cotton', '0');
+    expect(ClientBridge.confirmPendingUpdate).toHaveBeenCalledWith('RDOConnectInput:Cotton');
+  });
+
+  it('a property keeps the default key — member plus parameters', async () => {
+    const { setBuildingProperty } = await import('./building-action-handler');
+    await setBuildingProperty(setPropCtx(true), 10, 20, 'RDOSetInputMaxPrice', '120', { fluidId: 'Cotton' });
+    expect(ClientBridge.setPendingUpdate).toHaveBeenCalledWith('RDOSetInputMaxPrice:{"fluidId":"Cotton"}', '120');
+  });
+
+  it('a rename is pending, then confirmed', async () => {
+    const { renameFacility, RENAME_PENDING_KEY } = await import('./building-action-handler');
+    const ctx = {
+      ...makeCtx(),
+      sendRequest: jest.fn().mockResolvedValue({ success: true, newName: 'North Mill' }),
+    } as unknown as ClientHandlerContext;
+    await expect(renameFacility(ctx, 10, 20, 'North Mill')).resolves.toBe(true);
+    expect(ClientBridge.setPendingUpdate).toHaveBeenCalledWith(RENAME_PENDING_KEY, 'North Mill');
+    expect(ClientBridge.confirmPendingUpdate).toHaveBeenCalledWith(RENAME_PENDING_KEY);
+    expect(ClientBridge.failPendingUpdate).not.toHaveBeenCalled();
+  });
+
+  it('a refused rename says so, with the reason the server gave', async () => {
+    const { renameFacility, RENAME_PENDING_KEY } = await import('./building-action-handler');
+    const ctx = {
+      ...makeCtx(),
+      sendRequest: jest.fn().mockResolvedValue({ success: false, message: 'Name already taken' }),
+    } as unknown as ClientHandlerContext;
+    await expect(renameFacility(ctx, 10, 20, 'North Mill')).resolves.toBe(false);
+    expect(ClientBridge.failPendingUpdate).toHaveBeenCalledWith(RENAME_PENDING_KEY, 'North Mill', 'Name already taken');
+  });
+
+  it('a rename that never reaches the server fails with the transport error', async () => {
+    const { renameFacility, RENAME_PENDING_KEY } = await import('./building-action-handler');
+    const ctx = {
+      ...makeCtx(),
+      sendRequest: jest.fn().mockRejectedValue(new Error('socket closed')),
+    } as unknown as ClientHandlerContext;
+    await expect(renameFacility(ctx, 10, 20, 'North Mill')).resolves.toBe(false);
+    expect(ClientBridge.failPendingUpdate).toHaveBeenCalledWith(RENAME_PENDING_KEY, 'North Mill', 'socket closed');
+  });
+});

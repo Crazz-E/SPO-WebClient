@@ -40,6 +40,7 @@ import * as zoneHandler from './handlers/zone-handler';
 import * as buildMenuHandler from './handlers/build-menu-handler';
 import * as mapHandler from './handlers/map-handler';
 import { getReconnectDelay, isMaxAttempts, isSlowPhase, MAX_RECONNECT_ATTEMPTS } from './handlers/reconnect-utils';
+import { connectionPendingKey } from './handlers/connection-pending-key';
 
 // Wire-level debug tracker exposed on window.__spoDebug (permanent instrumentation)
 interface SpoDebugWire {
@@ -351,7 +352,7 @@ export class StarpeaceClient implements ClientHandlerContext {
         const rdoCommand = direction === 'input' ? 'RDODisconnectInput' : 'RDODisconnectOutput';
         buildingActionHandler.setBuildingProperty(this, buildingX, buildingY, rdoCommand, '0', {
           fluidId, connectionList: `${x},${y},`,  // trailing comma required by Delphi ParseGateList
-        }).then(success => {
+        }, connectionPendingKey(rdoCommand, fluidId)).then(success => {
           if (success) {
             this.showNotification(direction === 'input' ? 'Supplier disconnected' : 'Client disconnected', 'success');
             // Re-reads the connection lists too. A plain refreshProperties leaves
