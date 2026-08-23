@@ -393,6 +393,13 @@ export class IsometricMapRenderer {
   // Mouse state
   private isDragging: boolean = false;
   private rightClickDragged: boolean = false;
+  // Left-button click-or-pan arbitration, Voyager-style (GameControl.pas:533-597):
+  // the button press is recorded, a drag begins once |dx| + |dy| exceeds
+  // MIN_DRAG_MANHATTAN_PX, and a release without drag performs the click.
+  private leftButtonDown: boolean = false;
+  private leftClickDragged: boolean = false;
+  private pressX: number = 0;
+  private pressY: number = 0;
   private lastMouseX: number = 0;
   private lastMouseY: number = 0;
   private hoveredBuilding: MapBuilding | null = null;
@@ -404,6 +411,12 @@ export class IsometricMapRenderer {
   private mouseMapI: number = 0;
   private mouseMapJ: number = 0;
   private mouseHasEnteredCanvas: boolean = false;
+
+  // Keyboard pan (arrow keys) — velocity in screen pixels applied by a rAF loop,
+  // independent of the OS key-repeat rate
+  private heldPanKeys: Set<string> = new Set();
+  private keyboardPanRunning: boolean = false;
+  private lastKeyboardPanTime: number = 0;
 
   // Zone loading - managed by ZoneRequestManager
   private zoneRequestManager: ZoneRequestManager | null = null;
@@ -447,6 +460,13 @@ export class IsometricMapRenderer {
   private static isPortal(building: MapBuilding): boolean {
     return building.visualClass === '6031' || building.visualClass === '6032';
   }
+
+  /** Voyager cMinDrag (GameControl.pas:543): |dx| + |dy| above this is a drag, not a click */
+  private static readonly MIN_DRAG_MANHATTAN_PX = 8;
+  /** Arrow-key pan speed — half a viewport per second, in screen pixels */
+  private static readonly KEYBOARD_PAN_VIEWPORTS_PER_S = 0.5;
+  private static readonly ARROW_KEYS: ReadonlySet<string> =
+    new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
   // Road drawing
   private roadDrawingMode: boolean = false;
@@ -533,6 +553,8 @@ export class IsometricMapRenderer {
   private boundWheel = (e: WheelEvent) => this.onWheel(e);
   private boundContextMenu = (e: MouseEvent) => e.preventDefault();
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  private boundKeyUp: ((e: KeyboardEvent) => void) | null = null;
+  private boundWindowBlur: (() => void) | null = null;
 
   constructor(canvasId: string) {
     const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -614,47 +636,130 @@ export class IsometricMapRenderer {
    * (those keys are handled by useKeyboardShortcuts).
    */
   private setupKeyboardControls() {
-    this.boundKeyDown = (e: KeyboardEvent) => {
-      // Skip when typing in form fields
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if ((e.target as HTMLElement)?.isContentEditable) return;
-
-      // 'Q' rotates counter-clockwise (NORTH→WEST→SOUTH→EAST→NORTH)
-      if (e.key === 'q' || e.key === 'Q') {
-        this.rotateCounterClockwise();
-      }
-      // '+' or '=' zooms in
-      if (e.key === '+' || e.key === '=') {
-        this.zoomIn();
-      }
-      // '-' zooms out
-      if (e.key === '-') {
-        this.zoomOut();
-      }
-      // Debug sub-overlays (only active when debug mode is on)
-      if (e.key === '1' && this.debugMode) {
-        this.debugShowTileInfo = !this.debugShowTileInfo;
-        this.requestRender();
-      }
-      if (e.key === '2' && this.debugMode) {
-        this.debugShowBuildingInfo = !this.debugShowBuildingInfo;
-        this.requestRender();
-      }
-      if (e.key === '3' && this.debugMode) {
-        this.debugShowConcreteInfo = !this.debugShowConcreteInfo;
-        this.requestRender();
-      }
-      if (e.key === '4' && this.debugMode) {
-        this.debugShowWaterGrid = !this.debugShowWaterGrid;
-        this.requestRender();
-      }
-      if (e.key === '5' && this.debugMode) {
-        this.debugShowRoadInfo = !this.debugShowRoadInfo;
-        this.requestRender();
-      }
-    };
+    this.boundKeyDown = (e: KeyboardEvent) => this.handleMapKeyDown(e);
+    this.boundKeyUp = (e: KeyboardEvent) => this.handleMapKeyUp(e);
+    this.boundWindowBlur = () => this.cancelKeyboardPan();
     document.addEventListener('keydown', this.boundKeyDown);
+    document.addEventListener('keyup', this.boundKeyUp);
+    window.addEventListener('blur', this.boundWindowBlur);
+  }
+
+  /** True when the event target owns the keyboard (form fields, ARIA text widgets). */
+  private static targetOwnsKeyboard(e: KeyboardEvent): boolean {
+    const el = e.target as HTMLElement | null;
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    const role = typeof el.getAttribute === 'function' ? el.getAttribute('role') : null;
+    return role === 'textbox' || role === 'combobox' || role === 'searchbox';
+  }
+
+  /**
+   * Map-owned keys: arrows (pan), + / − (zoom), 1–5 (debug sub-overlays).
+   * Rotation (Q / W) belongs to useKeyboardShortcuts — one owner per key.
+   */
+  private handleMapKeyDown(e: KeyboardEvent): void {
+    if (IsometricMapRenderer.targetOwnsKeyboard(e)) return;
+    if (e.isComposing) return;
+    // Modifier chords belong to the browser (Ctrl+− is page zoom, not map zoom)
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (IsometricMapRenderer.ARROW_KEYS.has(e.key)) {
+      e.preventDefault();
+      this.heldPanKeys.add(e.key);
+      this.startKeyboardPan();
+      return;
+    }
+    // '+' or '=' zooms in
+    if (e.key === '+' || e.key === '=') {
+      this.zoomIn();
+    }
+    // '-' zooms out
+    if (e.key === '-') {
+      this.zoomOut();
+    }
+    // Debug sub-overlays (only active when debug mode is on)
+    if (e.key === '1' && this.debugMode) {
+      this.debugShowTileInfo = !this.debugShowTileInfo;
+      this.requestRender();
+    }
+    if (e.key === '2' && this.debugMode) {
+      this.debugShowBuildingInfo = !this.debugShowBuildingInfo;
+      this.requestRender();
+    }
+    if (e.key === '3' && this.debugMode) {
+      this.debugShowConcreteInfo = !this.debugShowConcreteInfo;
+      this.requestRender();
+    }
+    if (e.key === '4' && this.debugMode) {
+      this.debugShowWaterGrid = !this.debugShowWaterGrid;
+      this.requestRender();
+    }
+    if (e.key === '5' && this.debugMode) {
+      this.debugShowRoadInfo = !this.debugShowRoadInfo;
+      this.requestRender();
+    }
+  }
+
+  private handleMapKeyUp(e: KeyboardEvent): void {
+    if (this.heldPanKeys.delete(e.key) && this.heldPanKeys.size === 0) {
+      this.stopKeyboardPan();
+    }
+  }
+
+  /** Drive the arrow-key pan from a rAF loop so speed is frame-rate-independent. */
+  private startKeyboardPan(): void {
+    if (this.keyboardPanRunning) return;
+    this.keyboardPanRunning = true;
+    this.lastKeyboardPanTime = performance.now();
+    const step = () => {
+      if (!this.keyboardPanRunning) return;
+      const now = performance.now();
+      // Clamp: a throttled tab can stall rAF for seconds — don't teleport on resume
+      const dt = Math.min((now - this.lastKeyboardPanTime) / 1000, 0.1);
+      this.lastKeyboardPanTime = now;
+      this.keyboardPanStep(dt);
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  /** One frame of arrow-key pan. Direction is in view terms: ArrowRight moves the view east. */
+  private keyboardPanStep(dtSeconds: number): void {
+    if (dtSeconds <= 0) return;
+    const keys = this.heldPanKeys;
+    // Moving the view right means dragging the map content left — hence the sign flip
+    const dirX = (keys.has('ArrowLeft') ? 1 : 0) + (keys.has('ArrowRight') ? -1 : 0);
+    const dirY = (keys.has('ArrowUp') ? 1 : 0) + (keys.has('ArrowDown') ? -1 : 0);
+    if (dirX === 0 && dirY === 0) return;
+
+    const speed = IsometricMapRenderer.KEYBOARD_PAN_VIEWPORTS_PER_S;
+    const dx = dirX * this.canvas.clientWidth * speed * dtSeconds;
+    const dy = dirY * this.canvas.clientHeight * speed * dtSeconds;
+    const { deltaI, deltaJ } = this.screenDeltaToMapDelta(dx, dy);
+    this.terrainRenderer.pan(deltaI, deltaJ);
+
+    this.markCameraMoving();
+    if (this.zoneRequestManager) {
+      this.zoneRequestManager.markMoving();
+    }
+    this.requestRender();
+  }
+
+  private stopKeyboardPan(): void {
+    if (!this.keyboardPanRunning) return;
+    this.keyboardPanRunning = false;
+    if (this.zoneRequestManager) {
+      this.zoneRequestManager.markStopped(this.terrainRenderer.getZoomLevel());
+    }
+    this.checkVisibleZones();
+  }
+
+  /** Window blur while an arrow is held would leave the camera drifting — drop everything. */
+  private cancelKeyboardPan(): void {
+    this.heldPanKeys.clear();
+    this.stopKeyboardPan();
   }
 
   /**
@@ -4979,6 +5084,8 @@ export class IsometricMapRenderer {
       // Start drag (even in placement mode — cancel only on release without drag)
       this.isDragging = true;
       this.rightClickDragged = false;
+      this.pressX = e.clientX;
+      this.pressY = e.clientY;
       this.lastMouseX = e.clientX;
       this.lastMouseY = e.clientY;
       this.canvas.style.cursor = 'grabbing';
@@ -4999,22 +5106,7 @@ export class IsometricMapRenderer {
         this.roadDrawingState.endX = mapPos.j;
         this.roadDrawingState.endY = mapPos.i;
         this.requestRender();
-      } else if (this.placementMode && this.placementPreview) {
-        // Confirm building placement — normalize cursor to NW corner for the server.
-        // Server always expects (x=col, y=row) of the NW corner (min coords).
-        // Block placement if position is invalid (collision, reserved zone, or all tiles in wrong zone)
-        if (this.onPlacementConfirm && !this.placementInvalid) {
-          const p = this.placementPreview;
-          const { nwI, nwJ } = this.placementNWCorner(p.i, p.j, p.xsize, p.ysize);
-          this.onPlacementConfirm(nwJ, nwI); // j=x (col), i=y (row)
-        }
-      } else if (this.connectMode) {
-        // Connect mode — click on a building to connect it to the source
-        const building = this.getBuildingAt(mapPos.j, mapPos.i);
-        if (building && this.onConnectModeClick) {
-          this.onConnectModeClick(building.x, building.y);
-        }
-      } else if (this.onRoadDemolishClick) {
+      } else if (!this.placementMode && !this.connectMode && this.onRoadDemolishClick) {
         // Road demolish mode — start drag selection
         this.roadDemolishDragState.isDrawing = true;
         this.roadDemolishDragState.startX = mapPos.j;
@@ -5023,13 +5115,48 @@ export class IsometricMapRenderer {
         this.roadDemolishDragState.endY = mapPos.i;
         this.requestRender();
       } else {
-        // Check building click
-        const building = this.getBuildingAt(mapPos.j, mapPos.i);
-        if (building && !IsometricMapRenderer.isPortal(building) && this.onBuildingClick) {
-          this.onBuildingClick(building.x, building.y, building.visualClass);
-        } else if (!building && this.onEmptyMapClick) {
-          this.onEmptyMapClick();
-        }
+        // Placement, connect and plain-map clicks act on RELEASE, so the same
+        // button can pan (Voyager GameControl.pas:533-597)
+        this.beginLeftClickPending(e);
+      }
+    }
+  }
+
+  /** Record a left-button press whose meaning (click or pan) is decided later. */
+  private beginLeftClickPending(e: MouseEvent): void {
+    this.leftButtonDown = true;
+    this.leftClickDragged = false;
+    this.pressX = e.clientX;
+    this.pressY = e.clientY;
+    this.lastMouseX = e.clientX;
+    this.lastMouseY = e.clientY;
+  }
+
+  /** The click half of the arbitration — runs on release without drag. */
+  private performLeftClick(e: MouseEvent): void {
+    const mapPos = this.screenToMap(e.clientX, e.clientY);
+    if (this.placementMode && this.placementPreview) {
+      // Confirm building placement — normalize cursor to NW corner for the server.
+      // Server always expects (x=col, y=row) of the NW corner (min coords).
+      // Block placement if position is invalid (collision, reserved zone, or all tiles in wrong zone)
+      if (this.onPlacementConfirm && !this.placementInvalid) {
+        const p = this.placementPreview;
+        const { nwI, nwJ } = this.placementNWCorner(p.i, p.j, p.xsize, p.ysize);
+        this.onPlacementConfirm(nwJ, nwI); // j=x (col), i=y (row)
+      }
+    } else if (this.connectMode) {
+      // Connect mode — click on a building to connect it to the source
+      const building = this.getBuildingAt(mapPos.j, mapPos.i);
+      if (building && this.onConnectModeClick) {
+        this.onConnectModeClick(building.x, building.y);
+      }
+    } else {
+      // Check building click
+      const building = this.getBuildingAt(mapPos.j, mapPos.i);
+      if (building && !IsometricMapRenderer.isPortal(building) && this.onBuildingClick) {
+        this.onBuildingClick(building.x, building.y, building.visualClass);
+      } else if (!building && this.onEmptyMapClick) {
+        this.onEmptyMapClick();
       }
     }
   }
@@ -5040,12 +5167,27 @@ export class IsometricMapRenderer {
     this.mouseMapJ = mapPos.j;
     this.mouseHasEnteredCanvas = true;
 
+    // Pending left click: past the Manhattan threshold it becomes a pan
+    if (this.leftButtonDown && !this.leftClickDragged) {
+      const totalDx = Math.abs(e.clientX - this.pressX);
+      const totalDy = Math.abs(e.clientY - this.pressY);
+      if (totalDx + totalDy > IsometricMapRenderer.MIN_DRAG_MANHATTAN_PX) {
+        this.leftClickDragged = true;
+        this.isDragging = true;
+        this.lastMouseX = e.clientX;
+        this.lastMouseY = e.clientY;
+        this.canvas.style.cursor = 'grabbing';
+      }
+    }
+
     if (this.isDragging) {
       const dx = e.clientX - this.lastMouseX;
       const dy = e.clientY - this.lastMouseY;
 
-      // Mark as actual drag if moved more than a few pixels
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      // Mark as actual drag once the total travel crosses the same threshold
+      const totalDx = Math.abs(e.clientX - this.pressX);
+      const totalDy = Math.abs(e.clientY - this.pressY);
+      if (totalDx + totalDy > IsometricMapRenderer.MIN_DRAG_MANHATTAN_PX) {
         this.rightClickDragged = true;
       }
 
@@ -5155,9 +5297,29 @@ export class IsometricMapRenderer {
       }
       this.requestRender();
     }
+
+    if (e.button === 0 && this.leftButtonDown) {
+      this.leftButtonDown = false;
+      if (this.leftClickDragged) {
+        // End of a left-button pan
+        this.leftClickDragged = false;
+        this.isDragging = false;
+        this.updateCursor();
+        if (this.zoneRequestManager) {
+          this.zoneRequestManager.markStopped(this.terrainRenderer.getZoomLevel());
+        }
+        this.checkVisibleZones();
+        return;
+      }
+      // Release without drag — the click acts now (Voyager GameControl.pas:595)
+      this.performLeftClick(e);
+    }
   }
 
   private onMouseLeave() {
+    // A pending left click can't complete once the pointer left the canvas
+    this.leftButtonDown = false;
+    this.leftClickDragged = false;
     if (this.isDragging) {
       this.isDragging = false;
       this.updateCursor();
@@ -5216,12 +5378,13 @@ export class IsometricMapRenderer {
   }
 
   private updateCursor() {
-    if (this.placementMode || this.roadDrawingMode || this.onRoadDemolishClick || this.zonePaintingMode || this.connectMode) {
+    // An active pan wins over every mode — the hand is holding the map
+    if (this.isDragging) {
+      this.canvas.style.cursor = 'grabbing';
+    } else if (this.placementMode || this.roadDrawingMode || this.onRoadDemolishClick || this.zonePaintingMode || this.connectMode) {
       this.canvas.style.cursor = 'crosshair';
     } else if (this.hoveredBuilding) {
       this.canvas.style.cursor = 'pointer';
-    } else if (this.isDragging) {
-      this.canvas.style.cursor = 'grabbing';
     } else {
       this.canvas.style.cursor = 'grab';
     }
@@ -5318,6 +5481,15 @@ export class IsometricMapRenderer {
     this.canvas.removeEventListener('mouseleave', this.boundMouseLeave);
     this.canvas.removeEventListener('wheel', this.boundWheel);
     this.canvas.removeEventListener('contextmenu', this.boundContextMenu);
+    this.cancelKeyboardPan();
+    if (this.boundKeyUp) {
+      document.removeEventListener('keyup', this.boundKeyUp);
+      this.boundKeyUp = null;
+    }
+    if (this.boundWindowBlur) {
+      window.removeEventListener('blur', this.boundWindowBlur);
+      this.boundWindowBlur = null;
+    }
     if (this.boundKeyDown) {
       document.removeEventListener('keydown', this.boundKeyDown);
       this.boundKeyDown = null;

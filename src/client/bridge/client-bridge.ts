@@ -252,6 +252,7 @@ export interface ClientCallbacks {
   onCancelBuildingPlacement: () => void;
   onConfirmBuildingPlacement: () => void;
   onRotateCW: () => void;
+  onRotateCCW: () => void;
 }
 
 /**

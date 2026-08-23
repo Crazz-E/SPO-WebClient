@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { screen, fireEvent } from '@testing-library/react';
-import { renderWithProviders } from '../../__tests__/setup/render-helpers';
+import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup/render-helpers';
 import { useUiStore } from '../../store/ui-store';
 import { MobileMenu } from './MobileMenu';
 
@@ -27,6 +27,14 @@ describe('MobileMenu', () => {
     renderWithProviders(<MobileMenu />);
     fireEvent.click(screen.getByRole('button', { name: /Command palette/ }));
     expect(useUiStore.getState().commandPaletteOpen).toBe(true);
+  });
+
+  it('Rotate view reaches the client and returns to the map (N7 mobile)', () => {
+    const onRotateCW = jest.fn();
+    renderWithProviders(<MobileMenu />, { clientCallbacks: createSpiedCallbacks({ onRotateCW }) });
+    fireEvent.click(screen.getByRole('button', { name: /Rotate view/ }));
+    expect(onRotateCW).toHaveBeenCalledTimes(1);
+    expect(useUiStore.getState().mobileTab).toBe('map');
   });
 
   it('My facilities opens the facilities surface (the former Fav tab)', () => {

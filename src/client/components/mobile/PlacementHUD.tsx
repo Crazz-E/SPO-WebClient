@@ -23,7 +23,7 @@ export function PlacementHUD({ onCancel, onRotate, onConfirm, canConfirm }: Plac
         <span className={styles.label}>Cancel</span>
       </button>
 
-      <button className={`${styles.btn} ${styles.rotate}`} onClick={onRotate} aria-label="Rotate building">
+      <button className={`${styles.btn} ${styles.rotate}`} onClick={onRotate} aria-label="Rotate view">
         <RotateCw size={24} />
         <span className={styles.label}>Rotate</span>
       </button>

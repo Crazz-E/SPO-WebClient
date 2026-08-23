@@ -261,12 +261,16 @@ cibles pleine largeur valent mieux au pouce qu'une ligne de texte.
 Zoom : `right: 504px; bottom: 150px` (desktop), `right: 12px; bottom: 150px` (mobile), 40 / 44
 px. Pastille chat : `left: 16px; bottom: 150px`, ouvre `ChatStrip` étendu.
 
-### 4.3 Raccourcis — `hooks/useKeyboardShortcuts.ts` + `input/key-binding-registry.ts`
+### 4.3 Raccourcis — `hooks/useKeyboardShortcuts.ts`
 
-Brancher le registre (code mort aujourd'hui) ; **tester les modificateurs** (Ctrl/Cmd/Alt →
-laisser passer) ; Échap **après** le garde « champ actif » et `isComposing` ; `M` = Carte,
-`L` = Courrier, `Q`/`E` rotation, `+`/`−` zoom, `P` Politique ; la liste des Réglages est
-générée depuis le registre.
+**Décision inverse actée (lot d, PR #78)** : `input/key-binding-registry.ts` (rebind
+persistant, Q/E) est **supprimé**, pas branché — le rebind était un besoin hypothétique ;
+s'il devient réel un jour, il se reconstruira au-dessus de `SHORTCUTS`. La table unique
+est `SHORTCUTS` dans `useKeyboardShortcuts.ts`, la liste des Réglages en est générée.
+**Modificateurs testés** (Ctrl/Cmd/Alt → laisser passer) ; Échap **après** le garde
+« champ actif » et `isComposing` ; `M` = Carte, `L` = Courrier, `Q`/`W` rotation (E est
+pris par Empire — la paire Q/E est morte-née), flèches = pan (renderer), `+`/`−` zoom
+(renderer), `P` Politique.
 
 ---
 
