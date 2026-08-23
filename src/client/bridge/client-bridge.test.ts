@@ -194,3 +194,40 @@ describe('ClientBridge building overlay (stale data prevention)', () => {
     expect(state.isOverlayMode).toBe(true);
   });
 });
+
+describe('ClientBridge mail responses (T6)', () => {
+  const { useMailStore } = jest.requireActual('../store/mail-store') as typeof import('../store/mail-store');
+  const { WsMessageType } = jest.requireActual('../../shared/types') as typeof import('../../shared/types');
+  const { showToast } = jest.requireMock('../components/common/Toast') as { showToast: jest.Mock };
+
+  beforeEach(() => {
+    useMailStore.setState({ currentView: 'compose', composeTo: 'bob', composeSubject: 's', composeBody: 'b', isSending: true, pendingDeleteId: null, messages: [] });
+    showToast.mockClear();
+  });
+
+  it('a failed send keeps the draft and says so', () => {
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_SENT, success: false } as never);
+    const s = useMailStore.getState();
+    expect(s.currentView).toBe('compose');
+    expect(s.composeTo).toBe('bob');
+    expect(s.isSending).toBe(false);
+    expect(showToast).toHaveBeenCalledWith('Message not sent. Your draft is kept.', 'error');
+  });
+
+  it('a successful send clears the draft', () => {
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_SENT, success: true } as never);
+    expect(useMailStore.getState().currentView).toBe('list');
+    expect(useMailStore.getState().composeTo).toBe('');
+  });
+
+  it('a confirmed delete removes the pending row locally; a failed one keeps it', () => {
+    useMailStore.setState({ messages: [{ messageId: 'a' }, { messageId: 'b' }] as never, pendingDeleteId: 'a', currentView: 'read' });
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_DELETED, success: true } as never);
+    expect(useMailStore.getState().messages.map((m) => m.messageId)).toEqual(['b']);
+    expect(useMailStore.getState().pendingDeleteId).toBeNull();
+    useMailStore.setState({ pendingDeleteId: 'b' });
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_DELETED, success: false } as never);
+    expect(useMailStore.getState().messages.map((m) => m.messageId)).toEqual(['b']);
+    expect(useMailStore.getState().pendingDeleteId).toBeNull();
+  });
+});

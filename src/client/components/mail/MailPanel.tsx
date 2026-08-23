@@ -5,9 +5,10 @@
  * Folder tabs at top, message list scrollable, compose form.
  */
 
-import { useState, useCallback, useEffect, memo } from 'react';
+import { useCallback, useEffect, memo } from 'react';
 import { Send, Trash2, Reply, PenSquare } from 'lucide-react';
 import { useMailStore } from '../../store/mail-store';
+import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
 import { TabBar, Skeleton } from '../common';
 import type { MailFolder, MailMessageHeader } from '@/shared/types';
@@ -66,10 +67,12 @@ export function MailPanel() {
   const composeTo = useMailStore((s) => s.composeTo);
   const composeSubject = useMailStore((s) => s.composeSubject);
   const composeBody = useMailStore((s) => s.composeBody);
-
-  const [localTo, setLocalTo] = useState(composeTo);
-  const [localSubject, setLocalSubject] = useState(composeSubject);
-  const [localBody, setLocalBody] = useState(composeBody);
+  const setComposeField = useMailStore((s) => s.setComposeField);
+  const isSending = useMailStore((s) => s.isSending);
+  const setSending = useMailStore((s) => s.setSending);
+  const isMessageLoading = useMailStore((s) => s.isMessageLoading);
+  const setMessageLoading = useMailStore((s) => s.setMessageLoading);
+  const requestConfirm = useUiStore((s) => s.requestConfirm);
 
   const client = useClient();
   const setLoading = useMailStore((s) => s.setLoading);
@@ -82,22 +85,35 @@ export function MailPanel() {
 
   const handleReadMessage = useCallback(
     (msg: MailMessageHeader) => {
+      setMessageLoading(true);
       client.onMailReadMessage(msg.messageId);
     },
-    [client],
+    [client, setMessageLoading],
   );
 
+  // The draft is kept until the server answers: RESP_MAIL_SENT clears it on success and a
+  // failure leaves it in place with a toast (audit P2). Sending twice is blocked meanwhile.
+  const canSend = composeTo.trim().length > 0 && !isSending;
   const handleSend = useCallback(() => {
-    client.onMailSend(localTo, localSubject, localBody);
-    clearCompose();
-  }, [localTo, localSubject, localBody, clearCompose, client]);
+    if (!canSend) return;
+    setSending(true);
+    client.onMailSend(composeTo.trim(), composeSubject, composeBody);
+  }, [canSend, setSending, client, composeTo, composeSubject, composeBody]);
 
+  // Deleting asks first (B5); the row is removed locally when the server confirms.
   const handleDelete = useCallback(() => {
-    if (currentMessage) {
-      client.onMailDelete(currentMessage.messageId);
-      setView('list');
-    }
-  }, [currentMessage, client, setView]);
+    if (!currentMessage) return;
+    const id = currentMessage.messageId;
+    requestConfirm(
+      'Delete this message?',
+      `“${currentMessage.subject || '(no subject)'}” will be removed from ${currentFolder}.`,
+      () => {
+        useMailStore.getState().setPendingDeleteId(id);
+        client.onMailDelete(id);
+      },
+      { kind: 'destructive', confirmLabel: 'Delete', typeToConfirm: null },
+    );
+  }, [currentMessage, currentFolder, client, requestConfirm]);
 
   const folderTabs = FOLDERS.map((f) => ({
     id: f.id,
@@ -116,12 +132,7 @@ export function MailPanel() {
 
       {/* Compose button */}
       {currentView === 'list' && (
-        <button className={styles.composeBtn} onClick={() => {
-          setLocalTo('');
-          setLocalSubject('');
-          setLocalBody('');
-          startCompose();
-        }}>
+        <button className={styles.composeBtn} onClick={() => startCompose()}>
           <PenSquare size={14} />
           <span>Compose</span>
         </button>
@@ -153,6 +164,14 @@ export function MailPanel() {
         </div>
       )}
 
+      {/* Message loading — the row was clicked, the body is on its way */}
+      {!isLoading && isMessageLoading && currentView === 'list' && (
+        <div className={styles.loading} role="status" aria-live="polite">
+          <Skeleton width="100%" height="48px" />
+          <span className={styles.srOnly}>Loading message</span>
+        </div>
+      )}
+
       {/* Reading view */}
       {!isLoading && currentView === 'read' && currentMessage && (
         <div className={styles.readView}>
@@ -161,11 +180,11 @@ export function MailPanel() {
               ← Back
             </button>
             <div className={styles.readActions}>
-              <button className={styles.actionBtn} onClick={() => startReply(currentMessage)}>
-                <Reply size={14} />
+              <button className={styles.actionBtn} onClick={() => startReply(currentMessage)} aria-label="Reply" title="Reply">
+                <Reply size={14} aria-hidden="true" />
               </button>
-              <button className={styles.actionBtn} onClick={handleDelete}>
-                <Trash2 size={14} />
+              <button className={styles.actionBtn} onClick={handleDelete} aria-label="Delete" title="Delete">
+                <Trash2 size={14} aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -188,28 +207,34 @@ export function MailPanel() {
           <input
             className={styles.composeInput}
             placeholder="To"
-            value={localTo}
-            onChange={(e) => setLocalTo(e.target.value)}
+            aria-label="To"
+            value={composeTo}
+            onChange={(e) => setComposeField('to', e.target.value)}
+            disabled={isSending}
           />
           <input
             className={styles.composeInput}
             placeholder="Subject"
-            value={localSubject}
-            onChange={(e) => setLocalSubject(e.target.value)}
+            aria-label="Subject"
+            value={composeSubject}
+            onChange={(e) => setComposeField('subject', e.target.value)}
+            disabled={isSending}
           />
           <textarea
             className={styles.composeBody}
             placeholder="Message..."
-            value={localBody}
-            onChange={(e) => setLocalBody(e.target.value)}
+            aria-label="Message"
+            value={composeBody}
+            onChange={(e) => setComposeField('body', e.target.value)}
             rows={8}
+            disabled={isSending}
           />
           <div className={styles.composeActions}>
-            <button className={styles.sendBtn} onClick={handleSend}>
-              <Send size={14} />
-              <span>Send</span>
+            <button className={styles.sendBtn} onClick={handleSend} disabled={!canSend} aria-busy={isSending || undefined} title={composeTo.trim() ? undefined : 'Add a recipient'}>
+              <Send size={14} aria-hidden="true" />
+              <span>{isSending ? 'Sending…' : 'Send'}</span>
             </button>
-            <button className={styles.cancelBtn} onClick={clearCompose}>
+            <button className={styles.cancelBtn} onClick={clearCompose} disabled={isSending}>
               Cancel
             </button>
           </div>

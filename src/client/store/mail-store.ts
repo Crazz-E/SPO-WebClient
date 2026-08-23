@@ -25,6 +25,12 @@ interface MailState {
   composeSubject: string;
   composeBody: string;
   composeHeaders: string;
+  /** A send is in flight — the compose form is kept until the server answers (T6). */
+  isSending: boolean;
+  /** A message is being fetched after a click on its row. */
+  isMessageLoading: boolean;
+  /** The id a delete was requested for — removed from the list when the server confirms. */
+  pendingDeleteId: string | null;
 
   // Actions
   setFolder: (folder: MailFolder) => void;
@@ -36,6 +42,13 @@ interface MailState {
   startCompose: (to?: string, subject?: string, body?: string, headers?: string) => void;
   startReply: (message: MailMessageFull) => void;
   clearCompose: () => void;
+  /** Edit one compose field — the form is store-driven so Reply's prefill reaches it. */
+  setComposeField: (field: 'to' | 'subject' | 'body', value: string) => void;
+  setSending: (sending: boolean) => void;
+  setMessageLoading: (loading: boolean) => void;
+  setPendingDeleteId: (id: string | null) => void;
+  /** Drop a message from the current list (after a confirmed delete) — no refetch needed. */
+  removeMessage: (messageId: string) => void;
 }
 
 export const useMailStore = create<MailState>((set) => ({
@@ -50,11 +63,14 @@ export const useMailStore = create<MailState>((set) => ({
   composeSubject: '',
   composeBody: '',
   composeHeaders: '',
+  isSending: false,
+  isMessageLoading: false,
+  pendingDeleteId: null,
 
   setFolder: (folder) => set({ currentFolder: folder, currentView: 'list', currentMessage: null, messages: [], isLoading: true }),
   setView: (view) => set({ currentView: view }),
   setMessages: (messages) => set({ messages, isLoading: false }),
-  setCurrentMessage: (message) => set({ currentMessage: message, currentView: message ? 'read' : 'list', isLoading: false }),
+  setCurrentMessage: (message) => set({ currentMessage: message, currentView: message ? 'read' : 'list', isLoading: false, isMessageLoading: false }),
   setUnreadCount: (count) => set({ unreadCount: count }),
   setLoading: (loading) => set({ isLoading: loading }),
 
@@ -83,6 +99,20 @@ export const useMailStore = create<MailState>((set) => ({
       composeBody: '',
       composeHeaders: '',
       currentView: 'list',
+      isSending: false,
     }),
+
+  setComposeField: (field, value) =>
+    set(field === 'to' ? { composeTo: value } : field === 'subject' ? { composeSubject: value } : { composeBody: value }),
+  setSending: (sending) => set({ isSending: sending }),
+  setMessageLoading: (loading) => set({ isMessageLoading: loading }),
+  setPendingDeleteId: (id) => set({ pendingDeleteId: id }),
+  removeMessage: (messageId) =>
+    set((s) => ({
+      pendingDeleteId: s.pendingDeleteId === messageId ? null : s.pendingDeleteId,
+      messages: s.messages.filter((m) => m.messageId !== messageId),
+      currentMessage: s.currentMessage?.messageId === messageId ? null : s.currentMessage,
+      currentView: s.currentMessage?.messageId === messageId ? 'list' : s.currentView,
+    })),
 
 }));

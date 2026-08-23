@@ -639,15 +639,25 @@ export const ClientBridge = {
         const resp = msg as WsRespMailSent;
         if (resp.success) {
           mail.clearCompose();
-          showToast('Message sent', 'success');
+          showToast('Message sent.', 'success', { title: 'Sent' });
+        } else {
+          // The draft stays on screen (T6, audit P2) — a silent failure is a lost letter.
+          mail.setSending(false);
+          showToast('Message not sent. Your draft is kept.', 'error');
         }
         break;
       }
       case WsMessageType.RESP_MAIL_DELETED: {
         const resp = msg as WsRespMailDeleted;
         if (resp.success) {
+          // Drop the row locally — no folder refetch needed (T6, audit P2)
+          const pending = mail.pendingDeleteId;
+          if (pending) mail.removeMessage(pending);
           mail.setView('list');
-          showToast('Message deleted', 'info');
+          showToast('Message deleted.', 'info', { title: 'Deleted' });
+        } else {
+          mail.setPendingDeleteId(null);
+          showToast('Message not deleted.', 'error');
         }
         break;
       }
