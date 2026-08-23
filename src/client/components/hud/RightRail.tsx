@@ -13,9 +13,9 @@ import styles from './RightRail.module.css';
 
 export function RightRail() {
   const client = useClient();
-  const rightPanel = useUiStore((s) => s.rightPanel);
+  const surfaceOpen = useUiStore((s) => s.stack.length > 0);
 
-  const railClass = [styles.rail, rightPanel ? styles.shifted : ''].filter(Boolean).join(' ');
+  const railClass = [styles.rail, surfaceOpen ? styles.shifted : ''].filter(Boolean).join(' ');
 
   return (
     <nav className={railClass} aria-label="Map controls">

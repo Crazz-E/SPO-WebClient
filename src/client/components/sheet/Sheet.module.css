@@ -1,18 +1,22 @@
-/* Sheet — the universal surface (handoff 00 §3.2). Right-docked for now (HUD keeps its
-   shift logic until socle-4); the floating 472 px frame comes with the new HUD. */
+/* Sheet — the universal surface (handoff 00 §3.2). Desktop: a floating 472 px frame below the
+   status pill, 16 px off the edges, rounded; the map stays visible and clickable around it.
+   Tablet keeps the docked right panel (the HUD shifts beside it); mobile routes the same stack
+   into the BottomSheet. */
 
 .sheet {
   position: fixed;
-  top: 0;
-  right: 0;
+  top: var(--sheet-top);
+  right: var(--sheet-inset);
+  bottom: var(--sheet-inset);
   width: var(--panel-width-desktop);
-  height: 100vh;
   z-index: var(--z-panel);
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
-  border-left: 1px solid var(--surface-border);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
+  overflow: hidden;
   transition: transform var(--duration-panel) var(--ease-out);
 }
 
@@ -21,7 +25,7 @@
 }
 
 .closed {
-  transform: translateX(100%);
+  transform: translateX(calc(100% + var(--sheet-inset)));
 }
 
 /* ---- stack row ---- */
@@ -106,9 +110,19 @@
   scrollbar-color: var(--surface-border-strong) transparent;
 }
 
+/* Tablet — docked to the right edge, full height, the HUD shifts beside it. */
 @media (max-width: 1023px) {
   .sheet {
+    top: 0;
+    right: 0;
+    bottom: 0;
     width: var(--panel-width-tablet);
+    border-radius: 0;
+    border-width: 0 0 0 1px;
+  }
+
+  .closed {
+    transform: translateX(100%);
   }
 }
 

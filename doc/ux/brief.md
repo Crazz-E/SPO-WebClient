@@ -112,8 +112,9 @@ Chiffres = interactions minimales aujourd'hui (audit §1). Priorité : **P1** pr
 | #66 | **T8 Modes carte** — overlay Zones : même entrée/sortie pour placement et zonage, expliqué dans la barre de mode ; route : tarif dans la barre de mode, Dialog de dépense à la relâche, démolition confirmée | B5 (routes), H7, audit « Overlays » |
 | #67 | **Carte-1** — surface « Map » (M / tuile / triangle mobile) : terrain + bâtiments chargés (miens, déficitaires), rectangle de vue, clic = sauter, zoom 1–8×, Back / Next (historique caméra), hôtel de ville le plus proche | N1 (partiel), N2, N3 |
 | #68 | **Carte-2** — favoris de position dans la surface Map : ajouter la vue (nom), aller, renommer, supprimer ; local par monde et joueur | N4 (local) |
+| #69 | **Feuille flottante** — desktop : cadre 472 px (420 en desktop étroit), 64 px du haut, 16 px des bords, arrondi + ombre, la carte reste visible autour ; la barre de commande, le rail et la pastille se décalent (rail pour toute surface, pastille dégagée de la minicarte) ; tablette : panneau ancré conservé | handoff 00 §3.2 |
 
-Restent (dans l'ordre proposé) : mobile : barre de commande complète, feuille flottante 472 px.
+Restent (dans l'ordre proposé) : mobile : barre de commande complète.
 
 ## 7. Livrables attendus de la phase Design
 

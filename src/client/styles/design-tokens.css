@@ -148,8 +148,10 @@
   --chatstrip-collapsed: 80px;
   --chatstrip-expanded: 280px;
   --chat-box-width: 500px;
-  --panel-width-desktop: 560px;
+  --panel-width-desktop: 472px;   /* the floating sheet (handoff 00 §3.2) */
   --panel-width-tablet: 360px;
+  --sheet-inset: var(--space-4);  /* gap between the floating sheet and the screen edges (desktop) */
+  --sheet-top: 64px;              /* below the status pill */
   --minimap-size: 200px;
   --bottomnav-height: 56px;
   --palette-width: 560px;

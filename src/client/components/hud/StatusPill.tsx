@@ -114,7 +114,7 @@ export function StatusPill() {
           </button>
           <span className={incomeClass}>{formatGroupedIncome(tycoonStats.incomePerHour)}</span>
           {cashHistory.length >= 2 && (
-            <Sparkline data={cashHistory} color="gold" width={64} height={18} />
+            <Sparkline data={cashHistory} color="gold" width={64} height={18} className={styles.sparkline} />
           )}
 
           {failureLevel >= 1 && (
