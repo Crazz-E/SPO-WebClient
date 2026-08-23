@@ -15,6 +15,7 @@
  * 9. UI overlays
  */
 
+import { ROAD_COST_PER_TILE } from '../../shared/road-cost';
 import { IsometricTerrainRenderer } from './isometric-terrain-renderer';
 import { GameObjectTextureCache } from './game-object-texture-cache';
 import { VegetationFlatMapper } from './vegetation-flat-mapper';
@@ -458,7 +459,7 @@ export class IsometricMapRenderer {
     isMouseDown: false,
     mouseDownTime: 0
   };
-  private roadCostPerTile: number = 2000000;
+  private roadCostPerTile: number = ROAD_COST_PER_TILE;
 
   // Connect mode (map-click to connect two buildings)
   private connectMode: boolean = false;

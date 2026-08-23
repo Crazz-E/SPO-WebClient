@@ -14,6 +14,7 @@ import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';
 import type { ClientHandlerContext } from './client-context';
 import { setupEscapeHandler } from './handler-utils';
+import { enterZonesOverlayForMode, leaveZonesOverlayAfterMode } from './overlay-mode';
 
 export function toggleZonePaintingMode(ctx: ClientHandlerContext, zoneType: number): void {
   if (ctx.isZonePaintingMode && ctx.selectedZoneType === zoneType) {
@@ -39,11 +40,9 @@ export function toggleZonePaintingMode(ctx: ClientHandlerContext, zoneType: numb
     });
   }
 
-  // Auto-enable City Zones overlay so painted zones are visible
-  if (!ctx.isCityZonesEnabled) {
-    ctx.isCityZonesEnabled = true;
-  }
-  ctx.toggleZoneOverlay(true, SurfaceType.ZONES);
+  // Zones must be visible to paint them — shown the same way placement shows them, and put
+  // back the same way on exit (T8: the two modes used to disagree).
+  enterZonesOverlayForMode(ctx);
   setupZonePaintingKeyboardHandler(ctx);
 
   // Store is updated automatically via ctx.isZonePaintingMode and ctx.selectedZoneType setters
@@ -60,9 +59,8 @@ export function cancelZonePaintingMode(ctx: ClientHandlerContext): void {
     renderer.setCancelZonePaintingCallback(null);
   }
 
-  // Disable City Zones overlay when zone painting is cancelled
-  ctx.isCityZonesEnabled = false;
-  ctx.toggleZoneOverlay(false, SurfaceType.ZONES);
+  // Put back what was shown before painting (Zones stays if the player had it on).
+  leaveZonesOverlayAfterMode(ctx);
 
   // Store is updated automatically via ctx.isZonePaintingMode setter
   ClientBridge.log('Zone', 'Zone painting mode disabled');
