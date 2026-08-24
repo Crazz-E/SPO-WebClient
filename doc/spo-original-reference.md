@@ -398,7 +398,7 @@
 | `RDOSetInputMaxPrice` | **procedure** | `call` | `(%fluidId, #value)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId) |
 | `RDOSelSelected` | **procedure** | `call` | `(#boolVal)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId); WordBool: -1=true, 0=false |
 | `RDOSetInputSortMode` | **procedure** | `call` | `(%fluidId, #mode)` | `Kernel/Kernel.pas` (published) | BindTo(ObjectId); 0=cost, 1=quality |
-| ~~`RDOSetBuyingStatus`~~ | — | — | — | **NOT PUBLISHED — no declaration in the tree** | Removed from the client in `ad4672a2`. Voyager's only call site is dead code (`SupplySheetForm.pas:731` — `ObjId` never assigned; `threadedBuySet` never forked). The real member is `RDOSelSelected` above. See `doc/BACKLOG-OPEN.md` OB-32 |
+| ~~`RDOSetBuyingStatus`~~ | — | — | — | **NOT PUBLISHED — no declaration in the tree** | Removed from the client in `ad4672a2`. Voyager's only call site is dead code (`SupplySheetForm.pas:731` — `ObjId` never assigned; `threadedBuySet` never forked). The real member is `RDOSelSelected` above. See OB-32 in the [archived BACKLOG-OPEN @ 94b059a0](https://github.com/Crazz-E/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG-OPEN.md) |
 
 ### Product management (ProdSheetForm.pas)
 
