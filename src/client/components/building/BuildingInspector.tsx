@@ -8,8 +8,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Edit3, RefreshCw, X, Check, Crosshair } from 'lucide-react';
+import { Edit3, RefreshCw, X, Check, Crosshair, Star } from 'lucide-react';
 import { useBuildingStore } from '../../store/building-store';
+import { useEmpireStore } from '../../store/empire-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store';
 import { useClient } from '../../context';
@@ -53,6 +54,7 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   const currentTab = useBuildingStore((s) => s.currentTab);
   const setCurrentTab = useBuildingStore((s) => s.setCurrentTab);
   const isOwner = useBuildingStore((s) => s.isOwner);
+  const favorites = useEmpireStore((s) => s.facilities);
   const closeRightPanel = useUiStore((s) => s.closeRightPanel);
   const client = useClient();
   const [isRenaming, setIsRenaming] = useState(false);
@@ -139,6 +141,19 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   const handleCancelRename = useCallback(() => {
     setIsRenaming(false);
   }, []);
+
+  // Matched on coordinates, not on name: the favourite keeps the name it was
+  // given when it was added, and a building rename never updates it.
+  const isFavorited = useMemo(
+    () => !!details && favorites.some((f) => f.x === details.x && f.y === details.y),
+    [favorites, details?.x, details?.y],
+  );
+
+  const handleAddFavorite = useCallback(() => {
+    if (details) {
+      client.onAddFavorite(details.buildingName, details.x, details.y);
+    }
+  }, [details?.buildingName, details?.x, details?.y, client]);
 
   // Auto-refresh building details while panel is open.
   // Refreshes basic properties and resets the active lazy tab so it re-fetches.
@@ -339,6 +354,18 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
             ) : undefined}
             actions={!isRenaming && isOwner ? (
               <>
+                {/* Adding to the Empire list — the write half of the Favorites
+                    tree the panel has only ever read. Disabled, not hidden,
+                    when the facility is already bookmarked: a control that
+                    vanishes reads as a bug. */}
+                <IconButton
+                  icon={<Star size={14} />}
+                  label={isFavorited ? 'Already in your Empire list' : 'Add to Empire list'}
+                  size="sm"
+                  variant="ghost"
+                  disabled={isFavorited}
+                  onClick={handleAddFavorite}
+                />
                 <IconButton
                   icon={<Edit3 size={14} />}
                   label="Rename building"

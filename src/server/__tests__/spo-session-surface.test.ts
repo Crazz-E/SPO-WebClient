@@ -30,6 +30,7 @@ import * as mailHandler from '../session/mail-handler';
 import * as profileFinanceHandler from '../session/profile-finance-handler';
 import * as autoConnectionHandler from '../session/auto-connection-handler';
 import * as politicsHandler from '../session/politics-handler';
+import * as favoritesHandler from '../session/favorites-handler';
 import * as buildingManagementHandler from '../session/building-management-handler';
 import * as roadHandler from '../session/road-handler';
 import * as zoneSurfaceHandler from '../session/zone-surface-handler';
@@ -287,14 +288,37 @@ const DELEGATIONS: readonly Delegation[] = [
     result: { success: true },
   },
 
-  // ── politics-handler ─────────────────────────────────────────────────────
+  // ── favorites-handler ────────────────────────────────────────────────────
   {
     method: 'fetchOwnedFacilities',
-    install: () => jest.spyOn(politicsHandler, 'fetchOwnedFacilities'),
+    install: () => jest.spyOn(favoritesHandler, 'fetchOwnedFacilities'),
     call: s => s.fetchOwnedFacilities(),
     forwarded: [],
     result: [],
   },
+  {
+    method: 'addFavorite',
+    install: () => jest.spyOn(favoritesHandler, 'addFavorite'),
+    call: s => s.addFavorite('Farm 1', 118, 226),
+    forwarded: ['Farm 1', 118, 226],
+    result: { success: true, id: 7 },
+  },
+  {
+    method: 'deleteFavorite',
+    install: () => jest.spyOn(favoritesHandler, 'deleteFavorite'),
+    call: s => s.deleteFavorite('4210'),
+    forwarded: ['4210'],
+    result: { success: true },
+  },
+  {
+    method: 'renameFavorite',
+    install: () => jest.spyOn(favoritesHandler, 'renameFavorite'),
+    call: s => s.renameFavorite('4210', 'Ferme du Nord'),
+    forwarded: ['4210', 'Ferme du Nord'],
+    result: { success: true },
+  },
+
+  // ── politics-handler ─────────────────────────────────────────────────────
   {
     method: 'getPoliticsData',
     install: () => jest.spyOn(politicsHandler, 'getPoliticsData'),
@@ -618,7 +642,7 @@ describe('StarpeaceSession — handler delegation', () => {
   it('covers every one-line handler delegation the facade declares', () => {
     // A guard on the table itself: if a delegation is added to the facade and
     // not to the table, the count stops matching and this row says so.
-    expect(DELEGATIONS).toHaveLength(66);
+    expect(DELEGATIONS).toHaveLength(69);
     expect(new Set(DELEGATIONS.map(d => d.method)).size).toBe(DELEGATIONS.length);
   });
 

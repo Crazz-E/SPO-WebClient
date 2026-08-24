@@ -3,7 +3,6 @@
 /**
  * politics-handler — three ASP scrapes (popular / IFEL / tycoons ratings,
  * tycoonCampaign.asp) around a handful of RDO members:
- *   - `RDOFavoritesGetSubItems` on the world context (function → `"^"` via QueryId);
  *   - `procedure RDOVote(voterTycoon, choiceTycoon : widestring)` —
  *     Kernel/TownPolitics.pas:46 — a PROCEDURE, so fire-and-forget `"*"` on the
  *     construction socket with NO QueryId is the safe form (the mission notes
@@ -33,7 +32,6 @@ import {
   parseCampaignState,
   parseCampaignResponse,
   getDefaultPoliticsData,
-  fetchOwnedFacilities,
   getPoliticsData,
   politicsVote,
   politicsLaunchCampaign,
@@ -1062,62 +1060,6 @@ describe('getDefaultPoliticsData', () => {
     expect(data.mayorPrestige).toBe(0);
     expect(data.mayorRating).toBe(0);
     expect(data.campaignCount).toBe(0);
-  });
-});
-
-// =============================================================================
-// fetchOwnedFacilities — RDOFavoritesGetSubItems("")
-// =============================================================================
-describe('fetchOwnedFacilities', () => {
-  it('calls RDOFavoritesGetSubItems on the world context with an empty OLEString', async () => {
-    const fake = makeSessionCtx();
-    fake.respond(() => 'res="%"');
-
-    await fetchOwnedFacilities(fake.ctx);
-
-    expect(fake.sent).toHaveLength(1);
-    expect(fake.sent[0].socketName).toBe('world');
-    expect(fake.sent[0].category).toBe(TimeoutCategory.NORMAL);
-    expect(fake.sent[0].packet).toEqual({
-      verb: RdoVerb.SEL,
-      targetId: FAKE_CONTEXT_IDS.worldContextId,
-      action: RdoAction.CALL,
-      member: 'RDOFavoritesGetSubItems',
-      // Now explicit: rdoCall derives it from the catalogued kind instead of
-      // letting format() default it from the QueryId. Same bytes either way —
-      // proven in src/server/rdo.test.ts.
-      separator: '"^"',
-      args: [RdoValue.string('').format()],
-    });
-  });
-
-  it('parses the \\x01/\\x02-separated favorites through the real parseFavoritesResponse (links only)', async () => {
-    const fake = makeSessionCtx();
-    // id \x01 kind \x01 name \x01 info \x01 subCount \x01 '' — kind 1 = link, 0 = folder
-    const link = ['4210', '1', 'Farm 1', 'Farm 1,118,226,0', '0', ''].join('\x01');
-    const folder = ['9', '0', 'Folder', 'Folder,0,0,0', '2', ''].join('\x01');
-    fake.respond(() => `res="%${[folder, link].join('\x02')}"`);
-
-    const items = await fetchOwnedFacilities(fake.ctx);
-
-    expect(items).toEqual([{ id: 4210, name: 'Farm 1', x: 118, y: 226 }]);
-  });
-
-  it('returns [] for an empty payload', async () => {
-    const fake = makeSessionCtx();
-    expect(await fetchOwnedFacilities(fake.ctx)).toEqual([]);
-  });
-
-  it('refuses without a world context and sends nothing', async () => {
-    const fake = makeSessionCtx({ worldContextId: null });
-    await expect(fetchOwnedFacilities(fake.ctx)).rejects.toThrow('Not logged in — no worldContextId');
-    expect(fake.sent).toHaveLength(0);
-  });
-
-  it('propagates a timeout', async () => {
-    const fake = makeSessionCtx();
-    fake.respond(() => new Error('Request timeout: RDOFavoritesGetSubItems'));
-    await expect(fetchOwnedFacilities(fake.ctx)).rejects.toThrow('Request timeout: RDOFavoritesGetSubItems');
   });
 });
 

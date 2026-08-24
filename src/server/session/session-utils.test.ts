@@ -17,7 +17,7 @@ describe('parseFavoritesResponse', () => {
     it('parses a single link item', () => {
       const raw = favEntry(42, 1, 'My Factory', 'My Factory,100,200,1');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 42, name: 'My Factory', x: 100, y: 200 }]);
+      expect(result).toEqual([{ id: 42, name: 'My Factory', x: 100, y: 200, path: '42' }]);
     });
 
     it('parses multiple link items separated by \\x02', () => {
@@ -27,15 +27,15 @@ describe('parseFavoritesResponse', () => {
       ].join(ITEM);
       const result = parseFavoritesResponse(raw);
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ id: 1, name: 'Fac A', x: 10, y: 20 });
-      expect(result[1]).toEqual({ id: 2, name: 'Fac B', x: 30, y: 40 });
+      expect(result[0]).toEqual({ id: 1, name: 'Fac A', x: 10, y: 20, path: '1' });
+      expect(result[1]).toEqual({ id: 2, name: 'Fac B', x: 30, y: 40, path: '2' });
     });
 
     it('handles display name with commas in info field', () => {
       // info = "Big, Bad, Factory,500,600,0" — last 3 commas delimit x,y,select
       const raw = favEntry(7, 1, 'Complex Name', 'Big, Bad, Factory,500,600,0');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 7, name: 'Complex Name', x: 500, y: 600 }]);
+      expect(result).toEqual([{ id: 7, name: 'Complex Name', x: 500, y: 600, path: '7' }]);
     });
   });
 
@@ -112,13 +112,13 @@ describe('parseFavoritesResponse', () => {
     it('accepts zero coordinates', () => {
       const raw = favEntry(1, 1, 'Origin', 'Origin,0,0,0');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 1, name: 'Origin', x: 0, y: 0 }]);
+      expect(result).toEqual([{ id: 1, name: 'Origin', x: 0, y: 0, path: '1' }]);
     });
 
     it('accepts negative coordinates', () => {
       const raw = favEntry(5, 1, 'Neg', 'Neg,-10,-20,0');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 5, name: 'Neg', x: -10, y: -20 }]);
+      expect(result).toEqual([{ id: 5, name: 'Neg', x: -10, y: -20, path: '5' }]);
     });
   });
 

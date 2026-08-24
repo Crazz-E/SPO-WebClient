@@ -18,8 +18,13 @@ const FAV_KIND_LINK = 1;      // fvkLink — a bookmark with coordinates
  * Wire format per item: id \x01 kind \x01 name \x01 info \x01 subFolderCount \x01
  * Items separated by \x02.
  * For links (kind=1): info = "displayName,x,y,select"
+ *
+ * `parentPath` is the Location that was asked for — '' for the root. Each item
+ * carries the Location that addresses it, because delete and rename take a
+ * path, not an id (`TFavorites.LocateItem`, `Kernel/Favorites.pas:312-334`).
+ * At the root that path is just the id; one level down it is `parent/id`.
  */
-export function parseFavoritesResponse(raw: string): FavoritesItem[] {
+export function parseFavoritesResponse(raw: string, parentPath = ''): FavoritesItem[] {
   if (!raw) return [];
 
   const items: FavoritesItem[] = [];
@@ -51,7 +56,7 @@ export function parseFavoritesResponse(raw: string): FavoritesItem[] {
 
     if (isNaN(id) || isNaN(x) || isNaN(y)) continue;
 
-    items.push({ id, name, x, y });
+    items.push({ id, name, x, y, path: parentPath ? `${parentPath}/${id}` : String(id) });
   }
 
   return items;

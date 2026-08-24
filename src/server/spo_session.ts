@@ -73,6 +73,8 @@ import * as mailHandler from './session/mail-handler';
 import * as profileFinanceHandler from './session/profile-finance-handler';
 import * as autoConnectionHandler from './session/auto-connection-handler';
 import * as politicsHandler from './session/politics-handler';
+import * as favoritesHandler from './session/favorites-handler';
+import type { FavoriteMutationResult } from './session/favorites-handler';
 import * as newspaperHandler from './session/newspaper-handler';
 import type { NewspaperTarget } from './session/newspaper-handler';
 import * as buildingManagementHandler from './session/building-management-handler';
@@ -1140,11 +1142,24 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     return autoConnectionHandler.executeCurriculumAction(this, action, value);
   }
 
-  // -- POLITICS (facade -> politics-handler) --------------------------------
+  // -- FAVORITES (facade -> favorites-handler) ------------------------------
   public async fetchOwnedFacilities(): Promise<FavoritesItem[]> {
-    return politicsHandler.fetchOwnedFacilities(this);
+    return favoritesHandler.fetchOwnedFacilities(this);
   }
 
+  public async addFavorite(name: string, x: number, y: number): Promise<FavoriteMutationResult> {
+    return favoritesHandler.addFavorite(this, name, x, y);
+  }
+
+  public async deleteFavorite(path: string): Promise<FavoriteMutationResult> {
+    return favoritesHandler.deleteFavorite(this, path);
+  }
+
+  public async renameFavorite(path: string, name: string): Promise<FavoriteMutationResult> {
+    return favoritesHandler.renameFavorite(this, path, name);
+  }
+
+  // -- POLITICS (facade -> politics-handler) --------------------------------
   public async getPoliticsData(townName: string, buildingX: number, buildingY: number, isCapitol = false): Promise<PoliticsData> {
     return politicsHandler.getPoliticsData(this, townName, buildingX, buildingY, isCapitol);
   }

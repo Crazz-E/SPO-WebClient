@@ -44,7 +44,7 @@ describe('the catalogue', () => {
 
   it('marks exactly the writing flows as mutating', () => {
     const mutating = FLOWS.filter(f => f.mutates).map(f => f.name).sort();
-    expect(mutating).toEqual(['mail-roundtrip', 'politics-write']);
+    expect(mutating).toEqual(['favorites-roundtrip', 'mail-roundtrip', 'politics-write']);
   });
 
   it('names the known flows when asked for one that does not exist', () => {

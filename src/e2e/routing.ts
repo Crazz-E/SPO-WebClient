@@ -56,6 +56,14 @@ export const ROUTES: RouteRule[] = [
     why: 'pixels — a WebSocket drive cannot see a rendered frame',
   },
   {
+    // Before the broad wire-level rule below, which would otherwise swallow
+    // `session/favorites-handler.ts` and drive the politics flows instead of
+    // the one flow that actually exercises the Favorites tree.
+    test: /favorites-handler\.ts$|^src\/client\/components\/empire\//,
+    flows: ['favorites-roundtrip'],
+    why: 'the Favorites tree — the only flow that writes to it',
+  },
+  {
     test: /^src\/shared\/rdo-|^src\/server\/rdo\.ts$|^src\/server\/session\//,
     flows: ['politics-read', 'politics-write', 'building-details'],
     why: 'wire-level change: frames, session phases or RDO members',

@@ -8,6 +8,10 @@
 
 import { WsMessageType } from '../shared/types/message-types';
 import type {
+  WsRespEmpireFacilities,
+  WsRespFavoriteAdd,
+  WsRespFavoriteDelete,
+  WsRespFavoriteRename,
   WsRespMailFolder,
   WsRespMailSent,
   WsRespPoliticsData,
@@ -325,6 +329,94 @@ const buildingDetails: Flow = {
   },
 };
 
+/**
+ * The Favorites tree, written for the first time: add a link, rename it,
+ * remove it — each step proven by re-reading the tree.
+ *
+ * EVIDENCE. Unlike the civic writes, these members do not print to the
+ * Survival log (`Kernel/Favorites.pas` logs only the refused root-delete), so
+ * the read-back IS the proof here — and it is a sound one, because
+ * `RDOFavoritesGetSubItems` walks the same in-memory `TFavorites` object the
+ * write just touched. There is no model-server cache in between and therefore
+ * no OB-29 lag to excuse: an item missing after an add is a failure, not a
+ * late refresh.
+ *
+ * BLAST RADIUS. Per-tycoon and self-cleaning. The tree lives inside
+ * SPO_test3's own `TTycoon`; nothing here touches the world, another player,
+ * or any building. The flow removes what it created, and sweeps any leftover
+ * from an interrupted earlier run by matching its own marker prefix.
+ */
+const FAVORITE_MARKER = 'e2e-favorite';
+
+const favoritesRoundTrip: Flow = {
+  name: 'favorites-roundtrip',
+  what: 'favorites tree: add -> read back -> rename -> read back -> delete',
+  mutates: true,
+  run: async () => {
+    const assertions = new Assertions();
+    const name = `${FAVORITE_MARKER} ${new Date().toISOString()}`;
+    const renamed = `${FAVORITE_MARKER} renamed`;
+
+    const session = await login(PRIMARY_ACCOUNT);
+    const listFavorites = async (): Promise<WsRespEmpireFacilities> =>
+      session.driver.request<WsRespEmpireFacilities>(
+        { type: WsMessageType.REQ_EMPIRE_FACILITIES },
+        WsMessageType.RESP_EMPIRE_FACILITIES,
+      );
+
+    try {
+      // Sweep first: an earlier run killed between add and delete would
+      // otherwise leave its marker behind for good.
+      const before = await listFavorites();
+      for (const stale of before.facilities.filter(f => f.name.startsWith(FAVORITE_MARKER))) {
+        await session.driver.request<WsRespFavoriteDelete>(
+          { type: WsMessageType.REQ_FAVORITE_DELETE, path: stale.path },
+          WsMessageType.RESP_FAVORITE_DELETE,
+        );
+      }
+
+      const added = await session.driver.request<WsRespFavoriteAdd>(
+        { type: WsMessageType.REQ_FAVORITE_ADD, name, x: 641, y: 66 },
+        WsMessageType.RESP_FAVORITE_ADD,
+      );
+      assertions.check('the add was accepted and answered an id', added.success && (added.id ?? 0) > 0,
+        `id=${added.id ?? 'none'}`);
+
+      const afterAdd = await listFavorites();
+      const item = afterAdd.facilities.find(f => f.name === name);
+      assertions.check('the added favourite is in the tree the server serves', Boolean(item), name);
+      assertions.check('it kept the coordinates it was given',
+        item?.x === 641 && item?.y === 66, `${item?.x},${item?.y}`);
+
+      if (item) {
+        const renameResp = await session.driver.request<WsRespFavoriteRename>(
+          { type: WsMessageType.REQ_FAVORITE_RENAME, path: item.path, name: renamed },
+          WsMessageType.RESP_FAVORITE_RENAME,
+        );
+        assertions.check('the rename was accepted', renameResp.success);
+
+        const afterRename = await listFavorites();
+        const moved = afterRename.facilities.find(f => f.path === item.path);
+        assertions.check('the tree serves the new name', moved?.name === renamed, moved?.name);
+
+        const deleted = await session.driver.request<WsRespFavoriteDelete>(
+          { type: WsMessageType.REQ_FAVORITE_DELETE, path: item.path },
+          WsMessageType.RESP_FAVORITE_DELETE,
+        );
+        assertions.check('the delete was accepted', deleted.success);
+
+        const afterDelete = await listFavorites();
+        assertions.check('the favourite is gone — the world is restored',
+          !afterDelete.facilities.some(f => f.path === item.path));
+      }
+
+      return report('favorites-roundtrip', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
 export const FLOWS: Flow[] = [
   loginSpine,
   politicsRead,
@@ -332,6 +424,7 @@ export const FLOWS: Flow[] = [
   buildingDetails,
   permissionNegative,
   mailRoundTrip,
+  favoritesRoundTrip,
 ];
 
 export function flowByName(name: string): Flow {
