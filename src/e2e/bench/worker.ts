@@ -27,7 +27,7 @@ import {
   type BenchPaths,
 } from './paths';
 import { fingerprintTree, resolveRef, type TreeFingerprint } from './fingerprint';
-import { Spool, type JobReport, type JobRequest, type JobVerdict } from './job';
+import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
 import { clearPort, realGatewayDeps, startGateway, type RunningGateway } from './gateway';
 import { ghStatusPublisher, publishPendingStatuses, writeVerdict, type StatusPublisher } from './verdict';
 
@@ -60,6 +60,32 @@ export interface WorkerDeps {
 const DONE_RETENTION_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_LEASE_MINUTES = 30;
 const MAX_LEASE_MINUTES = 120;
+
+/**
+ * What each job type needs built — and nothing more.
+ *
+ * The bench is the machine's one serialised resource: every second spent compiling
+ * something the job never loads is a second every other session waits for. So the build
+ * follows the body, not the habit.
+ *
+ * - `gate` — the gateway alone. The L2 drive is a headless `ws` client that never opens a
+ *   page, and the gateway starts happily without the Vite bundle (`server.ts:90-98` falls
+ *   back and logs it). `verify-gate.js` compiles the e2e driver itself (`build:e2e`).
+ * - `live` — the gateway **and** the e2e driver. This branch runs `dist/e2e/run.js`
+ *   directly; nothing else in the job compiles it, so it is built here rather than assumed
+ *   to be left over from some earlier run.
+ * - `lease` — everything. It serves a real browser, so the client bundle and the
+ *   terrain-test are exactly what the session came for.
+ *
+ * What is given up: the full build also happened to prove the client still compiles. CI
+ * replays that same `npm run build` on every pull request, so the proof is not lost — it
+ * just no longer occupies the bench.
+ */
+const BUILD_STEPS: Record<JobType, string[]> = {
+  gate: ['build:server'],
+  live: ['build:server', 'build:e2e'],
+  lease: ['build'],
+};
 
 /**
  * Jobs found in running/ at startup were cut mid-flight by a worker death. They are
@@ -226,11 +252,14 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
   // whether `main` had moved past it. Read AFTER the fetch, so it is the real remote tip.
   report.baseMain = deps.resolveRef(request.worktree, 'origin/main');
 
-  // The worker always builds — a stale dist/ would run yesterday's code and produce a
-  // silently wrong PASS, which is the exact failure this bench exists to prevent.
-  const buildCode = await deps.runCommand('npm', ['run', 'build'], { cwd: request.worktree, logFile });
-  if (buildCode !== 0) {
-    return finish('FAIL', `npm run build failed in the worktree — see ${logFile}`);
+  // The worker always builds what the body will load — a stale dist/ would run
+  // yesterday's code and produce a silently wrong PASS, which is the exact failure this
+  // bench exists to prevent. Which targets, per job type: BUILD_STEPS.
+  for (const step of BUILD_STEPS[request.type]) {
+    const buildCode = await deps.runCommand('npm', ['run', step], { cwd: request.worktree, logFile });
+    if (buildCode !== 0) {
+      return finish('FAIL', `npm run ${step} failed in the worktree — see ${logFile}`);
+    }
   }
 
   let gateway: RunningGateway;

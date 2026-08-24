@@ -58,9 +58,19 @@ one process (the worker) consumes the spool.
    must be exactly that commit (the client already refuses it at deposit, exit 2; the
    worker enforces it again). Then `git fetch origin main` (best-effort)
    so verify-gate routes the diff against the real `origin/main`, not a lagging local one.
-5. **Build**: `npm run build` in the job's worktree — always. A stale `dist/` runs
-   yesterday's code and produces a silently wrong PASS; ~16 s is the price of never
-   finding out the hard way.
+5. **Build**: in the job's worktree, always — a stale `dist/` runs yesterday's code and
+   produces a silently wrong PASS. But only what the body will actually load, because the
+   bench is serialised and a build nobody reads is time every other session waits for:
+
+   | Type | Built | Why not more |
+   |---|---|---|
+   | `gate` | `build:server` | the L2 drive is a headless `ws` client — no page, no bundle; the gateway starts without the Vite manifest (`server.ts:90-98`), and `verify-gate.js` compiles the e2e driver itself |
+   | `live` | `build:server` + `build:e2e` | this branch runs `dist/e2e/run.js` directly, so it compiles it rather than hoping an earlier job left one behind |
+   | `lease` | `build` (everything) | it serves a real browser — the client bundle and the terrain-test are the point |
+
+   The full build also used to double as a "does the client still compile" check. CI runs
+   exactly that build on every pull request, so the proof moved rather than disappeared.
+   A failing step is a `FAIL` naming the step, before any gateway starts.
 6. **Gateway** from that worktree, wait for `phase=ready`.
 7. **Body**, with `E2E_WORLD_STATE_DIR=~/.spo-bench/world`:
    - `gate` → `node scripts/verify-gate.js` (static replay, President exclusion, routing,
