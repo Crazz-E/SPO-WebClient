@@ -1,14 +1,68 @@
 {
   "artboards": [
-    { "file": "Main.dc.html", "title": "Option A — HUD flottant consolidé", "x": 0, "y": 0, "w": 1440, "h": 900 },
-    { "file": "OptionB.dc.html", "title": "Option B — Cockpit ancré", "x": 1540, "y": 0, "w": 1440, "h": 900 },
-    { "file": "OptionC.dc.html", "title": "Option C — Carte pure + feuille universelle", "x": 3080, "y": 0, "w": 1440, "h": 900 }
+    {
+      "file": "Main.dc.html",
+      "title": "Option A — HUD flottant consolidé",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "OptionB.dc.html",
+      "title": "Option B — Cockpit ancré",
+      "x": 1540,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    {
+      "file": "OptionC.dc.html",
+      "title": "Option C — Carte pure + feuille universelle",
+      "x": 3080,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    }
   ],
   "annotations": [
-    { "id": "brief", "x": 0, "y": -520, "w": 560, "text": "DIRECTION — choisir un axe, pas un écran.\nTrois propositions du HUD de jeu pendant un placement, avec l'inspecteur « Approvisionnements » ouvert (tâches T1, T3 du brief). Mêmes tokens, mêmes icônes, même palette : la refonte est ergonomique, pas identitaire.\nCommun aux trois (imposé par l'audit) : un indicateur de mode persistant, un chemin de retour visible entre surfaces, un diagnostic en tête d'inspecteur, confirmation + état d'écriture sur chaque action, cibles tactiles ≥ 44 px, texte ≥ 12 px dans le système (ces esquisses desktop descendent à 11 px sur les badges et raccourcis)." },
-    { "id": "note-a", "x": 0, "y": -110, "w": 440, "text": "A — HUD flottant consolidé\nGarde la structure actuelle (widget haut-droite, rails, bande chat, panneau coulissant). Ajoute : la puce de mode en haut, le fil d'Ariane dans le panneau, le diagnostic en tête.\n+ le moins de dépaysement, portage le moins coûteux, la carte reste maximale.\n− les surfaces restent empilées au-dessus de la carte : moins de place pour les données denses ; le mobile reste un shell séparé." },
-    { "id": "note-b", "x": 1540, "y": -110, "w": 440, "text": "B — Cockpit ancré\nBarre haute (argent, mode, alertes, identité), dock gauche à onglets nommés, colonne droite toujours présente (Inspecteur / Courrier / Recherche / Empire), console basse (chat + journal).\n+ dense, tout a une place fixe, aucune perte de contexte, Politique à un clic, journal des événements.\n− la carte perd ~35 % de surface ; deux shells à maintenir (desktop cockpit, mobile feuille) ; loin de Voyager." },
-    { "id": "note-c", "x": 3080, "y": -110, "w": 440, "text": "C — Carte pure + feuille universelle\nUne pastille d'état en haut, une barre de commande en bas (recherche/palette + 6 actions) qui devient la barre de mode (la recherche se replie en icône), et UNE seule surface empilable — tiroir à droite sur desktop, feuille basse sur mobile — avec des jetons de pile cliquables.\n+ un seul modèle de surface pour toutes les plateformes, la palette devient le centre, Politique et Profil enfin sur mobile.\n− plus de clics pour les données denses (tout passe par la feuille) ; rupture visuelle avec l'actuel." }
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -520,
+      "w": 560,
+      "text": "DIRECTION — choisir un axe, pas un écran.\nTrois propositions du HUD de jeu pendant un placement, avec l'inspecteur « Approvisionnements » ouvert (tâches T1, T3 du brief). Mêmes tokens, mêmes icônes, même palette : la refonte est ergonomique, pas identitaire.\nCommun aux trois (imposé par l'audit) : un indicateur de mode persistant, un chemin de retour visible entre surfaces, un diagnostic en tête d'inspecteur, confirmation + état d'écriture sur chaque action, cibles tactiles ≥ 44 px, texte ≥ 12 px dans le système (ces esquisses desktop descendent à 11 px sur les badges et raccourcis)."
+    },
+    {
+      "id": "note-a",
+      "x": 0,
+      "y": -110,
+      "w": 440,
+      "text": "A — HUD flottant consolidé\nGarde la structure actuelle (widget haut-droite, rails, bande chat, panneau coulissant). Ajoute : la puce de mode en haut, le fil d'Ariane dans le panneau, le diagnostic en tête.\n+ le moins de dépaysement, portage le moins coûteux, la carte reste maximale.\n− les surfaces restent empilées au-dessus de la carte : moins de place pour les données denses ; le mobile reste un shell séparé."
+    },
+    {
+      "id": "note-b",
+      "x": 1540,
+      "y": -110,
+      "w": 440,
+      "text": "B — Cockpit ancré\nBarre haute (argent, mode, alertes, identité), dock gauche à onglets nommés, colonne droite toujours présente (Inspecteur / Courrier / Recherche / Empire), console basse (chat + journal).\n+ dense, tout a une place fixe, aucune perte de contexte, Politique à un clic, journal des événements.\n− la carte perd ~35 % de surface ; deux shells à maintenir (desktop cockpit, mobile feuille) ; loin de Voyager."
+    },
+    {
+      "id": "note-c",
+      "x": 3080,
+      "y": -110,
+      "w": 440,
+      "text": "C — Carte pure + feuille universelle\nUne pastille d'état en haut, une barre de commande en bas (recherche/palette + 6 actions) qui devient la barre de mode (la recherche se replie en icône), et UNE seule surface empilable — tiroir à droite sur desktop, feuille basse sur mobile — avec des jetons de pile cliquables.\n+ un seul modèle de surface pour toutes les plateformes, la palette devient le centre, Politique et Profil enfin sur mobile.\n− plus de clics pour les données denses (tout passe par la feuille) ; rupture visuelle avec l'actuel."
+    },
+    {
+      "id": "dir-etat",
+      "x": 0,
+      "y": -760,
+      "w": 720,
+      "text": "ÉTAT FINAL (24/08) — l'option C est PORTÉE EN ENTIER.\nDécision du 23/08 : option C, sans hésiter. Depuis : socle 1-4, tous les flux du plan (T1, T3, T6, T2, T7, T5, T8, Carte-1/2, feuille flottante, barre mobile — PR #55–#70), canevas alignés (#71), puis les travaux hors plan : barre de mode mobile (#72), SaveIndicator généralisé (#73), correctif Approvisionnements (#74), pan gauche + flèches + rotation N6/N7 + H3 (#78), rétrogradation confirmée B5 (#79), bâtiments en difficulté H6 + Pick on map N10 (#80).\nAudit de clôture : chaque élément visuel des canevas est branché sur une fonction existante (missing-features §9) ; ce qui manque au code est tracé (tickets RDO OB-33 favoris serveur, OB-34 tarif ponts).\nRestent : la tablette 768-1023 (décision produit à prendre) et N5 chat (linkification des coordonnées).\nLa vérité courante vit dans les canevas Système et Flux ; ces trois planches restent la décision d'origine, archivée."
+    }
   ],
-  "launch": { "view": "canvas" }
+  "launch": {
+    "view": "canvas"
+  }
 }
