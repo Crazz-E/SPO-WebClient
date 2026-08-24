@@ -1,0 +1,35 @@
+/* The overlay is a viewport-fixed layer that must never intercept the pointer:
+   `document.elementFromPoint` has to keep resolving the real control underneath.
+   It sits above the tooltip layer because report mode outranks every normal surface. */
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-tooltip) + 10);
+  pointer-events: none;
+}
+
+.highlight {
+  position: fixed;
+  border: 2px solid var(--error);
+  background: var(--error-bg);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  transition: all var(--duration-fast) linear;
+}
+
+.hint {
+  position: fixed;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  border: 1px solid var(--surface-border);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  white-space: nowrap;
+}

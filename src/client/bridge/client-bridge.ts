@@ -143,6 +143,21 @@ export interface ClientCallbacks {
   onZoomOut: () => void;
   onToggleMinimap: () => void;
   onToggleDebugOverlay: () => void;
+
+  // Bug-report capture (dev-only, armed by SPO_BUG_REPORT — see src/client/report/)
+  /** What sits under a screen point on the map canvas, in tile terms. `null` if the renderer is not up. */
+  onGetCanvasAnchor: (clientX: number, clientY: number) => {
+    tileX: number;
+    tileY: number;
+    visualClass?: string;
+    layer: 'building' | 'road' | 'concrete' | 'terrain';
+  } | null;
+  /** A JPEG data URL of the map canvas, or `null` if there is no canvas. */
+  onGetCanvasScreenshot: () => string | null;
+  /** The logged-in account name — the report's `username`. */
+  onGetUsername: () => string;
+  /** The world currently played — the report's `world`. */
+  onGetWorld: () => string;
   onLogout: () => void;
   onTriggerReconnect: () => void;
 

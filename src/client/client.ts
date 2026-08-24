@@ -17,6 +17,7 @@ import { MapNavigationUI } from './ui/map-navigation-ui';
 import { MinimapUI } from './ui/minimap-ui';
 import { useMapStore } from './store/map-store';
 import { ClientBridge, setWorldToScreenFn, setWorldToScreenCenteredFn, type ClientCallbacks } from './bridge/client-bridge';
+import { reportJournal } from './report/journal';
 import { useGameStore } from './store/game-store';
 import type { GameSettings } from './store/game-store';
 import { useUiStore } from './store/ui-store';
@@ -273,6 +274,15 @@ export class StarpeaceClient implements ClientHandlerContext {
         const renderer = this.mapNavigationUI?.getRenderer();
         if (renderer) renderer.toggleDebugMode();
       },
+      // Bug-report capture (dev-only) — the four facts the report needs from the client.
+      onGetCanvasAnchor: (clientX: number, clientY: number) =>
+        this.mapNavigationUI?.getRenderer()?.getCanvasAnchorAt(clientX, clientY) ?? null,
+      onGetCanvasScreenshot: () => {
+        const canvas = document.getElementById('game-canvas') as HTMLCanvasElement | null;
+        return canvas ? canvas.toDataURL('image/jpeg', 0.7) : null;
+      },
+      onGetUsername: () => this.storedUsername,
+      onGetWorld: () => this.currentWorldName,
       onLogout: () => authHandler.logout(this),
       onSwitchServer: () => authHandler.startServerSwitch(),
       onCancelServerSwitch: () => authHandler.cancelServerSwitch(),
@@ -555,6 +565,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       this.debugWire.lastSent = msg.type || '';
       this.debugWire.history.push({ dir: '→', type: msg.type || '?', ts: Date.now(), reqId: requestId });
       if (this.debugWire.history.length > this.debugWire.maxHistory) this.debugWire.history.shift();
+      reportJournal.record('ws-out', msg);
       ClientBridge.log('Wire', `→ SEND ${msg.type} [${requestId.slice(-6)}]`);
       // [/E2E-DEBUG]
       this.ws.send(JSON.stringify(msg));
@@ -578,6 +589,7 @@ export class StarpeaceClient implements ClientHandlerContext {
     this.debugWire.lastSent = msg.type || '';
     this.debugWire.history.push({ dir: '→', type: msg.type || '?', ts: Date.now() });
     if (this.debugWire.history.length > this.debugWire.maxHistory) this.debugWire.history.shift();
+    reportJournal.record('ws-out', msg);
     ClientBridge.log('Wire', `→ SEND ${msg.type}`);
     // [/E2E-DEBUG]
     this.ws.send(JSON.stringify(msg));
@@ -965,6 +977,7 @@ export class StarpeaceClient implements ClientHandlerContext {
     const reqTag = msg.wsRequestId ? ` [${msg.wsRequestId.slice(-6)}]` : '';
     this.debugWire.history.push({ dir: '←', type: msg.type, ts: Date.now(), reqId: msg.wsRequestId });
     if (this.debugWire.history.length > this.debugWire.maxHistory) this.debugWire.history.shift();
+    reportJournal.record('ws-in', msg);
     ClientBridge.log('Wire', `← RECV ${msg.type}${reqTag}${isError ? ' ✗ERROR' : ''}`);
     // [/E2E-DEBUG]
 
