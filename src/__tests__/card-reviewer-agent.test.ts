@@ -1,0 +1,195 @@
+/**
+ * The neutral reader of a backlog card (#150) is a prompt, not a program: nothing in the
+ * Jest suite executes it, and no workflow can observe whether a live session actually
+ * spawned it before running `gh issue create` — that moment happens on a developer machine.
+ *
+ * What CAN be held is everything else, and #123 is the reason to hold it: a rule that lives
+ * only in prose is protected by nothing. So this file pins the same way
+ * `claude-review-workflow.test.ts` pins the PR reviewer — the properties that make the
+ * mechanism the thing #150 asked for, each one a single edit away from being lost and none
+ * of them visible in a diff review of one file alone.
+ *
+ * Two invariants matter more than the rest:
+ *
+ *   - **Read-only.** The reviewer must never file, comment or edit. A reviewer that writes
+ *     to the board is a second author, and the card is back to having one reader.
+ *   - **The four surfaces stay consistent.** The agent, the rulebook, the `/next-task`
+ *     command and CLAUDE.md all have to name the mechanism, or a session reading any one of
+ *     them is following a rule the others no longer carry. Gut any of the four and this
+ *     test — inside the required `typecheck + tests` check — goes red.
+ *
+ * Deciding the review is not worth its cost is a legitimate decision. It just has to be
+ * made here as well as in the agent file, which is the point of pinning it.
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+
+const ROOT = process.cwd();
+const AGENT = path.join(ROOT, '.claude', 'agents', 'card-reviewer.md');
+const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
+const COMMAND = path.join(ROOT, '.claude', 'commands', 'next-task.md');
+const CLAUDE_MD = path.join(ROOT, 'CLAUDE.md');
+
+let agent: string;
+let frontmatter: string;
+let rulebook: string;
+let command: string;
+let claudeMd: string;
+
+/**
+ * Prose in these files is hard-wrapped at ~95 columns, so a sentence assertion written
+ * against the reading order breaks the day a word crosses the margin. Every assertion about
+ * a *sentence* runs against the collapsed copy; the ones about *structure* (frontmatter
+ * keys, table rows, headings) keep the newlines they depend on.
+ */
+const collapse = (text: string): string => text.replace(/\s+/g, ' ');
+
+beforeAll(() => {
+  agent = fs.readFileSync(AGENT, 'utf8');
+  const match = /^---\n([\s\S]*?)\n---\n/.exec(agent);
+  frontmatter = match ? match[1] : '';
+  rulebook = fs.readFileSync(RULEBOOK, 'utf8');
+  command = fs.readFileSync(COMMAND, 'utf8');
+  claudeMd = fs.readFileSync(CLAUDE_MD, 'utf8');
+});
+
+describe('card-reviewer agent', () => {
+  describe('frontmatter', () => {
+    it('opens with a frontmatter block, like the other agents in the directory', () => {
+      expect(frontmatter).not.toBe('');
+    });
+
+    it('is registered under the name the rulebook and the command call it', () => {
+      expect(frontmatter).toMatch(/^name: card-reviewer$/m);
+    });
+
+    it('describes itself as read-only', () => {
+      const description = /^description: (.+)$/m.exec(frontmatter);
+      expect(description).not.toBeNull();
+      expect(description?.[1]).toMatch(/[Rr]ead-only/);
+    });
+
+    it('holds only reading tools', () => {
+      // The tool line IS the read-only invariant — the prose below it is a promise, this is
+      // the constraint. Adding Edit or Write here turns the reviewer into a second author.
+      const tools = /^tools: (.+)$/m.exec(frontmatter);
+      expect(tools).not.toBeNull();
+      const granted = (tools?.[1] ?? '').split(',').map(t => t.trim());
+      expect(granted).toEqual(expect.arrayContaining(['Read', 'Grep', 'Glob']));
+      for (const forbidden of ['Edit', 'Write', 'NotebookEdit']) {
+        expect(granted).not.toContain(forbidden);
+      }
+    });
+
+    it('routes to the model CLAUDE.md sends analysis to', () => {
+      // A card review is analysis, so § Model routing says Fable 5 — the same reasoning
+      // claude-review.yml records for `--model claude-fable-5`.
+      expect(frontmatter).toMatch(/^model: fable$/m);
+    });
+  });
+
+  describe('the four checks #150 asked for', () => {
+    const checks: ReadonlyArray<readonly [string, RegExp]> = [
+      ['the claim holds against the code', /Does the claim hold against the code\?/],
+      ['it is not already covered', /Is it already covered\?/],
+      ['it is actionable as written', /Is it actionable as written\?/],
+      ['the weight is right', /Is the weight right\?/],
+    ];
+
+    it.each(checks)('names the check that %s', (_label, pattern) => {
+      expect(agent).toMatch(pattern);
+    });
+
+    it('requires a file:line or an explicit reason there can be none', () => {
+      expect(collapse(agent)).toMatch(/at least one `file:line` reference, or an explicit reason/);
+    });
+
+    it('requires the card to state what done looks like', () => {
+      expect(collapse(agent)).toMatch(/what \*\*done\*\* looks like/);
+    });
+
+    it('names both weight fields, which feed the human priority order', () => {
+      expect(agent).toMatch(/`Category`/);
+      expect(agent).toMatch(/`Size`/);
+    });
+
+    it('sends an RDO claim to the server declaration, not to the finding aid', () => {
+      expect(agent).toMatch(/\.\.\/SPO-Original\/Rdo\/Server\//);
+      expect(agent).toMatch(/never probe the live server|never treat `doc\/spo-original-reference\.md`/);
+    });
+  });
+
+  describe('the verdict contract', () => {
+    const verdicts = ['FILE', 'FILE AMENDED', 'DO NOT FILE'] as const;
+
+    it.each(verdicts)('offers the verdict %s', verdict => {
+      expect(agent).toContain(verdict);
+    });
+
+    it('dates the verdict, since every comment posts as the same account', () => {
+      expect(agent).toMatch(/### Card review — <YYYY-MM-DD>/);
+    });
+
+    it('makes FILE AMENDED name the corrections instead of asking for more detail', () => {
+      expect(collapse(agent)).toMatch(/"Needs more detail" is not a correction/);
+    });
+
+    it('keeps DO NOT FILE about the finding, never about priority', () => {
+      expect(collapse(agent)).toMatch(/\*\*priority is the human's\*\*/);
+    });
+
+    it('licenses an unchanged FILE, so the reviewer does not invent objections', () => {
+      expect(collapse(agent)).toMatch(/\*\*expected outcome on most cards\*\*/);
+      expect(collapse(agent)).toMatch(/inventing an objection to look useful/);
+    });
+  });
+
+  describe('it files nothing itself', () => {
+    it('forbids every board-writing command by name', () => {
+      const forbidden = ['gh issue create', 'gh issue comment', 'gh issue edit', 'gh project item-'];
+      for (const cmd of forbidden) {
+        expect(collapse(agent)).toMatch(new RegExp(`Never file anything.{0,400}${cmd}`));
+      }
+    });
+
+    it('states that the session, not the reviewer, posts the verdict', () => {
+      expect(collapse(agent)).toMatch(/You return text; the session posts it/);
+    });
+  });
+});
+
+describe('the mechanism is named on all four surfaces', () => {
+  it('sits in the rulebook, inside the feeding rule it amends', () => {
+    const feeding = rulebook.indexOf('## Feeding rule');
+    const next = rulebook.indexOf('## Context discipline');
+    expect(feeding).toBeGreaterThan(-1);
+    expect(next).toBeGreaterThan(feeding);
+    const section = rulebook.slice(feeding, next);
+    expect(section).toMatch(/### The card review/);
+    expect(section).toMatch(/card-reviewer/);
+  });
+
+  it('states in the rulebook that the verdict is the card first comment', () => {
+    expect(collapse(rulebook)).toMatch(/verbatim as the card's first comment/);
+  });
+
+  it('leaves the claim handshake and the human out of it', () => {
+    // The constraint from #150: the path a session already follows is unchanged in shape.
+    expect(collapse(rulebook)).toMatch(/The claim handshake is untouched\. No human step is added\./);
+    expect(collapse(rulebook)).toMatch(/No session ever waits on another session's review/);
+  });
+
+  it('is in the /next-task command, where a session meets the feeding rule', () => {
+    expect(command).toMatch(/`card-reviewer`/);
+    expect(command).toMatch(/DO NOT FILE/);
+  });
+
+  it('is in the CLAUDE.md sub-agents table', () => {
+    expect(claudeMd).toMatch(/\|\s*`card-reviewer`\s*\|\s*Fable\s*\|/);
+  });
+
+  it('is in the CLAUDE.md feeding rule', () => {
+    expect(collapse(claudeMd)).toMatch(/Every draft card is read first by the `card-reviewer` sub-agent/);
+  });
+});

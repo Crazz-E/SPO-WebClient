@@ -171,6 +171,9 @@ it — `.github/workflows/orphan-cards.yml` comments once on any card claimed an
 24 h, so the human sees it; it frees nothing itself.
 **Feeding rule:** every finding lands as a new issue in Todo, with its `Category` and the
 matching `cat:` / `size:` labels — a finding that only lives in a session report is lost.
+**Every draft card is read first by the `card-reviewer` sub-agent**, whose dated verdict
+becomes the card's first comment; on `DO NOT FILE` no issue is created and the session's
+report says why.
 **The board is written in English — all of it**, whatever language the session, the source
 or the conversation was in: titles, bodies, every comment, columns, fields, labels.
 Translate on the way in; never transcribe. The former `doc/BACKLOG*.md` files are deleted; their text is
@@ -329,6 +332,7 @@ security-auditor, typescript, web-accessibility, web-performance.
 |-------|-------|---------|
 | `security-reviewer` | Opus | WebSocket auth, RDO parsing, session management, OWASP. Read-only. |
 | `performance-analyzer` | Opus | Renderer bottlenecks, chunk caching, frame budget. Read-only. |
+| `card-reviewer` | Fable | The neutral reader of a draft backlog card, before it is filed. Read-only. |
 
 ## Delegation strategy
 
