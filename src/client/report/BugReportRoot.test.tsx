@@ -4,7 +4,9 @@ import { ClientContext } from '../context/ClientContext';
 import { createSpiedCallbacks } from '../__tests__/setup/render-helpers';
 import { validateBugReport } from '../../shared/bug-report-schema';
 import { reportJournal } from './journal';
-import { BugReportRoot } from './BugReportRoot';
+// Through the barrel: that is the module main.tsx lazy-imports, so it is the surface that
+// must actually resolve.
+import { BugReportRoot } from './index';
 
 let posted: string[] = [];
 const originalFetch = (globalThis as unknown as { fetch?: unknown }).fetch;

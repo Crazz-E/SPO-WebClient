@@ -80,6 +80,18 @@ describe('resolveDomAnchor — the fiber walk', () => {
     expect(resolveDomAnchor(button).componentChain).toEqual(['MemoPanel', 'TaxRow', 'button']);
   });
 
+  it('skips a wrapper object that carries no displayName, rather than naming it', () => {
+    const { button } = makeTree();
+    (button as unknown as Record<string, unknown>).__reactFiber$abc123 = {
+      type: 'button',
+      // An anonymous memo()/forwardRef() result, and a context provider: neither has a name
+      // worth putting in the chain.
+      return: { type: {}, return: { type: null, return: { type: function Named() {}, return: null } } },
+    };
+
+    expect(resolveDomAnchor(button).componentChain).toEqual(['Named', 'button']);
+  });
+
   it('trims the outermost names when the tree is deeper than eight components', () => {
     const { button } = makeTree();
     const deep: string[] = [{ host: 'button' } as unknown as string];
