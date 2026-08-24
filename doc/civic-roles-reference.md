@@ -417,7 +417,9 @@ Four defects are filed against the civic write path — read them before touchin
 write was reported confirmed when it was discarded — closed: the gateway now confirms only when the
 re-read value is one the write would have produced, and answers `confirmed: undefined` rather than
 guessing, `expectedWitnessValues` in `src/server/session/building-property-handler.ts`), `OB-29` (a
-tax write lands but the cached copy the client reads is never invalidated), `OB-30` (nobody can rate
+tax write lands but the cached copy the client reads is never invalidated — closed: the server-side
+miss cannot be fixed from here, so it is recorded rather than worked around; `TaxesTab` says the
+rate takes effect tomorrow instead of ticking a confirmation, and the poll decision below stands), `OB-30` (nobody can rate
 their own term — closed, and the reference agrees) and `OB-31` (the ruler test needs two prongs, not
 one — closed, see below).
 
@@ -452,6 +454,21 @@ every `SetObject` (`Cache/CachedObjectWrap.pas:320`). It is also an opt-in — e
 defaults to `NULLTTL` and re-pulls on every read (`Cache/CacheAgent.pas:90`).
 `RDOSetMinSalaryValue` invalidates `Facility` (`:1300`) and does not have the problem. Any test that writes and immediately re-reads will see the old value and must
 not conclude the write failed.
+
+**The TTL is the Town Hall's, not the civic surface's.** `Cache.WriteString(ppTTL, …)` at
+`Population.pas:1192` sits in `TTownHall`'s `StoreToCache`, and it is the only `CreateTTL` on a
+facility in the whole `Kernel/` tree — the other one (`WorldPolitics.pas:2083`, fifteen minutes)
+is on the *world* political object `world.five`, not on a facility. The **Capitol has no TTL** and
+re-pulls on every read. So `isCivicBuilding` is the wrong axis for any cache reasoning: it groups
+the Capitol with the Town Hall, and only the Town Hall is affected.
+
+**Decision — the 30 s inspector poll stays 30 s, civic buildings included** (`OB-29`, closed on
+this). Slowing the poll to the Town Hall's two-minute TTL would look like removing three useless
+reads out of four, and it is the opposite. The poll clock and the TTL clock are independent: a poll
+landing just before the TTL lapses would then wait a whole further interval, so the refreshed value
+could sit unseen for up to two minutes. Polling faster than the TTL is what bounds that gap to one
+interval. The repeated reads buy freshness; they are not waste. The constant carries the same note
+(`src/client/components/building/BuildingInspector.tsx`) so it is not "optimised" later.
 
 ### Deliberate divergences
 

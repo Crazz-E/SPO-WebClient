@@ -39,7 +39,23 @@ import styles from './BuildingInspector.module.css';
 import { SaveIndicator } from './SaveIndicator';
 import { RENAME_PENDING_KEY } from '../../handlers/building-action-handler';
 
-/** Auto-refresh interval for open building panel (ms). */
+/**
+ * Auto-refresh interval for the open building panel (ms).
+ *
+ * Deliberately NOT slowed down for civic buildings, and `OB-29` is why. The
+ * Town Hall is the one facility whose cache object opts into a TTL — two
+ * minutes, `CreateTTL(0,0,2,0)` (`Kernel/Population.pas:1192`); every other
+ * facility defaults to `NULLTTL` and re-pulls on every read
+ * (`Cache/CacheAgent.pas:90`), the Capitol included. So on a Town Hall three
+ * polls out of four hand back the bytes the previous one already returned.
+ *
+ * Matching the interval to that TTL looks tempting and is the wrong move: the
+ * two clocks are not aligned. A poll that lands just before the TTL lapses
+ * would then wait a full further interval, leaving a refreshed value unseen
+ * for up to two minutes. Polling faster than the TTL is what bounds that gap
+ * to one interval — the repeated reads are what buys the freshness, not waste
+ * to be optimised away.
+ */
 const AUTO_REFRESH_INTERVAL = 30_000;
 
 interface BuildingInspectorProps {
