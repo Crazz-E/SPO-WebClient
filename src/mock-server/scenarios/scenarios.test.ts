@@ -1,5 +1,5 @@
 /**
- * Scenario integrity tests for all 9 mock server scenario factory functions
+ * Scenario integrity tests for all 10 mock server scenario factory functions
  * and the scenario registry.
  */
 import { describe, it, expect } from '@jest/globals';
@@ -21,6 +21,11 @@ import {
   MOCK_TOWN_HALL,
   ALL_MOCK_BUILDINGS,
 } from './building-details-scenario';
+import { createCivicMutationsScenario } from './civic-mutations-scenario';
+import { HANDLER_TO_GROUP } from '@/shared/building-details/template-groups';
+import { PropertyType } from '@/shared/building-details/property-definitions';
+import type { BuildingTemplate, PropertyGroup } from '@/shared/building-details/property-definitions';
+import { collectTemplatePropertyNamesStructured } from '@/shared/building-details/property-templates';
 import { loadScenario, loadAll, SCENARIO_NAMES } from './scenario-registry';
 
 // =============================================================================
@@ -477,6 +482,88 @@ describe('building-details scenario', () => {
     expect(propNames.some(n => n.startsWith('prd'))).toBe(false);
   });
 
+  // ---------------------------------------------------------------------------
+  // Mock <-> template key parity, for the civic groups
+  //
+  // The divergence this exists to catch is silent by construction: the mock
+  // answers whatever key it holds, so a fixture serving `covName0.0` where the
+  // template asks for `covName0` looks healthy from both ends and simply
+  // renders nothing. It had already happened three times — `Tax0Name.0`,
+  // `townServices` filled with `prd*` keys, and the Capitol's coverage names.
+  //
+  // Scoped to the civic groups on purpose. A blanket sweep over all 27 handlers
+  // reports the special tabs (supplies, products, workforce) whose data does not
+  // travel in `groups` at all, and would be noise rather than a guard.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Every property name the template would put in its `GetPropertyList`, with
+   * indexed rows expanded against the count the mock itself serves.
+   *
+   * ACTION_BUTTON columns are excluded: they name a control, not a cache
+   * property, and no server writes one.
+   */
+  function templateKeysFor(group: PropertyGroup, served: Map<string, string>): string[] {
+    const template = { id: 't', name: 't', groups: [group] } as unknown as BuildingTemplate;
+    const collected = collectTemplatePropertyNamesStructured(template);
+    const keys = new Set<string>(collected.regularProperties);
+
+    for (const countProp of collected.countProperties) {
+      keys.add(countProp);
+      const count = parseInt(served.get(countProp) ?? '0', 10);
+      for (const info of collected.indexedByCount.get(countProp) ?? []) {
+        const columns = group.properties
+          .find(p => p.rdoName === info.rdoName)?.columns ?? [];
+        for (let i = 0; i < count; i++) {
+          if (info.columns) {
+            for (const col of info.columns) {
+              const isButton = columns
+                .find(c => c.rdoSuffix === col.rdoSuffix)?.type === PropertyType.ACTION_BUTTON;
+              if (isButton) continue;
+              const suffix = col.indexSuffix !== undefined ? col.indexSuffix : (info.indexSuffix ?? '');
+              keys.add(`${col.rdoSuffix}${i}${col.columnSuffix ?? ''}${suffix}`);
+            }
+          } else {
+            keys.add(`${info.rdoName}${i}${info.indexSuffix ?? ''}`);
+          }
+        }
+      }
+    }
+    return Array.from(keys);
+  }
+
+  const CIVIC_TABS = [
+    ['townGeneral', MOCK_TOWN_HALL], ['townJobs', MOCK_TOWN_HALL],
+    ['townRes', MOCK_TOWN_HALL], ['townServices', MOCK_TOWN_HALL],
+    ['townTaxes', MOCK_TOWN_HALL],
+    ['capitolGeneral', MOCK_CAPITOL], ['capitolTowns', MOCK_CAPITOL],
+    ['ministeries', MOCK_CAPITOL], ['votes', MOCK_CAPITOL],
+  ] as const;
+
+  it.each(CIVIC_TABS)('%s serves every key its template asks for', (tabId, building) => {
+    const tab = building.tabs.find(t => t.id === tabId)!;
+    const props = building.groups[tabId];
+    const served = new Map(props.map(p => [p.name, p.value]));
+    const group = HANDLER_TO_GROUP[tab.handlerName!];
+    expect(group).toBeDefined();
+
+    const missing = templateKeysFor(group, served).filter(k => !served.has(k));
+    expect(missing).toEqual([]);
+  });
+
+  it('the Capitol coverage names carry no language suffix, unlike the town\'s', () => {
+    // WorldPolitics.pas:1303 writes `covName0` flat; Population.pas:1090 writes
+    // the town's through StoreMultiStringToCache, hence `covName0.0`. Serving
+    // the same shape on both is what emptied the Capitol GENERAL tab.
+    const capitol = MOCK_CAPITOL.groups['capitolGeneral'].map(p => p.name);
+    expect(capitol).toContain('covName0');
+    expect(capitol).not.toContain('covName0.0');
+
+    const town = MOCK_TOWN_HALL.groups['townGeneral'].map(p => p.name);
+    expect(town).toContain('covName0.0');
+    expect(town).not.toContain('covName0');
+  });
+
   it('RDO has GetPropertyList exchanges for each building group', () => {
     const { rdo } = createBuildingDetailsScenario();
     // Each building has exchanges for each group
@@ -494,9 +581,28 @@ describe('building-details scenario', () => {
 // Scenario Registry
 // =============================================================================
 
+// =============================================================================
+// Scenario 16: civic-mutations
+// =============================================================================
+
+describe('civic-mutations scenario', () => {
+  it('creates scenario with RDO and HTTP', () => {
+    const { rdo, http } = createCivicMutationsScenario();
+    expect(rdo.name).toBe('civic-mutations');
+    expect(http.name).toBe('civic-mutations');
+    expect(rdo.exchanges.length).toBeGreaterThan(0);
+    expect(http.exchanges).toHaveLength(5);
+  });
+
+  it('variable override reaches the campaign page body', () => {
+    const { http } = createCivicMutationsScenario({ worldName: 'Helartia' });
+    expect(http.variables.worldName).toBe('Helartia');
+  });
+});
+
 describe('scenario registry', () => {
-  it('SCENARIO_NAMES has 9 entries', () => {
-    expect(SCENARIO_NAMES).toHaveLength(9);
+  it('SCENARIO_NAMES has 10 entries', () => {
+    expect(SCENARIO_NAMES).toHaveLength(10);
   });
 
   it('loadScenario returns bundle for each name', () => {
