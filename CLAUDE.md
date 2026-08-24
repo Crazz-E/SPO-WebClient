@@ -18,8 +18,11 @@ not. Treat RDO work as the highest-stakes work in the repo.
 - Use `any` — `unknown` in catch blocks, typed interfaces for data
 - Modify a file without reading it first
 - Ship code without tests — new/modified lines must reach ≥ 93 % coverage
-- Modify without discussion: `src/shared/rdo-types.ts`, `src/server/rdo.ts`,
-  `src/__fixtures__/*`, `jest.config.js` (thresholds only go UP)
+- Modify without discussion: `src/shared/rdo-types.ts`, `src/shared/rdo-frame.ts`,
+  `src/server/rdo.ts`, `src/__fixtures__/*`, `jest.config.js` (thresholds only go UP) —
+  **enforced**: `scripts/check-pr-rules.js` runs inside the required CI check and fails the
+  PR unless the maintainer posted the `rdo-approved` label. It also fails a change to
+  `rdo-members.ts` whose PR body cites no `File.pas:Line`, and any lowered Jest threshold
 - Load screenshots into the main context during debug/E2E — delegate to a sub-agent
 - Add a UI element without wiring its action — no dead buttons
 

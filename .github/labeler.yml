@@ -1,0 +1,62 @@
+# Which domain a pull request touches, derived from its paths.
+#
+# The board carries `Catégorie` and `Taille` as project fields, and the issue title carries
+# an emoji — neither is readable from a workflow or from `gh issue list --label`. These
+# labels are the queryable projection: they are what lets a later job route by domain
+# (a stricter review on the wire, a lighter one on docs) instead of treating every PR alike.
+#
+# Read by actions/labeler; every label listed here must exist on the repository.
+
+rdo:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/shared/rdo-*.ts'
+          - 'src/server/rdo*.ts'
+          - 'src/server/session/rdo-*.ts'
+          - 'src/mock-server/**'
+
+gateway:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/server/**'
+
+client:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/client/**'
+
+renderer:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/client/renderer/**'
+          - 'src/client/**/*.module.css'
+
+e2e:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/e2e/**'
+
+bench:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/e2e/bench/**'
+          - 'scripts/bench-*.sh'
+          - 'scripts/verify-gate.js'
+          - '.claude/hooks/**'
+
+electron:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'electron/**'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+          - 'scripts/**'
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'doc/**'
+          - '**/*.md'

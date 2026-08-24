@@ -28,8 +28,13 @@ crash a live server. So:
   **arity** taken from the server-side declaration in `../SPO-Original`, cited as `File.pas:Line`;
 - never probe a live server to find out.
 
-`src/shared/rdo-types.ts`, `src/server/rdo.ts`, `src/__fixtures__/` and `jest.config.js` are
-not modified without discussion.
+`src/shared/rdo-types.ts`, `src/shared/rdo-frame.ts`, `src/server/rdo.ts`,
+`src/__fixtures__/` and `jest.config.js` are not modified without discussion — and this is
+**checked**, not merely stated: `scripts/check-pr-rules.js` runs inside the required
+`typecheck + tests` check and fails a pull request that touches one of them without the
+**`rdo-approved`** label. Only the maintainer posts that label; the author of a diff cannot
+unlock their own change. The same step requires a `File.pas:Line` citation in the PR body
+whenever `src/shared/rdo-members.ts` changes.
 
 ## Tests
 
@@ -42,7 +47,9 @@ npm run test:coverage
 
 New or modified lines must reach **93 % coverage** — enforced by `npm run coverage:changed`
 (part of `npm run gate`'s precheck, and run by CI on every pull request); the `jest.config.js`
-floor is a separate number and is unchanged by it. Jest thresholds only go up, never down.
+floor is a separate number and is unchanged by it. Jest thresholds only go up, never down —
+`check-pr-rules.js` compares `coverageThreshold` against the base commit and fails on any
+value lowered or removed.
 Never change a test to make it pass: a red test means the code is wrong, or the criterion was
 badly stated — in that case, ask.
 

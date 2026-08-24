@@ -1,0 +1,52 @@
+# CodeQL — static security analysis of the code we write ourselves.
+#
+# The dependency half was already covered (secret scanning + push protection, Dependabot
+# security updates, `npm audit --omit=dev` in CI). Nothing read our own source: the repo
+# had no code-scanning analysis at all. On a client that parses a binary protocol and
+# holds the WebSocket session, that is the half that matters.
+#
+# Informational by design: it is NOT a required status check. It surfaces alerts in the
+# Security tab; a finding is triaged, not an automatic merge block. Making it required
+# would mean a ruleset change, which is the maintainer's call.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # A weekly pass catches rules added to the query pack after a file stopped changing.
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef # codeql-bundle-v2.26.3
+        with:
+          languages: javascript-typescript
+          # security-extended over the default pack: the extra rules are the taint-tracking
+          # ones, which is exactly what a protocol parser and a session store need.
+          queries: security-extended
+
+      # No build step: the JS/TS extractor reads the sources directly, and `npm run build`
+      # is already proven by the `typecheck + tests` job.
+      - name: Analyze
+        uses: github/codeql-action/analyze@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef # codeql-bundle-v2.26.3
+        with:
+          category: /language:javascript-typescript

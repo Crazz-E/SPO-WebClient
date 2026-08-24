@@ -1,0 +1,31 @@
+# Label pull requests by the paths they touch, so later jobs can route by domain.
+#
+# `pull_request_target` rather than `pull_request`: labelling needs write access to the
+# PR, which the read-only token of a fork-originated `pull_request` run does not have.
+# The job checks out NOTHING and runs no repository code — it reads .github/labeler.yml
+# from the base branch only, which is what makes that trigger safe here.
+name: Labeler
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+        with:
+          # Domain labels are derived, but a human-posted label (rdo-approved) must never
+          # be stripped by a later push.
+          sync-labels: false

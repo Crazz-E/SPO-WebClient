@@ -47,4 +47,6 @@ ownership, one way or the other.
 ## 5 · Findings along the way
 
 Anything discovered out of scope: new issue, added to the board in Todo (bottom), `Catégorie`
-set, synthetic body — then back to the task. Never expand your own scope with it.
+**and the matching `cat:` / `size:` labels** set (kanban-workflow § Feeding rule — the project
+field is not queryable, the label is), synthetic body — then back to the task. Never expand
+your own scope with it.
