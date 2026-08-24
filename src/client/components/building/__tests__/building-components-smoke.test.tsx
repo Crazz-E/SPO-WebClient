@@ -36,7 +36,7 @@ describe('SaveIndicator', () => {
   it('renders confirmed checkmark', () => {
     useBuildingStore.setState({
       pendingUpdates: new Map(),
-      confirmedUpdates: new Map([['price-0', { timestamp: Date.now() }]]),
+      confirmedUpdates: new Map([['price-0', { timestamp: Date.now(), verdict: 'confirmed' as const }]]),
       failedUpdates: new Map(),
     });
     const { container } = renderWithProviders(<SaveIndicator propertyKey="price-0" />);

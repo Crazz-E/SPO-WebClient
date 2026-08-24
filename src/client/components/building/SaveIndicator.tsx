@@ -6,14 +6,20 @@
  *  - Confirmed: brief green checkmark that auto-fades
  *  - Failed: red "!" + "Failed — reason", announced as an alert, auto-clears
  *
- * `confirmedMessage` replaces the checkmark with a sentence. It exists because
- * a checkmark is a claim — "the server holds this value now" — and some members
- * cannot support that claim. `RDOSetTaxValue` is the case in hand: it is a
- * Pascal `procedure`, so nothing comes back, and its cached read-back only
- * refreshes when the Town Hall object's TTL expires (`Kernel/Population.pas:1192`),
- * because the server invalidates the TOWN rather than the facility that carries
- * `Tax<i>Percent` (`:1285`). A tick there would be inventing a confirmation.
- * A sentence says what actually happened instead.
+ * A checkmark is a claim — "the server holds this value now" — and most writes
+ * cannot support it. Which of the two the indicator shows is decided by the
+ * VERDICT the gateway returned, not by the call site: `'confirmed'` gets the
+ * tick, `'unconfirmed'` gets the muted "Sent" instead (OB-1). The two used to
+ * render identically, so a connection the server discarded looked exactly like
+ * one it made.
+ *
+ * `confirmedMessage` is what an unconfirmed write says in place of "Sent" when
+ * the call site has something more useful to tell the player. `RDOSetTaxValue`
+ * is the case in hand: a Pascal `procedure`, so nothing comes back, and its
+ * cached read-back only refreshes when the Town Hall object's TTL expires
+ * (`Kernel/Population.pas:1192`), because the server invalidates the TOWN
+ * rather than the facility that carries `Tax<i>Percent` (`:1285`). It is
+ * ignored on a confirmed write, which needs no excuse.
  */
 
 import { useEffect, useRef } from 'react';
@@ -24,10 +30,17 @@ import styles from './SaveIndicator.module.css';
 const CONFIRMED_DWELL_MS = 1500;
 const MESSAGE_DWELL_MS = 5000;
 
+/**
+ * What an unconfirmed write says when the call site offers no better sentence.
+ * Short enough to sit beside a slider, and it does not claim the write landed.
+ */
+const SENT_LABEL = 'Sent';
+const SENT_TITLE = 'Sent to the server, which did not confirm it';
+
 interface SaveIndicatorProps {
   /** Unique key matching the pendingKey used in setBuildingProperty. */
   propertyKey: string;
-  /** Shown instead of the checkmark when the write cannot be confirmed. */
+  /** Shown instead of "Sent" when the write comes back unconfirmed. */
   confirmedMessage?: string;
 }
 
@@ -42,7 +55,7 @@ export function SaveIndicator({ propertyKey, confirmedMessage }: SaveIndicatorPr
   const confirmedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     if (confirmed) {
-      const dwell = confirmedMessage ? MESSAGE_DWELL_MS : CONFIRMED_DWELL_MS;
+      const dwell = confirmed.verdict === 'unconfirmed' ? MESSAGE_DWELL_MS : CONFIRMED_DWELL_MS;
       confirmedTimer.current = setTimeout(() => clearConfirmed(propertyKey), dwell);
       return () => clearTimeout(confirmedTimer.current);
     }
@@ -67,10 +80,21 @@ export function SaveIndicator({ propertyKey, confirmedMessage }: SaveIndicatorPr
   }
 
   if (confirmed) {
-    if (confirmedMessage) {
+    // OB-1: the verdict decides, not the call site. An unconfirmed write says so
+    // — in the call site's own words when it has them, otherwise in one word.
+    if (confirmed.verdict === 'unconfirmed') {
+      if (confirmedMessage) {
+        return (
+          <span className={`${styles.indicator} ${styles.notice}`} role="status">
+            {confirmedMessage}
+          </span>
+        );
+      }
       return (
-        <span className={`${styles.indicator} ${styles.notice}`} role="status">
-          {confirmedMessage}
+        <span className={`${styles.indicator} ${styles.sent}`} role="status" title={SENT_TITLE}>
+          <span className={styles.sentIcon} aria-hidden="true">&#8599;</span>
+          <span className={styles.sentText}>{SENT_LABEL}</span>
+          <span className={styles.srOnly}>{SENT_TITLE}</span>
         </span>
       );
     }
