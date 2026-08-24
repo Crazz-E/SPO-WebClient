@@ -106,12 +106,17 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0 var(--space-4) var(--space-4);
+  /* Tablet cap (lot g): the sheet stays edge-to-edge (one gesture system) but
+     the reading column is capped and centred for line length */
+  width: 100%;
+  max-width: var(--sheet-content-max);
+  margin-inline: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--surface-border) transparent;
 }
 
 /* Only visible on mobile */
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .backdrop,
   .sheet {
     display: none;

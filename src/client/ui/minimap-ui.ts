@@ -45,9 +45,10 @@ const MAX_SIZE      = 500;  // px — maximum size
  * breakpoint and to the `max-width: 767px` guard every mobile stylesheet uses:
  * a lower value here left a band of widths (landscape phones, small tablets)
  * where the mobile shell was on screen *and* the docked minimap was floating
- * over it.
+ * over it. Lot g moved the mobile shell's upper edge to the desktop
+ * breakpoint (tablet joined the mobile model) — this constant follows it.
  */
-const MOBILE_BP     = 768;
+const MOBILE_BP     = 1024;
 const UPDATE_MS     = 500;  // ms — render interval
 
 /** Fullscreen scrim stacking level — above the mobile sheet, below any modal. */

@@ -277,12 +277,6 @@
 }
 
 @media (max-width: 1023px) {
-  .shifted {
-    right: calc(var(--panel-width-tablet) + var(--space-4));
-  }
-}
-
-@media (max-width: 767px) {
   .bar {
     display: none;
   }

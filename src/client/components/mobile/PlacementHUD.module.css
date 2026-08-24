@@ -7,8 +7,10 @@
   right: 0;
   height: var(--bottomnav-height);
   z-index: var(--z-bottomnav);
-  display: none; /* Only on mobile */
+  display: none; /* Only on mobile and tablet (lot g) */
   align-items: stretch;
+  /* Tablet (lot g): centred cluster — Confirm stays a constant reach from Cancel */
+  justify-content: center;
   background: var(--bg-secondary);
   border-top: 1px solid var(--surface-border);
   padding-bottom: var(--sai-bottom);
@@ -17,6 +19,7 @@
 
 .btn {
   flex: 1;
+  max-width: calc(var(--mobile-hud-max) / 3);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -53,14 +56,14 @@
   line-height: 1;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .hud {
     display: flex;
   }
 }
 
 /* Landscape — compact */
-@media (max-width: 767px) and (orientation: landscape) {
+@media (max-width: 1023px) and (orientation: landscape) {
   .hud {
     height: var(--bottomnav-height); /* 44px in landscape via token */
   }

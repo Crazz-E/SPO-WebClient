@@ -29,15 +29,9 @@
   margin: var(--space-1) 0;
 }
 
-/* Tablet — use correct panel width for shift */
-@media (max-width: 1023px) {
-  .shifted {
-    right: calc(var(--panel-width-tablet) + var(--space-3));
-  }
-}
 
 /* Mobile — hidden (map controls not useful on mobile) */
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .rail {
     display: none;
   }

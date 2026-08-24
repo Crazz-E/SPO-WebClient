@@ -61,7 +61,9 @@ function SheetContent() {
 }
 
 export function MobileShell() {
-  const { isMobile } = useResponsive();
+  // Lot g: the 768-1023 tablet band joined the mobile model — one shell, one
+  // sheet, one tab bar for everything under the desktop breakpoint.
+  const { isDesktop } = useResponsive();
   const mobileTab = useUiStore((s) => s.mobileTab);
   const top = useUiStore((s) => s.stack[s.stack.length - 1]);
   const stackDepth = useUiStore((s) => s.stack.length);
@@ -73,7 +75,7 @@ export function MobileShell() {
   const connectActive = useUiStore((s) => s.connectMode.active);
   const client = useClient();
 
-  if (!isMobile) return null;
+  if (isDesktop) return null;
 
   // Determine if the BottomSheet should be open. Connect mode hides it (N10):
   // on a phone the sheet covers the very map the mode asks to tap; the stack

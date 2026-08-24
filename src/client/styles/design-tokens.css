@@ -149,7 +149,12 @@
   --chatstrip-expanded: 280px;
   --chat-box-width: 500px;
   --panel-width-desktop: 472px;   /* the floating sheet (handoff 00 §3.2) */
-  --panel-width-tablet: 360px;
+  --panel-width-tablet: 360px;    /* legacy panels only — the docked tablet sheet is gone (lot g) */
+  /* Tablet caps (lot g): the mobile shell serves 768-1023 too; touch clusters
+     and reading columns are capped so they don't stretch across the slab. */
+  --mobile-hud-max: 600px;        /* PlacementHUD / MobileModeBar action cluster */
+  --search-pill-max: 480px;       /* the search pill — a deliberate gesture, centred is fine */
+  --sheet-content-max: 640px;     /* reading column inside the bottom sheet */
   --sheet-inset: var(--space-4);  /* gap between the floating sheet and the screen edges (desktop) */
   --sheet-top: 64px;              /* below the status pill */
   --minimap-size: 200px;

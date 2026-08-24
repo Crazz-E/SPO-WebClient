@@ -263,8 +263,9 @@ async function startBuildingPlacement(ctx: ClientHandlerContext, building: Build
   ctx.currentBuildingXSize = xsize;
   ctx.currentBuildingYSize = ysize;
 
-  const isMobile = window.innerWidth < 768;
-  const notifText = isMobile
+  // Under the desktop breakpoint the touch shell runs (lot g: tablet included)
+  const isTouchShell = window.innerWidth < 1024;
+  const notifText = isTouchShell
     ? `${building.name} — Pan map to position, tap to place`
     : `${building.name} placement mode — Click map to place, ESC to cancel`;
   ctx.showNotification(notifText, 'info');
