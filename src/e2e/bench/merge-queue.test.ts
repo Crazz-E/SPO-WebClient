@@ -13,6 +13,7 @@ import {
   listQueueEntries,
   mayReuseVerdict,
   parseQueueRefs,
+  serveMergeQueue,
   shouldGate,
   treeOf,
   type QueueEntry,
@@ -159,5 +160,109 @@ describe('mayReuseVerdict — a live slot only where it proves something', () =>
 
   it('drives when there is nothing attested at all', () => {
     expect(mayReuseVerdict('T1', []).reuseFrom).toBeNull();
+  });
+});
+
+describe('serveMergeQueue — one pass over the queue', () => {
+  interface Recorder {
+    deposited: QueueEntry[];
+    reused: { from: string; to: string }[];
+    logs: string[];
+    deps: Parameters<typeof serveMergeQueue>[0];
+  }
+
+  function recorder(
+    refs: string,
+    attested: { head: string; tree: string | null; verdict: string; fingerprintStable: boolean }[] = [],
+    trees: Record<string, string> = {},
+    pending: (sha: string) => boolean = () => false,
+  ): Recorder {
+    const r: Partial<Recorder> = { deposited: [], reused: [], logs: [] };
+    r.deps = {
+      lsRemote: () => refs,
+      git: args => {
+        const ref = args[1].replace('^{tree}', '');
+        if (!(ref in trees)) throw new Error('unknown revision');
+        return trees[ref];
+      },
+      attested: () => attested,
+      pendingFor: pending,
+      reuse: (from, to) => void r.reused!.push({ from, to }),
+      deposit: entry => void r.deposited!.push(entry),
+      checkoutDir: '/co',
+      log: line => void r.logs!.push(line),
+    };
+    return r as Recorder;
+  }
+
+  it('does nothing at all when there is no queue — the normal state', () => {
+    const r = recorder('');
+    expect(serveMergeQueue(r.deps)).toBe(0);
+    expect(r.deposited).toHaveLength(0);
+    expect(r.logs).toHaveLength(0);
+  });
+
+  it('deposits a gate for an entry nobody has answered', () => {
+    const r = recorder(`${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`);
+    expect(serveMergeQueue(r.deps)).toBe(1);
+    expect(r.deposited).toEqual([{ ref: 'gh-readonly-queue/main/pr-1-abc', sha: SHA_A }]);
+    expect(r.reused).toHaveLength(0);
+  });
+
+  it('reuses a verdict when the entry tree is already driven — no live slot', () => {
+    // The common case at one entry a time: the merge commit is new, its tree is not.
+    const r = recorder(
+      `${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`,
+      [{ head: SHA_B, tree: 'T1', verdict: 'PASS', fingerprintStable: true }],
+      { [SHA_A]: 'T1' },
+    );
+    expect(serveMergeQueue(r.deps)).toBe(1);
+    expect(r.reused).toEqual([{ from: SHA_B, to: SHA_A }]);
+    expect(r.deposited).toHaveLength(0);
+  });
+
+  it('gates rather than reuses when the tree differs — main moved', () => {
+    const r = recorder(
+      `${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`,
+      [{ head: SHA_B, tree: 'T1', verdict: 'PASS', fingerprintStable: true }],
+      { [SHA_A]: 'T2' },
+    );
+    serveMergeQueue(r.deps);
+    expect(r.deposited).toHaveLength(1);
+    expect(r.reused).toHaveLength(0);
+  });
+
+  it('skips an entry that already carries a status', () => {
+    const r = recorder(`${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`, [
+      { head: SHA_A, tree: 'T1', verdict: 'PASS', fingerprintStable: true },
+    ]);
+    expect(serveMergeQueue(r.deps)).toBe(0);
+    expect(r.deposited).toHaveLength(0);
+  });
+
+  it('skips an entry whose job is already in the spool — no second deposit per tick', () => {
+    const r = recorder(`${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`, [], {}, () => true);
+    expect(serveMergeQueue(r.deps)).toBe(0);
+    expect(r.deposited).toHaveLength(0);
+  });
+
+  it('handles several entries independently in one pass', () => {
+    const r = recorder(
+      [
+        `${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`,
+        `${SHA_B}\trefs/heads/gh-readonly-queue/main/pr-2-abc`,
+      ].join('\n'),
+      [{ head: 'c'.repeat(40), tree: 'T1', verdict: 'PASS', fingerprintStable: true }],
+      { [SHA_A]: 'T1' },
+    );
+    expect(serveMergeQueue(r.deps)).toBe(2);
+    expect(r.reused.map(x => x.to)).toEqual([SHA_A]);
+    expect(r.deposited.map(x => x.sha)).toEqual([SHA_B]);
+  });
+
+  it('says what it did, for a human reading the worker log', () => {
+    const r = recorder(`${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`);
+    serveMergeQueue(r.deps);
+    expect(r.logs.join('\n')).toMatch(/gating aaaaaaaa \(gh-readonly-queue\/main\/pr-1-abc\)/);
   });
 });

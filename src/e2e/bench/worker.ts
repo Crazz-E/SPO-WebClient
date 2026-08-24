@@ -29,7 +29,7 @@ import {
 import { fingerprintTree, resolveRef, runGit, type TreeFingerprint } from './fingerprint';
 import { prepareCheckout } from './checkout';
 import { ciStaticProof, type CiProof } from './ci-proof';
-import { serveMergeQueue } from './merge-queue';
+import { serveMergeQueue, type MergeQueueDeps } from './merge-queue';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
 import { lookupReceipt, pruneReceipts, RECEIPT_MAX_AGE_MS } from './receipt';
 import {
@@ -583,6 +583,60 @@ export function realRunCommand(
  * `gatewayDeps` is a parameter only so a test can prove the forwarding — chiefly that the
  * job environment reaches `startGateway` — without a real gateway being spawned.
  */
+/**
+ * What `serveMergeQueue` needs, built from the bench layout.
+ *
+ * Extracted from realWorkerDeps rather than inlined there because these closures are not
+ * wiring — they decide which verdicts count as candidates, what a reused attestation says
+ * about itself, and what shape a queue entry's job takes. That is behaviour, and it is
+ * tested directly.
+ */
+export function mergeQueueDeps(paths: BenchPaths, log: (line: string) => void): MergeQueueDeps {
+  const spool = new Spool(paths);
+  return {
+    lsRemote: cwd => runGit(cwd, ['ls-remote', 'origin', 'refs/heads/gh-readonly-queue/*']),
+    git: (args, cwd) => runGit(cwd, args),
+    attested: () =>
+      listVerdicts(paths).map(({ verdict }) => ({
+        head: verdict.head,
+        tree: verdict.tree ?? null,
+        verdict: verdict.verdict,
+        fingerprintStable: verdict.fingerprintStable,
+      })),
+    pendingFor: sha => [...spool.queued(), ...spool.running()].some(e => e.request.ref === sha),
+    reuse: (fromSha, toSha, why) => {
+      const source = listVerdicts(paths).find(v => v.verdict.head === fromSha);
+      // The source can vanish between the decision and here (the 24 h purge). Doing
+      // nothing leaves the entry unanswered, and the next tick gates it properly — which
+      // is the safe direction.
+      if (!source) return;
+      writeVerdictIn(paths.verdicts, {
+        ...source.verdict,
+        head: toSha,
+        // The reuse is recorded in the job id, so a human reading the status on the PR can
+        // see this entry was not driven live and why it did not need to be.
+        jobId: `${source.verdict.jobId} (reused: ${why})`,
+        createdAt: new Date().toISOString(),
+        published: false,
+      });
+    },
+    deposit: entry => {
+      spool.submit({
+        type: 'ref',
+        worktree: paths.refCheckout,
+        branch: entry.ref,
+        fingerprint: { head: entry.sha, hash: `ref:${entry.sha}`, clean: true },
+        submitter: { pid: 0 },
+        args: [],
+        ref: entry.sha,
+        queueEntry: true,
+      });
+    },
+    checkoutDir: paths.refCheckout,
+    log,
+  };
+}
+
 export function realWorkerDeps(
   paths: BenchPaths,
   gatewayDeps: GatewayDeps = realGatewayDeps(),
@@ -617,47 +671,7 @@ export function realWorkerDeps(
       start: (worktree, port, logFile, env) => startGateway(worktree, port, logFile, gatewayDeps, env),
     },
     publishStatus: ghStatusPublisher(ghExec),
-    serveMergeQueue: () =>
-      serveMergeQueue({
-        lsRemote: cwd => runGit(cwd, ['ls-remote', 'origin', 'refs/heads/gh-readonly-queue/*']),
-        git: (args, cwd) => runGit(cwd, args),
-        attested: () =>
-          listVerdicts(paths).map(({ verdict }) => ({
-            head: verdict.head,
-            tree: verdict.tree ?? null,
-            verdict: verdict.verdict,
-            fingerprintStable: verdict.fingerprintStable,
-          })),
-        pendingFor: sha =>
-          [...new Spool(paths).queued(), ...new Spool(paths).running()].some(
-            e => e.request.ref === sha,
-          ),
-        reuse: (fromSha, toSha, why) => {
-          const source = listVerdicts(paths).find(v => v.verdict.head === fromSha);
-          if (!source) return;
-          writeVerdictIn(paths.verdicts, {
-            ...source.verdict,
-            head: toSha,
-            jobId: `${source.verdict.jobId} (reused: ${why})`,
-            createdAt: new Date().toISOString(),
-            published: false,
-          });
-        },
-        deposit: entry => {
-          new Spool(paths).submit({
-            type: 'ref',
-            worktree: paths.refCheckout,
-            branch: entry.ref,
-            fingerprint: { head: entry.sha, hash: `ref:${entry.sha}`, clean: true },
-            submitter: { pid: 0 },
-            args: [],
-            ref: entry.sha,
-            queueEntry: true,
-          });
-        },
-        checkoutDir: paths.refCheckout,
-        log,
-      }),
+    serveMergeQueue: () => serveMergeQueue(mergeQueueDeps(paths, log)),
     ciStaticProof: sha => ciStaticProof((args, cwd) => runGh('gh', args, cwd), sha, paths.refCheckout),
     prepareRef: (ref, logFile) =>
       prepareCheckout(

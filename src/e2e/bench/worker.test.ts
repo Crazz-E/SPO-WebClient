@@ -3,13 +3,14 @@ import * as os from 'os';
 import * as path from 'path';
 import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './paths';
 import { Spool, type JobRequest } from './job';
-import { listVerdicts } from './verdict';
+import { listVerdicts, writeVerdictIn } from './verdict';
 import { readNightlyResult } from './nightly';
 import { buildReceipt, writeReceipt } from './receipt';
 import { type GatewayDeps } from './gateway';
 import {
   countCapabilityExceptions,
   main,
+  mergeQueueDeps,
   processOldest,
   realRunCommand,
   realWorkerDeps,
@@ -992,5 +993,103 @@ describe('the merge queue takes the bench first', () => {
     await processOldest(h.deps);
 
     expect(listVerdicts(h.paths)[0].verdict.tree).toBe('tree-abc');
+  });
+});
+
+describe('mergeQueueDeps — what the queue service is given', () => {
+  function bench(): BenchPaths {
+    const paths = benchPaths(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-mq-')));
+    ensureLayout(paths);
+    return paths;
+  }
+
+  it('offers every attestation as a candidate, with the tree it drove', () => {
+    const paths = bench();
+    writeVerdictIn(paths.verdicts, {
+      head: 'a'.repeat(40),
+      branch: 'x',
+      worktree: paths.refCheckout,
+      verdict: 'PASS',
+      fingerprintStable: true,
+      tree: 'tree-1',
+      jobId: 'job-1',
+      createdAt: new Date().toISOString(),
+    });
+
+    expect(mergeQueueDeps(paths, () => {}).attested()).toEqual([
+      { head: 'a'.repeat(40), tree: 'tree-1', verdict: 'PASS', fingerprintStable: true },
+    ]);
+  });
+
+  it('reports a tree-less attestation as null rather than dropping it', () => {
+    // Older attestations predate the tree field. They are still real verdicts; they just
+    // cannot satisfy the dedup, which mayReuseVerdict already handles.
+    const paths = bench();
+    writeVerdictIn(paths.verdicts, {
+      head: 'b'.repeat(40),
+      branch: 'x',
+      worktree: '/wt',
+      verdict: 'PASS',
+      fingerprintStable: true,
+      jobId: 'job-2',
+      createdAt: new Date().toISOString(),
+    });
+    expect(mergeQueueDeps(paths, () => {}).attested()[0].tree).toBeNull();
+  });
+
+  it('deposits a queue entry as a PRIORITY ref job in the shared checkout', () => {
+    const paths = bench();
+    const deps = mergeQueueDeps(paths, () => {});
+    deps.deposit({ ref: 'gh-readonly-queue/main/pr-9-abc', sha: 'c'.repeat(40) });
+
+    const [{ request }] = new Spool(paths).queued();
+    expect(request).toMatchObject({
+      type: 'ref',
+      ref: 'c'.repeat(40),
+      queueEntry: true,
+      worktree: paths.refCheckout,
+      branch: 'gh-readonly-queue/main/pr-9-abc',
+      submitter: { pid: 0 },
+    });
+  });
+
+  it('sees its own deposit as pending, so a tick never deposits twice', () => {
+    const paths = bench();
+    const deps = mergeQueueDeps(paths, () => {});
+    expect(deps.pendingFor('d'.repeat(40))).toBe(false);
+    deps.deposit({ ref: 'gh-readonly-queue/main/pr-9-abc', sha: 'd'.repeat(40) });
+    expect(deps.pendingFor('d'.repeat(40))).toBe(true);
+  });
+
+  it('copies a reused verdict onto the entry, recording that it was not driven', () => {
+    const paths = bench();
+    writeVerdictIn(paths.verdicts, {
+      head: 'e'.repeat(40),
+      branch: 'x',
+      worktree: paths.refCheckout,
+      verdict: 'PASS',
+      fingerprintStable: true,
+      tree: 'tree-9',
+      jobId: 'job-src',
+      createdAt: new Date().toISOString(),
+      published: true,
+    });
+
+    mergeQueueDeps(paths, () => {}).reuse('e'.repeat(40), 'f'.repeat(40), 'identical tree');
+
+    const copy = listVerdicts(paths).find(v => v.verdict.head === 'f'.repeat(40))!.verdict;
+    expect(copy.verdict).toBe('PASS');
+    expect(copy.tree).toBe('tree-9');
+    // Unpublished, so the loop posts it to GitHub; and the id says plainly it was reused.
+    expect(copy.published).toBe(false);
+    expect(copy.jobId).toMatch(/job-src \(reused: identical tree\)/);
+  });
+
+  it('does nothing when the source verdict has vanished — the next tick gates it', () => {
+    // The 24 h purge can remove it between the decision and the copy. Leaving the entry
+    // unanswered is the safe direction: it gets gated properly rather than blessed.
+    const paths = bench();
+    mergeQueueDeps(paths, () => {}).reuse('0'.repeat(40), '1'.repeat(40), 'why');
+    expect(listVerdicts(paths)).toHaveLength(0);
   });
 });
