@@ -46,7 +46,7 @@ L3  LIVE browser smoke        Playwright MCP, SPO_test3 / Crazz         UI/rende
 ```
 
 L2 replaces both the abandoned mock-E2E plan and most of the browser smoke. L3 survives only
-for what a WebSocket cannot observe: rendering, layout, input, mobile, Electron.
+for what a WebSocket cannot observe: rendering, layout, input, mobile.
 
 `src/mock-server/` is **not** a mock backend for L2 — it is the substrate of L1
 (`rdo-mock`, `rdo-strict-validator`, `scenarios/`, `types/`, consumed by 19 suites under
@@ -111,7 +111,6 @@ nothing that changed; the routing table is what keeps the run pointed at the del
 | `src/client/components/building/**` | L2 `building-details` |
 | `src/client/renderer/**`, mobile layout, `*.module.css` | **L3** browser smoke (a WS drive cannot see a pixel) |
 | `package.json`, `package-lock.json` | L2 spine + `building-details` — the shipped code moved even though no `src/` file did |
-| `electron/**` | static only — packaged by `electron-release.yml`, not observable over the wire |
 | `doc/**`, `*.md`, CI config, tooling | static only |
 
 The **login spine** (connect -> auth -> directory -> world login -> company select ->

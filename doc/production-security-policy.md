@@ -32,7 +32,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 
 | ID | Requirement | Status | Enforcement |
 |---|---|---|---|
-| SEC-W-1 | WS upgrades MUST validate `Origin` against the allow-list; missing or foreign origins → 403 (except `SINGLE_USER_MODE`, Electron). | Met (`server.ts:1037-1060`) | L4 |
+| SEC-W-1 | WS upgrades MUST validate `Origin` against the allow-list; missing or foreign origins → 403 (except `SINGLE_USER_MODE`). | Met (`server.ts:1037-1060`) | L4 |
 | SEC-W-2 | WS frames MUST be capped at 64 KB (`maxPayload`). | Met | L4 |
 | SEC-W-3 | Per-IP concurrent WS connections MUST be capped (currently 5 → 429). A **global** session cap SHOULD be added to bound aggregate gateway→Delphi load (risk B4). | Partial (per-IP only) | L4 (per-IP now; global when implemented) |
 | SEC-W-4 | Messages MUST be gated by session phase (`PHASE_ALLOWED_MESSAGES`): gameplay messages before auth → `ERROR_AccessDenied`; unknown message types MUST be rejected. | Met (`server.ts:1283-1309`) | L4 |
@@ -69,7 +69,6 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 |---|---|---|---|
 | SEC-D-1 | `npm audit --omit=dev --audit-level=high` MUST pass in CI on every PR; high/critical findings block merge (or carry a written, dated exception in this file). | **Enforced** (2026-08-22, `ci.yml` step *Audit production dependencies*) | CI `typecheck + tests` job |
 | SEC-D-2 | Lockfile (`package-lock.json`) MUST be committed; CI MUST use `npm ci`. | Met | CI |
-| SEC-D-3 | Electron auto-updates MUST come only from the official signed GitHub releases channel. | Met (electron-updater config) | release workflow + `validate-electron-package.js` |
 
 ## 8. Network Etiquette Toward Live Servers (SEC-N)
 
@@ -86,4 +85,4 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 - The **L4 compliance suite is the machine-readable form of this policy.** A PR that makes L4 fail is a policy violation and MUST NOT merge.
 - Items marked **Missing — required work** (SEC-G-4, SEC-R-2, SEC-D-1, global cap of SEC-W-3) are the initial remediation backlog; each fix ships with its L4/L1 test.
 - Exceptions: documented here, with owner, rationale, and expiry date. Current exceptions: **none**.
-- Review cadence: re-audit this policy whenever the deployment topology changes (new public endpoint, new proxy layer, Electron distribution change) and at least once per release cycle.
+- Review cadence: re-audit this policy whenever the deployment topology changes (new public endpoint, new proxy layer, new distribution channel) and at least once per release cycle.

@@ -51,10 +51,6 @@ screenshots/
 # Playwright MCP session logs
 .playwright-mcp/
 
-# Electron build artifacts
-electron/release/
-electron/node_modules/
-
 # Claude AI local overrides (settings.local.json only - shared config is tracked)
 .claude/settings.local.json
 .claude/memory/

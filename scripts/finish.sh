@@ -214,10 +214,6 @@ if git -C "$MAIN_REPO" diff --name-only "${merge_sha}^" "$merge_sha" | grep -qx 
   echo "== the merge changed package-lock.json — npm ci in $MAIN_REPO"
   (cd "$MAIN_REPO" && npm ci --no-audit --no-fund)
 fi
-if git -C "$MAIN_REPO" diff --name-only "${merge_sha}^" "$merge_sha" | grep -qx 'electron/package-lock.json'; then
-  echo "== the merge changed electron/package-lock.json — npm ci --prefix electron in $MAIN_REPO"
-  (cd "$MAIN_REPO" && npm ci --no-audit --no-fund --prefix electron)
-fi
 
 if [ "$branch_only" = 0 ] && [ -n "$(git -C "$here" status --porcelain)" ]; then
   echo "REFUSED: '$here' has uncommitted changes — they are not on main. Commit or discard them first." >&2

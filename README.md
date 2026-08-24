@@ -52,7 +52,6 @@ Browser Client ──WebSocket──> Node.js Gateway ──RDO/TCP──> Game 
 - **Mock server** — Capture-based replay engine with 8+ scenarios for offline development without a live game server
 - **Service registry** — Managed service lifecycle with dependency ordering, health checks, and graceful shutdown
 - **In-app changelog** — Version badge with changelog modal for tracking updates
-- **Electron desktop client** — Native desktop app with embedded gateway, auto-update, and incremental asset caching
 - **Docker deployment** — Production-ready containerization with nginx reverse proxy and HTTPS via Let's Encrypt
 - **Auto-reconnect** — Seamless session recovery on mobile tab switch without re-login
 
@@ -309,9 +308,9 @@ The Node.js server exposes REST endpoints for game data and asset serving. Stati
 
 ### Releases
 
-Every merge to `main` is a release: `electron-release.yml` derives the version from the last
-`v*` tag and the conventional commits since it (`feat` → minor, otherwise patch), builds the
-installer, tags and publishes it on [GitHub Releases](https://github.com/Crazz-E/SPO-WebClient/releases)
+Every merge to `main` is a release: `release.yml` derives the version from the last
+`v*` tag and the conventional commits since it (`feat` → minor, otherwise patch), builds,
+tags and publishes it on [GitHub Releases](https://github.com/Crazz-E/SPO-WebClient/releases)
 with generated notes. Nobody creates `v*` tags by hand. [CHANGELOG.md](CHANGELOG.md) is the
 frozen history up to 1.3.2-beta.
 

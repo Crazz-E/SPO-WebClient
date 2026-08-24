@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-electron/node_modules/
 
 # Build outputs
 dist/
@@ -15,9 +14,6 @@ webclient-cache/
 coverage/
 screenshots/
 .playwright-mcp/
-
-# Electron build artifacts
-electron/release/
 
 # Environment & secrets
 .env

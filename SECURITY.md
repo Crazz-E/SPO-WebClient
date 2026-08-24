@@ -25,8 +25,7 @@ not operated by this project. Findings that concern those servers are out of sco
 report them to the server operators.
 
 In scope: the Node.js gateway (WebSocket handling, session management, RDO framing and
-parsing), the browser client, the Electron shell and its auto-updater, and the build and
-release pipeline.
+parsing), the browser client, and the build and release pipeline.
 
 ## Please do not
 

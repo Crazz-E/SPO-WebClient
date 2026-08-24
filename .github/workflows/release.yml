@@ -1,0 +1,104 @@
+# Release — every merge to main becomes a release.
+#
+# The version is derived, not committed: scripts/changelog.js reads the last `v*` tag and
+# the conventional-commit subjects since it (feat -> minor, otherwise patch; nothing ->
+# skip). The workflow builds server + client, then creates the GitHub Release as a DRAFT
+# and publishes it; the `v<version>` tag materialises at that moment, on GITHUB_SHA.
+# Never create a `v*` tag by hand.
+#
+# Why `push: branches: [main]` and not a tag trigger: the tag is made here with
+# GITHUB_TOKEN, and events caused by GITHUB_TOKEN never start another workflow — a
+# `v*` tag trigger would simply never fire. workflow_dispatch is the manual retry.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      # Derives the version from the tags; fails if `v<version>` already exists at another
+      # commit; writes version= and skip= to GITHUB_OUTPUT. Nothing else runs when skip is true.
+      - name: Derive the next version
+        id: next
+        run: node scripts/changelog.js --next
+
+      # A previous run of this same sha may have died between `release create --draft` and
+      # the publish. A draft has no tag, so deleting it costs nothing and makes the run resumable.
+      - name: Delete a stale draft for this version
+        if: steps.next.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.next.outputs.version }}
+        run: |
+          ids=$(gh api "repos/${{ github.repository }}/releases" --paginate \
+            --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id")
+          for id in $ids; do
+            echo "Deleting stale draft release $id for $TAG"
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$id"
+          done
+
+      - name: Cache node_modules
+        if: steps.next.outputs.skip != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: root-modules-${{ hashFiles('package-lock.json') }}
+
+      - name: Install dependencies
+        if: steps.next.outputs.skip != 'true'
+        run: npm ci
+
+      # The manifest carries 0.0.0-dev in git. Stamping it here, before the build, is what
+      # puts the real version into vite's __APP_VERSION__.
+      - name: Stamp the version into the manifest
+        if: steps.next.outputs.skip != 'true'
+        run: npm version ${{ steps.next.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Generate the in-app changelog
+        if: steps.next.outputs.skip != 'true'
+        run: node scripts/changelog.js --json
+
+      - name: Generate the release notes
+        if: steps.next.outputs.skip != 'true'
+        run: node scripts/changelog.js --notes notes.md && cat notes.md
+
+      # No `npm test` here: the sha being released already passed CI on its PR and on the
+      # push to main, and the bench gate before that. The build below is what proves the
+      # released tree compiles.
+      - name: Build server + client
+        if: steps.next.outputs.skip != 'true'
+        run: npm run build
+
+      # Draft first: a draft creates no tag and nobody sees it. The publish flips it live
+      # and creates the tag on GITHUB_SHA — one release, one tag, or nothing at all.
+      - name: Publish the release
+        if: steps.next.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.next.outputs.version }}
+        run: |
+          gh release create "$TAG" --target ${{ github.sha }} --draft --title "$TAG" --notes-file notes.md
+          gh release edit "$TAG" --draft=false --latest

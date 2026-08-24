@@ -35,11 +35,6 @@ export const ROUTES: RouteRule[] = [
     why: 'dependency change — the shipped code moved even though no src/ file did',
   },
   {
-    test: /^electron\//,
-    flows: [],
-    why: 'Electron shell — packaged by electron-release.yml, not observable over the wire',
-  },
-  {
     test: /^src\/e2e\/|^scripts\/|^\.claude\/|^\.github\/|^\.[^/]*$|^[^/]+\.(json|js|cjs|mjs|ya?ml)$/,
     flows: [],
     why: 'tooling and repo config — verified by its own unit tests',

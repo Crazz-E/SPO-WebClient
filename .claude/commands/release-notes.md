@@ -7,7 +7,7 @@ model: fable
 # Preview Release Notes
 
 Preview-only. Nothing here releases anything: every merge to `main` is the release
-(`.github/workflows/electron-release.yml` derives the version from the last `v*` tag and
+(`.github/workflows/release.yml` derives the version from the last `v*` tag and
 the conventional commits since it, builds, tags and publishes). Never create `v*` tags by hand.
 
 ## Procedure

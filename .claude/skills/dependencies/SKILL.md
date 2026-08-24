@@ -1,6 +1,6 @@
 ---
 name: dependencies
-description: "TRIGGER: When auditing dependency vulnerabilities, checking licences, updating packages, or resolving version conflicts in package.json. Covers the WebClient root and the electron/ subpackage."
+description: "TRIGGER: When auditing dependency vulnerabilities, checking licences, updating packages, or resolving version conflicts in package.json."
 user-invokable: true
 disable-model-invocation: false
 ---
@@ -11,14 +11,11 @@ Replaces the former `dependency-audit` + `dependency-updater` pair. Both were ge
 multi-language playbooks (Python/Go/Rust branches, `taze`, monorepo tooling) for a repo
 that is npm-only. This is the npm-only version, with this project's actual verification gate.
 
-## Two package trees
+## One package tree
 
 | Tree | Manifest | Notes |
 |------|----------|-------|
-| WebClient | `package.json` | Server + client + tests. The one you almost always mean. |
-| Electron shell | `electron/package.json` | Separate `node_modules`, separate lockfile. `npm audit` at the root does NOT see it. |
-
-Always state which tree you audited. A "clean" root audit says nothing about `electron/`.
+| WebClient | `package.json` | Server + client + tests. The only manifest in the repo. |
 
 ## Runtime surface
 
@@ -40,7 +37,6 @@ Production deps are few and each carries a specific risk profile — know which 
 npm audit --omit=dev              # production surface — what actually ships
 npm audit                         # full tree, including build tooling
 npm outdated                      # available upgrades
-cd electron && npm audit          # the second tree — do not skip
 ```
 
 Triage by **reachability**, not by CVSS alone. A critical in a build-only devDependency
@@ -54,7 +50,7 @@ npm ls --all --json | node -e "…"   # or npx license-checker-rseidelsohn --sum
 ```
 
 The project ships under its own `LICENSE`. Flag any new **copyleft** (GPL/AGPL/LGPL)
-dependency before it lands — an AGPL transitive in a shipped Electron build is a real
+dependency before it lands — an AGPL transitive in the shipped gateway is a real
 problem, not a formality.
 
 ## Updating
@@ -97,6 +93,5 @@ npm test -- rdo
 |--------|-----|
 | `npm audit fix --force` | Applies breaking majors silently across the protocol layer. |
 | Bump `ws` or `cheerio` inside a feature commit | Buries a protocol-layer risk in unrelated review. |
-| Report a root `npm audit` as "the project is clean" | `electron/` has its own tree. |
 | Add a package to replace ~20 lines of code | Widens the supply-chain surface for no gain. |
 | Lower a coverage threshold to make an upgrade pass | Thresholds only go UP. |

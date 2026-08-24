@@ -17,17 +17,18 @@ interface AuthStageProps {
   status: string;
 }
 
-const isElectron = typeof window !== 'undefined' &&
-  (window as unknown as Record<string, unknown>).__SPO_ELECTRON__ === true;
+/** Single-user mode: the gateway serves one local player, so remembering a username is safe. */
+const isSingleUser = typeof window !== 'undefined' &&
+  (window as unknown as Record<string, unknown>).__SPO_SINGLE_USER__ === true;
 
 export function AuthStage({ onConnect, isLoading, status }: AuthStageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberUsername, setRememberUsername] = useState(false);
 
-  // Load saved username on mount (Electron only)
+  // Load saved username on mount (single-user mode only)
   useEffect(() => {
-    if (!isElectron) return;
+    if (!isSingleUser) return;
     const saved = localStorage.getItem('spo_last_username');
     if (saved) {
       setUsername(saved);
@@ -40,7 +41,7 @@ export function AuthStage({ onConnect, isLoading, status }: AuthStageProps) {
       showToast('Enter username and password', 'warning');
       return;
     }
-    if (isElectron) {
+    if (isSingleUser) {
       if (rememberUsername) {
         localStorage.setItem('spo_last_username', username);
       } else {
@@ -84,7 +85,7 @@ export function AuthStage({ onConnect, isLoading, status }: AuthStageProps) {
             autoComplete="current-password"
           />
         </div>
-        {isElectron && (
+        {isSingleUser && (
           <label className={styles.rememberMe}>
             <input
               type="checkbox"

@@ -13,8 +13,6 @@ export default tseslint.config(
       'cache/**',
       'webclient-cache/**',
       'public/**',
-      'electron/node_modules/**',
-      'electron/release/**',
       '.claude/**',
     ],
   },
@@ -24,9 +22,9 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
 
   {
-    // These are CommonJS by design — the Electron shell, the Jest plumbing, the scripts,
-    // and the legacy-archaeology generators behind report/rdo-surface-coverage.html.
-    files: ['electron/**/*.js', 'jest.config.js', 'src/__mocks__/**/*.js', 'scripts/**/*.js', 'report/**/*.js'],
+    // These are CommonJS by design — the Jest plumbing, the scripts, and the
+    // legacy-archaeology generators behind report/rdo-surface-coverage.html.
+    files: ['jest.config.js', 'src/__mocks__/**/*.js', 'scripts/**/*.js', 'report/**/*.js'],
     languageOptions: {
       sourceType: 'commonjs',
       globals: { module: 'writable', require: 'readonly', __dirname: 'readonly', process: 'readonly', console: 'readonly' },
@@ -38,7 +36,7 @@ export default tseslint.config(
   },
 
   {
-    files: ['src/**/*.{ts,tsx}', 'scripts/**/*.js', 'electron/**/*.js'],
+    files: ['src/**/*.{ts,tsx}', 'scripts/**/*.js'],
     rules: {
       // TypeScript already resolves every identifier; no-undef only reports DOM and
       // Node globals it cannot see, which is noise.

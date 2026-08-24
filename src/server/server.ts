@@ -30,7 +30,7 @@ import { toErrorMessage } from '../shared/error-utils';
 import { wsHandlerRegistry } from './ws-handlers';
 import { buildErrorContractReadout, buildPropertyFallbackReadout } from './session/diagnostics-readouts';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
-import { getPublicDir, getCacheDir, getWebclientCacheDir, setElectronUserDataPath, setElectronResourcesPath } from './paths';
+import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 
 /**
  * Starpeace Gateway Server
@@ -73,14 +73,14 @@ const QUIET_WS_TYPES: ReadonlySet<string> = new Set([
   WsMessageType.REQ_MAP_LOAD,
 ]);
 
-/** Cache sync mode: 'inline' = UpdateService runs in-process (dev/Electron), 'external' = separate container */
+/** Cache sync mode: 'inline' = UpdateService runs in-process (dev/single-user), 'external' = separate container */
 const CACHE_SYNC_MODE = process.env.CACHE_SYNC_MODE || 'inline';
 if (CACHE_SYNC_MODE !== 'inline' && CACHE_SYNC_MODE !== 'external') {
   throw new Error(`Invalid CACHE_SYNC_MODE="${CACHE_SYNC_MODE}". Must be "inline" or "external".`);
 }
 
-let PUBLIC_DIR = getPublicDir();
-let CACHE_DIR = getCacheDir();
+const PUBLIC_DIR = getPublicDir();
+const CACHE_DIR = getCacheDir();
 
 // Vite manifest: maps source entries to hashed output filenames for cache-busting.
 // Loaded once at startup; rebuilt on each `npm run build`.
@@ -116,7 +116,7 @@ const facilityDimensionsCache = () => serviceRegistry.get<FacilityDimensionsCach
 const mapDataService = () => serviceRegistry.get<MapDataService>('mapData');
 
 // Dynamic image cache directory (for facility images fetched from game server)
-let WEBCLIENT_CACHE_DIR = getWebclientCacheDir();
+const WEBCLIENT_CACHE_DIR = getWebclientCacheDir();
 if (!fs.existsSync(WEBCLIENT_CACHE_DIR)) {
   fs.mkdirSync(WEBCLIENT_CACHE_DIR, { recursive: true });
 }
@@ -125,12 +125,12 @@ if (!fs.existsSync(WEBCLIENT_CACHE_DIR)) {
 // Service Registration (called after paths are resolved)
 // =============================================================================
 // Services capture their cache directory at construction time, so they MUST be
-// created after Electron's userDataPath/resourcesPath have been applied.
+// created from startGateway() once the runtime overrides have been applied.
 // Moving this to module level would cause services to capture stale paths.
 
 function registerServices(): void {
   if (CACHE_SYNC_MODE === 'inline') {
-    // Dev/Electron: UpdateService runs in-process (existing behavior)
+    // Dev/single-user: UpdateService runs in-process (existing behavior)
     serviceRegistry.register('update', new UpdateService(), {
       progressWeight: 50,
       progressMessage: 'Downloading game assets...',
@@ -583,13 +583,13 @@ const server = http.createServer(async (req, res) => {
   const safePath = req.url === '/' ? '/index.html' : req.url || '/index.html';
 
   // Runtime config script — serves CDN URL override as an external JS file (CSP-compliant).
-  // Only relevant when CHUNK_CDN_URL is overridden (e.g., Electron). In Docker, this returns
+  // Only relevant when CHUNK_CDN_URL is overridden. In Docker, this returns
   // an empty script since config.cdn.url matches the default.
   if (safePath === '/spo-runtime-config.js') {
     const cdnJson = JSON.stringify(config.cdn.url);
     let body = `window.__SPO_CDN_URL__=${cdnJson};`;
     if (SINGLE_USER_MODE) {
-      body += `\nwindow.__SPO_ELECTRON__=true;`;
+      body += `\nwindow.__SPO_SINGLE_USER__=true;`;
     }
     if (config.server.forceWorld) {
       body += `\nwindow.__SPO_FORCE_WORLD__=${JSON.stringify(config.server.forceWorld)};`;
@@ -765,7 +765,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // CDN proxy — relays requests to the upstream CDN server-side, bypassing CORS.
-  // Used when the client sets cdn.url to '' (e.g., Electron / single-user mode).
+  // Used when the client sets cdn.url to '' (e.g., single-user mode).
   // The client falls back to /cdn/* paths when CHUNK_CDN_URL is empty.
   if (safePath.startsWith('/cdn/')) {
     const cdnBaseUrl = config.cdn.url || 'https://spo.zz.works';
@@ -1020,7 +1020,7 @@ const server = http.createServer(async (req, res) => {
       html = html.replace('href="app.css"', cssPaths.map(p => `href="${p}"`).join('" />\n    <link rel="stylesheet" '));
 
       // Inject a runtime config script tag into index.html so the client can use
-      // the /cdn/ proxy when CHUNK_CDN_URL is overridden (e.g., Electron).
+      // the /cdn/ proxy when CHUNK_CDN_URL is overridden.
       // Uses an external script (CSP-compliant) instead of inline script.
       // In Docker/default mode, config.cdn.url is the default and no injection occurs.
       if (config.cdn.url !== 'https://spo.zz.works' || config.server.forceWorld) {
@@ -1360,17 +1360,13 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
 }
 
 // =============================================================================
-// Gateway startup — exportable for embedding (e.g., Electron)
+// Gateway startup — exportable for embedding and for the test harness
 // =============================================================================
 
 export interface GatewayOptions {
   host?: string;
   port?: number;
   singleUserMode?: boolean;
-  /** Electron: pass app.getPath('userData') to redirect writable dirs to %APPDATA% */
-  userDataPath?: string;
-  /** Electron: pass process.resourcesPath so getPublicDir() resolves to resources/public */
-  resourcesPath?: string;
   onListening?: (port: number) => void;
 }
 
@@ -1385,24 +1381,6 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
   if (options?.host !== undefined) HOST = options.host;
   if (options?.port !== undefined) PORT = options.port;
   if (options?.singleUserMode !== undefined) SINGLE_USER_MODE = options.singleUserMode;
-
-  // Re-resolve paths for Electron (writable dirs → %APPDATA%, public → resources/)
-  if (options?.resourcesPath) {
-    setElectronResourcesPath(options.resourcesPath);
-  }
-  if (options?.userDataPath) {
-    setElectronUserDataPath(options.userDataPath);
-  }
-  if (options?.userDataPath || options?.resourcesPath) {
-    PUBLIC_DIR = getPublicDir();
-    CACHE_DIR = getCacheDir();
-    WEBCLIENT_CACHE_DIR = getWebclientCacheDir();
-    for (const dir of [CACHE_DIR, WEBCLIENT_CACHE_DIR]) {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-    }
-  }
 
   // Load Vite manifest for content-hashed asset resolution
   loadViteManifest();
@@ -1550,7 +1528,7 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
 }
 
 // =============================================================================
-// Standalone entry point — when run directly (not imported by Electron/test)
+// Standalone entry point — when run directly (not imported by a test)
 // =============================================================================
 
 function setupStandaloneErrorHandlers(): void {

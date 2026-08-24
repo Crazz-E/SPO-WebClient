@@ -86,8 +86,8 @@ becomes the one squash commit, and that commit is the changelog line. GitHub del
 remote branch at merge; then **`npm run finish`** closes the local side (main fast-forwarded,
 refs pruned, worker reinstalled if its sources changed, worktree and branch removed). An
 update is done when `main` is the only branch left, locally and on origin. The merge itself
-is the release: `electron-release.yml` computes the version from the last `v*` tag and the
-commits since it (`feat` → minor, otherwise patch), builds the installer, tags and publishes
+is the release: `release.yml` computes the version from the last `v*` tag and the
+commits since it (`feat` → minor, otherwise patch), builds, tags and publishes
 it on GitHub Releases — never create `v*` tags by hand.
 
 Dependabot PRs: `npm run deps:gate` merges main in, installs, gates, pushes and auto-merges them

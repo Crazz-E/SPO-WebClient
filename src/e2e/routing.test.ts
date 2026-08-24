@@ -64,12 +64,6 @@ describe('route', () => {
     expect(route(['package.json']).staticOnly).toBe(false);
   });
 
-  it('treats the Electron shell as static-only — not observable over the wire', () => {
-    const decision = route(['electron/package.json', 'electron/package-lock.json', 'electron/main.js']);
-    expect(decision.unmapped).toEqual([]);
-    expect(decision.staticOnly).toBe(true);
-  });
-
   it('fails closed on a path no rule covers', () => {
     const decision = route(['src/brand-new-area/thing.ts']);
     expect(decision.unmapped).toEqual(['src/brand-new-area/thing.ts']);

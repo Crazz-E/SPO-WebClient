@@ -21,7 +21,7 @@ Drives the live game client in a real browser via Playwright MCP.
    The ordered Phase 0–8 smoke script and report format now live in the same file.
 2. **[doc/E2E-POLICY.md](../../../doc/E2E-POLICY.md)** — the gate: which layer a change
    must reach, and what counts as proof. L3 is required only for pixels (renderer, layout,
-   mobile, Electron) and pre-release; everything below the pixel is L2,
+   mobile) and pre-release; everything below the pixel is L2,
    `npm run test:live`.
 
 ## Scenario argument
