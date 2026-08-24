@@ -27,7 +27,7 @@ const INFO: WorkerInfo = { pid: 4242, startedAt: '2026-08-22T09:00:00Z', repo: '
 describe('bench layout', () => {
   it('creates every shared directory', () => {
     const paths = tempBench();
-    for (const dir of [paths.spool, paths.running, paths.done, paths.verdicts, paths.world]) {
+    for (const dir of [paths.spool, paths.running, paths.done, paths.verdicts, paths.receipts, paths.world]) {
       expect(fs.statSync(dir).isDirectory()).toBe(true);
     }
   });
@@ -38,6 +38,7 @@ describe('bench layout', () => {
       process.env.SPO_BENCH_DIR = '/somewhere/else';
       expect(benchRoot()).toBe('/somewhere/else');
       expect(benchPaths().spool).toBe('/somewhere/else/spool');
+      expect(benchPaths().receipts).toBe('/somewhere/else/receipts');
       delete process.env.SPO_BENCH_DIR;
       expect(benchRoot()).toBe(path.join(os.homedir(), '.spo-bench'));
     } finally {

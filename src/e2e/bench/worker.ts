@@ -28,6 +28,7 @@ import {
 } from './paths';
 import { fingerprintTree, resolveRef, type TreeFingerprint } from './fingerprint';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
+import { lookupReceipt, pruneReceipts, RECEIPT_MAX_AGE_MS } from './receipt';
 import { clearPort, realGatewayDeps, startGateway, type RunningGateway } from './gateway';
 import { ghStatusPublisher, publishPendingStatuses, writeVerdict, type StatusPublisher } from './verdict';
 
@@ -274,7 +275,25 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
   try {
     const env = { E2E_WORLD_STATE_DIR: deps.paths.world };
     if (request.type === 'gate') {
-      const code = await deps.runCommand('node', ['scripts/verify-gate.js', ...request.args], {
+      // The static stage — typecheck, lint, the Jest suite — is exactly what the session
+      // already ran in `gate:precheck`. If it left a receipt for THIS tree, replaying it
+      // inside the exclusive bench buys nothing but ~113 s of everyone else's queue.
+      // The tree is the one the worker fingerprinted itself at :atStart, never a value
+      // the session supplied — a receipt for any other tree is simply never opened.
+      const found = lookupReceipt(
+        deps.paths,
+        report.fingerprints.atStart,
+        request.worktree,
+        deps.now(),
+      );
+      report.staticReceipt = { used: found.ok, ...(found.ok ? {} : { why: found.why }) };
+      deps.log(
+        found.ok
+          ? `static stage from the precheck receipt (${found.file})`
+          : `replaying the static stage — ${found.why}`,
+      );
+      const args = found.ok ? ['--skip-static', ...request.args] : request.args;
+      const code = await deps.runCommand('node', ['scripts/verify-gate.js', ...args], {
         cwd: request.worktree,
         env,
         logFile,
@@ -355,6 +374,7 @@ export async function workerLoop(deps: WorkerDeps, maxTicks: number = Infinity):
     try {
       const worked = await processOldest(deps);
       deps.spool.purgeDone(DONE_RETENTION_MS, deps.now());
+      pruneReceipts(deps.paths, RECEIPT_MAX_AGE_MS, deps.now());
       if (deps.now() - lastPublish > 30_000) {
         lastPublish = deps.now();
         publishPendingStatuses(deps.paths, deps.publishStatus, deps.log, deps.now());

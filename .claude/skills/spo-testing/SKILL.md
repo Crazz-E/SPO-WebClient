@@ -35,6 +35,11 @@ run with coverage restricted to the changed files, aggregate ratio over changed 
 lines) in `gate:precheck` and in CI on pull requests — meeting the jest thresholds is not
 sufficient.
 
+**That one run is the precheck's whole test pass.** `--collectCoverageFrom` restricts what
+Jest *instruments*, never what it *runs*, so this has always executed the entire suite;
+`gate:precheck` no longer calls `npm test` beside it. A branch with no eligible source
+change still runs the suite here — it simply collects no coverage.
+
 **Machine floor** (`jest.config.js`, ratchet baseline 2026-03-11) — thresholds **only go UP**:
 
 | Scope | lines | functions | branches | statements |

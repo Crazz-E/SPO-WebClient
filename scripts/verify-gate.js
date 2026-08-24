@@ -5,7 +5,8 @@
  *
  * Runs, in order, stopping at the first failure:
  *
- *   static        typecheck, lint, tests
+ *   static        typecheck, lint, tests — or, with --skip-static, the receipt the bench
+ *                 worker already verified against the tree on disk (src/e2e/bench/receipt.ts)
  *   capabilities  President members in the diff -> the live stage must read, from the
  *                 server, whether the test account holds the capability (§7)
  *   routing       diff -> required L2 flows
@@ -17,6 +18,7 @@
  * Usage:
  *   node scripts/verify-gate.js
  *   node scripts/verify-gate.js --static-only
+ *   node scripts/verify-gate.js --skip-static      # worker only: a receipt covers stage 1
  *   node scripts/verify-gate.js --flows=login-spine,politics-write
  *   node scripts/verify-gate.js --attempt=2
  */
@@ -138,17 +140,30 @@ async function main() {
   };
 
   // --- Stage 1: static -------------------------------------------------------
-  for (const [key, label, command] of [
+  // `--skip-static` is passed by the bench worker, and only when it has matched a precheck
+  // receipt against the fingerprint IT took of the worktree on disk (src/e2e/bench/receipt.ts).
+  // The three commands below are byte-for-byte what `gate:precheck` already ran on that
+  // exact tree; replaying them costs ~113 s of the one resource every session queues for.
+  // Nothing else is skipped, and the artifact says plainly where the proof came from.
+  const staticSteps = [
     ['typecheck', 'typecheck', 'npm run typecheck'],
     ['lint', 'lint', 'npm run lint'],
     ['test', 'unit + component tests', 'npm test'],
-  ]) {
-    const result = runStage(label, command);
-    artifact.static[key] = result.status;
-    if (result.status === 'FAIL') {
-      const file = write(artifact);
-      fail(`static stage failed: ${label}`, file);
-      return 1;
+  ];
+  if (flag('skip-static') === 'true') {
+    process.stdout.write(
+      '\n=== static: from the precheck receipt (the worker matched it to this tree)\n',
+    );
+    for (const [key] of staticSteps) artifact.static[key] = 'RECEIPT';
+  } else {
+    for (const [key, label, command] of staticSteps) {
+      const result = runStage(label, command);
+      artifact.static[key] = result.status;
+      if (result.status === 'FAIL') {
+        const file = write(artifact);
+        fail(`static stage failed: ${label}`, file);
+        return 1;
+      }
     }
   }
 

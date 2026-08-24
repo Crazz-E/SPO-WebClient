@@ -204,6 +204,34 @@ describe('stage 1 — static', () => {
     });
   });
 
+  it('--skip-static runs none of the three, and marks the artifact RECEIPT', () => {
+    // The worker passes this ONLY after matching a precheck receipt to the tree it
+    // fingerprinted itself (src/e2e/bench/receipt.ts). Nothing else is skipped: the e2e
+    // driver is still built here, from this tree.
+    const run = runGate(scratchRepo(), ['--skip-static']);
+    expect(run.code).toBe(0);
+    expect(run.npmCalls).toEqual(['run build:e2e']);
+    expect(run.stdout).toMatch(/static: from the precheck receipt/);
+    expect(run.artifact?.static).toEqual({
+      typecheck: 'RECEIPT',
+      lint: 'RECEIPT',
+      test: 'RECEIPT',
+      buildE2e: 'PASS',
+    });
+  });
+
+  it('--skip-static still fails on the build it does not skip', () => {
+    const run = runGate(scratchRepo(), ['--skip-static'], { FAKE_NPM_FAIL: 'build:e2e' });
+    expect(run.code).toBe(1);
+    expect(run.npmCalls).toEqual(['run build:e2e']);
+    expect(run.stderr).toMatch(/could not build the e2e driver/);
+  });
+
+  it('without the flag the three stages run, as they always have', () => {
+    const run = runGate(scratchRepo(), []);
+    expect(run.npmCalls.slice(0, 3)).toEqual(['run typecheck', 'run lint', 'test']);
+  });
+
   it('records --attempt in the artifact', () => {
     const run = runGate(scratchRepo(), ['--attempt=2'], { FAKE_NPM_FAIL: 'lint' });
     expect(run.artifact?.attempt).toBe(2);

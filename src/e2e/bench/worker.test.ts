@@ -4,6 +4,7 @@ import * as path from 'path';
 import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './paths';
 import { Spool, type JobRequest } from './job';
 import { listVerdicts } from './verdict';
+import { buildReceipt, writeReceipt } from './receipt';
 import {
   countCapabilityExceptions,
   main,
@@ -239,6 +240,73 @@ describe('runJob — gate', () => {
     const h = harness();
     await runJob(h.deps, deposit(h, 'gate'));
     expect(npmRuns(h)).toEqual(['build:server']);
+  });
+
+  it('replays the static stage when no receipt covers the tree, and says why', async () => {
+    const h = harness();
+    await runJob(h.deps, deposit(h, 'gate'));
+    const gate = h.commands.find(c => c.cmd === 'node');
+    expect(gate?.args).toEqual(['scripts/verify-gate.js']);
+    expect(h.logs.join('\n')).toContain('replaying the static stage');
+  });
+
+  it('skips the static replay when the precheck receipt matches the tree it fingerprinted', async () => {
+    const h = harness();
+    const job = deposit(h, 'gate', ['--attempt=2']);
+    // The tree the WORKER will fingerprint at atStart — the session's own reading never
+    // enters the decision.
+    writeReceipt(
+      h.paths,
+      buildReceipt(
+        { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1', clean: true },
+        h.worktree,
+        'fix/x',
+        h.clock.nowMs,
+      ),
+    );
+    const report = await runJob(h.deps, job);
+
+    const gate = h.commands.find(c => c.cmd === 'node');
+    expect(gate?.args).toEqual(['scripts/verify-gate.js', '--skip-static', '--attempt=2']);
+    expect(report.staticReceipt).toEqual({ used: true });
+    expect(h.logs.join('\n')).toContain('static stage from the precheck receipt');
+  });
+
+  it('ignores a receipt written for a tree the worker is not holding', async () => {
+    const h = harness();
+    // The session prechecked h1 and then committed again: the worker now fingerprints h2.
+    h.hashes = ['h2'];
+    writeReceipt(
+      h.paths,
+      buildReceipt(
+        { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1', clean: true },
+        h.worktree,
+        'fix/x',
+        h.clock.nowMs,
+      ),
+    );
+    const report = await runJob(h.deps, deposit(h, 'gate'));
+
+    expect(h.commands.find(c => c.cmd === 'node')?.args).toEqual(['scripts/verify-gate.js']);
+    expect(report.staticReceipt?.used).toBe(false);
+    expect(report.staticReceipt?.why).toContain('no readable precheck receipt');
+  });
+
+  it('ignores a receipt that has gone past its window', async () => {
+    const h = harness();
+    writeReceipt(
+      h.paths,
+      buildReceipt(
+        { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1', clean: true },
+        h.worktree,
+        'fix/x',
+        h.clock.nowMs - 3 * 60 * 60 * 1000,
+      ),
+    );
+    const report = await runJob(h.deps, deposit(h, 'gate'));
+
+    expect(h.commands.find(c => c.cmd === 'node')?.args).toEqual(['scripts/verify-gate.js']);
+    expect(report.staticReceipt?.why).toContain('min old');
   });
 
   it('maps verify-gate exit codes: 0 PASS, 2 BLOCKED, else FAIL', async () => {

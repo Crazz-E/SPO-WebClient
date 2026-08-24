@@ -15,7 +15,17 @@
  *
  * Per-file ratios are printed as information; only the AGGREGATE decides the exit code.
  * The jest.config.js thresholds are deliberately neutralised for this run: they judge
- * whole directories, which a one-file change cannot be held to.
+ * whole directories, which a one-file change cannot be held to — and `npm test` does not
+ * enforce them either, since it collects no coverage at all.
+ *
+ * ## One suite pass, not two
+ *
+ * This script IS the precheck's test pass. `--collectCoverageFrom` restricts what Jest
+ * *instruments*, never what it *runs*: the run below has always executed all 310 test
+ * files, so `gate:precheck` calling `npm test` and then this script ran the whole suite
+ * twice for one branch. It now runs once, here, and the changed lines are judged from
+ * that same run. The suite therefore runs even when no eligible source file changed —
+ * a docs-only branch must still be proven green before it queues for the bench.
  */
 
 const { execFileSync, spawnSync } = require('child_process');
@@ -220,19 +230,26 @@ function resolveMinimum(env) {
 }
 
 /**
- * One Jest run, coverage restricted to the changed files, thresholds neutralised. Output
- * is kept quiet unless the run fails — the precheck has already shown the suite green.
+ * The one Jest run: the whole suite, with coverage instrumentation restricted to the
+ * changed files and the directory thresholds neutralised.
+ *
+ * With no changed file there is nothing to instrument, so coverage is left off entirely —
+ * the run is then a plain `npm test`, which is still what the precheck needs from it.
+ * Output is captured rather than streamed, and shown only when the run fails; `--silent`
+ * mutes the tests' own console noise, never Jest's failure report.
  */
 function runJest(files, cwd) {
   const jestBin = require.resolve('jest/bin/jest');
-  const args = [
-    jestBin,
-    '--coverage',
-    '--coverageReporters=json',
-    '--coverageThreshold={}',
-    '--silent',
-    ...files.map(file => `--collectCoverageFrom=${file}`),
-  ];
+  const coverage =
+    files.length === 0
+      ? []
+      : [
+          '--coverage',
+          '--coverageReporters=json',
+          '--coverageThreshold={}',
+          ...files.map(file => `--collectCoverageFrom=${file}`),
+        ];
+  const args = [jestBin, '--silent', ...coverage];
   const run = spawnSync(process.execPath, args, {
     cwd,
     encoding: 'utf8',
@@ -248,17 +265,21 @@ function main({ run = runJest, env = process.env, out = process.stdout, err = pr
   const min = resolveMinimum(env);
   const { base, changed } = collectChangedLines(cwd);
   out.write(`=== coverage of changed lines (base ${base ? base.slice(0, 12) : 'HEAD (no main ref)'})\n`);
-  if (changed.size === 0) {
-    out.write('no eligible source file changed — nothing to measure.\n');
-    return 0;
-  }
   const files = [...changed.keys()];
-  out.write(`running jest with coverage on ${files.length} file(s)...\n`);
+  out.write(
+    files.length === 0
+      ? 'no eligible source file changed — running the suite, nothing to measure.\n'
+      : `running the suite once, with coverage on ${files.length} changed file(s)...\n`,
+  );
   const jest = run(files, cwd);
   if (jest.status !== 0) {
     err.write(jest.stderr.split('\n').slice(-60).join('\n'));
-    err.write(`\njest exited with ${jest.status}; no coverage to judge.\n`);
+    err.write(`\njest exited with ${jest.status}; the suite is not green.\n`);
     return 1;
+  }
+  if (files.length === 0) {
+    out.write('suite green; no changed line to judge.\n');
+    return 0;
   }
   const coverage = JSON.parse(fs.readFileSync(path.join(cwd, COVERAGE_FILE), 'utf8'));
   const report = evaluate(changed, coverage, cwd);

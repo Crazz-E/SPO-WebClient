@@ -76,6 +76,12 @@ export interface JobReport {
   detail?: string;
   /** gate only: path of report/e2e/gate-<sha>.json inside the worktree. */
   gateArtifact?: string;
+  /**
+   * gate only: whether the static stage (typecheck, lint, tests) was taken from the
+   * session's precheck receipt instead of replayed on the bench, and why not when it was
+   * not. See ./receipt — absent means the question was never asked (live/lease job).
+   */
+  staticReceipt?: { used: boolean; why?: string };
   /** Where the job's stdout/stderr went. */
   logFile?: string;
   /** lease only. */

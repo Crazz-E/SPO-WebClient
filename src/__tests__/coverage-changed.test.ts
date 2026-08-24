@@ -4,6 +4,9 @@
  * The pure pieces (hunk parsing, eligibility, the measurement against an istanbul report)
  * are tested directly; the git side runs against a throwaway repo, never this one; and the
  * CLI flow runs with an injected stand-in for the Jest run, so no suite is spawned here.
+ *
+ * Since #131 this script IS the precheck's suite pass, so `main` always calls the run —
+ * the old "exits early on a clean branch" case is gone by design, not by accident.
  */
 
 import { execFileSync } from 'child_process';
@@ -315,12 +318,25 @@ describe('main', () => {
   const originalCwd = process.cwd();
   afterEach(() => process.chdir(originalCwd));
 
-  it('exits 0 with a note when no eligible file changed', () => {
+  it('runs the suite even when no eligible file changed — a docs branch is still proven green', () => {
     const { dir } = scratchRepo();
     process.chdir(dir);
     const out = sink();
-    expect(script.main({ out, err: sink(), env: {} })).toBe(0);
+    const run = jest.fn().mockReturnValue({ status: 0, stdout: '', stderr: '' });
+    expect(script.main({ run, out, err: sink(), env: {} })).toBe(0);
+    // Called with no file: the suite runs, coverage is simply not collected.
+    expect(run).toHaveBeenCalledWith([], dir);
     expect(out.text).toContain('nothing to measure');
+    expect(out.text).toContain('suite green');
+  });
+
+  it('exits 1 when the suite fails on a branch with nothing to measure', () => {
+    const { dir } = scratchRepo();
+    process.chdir(dir);
+    const err = sink();
+    const run = jest.fn().mockReturnValue({ status: 1, stdout: '', stderr: 'red' });
+    expect(script.main({ run, out: sink(), err, env: {} })).toBe(1);
+    expect(err.text).toContain('the suite is not green');
   });
 
   it('exits 1 when the Jest run itself fails', () => {
@@ -332,7 +348,7 @@ describe('main', () => {
     expect(script.main({ run, out: sink(), err, env: {} })).toBe(1);
     expect(run).toHaveBeenCalledWith(['src/shared/new.ts'], dir);
     expect(err.text).toContain('boom');
-    expect(err.text).toContain('jest exited with 1');
+    expect(err.text).toContain('the suite is not green');
   });
 
   it('judges the aggregate against the minimum from the coverage file the run produced', () => {
@@ -374,13 +390,6 @@ describe('CLI entry', () => {
     }
   }
 
-  it('exits 0 on a clean branch', () => {
-    const { dir } = scratchRepo();
-    const result = cli(dir);
-    expect(result.code).toBe(0);
-    expect(result.stdout).toContain('nothing to measure');
-  });
-
   it('exits 1 with the reason when the minimum is not a percentage', () => {
     const { dir } = scratchRepo();
     const result = cli(dir, { COVERAGE_CHANGED_MIN: 'lots' });
@@ -397,5 +406,14 @@ describe('runJest', () => {
     expect(typeof result.status).toBe('number');
     expect(result.status).not.toBe(0);
     expect(`${result.stdout}${result.stderr}`).toMatch(/No tests found|jest/i);
+  });
+
+  it('runs the suite with no coverage at all when nothing changed', () => {
+    // `--collectCoverageFrom` restricts instrumentation, never execution — with no file
+    // to instrument the run is a plain suite pass, which is what the precheck needs.
+    const { dir } = scratchRepo();
+    const result = script.runJest([], dir);
+    expect(typeof result.status).toBe('number');
+    expect(`${result.stdout}${result.stderr}`).not.toMatch(/collectCoverageFrom/);
   });
 });
