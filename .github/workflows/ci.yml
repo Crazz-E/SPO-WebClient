@@ -4,15 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  # A merge queue runs its required checks on a SPECULATIVE commit
-  # (`gh-readonly-queue/main/pr-N-<sha>`), which is not a push and not a pull request.
-  # Without this trigger the required `typecheck + tests` context never reports there, and
-  # every queue entry sits until it is ejected on the check-response timeout. GitHub's own
-  # words: "You must use the merge_group event to trigger your GitHub Actions workflow when
-  # a pull request is added to a merge queue. Otherwise, status checks will not be
-  # triggered." So this has to land BEFORE the queue is enabled — including for the pull
-  # request that enables it. #158 stage D.
-  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -20,10 +11,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  # Never cancel a merge-group run: the queue is waiting on that exact check to report, and
-  # a cancelled required check reads as a failure that ejects the entry. Only pull-request
-  # and branch runs are worth superseding.
-  cancel-in-progress: ${{ github.event_name != 'merge_group' }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -63,13 +51,6 @@ jobs:
       - name: Tests
         run: npm test
 
-      # PR-only, deliberately. In a merge group this step is skipped, and the run is still
-      # green — which is safe only because the queue admits nothing that has not already
-      # passed its pull-request checks, where this ran against the same changed lines.
-      # The residual, stated: the merge commit's diff against main can differ from the PR's
-      # if main moved, so changed-line coverage is measured on the PR's base, not the
-      # queue's. Accepted — the alternative is measuring coverage against a base the author
-      # never saw.
       - name: Coverage of changed lines
         if: github.event_name == 'pull_request'
         run: npm run coverage:changed
@@ -78,9 +59,6 @@ jobs:
       # the REQUIRED check rather than as a job of its own, so it blocks a merge without
       # anyone having to touch the ruleset. `rdo-approved` is posted by a human — the
       # author of a diff cannot unlock their own protected-file change.
-      # PR-only of necessity, not by choice: this reads the pull request's body and labels,
-      # and a merge_group event carries neither. `rdo-approved` is a label; there is nothing
-      # to read in a merge group. The PR-level run is the enforcement point.
       - name: PR rules (protected files, coverage ratchet, RDO citation)
         if: github.event_name == 'pull_request'
         env:
