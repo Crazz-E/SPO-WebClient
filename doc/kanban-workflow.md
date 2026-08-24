@@ -147,6 +147,43 @@ Pull requests are labelled by **path**, automatically (`actions/labeler`, `.gith
 Never post those by hand. One label is neither derived nor a session's to post:
 **`rdo-approved`**, which the maintainer alone adds to unlock a protected-file change.
 
+### The card review — a neutral reader before the pool
+
+**Before the `gh issue create`, the draft card goes to the `card-reviewer` sub-agent**
+([.claude/agents/card-reviewer.md](../.claude/agents/card-reviewer.md)) — title, body,
+`Category`, `Size`, verbatim, and nothing else. It is read-only, it carries none of the
+finder's context, and it does not want the work.
+
+Why: a pull request has had a second reader since #143. A card had none — the session that
+finds something also judges it worth doing, sizes it and picks its `Category`. The cost of a
+misread claim, a duplicate, a card with no `file:line` or no statement of what *done* looks
+like lands entirely on whoever claims it, never on whoever wrote it. That is the same
+asymmetry the English-only rule above exists to prevent.
+
+Three verdicts, and what each does to the flow:
+
+| Verdict | The session |
+|---|---|
+| `FILE` | Files the card as written. |
+| `FILE AMENDED` | Applies the named corrections — body, `Category`, `Size` — then files. |
+| `DO NOT FILE` | Files nothing. Its final report says what was found and why no card exists. |
+
+`DO NOT FILE` names the code, the issue number or the commit that makes the finding moot. It
+is never about priority: **priority is the human's**, and a real but low-value finding is
+still filed, at the bottom of Todo like any other.
+
+**The trace.** Immediately after creating the issue, the session posts the verdict
+**verbatim as the card's first comment**, dated (`### Card review — <YYYY-MM-DD>`). Every
+comment on this board posts as the same GitHub account, so that heading — not the author
+line — is what marks the card as read by something other than its writer. A card whose first
+comment is not a verdict is visibly unreviewed; that visibility is the enforcement, and
+[src/\_\_tests\_\_/card-reviewer-agent.test.ts](../src/__tests__/card-reviewer-agent.test.ts)
+keeps the four surfaces of the mechanism from drifting apart.
+
+**What does not change.** The claim handshake is untouched. No human step is added. No
+session ever waits on another session's review: the cost is one sub-agent inside the
+finder's own turn, and it is paid by the finder rather than by the claimer.
+
 ## Context discipline for sessions
 
 - A good context stays **under ~250k tokens**. A session may deliberately exceed it when
@@ -187,9 +224,11 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
   --field-id <SESSION_FIELD_ID> --text "<branch> @ <date>"
 
-# New finding → issue → board (label = the queryable mirror of Category/Size)
+# New finding → card review → issue → board (label = the queryable mirror of Category/Size)
+# The draft goes to the `card-reviewer` sub-agent FIRST; on DO NOT FILE, nothing below runs.
 gh issue create --repo Crazz-E/SPO-WebClient --title "…" --body "…" \
   --label "cat:latent-trap" --label "size:M"
+gh issue comment <N> --repo Crazz-E/SPO-WebClient --body "<the verdict, verbatim>"
 gh project item-add 2 --owner Crazz-E --url <ISSUE_URL>
 
 # Final comment

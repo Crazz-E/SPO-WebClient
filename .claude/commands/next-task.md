@@ -50,3 +50,7 @@ Anything discovered out of scope: new issue, added to the board in Todo (bottom)
 **and the matching `cat:` / `size:` labels** set (kanban-workflow § Feeding rule — the project
 field is not queryable, the label is), synthetic body — then back to the task. Never expand
 your own scope with it.
+
+Run the draft past the **`card-reviewer`** sub-agent before filing (kanban-workflow § The
+card review): its verdict becomes the new issue's first comment, and on `DO NOT FILE` no
+issue is created — your final report says what was found and why no card exists.
