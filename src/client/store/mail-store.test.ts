@@ -101,6 +101,15 @@ describe('Mail Store — Compose', () => {
     expect(state.composeSubject).toBe('Re: Hello');
   });
 
+  it('refreshFolder bumps the token and shows the listing as loading', () => {
+    const before = useMailStore.getState().folderRefreshToken;
+    useMailStore.setState({ isLoading: false });
+    useMailStore.getState().refreshFolder();
+    const state = useMailStore.getState();
+    expect(state.folderRefreshToken).toBe(before + 1);
+    expect(state.isLoading).toBe(true);
+  });
+
   it('startReply does not double-prefix Re:', () => {
     useMailStore.getState().startReply({
       ...mockFullMessage,

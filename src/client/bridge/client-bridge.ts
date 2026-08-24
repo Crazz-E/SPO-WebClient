@@ -651,6 +651,9 @@ export const ClientBridge = {
         const resp = msg as WsRespMailSent;
         if (resp.success) {
           mail.clearCompose();
+          // The listing the user lands back on predates the send — read it again
+          // (OB-11). A delete needs no such refetch: its row is dropped locally.
+          mail.refreshFolder();
           showToast('Message sent.', 'success', { title: 'Sent' });
         } else {
           // The draft stays on screen (T6, audit P2) — a silent failure is a lost letter.
