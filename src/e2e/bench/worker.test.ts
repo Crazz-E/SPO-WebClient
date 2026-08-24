@@ -93,6 +93,11 @@ function harness(): Harness {
   return h;
 }
 
+/** The `npm run <script>` targets the job asked for, in order. */
+function npmRuns(h: Harness): string[] {
+  return h.commands.filter(c => c.cmd === 'npm').map(c => c.args[1]);
+}
+
 function deposit(h: Harness, type: JobRequest['type'] = 'gate', args: string[] = []): JobRequest {
   return h.spool.submit(
     {
@@ -219,7 +224,7 @@ describe('runJob — gate', () => {
     const job = deposit(h, 'gate', ['--attempt=2']);
     await runJob(h.deps, job);
     expect(h.commands[0]).toMatchObject({ cmd: 'git', args: ['fetch', '--quiet', 'origin', 'main'], cwd: h.worktree });
-    expect(h.commands[1]).toMatchObject({ cmd: 'npm', args: ['run', 'build'], cwd: h.worktree });
+    expect(h.commands[1]).toMatchObject({ cmd: 'npm', args: ['run', 'build:server'], cwd: h.worktree });
     expect(h.commands[2]).toMatchObject({
       cmd: 'node',
       args: ['scripts/verify-gate.js', '--attempt=2'],
@@ -228,6 +233,12 @@ describe('runJob — gate', () => {
     expect(h.commands[2].env?.E2E_WORLD_STATE_DIR).toBe(h.paths.world);
     expect(h.gatewayStarts).toEqual([h.worktree]);
     expect(h.gatewayStops).toBe(1);
+  });
+
+  it('builds the gateway alone — no client bundle, no terrain-test, for a browserless drive', async () => {
+    const h = harness();
+    await runJob(h.deps, deposit(h, 'gate'));
+    expect(npmRuns(h)).toEqual(['build:server']);
   });
 
   it('maps verify-gate exit codes: 0 PASS, 2 BLOCKED, else FAIL', async () => {
@@ -256,7 +267,7 @@ describe('runJob — gate', () => {
     h.exitCodes = [0, 1]; // fetch ok, build fails
     const report = await runJob(h.deps, job);
     expect(report.verdict).toBe('FAIL');
-    expect(report.detail).toMatch(/npm run build failed/);
+    expect(report.detail).toMatch(/npm run build:server failed/);
     expect(h.gatewayStarts).toHaveLength(0);
   });
 
@@ -321,12 +332,29 @@ describe('runJob — gate', () => {
 });
 
 describe('runJob — live and lease', () => {
-  it('drives dist/e2e/run.js for a live job', async () => {
+  it('drives dist/e2e/run.js for a live job, having compiled it rather than assumed it', async () => {
     const h = harness();
     const job = deposit(h, 'live', ['--flows=login-spine']);
     const report = await runJob(h.deps, job);
-    expect(h.commands[2]).toMatchObject({ cmd: 'node', args: ['dist/e2e/run.js', '--flows=login-spine'] });
+    expect(npmRuns(h)).toEqual(['build:server', 'build:e2e']);
+    expect(h.commands[3]).toMatchObject({ cmd: 'node', args: ['dist/e2e/run.js', '--flows=login-spine'] });
     expect(report.verdict).toBe('PASS');
+  });
+
+  it('names the step that failed, and stops there — a live job whose driver will not compile', async () => {
+    const h = harness();
+    const job = deposit(h, 'live');
+    h.exitCodes = [0, 0, 1]; // fetch ok, build:server ok, build:e2e fails
+    const report = await runJob(h.deps, job);
+    expect(report.verdict).toBe('FAIL');
+    expect(report.detail).toMatch(/npm run build:e2e failed/);
+    expect(h.gatewayStarts).toHaveLength(0);
+  });
+
+  it('lease: builds everything — the session it serves opens a real browser', async () => {
+    const h = harness();
+    await runJob(h.deps, deposit(h, 'lease'));
+    expect(npmRuns(h)).toEqual(['build']);
   });
 
   it('lease: reports LEASED early, holds, and releases on the session\'s marker', async () => {

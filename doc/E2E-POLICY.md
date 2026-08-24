@@ -76,7 +76,7 @@ npm run gate
    | Stage | Check |
    |---|---|
    | Clean bench | nothing listens on 8080; fingerprint the tree — uncommitted changes -> `DIRTY`, nothing runs (the attestation names a sha, so the tree must be that commit) |
-   | Build | `npm run build` in the worktree — the tested gateway IS this tree's code |
+   | Build | `npm run build:server` in the worktree — the tested gateway IS this tree's code. Only the gateway: an L2 gate opens no browser, so the client bundle and the terrain-test are not built here (a `live` job adds `build:e2e`, a `lease` builds everything — [bench-worker.md §3](bench-worker.md)) |
    | Static (replayed) | typecheck, lint, tests — the attestation is the worker's, not the session's |
    | Capabilities | President members / Capitol governance in the diff -> the live stage reads, from the server, whether the account holds the capability (§7): granted -> a flow must drive it (fail closed); refused -> recorded exception |
    | Routing | map the diff to the required L2 flows (§4) |
