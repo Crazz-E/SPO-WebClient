@@ -14,13 +14,25 @@ function Harness() {
 
 describe('MobileModeBar', () => {
   beforeEach(() => {
-    useUiStore.setState({ isPlacingBuilding: false, placementValid: false, placingFacility: null });
+    useUiStore.setState({ isPlacingBuilding: false, placementValid: false, placingFacility: null, connectMode: { active: false, subject: '' } });
     useGameStore.setState({ isRoadBuildingMode: false, isRoadDemolishMode: false, isZonePaintingMode: false, tycoonStats: null, overlayBeforeMode: null });
   });
 
   it('says nothing when no mode runs', () => {
     renderWithProviders(<Harness />);
     expect(screen.getByText('NO MODE')).toBeTruthy();
+  });
+
+  it('connect mode (N10): kind, subject, hint — and the way out says Cancel', () => {
+    const onCancelConnectMode = jest.fn();
+    renderWithProviders(<Harness />, { clientCallbacks: createSpiedCallbacks({ onCancelConnectMode }) });
+    act(() => useUiStore.setState({ connectMode: { active: true, subject: 'Fabrics' } }));
+    const bar = screen.getByRole('status');
+    expect(bar.textContent).toContain('Connect');
+    expect(bar.textContent).toContain('Fabrics');
+    expect(bar.textContent).toContain('Click a building to connect');
+    fireEvent.click(screen.getByRole('button', { name: /Cancel — leave Connect mode/ }));
+    expect(onCancelConnectMode).toHaveBeenCalledTimes(1);
   });
 
   it('road building: kind, what to do, the tariff, and Done leaves the mode', () => {

@@ -119,6 +119,14 @@ interface UiState {
   placingFacility: { name: string; cost: number } | null;
   connectionFilters: ConnectionFilters;
 
+  /**
+   * Connect mode (N10) — the map is picking a building to connect. While it
+   * runs the sheet stack is HIDDEN, never destroyed: the picker (and the
+   * inspector under it) come back exactly as they were when the mode ends.
+   * `subject` is what the pick is for (a fluid name, or the source building).
+   */
+  connectMode: { active: boolean; subject: string };
+
   // Actions — Surfaces
   /** Push a surface on top (never replaces). No-op if the top already is that kind+params. */
   pushSurface: (surface: Surface) => void;
@@ -177,6 +185,7 @@ interface UiState {
   setPlacementValid: (v: boolean) => void;
   setPlacingFacility: (f: { name: string; cost: number } | null) => void;
   setConnectionFilters: (f: ConnectionFilters) => void;
+  setConnectMode: (active: boolean, subject?: string) => void;
 
   // Actions — Escape (close topmost layer)
   dismissTopmost: () => void;
@@ -202,6 +211,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   placementValid: false,
   placingFacility: null,
   connectionFilters: DEFAULT_CONNECTION_FILTERS,
+  connectMode: { active: false, subject: '' },
 
   // Surfaces — one stack; the legacy panel fields follow its top
   pushSurface: (surface) => {
@@ -322,10 +332,14 @@ export const useUiStore = create<UiState>((set, get) => ({
   setPlacementValid: (v) => set({ placementValid: v }),
   setPlacingFacility: (f) => set({ placingFacility: f }),
   setConnectionFilters: (f) => set({ connectionFilters: f }),
+  setConnectMode: (active, subject = '') => set({ connectMode: { active, subject } }),
 
   // Escape — dismiss topmost layer in priority order
   dismissTopmost: () => {
     const state = get();
+    // Connect mode owns Escape: its own listener cancels the mode and reveals
+    // the hidden stack — popping a surface the player cannot see would be worse.
+    if (state.connectMode.active) return;
     if (state.minimapFullscreen) {
       set({ minimapFullscreen: false });
     } else if (state.commandPaletteOpen) {

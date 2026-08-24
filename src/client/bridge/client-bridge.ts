@@ -253,6 +253,12 @@ export interface ClientCallbacks {
   onConfirmBuildingPlacement: () => void;
   onRotateCW: () => void;
   onRotateCCW: () => void;
+
+  // Connect mode (N10)
+  /** Enter connect mode sourced from the supplier picker's building. */
+  onConnectionPickOnMap: () => void;
+  /** Leave connect mode without connecting — the hidden sheet stack comes back. */
+  onCancelConnectMode: () => void;
 }
 
 /**

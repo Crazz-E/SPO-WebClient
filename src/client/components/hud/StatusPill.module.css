@@ -139,6 +139,8 @@
   border: 1px solid var(--error);
   color: var(--money-negative);
   font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  cursor: pointer;
   font-weight: var(--font-medium);
 }
 

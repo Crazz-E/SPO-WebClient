@@ -24,7 +24,7 @@ Légende : ✅ existe · 🟡 partiel · ❌ manquant · **V** = Voyager l'avait
 | N7 | **Rotation de la vue sur desktop** | ✅ **fait (lot d, PR #78)** — deux boutons RotateCcw/RotateCw dans le groupe carte du RightRail (« Rotate view (Q) » / « Rotate view (W) ») ; Q = anti-horaire, W = horaire dans `useKeyboardShortcuts` (E est pris par Empire — la paire Q/E du handoff était morte-née) ; la touche Q a **quitté le renderer** (un propriétaire par touche) ; mobile : « Rotate view » dans More › Map Controls, le geste deux doigts (accroche 90°, `touch-handler-2d.ts`) reste le chemin rapide ; `key-binding-registry.ts` **supprimé** — décision inverse du handoff §4.3 : `SHORTCUTS` est l'unique table, le rebind persistant était un besoin hypothétique et se reconstruira au-dessus de `SHORTCUTS` s'il devient réel | **V** 2 boutons rotate (`FiveControl.pas:665-693`) | — |
 | N8 | **Zoom** | ✅ 4 niveaux, +/−, molette zoom-vers-curseur (`:5176-5204`), pinch | **V** 4 niveaux (`GameTypes.pas:24`), pas de molette | — |
 | N9 | **« Voir sur la carte »** depuis l'inspecteur | ✅ **fait (T3)** — bouton « View on map » dans la barre de l'inspecteur ; avant : 🟡 recentrage implicite via `focusBuilding` ; **aucun bouton** explicite (`BuildingInspector.tsx:260-280` : Actualiser + Fermer) | **V** `MoveAndSelect` depuis les fiches (`ProdSheetForm.pas:761`) | Bouton dans le pied de la feuille |
-| N10 | **Choisir sur la carte** depuis un dialogue (pick-on-map) | 🟡 un seul flux : `connectMap` (`building-action-handler.ts:603`) ; pas dans les pickers de fournisseurs | **V** `PICKONMAP` (`MapIsoHandler.pas:277-285`) | Ajouter au flux « Trouver un fournisseur » |
+| N10 | **Choisir sur la carte** depuis un dialogue (pick-on-map) | ✅ **fait (PR #80)** — bouton « Pick on map » au pied du picker fournisseur (toujours offert, pas seulement à vide) ; **un seul mode, deux origines** : le `connectMap` de l'inspecteur et le picker passent par le même `startConnectMode` ; le mode entre dans `use-mode-descriptor` (barre de mode desktop + `MobileModeBar` : « CONNECT · <sujet> · Click a building to connect », sortie **Cancel** / Échap) ; la **pile de surfaces se masque sans se détruire** pendant le mode (sur mobile la feuille couvrait la carte, et le mode était invisible — corrigé pour les deux origines) ; one-shot : succès, échec ou annulation → la pile revient telle quelle (le picker garde son contexte) ; le toast d'entrée est remplacé par la barre de mode | **V** `PICKONMAP` (`MapIsoHandler.pas:277-285`) | — |
 
 ## 2. Bâtiment et inspecteur
 
@@ -48,7 +48,7 @@ Légende : ✅ existe · 🟡 partiel · ❌ manquant · **V** = Voyager l'avait
 | H3 | **« Tourner » en placement** | ✅ **corrigé (lot d, PR #78)** — l'aria-label de `PlacementHUD` disait « Rotate building » alors que le bouton tourne la **carte** ; il dit désormais « Rotate view » ; **aucune orientation de bâtiment** n'existe | **V** idem : pas d'orientation de bâtiment | — |
 | H4 | Coût vs trésorerie avant la pose, trésorerie après | ✅ **fait (socle-4b + T1)** — barre de mode, carte dépliée (« Cash after »), Placer désactivé si insuffisant ; avant : ❌ coût affiché (`BuildMenu.tsx:115`), jamais comparé au cash ; aucune désactivation | — | Comparaison locale (`tycoonStats.cash`) dans la barre de mode et le dialogue |
 | H5 | Liste des raccourcis à jour | ✅ **fait (socle-4a)** — table unique `SHORTCUTS`, M = carte, L = courrier, P = gouvernement, W = tourner la vue, modificateurs laissés au navigateur ; avant : 🟡 `SettingsDialog.tsx:136-145` (B E M R ⌘K Esc D) ; Q, +/−, 1–5 absents ; collision M (mail vs minimap dans le registre mort) | — | Générer la liste depuis le registre ; réattribuer M = Carte, L = Courrier |
-| H6 | Pastille d'état avec alertes cliquables (bâtiments en difficulté) | 🟡 `InfoWidget` a la teinte dette (`failureLevel`) ; **pas de liste** des bâtiments en difficulté | — | Liste dérivée des `hintsText` / revenus négatifs déjà reçus (pas de RDO en plus) |
+| H6 | Pastille d'état avec alertes cliquables (bâtiments en difficulté) | ✅ **fait (PR #80, zéro RDO)** — « My facilities » regroupe les favoris en trois sections honnêtes : **Losing money** (bit `alert` serveur d'un bâtiment chargé — le rouge minimap Voyager), **Status unknown** (zone jamais chargée : l'état n'est PAS connu, jamais supposé sain — « Not visited yet — tap to check. »), **Operating** ; tri alphabétique par section, clic = `onNavigateToBuilding`. Entrées : le tag **Debt** de la StatusPill devient un bouton (« View facilities losing money ») ; sur mobile la barre d'info affiche un tag Debt tapable dès `failureLevel ≥ 1` (1 interaction). Le compteur ne compte que les alertes confirmées | — | — |
 
 ## 4. Politique et points d'entrée
 
@@ -129,7 +129,7 @@ aucune dépendance serveur.
 | Identité : nom, compagnie, ville, niveau | `BuildingDetails` + bloc Inspect ✅ | — |
 | Tag d'état (À l'arrêt / En production) + diagnostic | `hintsText` / `detailsText` ✅ brut | B7 (parseur de hints → sévérité + action) |
 | « Trouver un fournisseur » (diagnostic et porte vide) | `onSearchConnections` → `ConnectionPickerModal` ✅ | — |
-| « Choisir sur la carte » | `connectMap` ✅ (un flux) | N10 pour l'ajouter au picker |
+| « Choisir sur la carte » | `connectMap` ✅ + « Pick on map » du picker (N10, PR #80 — même mode) | — |
 | Onglets de sections | `BuildingDetailsTab` (CLASSES.BIN) ✅ | libellés à mapper (audit §5) |
 | Filtre des approvisionnements | client (noms déjà reçus) ✅ | — |
 | Ligne repliée = nom ; ouverture charge valeurs / fournisseurs | `useGateConnections` ✅ (même régime) | — |
@@ -172,7 +172,7 @@ aucune dépendance serveur.
 | Résultats : nom, compagnie, ville, prix, qualité | `ConnectionSearchResult` ✅ | — |
 | Distance, tri par distance | calcul local depuis `x,y` ✅ | — |
 | Sélection multiple + « Connecter » | `onConnectionConnect` (liste `{x,y}`) ✅ | — |
-| Vide : « élargir les rôles » / « choisir sur la carte » | client / N10 | — |
+| Vide : « élargir les rôles » / « choisir sur la carte » | client / « Pick on map » ✅ (N10, PR #80 — offert en permanence, pas seulement à vide) | — |
 | SaveIndicator « Connecté » | composant ✅ ; brancher sur la connexion → B6 | — |
 | Diagnostic qui change après connexion | bloc Inspect poussé ✅ (le serveur décide) | — |
 

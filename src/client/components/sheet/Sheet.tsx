@@ -102,7 +102,10 @@ export function Sheet() {
   const setPinned = useUiStore((s) => s.setPinned);
   const popToSurface = useUiStore((s) => s.popToSurface);
   const clearSurfaces = useUiStore((s) => s.clearSurfaces);
-  const open = stack.length > 0;
+  // Connect mode hides the sheet without destroying the stack (N10): the map
+  // needs the room, and the picker must come back untouched when the mode ends.
+  const connectActive = useUiStore((s) => s.connectMode.active);
+  const open = stack.length > 0 && !connectActive;
   const { visible, animating } = usePanel(open);
 
   if (!visible) return null;

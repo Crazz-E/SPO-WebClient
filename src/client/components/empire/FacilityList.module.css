@@ -93,3 +93,44 @@
   color: var(--text-placeholder);
   font-size: var(--text-sm);
 }
+
+/* H6 — grouped sections: Losing money / Status unknown / Operating */
+
+.sectionHeader {
+  padding: var(--space-3) var(--space-4) var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.sectionNote,
+.sectionEmpty {
+  padding: 0 var(--space-4) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--space-2);
+  border-radius: var(--radius-full);
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.dotLosing {
+  background: var(--error);
+}
+
+.dotUnknown {
+  background: transparent;
+  border: 1px solid var(--text-muted);
+}
+
+.dotOperating {
+  background: var(--surface-border-active);
+}

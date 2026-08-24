@@ -106,16 +106,23 @@ describe('StatusPill', () => {
     useGameStore.setState({ tycoonStats: stats({ failureLevel: 1 }) });
     const { unmount } = renderWithProviders(<StatusPill />);
     const debt = screen.getByText('Debt');
-    expect(debt.tagName).toBe('SPAN');
-    expect(debt.getAttribute('title')).toBe('Debt — level 1');
+    expect(debt.getAttribute('title')).toContain('Debt — level 1');
     expect(debt.className).not.toContain('alertPulse');
     unmount();
 
     useGameStore.setState({ tycoonStats: stats({ failureLevel: 2 }) });
     renderWithProviders(<StatusPill />);
     const alert = screen.getByText('Debt');
-    expect(alert.getAttribute('title')).toBe('Debt — level 2');
+    expect(alert.getAttribute('title')).toContain('Debt — level 2');
     expect(alert.className).toContain('alertPulse');
+  });
+
+  it('the Debt tag is a control now (H6): it opens the grouped facilities list', () => {
+    useGameStore.setState({ tycoonStats: stats({ failureLevel: 1 }) });
+    renderWithProviders(<StatusPill />);
+    const debt = screen.getByRole('button', { name: 'View facilities losing money' });
+    fireEvent.click(debt);
+    expect(useUiStore.getState().leftPanel).toBe('facilities');
   });
 
   it('cash button opens the empire surface', () => {

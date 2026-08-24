@@ -1,9 +1,11 @@
 /**
  * MobileInfoBar — Slim horizontal top bar replacing desktop InfoWidget on mobile.
  *
- * Single row: [World + Date] [Cash] [Income/h] [Rank + Name]
+ * Single row: [World + Date] [Cash] [Income/h] [Debt?] [Rank + Name]
  * Glass background, 36px tall, z-300.
- * Tap to open the Profile (empire) surface.
+ * Tap to open the Profile (empire) surface; when the tycoon is in debt
+ * (failureLevel >= 1) a "Debt" tag appears and taps through to the grouped
+ * My facilities list instead (H6) — one interaction to the losing buildings.
  */
 
 import { formatMoney, formatIncome, incomeSign } from '../../format-utils';
@@ -30,6 +32,12 @@ export function MobileInfoBar() {
     openLeftPanel('empire');
   };
 
+  const handleDebtTap = () => {
+    setMobileTab('map');
+    openLeftPanel('facilities');
+  };
+
+  const failureLevel = tycoonStats?.failureLevel ?? 0;
   const sign = tycoonStats ? incomeSign(tycoonStats.incomePerHour) : 'neutral';
   const incomeClass =
     sign === 'positive' ? styles.incomePositive
@@ -37,27 +45,41 @@ export function MobileInfoBar() {
         : styles.incomeNeutral;
 
   return (
-    <button className={styles.bar} onClick={handleTap} aria-label="Open empire overview">
-      {/* World + Date */}
-      <span className={styles.world}>
-        {worldName ? worldName.toUpperCase() : 'OFFLINE'}
-      </span>
-      <span className={styles.date}>{formatDate(gameDate)}</span>
-
-      {/* Financial */}
-      {tycoonStats && (
-        <>
-          <span className={styles.cash}>{formatMoney(tycoonStats.cash)}</span>
-          <span className={incomeClass}>{formatIncome(tycoonStats.incomePerHour)}</span>
-        </>
-      )}
-
-      {/* Identity */}
-      {tycoonStats && (
-        <span className={styles.identity}>
-          #{tycoonStats.ranking} {username}
+    <div className={styles.bar}>
+      <button className={styles.tapArea} onClick={handleTap} aria-label="Open empire overview">
+        {/* World + Date */}
+        <span className={styles.world}>
+          {worldName ? worldName.toUpperCase() : 'OFFLINE'}
         </span>
+        <span className={styles.date}>{formatDate(gameDate)}</span>
+
+        {/* Financial */}
+        {tycoonStats && (
+          <>
+            <span className={styles.cash}>{formatMoney(tycoonStats.cash)}</span>
+            <span className={incomeClass}>{formatIncome(tycoonStats.incomePerHour)}</span>
+          </>
+        )}
+      </button>
+
+      {failureLevel >= 1 && (
+        <button
+          className={styles.debtTag}
+          onClick={handleDebtTap}
+          aria-label="View facilities losing money"
+        >
+          Debt
+        </button>
       )}
-    </button>
+
+      {/* Identity — same tap target as the main area */}
+      {tycoonStats && (
+        <button className={styles.identityTap} onClick={handleTap} aria-label="Open empire overview">
+          <span className={styles.identity}>
+            #{tycoonStats.ranking} {username}
+          </span>
+        </button>
+      )}
+    </div>
   );
 }

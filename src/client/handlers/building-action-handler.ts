@@ -499,7 +499,7 @@ export function handleBuildingAction(ctx: ClientHandlerContext, actionId: string
     const kind = actionId.split(':')[1];
     tradeDisconnect(ctx, buildingDetails, kind);
   } else if (actionId === 'connectMap') {
-    startConnectMode(ctx, buildingDetails);
+    startConnectMode(ctx, buildingDetails, buildingDetails.buildingName);
   } else if (actionId === 'demolish') {
     useUiStore.getState().requestConfirm(
       'Demolish Building',
@@ -643,9 +643,18 @@ async function tradeDisconnect(ctx: ClientHandlerContext, buildingDetails: Build
 
 // ── Manual Connect Mode ─────────────────────────────────────────────────────
 
-function startConnectMode(ctx: ClientHandlerContext, buildingDetails: BuildingDetailsResponse): void {
+/**
+ * One mode, two origins (N10): the inspector's connectMap and the picker's
+ * "Pick on map" both land here. The mode bar (use-mode-descriptor) announces
+ * it — no entry toast — and the sheet stack hides itself while it runs, so
+ * whatever surface started the pick comes back untouched when it ends.
+ */
+function startConnectMode(ctx: ClientHandlerContext, source: { x: number; y: number }, subject: string): void {
   ctx.isConnectMode = true;
-  ctx.connectSourceBuilding = buildingDetails;
+  ctx.connectSourceBuilding = { x: source.x, y: source.y };
+  useUiStore.getState().setConnectMode(true, subject);
+  // On a phone the mode lives on the map tab — the sheet is hidden by the store flag
+  useUiStore.getState().setMobileTab('map');
 
   const renderer = ctx.getRenderer();
   if (renderer) {
@@ -661,13 +670,19 @@ function startConnectMode(ctx: ClientHandlerContext, buildingDetails: BuildingDe
     }
   };
   document.addEventListener('keydown', ctx.connectKeyboardHandler);
-
-  ctx.showNotification('Click on a building to connect. Press ESC to cancel.', 'info');
 }
 
-function cancelConnectMode(ctx: ClientHandlerContext): void {
+/** The picker's "Pick on map" — same mode, sourced from the picker's building. */
+export function startConnectModeFromPicker(ctx: ClientHandlerContext): void {
+  const picker = useBuildingStore.getState().connectionPicker;
+  if (!picker) return;
+  startConnectMode(ctx, { x: picker.buildingX, y: picker.buildingY }, picker.fluidName);
+}
+
+export function cancelConnectMode(ctx: ClientHandlerContext): void {
   ctx.isConnectMode = false;
   ctx.connectSourceBuilding = null;
+  useUiStore.getState().setConnectMode(false);
 
   const renderer = ctx.getRenderer();
   if (renderer) {

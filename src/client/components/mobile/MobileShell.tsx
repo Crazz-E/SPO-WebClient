@@ -70,13 +70,16 @@ export function MobileShell() {
   const isPlacingBuilding = useUiStore((s) => s.isPlacingBuilding);
   const placementValid = useUiStore((s) => s.placementValid);
   const mode = useModeDescriptor();
+  const connectActive = useUiStore((s) => s.connectMode.active);
   const client = useClient();
 
   if (!isMobile) return null;
 
-  // Determine if the BottomSheet should be open
+  // Determine if the BottomSheet should be open. Connect mode hides it (N10):
+  // on a phone the sheet covers the very map the mode asks to tap; the stack
+  // stays intact underneath and comes back when the mode ends.
   const hasRightPanel = top != null;
-  const sheetOpen = mobileTab !== 'map' || hasRightPanel;
+  const sheetOpen = (mobileTab !== 'map' || hasRightPanel) && !connectActive;
 
   // Sheet title from the top surface or the active tab
   const sheetTitle = top ? SURFACE_TITLES[top.kind] : SHEET_TITLES[mobileTab];

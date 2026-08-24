@@ -26,6 +26,19 @@ describe('Sheet', () => {
     expect(container.querySelector('aside')).toBeNull();
   });
 
+  it('hides while connect mode runs — the stack survives underneath (N10)', () => {
+    act(() => {
+      useUiStore.getState().setRootSurface({ kind: 'building' });
+      useUiStore.getState().pushSurface({ kind: 'supplierSearch' });
+      useUiStore.getState().setConnectMode(true, 'Fabrics');
+    });
+    const { container } = renderWithProviders(<Sheet />);
+    expect(container.querySelector('aside')).toBeNull();
+    expect(useUiStore.getState().stack).toHaveLength(2);
+    act(() => useUiStore.getState().setConnectMode(false));
+    expect(container.querySelector('aside')).not.toBeNull();
+  });
+
   it('routes the top surface to its content and names the region', () => {
     act(() => useUiStore.getState().setRootSurface({ kind: 'mail' }));
     renderWithProviders(<Sheet />);
