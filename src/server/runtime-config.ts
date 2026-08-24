@@ -16,6 +16,8 @@ export interface RuntimeConfigInput {
   singleUserMode?: boolean;
   /** Skips the world picker and logs straight into this world. */
   forceWorld?: string;
+  /** Dev-only: turns on the in-app bug-reporting capture. */
+  bugReport?: boolean;
 }
 
 export function buildRuntimeConfigScript(input: RuntimeConfigInput): string {
@@ -25,6 +27,9 @@ export function buildRuntimeConfigScript(input: RuntimeConfigInput): string {
   }
   if (input.forceWorld) {
     lines.push(`window.__SPO_FORCE_WORLD__=${JSON.stringify(input.forceWorld)};`);
+  }
+  if (input.bugReport) {
+    lines.push(`window.__SPO_BUG_REPORT__=true;`);
   }
   return lines.join('\n');
 }

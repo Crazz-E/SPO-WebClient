@@ -32,6 +32,8 @@ import { buildErrorContractReadout, buildPropertyFallbackReadout } from './sessi
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
 import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 import { buildRuntimeConfigScript } from './runtime-config';
+import { depositBugReport, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
+import { MAX_BODY_BYTES as MAX_BUG_REPORT_BODY } from '../shared/bug-report-schema';
 
 /**
  * Starpeace Gateway Server
@@ -591,6 +593,7 @@ const server = http.createServer(async (req, res) => {
       cdnUrl: config.cdn.url,
       singleUserMode: SINGLE_USER_MODE,
       forceWorld: config.server.forceWorld,
+      bugReport: config.server.bugReportMode,
     });
     res.writeHead(200, {
       'Content-Type': 'text/javascript',
@@ -887,6 +890,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Bug report deposit: POST /api/bug-report — dev-only, 404 unless SPO_BUG_REPORT=true.
+  // All of the logic lives in bug-report-endpoint.ts, which tests can import; this is transport only.
+  if (safePath === '/api/bug-report' && req.method === 'POST') {
+    // checkRateLimit's window is fixed at RATE_LIMIT_WINDOW_MS (60 s) — this is 10 per minute.
+    if (!checkRateLimit(getClientIp(req), 'bug-report', 10)) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Too many bug reports. Try again in a minute.' }));
+      return;
+    }
+    const chunks: Buffer[] = [];
+    let bodySize = 0;
+    req.on('data', (chunk: Buffer) => {
+      bodySize += chunk.length;
+      if (bodySize <= MAX_BUG_REPORT_BODY) chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (bodySize > MAX_BUG_REPORT_BODY) {
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Payload too large' }));
+        return;
+      }
+      const result = depositBugReport(Buffer.concat(chunks).toString('utf8'), {
+        enabled: config.server.bugReportMode,
+        queueDir: DEFAULT_QUEUE_DIR,
+      });
+      res.writeHead(result.status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result.body));
+    });
+    return;
+  }
+
   // Image proxy endpoint: /proxy-image?url=<encoded_url>
   if (safePath.startsWith(`${PROXY_IMAGE_ENDPOINT}?`)) {
     const urlParams = new URLSearchParams(safePath.split('?')[1]);
@@ -1021,7 +1055,7 @@ const server = http.createServer(async (req, res) => {
       // the /cdn/ proxy when CHUNK_CDN_URL is overridden.
       // Uses an external script (CSP-compliant) instead of inline script.
       // In Docker/default mode, config.cdn.url is the default and no injection occurs.
-      if (config.cdn.url !== 'https://spo.zz.works' || config.server.forceWorld) {
+      if (config.cdn.url !== 'https://spo.zz.works' || config.server.forceWorld || config.server.bugReportMode) {
         const injection = `<script src="/spo-runtime-config.js"></script>`;
         html = html.replace('</head>', `${injection}</head>`);
       }

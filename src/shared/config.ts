@@ -27,6 +27,10 @@ export const config = {
     forceWorld: (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__SPO_FORCE_WORLD__ !== undefined)
       ? (window as unknown as Record<string, unknown>).__SPO_FORCE_WORLD__ as string
       : getEnv('SPO_FORCE_WORLD') ?? undefined,
+    /** Dev-only: enables the in-app bug-report capture and the /api/bug-report deposit endpoint. */
+    bugReportMode: (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__SPO_BUG_REPORT__ !== undefined)
+      ? (window as unknown as Record<string, unknown>).__SPO_BUG_REPORT__ === true
+      : getEnv('SPO_BUG_REPORT') === 'true',
   },
 
   /**
