@@ -231,3 +231,48 @@ describe('ClientBridge mail responses (T6)', () => {
     expect(useMailStore.getState().pendingDeleteId).toBeNull();
   });
 });
+
+/**
+ * OB-1: the bridge is where the gateway's verdict crosses into the store, and
+ * it must carry it rather than flatten it — a write nothing could vouch for
+ * used to arrive here indistinguishable from one that was read back and matched.
+ */
+describe('ClientBridge optimistic write feedback (OB-1)', () => {
+  const KEY = 'RDOConnectInput:Cotton';
+
+  beforeEach(() => {
+    useBuildingStore.setState({
+      pendingUpdates: new Map(),
+      confirmedUpdates: new Map(),
+      failedUpdates: new Map(),
+    });
+  });
+
+  it('setPendingUpdate parks the optimistic value under the key', () => {
+    ClientBridge.setPendingUpdate(KEY, '0');
+    expect(useBuildingStore.getState().pendingUpdates.get(KEY)?.value).toBe('0');
+  });
+
+  it('confirmPendingUpdate carries a confirmed verdict through to the store', () => {
+    ClientBridge.setPendingUpdate(KEY, '0');
+    ClientBridge.confirmPendingUpdate(KEY, 'confirmed');
+
+    expect(useBuildingStore.getState().pendingUpdates.has(KEY)).toBe(false);
+    expect(useBuildingStore.getState().confirmedUpdates.get(KEY)?.verdict).toBe('confirmed');
+  });
+
+  it('confirmPendingUpdate carries an unconfirmed verdict just as faithfully', () => {
+    ClientBridge.setPendingUpdate(KEY, '0');
+    ClientBridge.confirmPendingUpdate(KEY, 'unconfirmed');
+
+    expect(useBuildingStore.getState().confirmedUpdates.get(KEY)?.verdict).toBe('unconfirmed');
+  });
+
+  it('failPendingUpdate records the reason the server gave', () => {
+    ClientBridge.setPendingUpdate(KEY, '0');
+    ClientBridge.failPendingUpdate(KEY, '0', 'Server rejected the change');
+
+    expect(useBuildingStore.getState().failedUpdates.get(KEY)?.error)
+      .toBe('Server rejected the change');
+  });
+});

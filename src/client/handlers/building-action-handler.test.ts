@@ -304,7 +304,30 @@ describe('the SaveIndicator key of a write (B6)', () => {
     const { connectFacilities } = await import('./building-action-handler');
     await connectFacilities(setPropCtx(true), 10, 20, 'Cotton', 'input', [{ x: 1, y: 2 }]);
     expect(ClientBridge.setPendingUpdate).toHaveBeenCalledWith('RDOConnectInput:Cotton', '0');
-    expect(ClientBridge.confirmPendingUpdate).toHaveBeenCalledWith('RDOConnectInput:Cotton');
+    // OB-1: `RDOConnectInput` is a Pascal `procedure` whose witness is a count,
+    // so the gateway answers `confirmed: undefined`. The indicator must be told
+    // that, not handed the same settle call a verified write gets.
+    expect(ClientBridge.confirmPendingUpdate)
+      .toHaveBeenCalledWith('RDOConnectInput:Cotton', 'unconfirmed');
+  });
+
+  it('a write the gateway verified is the only one that claims confirmation', async () => {
+    const { setBuildingProperty } = await import('./building-action-handler');
+    await setBuildingProperty(setPropCtx(true, true), 10, 20, 'RDOSetPrice', '220', { index: '0' });
+    expect(ClientBridge.confirmPendingUpdate)
+      .toHaveBeenCalledWith('RDOSetPrice:{"index":"0"}', 'confirmed');
+  });
+
+  it('a write the gateway could not check still succeeds, but says so', async () => {
+    const { setBuildingProperty } = await import('./building-action-handler');
+    // `confirmed` absent — the gateway's honest answer when the witness reads
+    // the same either way, or the object cache has not refreshed (OB-28/OB-29).
+    await expect(
+      setBuildingProperty(setPropCtx(true), 10, 20, 'RDOSetPrice', '220', { index: '0' }),
+    ).resolves.toBe(true);
+    expect(ClientBridge.confirmPendingUpdate)
+      .toHaveBeenCalledWith('RDOSetPrice:{"index":"0"}', 'unconfirmed');
+    expect(ClientBridge.failPendingUpdate).not.toHaveBeenCalled();
   });
 
   it('a property keeps the default key — member plus parameters', async () => {
@@ -313,7 +336,7 @@ describe('the SaveIndicator key of a write (B6)', () => {
     expect(ClientBridge.setPendingUpdate).toHaveBeenCalledWith('RDOSetInputMaxPrice:{"fluidId":"Cotton"}', '120');
   });
 
-  it('a rename is pending, then confirmed', async () => {
+  it('a rename is pending, then settled — unconfirmed, the set reply being unread', async () => {
     const { renameFacility, RENAME_PENDING_KEY } = await import('./building-action-handler');
     const ctx = {
       ...makeCtx(),
@@ -321,7 +344,8 @@ describe('the SaveIndicator key of a write (B6)', () => {
     } as unknown as ClientHandlerContext;
     await expect(renameFacility(ctx, 10, 20, 'North Mill')).resolves.toBe(true);
     expect(ClientBridge.setPendingUpdate).toHaveBeenCalledWith(RENAME_PENDING_KEY, 'North Mill');
-    expect(ClientBridge.confirmPendingUpdate).toHaveBeenCalledWith(RENAME_PENDING_KEY);
+    expect(ClientBridge.confirmPendingUpdate)
+      .toHaveBeenCalledWith(RENAME_PENDING_KEY, 'unconfirmed');
     expect(ClientBridge.failPendingUpdate).not.toHaveBeenCalled();
   });
 
