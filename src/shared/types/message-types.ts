@@ -816,16 +816,28 @@ export interface WsRespBuildingSetProperty extends WsMessage {
   /** The command was issued and the round-trip did not throw. */
   success: boolean;
   propertyName: string;
-  /** What the server actually holds after the write — empty if unconfirmed. */
+  /**
+   * What the server actually holds after the write — empty when nothing could
+   * be read back. Never an echo of the requested value (M-E).
+   */
   newValue: string;
   /**
-   * The value was re-read from the server and matches a real stored value.
+   * `true` only when the server was re-read and holds the value the write would
+   * have produced.
    *
    * Distinct from `success` on purpose (M-E): several legitimate commands — the
    * disconnect family — have no read-back property at all, so they succeed
    * without ever being confirmable. `newValue` used to echo the requested value
    * when the read-back came back empty, which made a mutation the server threw
    * away indistinguishable from one it applied.
+   *
+   * `undefined` means "nothing contradicts the write", and it is what the
+   * cache-backed confirmations answer whenever they cannot do better (OB-28):
+   * either the witness property reads the same whether or not the write landed,
+   * or it still holds the old value — which for a civic write is the expected
+   * reading for the first 30-90 s, the cache being refreshed asynchronously
+   * (OB-29). `false` is reserved for a re-read that positively disagrees with
+   * the write with no cache in the loop.
    */
   confirmed?: boolean;
 }

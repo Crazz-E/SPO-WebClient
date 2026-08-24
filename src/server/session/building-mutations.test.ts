@@ -155,7 +155,44 @@ describe('setBuildingProperty — confirmation (M-E)', () => {
     const result = await setBuildingProperty(ctx, 10, 20, 'RDOAutoProduce', '99');
 
     expect(result.newValue).toBe('42');
+    // OB-28: this used to assert `confirmed: true`, which is the defect in
+    // miniature — the witness answered '42' while the write asked for '99', and
+    // "the witness is readable" was taken for "the write landed". `AutoProd`
+    // holds 'YES'/'NO' after a successful write, so '42' confirms nothing.
+    expect(result.confirmed).toBeUndefined();
+  });
+
+  it('confirms the write when the witness holds what the write would produce', async () => {
+    const { ctx } = makeCtx({
+      cacherGetPropertyList: jest.fn()
+        .mockResolvedValueOnce(['8161308', '8161308'])
+        .mockResolvedValueOnce(['YES']),
+    });
+
+    const result = await setBuildingProperty(ctx, 10, 20, 'RDOAutoProduce', '1');
+
+    expect(result.newValue).toBe('YES');
     expect(result.confirmed).toBe(true);
+  });
+
+  it('withholds a verdict when the witness disagrees with the write', async () => {
+    // The live OB-28 case: `RDOSetTaxValue` with -10 answered confirmed while
+    // the town kept 12. Not `false` either — the object cache surfaces a civic
+    // write 30-90 s late (OB-29), so the old value is the expected reading.
+    const { ctx } = makeCtx({
+      cacherGetPropertyList: jest.fn()
+        .mockResolvedValueOnce(['8161308', '8161308'])
+        .mockResolvedValueOnce(['110'])                // Tax0Id lookup
+        .mockResolvedValueOnce(['12']),                // Tax0Percent, unchanged
+    });
+
+    const result = await setBuildingProperty(ctx, 10, 20, 'RDOSetTaxValue', '-10', { index: '0' });
+
+    expect(result.newValue).toBe('12');
+    expect(result.confirmed).toBeUndefined();
+    expect(ctx.log.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/holds 12, the write sent -10/),
+    );
   });
 
   // The regression sentinel. `readValues[0] || value` returned '99' here — the
@@ -172,7 +209,10 @@ describe('setBuildingProperty — confirmation (M-E)', () => {
 
     expect(result.newValue).not.toBe('99');
     expect(result.newValue).toBe('');
-    expect(result.confirmed).toBe(false);
+    // Was `false`, which the client turns into a red "Failed" and a reverted
+    // field. An absent cache property does not say the write was discarded —
+    // OB-28's false negative, the mirror of its false positive.
+    expect(result.confirmed).toBeUndefined();
   });
 
   it('warns when it cannot confirm, so the gap is visible in the logs', async () => {

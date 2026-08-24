@@ -296,11 +296,29 @@ async function setBuildingPropertyImpl(
         'RDOAcceptCloning', currBlock,
       ).packet, undefined, TimeoutCategory.NORMAL);
       const readBack = parsePropertyResponse(packet.payload || '', 'RDOAcceptCloning');
-      const confirmed = readBack !== '';
-      if (!confirmed) {
+
+      // OB-28 applies here too, and here alone it can answer `false`. The verdict
+      // used to be `readBack !== ''` — but the get returns the flag's current
+      // value, which is non-empty whether or not our set took effect. This is the
+      // one confirmation path with no object cache in the loop: the get reads the
+      // very field the set assigns (`property RDOAcceptCloning` on TBlock), so a
+      // flag that disagrees with the one we sent is a write that did not land,
+      // not a cache lagging behind (OB-29).
+      //
+      // Booleans compare by truthiness, never by digits: we emit `#-1`/`#0` and
+      // any non-zero ordinal reads as true (src/shared/CLAUDE.md).
+      const wanted = parseInt(value, 10) !== 0;
+      const held = readBack === '' ? null : parseInt(readBack, 10) !== 0;
+      const confirmed = held !== null && held === wanted;
+      if (held === null) {
         ctx.log.warn(
           `[BuildingDetails] ${propertyName} was issued but could not be confirmed — ` +
           `live get of "RDOAcceptCloning" came back empty`
+        );
+      } else if (!confirmed) {
+        ctx.log.warn(
+          `[BuildingDetails] ${propertyName} was issued but could not be confirmed — ` +
+          `live get of "RDOAcceptCloning" holds ${readBack}, the write sent ${wanted ? '-1' : '0'}`
         );
       } else {
         ctx.log.debug(`[BuildingDetails] Property ${propertyName} confirmed at ${readBack}`);
@@ -325,19 +343,43 @@ async function setBuildingPropertyImpl(
       // not throw" — several legitimate commands (the disconnect family) have no
       // read-back property at all, and the client uses `success` to drive its
       // notifications. `confirmed` is the honest signal.
-      const readBack = readValues[0];
-      const confirmed = readBack !== undefined && readBack !== '';
+      const readBack = readValues[0] ?? '';
 
-      if (!confirmed) {
+      // OB-28: the verdict used to be `readBack !== ''`, i.e. "the witness is
+      // readable". That is a different question from "the write landed", and it
+      // answered `true` for writes the server had discarded — live on
+      // 2026-08-20, `RDOSetTaxValue` with `-10` was reported confirmed while
+      // `Tax0Percent` kept its old `12`. Only a witness that ECHOES the value we
+      // sent can settle it; see expectedWitnessValues.
+      const accepted = expectedWitnessValues(propertyName, value, additionalParams);
+      const confirmed = accepted !== null && readBack !== '' && witnessMatches(readBack, accepted)
+        ? true
+        : undefined;
+
+      if (confirmed) {
+        ctx.log.debug(`[BuildingDetails] Property ${propertyName} confirmed at ${readBack}`);
+      } else if (accepted === null) {
+        ctx.log.debug(
+          `[BuildingDetails] ${propertyName} was issued but could not be confirmed — ` +
+          `"${propertyToRead}" reads the same whether or not the write landed`
+        );
+      } else if (readBack === '') {
         ctx.log.warn(
           `[BuildingDetails] ${propertyName} was issued but could not be confirmed — ` +
           `read-back of "${propertyToRead}" came back empty`
         );
       } else {
-        ctx.log.debug(`[BuildingDetails] Property ${propertyName} confirmed at ${readBack}`);
+        // Not a failure: a civic write reaches its object well before the cache
+        // the client reads is refreshed (OB-29), so a witness still holding the
+        // old value is the expected reading for the first 30-90 s. Saying
+        // `false` here would paint "Failed" over writes that landed.
+        ctx.log.warn(
+          `[BuildingDetails] ${propertyName} was issued but could not be confirmed — ` +
+          `"${propertyToRead}" holds ${readBack}, the write sent ${accepted.join(' or ')}`
+        );
       }
 
-      return { success: true, newValue: confirmed ? readBack : '', confirmed };
+      return { success: true, newValue: readBack, confirmed };
     } finally {
       await ctx.cacherCloseObject(verifyObjectId);
     }
@@ -744,6 +786,136 @@ function buildRdoCommandArgs(
   }
 
   return args;
+}
+
+// =========================================================================
+// MODULE-PRIVATE — expectedWitnessValues / witnessMatches
+// =========================================================================
+
+/**
+ * What the witness property must hold for the write to count as landed — or
+ * `null` when no read-back can settle the question.
+ *
+ * OB-28: reading a witness only tells us the property EXISTS. `Tax0Percent`
+ * exists whether or not the rate we sent was accepted, so the old verdict
+ * (`readBack !== ''`) reported a discarded write as confirmed. A witness can
+ * only confirm a write when it ECHOES it: the value the object cache holds
+ * after a successful write is one we can predict from what we sent.
+ *
+ * Three families, and only the first gets a verdict:
+ *
+ * - **echo** — the cache holds the value we sent, or a form of it we can
+ *   compute. Listed below, each with the Delphi line that writes it.
+ * - **not an echo** — the witness is a count (`cnxCount`), an aggregate
+ *   (`RulerVotes`), a derived figure the gateway cannot recompute
+ *   (`cInputDem{i}`, `nfActualMaxFluidValue`), or a flag whose success state is
+ *   ABSENCE (`InProd` after a cancel). Readable either way: no verdict.
+ * - **not on the object we read** — the supply-chain witnesses live on the gate
+ *   sub-objects (`TGateCacheAgent.UpdateCache`, Kernel/KernelCache.pas:459-471),
+ *   while the verification read binds by coordinates and therefore lands on the
+ *   facility. They come back empty whatever happens.
+ *
+ * The last two return `null`, which the caller turns into `confirmed:
+ * undefined` — "nothing contradicts the write". Never `false`: the cache the
+ * client reads lags a civic write by 30-90 s (OB-29), so a mismatch cannot be
+ * told apart from a write that landed and has not surfaced yet.
+ */
+function expectedWitnessValues(
+  rdoCommand: string,
+  value: string,
+  additionalParams?: Record<string, string>
+): readonly string[] | null {
+  const params = additionalParams || {};
+
+  switch (rdoCommand) {
+    // The value we sent is the value the cache holds. The two percentages are
+    // divided by 100 on the way in and multiplied back on the way out; the two
+    // integers are assigned to the very field the cache writes; the widestring
+    // is stored verbatim. The salary clamps at 255 and a clamped write reads
+    // back as the clamp — a mismatch, hence no verdict rather than a wrong one.
+    //
+    //   Tax{i}Percent        `StrToInt(value)/100` Kernel/BasicTaxes.pas:249,
+    //                        `round(100*Percent)` :220, name Kernel/Population.pas:1181
+    //   TownTax{i}           `TX.TaxValue := Value/100` Kernel/WorldPolitics.pas:1765,
+    //                        `round(100*TX.TaxValue)` :1380
+    //   {hi|mid|lo}MinSalary `min(high(TPercent), Value)` Kernel/Population.pas:1292-1305,
+    //                        cache :1219, prefixes Kernel/Kernel.pas:246
+    //   TradeLevel           Kernel/Kernel.pas:6408-6412 (assign) / :5894 (cache)
+    //   WordsOfWisdom        TranscendBlock.pas:216 (assign) / :200 (cache)
+    case 'RDOSetTaxValue':
+    case 'RDOSetTownTaxes':
+    case 'RDOSetMinSalaryValue':
+    case 'RDOSetTradeLevel':
+    case 'RDOSetWordsOfWisdom':
+      return [value.trim()];
+
+    // The witness is the first of the triplet, not the edited one: the caller
+    // always resends all three (buildRdoCommandArgs refuses a partial triplet),
+    // and the handler assigns them unscaled — WorkCenterBlock.pas:591-593,
+    // cache :571.
+    case 'RDOSetSalaries':
+      return params.salary0 === undefined ? null : [params.salary0.trim()];
+
+    // The one lossy round-trip: the setter halves the price and the cache
+    // doubles it back — `min(high(Price), round(value/2))` ServiceBlock.pas:1585,
+    // `2*Price` :1731. Even values return unchanged; an odd one comes back as
+    // one of its two even neighbours, Delphi's `round` breaking the .5 tie
+    // towards the even integer. Above 510 the byte clamps and there is no
+    // verdict, which is the honest reading of a refused value.
+    case 'RDOSetPrice': {
+      const price = parseInt(value, 10);
+      if (!Number.isFinite(price)) return null;
+      if (price % 2 === 0) return [String(price)];
+      const lower = Math.floor(price / 2) * 2;
+      return [String(lower), String(lower + 2)];
+    }
+
+    // Booleans reach the cache as words, not as the `#-1`/`#0` we emit:
+    // `Cache.WriteString('AutoProd', 'YES'/'NO')` MovieStudios.pas:770-772,
+    // `Cache.WriteString('InProd', 'YES')` :763. Both are written only while a
+    // film project exists (:760-776), so the cancel/release commands cannot be
+    // confirmed this way at all — their success is the property's ABSENCE, and
+    // an absent property is indistinguishable from an unrefreshed cache.
+    case 'RDOAutoProduce':
+      return parseInt(value, 10) !== 0 ? ['YES'] : ['NO'];
+    case 'RDOLaunchMovie':
+      return ['YES'];
+
+    // `Cache.WriteBoolean` writes '1'/'0' (Cache/CacheAgent.pas:150-152), and
+    // the cancellation clears the flag — TranscendBlock.pas:202.
+    case 'RDOCacncelTransc':
+      return ['0'];
+
+    // Direct property set: the witness IS the property that was written, read
+    // from the cache under the same name. Same assumption the read-back itself
+    // already makes (mapRdoCommandToPropertyName, `case 'property'`).
+    case 'property':
+      return params.propertyName === undefined ? null : [value.trim()];
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * Does the value the server holds match one the write would have produced?
+ *
+ * Numeric when both sides read as numbers — `3000` and `3000.00` are the same
+ * currency, and Delphi's `IntToStr`/`CurrToStr` do not agree on trailing
+ * decimals. Otherwise a trimmed, case-insensitive string compare, which is what
+ * the word booleans (`YES`/`NO`) and the widestring witnesses need.
+ */
+function witnessMatches(readBack: string, accepted: readonly string[]): boolean {
+  const held = readBack.trim();
+  return accepted.some(candidate => {
+    const want = candidate.trim();
+    const heldNum = Number(held);
+    const wantNum = Number(want);
+    if (held !== '' && want !== '' && Number.isFinite(heldNum) && Number.isFinite(wantNum)) {
+      return heldNum === wantNum;
+    }
+    return held.toLowerCase() === want.toLowerCase();
+  });
 }
 
 // =========================================================================
