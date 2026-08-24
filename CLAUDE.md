@@ -169,6 +169,10 @@ card whose `Session` is filled; every owner closes its ownership (Done or Needs 
 A session that dies without closing it leaves a locked card, and only the human may free
 it — `.github/workflows/orphan-cards.yml` comments once on any card claimed and quiet for
 24 h, so the human sees it; it frees nothing itself.
+**One session per area:** a card also carries an `Area` — the one part of the tree its change
+lands in — and a session claims the topmost Todo card whose area no live card already holds.
+`docs` never blocks; every other area does. The reservation expires with the session heartbeat
+(`SPO_WORKTREE_IDLE_MIN`, 120 min), the card's `Session` field never does.
 **Feeding rule:** every finding lands as a new issue in Todo, with its `Category` and the
 matching `cat:` / `size:` labels — a finding that only lives in a session report is lost.
 **Every draft card is read first by the `card-reviewer` sub-agent**, whose dated verdict
