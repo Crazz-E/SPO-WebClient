@@ -26,6 +26,8 @@ interface Harness {
   /** Queue of exit codes handed to successive runCommand calls (default 0). */
   exitCodes: number[];
   gatewayStarts: string[];
+  /** The environment each gateway start was handed, in start order. */
+  gatewayEnvs: Record<string, string>[];
   gatewayStops: number;
   logs: string[];
   submitterAlive: boolean;
@@ -54,6 +56,7 @@ function harness(): Harness {
     commands: [],
     exitCodes: [],
     gatewayStarts: [],
+    gatewayEnvs: [],
     gatewayStops: 0,
     logs: [],
     submitterAlive: true,
@@ -78,9 +81,10 @@ function harness(): Harness {
       },
       gateway: {
         clearPort: async () => {},
-        start: async wt => {
+        start: async (wt, _port, _logFile, env) => {
           if (h.gatewayFails) throw new Error('phase=caching forever');
           h.gatewayStarts.push(wt);
+          h.gatewayEnvs.push(env);
           return { pid: 999, stop: async () => void h.gatewayStops++ };
         },
       },
@@ -234,6 +238,20 @@ describe('runJob — gate', () => {
     expect(h.commands[2].env?.E2E_WORLD_STATE_DIR).toBe(h.paths.world);
     expect(h.gatewayStarts).toEqual([h.worktree]);
     expect(h.gatewayStops).toBe(1);
+  });
+
+  it('points the gateway and the body at the bench-wide asset cache, not the worktree', async () => {
+    const h = harness();
+    const job = deposit(h, 'gate');
+    await runJob(h.deps, job);
+    // The gateway is what primes and reads the mirror; without this it would download
+    // all ~570 files into a fresh worktree on the bench's exclusive time.
+    expect(h.gatewayEnvs).toEqual([
+      { E2E_WORLD_STATE_DIR: h.paths.world, SPO_CACHE_DIR: h.paths.cache },
+    ]);
+    // verify-gate replays the Jest suite when there is no receipt, and tests that read
+    // real assets must be pointed at the same mirror or they silently self-skip.
+    expect(h.commands[2].env?.SPO_CACHE_DIR).toBe(h.paths.cache);
   });
 
   it('builds the gateway alone — no client bundle, no terrain-test, for a browserless drive', async () => {

@@ -65,6 +65,41 @@ describe('paths — dev mode (no Electron)', () => {
     expect(path.isAbsolute(paths.getWebclientCacheDir())).toBe(true);
   });
 
+  it('SPO_CACHE_DIR moves the asset cache, and nothing else', () => {
+    const publicBefore = paths.getPublicDir();
+    const webclientBefore = paths.getWebclientCacheDir();
+    process.env.SPO_CACHE_DIR = path.join(path.sep, 'bench', 'cache');
+    try {
+      expect(paths.getCacheDir()).toBe(path.join(path.sep, 'bench', 'cache'));
+      // The override is the shared asset mirror only: the webclient image cache is
+      // written by this checkout, and public/ ships with it.
+      expect(paths.getWebclientCacheDir()).toBe(webclientBefore);
+      expect(paths.getPublicDir()).toBe(publicBefore);
+    } finally {
+      delete process.env.SPO_CACHE_DIR;
+    }
+    expect(paths.getCacheDir()).toBe(path.join(path.dirname(publicBefore), 'cache'));
+  });
+
+  it('resolves a relative SPO_CACHE_DIR to an absolute path', () => {
+    process.env.SPO_CACHE_DIR = 'shared-cache';
+    try {
+      expect(paths.getCacheDir()).toBe(path.resolve('shared-cache'));
+    } finally {
+      delete process.env.SPO_CACHE_DIR;
+    }
+  });
+
+  it('ignores an empty SPO_CACHE_DIR — an unset variable is not a location', () => {
+    const before = paths.getCacheDir();
+    process.env.SPO_CACHE_DIR = '';
+    try {
+      expect(paths.getCacheDir()).toBe(before);
+    } finally {
+      delete process.env.SPO_CACHE_DIR;
+    }
+  });
+
   it('all paths resolve relative to project root (two levels above dist/server)', () => {
     // __dirname for paths.ts compiled output = dist/server/
     // projectRoot = dist/server/../../ = project root
@@ -91,6 +126,17 @@ describe('paths — Electron mode with userDataPath', () => {
 
   it('getWebclientCacheDir() resolves under userDataPath', () => {
     expect(paths.getWebclientCacheDir()).toBe(path.join(mockUserData, 'webclient-cache'));
+  });
+
+  it('SPO_CACHE_DIR does not move an installed client cache out of userData', () => {
+    // The packaged app inherits the user's shell environment; a variable meant for a
+    // developer's bench must not redirect an installed client's writable directory.
+    process.env.SPO_CACHE_DIR = path.join(path.sep, 'bench', 'cache');
+    try {
+      expect(paths.getCacheDir()).toBe(path.join(mockUserData, 'cache'));
+    } finally {
+      delete process.env.SPO_CACHE_DIR;
+    }
   });
 
   it('getPublicDir() still uses projectRoot when resourcesPath is NOT set', () => {

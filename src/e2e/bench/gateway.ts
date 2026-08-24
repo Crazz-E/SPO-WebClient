@@ -91,17 +91,21 @@ const READY_POLL_MS = 1_000;
 /**
  * Start `node dist/server/server.js` from the worktree, in its own process group, and
  * wait for /api/startup-status to report phase=ready. Stdout/stderr go to `logFile`.
+ *
+ * `env` adds to the worker's own environment — that is how the gateway is told to read
+ * the bench-wide asset cache instead of priming an empty one inside the worktree.
  */
 export async function startGateway(
   worktree: string,
   port: number,
   logFile: string,
   deps: GatewayDeps,
+  env: Record<string, string> = {},
 ): Promise<RunningGateway> {
   const out = fs.openSync(logFile, 'a');
   const child = deps.spawnProcess('node', ['--disable-warning=DEP0040', 'dist/server/server.js'], {
     cwd: worktree,
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, ...env, PORT: String(port) },
     detached: true,
     stdio: ['ignore', out, out],
   });

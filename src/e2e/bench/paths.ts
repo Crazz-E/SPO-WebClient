@@ -26,6 +26,13 @@ export interface BenchPaths {
   receipts: string;
   /** Shared world lock / dirty flag / run history (see WORLD_STATE_DIR in ../config). */
   world: string;
+  /**
+   * The asset mirror every job's gateway reads, shared by every worktree on the machine.
+   * Those ~570 files are identical in every checkout, so a per-worktree copy made each
+   * new branch re-download the lot on the bench's exclusive time. Jobs are serialised,
+   * so the one writer at a time this directory assumes is guaranteed by the queue.
+   */
+  cache: string;
   /** Touched every few seconds by the worker; its mtime is the liveness signal. */
   heartbeat: string;
   /** Who the worker is: pid, repo it runs from, port it owns. */
@@ -54,13 +61,23 @@ export function benchPaths(root: string = benchRoot()): BenchPaths {
     verdicts: path.join(root, 'verdicts'),
     receipts: path.join(root, 'receipts'),
     world: path.join(root, 'world'),
+    cache: path.join(root, 'cache'),
     heartbeat: path.join(root, 'heartbeat'),
     workerFile: path.join(root, 'worker.json'),
   };
 }
 
 export function ensureLayout(paths: BenchPaths): void {
-  const dirs = [paths.root, paths.spool, paths.running, paths.done, paths.verdicts, paths.receipts, paths.world];
+  const dirs = [
+    paths.root,
+    paths.spool,
+    paths.running,
+    paths.done,
+    paths.verdicts,
+    paths.receipts,
+    paths.world,
+    paths.cache,
+  ];
   for (const dir of dirs) {
     fs.mkdirSync(dir, { recursive: true });
   }

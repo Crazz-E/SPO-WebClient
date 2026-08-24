@@ -10,6 +10,11 @@
  *    where electron-builder places extraResources)
  *
  * Detection: `process.versions.electron` is set when running inside Electron.
+ *
+ * `SPO_CACHE_DIR` overrides the asset cache alone, for a caller that shares one mirror
+ * between several checkouts of this repo on the same machine (the bench worker does).
+ * It is read on every call rather than captured at load time, so a test can set it and
+ * a process can be configured after the module is imported.
  */
 import * as path from 'path';
 
@@ -43,10 +48,24 @@ export function getPublicDir(): string {
   return path.join(projectRoot(), 'public');
 }
 
+/**
+ * Where the mirror of `update.starpeaceonline.com/five/client/cache/` lives.
+ *
+ * The default is `<checkout>/cache`, which is what Docker and a plain `npm start` want.
+ * `SPO_CACHE_DIR` moves it somewhere shared: those ~570 files are the same bytes in
+ * every checkout — a mirror of a remote tree, not build output — so re-downloading them
+ * per worktree costs the network and the bench's exclusive time for nothing.
+ *
+ * Electron keeps its `userData` answer whatever the environment says: the packaged app
+ * inherits the user's shell environment, and a stray variable must not send an installed
+ * client's cache into a developer's directory.
+ */
 export function getCacheDir(): string {
   if (IS_ELECTRON && electronUserDataPath) {
     return path.join(electronUserDataPath, 'cache');
   }
+  const override = process.env.SPO_CACHE_DIR;
+  if (override) return path.resolve(override);
   return path.join(projectRoot(), 'cache');
 }
 

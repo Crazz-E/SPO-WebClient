@@ -142,6 +142,30 @@ describe('startGateway', () => {
     expect(spawned.opts.detached).toBe(true);
   });
 
+  it('adds the caller environment, and never lets it override the bench port', async () => {
+    const world = spawningWorld(['ready']);
+    await startGateway('/wt/a', 8080, tmpLog(), world.deps, {
+      SPO_CACHE_DIR: '/bench/cache',
+      PORT: '9999',
+    });
+    const spawned = world.spawned[0] as { opts: { env: Record<string, string> } };
+    expect(spawned.opts.env.SPO_CACHE_DIR).toBe('/bench/cache');
+    // The port the worker owns is not the caller's to choose.
+    expect(spawned.opts.env.PORT).toBe('8080');
+  });
+
+  it('inherits the worker environment when the caller adds nothing', async () => {
+    const world = spawningWorld(['ready']);
+    process.env.SPO_GATEWAY_ENV_PROBE = 'inherited';
+    try {
+      await startGateway('/wt/a', 8080, tmpLog(), world.deps);
+    } finally {
+      delete process.env.SPO_GATEWAY_ENV_PROBE;
+    }
+    const spawned = world.spawned[0] as { opts: { env: Record<string, string> } };
+    expect(spawned.opts.env.SPO_GATEWAY_ENV_PROBE).toBe('inherited');
+  });
+
   it('gives up when the gateway never reaches ready, naming the last phase seen', async () => {
     const world = spawningWorld(['caching']);
     await expect(startGateway('/wt/a', 8080, tmpLog(), world.deps)).rejects.toThrow(
