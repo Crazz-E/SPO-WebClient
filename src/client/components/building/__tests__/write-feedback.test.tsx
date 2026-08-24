@@ -43,7 +43,7 @@ describe('the supplier sliders say they are saving', () => {
     act(() => useBuildingStore.getState().setPending('RDOSetInputMaxPrice:{"fluidId":"Cotton"}', '150'));
     expect(screen.getAllByText('Saving…').length).toBe(1);
     act(() => {
-      useBuildingStore.getState().confirmPending('RDOSetInputMaxPrice:{"fluidId":"Cotton"}');
+      useBuildingStore.getState().confirmPending('RDOSetInputMaxPrice:{"fluidId":"Cotton"}', 'confirmed');
       useBuildingStore.getState().setPending('RDOSetInputMinK:{"fluidId":"Cotton"}', '60');
     });
     expect(screen.getByText('Saved')).toBeTruthy();
@@ -70,7 +70,7 @@ describe('a connection change says so on its own gate', () => {
     expandGate('Cotton');
     act(() => useBuildingStore.getState().setPending(connectionPendingKey('RDODisconnectInput', 'Cotton'), '0'));
     expect(screen.getByText('Saving…')).toBeTruthy();
-    act(() => useBuildingStore.getState().confirmPending(connectionPendingKey('RDODisconnectInput', 'Cotton')));
+    act(() => useBuildingStore.getState().confirmPending(connectionPendingKey('RDODisconnectInput', 'Cotton'), 'confirmed'));
     expect(screen.getByText('Saved')).toBeTruthy();
   });
 
@@ -80,7 +80,7 @@ describe('a connection change says so on its own gate', () => {
     act(() => useBuildingStore.getState().setPending(connectionPendingKey('RDOConnectOutput', 'Fabric'), '0'));
     expect(screen.getByText('Saving…')).toBeTruthy();
     act(() => {
-      useBuildingStore.getState().confirmPending(connectionPendingKey('RDOConnectOutput', 'Fabric'));
+      useBuildingStore.getState().confirmPending(connectionPendingKey('RDOConnectOutput', 'Fabric'), 'confirmed');
       useBuildingStore.getState().setPending('PricePc:{"fluidId":"Fabric"}', '110');
     });
     expect(screen.getByText('Saved')).toBeTruthy();

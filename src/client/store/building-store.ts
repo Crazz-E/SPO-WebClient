@@ -43,9 +43,26 @@ interface FailedUpdate {
   timestamp: number;
 }
 
-/** Tracks a recently confirmed SET command (success feedback). */
+/**
+ * How much the gateway could actually vouch for a write that came back
+ * `success: true`.
+ *
+ * `'confirmed'` — the server was re-read and holds the value the write would
+ * have produced. `'unconfirmed'` — the command went out and nothing came back
+ * to contradict it, which is all that can be said when the member is a Pascal
+ * `procedure` answering nothing, when its witness property reads the same
+ * either way (`cnxCount` after a connect), or when the object cache has not
+ * refreshed yet (OB-29).
+ *
+ * OB-1: the two used to render identically — a green tick — so a connection the
+ * server discarded looked exactly like one it made.
+ */
+export type WriteVerdict = 'confirmed' | 'unconfirmed';
+
+/** Tracks a recently settled SET command (success feedback). */
 interface ConfirmedUpdate {
   timestamp: number;
+  verdict: WriteVerdict;
 }
 
 /** Loading state for lazy tab data. */
@@ -193,7 +210,7 @@ interface BuildingState {
 
   // Optimistic SET actions
   setPending: (key: string, value: string) => void;
-  confirmPending: (key: string) => void;
+  confirmPending: (key: string, verdict: WriteVerdict) => void;
   failPending: (key: string, originalValue: string, error: string) => void;
   clearFailed: (key: string) => void;
   clearConfirmed: (key: string) => void;
@@ -592,12 +609,14 @@ export const useBuildingStore = create<BuildingState>((set) => ({
       return { pendingUpdates: next, failedUpdates: nextFailed };
     }),
 
-  confirmPending: (key) =>
+  // The verdict is a required argument on purpose (OB-1): a call site that does
+  // not know whether the write landed must say so, not default to a tick.
+  confirmPending: (key, verdict) =>
     set((state) => {
       const nextPending = new Map(state.pendingUpdates);
       nextPending.delete(key);
       const nextConfirmed = new Map(state.confirmedUpdates);
-      nextConfirmed.set(key, { timestamp: Date.now() });
+      nextConfirmed.set(key, { timestamp: Date.now(), verdict });
       return { pendingUpdates: nextPending, confirmedUpdates: nextConfirmed };
     }),
 
