@@ -267,6 +267,66 @@ describe('UpdateService directory-listing metadata', () => {
     expect(service.getStats().updated).toBe(0);
   });
 
+  it('downloads a file the local cache does not hold, metadata or not', async () => {
+    mockFetch.mockImplementation((input: unknown, init?: unknown) => {
+      const url = String(input);
+      if (url === CACHE_URL) {
+        return Promise.resolve(new Response(
+          listing([fileRow('11/19/1999', '11:15 AM', '1649', 'Default.ini')]), { status: 200 }));
+      }
+      if (url.endsWith('/Default.ini') && (init as RequestInit | undefined)?.method !== 'HEAD') {
+        return Promise.resolve(new Response('n'.repeat(1649), {
+          status: 200,
+          headers: { 'last-modified': 'Fri, 19 Nov 1999 11:15:42 GMT' },
+        }));
+      }
+      return Promise.resolve(new Response(listing([]), { status: 200 }));
+    });
+
+    const service = new UpdateService(tmpDir);
+    await service.initialize();
+
+    expect(headCalls()).toEqual([]);
+    expect(service.getStats().downloaded).toBe(1);
+    expect(fs.existsSync(path.join(tmpDir, 'Default.ini'))).toBe(true);
+  });
+
+  // Orphan removal (step 4 of syncAll) deletes every local file absent from the discovered
+  // set, so the metadata pass must not change which entries discovery yields.
+  it('leaves the discovered file and directory set untouched', async () => {
+    seed('Default.ini', 'x'.repeat(1649), '1999-11-19T11:15:42Z');
+    seed('stray.txt', 'orphan', '2020-01-01T00:00:00Z');
+
+    const rootHtml = listing([
+      ' 2/29/2024  2:37 PM        &lt;dir&gt; <A HREF="/five/client/cache/Cursors/">Cursors</A><br>',
+      fileRow(' 6/20/2008', ' 5:12 PM', '14', 'cindex.bat'),
+      fileRow('10/11/2001', ' 6:58 PM', '295', 'folders.sync'),
+      fileRow(' 1/15/2010', ' 9:00 AM', '512', 'web.config'),
+      fileRow('11/19/1999', '11:15 AM', '1649', 'Default.ini'),
+    ]);
+
+    const fetched: string[] = [];
+    mockFetch.mockImplementation((input: unknown) => {
+      const url = String(input);
+      fetched.push(url);
+      if (url === CACHE_URL) return Promise.resolve(new Response(rootHtml, { status: 200 }));
+      return Promise.resolve(new Response(listing([]), { status: 200 }));
+    });
+
+    const service = new UpdateService(tmpDir);
+    await service.initialize();
+
+    // The <dir> row still drives recursion into the subdirectory.
+    expect(fetched).toContain(`${CACHE_URL}/Cursors`);
+    // cindex.bat and web.config are IGNORED_PATTERNS; folders.sync is a real file but absent
+    // locally, so it is the only download. Default.ini matches the listing and is skipped.
+    expect(service.getStats().downloaded).toBe(1);
+    expect(service.getStats().skipped).toBe(1);
+    // stray.txt is not on the remote, so orphan removal takes it — unchanged behaviour.
+    expect(fs.existsSync(path.join(tmpDir, 'stray.txt'))).toBe(false);
+    expect(headCalls()).toEqual([]);
+  });
+
   it('accepts a comma-grouped size in a listing row', async () => {
     seed('big.bin', 'x'.repeat(1234), '2026-07-20T13:32:02Z');
 
