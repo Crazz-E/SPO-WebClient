@@ -93,3 +93,20 @@
   85% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* ---- Sent, unconfirmed (muted, fades like the notice) ----
+   Deliberately NOT green and NOT a checkmark: the write went out and the
+   server said nothing that confirms it (OB-1). It must not read as "saved"
+   at a glance, which is the only way the old green tick was ever read. */
+.sent {
+  color: var(--text-secondary);
+  animation: noticeFade 5s ease-out forwards;
+}
+
+.sentIcon {
+  font-size: var(--text-2xs);
+}
+
+.sentText {
+  font-style: italic;
+}

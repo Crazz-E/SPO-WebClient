@@ -472,7 +472,7 @@ describe('Building Store — Optimistic SET feedback', () => {
     store.setPending('RDOSetPrice:{"index":"0"}', '250');
     expect(useBuildingStore.getState().pendingUpdates.size).toBe(1);
 
-    store.confirmPending('RDOSetPrice:{"index":"0"}');
+    store.confirmPending('RDOSetPrice:{"index":"0"}', 'confirmed');
     expect(useBuildingStore.getState().pendingUpdates.size).toBe(0);
     expect(useBuildingStore.getState().confirmedUpdates.size).toBe(1);
     expect(useBuildingStore.getState().confirmedUpdates.has('RDOSetPrice:{"index":"0"}')).toBe(true);
@@ -504,8 +504,8 @@ describe('Building Store — Optimistic SET feedback', () => {
     const store = useBuildingStore.getState();
     store.setPending('k1', '1');
     store.setPending('k2', '2');
-    store.confirmPending('k1');
-    store.confirmPending('k2');
+    store.confirmPending('k1', 'confirmed');
+    store.confirmPending('k2', 'confirmed');
     expect(useBuildingStore.getState().confirmedUpdates.size).toBe(2);
 
     store.clearConfirmed('k1');
@@ -518,7 +518,7 @@ describe('Building Store — Optimistic SET feedback', () => {
     store.setPending('p1', '1');
     store.failPending('p2', '2', 'fail');
     store.setPending('p3', '3');
-    store.confirmPending('p3');
+    store.confirmPending('p3', 'confirmed');
 
     store.clearFocus();
     expect(useBuildingStore.getState().pendingUpdates.size).toBe(0);
@@ -534,7 +534,7 @@ describe('Building Store — Optimistic SET feedback', () => {
 
     expect(useBuildingStore.getState().pendingUpdates.size).toBe(3);
 
-    store.confirmPending('RDOSetPrice:{"index":"0"}');
+    store.confirmPending('RDOSetPrice:{"index":"0"}', 'confirmed');
     expect(useBuildingStore.getState().pendingUpdates.size).toBe(2);
     expect(useBuildingStore.getState().confirmedUpdates.size).toBe(1);
   });

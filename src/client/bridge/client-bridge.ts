@@ -7,7 +7,7 @@
  */
 
 import { useGameStore, type GameSettings, type ServerStartupState, type MapLoadingState, type DisconnectReason } from '../store/game-store';
-import { useBuildingStore } from '../store/building-store';
+import { useBuildingStore, type WriteVerdict } from '../store/building-store';
 import { useChatStore, type ChatUser } from '../store/chat-store';
 import { useMailStore } from '../store/mail-store';
 import { useProfileStore } from '../store/profile-store';
@@ -435,9 +435,14 @@ export const ClientBridge = {
     useBuildingStore.getState().setPending(key, value);
   },
 
-  /** Mark a property SET command as confirmed by server. */
-  confirmPendingUpdate(key: string): void {
-    useBuildingStore.getState().confirmPending(key);
+  /**
+   * Settle a property SET command that came back `success: true`.
+   *
+   * The verdict says whether the gateway could vouch for it (OB-1) — a write it
+   * could not check must not be painted as one it verified.
+   */
+  confirmPendingUpdate(key: string, verdict: WriteVerdict): void {
+    useBuildingStore.getState().confirmPending(key, verdict);
   },
 
   /** Mark a property SET command as failed — triggers revert + error display. */

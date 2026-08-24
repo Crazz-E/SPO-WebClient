@@ -245,7 +245,7 @@ describe('WorkforceTable — lock and settle', () => {
     expect(container.querySelectorAll('.pendingDot')).toHaveLength(1);
 
     act(() => {
-      useBuildingStore.getState().confirmPending(keyFor(properties, 2, 120));
+      useBuildingStore.getState().confirmPending(keyFor(properties, 2, 120), 'confirmed');
     });
     expect(container.querySelector('.checkmark')).toBeTruthy();
   });
@@ -259,7 +259,7 @@ describe('WorkforceTable — lock and settle', () => {
     expect(refresh).not.toHaveBeenCalled();
 
     act(() => {
-      useBuildingStore.getState().confirmPending(keyFor(properties, 2, 120));
+      useBuildingStore.getState().confirmPending(keyFor(properties, 2, 120), 'confirmed');
     });
     expect(refresh).toHaveBeenCalledWith(10, 20);
   });
@@ -271,7 +271,7 @@ describe('WorkforceTable — lock and settle', () => {
     fireEvent.pointerUp(screen.getByLabelText('Workers salary'));
 
     act(() => {
-      useBuildingStore.getState().confirmPending(keyFor(properties, 2, 40));
+      useBuildingStore.getState().confirmPending(keyFor(properties, 2, 40), 'confirmed');
     });
 
     // The refresh lands: the town minimum wage pushed the salary back up to 60,
@@ -302,7 +302,7 @@ describe('WorkforceTable — lock and settle', () => {
     fireEvent.change(screen.getByLabelText('Workers salary'), { target: { value: '140' } });
     fireEvent.pointerUp(screen.getByLabelText('Workers salary'));
     act(() => {
-      useBuildingStore.getState().confirmPending(keyFor(properties, 2, 140));
+      useBuildingStore.getState().confirmPending(keyFor(properties, 2, 140), 'confirmed');
     });
     expect((screen.getByLabelText('Workers salary') as HTMLInputElement).disabled).toBe(true);
 
