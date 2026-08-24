@@ -46,5 +46,5 @@ ownership, one way or the other.
 
 ## 5 · Findings along the way
 
-Anything discovered out of scope: new issue, added to the board in Todo (bottom), `Type`
+Anything discovered out of scope: new issue, added to the board in Todo (bottom), `Catégorie`
 set, synthetic body — then back to the task. Never expand your own scope with it.
