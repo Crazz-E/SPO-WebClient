@@ -32,6 +32,7 @@ import { buildErrorContractReadout, buildPropertyFallbackReadout } from './sessi
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
 import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 import { buildRuntimeConfigScript } from './runtime-config';
+import { handleBugReportRequest, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
 
 /**
  * Starpeace Gateway Server
@@ -591,6 +592,7 @@ const server = http.createServer(async (req, res) => {
       cdnUrl: config.cdn.url,
       singleUserMode: SINGLE_USER_MODE,
       forceWorld: config.server.forceWorld,
+      bugReport: config.server.bugReportMode,
     });
     res.writeHead(200, {
       'Content-Type': 'text/javascript',
@@ -887,6 +889,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Bug report deposit: POST /api/bug-report — dev-only, 404 unless SPO_BUG_REPORT=true.
+  // Everything, transport included, lives in bug-report-endpoint.ts, which tests can import.
+  // checkRateLimit's window is fixed at RATE_LIMIT_WINDOW_MS (60 s) — this is 10 per minute.
+  if (safePath === '/api/bug-report' && req.method === 'POST') {
+    handleBugReportRequest(req, res, {
+      enabled: config.server.bugReportMode,
+      queueDir: DEFAULT_QUEUE_DIR,
+      allowRequest: () => checkRateLimit(getClientIp(req), 'bug-report', 10),
+    });
+    return;
+  }
+
   // Image proxy endpoint: /proxy-image?url=<encoded_url>
   if (safePath.startsWith(`${PROXY_IMAGE_ENDPOINT}?`)) {
     const urlParams = new URLSearchParams(safePath.split('?')[1]);
@@ -1021,7 +1035,7 @@ const server = http.createServer(async (req, res) => {
       // the /cdn/ proxy when CHUNK_CDN_URL is overridden.
       // Uses an external script (CSP-compliant) instead of inline script.
       // In Docker/default mode, config.cdn.url is the default and no injection occurs.
-      if (config.cdn.url !== 'https://spo.zz.works' || config.server.forceWorld) {
+      if (config.cdn.url !== 'https://spo.zz.works' || config.server.forceWorld || config.server.bugReportMode) {
         const injection = `<script src="/spo-runtime-config.js"></script>`;
         html = html.replace('</head>', `${injection}</head>`);
       }

@@ -47,6 +47,32 @@ describe('buildRuntimeConfigScript', () => {
     ]);
   });
 
+  it('announces bug-report mode when it is on', () => {
+    expect(buildRuntimeConfigScript({ cdnUrl: '', bugReport: true }))
+      .toContain('window.__SPO_BUG_REPORT__=true;');
+  });
+
+  it('says nothing about bug-report mode when it is off', () => {
+    expect(buildRuntimeConfigScript({ cdnUrl: '', bugReport: false }))
+      .not.toContain('__SPO_BUG_REPORT__');
+    expect(buildRuntimeConfigScript({ cdnUrl: '' })).not.toContain('__SPO_BUG_REPORT__');
+  });
+
+  it('emits every override together, in a fixed order', () => {
+    const body = buildRuntimeConfigScript({
+      cdnUrl: '',
+      singleUserMode: true,
+      forceWorld: 'planitia',
+      bugReport: true,
+    });
+    expect(body.split('\n')).toEqual([
+      'window.__SPO_CDN_URL__="";',
+      'window.__SPO_SINGLE_USER__=true;',
+      'window.__SPO_FORCE_WORLD__="planitia";',
+      'window.__SPO_BUG_REPORT__=true;',
+    ]);
+  });
+
   it('escapes a value that would otherwise break out of the script', () => {
     const body = buildRuntimeConfigScript({ cdnUrl: 'https://x/</script>' });
     expect(body).toBe('window.__SPO_CDN_URL__="https://x/</script>";');
