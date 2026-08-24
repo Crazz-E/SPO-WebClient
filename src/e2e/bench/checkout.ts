@@ -1,0 +1,169 @@
+/**
+ * A worker-owned checkout, brought to an arbitrary ref.
+ *
+ * The bench has always tested **the depositing session's worktree**: the worker builds
+ * whatever is on disk at a path the session named. That is the coupling #158 removes —
+ * it is the only reason a session has to live on this machine, and the reason GitHub's
+ * merge queue is unusable, since a speculative merge commit exists only on GitHub and
+ * never in anybody's worktree.
+ *
+ * The input was already a commit: a `gate` job refuses a dirty tree, so the tree it tests
+ * *is* HEAD. Replacing the worktree with a fetch changes the transport, not what is proven.
+ *
+ * #157 built the first instance of this for the nightly proof of `main`. This module is
+ * that machinery with the target made a parameter, so one implementation serves the
+ * nightly, a pushed branch head, and — the point of the exercise — a
+ * `gh-readonly-queue/...` ref that exists nowhere but on GitHub.
+ *
+ * **Why a clone and not a `git worktree`.** Two reasons, both load-bearing:
+ * `scripts/finish.sh` scans and reaps worktrees on its own schedule, and the worker must
+ * not be something `finish` can delete underneath a running job; and the worker executes
+ * `dist/e2e/bench/worker.js` *from* its own repo, so building a fetched ref there would
+ * overwrite the running worker's code mid-flight.
+ *
+ * **Why the install is conditional.** `npm ci` is not a no-op: it deletes `node_modules`
+ * and reinstalls from scratch, every time. The nightly could afford that — nobody waits
+ * for it. A gate cannot: it is the serialised bench, and a full install would be paid by
+ * every job to protect against a lockfile that changes a few times a month. So the
+ * lockfile's own hash is recorded next to the checkout after each successful install, and
+ * `npm ci` runs only when it differs — or when `node_modules` is simply not there.
+ *
+ * Session worktrees never needed any of this, and that is worth stating because it is not
+ * obvious: they sit *inside* the main checkout (`.claude/worktrees/<name>`), so Node's
+ * upward resolution finds `/home/<user>/SPO-WebClient/node_modules` and every worktree
+ * silently borrows it. A checkout fetched from GitHub has no parent to borrow from.
+ */
+
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+import { toErrorMessage } from '../../shared/error-utils';
+import { type GitRunner } from './fingerprint';
+
+export interface CheckoutCommandOptions {
+  cwd: string;
+  env?: Record<string, string>;
+  logFile: string;
+}
+
+/** Exactly what preparing a checkout needs; WorkerDeps satisfies it structurally. */
+export interface CheckoutDeps {
+  runCommand: (cmd: string, args: string[], options: CheckoutCommandOptions) => Promise<number>;
+  now: () => number;
+  log: (line: string) => void;
+}
+
+export interface PrepareRequest {
+  /** Absolute path of the checkout directory; created by cloning when absent. */
+  dir: string;
+  /** What to reset to: `origin/main`, a sha, `origin/<branch>`. */
+  ref: string;
+  /** A repo that already has the origin remote, to read the clone URL from. */
+  workerRepo: string;
+  logFile: string;
+}
+
+/** Where the hash of the lockfile that the current `node_modules` was built from lives. */
+export function installedLockFile(dir: string): string {
+  return `${dir}.installed-lock`;
+}
+
+export function lockHash(dir: string): string | null {
+  try {
+    return crypto
+      .createHash('sha256')
+      .update(fs.readFileSync(path.join(dir, 'package-lock.json')))
+      .digest('hex');
+  } catch {
+    // No lockfile to compare: never claim the install is current.
+    return null;
+  }
+}
+
+/** What the last successful `npm ci` in this checkout was built from, if anything. */
+export function installedLockHash(dir: string): string | null {
+  try {
+    return fs.readFileSync(installedLockFile(dir), 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export function recordInstalled(dir: string, hash: string): void {
+  fs.writeFileSync(installedLockFile(dir), `${hash}\n`, 'utf8');
+}
+
+/**
+ * Does this checkout need `npm ci`?
+ *
+ * Yes when `node_modules` is missing, when nothing recorded what the current one was
+ * built from, or when the lockfile has moved since. **An unreadable lockfile also means
+ * yes** — the whole point is to skip work only on positive evidence that it is redundant.
+ */
+export function needsInstall(dir: string, exists: (p: string) => boolean = fs.existsSync): boolean {
+  if (!exists(path.join(dir, 'node_modules'))) return true;
+  const current = lockHash(dir);
+  if (current === null) return true;
+  return current !== installedLockHash(dir);
+}
+
+/**
+ * Bring `dir` to `ref`, cloning it the first time. Returns the name of the step that
+ * failed, or null on success.
+ *
+ * `git clean -fd` keeps ignored files on purpose, so `node_modules/` survives the reset —
+ * which is what makes the conditional install possible at all. The tree fingerprint also
+ * excludes ignored files, so the checkout reads as clean either way.
+ */
+export async function prepareCheckout(
+  deps: CheckoutDeps,
+  request: PrepareRequest,
+  git: GitRunner,
+): Promise<string | null> {
+  const { dir, ref, workerRepo, logFile } = request;
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  // One preparation per log: a red result points here, and yesterday's noise would bury it.
+  fs.writeFileSync(logFile, `=== prepare ${dir} at ${ref} — ${new Date(deps.now()).toISOString()} ===\n`, 'utf8');
+
+  if (!fs.existsSync(path.join(dir, '.git'))) {
+    let url: string;
+    try {
+      url = git(workerRepo, ['remote', 'get-url', 'origin']).trim();
+    } catch (err: unknown) {
+      fs.appendFileSync(logFile, `${toErrorMessage(err)}\n`, 'utf8');
+      return 'git remote get-url origin';
+    }
+    const cloned = await deps.runCommand('git', ['clone', url, dir], {
+      cwd: path.dirname(dir),
+      logFile,
+    });
+    if (cloned !== 0) return 'git clone';
+  }
+
+  // Every branch, not just the one asked for: a bare sha cannot always be fetched
+  // directly (the server has to allow it), while a sha reachable from a fetched branch
+  // always resets cleanly. `--prune` keeps deleted branches from accumulating forever.
+  const steps: { name: string; cmd: string; args: string[] }[] = [
+    { name: 'git fetch', cmd: 'git', args: ['fetch', '--prune', '--force', 'origin'] },
+    { name: `git reset --hard ${ref}`, cmd: 'git', args: ['reset', '--hard', ref] },
+    { name: 'git clean -fd', cmd: 'git', args: ['clean', '-fd'] },
+  ];
+  for (const step of steps) {
+    const code = await deps.runCommand(step.cmd, step.args, { cwd: dir, logFile });
+    if (code !== 0) return step.name;
+  }
+
+  if (needsInstall(dir)) {
+    deps.log(`checkout ${dir}: lockfile moved (or no node_modules) — npm ci`);
+    const code = await deps.runCommand('npm', ['ci'], { cwd: dir, logFile });
+    if (code !== 0) return 'npm ci';
+    const hash = lockHash(dir);
+    // Only a hash we actually read gets recorded: stamping a guess would make the next
+    // job skip an install it needed.
+    if (hash) recordInstalled(dir, hash);
+  } else {
+    deps.log(`checkout ${dir}: node_modules already matches the lockfile — no install`);
+  }
+
+  return null;
+}

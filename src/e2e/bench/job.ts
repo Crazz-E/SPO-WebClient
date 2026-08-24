@@ -14,7 +14,7 @@ import * as path from 'path';
 import type { BenchPaths } from './paths';
 import type { TreeFingerprint } from './fingerprint';
 
-export type JobType = 'gate' | 'live' | 'lease' | 'nightly';
+export type JobType = 'gate' | 'live' | 'lease' | 'nightly' | 'ref';
 
 export type JobVerdict =
   | 'PASS'
@@ -47,6 +47,12 @@ export interface JobRequest {
   args: string[];
   /** lease only: how long to hold the gateway. */
   leaseMinutes?: number;
+  /**
+   * `ref` only: what to gate, as anything `git reset --hard` accepts — a sha, a branch,
+   * a `gh-readonly-queue/...` ref. The worker fetches it into a checkout it owns, so
+   * unlike every other job type the subject need not exist on this machine at all.
+   */
+  ref?: string;
 }
 
 export interface JobReport {

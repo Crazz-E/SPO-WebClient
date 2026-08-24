@@ -32,6 +32,7 @@ import * as path from 'path';
 import { toErrorMessage } from '../../shared/error-utils';
 import type { BenchPaths } from './paths';
 import { runGit, type GitRunner, type TreeFingerprint } from './fingerprint';
+import { prepareCheckout as sharedPrepareCheckout } from './checkout';
 import type { Spool, JobVerdict } from './job';
 
 /**
@@ -156,51 +157,28 @@ export function nightlyDue(
 }
 
 /**
- * Bring `<bench>/nightly/checkout` to `origin/main`, cloning it the first time.
+ * Bring `<bench>/nightly/checkout` to `origin/main`.
  *
- * Returns the name of the step that failed, or null on success. `git clean -fd` keeps
- * ignored files, so `node_modules/` survives the reset and `npm ci` is usually a no-op;
- * the fingerprint excludes ignored files too, so the tree reads as clean either way.
+ * A thin naming of the shared machinery in ./checkout — same clone, same reset, same
+ * conditional install — with `origin/main` as the target. It stayed a named function
+ * because "the nightly's checkout" is a thing the rest of this module and its tests talk
+ * about, while ./checkout deliberately knows nothing about nightlies.
  */
 export async function prepareCheckout(
   deps: NightlyDeps,
   workerRepo: string,
   git: GitRunner,
 ): Promise<string | null> {
-  const checkout = nightlyCheckout(deps.paths);
-  const logFile = nightlyPrepareLog(deps.paths);
-  fs.mkdirSync(deps.paths.nightly, { recursive: true });
-  // One night per log: a red result points here, and yesterday's noise would bury it.
-  fs.writeFileSync(logFile, `=== nightly prepare ${new Date(deps.now()).toISOString()} ===\n`, 'utf8');
-
-  if (!fs.existsSync(path.join(checkout, '.git'))) {
-    let url: string;
-    try {
-      url = git(workerRepo, ['remote', 'get-url', 'origin']).trim();
-    } catch (err: unknown) {
-      fs.appendFileSync(logFile, `${toErrorMessage(err)}\n`, 'utf8');
-      return 'git remote get-url origin';
-    }
-    const cloned = await deps.runCommand('git', ['clone', url, checkout], {
-      cwd: deps.paths.nightly,
-      logFile,
-    });
-    if (cloned !== 0) return 'git clone';
-  }
-
-  const steps: { name: string; cmd: string; args: string[] }[] = [
-    { name: 'git fetch', cmd: 'git', args: ['fetch', '--prune', 'origin'] },
-    { name: 'git reset --hard origin/main', cmd: 'git', args: ['reset', '--hard', 'origin/main'] },
-    { name: 'git clean -fd', cmd: 'git', args: ['clean', '-fd'] },
-    // The lockfile moves with main; a checkout built against yesterday's packages would
-    // fail for a reason that has nothing to do with main's code.
-    { name: 'npm ci', cmd: 'npm', args: ['ci'] },
-  ];
-  for (const step of steps) {
-    const code = await deps.runCommand(step.cmd, step.args, { cwd: checkout, logFile });
-    if (code !== 0) return step.name;
-  }
-  return null;
+  return sharedPrepareCheckout(
+    deps,
+    {
+      dir: nightlyCheckout(deps.paths),
+      ref: 'origin/main',
+      workerRepo,
+      logFile: nightlyPrepareLog(deps.paths),
+    },
+    git,
+  );
 }
 
 /**
