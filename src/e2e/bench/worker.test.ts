@@ -41,6 +41,9 @@ interface Harness {
   baseMain: string | undefined;
   published: string[];
   gatewayFails: boolean;
+  /** What the owner lease answers when a job asks whether it may take the bench. */
+  leaseDecision: { ok: boolean; why?: string };
+  leaseRenewals: number;
   clock: { nowMs: number };
 }
 
@@ -67,6 +70,8 @@ function harness(): Harness {
     baseMain: 'main-sha-1',
     published: [],
     gatewayFails: false,
+    leaseDecision: { ok: true },
+    leaseRenewals: 0,
     clock: { nowMs: 1_000_000 },
     deps: {
       paths,
@@ -91,6 +96,11 @@ function harness(): Harness {
         },
       },
       publishStatus: (_wt, head) => h.published.push(head),
+      mayDriveLive: () => h.leaseDecision,
+      renewLease: async () => {
+        h.leaseRenewals++;
+        return { held: h.leaseDecision.ok };
+      },
       processAlive: () => h.submitterAlive,
       now: () => (h.clock.nowMs += 10),
       sleep: async () => {},
@@ -392,6 +402,25 @@ describe('runJob — gate', () => {
     expect(report.detail).toMatch(/never became ready/);
   });
 
+  it('never lets an ENVIRONMENT overwrite a good attestation for the same sha', async () => {
+    // The destructive shape this guards: a sha gates PASS, then anything that runs no
+    // code — a gateway that will not come up, a lease that cannot be renewed — replaces
+    // that attestation and publishes `bench/gate=error` on a commit that genuinely passed.
+    const h = harness();
+    await processOldest(h.deps);
+    deposit(h);
+    await processOldest(h.deps);
+    expect(listVerdicts(h.paths)[0].verdict.verdict).toBe('PASS');
+
+    h.gatewayFails = true;
+    deposit(h);
+    await processOldest(h.deps);
+
+    const verdicts = listVerdicts(h.paths);
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0].verdict.verdict).toBe('PASS');
+  });
+
   it('reports ABANDONED when the worktree vanished from disk', async () => {
     const h = harness();
     const job = deposit(h);
@@ -410,6 +439,28 @@ describe('runJob — gate', () => {
     expect(h.spool.readReport(job.id)?.detail).toMatch(/commit first/);
     expect(h.commands).toHaveLength(0);
     expect(h.gatewayStarts).toHaveLength(0);
+    expect(listVerdicts(h.paths)).toHaveLength(0);
+  });
+
+  it('refuses to take the bench without the owner lease, before clearing the port', async () => {
+    // The refusal has to land BEFORE clearPort: that call SIGKILLs whatever holds 8080,
+    // and on a second host it would be killing the other worker's gateway.
+    const h = harness();
+    const job = deposit(h);
+    let cleared = 0;
+    h.deps.gateway.clearPort = async () => void cleared++;
+    h.leaseDecision = { ok: false, why: 'BENCH_OWNER has lapsed and could not be renewed' };
+
+    await processOldest(h.deps);
+
+    expect(cleared).toBe(0);
+
+    const report = h.spool.readReport(job.id);
+    expect(report?.verdict).toBe('ENVIRONMENT');
+    expect(report?.detail).toMatch(/lapsed/);
+    expect(h.commands).toHaveLength(0);
+    expect(h.gatewayStarts).toHaveLength(0);
+    // ENVIRONMENT attests nothing — the sha is neither passed nor failed.
     expect(listVerdicts(h.paths)).toHaveLength(0);
   });
 
@@ -692,5 +743,20 @@ describe('workerLoop and main', () => {
     expect(fs.existsSync(h.paths.heartbeat)).toBe(true);
     expect(h.spool.running()).toHaveLength(0); // recovered
     expect(cleared).toBe(1);
+  });
+
+  it('main takes the owner lease before it looks at the queue', async () => {
+    // A worker that claims a job before it holds the lease has already taken the bench
+    // by the time it asks whether it may — the order is the guarantee, not the check.
+    const h = harness();
+    await main(h.deps, 0);
+    expect(h.leaseRenewals).toBe(1);
+  });
+
+  it('main says so, loudly, when it cannot hold the lease', async () => {
+    const h = harness();
+    h.leaseDecision = { ok: false, why: 'laptop (pid 77) holds the bench' };
+    await main(h.deps, 0);
+    expect(h.logs.join('\n')).toMatch(/bench lease NOT held/);
   });
 });
