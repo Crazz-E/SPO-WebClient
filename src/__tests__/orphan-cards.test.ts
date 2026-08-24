@@ -54,6 +54,7 @@ interface OrphanModule {
   selectOrphans(items: Partial<Item>[], opts: { now: number; staleHours: number }): Orphan[];
   formatQuiet(hours: number): string;
   formatEvidence(evidence: unknown): string;
+  escapeCell(value: unknown): string;
   marker(session: unknown): string;
   firedOwners(comments: { body?: unknown }[] | null): Set<string>;
   needsReminder(orphan: { session?: string }, comments: { body?: unknown }[]): boolean;
@@ -342,6 +343,30 @@ describe('renderDigest', () => {
     expect(
       watch.renderDigest([orphan({ title: 'Pipes | in | the title' })], { now: NOW, staleHours: 24 })
     ).toContain('Pipes \\| in \\| the title');
+  });
+
+  it('escapes a pipe in the branch too — `Session` is free text', () => {
+    expect(
+      watch.renderDigest([orphan({ session: 'fix/a|b @ 2026-08-24' })], { now: NOW, staleHours: 24 })
+    ).toContain('`fix/a\\|b`');
+  });
+});
+
+describe('escapeCell', () => {
+  it('escapes the pipe that would end the cell early', () => {
+    expect(watch.escapeCell('a | b')).toBe('a \\| b');
+  });
+
+  it('escapes the backslash FIRST, so an already-escaped pipe is not un-escaped', () => {
+    // The bug CodeQL named: escaping only the pipe turns `a\|b` into `a\\|b`, which renders
+    // as a literal backslash and then breaks the row on the very pipe it meant to protect.
+    expect(watch.escapeCell('a\\|b')).toBe('a\\\\\\|b');
+    expect(watch.escapeCell('trailing\\')).toBe('trailing\\\\');
+  });
+
+  it('renders an absent value as an empty cell rather than "undefined"', () => {
+    expect(watch.escapeCell(null)).toBe('');
+    expect(watch.escapeCell(undefined)).toBe('');
   });
 });
 

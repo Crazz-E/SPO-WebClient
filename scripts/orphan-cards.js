@@ -222,6 +222,17 @@ function renderReminder(orphan, { staleHours }) {
   ].join('\n');
 }
 
+/**
+ * A value that has to survive a Markdown table cell. The backslash goes first — escaping the
+ * pipe alone turns a title already containing `\|` into `\\|`, which renders as a literal
+ * backslash and then breaks the row exactly where the escape was meant to hold it together.
+ */
+function escapeCell(value) {
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|');
+}
+
 /** The same suspects as a table, for the run's job summary — a view, notifying nobody. */
 function renderDigest(orphans, { now, staleHours }) {
   const stamp = new Date(now).toISOString().replace('T', ' ').slice(0, 16);
@@ -239,7 +250,7 @@ function renderDigest(orphans, { now, staleHours }) {
   for (const o of orphans) {
     const session = parseSession(o.session);
     lines.push(
-      `| [#${o.number}](${o.url}) ${o.title.replace(/\|/g, '\\|')} | ${o.status} | \`${session ? session.branch : ''}\` | ${formatQuiet(o.quietHours)} | ${formatEvidence(o.evidence)} | ${o.reminded ? 'posted' : 'already sent'} |`
+      `| [#${o.number}](${o.url}) ${escapeCell(o.title)} | ${escapeCell(o.status)} | \`${escapeCell(session ? session.branch : '')}\` | ${formatQuiet(o.quietHours)} | ${formatEvidence(o.evidence)} | ${o.reminded ? 'posted' : 'already sent'} |`
     );
   }
   return lines.join('\n');
@@ -359,6 +370,7 @@ module.exports = {
   selectOrphans,
   formatQuiet,
   formatEvidence,
+  escapeCell,
   marker,
   firedOwners,
   needsReminder,
