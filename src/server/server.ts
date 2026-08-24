@@ -31,6 +31,7 @@ import { wsHandlerRegistry } from './ws-handlers';
 import { buildErrorContractReadout, buildPropertyFallbackReadout } from './session/diagnostics-readouts';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
 import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
+import { buildRuntimeConfigScript } from './runtime-config';
 
 /**
  * Starpeace Gateway Server
@@ -586,14 +587,11 @@ const server = http.createServer(async (req, res) => {
   // Only relevant when CHUNK_CDN_URL is overridden. In Docker, this returns
   // an empty script since config.cdn.url matches the default.
   if (safePath === '/spo-runtime-config.js') {
-    const cdnJson = JSON.stringify(config.cdn.url);
-    let body = `window.__SPO_CDN_URL__=${cdnJson};`;
-    if (SINGLE_USER_MODE) {
-      body += `\nwindow.__SPO_SINGLE_USER__=true;`;
-    }
-    if (config.server.forceWorld) {
-      body += `\nwindow.__SPO_FORCE_WORLD__=${JSON.stringify(config.server.forceWorld)};`;
-    }
+    const body = buildRuntimeConfigScript({
+      cdnUrl: config.cdn.url,
+      singleUserMode: SINGLE_USER_MODE,
+      forceWorld: config.server.forceWorld,
+    });
     res.writeHead(200, {
       'Content-Type': 'text/javascript',
       'Cache-Control': 'no-cache',

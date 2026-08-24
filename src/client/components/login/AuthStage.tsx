@@ -17,11 +17,19 @@ interface AuthStageProps {
   status: string;
 }
 
-/** Single-user mode: the gateway serves one local player, so remembering a username is safe. */
-const isSingleUser = typeof window !== 'undefined' &&
-  (window as unknown as Record<string, unknown>).__SPO_SINGLE_USER__ === true;
+/**
+ * Single-user mode: the gateway serves one local player, so remembering a username is safe.
+ * Read per render rather than once at module load — `/spo-runtime-config.js` sets the flag
+ * before the app mounts, and a captured constant would freeze whichever value happened to
+ * be there when this module was first evaluated.
+ */
+function isSingleUserMode(): boolean {
+  return typeof window !== 'undefined' &&
+    (window as unknown as Record<string, unknown>).__SPO_SINGLE_USER__ === true;
+}
 
 export function AuthStage({ onConnect, isLoading, status }: AuthStageProps) {
+  const isSingleUser = isSingleUserMode();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberUsername, setRememberUsername] = useState(false);
@@ -34,7 +42,7 @@ export function AuthStage({ onConnect, isLoading, status }: AuthStageProps) {
       setUsername(saved);
       setRememberUsername(true);
     }
-  }, []);
+  }, [isSingleUser]);
 
   const handleConnect = useCallback(() => {
     if (!username.trim() || !password.trim()) {
@@ -49,7 +57,7 @@ export function AuthStage({ onConnect, isLoading, status }: AuthStageProps) {
       }
     }
     onConnect(username, password);
-  }, [username, password, rememberUsername, onConnect]);
+  }, [isSingleUser, username, password, rememberUsername, onConnect]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
