@@ -150,6 +150,26 @@ describe('connect mode from the inspector (connectMap)', () => {
 });
 
 describe('Escape ownership while the mode runs', () => {
+  it('one keypress leaves the mode and never reaches the window listeners', () => {
+    const ctx = makeCtx();
+    seedPicker();
+    useUiStore.getState().setRootSurface({ kind: 'building' });
+    useUiStore.getState().pushSurface({ kind: 'supplierSearch' });
+    startConnectModeFromPicker(ctx);
+
+    const windowSpy = jest.fn();
+    window.addEventListener('keydown', windowSpy);
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    window.removeEventListener('keydown', windowSpy);
+
+    expect(ctx.isConnectMode).toBe(false);
+    // The same keypress must NOT fall through to useKeyboardShortcuts —
+    // it would pop a surface of the just-restored stack (live QA, lot f)
+    expect(windowSpy).not.toHaveBeenCalled();
+    expect(useUiStore.getState().stack).toHaveLength(2);
+    useUiStore.getState().clearSurfaces();
+  });
+
   it('dismissTopmost refuses to pop the hidden stack', () => {
     useUiStore.setState({ connectMode: { active: true, subject: 'Fabrics' } });
     useUiStore.getState().setRootSurface({ kind: 'building' });

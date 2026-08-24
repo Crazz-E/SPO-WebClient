@@ -666,6 +666,13 @@ function startConnectMode(ctx: ClientHandlerContext, source: { x: number; y: num
 
   ctx.connectKeyboardHandler = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && ctx.isConnectMode) {
+      // The mode OWNS this Escape. This document listener runs before the
+      // window-level useKeyboardShortcuts one; once the mode is cancelled the
+      // store flag is already false, so without stopping the event here the
+      // hook would see a free keyboard and pop a surface of the restored
+      // stack on the SAME keypress (found by the N10 live QA).
+      e.stopPropagation();
+      e.preventDefault();
       cancelConnectMode(ctx);
     }
   };
