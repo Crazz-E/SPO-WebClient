@@ -5,6 +5,7 @@ import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './pat
 import { Spool, type JobRequest } from './job';
 import { listVerdicts } from './verdict';
 import { buildReceipt, writeReceipt } from './receipt';
+import { type GatewayDeps } from './gateway';
 import {
   countCapabilityExceptions,
   main,
@@ -527,6 +528,32 @@ describe('the real command runner and deps', () => {
     deps.log('smoke'); // writes to stdout; must not throw
     // An unused high port: the real clearPort runs `ss`, finds nothing, returns.
     await expect(deps.gateway.clearPort(65_001)).resolves.toBeUndefined();
+  });
+
+  it('realWorkerDeps forwards the job environment to startGateway', async () => {
+    const paths = benchPaths(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-real-')));
+    ensureLayout(paths);
+    const spawned: { cwd: string; env: Record<string, string> }[] = [];
+    // A fake machine, so the wiring is exercised without a gateway being spawned.
+    const gatewayDeps: GatewayDeps = {
+      execFile: () => '',
+      spawnProcess: ((_cmd: string, _args: string[], opts: { cwd: string; env: Record<string, string> }) => {
+        spawned.push({ cwd: opts.cwd, env: opts.env });
+        return { pid: 4242, unref: () => {} };
+      }) as unknown as GatewayDeps['spawnProcess'],
+      fetchImpl: (async () => ({ ok: true, text: async () => 'data: {"phase":"ready"}\n\n' }) as Response) as typeof fetch,
+      sleep: async () => {},
+      kill: () => {},
+    };
+    const deps = realWorkerDeps(paths, gatewayDeps);
+
+    const logFile = path.join(paths.done, 'wiring.log');
+    const gateway = await deps.gateway.start('/wt/a', 8080, logFile, { SPO_CACHE_DIR: paths.cache });
+
+    expect(gateway.pid).toBe(4242);
+    expect(spawned[0].cwd).toBe('/wt/a');
+    expect(spawned[0].env.SPO_CACHE_DIR).toBe(paths.cache);
+    expect(spawned[0].env.PORT).toBe('8080');
   });
 });
 

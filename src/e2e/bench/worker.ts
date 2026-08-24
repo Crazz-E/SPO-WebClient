@@ -29,7 +29,13 @@ import {
 import { fingerprintTree, resolveRef, type TreeFingerprint } from './fingerprint';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
 import { lookupReceipt, pruneReceipts, RECEIPT_MAX_AGE_MS } from './receipt';
-import { clearPort, realGatewayDeps, startGateway, type RunningGateway } from './gateway';
+import {
+  clearPort,
+  realGatewayDeps,
+  startGateway,
+  type GatewayDeps,
+  type RunningGateway,
+} from './gateway';
 import { ghStatusPublisher, publishPendingStatuses, writeVerdict, type StatusPublisher } from './verdict';
 
 export interface RunCommandOptions {
@@ -423,8 +429,14 @@ export function realRunCommand(
   });
 }
 
-export function realWorkerDeps(paths: BenchPaths): WorkerDeps {
-  const gatewayDeps = realGatewayDeps();
+/**
+ * `gatewayDeps` is a parameter only so a test can prove the forwarding — chiefly that the
+ * job environment reaches `startGateway` — without a real gateway being spawned.
+ */
+export function realWorkerDeps(
+  paths: BenchPaths,
+  gatewayDeps: GatewayDeps = realGatewayDeps(),
+): WorkerDeps {
   return {
     paths,
     spool: new Spool(paths),
