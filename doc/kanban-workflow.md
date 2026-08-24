@@ -29,7 +29,7 @@ The `Status` field is single-select: a task is in exactly one column.
 | Field | Kind | Meaning |
 |---|---|---|
 | `Session` | text | **The ownership marker.** Empty = claimable. Format: `<branch> @ <YYYY-MM-DD>` (e.g. `claude-crazz/mail-refresh-x1 @ 2026-08-24`). All sessions push as the same GitHub account, so the assignee cannot distinguish them — this field can. |
-| `Type` | single select | 🔴 Défaut · 🟠 Piège latent · 🟡 Feature/Manque · ⚪ Observation · 📚 Doc/Infra |
+| `Catégorie` | single select | 🔴 Défaut · 🟠 Piège latent · 🟡 Feature/Manque · ⚪ Observation · 📚 Doc/Infra — named `Catégorie` because `Type` is a reserved field name on GitHub Projects |
 | `Taille` | single select | S · M · L — rough estimate at creation, for scanning the pool. |
 
 ## The ownership law
@@ -65,7 +65,7 @@ Every write is very short.
 ## Feeding rule (replaces the BACKLOG-OPEN feeding rule)
 
 Every live-journey finding, investigation result, or defect discovered in passing **lands as
-a new issue on the board**, in Todo (bottom — the human prioritises), with `Type` set and a
+a new issue on the board**, in Todo (bottom — the human prioritises), with `Catégorie` set and a
 synthetic body: what is wrong or missing, key `file:line` references, source (journey/date).
 A finding that only lives in a session report is lost.
 
