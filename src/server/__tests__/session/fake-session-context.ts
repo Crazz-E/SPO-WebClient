@@ -238,9 +238,6 @@ export function makeSessionCtx(overrides: FakeSessionOptions = {}): FakeSessionC
     setAspActionCache: jest.fn(() => undefined),
 
     // ── In-flight dedup map ──────────────────────────────────────────────
-    getInFlightBuildingDetails: jest.fn(() => undefined),
-    setInFlightBuildingDetails: jest.fn(() => undefined),
-    deleteInFlightBuildingDetails: jest.fn(() => undefined),
 
     // ── Session state: ids are plumbing, everything else stays null ──────
     worldContextId: FAKE_CONTEXT_IDS.worldContextId,
@@ -673,7 +670,6 @@ export function makeLoginCtx(overrides: FakeLoginOptions = {}): FakeLoginCtx {
 }
 
 /**
- * Re-exported so a test can name the type it feeds `setInFlightBuildingDetails`
  * without reaching back into `shared/types` for it.
  */
 export type { BuildingDetailsResponse, AspActionUrl };

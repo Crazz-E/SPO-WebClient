@@ -60,7 +60,6 @@ export enum WsMessageType {
   REQ_MAP_LOAD = 'REQ_MAP_LOAD',
   REQ_SELECT_COMPANY = 'REQ_SELECT_COMPANY',
   REQ_SWITCH_COMPANY = 'REQ_SWITCH_COMPANY',
-  REQ_MANAGE_CONSTRUCTION = 'REQ_MANAGE_CONSTRUCTION',
 
   // Gateway -> Client (Responses)
   RESP_AUTH_SUCCESS = 'RESP_AUTH_SUCCESS',
@@ -69,7 +68,6 @@ export enum WsMessageType {
   RESP_RDO_RESULT = 'RESP_RDO_RESULT',
   RESP_ERROR = 'RESP_ERROR',
   RESP_MAP_DATA = 'RESP_MAP_DATA',
-  RESP_CONSTRUCTION_SUCCESS = 'RESP_CONSTRUCTION_SUCCESS',
 
   // Gateway -> Client (Async Events / Pushes)
   EVENT_CHAT_MSG = 'EVENT_CHAT_MSG',
@@ -179,7 +177,6 @@ export enum WsMessageType {
   REQ_SEARCH_MENU_HOME = 'REQ_SEARCH_MENU_HOME',
   REQ_SEARCH_MENU_TOWNS = 'REQ_SEARCH_MENU_TOWNS',
   REQ_SEARCH_MENU_TYCOON_PROFILE = 'REQ_SEARCH_MENU_TYCOON_PROFILE',
-  REQ_SEARCH_MENU_PEOPLE = 'REQ_SEARCH_MENU_PEOPLE',
   REQ_SEARCH_MENU_PEOPLE_SEARCH = 'REQ_SEARCH_MENU_PEOPLE_SEARCH',
   REQ_SEARCH_MENU_RANKINGS = 'REQ_SEARCH_MENU_RANKINGS',
   REQ_SEARCH_MENU_RANKING_DETAIL = 'REQ_SEARCH_MENU_RANKING_DETAIL',
@@ -188,7 +185,6 @@ export enum WsMessageType {
   RESP_SEARCH_MENU_HOME = 'RESP_SEARCH_MENU_HOME',
   RESP_SEARCH_MENU_TOWNS = 'RESP_SEARCH_MENU_TOWNS',
   RESP_SEARCH_MENU_TYCOON_PROFILE = 'RESP_SEARCH_MENU_TYCOON_PROFILE',
-  RESP_SEARCH_MENU_PEOPLE = 'RESP_SEARCH_MENU_PEOPLE',
   RESP_SEARCH_MENU_PEOPLE_SEARCH = 'RESP_SEARCH_MENU_PEOPLE_SEARCH',
   RESP_SEARCH_MENU_RANKINGS = 'RESP_SEARCH_MENU_RANKINGS',
   RESP_SEARCH_MENU_RANKING_DETAIL = 'RESP_SEARCH_MENU_RANKING_DETAIL',
@@ -349,14 +345,6 @@ export interface WsReqMapLoad extends WsMessage {
   height: number;
 }
 
-export interface WsReqManageConstruction extends WsMessage {
-  type: WsMessageType.REQ_MANAGE_CONSTRUCTION;
-  x: number;
-  y: number;
-  action: 'START' | 'STOP' | 'DOWN';
-  count?: number;
-}
-
 export interface WsReqSelectCompany extends WsMessage {
   type: WsMessageType.REQ_SELECT_COMPANY;
   companyId: string;
@@ -400,13 +388,6 @@ export interface WsRespLoginSuccess extends WsMessage {
 export interface WsRespRdoResult extends WsMessage {
   type: WsMessageType.RESP_RDO_RESULT;
   result: string | string[];
-}
-
-export interface WsRespConstructionSuccess extends WsMessage {
-  type: WsMessageType.RESP_CONSTRUCTION_SUCCESS;
-  action: string;
-  x: number;
-  y: number;
 }
 
 export interface WsRespMapData extends WsMessage {
@@ -947,14 +928,6 @@ export interface WsReqSearchMenuTycoonProfile extends WsMessage {
 export interface WsRespSearchMenuTycoonProfile extends WsMessage {
   type: WsMessageType.RESP_SEARCH_MENU_TYCOON_PROFILE;
   profile: TycoonProfile;
-}
-
-export interface WsReqSearchMenuPeople extends WsMessage {
-  type: WsMessageType.REQ_SEARCH_MENU_PEOPLE;
-}
-
-export interface WsRespSearchMenuPeople extends WsMessage {
-  type: WsMessageType.RESP_SEARCH_MENU_PEOPLE;
 }
 
 export interface WsReqSearchMenuPeopleSearch extends WsMessage {

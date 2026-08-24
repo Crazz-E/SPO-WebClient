@@ -696,10 +696,6 @@ export const ClientBridge = {
       case WsMessageType.RESP_SEARCH_MENU_TOWNS:
         search.setTownsData(msg as WsRespSearchMenuTowns);
         break;
-      case WsMessageType.RESP_SEARCH_MENU_PEOPLE:
-        // Acknowledges page ready — no data to store
-        search.setLoading(false);
-        break;
       case WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH:
         search.setPeopleData(msg as WsRespSearchMenuPeopleSearch);
         break;

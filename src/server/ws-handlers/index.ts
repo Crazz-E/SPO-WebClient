@@ -37,7 +37,7 @@ import { handleNewspaperBoard, handleNewspaperPost } from './newspaper-handlers'
 import { handlePoliticsData, handlePoliticsVote, handlePoliticsLaunchCampaign, handlePoliticsCancelCampaign, handlePoliticsSetRating, handlePoliticsSetPublicity, handlePoliticsSetProject, handleTycoonRole } from './politics-handlers';
 
 // Miscellaneous
-import { handleManageConstruction, handleDefineZone, handleCreateCompany, handleClusterInfo, handleClusterFacilities, handleSearchConnections, handleEmpireFacilities, handleResearchInventory, handleResearchDetails } from './misc-handlers';
+import { handleDefineZone, handleCreateCompany, handleClusterInfo, handleClusterFacilities, handleSearchConnections, handleEmpireFacilities, handleResearchInventory, handleResearchDetails } from './misc-handlers';
 
 export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   // Auth & session
@@ -131,7 +131,6 @@ export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   [WsMessageType.REQ_TYCOON_ROLE]: handleTycoonRole,
 
   // Miscellaneous
-  [WsMessageType.REQ_MANAGE_CONSTRUCTION]: handleManageConstruction,
   [WsMessageType.REQ_DEFINE_ZONE]: handleDefineZone,
   [WsMessageType.REQ_CREATE_COMPANY]: handleCreateCompany,
   [WsMessageType.REQ_CLUSTER_INFO]: handleClusterInfo,

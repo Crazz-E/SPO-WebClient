@@ -130,10 +130,10 @@ export function setActiveInspectorForTest(ctx: SessionContext, inspector: Active
 
 /**
  * Create an ActiveInspector on-the-fly for a building.
- * Used as fallback when the legacy `getBuildingDetails` path was used (which
- * doesn't create an inspector) but the client then requests lazy tab data.
- * Only creates the Delphi temp object + determines tab capabilities — does NOT
- * fetch properties (those were already fetched by the legacy path).
+ * Used as a fallback whenever a lazy request finds no inspector for the
+ * building — a released or stale one, or a tab asked for before the basic
+ * fetch registered its inspector. Only creates the Delphi temp object +
+ * determines tab capabilities — does NOT fetch properties.
  */
 async function createInspectorForBuilding(
   ctx: SessionContext,
@@ -193,33 +193,6 @@ async function createInspectorForBuilding(
 // =========================================================================
 // PUBLIC API
 // =========================================================================
-
-/**
- * Get building details with deduplication of concurrent requests.
- * Legacy full-fetch path: loads basic + all tab data in one call.
- * Used by auto-refresh and backward-compatible code paths.
- */
-export async function getBuildingDetails(
-  ctx: SessionContext,
-  x: number,
-  y: number,
-  visualClass: string
-): Promise<BuildingDetailsResponse> {
-  const dedupeKey = `${x},${y}`;
-  const existing = ctx.getInFlightBuildingDetails(dedupeKey);
-  if (existing) {
-    ctx.log.debug(`[BuildingDetails] Dedup hit (${x},${y})`);
-    return existing;
-  }
-
-  const promise = getBuildingDetailsImpl(ctx, x, y, visualClass);
-  ctx.setInFlightBuildingDetails(dedupeKey, promise);
-  try {
-    return await promise;
-  } finally {
-    ctx.deleteInFlightBuildingDetails(dedupeKey);
-  }
-}
 
 /**
  * Lazy Phase 1+2: Fetch basic building details (properties, tabs, moneyGraph).
@@ -359,8 +332,8 @@ export async function getBuildingBasicDetails(
  * Lazy Phase 3+4: Fetch tab-specific data using the active inspector's temp object.
  * Serialized via mutex to prevent SetPath race conditions.
  *
- * If no ActiveInspector exists (e.g., the building was loaded via the legacy
- * `getBuildingDetails` path), one is created on-the-fly so tab data still works.
+ * If no ActiveInspector exists (released, stale, or never registered), one is
+ * created on-the-fly so tab data still works.
  */
 export async function getBuildingTabData(
   ctx: SessionContext,
@@ -598,116 +571,7 @@ export async function refreshBuildingProperties(
 }
 
 // =========================================================================
-// PRIVATE HELPERS
-// =========================================================================
-
-/**
- * Full building details implementation — fetches properties, supplies,
- * products, and company inputs via the cacher object pool.
- * Legacy path: loads everything in one shot, closes temp object when done.
- */
-async function getBuildingDetailsImpl(
-  ctx: SessionContext,
-  x: number,
-  y: number,
-  visualClass: string
-): Promise<BuildingDetailsResponse> {
-  ctx.log.debug(`[BuildingDetails] Fetching details for building at (${x}, ${y}), visualClass: ${visualClass}`);
-
-  const template = getTemplateForVisualClass(visualClass);
-
-  let buildingName = '';
-  let ownerName = '';
-  let buildingId = '';
-  try {
-    const focusInfo = await ctx.focusBuilding(x, y);
-    buildingName = focusInfo.buildingName;
-    ownerName = focusInfo.ownerName;
-    buildingId = focusInfo.buildingId;
-  } catch (e: unknown) {
-    ctx.log.warn(`[BuildingDetails] Could not focus building:`, e);
-  }
-
-  await ctx.connectMapService();
-  if (!ctx.cacherId) {
-    throw new Error('Map service not initialized');
-  }
-
-  const tempObjectId = await ctx.cacherCreateObject();
-
-  try {
-    await ctx.cacherSetObject(tempObjectId, x, y);
-
-    // Phase 1+2: Fetch properties and build groups
-    const { allValues, groups, moneyGraph } = await fetchPropertiesAndGroups(ctx, tempObjectId, template);
-
-    // Enrich votes tab
-    await enrichVotesTab(ctx, groups, allValues);
-
-    // Enrich upgrade tab — AcceptCloning is not a cached property
-    await enrichUpgradeTab(ctx, groups, allValues);
-
-    // Phase 3: reads that need the object on the building root, first — the
-    // gate reads below can leave it on a gate.
-    const suppliesGroup = template.groups.find(g => g.special === 'supplies');
-    const productsGroup = template.groups.find(g => g.special === 'products');
-    const compInputsGroup = template.groups.find(g => g.special === 'compInputs');
-    const isWarehouse = template.groups.some(g => g.id === 'whGeneral');
-    const gateMap = allValues.get('GateMap') || '';
-
-    const compInputs = compInputsGroup ? await fetchCompInputData(ctx, tempObjectId) : undefined;
-    const warehouseWares = isWarehouse
-      ? await getWarehouseWareNames(ctx, tempObjectId, gateMap)
-      : undefined;
-
-    // Phase 4: the gate lists. Same split as the lazy path — names here,
-    // everything else on click via `getBuildingGateConnections` — so both entry
-    // points feed the client the same shape and the accordion behaves
-    // identically whichever one filled it. Neither call moves the object off
-    // the building root, so the two can follow each other directly.
-    const supplies = suppliesGroup
-      ? await listGates(ctx, tempObjectId, gateMap, isWarehouse, SUPPLY_GATES)
-      : undefined;
-    const products = productsGroup
-      ? await listGates(ctx, tempObjectId, gateMap, isWarehouse, PRODUCT_GATES)
-      : undefined;
-
-    return {
-      buildingId: buildingId || allValues.get('ObjectId') || allValues.get('CurrBlock') || '',
-      x,
-      y,
-      visualClass,
-      templateName: template.name,
-      buildingName,
-      ownerName,
-      securityId: allValues.get('SecurityId') || '',
-      // Decided here: only the session holds the requester half, and it is the
-      // InitClient proxy id (a pointer), never ctx.tycoonId.
-      canGovern: grantAccess(String(ctx.fTycoonProxyId ?? ''), allValues.get('SecurityId') || ''),
-      tabs: template.groups.map(g => ({
-        id: g.id,
-        name: g.name,
-        icon: g.icon || '',
-        order: g.order,
-        special: g.special,
-        handlerName: g.handlerName || '',
-      })),
-      groups,
-      supplies,
-      products,
-      compInputs,
-      warehouseWares,
-      moneyGraph,
-      timestamp: Date.now(),
-    };
-
-  } finally {
-    await ctx.cacherCloseObject(tempObjectId);
-  }
-}
-
-// =========================================================================
-// SHARED HELPERS — used by both legacy getBuildingDetailsImpl and lazy paths
+// SHARED HELPERS
 // =========================================================================
 
 /**

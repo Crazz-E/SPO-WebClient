@@ -123,7 +123,6 @@ export type {
   WsReqConnectDirectory,
   WsReqLoginWorld,
   WsReqMapLoad,
-  WsReqManageConstruction,
   WsReqSelectCompany,
   WsReqSwitchCompany,
   // Response payloads
@@ -132,7 +131,6 @@ export type {
   WsRespConnectSuccess,
   WsRespLoginSuccess,
   WsRespRdoResult,
-  WsRespConstructionSuccess,
   WsRespMapData,
   // Event payloads
   WsEventChatMsg,
@@ -202,8 +200,6 @@ export type {
   WsRespSearchMenuTowns,
   WsReqSearchMenuTycoonProfile,
   WsRespSearchMenuTycoonProfile,
-  WsReqSearchMenuPeople,
-  WsRespSearchMenuPeople,
   WsReqSearchMenuPeopleSearch,
   WsRespSearchMenuPeopleSearch,
   WsReqSearchMenuRankings,
