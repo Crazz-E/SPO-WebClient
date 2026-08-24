@@ -1,7 +1,8 @@
 /**
  * The bench client — what a session runs. Three commands:
  *
- *   submit --type=gate|live|lease [--wait] [--timeout-min=N] [--lease-minutes=N] [flags…]
+ *   submit --type=gate|live|lease|ref [--ref=<sha>] [--wait] [--timeout-min=N]
+ *          [--lease-minutes=N] [flags…]
  *     Deposits a job for the CURRENT worktree (cwd) and returns immediately with the
  *     job id — unless --wait, which folds straight into the wait loop so the whole
  *     round trip is ONE background shell command for the session (zero tokens spent
@@ -10,6 +11,12 @@
  *     A dead worker is reported HERE, at deposit time — exit 3, immediately. A gate on
  *     a tree with uncommitted changes is refused here too — exit 2: the attestation
  *     names a sha, so the tested tree must BE that sha.
+ *
+ *     `--type=ref --ref=<sha|branch>` is the odd one out: it names a commit on GitHub
+ *     rather than this worktree, and the worker fetches it into a checkout of its own.
+ *     The subject need not exist on this machine — which is the point (#158). Its answer
+ *     goes to `ref/verdicts/` and is published as `bench/ref-gate`, beside the session
+ *     path rather than on top of it.
  *
  *   wait <job-id> [--timeout-min=N]
  *     Sleeps until the report exists (exit 0 on PASS/LEASED, 1 otherwise), the worker
@@ -81,7 +88,7 @@ interface ParsedArgs {
   passthrough: string[];
 }
 
-const KNOWN_FLAGS = new Set(['type', 'wait', 'timeout-min', 'lease-minutes']);
+const KNOWN_FLAGS = new Set(['type', 'wait', 'timeout-min', 'lease-minutes', 'ref']);
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const [command = '', ...rest] = argv;
@@ -136,8 +143,13 @@ function timeoutMin(parsed: ParsedArgs): number {
 
 async function submit(parsed: ParsedArgs, deps: CliDeps): Promise<number> {
   const type = (parsed.known.get('type') ?? 'gate') as JobType;
-  if (!['gate', 'live', 'lease'].includes(type)) {
-    deps.err(`unknown job type "${type}" — expected gate, live or lease`);
+  if (!['gate', 'live', 'lease', 'ref'].includes(type)) {
+    deps.err(`unknown job type "${type}" — expected gate, live, lease or ref`);
+    return 1;
+  }
+  const ref = parsed.known.get('ref');
+  if (type === 'ref' && !ref) {
+    deps.err('a ref job needs --ref=<sha|branch> — what the worker should fetch and gate');
     return 1;
   }
 
@@ -162,7 +174,12 @@ async function submit(parsed: ParsedArgs, deps: CliDeps): Promise<number> {
     return 1;
   }
 
-  const fingerprint = deps.fingerprint(worktree);
+  // A ref job is about a commit on GitHub, not about this worktree. The subject does not
+  // exist on this machine until the worker fetches it, so there is nothing here to
+  // fingerprint — the placeholder below names the ref and is never compared against the
+  // tree (see the staleness rule in worker.ts).
+  const fingerprint =
+    type === 'ref' ? { head: ref as string, hash: `ref:${ref}`, clean: true } : deps.fingerprint(worktree);
   // The hook and GitHub both key on HEAD's sha. A gate run over uncommitted changes would
   // attest a sha that was never tested on its own — refuse it before it costs bench time.
   // The worker enforces the same rule (DIRTY), so a bypassed client still attests nothing.
@@ -178,14 +195,17 @@ async function submit(parsed: ParsedArgs, deps: CliDeps): Promise<number> {
     request = deps.spool.submit(
       {
         type,
-        worktree,
-        branch,
+        // The worker's own checkout, not this one: a ref job's tree is fetched, and the
+        // session that deposited it may not even be on the worker's machine.
+        worktree: type === 'ref' ? deps.paths.refCheckout : worktree,
+        branch: type === 'ref' ? (ref as string) : branch,
         fingerprint,
         // With --wait this process stays alive until the report lands, so the worker can
         // tell a dead session from a queued one. Without it there is nobody to watch.
         submitter: { pid: parsed.known.has('wait') ? deps.pid : 0 },
         args: parsed.passthrough,
         ...(type === 'lease' ? { leaseMinutes: leaseMinutes(parsed) } : {}),
+        ...(type === 'ref' ? { ref } : {}),
       },
       deps.now(),
     );

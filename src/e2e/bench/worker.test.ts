@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './paths';
 import { Spool, type JobRequest } from './job';
-import { listVerdicts } from './verdict';
+import { listVerdicts, listVerdictsIn } from './verdict';
 import { readNightlyResult } from './nightly';
 import { buildReceipt, writeReceipt } from './receipt';
 import { type GatewayDeps } from './gateway';
@@ -43,6 +43,10 @@ interface Harness {
   gatewayFails: boolean;
   /** What the owner lease answers when a job asks whether it may take the bench. */
   leaseDecision: { ok: boolean; why?: string };
+  /** The step name prepareRef reports as failed; null = the fetch worked. */
+  prepareRefFails: string | null;
+  prepareRefCalls: string[];
+  publishedRef: string[];
   leaseRenewals: number;
   clock: { nowMs: number };
 }
@@ -71,6 +75,9 @@ function harness(): Harness {
     published: [],
     gatewayFails: false,
     leaseDecision: { ok: true },
+    prepareRefFails: null,
+    prepareRefCalls: [],
+    publishedRef: [],
     leaseRenewals: 0,
     clock: { nowMs: 1_000_000 },
     deps: {
@@ -96,6 +103,14 @@ function harness(): Harness {
         },
       },
       publishStatus: (_wt, head) => h.published.push(head),
+      publishRefStatus: (_wt, head) => h.publishedRef.push(head),
+      prepareRef: async ref => {
+        h.prepareRefCalls.push(ref);
+        // The real one resets a checkout on disk; the harness just makes the directory
+        // exist, since everything downstream only asks whether it does.
+        fs.mkdirSync(h.worktree, { recursive: true });
+        return h.prepareRefFails;
+      },
       mayDriveLive: () => h.leaseDecision,
       renewLease: async () => {
         h.leaseRenewals++;
@@ -518,6 +533,106 @@ describe('runJob — gate', () => {
     const report = await runJob(h.deps, job);
     expect(report.verdict).toBe('FAIL');
     expect(report.targetMoved).toBe(true);
+  });
+});
+
+describe('runJob — ref: gating a commit the worker fetched', () => {
+  /** A ref deposit, shaped the way cli.ts shapes one: the fingerprint names the ref. */
+  function depositRef(h: Harness, ref = 'a'.repeat(40)): JobRequest {
+    return h.spool.submit(
+      {
+        type: 'ref',
+        worktree: h.worktree,
+        branch: ref,
+        fingerprint: { head: ref, hash: `ref:${ref}`, clean: true },
+        submitter: { pid: 0 },
+        args: [],
+        ref,
+      },
+      h.clock.nowMs,
+    );
+  }
+
+  it('fetches the ref before anything else, then gates it like any other commit', async () => {
+    const h = harness();
+    const job = depositRef(h);
+
+    await processOldest(h.deps);
+
+    expect(h.prepareRefCalls).toEqual(['a'.repeat(40)]);
+    expect(npmRuns(h)).toEqual(['build:server']);
+    expect(h.commands.some(c => c.args[0] === 'scripts/verify-gate.js')).toBe(true);
+    expect(h.spool.readReport(job.id)?.verdict).toBe('PASS');
+  });
+
+  it('is never STALE for a tree it reset itself — a fetched commit cannot move', async () => {
+    // The deposit fingerprint names the ref, and the checkout is reset AFTER it; the two
+    // can never match. Under the worktree rule that reads as a moving target, which would
+    // make every ref job STALE and the whole path useless.
+    const h = harness();
+    const job = depositRef(h);
+
+    await processOldest(h.deps);
+
+    const report = h.spool.readReport(job.id);
+    expect(report?.verdict).toBe('PASS');
+    expect(report?.targetMoved).toBe(false);
+  });
+
+  it('still catches a tree that moves DURING the run', async () => {
+    // The atSubmit half is waived, not the atStart/atEnd half: something rewriting the
+    // checkout mid-job is a real fault whatever caused it, and a PASS from it would
+    // describe a tree that no longer exists.
+    const h = harness();
+    h.hashes = ['at-start', 'moved-underneath'];
+    const job = depositRef(h);
+
+    await processOldest(h.deps);
+
+    const report = h.spool.readReport(job.id);
+    expect(report?.verdict).toBe('STALE');
+    expect(report?.bodyVerdict).toBe('PASS');
+    expect(listVerdictsIn(h.paths.refVerdicts)[0].verdict.fingerprintStable).toBe(false);
+  });
+
+  it('keeps its answer apart from the session path — same sha, two verdicts', async () => {
+    const h = harness();
+    depositRef(h);
+
+    await processOldest(h.deps);
+
+    // `verdicts/` is the session path's; overwriting it would destroy the comparison
+    // stage B exists to make, and would put a fetched-ref answer behind the required
+    // `bench/gate` context before it has earned that.
+    expect(listVerdicts(h.paths)).toHaveLength(0);
+    expect(listVerdictsIn(h.paths.refVerdicts)).toHaveLength(1);
+    expect(listVerdictsIn(h.paths.refVerdicts)[0].verdict).toMatchObject({ verdict: 'PASS' });
+  });
+
+  it('publishes under its own context, never the required one', async () => {
+    const h = harness();
+    depositRef(h);
+    await processOldest(h.deps);
+
+    await workerLoop(h.deps, 1, async () => false);
+
+    expect(h.published).toHaveLength(0);
+    expect(h.publishedRef).toHaveLength(1);
+  });
+
+  it('reports ENVIRONMENT when the ref cannot be fetched, and builds nothing', async () => {
+    const h = harness();
+    const job = depositRef(h, 'deadbeef');
+    h.prepareRefFails = 'git reset --hard deadbeef';
+
+    await processOldest(h.deps);
+
+    const report = h.spool.readReport(job.id);
+    expect(report?.verdict).toBe('ENVIRONMENT');
+    expect(report?.detail).toMatch(/git reset --hard deadbeef/);
+    expect(h.commands).toHaveLength(0);
+    // Nothing was learned about the commit, so nothing is attested about it either.
+    expect(listVerdictsIn(h.paths.refVerdicts)).toHaveLength(0);
   });
 });
 

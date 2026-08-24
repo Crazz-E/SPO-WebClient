@@ -47,8 +47,20 @@ export interface BenchVerdict {
 }
 
 export function writeVerdict(paths: BenchPaths, verdict: BenchVerdict): string {
-  const target = path.join(paths.verdicts, `${verdict.head}.json`);
-  fs.mkdirSync(paths.verdicts, { recursive: true });
+  return writeVerdictIn(paths.verdicts, verdict);
+}
+
+/**
+ * The same write, into a named directory.
+ *
+ * It exists because #158 stage B runs two gate paths at once — a session's worktree and a
+ * ref the worker fetched — and both answer for the SAME sha. Writing both into
+ * `verdicts/` would leave whichever finished last, which is precisely the comparison
+ * being destroyed.
+ */
+export function writeVerdictIn(dir: string, verdict: BenchVerdict): string {
+  const target = path.join(dir, `${verdict.head}.json`);
+  fs.mkdirSync(dir, { recursive: true });
   const tmp = `${target}.tmp-${process.pid}`;
   fs.writeFileSync(tmp, `${JSON.stringify(verdict, null, 2)}\n`, 'utf8');
   fs.renameSync(tmp, target);
@@ -56,16 +68,20 @@ export function writeVerdict(paths: BenchPaths, verdict: BenchVerdict): string {
 }
 
 export function listVerdicts(paths: BenchPaths): { file: string; verdict: BenchVerdict }[] {
+  return listVerdictsIn(paths.verdicts);
+}
+
+export function listVerdictsIn(dir: string): { file: string; verdict: BenchVerdict }[] {
   let names: string[];
   try {
-    names = fs.readdirSync(paths.verdicts);
+    names = fs.readdirSync(dir);
   } catch {
     return [];
   }
   const out: { file: string; verdict: BenchVerdict }[] = [];
   for (const name of names) {
     if (!name.endsWith('.json')) continue;
-    const file = path.join(paths.verdicts, name);
+    const file = path.join(dir, name);
     try {
       out.push({ file, verdict: JSON.parse(fs.readFileSync(file, 'utf8')) as BenchVerdict });
     } catch {
@@ -87,6 +103,7 @@ export type StatusPublisher = (worktree: string, head: string, state: string, de
 /** Publish via `gh api` — resolves owner/repo from the worktree's origin remote. */
 export function ghStatusPublisher(
   execFile: (cmd: string, args: string[], cwd: string) => void,
+  context: string = 'bench/gate',
 ): StatusPublisher {
   return (worktree, head, state, description) => {
     execFile(
@@ -95,7 +112,7 @@ export function ghStatusPublisher(
         'api',
         `repos/{owner}/{repo}/statuses/${head}`,
         '-f', `state=${state}`,
-        '-f', 'context=bench/gate',
+        '-f', `context=${context}`,
         '-f', `description=${description}`,
       ],
       worktree,
@@ -116,8 +133,9 @@ export function publishPendingStatuses(
   publish: StatusPublisher,
   log: (line: string) => void,
   nowMs: number = Date.now(),
+  dir: string = paths.verdicts,
 ): void {
-  for (const { verdict } of listVerdicts(paths)) {
+  for (const { verdict } of listVerdictsIn(dir)) {
     if (verdict.published) continue;
     if (nowMs - Date.parse(verdict.createdAt) > PUBLISH_WINDOW_MS) continue;
     try {
@@ -129,8 +147,8 @@ export function publishPendingStatuses(
           `${verdict.exceptions ? ` — ${verdict.exceptions} capability exception(s)` : ''}` +
           `${verdict.baseMain ? ` — base ${verdict.baseMain.slice(0, 8)}` : ''} — job ${verdict.jobId}`,
       );
-      writeVerdict(paths, { ...verdict, published: true });
-      log(`published bench/gate=${statusState(verdict.verdict)} for ${verdict.head.slice(0, 8)}`);
+      writeVerdictIn(dir, { ...verdict, published: true });
+      log(`published ${statusState(verdict.verdict)} for ${verdict.head.slice(0, 8)}`);
     } catch (err: unknown) {
       // Expected until the commit is pushed; keep quiet unless it never resolves.
       void toErrorMessage(err);

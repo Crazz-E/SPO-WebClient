@@ -29,6 +29,7 @@ discipline rule.
 ├── verdicts/<sha>.json             per-HEAD attestations — what the push hook reads
 ├── cache/                          the ~570-file asset mirror, ONE copy for the machine
 ├── nightly/checkout + latest.json  the worker's own `main` clone, and last night's verdict
+├── ref/checkout + ref/verdicts/    a fetched commit's checkout, and its own attestations
 └── world/                          world-lock.json + run-history.json — finally GLOBAL
 ```
 
@@ -53,6 +54,7 @@ one process (the worker) consumes the spool.
 | Supervision | `scripts/bench-install.sh` | systemd --user unit, `Restart=always`, linger |
 | Nightly | `src/e2e/bench/nightly.ts` | the schedule, the `main` checkout, `nightly/latest.json` (§8) |
 | Owner lease | `src/e2e/bench/owner.ts` | the cross-host exclusion — the `BENCH_OWNER` repository variable (§9) |
+| Checkout | `src/e2e/bench/checkout.ts` | a worker-owned clone brought to any ref, with a conditional `npm ci` (§10) |
 
 ## 3. A job's life
 
@@ -381,7 +383,48 @@ between one write and its read-back; it does not close it. Closing it needs a CA
 (a `git push` of a ref is one), and that is worth building only if this proves insufficient
 in practice.
 
-## 10. Acceptance criteria (verified by the test suites)
+## 10. Gating a commit the worker fetched — the `ref` job
+
+**Status:** stage B of [#158](https://github.com/Crazz-E/SPO-WebClient/issues/158) · Code: `src/e2e/bench/checkout.ts`
+
+Everything above tests **the depositing session's worktree**. That is the coupling #158
+removes: it is the only reason a session must live on this machine, and the reason GitHub's
+merge queue is unusable — a speculative merge commit exists on GitHub and in nobody's
+worktree.
+
+The input was already a commit. A `gate` refuses a dirty tree, so the tree it tests *is*
+HEAD; replacing the worktree with a fetch changes the **transport**, not what is proven.
+
+```bash
+node dist/e2e/bench/cli.js submit --type=ref --ref=<sha|branch> --wait
+```
+
+The worker clones once into `<bench>/ref/checkout`, then per job: `fetch --prune --force`,
+`reset --hard <ref>`, `clean -fd`, and **`npm ci` only when the lockfile moved**. From there
+it is an ordinary gate — same `verify-gate.js`, same routing, same President exclusion, same
+live drive.
+
+Three things that are not obvious:
+
+- **Why `npm ci` had to become conditional.** It is not a no-op: it deletes `node_modules`
+  and reinstalls, every time. The nightly could afford that; a gate on the serialised bench
+  cannot. The lockfile's hash is recorded beside the checkout after each install, and the
+  install runs only on a mismatch — or when `node_modules` is simply absent. **Session
+  worktrees never needed any of this**, and that is worth saying because it is invisible:
+  they sit *inside* the main checkout, so Node's upward resolution finds its `node_modules`
+  and every worktree silently borrows it. A fetched checkout has no parent to borrow from.
+- **A ref job is exempt from the staleness rule**, and necessarily. The checkout is reset to
+  the ref *after* the deposit, so the tree at deposit time is whatever the previous job left
+  and never matches. That is not a moving target, it is the absence of one — a fetched
+  commit cannot move. The `atStart`/`atEnd` half still runs, because a tree that changes
+  mid-run is a real fault whatever caused it.
+- **Its answer is kept apart.** While both paths run (stage B is explicitly *alongside*),
+  the same sha gets two independent verdicts. They go to `ref/verdicts/` and publish as
+  **`bench/ref-gate`** — a context the ruleset does not require. Writing into `verdicts/`
+  would leave whichever finished last, destroying the comparison; publishing as `bench/gate`
+  would put the new path behind the required check before it has earned it.
+
+## 11. Acceptance criteria (verified by the test suites)
 
 - Two simultaneous deposits execute one after the other, in deposit order, each with an
   attributable report — `job.test.ts`, `worker.test.ts`.
@@ -404,6 +447,11 @@ in practice.
   `owner.test.ts`, `worker.test.ts`.
 - Nothing that ran no code — `DIRTY`, `ENVIRONMENT` — can overwrite an existing attestation
   for the same sha. `worker.test.ts`.
+- A `ref` job fetches before it builds, is never `STALE` for the tree it reset itself, still
+  catches one that moves mid-run, and writes beside the session path rather than over it.
+  `checkout.test.ts`, `worker.test.ts`.
+- The install is skipped only on positive evidence that `node_modules` matches the lockfile;
+  a missing record, a moved lockfile or an unreadable one all install. `checkout.test.ts`.
 - A nightly is deposited only from an idle queue, inside its UTC window, at most one per
   20 h, and only by the worker; it publishes to `nightly/latest.json` and writes no
   attestation. A worker death mid-nightly stamps `INTERRUPTED` rather than leaving

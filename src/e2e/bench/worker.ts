@@ -26,7 +26,8 @@ import {
   writeWorkerInfo,
   type BenchPaths,
 } from './paths';
-import { fingerprintTree, resolveRef, type TreeFingerprint } from './fingerprint';
+import { fingerprintTree, resolveRef, runGit, type TreeFingerprint } from './fingerprint';
+import { prepareCheckout } from './checkout';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
 import { lookupReceipt, pruneReceipts, RECEIPT_MAX_AGE_MS } from './receipt';
 import {
@@ -36,7 +37,12 @@ import {
   type GatewayDeps,
   type RunningGateway,
 } from './gateway';
-import { ghStatusPublisher, publishPendingStatuses, writeVerdict, type StatusPublisher } from './verdict';
+import {
+  ghStatusPublisher,
+  publishPendingStatuses,
+  writeVerdictIn,
+  type StatusPublisher,
+} from './verdict';
 import { maybeRunNightly, nightlyResultFromReport, writeNightlyResult } from './nightly';
 import {
   ghVariableReader,
@@ -76,6 +82,13 @@ export interface WorkerDeps {
     ) => Promise<RunningGateway>;
   };
   publishStatus: StatusPublisher;
+  /** The same, under `bench/ref-gate` — the fetched-ref path's own context (#158 stage B). */
+  publishRefStatus: StatusPublisher;
+  /**
+   * Bring the worker's own checkout to `ref`, ready to build. Resolves to the name of the
+   * step that failed, or null. See ./checkout.
+   */
+  prepareRef: (ref: string, logFile: string) => Promise<string | null>;
   /** May this worker take the live bench right now? See ./owner. */
   mayDriveLive: (nowMs: number) => DriveDecision;
   /** One owner-lease renewal pass; the loop calls it on a timer. See ./owner. */
@@ -107,6 +120,9 @@ const MAX_LEASE_MINUTES = 120;
  *   terrain-test are exactly what the session came for.
  * - `nightly` — the same as `live`, because it *is* a live drive; the only difference is
  *   that the worker deposited it against `main` instead of a session against its branch.
+ * - `ref` — the same as `gate`, because it *is* a gate; the only difference is where the
+ *   tree came from. A session's gate tests a worktree the session named; a ref job tests
+ *   a commit the worker fetched, which is what lets the subject live nowhere but GitHub.
  *
  * What is given up: the full build also happened to prove the client still compiles. CI
  * replays that same `npm run build` on every pull request, so the proof is not lost — it
@@ -117,6 +133,7 @@ const BUILD_STEPS: Record<JobType, string[]> = {
   live: ['build:server', 'build:e2e'],
   lease: ['build'],
   nightly: ['build:server', 'build:e2e'],
+  ref: ['build:server'],
 };
 
 /**
@@ -216,10 +233,20 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   // never read a line of the code: a lease that could not be renewed, or a gateway that
   // never came up. Both already "do not consume an attempt" (doc/E2E-POLICY.md §8); an
   // attestation they can destroy is the same claim made in a place that outlives them.
-  if (request.type === 'gate' && report.verdict !== 'DIRTY' && report.verdict !== 'ENVIRONMENT') {
+  //
+  // A `ref` job answers for the same sha as the session's own gate, so its answer goes to
+  // its own directory (#158 stage B): the two paths are being compared, and whichever
+  // finished last overwriting the other is exactly what would make the comparison say
+  // nothing. It is published under `bench/ref-gate`, a context the ruleset does not
+  // require — visible on the PR, unable to gate a merge until it has earned it.
+  if (
+    (request.type === 'gate' || request.type === 'ref') &&
+    report.verdict !== 'DIRTY' &&
+    report.verdict !== 'ENVIRONMENT'
+  ) {
     const head =
       report.fingerprints.atEnd?.head ?? report.fingerprints.atStart?.head ?? request.fingerprint.head;
-    writeVerdict(deps.paths, {
+    writeVerdictIn(request.type === 'ref' ? deps.paths.refVerdicts : deps.paths.verdicts, {
       head,
       branch: request.branch,
       worktree: request.worktree,
@@ -274,6 +301,19 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
     report.finishedAt = new Date(deps.now()).toISOString();
     return report;
   };
+
+  // A ref job's subject does not exist on this machine until we fetch it — that is the
+  // whole point of the type. Everything below then treats the checkout exactly as it
+  // treats a session's worktree, because by this line it IS one.
+  if (request.type === 'ref') {
+    const failedStep = await deps.prepareRef(request.ref ?? 'origin/main', logFile);
+    if (failedStep) {
+      // ENVIRONMENT, not FAIL: nothing was learned about the commit. A ref that does not
+      // exist lands here too — which is right, since "I could not fetch it" is a
+      // statement about this worker, not about the code.
+      return finish('ENVIRONMENT', `${failedStep} failed while fetching ${request.ref} — see ${logFile}`);
+    }
+  }
 
   if (!fs.existsSync(request.worktree)) {
     return finish('ABANDONED', 'the worktree no longer exists on disk; nothing ran');
@@ -345,7 +385,7 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
   let bodyVerdict: JobVerdict;
   let bodyDetail: string;
   try {
-    if (request.type === 'gate') {
+    if (request.type === 'gate' || request.type === 'ref') {
       // The static stage — typecheck, lint, the Jest suite — is exactly what the session
       // already ran in `gate:precheck`. If it left a receipt for THIS tree, replaying it
       // inside the exclusive bench buys nothing but ~113 s of everyone else's queue.
@@ -418,10 +458,16 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
       report.fingerprints.atEnd = undefined;
       bodyDetail += `; could not re-fingerprint at end (${toErrorMessage(err)})`;
     }
+    // A `ref` job is exempt from the atSubmit half, and necessarily: the checkout is
+    // reset to the ref *after* the deposit, so the tree at deposit time is whatever the
+    // last job left there and never matches. That is not a moving target — it is the
+    // absence of one. What the fetched commit is, nobody can change; the atStart/atEnd
+    // half still runs, because a tree that moves mid-run is a real fault whatever put it
+    // there.
     const stable =
       report.fingerprints.atEnd !== undefined &&
-      request.fingerprint.hash === report.fingerprints.atStart?.hash &&
-      report.fingerprints.atStart.hash === report.fingerprints.atEnd.hash;
+      (request.type === 'ref' || request.fingerprint.hash === report.fingerprints.atStart?.hash) &&
+      report.fingerprints.atStart?.hash === report.fingerprints.atEnd.hash;
     report.targetMoved = !stable;
     if (report.targetMoved && bodyVerdict === 'PASS') {
       report.bodyVerdict = bodyVerdict;
@@ -453,6 +499,13 @@ export async function workerLoop(
       if (deps.now() - lastPublish > 30_000) {
         lastPublish = deps.now();
         publishPendingStatuses(deps.paths, deps.publishStatus, deps.log, deps.now());
+        publishPendingStatuses(
+          deps.paths,
+          deps.publishRefStatus,
+          deps.log,
+          deps.now(),
+          deps.paths.refVerdicts,
+        );
       }
       if (!worked) {
         // Only when the queue came back empty: the nightly takes the bench like any job,
@@ -506,6 +559,9 @@ export function realWorkerDeps(
   const log = (line: string): void => {
     process.stdout.write(`[bench] ${new Date().toISOString()} ${line}\n`);
   };
+  const ghExec = (cmd: string, args: string[], cwd: string): void => {
+    execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+  };
   const runGh = (cmd: string, args: string[], cwd: string): string =>
     execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   const ownerDeps: OwnerDeps = {
@@ -526,9 +582,14 @@ export function realWorkerDeps(
       clearPort: port => clearPort(port, gatewayDeps),
       start: (worktree, port, logFile, env) => startGateway(worktree, port, logFile, gatewayDeps, env),
     },
-    publishStatus: ghStatusPublisher((cmd, args, cwd) => {
-      execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
-    }),
+    publishStatus: ghStatusPublisher(ghExec),
+    publishRefStatus: ghStatusPublisher(ghExec, 'bench/ref-gate'),
+    prepareRef: (ref, logFile) =>
+      prepareCheckout(
+        { runCommand: realRunCommand, now: () => Date.now(), log },
+        { dir: paths.refCheckout, ref, workerRepo: process.cwd(), logFile },
+        runGit,
+      ),
     mayDriveLive: nowMs => mayDriveLive(lease, nowMs),
     renewLease: nowMs => renewLease(ownerDeps, lease, nowMs),
     processAlive,
