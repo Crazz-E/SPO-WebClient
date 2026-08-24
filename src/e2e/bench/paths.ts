@@ -44,12 +44,6 @@ export interface BenchPaths {
    * wait for, or disturb, the nightly's copy of `main`. See ./checkout.
    */
   refCheckout: string;
-  /**
-   * Attestations produced by gating a FETCHED ref, kept apart from `verdicts/` while both
-   * paths run side by side (#158 stage B). Same sha, two independent answers: overwriting
-   * one with the other is exactly what would make the comparison worthless.
-   */
-  refVerdicts: string;
   /** Touched every few seconds by the worker; its mtime is the liveness signal. */
   heartbeat: string;
   /** Who the worker is: pid, repo it runs from, port it owns. */
@@ -81,7 +75,6 @@ export function benchPaths(root: string = benchRoot()): BenchPaths {
     cache: path.join(root, 'cache'),
     nightly: path.join(root, 'nightly'),
     refCheckout: path.join(root, 'ref', 'checkout'),
-    refVerdicts: path.join(root, 'ref', 'verdicts'),
     heartbeat: path.join(root, 'heartbeat'),
     workerFile: path.join(root, 'worker.json'),
   };
@@ -98,7 +91,6 @@ export function ensureLayout(paths: BenchPaths): void {
     paths.world,
     paths.cache,
     paths.nightly,
-    paths.refVerdicts,
   ];
   for (const dir of dirs) {
     fs.mkdirSync(dir, { recursive: true });

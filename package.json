@@ -29,7 +29,7 @@
     "build:e2e": "tsc -p tsconfig.e2e.json",
     "test:live": "bash scripts/bench-submit.sh --type=live --wait",
     "test:live:local": "npm run build:e2e && node dist/e2e/run.js",
-    "gate": "npm run gate:precheck && bash scripts/bench-submit.sh --type=gate --wait",
+    "gate": "bash scripts/bench-gate.sh",
     "gate:precheck": "npm run typecheck && npm run lint && npm run coverage:changed && bash scripts/bench-receipt.sh",
     "coverage:changed": "node scripts/coverage-changed.js",
     "gate:local": "node scripts/verify-gate.js",

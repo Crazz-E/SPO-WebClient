@@ -28,6 +28,7 @@ import {
 } from './paths';
 import { fingerprintTree, resolveRef, runGit, type TreeFingerprint } from './fingerprint';
 import { prepareCheckout } from './checkout';
+import { ciStaticProof, type CiProof } from './ci-proof';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
 import { lookupReceipt, pruneReceipts, RECEIPT_MAX_AGE_MS } from './receipt';
 import {
@@ -82,13 +83,13 @@ export interface WorkerDeps {
     ) => Promise<RunningGateway>;
   };
   publishStatus: StatusPublisher;
-  /** The same, under `bench/ref-gate` — the fetched-ref path's own context (#158 stage B). */
-  publishRefStatus: StatusPublisher;
   /**
    * Bring the worker's own checkout to `ref`, ready to build. Resolves to the name of the
    * step that failed, or null. See ./checkout.
    */
   prepareRef: (ref: string, logFile: string) => Promise<string | null>;
+  /** Has CI already proved this sha's static half? See ./ci-proof. */
+  ciStaticProof: (sha: string) => CiProof;
   /** May this worker take the live bench right now? See ./owner. */
   mayDriveLive: (nowMs: number) => DriveDecision;
   /** One owner-lease renewal pass; the loop calls it on a timer. See ./owner. */
@@ -234,11 +235,11 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   // never came up. Both already "do not consume an attempt" (doc/E2E-POLICY.md §8); an
   // attestation they can destroy is the same claim made in a place that outlives them.
   //
-  // A `ref` job answers for the same sha as the session's own gate, so its answer goes to
-  // its own directory (#158 stage B): the two paths are being compared, and whichever
-  // finished last overwriting the other is exactly what would make the comparison say
-  // nothing. It is published under `bench/ref-gate`, a context the ruleset does not
-  // require — visible on the PR, unable to gate a merge until it has earned it.
+  // `ref` and `gate` write to the same place again. They were split for #158 stage B, so
+  // one live exercise of the fetched-ref path could be compared against the session path
+  // without either overwriting the other; that comparison ran (job-01787603001316-a0c610,
+  // PASS on 514bc4e3, `verdicts/` untouched) and the split has done its job. A ref job is
+  // now THE gate, so it attests where the merge rule reads.
   if (
     (request.type === 'gate' || request.type === 'ref') &&
     report.verdict !== 'DIRTY' &&
@@ -246,7 +247,7 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   ) {
     const head =
       report.fingerprints.atEnd?.head ?? report.fingerprints.atStart?.head ?? request.fingerprint.head;
-    writeVerdictIn(request.type === 'ref' ? deps.paths.refVerdicts : deps.paths.verdicts, {
+    writeVerdictIn(deps.paths.verdicts, {
       head,
       branch: request.branch,
       worktree: request.worktree,
@@ -280,6 +281,11 @@ export function countCapabilityExceptions(artifactPath: string | undefined): num
   } catch {
     return 0;
   }
+}
+
+/** Both static witnesses, in one shape, so the decision below reads as one decision. */
+function ciProofAsReceipt(proof: CiProof): { ok: boolean; why?: string; from: 'ci' } {
+  return { ok: proof.proven, why: proof.why, from: 'ci' };
 }
 
 export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<JobReport> {
@@ -391,19 +397,33 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
       // inside the exclusive bench buys nothing but ~113 s of everyone else's queue.
       // The tree is the one the worker fingerprinted itself at :atStart, never a value
       // the session supplied — a receipt for any other tree is simply never opened.
-      const found = lookupReceipt(
-        deps.paths,
-        report.fingerprints.atStart,
-        request.worktree,
-        deps.now(),
-      );
-      report.staticReceipt = { used: found.ok, ...(found.ok ? {} : { why: found.why }) };
+      // Two possible witnesses, one rule: skip on positive evidence, never on assumption.
+      //
+      // A `ref` job's subject is a pushed commit, so the better authority exists — GitHub
+      // ran `typecheck + tests` on that exact sha, on a machine nobody here controls, and
+      // the ruleset requires it green before a merge. A worktree gate has no sha on
+      // GitHub to ask about, so it still uses the session's precheck receipt.
+      const proof =
+        request.type === 'ref'
+          ? ciProofAsReceipt(deps.ciStaticProof(report.fingerprints.atStart.head))
+          : (() => {
+              const found = lookupReceipt(
+                deps.paths,
+                report.fingerprints.atStart as TreeFingerprint,
+                request.worktree,
+                deps.now(),
+              );
+              return { ok: found.ok, why: found.why, from: 'receipt' as const };
+            })();
+      report.staticReceipt = { used: proof.ok, ...(proof.ok ? {} : { why: proof.why }) };
       deps.log(
-        found.ok
-          ? `static stage from the precheck receipt (${found.file})`
-          : `replaying the static stage — ${found.why}`,
+        proof.ok
+          ? `static stage from ${proof.from === 'ci' ? 'CI (it ran on this sha)' : 'the precheck receipt'}`
+          : `replaying the static stage — ${proof.why}`,
       );
-      const args = found.ok ? ['--skip-static', ...request.args] : request.args;
+      const args = proof.ok
+        ? ['--skip-static', ...(proof.from === 'ci' ? ['--static-from=ci'] : []), ...request.args]
+        : request.args;
       const code = await deps.runCommand('node', ['scripts/verify-gate.js', ...args], {
         cwd: request.worktree,
         env,
@@ -499,13 +519,6 @@ export async function workerLoop(
       if (deps.now() - lastPublish > 30_000) {
         lastPublish = deps.now();
         publishPendingStatuses(deps.paths, deps.publishStatus, deps.log, deps.now());
-        publishPendingStatuses(
-          deps.paths,
-          deps.publishRefStatus,
-          deps.log,
-          deps.now(),
-          deps.paths.refVerdicts,
-        );
       }
       if (!worked) {
         // Only when the queue came back empty: the nightly takes the bench like any job,
@@ -583,7 +596,7 @@ export function realWorkerDeps(
       start: (worktree, port, logFile, env) => startGateway(worktree, port, logFile, gatewayDeps, env),
     },
     publishStatus: ghStatusPublisher(ghExec),
-    publishRefStatus: ghStatusPublisher(ghExec, 'bench/ref-gate'),
+    ciStaticProof: sha => ciStaticProof((args, cwd) => runGh('gh', args, cwd), sha, paths.refCheckout),
     prepareRef: (ref, logFile) =>
       prepareCheckout(
         { runCommand: realRunCommand, now: () => Date.now(), log },

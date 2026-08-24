@@ -29,7 +29,7 @@ discipline rule.
 ├── verdicts/<sha>.json             per-HEAD attestations — what the push hook reads
 ├── cache/                          the ~570-file asset mirror, ONE copy for the machine
 ├── nightly/checkout + latest.json  the worker's own `main` clone, and last night's verdict
-├── ref/checkout + ref/verdicts/    a fetched commit's checkout, and its own attestations
+├── ref/checkout                    the checkout a fetched commit is gated in
 └── world/                          world-lock.json + run-history.json — finally GLOBAL
 ```
 
@@ -55,6 +55,7 @@ one process (the worker) consumes the spool.
 | Nightly | `src/e2e/bench/nightly.ts` | the schedule, the `main` checkout, `nightly/latest.json` (§8) |
 | Owner lease | `src/e2e/bench/owner.ts` | the cross-host exclusion — the `BENCH_OWNER` repository variable (§9) |
 | Checkout | `src/e2e/bench/checkout.ts` | a worker-owned clone brought to any ref, with a conditional `npm ci` (§10) |
+| CI proof | `src/e2e/bench/ci-proof.ts` | whether CI already proved a sha's static half (§11) |
 
 ## 3. A job's life
 
@@ -424,7 +425,63 @@ Three things that are not obvious:
   would leave whichever finished last, destroying the comparison; publishing as `bench/gate`
   would put the new path behind the required check before it has earned it.
 
-## 11. Acceptance criteria (verified by the test suites)
+## 11. The push chain after #158 stage C
+
+**The gate tests a pushed commit.** A session commits, pushes, and asks the bench to gate the
+sha:
+
+```bash
+git push -u origin <branch>
+npm run gate                # refuses with exit 2 if HEAD is not on origin
+```
+
+`npm run gate` (`scripts/bench-gate.sh`) checks the tree is clean and the sha is on origin,
+then deposits a `ref` job. Everything after that is §10.
+
+### What changed, and what did not
+
+| | Before | After |
+|---|---|---|
+| Subject of the gate | the session's worktree | the pushed commit |
+| Local suite run | `gate:precheck` ran typecheck + lint + the whole suite | not required; CI runs them on the sha |
+| Static stage on the bench | replayed, unless a precheck receipt matched the tree | skipped when **CI proved this sha**, else replayed |
+| `git push` | refused without a bench attestation for HEAD | allowed on any branch but `main` |
+| Merge | ruleset requires CI **and** `bench/gate` | unchanged |
+
+**Nothing was loosened.** The push was never the irreversible act; the merge is. `bench/gate`
+is a required status check on `main` with an **empty bypass list**, so a pull request still
+cannot merge without the worker's live evidence for its head sha — the maintainer included.
+Keeping the old push rule would have been self-contradictory: a commit must be pushed before
+the worker can fetch it, so "no push without an attestation" and "no attestation without a
+push" cannot both hold.
+
+### The static witness — why CI and not the receipt
+
+The receipt (#145) had the session run typecheck, lint and the suite, write a file naming the
+tree it proved, and the worker re-key that file by the fingerprint it took itself. Careful, and
+it closed the obvious hole (#126). But the proof was still produced by the session.
+
+A pushed commit has a better witness: GitHub ran `typecheck + tests` **on that exact sha**, on
+a machine nobody here controls, and the ruleset already requires it green to merge. So the
+worker asks GitHub (`src/e2e/bench/ci-proof.ts`) instead of trusting a file.
+
+**The rule is unchanged — skip on positive evidence, never on assumption.** A recorded
+`success` for the sha skips stage 1, and the gate artifact records `CI` as the authority.
+Everything else replays it: no run yet, still running, failed, cancelled, GitHub unreachable,
+an unparseable answer.
+
+⚠ The trap this avoids: *"CI is required for the merge"* is true **at merge time** and says
+nothing about the moment the gate runs. A gate can run before the pull request exists, and
+`coverage:changed` and `check-pr-rules` in `ci.yml` are `if: github.event_name ==
+'pull_request'`. Asking about **this sha, right now** is the only safe form of the question.
+
+### Dependabot
+
+`npm run deps:gate` pushes **before** it gates, for the same reason. It used to gate first,
+because the push hook refused anything unattested; that rule is gone, and `gh pr merge --auto`
+still cannot land a commit `bench/gate` has not passed.
+
+## 12. Acceptance criteria (verified by the test suites)
 
 - Two simultaneous deposits execute one after the other, in deposit order, each with an
   attributable report — `job.test.ts`, `worker.test.ts`.
@@ -452,6 +509,11 @@ Three things that are not obvious:
   `checkout.test.ts`, `worker.test.ts`.
 - The install is skipped only on positive evidence that `node_modules` matches the lockfile;
   a missing record, a moved lockfile or an unreadable one all install. `checkout.test.ts`.
+- The static stage is skipped only on a recorded CI **success for that exact sha**; absent,
+  pending, failed, malformed and unreachable all replay it, and the artifact names which
+  witness proved it. `ci-proof.test.ts`, `worker.test.ts`.
+- The push hook refuses `main` and nothing else, while still telling a mention of `git push`
+  from a real one. `pre-push-gate.test.ts`.
 - A nightly is deposited only from an idle queue, inside its UTC window, at most one per
   20 h, and only by the worker; it publishes to `nightly/latest.json` and writes no
   attestation. A worker death mid-nightly stamps `INTERRUPTED` rather than leaving

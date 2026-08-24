@@ -43,6 +43,7 @@
 
 import * as os from 'os';
 import { toErrorMessage } from '../../shared/error-utils';
+import { processAlive } from './paths';
 
 /** The repository variable that carries the claim. */
 export const OWNER_VARIABLE = 'BENCH_OWNER';
@@ -148,13 +149,31 @@ export interface TakeDecision {
 /**
  * May we write our claim right now?
  *
- * Yes when there is no claim, when the claim is ours (a renewal), or when someone else's
- * has lapsed. No — and only this case — while another host's lease is still live.
+ * Yes when there is no claim, when the claim is ours (a renewal), when someone else's has
+ * lapsed, or when it belongs to a **dead process on this host**. No — and only this case —
+ * while another host's lease is still live.
+ *
+ * That fourth case is not a convenience, it is the restart case, and leaving it out was a
+ * real fault: systemd restarts the worker under a new pid, the claim written by the old
+ * pid stays live for up to a full lease, and the new worker spends that window unable to
+ * take a lease *it is the rightful owner of*. Worse, it drives the bench anyway during it,
+ * because `everHeld` is per-process and a restart resets the earned enforcement to off.
+ *
+ * The expiry exists precisely because liveness is **not** checkable across hosts. On this
+ * host it is — `process.kill(pid, 0)` answers directly — so there is nothing to wait for.
+ * The check is deliberately gated on the hostname: a matching pid number on a different
+ * machine says nothing at all about the process holding that lease.
  */
-export function mayTake(claim: OwnerClaim | null, me: OwnerIdentity, nowMs: number): TakeDecision {
+export function mayTake(
+  claim: OwnerClaim | null,
+  me: OwnerIdentity,
+  nowMs: number,
+  isAlive: (pid: number) => boolean = processAlive,
+): TakeDecision {
   if (!claim) return { ok: true, takeover: true };
   if (sameOwner(claim, me)) return { ok: true, takeover: false };
   if (!claimLive(claim, nowMs)) return { ok: true, takeover: true };
+  if (claim.host === me.host && !isAlive(claim.pid)) return { ok: true, takeover: true };
   const seconds = Math.round((Date.parse(claim.expiresAt) - nowMs) / 1000);
   return {
     ok: false,
@@ -192,6 +211,7 @@ export async function renewLease(
   state: LeaseState,
   nowMs: number,
   sleep: (ms: number) => Promise<void> = ms => new Promise(r => setTimeout(r, ms)),
+  isAlive: (pid: number) => boolean = processAlive,
 ): Promise<RenewOutcome> {
   let raw: string | null;
   try {
@@ -201,7 +221,7 @@ export async function renewLease(
   }
 
   const current = parseClaim(raw);
-  const decision = mayTake(current, deps.identity, nowMs);
+  const decision = mayTake(current, deps.identity, nowMs, isAlive);
   if (!decision.ok) {
     // Somebody else genuinely holds it. Drop our own grace immediately: continuing to
     // drive on a lease we can see belongs to another host is the exact collision this

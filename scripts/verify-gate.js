@@ -5,8 +5,10 @@
  *
  * Runs, in order, stopping at the first failure:
  *
- *   static        typecheck, lint, tests — or, with --skip-static, the receipt the bench
- *                 worker already verified against the tree on disk (src/e2e/bench/receipt.ts)
+ *   static        typecheck, lint, tests — or, with --skip-static, a proof the bench worker
+ *                 verified for itself: a precheck receipt matched to the tree on disk
+ *                 (src/e2e/bench/receipt.ts), or CI's own run on this sha
+ *                 (src/e2e/bench/ci-proof.ts). --static-from names which, in the artifact.
  *   capabilities  President members in the diff -> the live stage must read, from the
  *                 server, whether the test account holds the capability (§7)
  *   routing       diff -> required L2 flows
@@ -19,6 +21,7 @@
  *   node scripts/verify-gate.js
  *   node scripts/verify-gate.js --static-only
  *   node scripts/verify-gate.js --skip-static      # worker only: a receipt covers stage 1
+ *   node scripts/verify-gate.js --skip-static --static-from=ci   # worker only: CI proved this sha
  *   node scripts/verify-gate.js --flows=login-spine,politics-write
  *   node scripts/verify-gate.js --attempt=2
  */
@@ -163,10 +166,18 @@ async function main() {
     ['test', 'unit + component tests', 'npm test'],
   ];
   if (flag('skip-static') === 'true') {
+    // WHO proved it is part of the evidence, not a detail. Two different authorities
+    // recorded as one word would break the promise this artifact makes above — so the
+    // marker names the witness: a precheck receipt (a session, re-keyed by the worker) or
+    // CI (GitHub, on this exact sha, required green before the merge). See
+    // src/e2e/bench/ci-proof.ts.
+    const from = flag('static-from') === 'ci' ? 'CI' : 'RECEIPT';
     process.stdout.write(
-      '\n=== static: from the precheck receipt (the worker matched it to this tree)\n',
+      from === 'CI'
+        ? '\n=== static: from CI, which ran it on this exact commit\n'
+        : '\n=== static: from the precheck receipt (the worker matched it to this tree)\n',
     );
-    for (const [key] of staticSteps) artifact.static[key] = 'RECEIPT';
+    for (const [key] of staticSteps) artifact.static[key] = from;
   } else {
     for (const [key, label, command] of staticSteps) {
       const result = runStage(label, command);

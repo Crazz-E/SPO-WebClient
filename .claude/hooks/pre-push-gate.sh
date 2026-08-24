@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-# PreToolUse(Bash) — blocks `git push` unless the BENCH WORKER has attested this HEAD.
+# PreToolUse(Bash) — blocks a direct `git push` to `main`.
 #
 # doc/E2E-POLICY.md §3. An instruction in CLAUDE.md is advisory to a model; a hook is not.
-# Since 2026-08-22 the attestation is the bench worker's verdicts/<sha>.json — written by
-# the single process that owns the live bench (gateway port, LOCKED accounts, world
-# state). A session-local `npm run gate:local` produces evidence for reading, but does
-# NOT unblock a push: only the worker attests. `npm run gate` queues the job and waits.
+#
+# Until #158 stage C this also refused any push whose HEAD the bench had not attested.
+# That rule became self-contradictory the moment the gate started testing a commit the
+# worker FETCHES: a commit must be pushed before it can be gated, so "no push without an
+# attestation" and "no attestation without a push" cannot both hold.
+#
+# The check did not disappear, it moved to where the irreversible act is. `bench/gate` is
+# a required status check on `main` with an empty bypass list, so a pull request cannot
+# merge without the worker's live evidence for its head sha — and neither can the
+# maintainer. Pushing a branch nobody has gated is now how a session ASKS to be gated.
 #
 # Exit 0 = allow. Exit 2 = block, and stderr goes back to the model as the reason.
 
@@ -74,87 +80,33 @@ invokes_push="${invokes_push%%	*}"
 
 # The repo to judge: the directory the push command itself names (\`git -C <dir>\`, or a
 # preceding \`cd <dir>\`), else the working directory. GATE_REPO_DIR overrides both, so the
-# hook's own test suite can exercise the attestation branches from a scratch repo on a
-# feature branch — on `main` the branch guard below fires first and hides them.
+# hook's own test suite can point it at a scratch repo.
 repo="${GATE_REPO_DIR:-${push_dir:-.}}"
-bench="${SPO_BENCH_DIR:-$HOME/.spo-bench}"
 
 head_sha="$(git -C "$repo" rev-parse HEAD 2>/dev/null)"
 branch="$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null)"
-toplevel="$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null)"
-attestation="${bench}/verdicts/${head_sha}.json"
 
 if [ "$branch" = "main" ]; then
   echo "BLOCKED: direct push to main. doc/E2E-POLICY.md §3 — work on a feature/fix branch and open a PR." >&2
   exit 2
 fi
 
-if [ ! -f "$attestation" ]; then
-  echo "BLOCKED: no bench attestation for HEAD (${head_sha:0:8})." >&2
-  echo "Run:  npm run gate" >&2
-  echo "It pre-checks locally (typecheck, lint, tests), then queues the job on the bench" >&2
-  echo "worker, which builds this worktree, drives the L2 flows live against planitia and" >&2
-  echo "attests the result. Only the worker attests — a local gate:local run does not" >&2
-  echo "unblock a push. doc/E2E-POLICY.md §3." >&2
-  exit 2
-fi
+# Everything from here used to refuse the push unless the bench had attested HEAD. That
+# check is gone, and its absence is the point of #158 stage C.
+#
+# The gate now tests a commit the worker FETCHES, so a commit must be pushed before it can
+# be gated at all. Keeping the old rule would have made the two mutually exclusive: no push
+# without an attestation, no attestation without a push.
+#
+# Nothing is loosened, because the push was never the irreversible act — the merge is, and
+# that is where the rule now lives. `bench/gate` is a required status check on `main` with
+# an EMPTY bypass list (ruleset 21111153), so a pull request still cannot merge without the
+# worker's live evidence for its head sha, and the maintainer cannot wave it through either.
+# What a session can now do that it could not before is push a branch nobody has gated —
+# which is exactly how it asks to be gated.
+#
+# The `main` block above stays, and it is now this hook's whole job.
 
-read -r verdict stable wtree age_minutes base_main <<EOF
-$(node -e "
-  const a = require(require('path').resolve('${attestation}'));
-  const age = Math.floor((Date.now() - Date.parse(a.createdAt)) / 60000);
-  process.stdout.write([a.verdict || 'UNKNOWN', String(a.fingerprintStable === true), a.worktree || '?', String(age), a.baseMain || '-'].join(' '));
-" 2>/dev/null)
-EOF
-
-max_age="${GATE_MAX_AGE_MINUTES:-60}"
-
-if [ "${verdict:-UNKNOWN}" != "PASS" ]; then
-  echo "BLOCKED: the bench verdict for HEAD is ${verdict:-UNKNOWN}, not PASS." >&2
-  if [ "${verdict:-}" = "BLOCKED" ]; then
-    echo "The live stage was refused before running — a dirty world lock or the rate limit." >&2
-    echo "Nothing was tested. Read the job report; a dirty world needs a human restore and" >&2
-    echo "npm run e2e:unlock, then resubmit: npm run gate" >&2
-  elif [ "${verdict:-}" = "STALE" ]; then
-    echo "The tree changed while the job was queued or running; the result attests a tree" >&2
-    echo "that no longer exists. Resubmit: npm run gate" >&2
-  else
-    echo "Fix the failure, commit, and re-run: npm run gate" >&2
-    echo "Three attempts maximum, each naming a different root cause — doc/E2E-POLICY.md §8." >&2
-  fi
-  exit 2
-fi
-
-if [ "${stable:-false}" != "true" ]; then
-  echo "BLOCKED: the attestation for HEAD is not fingerprint-stable — the tree moved during" >&2
-  echo "the run. Resubmit: npm run gate" >&2
-  exit 2
-fi
-
-if [ "${wtree:-?}" != "$toplevel" ]; then
-  echo "BLOCKED: HEAD was attested for another worktree (${wtree:-?})." >&2
-  echo "The bench tested that checkout's files, not this one's. Run npm run gate here." >&2
-  exit 2
-fi
-
-if [ -n "${age_minutes:-}" ] && [ "$age_minutes" -gt "$max_age" ]; then
-  echo "BLOCKED: the bench attestation is ${age_minutes} min old (limit ${max_age})." >&2
-  echo "The live world moves; stale evidence is not evidence. Re-run: npm run gate" >&2
-  exit 2
-fi
-
-# The gate base. `main` is no longer required to be up to date with the branch — that rule
-# made every merge invalidate every other session's gate, at a cost growing as N². What
-# replaces it is this comparison: the attestation records WHICH `main` it was judged
-# against, and a base that has moved is ANNOUNCED, not enforced. Re-gating becomes an
-# informed choice instead of a blind rule. doc/bench-worker.md § The gate base.
-current_main="$(git -C "$repo" rev-parse --verify --quiet origin/main 2>/dev/null)"
-if [ -n "${base_main:-}" ] && [ "$base_main" != "-" ] && [ -n "$current_main" ] &&
-   [ "$base_main" != "$current_main" ]; then
-  echo "NOTE: main has moved since this gate — attested against ${base_main:0:8}, origin/main is now ${current_main:0:8}."
-  echo "The push is allowed and the PR can merge; what was driven live is the older base."
-  echo "If the merge is not trivial, merge origin/main and re-run npm run gate."
-fi
-
-echo "Bench attestation PASS for ${head_sha:0:8} (${age_minutes:-?} min old) — push allowed."
+echo "Push allowed. Gate the pushed commit with:  npm run gate"
+echo "(the bench fetches ${head_sha:0:8} and attests it as bench/gate — doc/bench-worker.md §11)"
 exit 0

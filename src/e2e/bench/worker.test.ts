@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './paths';
 import { Spool, type JobRequest } from './job';
-import { listVerdicts, listVerdictsIn } from './verdict';
+import { listVerdicts } from './verdict';
 import { readNightlyResult } from './nightly';
 import { buildReceipt, writeReceipt } from './receipt';
 import { type GatewayDeps } from './gateway';
@@ -43,10 +43,11 @@ interface Harness {
   gatewayFails: boolean;
   /** What the owner lease answers when a job asks whether it may take the bench. */
   leaseDecision: { ok: boolean; why?: string };
+  /** What CI is said to have concluded for the sha under test. See ./ci-proof. */
+  ciProof: { proven: boolean; why?: string };
   /** The step name prepareRef reports as failed; null = the fetch worked. */
   prepareRefFails: string | null;
   prepareRefCalls: string[];
-  publishedRef: string[];
   leaseRenewals: number;
   clock: { nowMs: number };
 }
@@ -75,9 +76,9 @@ function harness(): Harness {
     published: [],
     gatewayFails: false,
     leaseDecision: { ok: true },
+    ciProof: { proven: false, why: 'no CI run for this commit yet' },
     prepareRefFails: null,
     prepareRefCalls: [],
-    publishedRef: [],
     leaseRenewals: 0,
     clock: { nowMs: 1_000_000 },
     deps: {
@@ -103,7 +104,7 @@ function harness(): Harness {
         },
       },
       publishStatus: (_wt, head) => h.published.push(head),
-      publishRefStatus: (_wt, head) => h.publishedRef.push(head),
+      ciStaticProof: () => h.ciProof,
       prepareRef: async ref => {
         h.prepareRefCalls.push(ref);
         // The real one resets a checkout on disk; the harness just makes the directory
@@ -592,32 +593,83 @@ describe('runJob — ref: gating a commit the worker fetched', () => {
     const report = h.spool.readReport(job.id);
     expect(report?.verdict).toBe('STALE');
     expect(report?.bodyVerdict).toBe('PASS');
-    expect(listVerdictsIn(h.paths.refVerdicts)[0].verdict.fingerprintStable).toBe(false);
+    expect(listVerdicts(h.paths)[0].verdict.fingerprintStable).toBe(false);
   });
 
-  it('keeps its answer apart from the session path — same sha, two verdicts', async () => {
+  it('attests where the merge rule reads — a ref job IS the gate now', async () => {
+    // Stage B kept this answer in `ref/verdicts/` under a non-required context, so one
+    // live exercise could be compared against the session path without either overwriting
+    // the other. That comparison ran for real (job-01787603001316-a0c610: PASS on
+    // 514bc4e3, `verdicts/` untouched, published as `bench/ref-gate`) and stage C promotes
+    // the path. An attestation nobody reads would gate nothing.
     const h = harness();
     depositRef(h);
 
     await processOldest(h.deps);
 
-    // `verdicts/` is the session path's; overwriting it would destroy the comparison
-    // stage B exists to make, and would put a fetched-ref answer behind the required
-    // `bench/gate` context before it has earned that.
-    expect(listVerdicts(h.paths)).toHaveLength(0);
-    expect(listVerdictsIn(h.paths.refVerdicts)).toHaveLength(1);
-    expect(listVerdictsIn(h.paths.refVerdicts)[0].verdict).toMatchObject({ verdict: 'PASS' });
+    const verdicts = listVerdicts(h.paths);
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0].verdict).toMatchObject({ verdict: 'PASS', fingerprintStable: true });
   });
 
-  it('publishes under its own context, never the required one', async () => {
+  it('publishes it as the required context', async () => {
     const h = harness();
     depositRef(h);
     await processOldest(h.deps);
 
     await workerLoop(h.deps, 1, async () => false);
 
-    expect(h.published).toHaveLength(0);
-    expect(h.publishedRef).toHaveLength(1);
+    expect(h.published).toHaveLength(1);
+  });
+
+  it('skips the static stage when CI proved this exact sha, and says who proved it', async () => {
+    const h = harness();
+    h.ciProof = { proven: true };
+    const job = depositRef(h);
+
+    await processOldest(h.deps);
+
+    const verify = h.commands.find(c => c.args[0] === 'scripts/verify-gate.js');
+    expect(verify?.args).toContain('--skip-static');
+    // The artifact must name its witness. Recording CI as RECEIPT would make two different
+    // authorities indistinguishable in the one file a human reads afterwards.
+    expect(verify?.args).toContain('--static-from=ci');
+    expect(h.spool.readReport(job.id)?.staticReceipt).toEqual({ used: true });
+    expect(h.logs.join('\n')).toMatch(/static stage from CI/);
+  });
+
+  it('replays the static stage when CI has not proved the sha — and says why', async () => {
+    // The hole the receipt could not see: a gate may run BEFORE the pull request exists,
+    // and two of ci.yml's steps only run on pull_request events. "CI is required for the
+    // merge" is true at merge time and says nothing about now.
+    const h = harness();
+    h.ciProof = { proven: false, why: 'no "typecheck + tests" run exists for this commit yet' };
+    const job = depositRef(h);
+
+    await processOldest(h.deps);
+
+    const verify = h.commands.find(c => c.args[0] === 'scripts/verify-gate.js');
+    expect(verify?.args).not.toContain('--skip-static');
+    expect(h.spool.readReport(job.id)?.staticReceipt).toEqual({
+      used: false,
+      why: expect.stringContaining('no "typecheck + tests" run'),
+    });
+  });
+
+  it('never reads a session receipt for a ref job — the sha has a better witness', async () => {
+    // A receipt is written by the session, for a tree. A pushed commit has CI's answer on
+    // the sha itself, produced by a machine the session does not control.
+    const h = harness();
+    h.ciProof = { proven: false, why: 'still queued' };
+    writeReceipt(
+      h.paths,
+      buildReceipt({ head: 'a'.repeat(40), hash: 'h1', clean: true }, h.worktree, 'main', h.clock.nowMs),
+    );
+    depositRef(h);
+
+    await processOldest(h.deps);
+
+    expect(h.commands.find(c => c.args[0] === 'scripts/verify-gate.js')?.args).not.toContain('--skip-static');
   });
 
   it('reports ENVIRONMENT when the ref cannot be fetched, and builds nothing', async () => {
@@ -632,7 +684,7 @@ describe('runJob — ref: gating a commit the worker fetched', () => {
     expect(report?.detail).toMatch(/git reset --hard deadbeef/);
     expect(h.commands).toHaveLength(0);
     // Nothing was learned about the commit, so nothing is attested about it either.
-    expect(listVerdictsIn(h.paths.refVerdicts)).toHaveLength(0);
+    expect(listVerdicts(h.paths)).toHaveLength(0);
   });
 });
 

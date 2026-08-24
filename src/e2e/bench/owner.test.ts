@@ -119,8 +119,29 @@ describe('mayTake', () => {
     expect(mayTake(claimOf(OTHER, NOW - 1), ME, NOW)).toEqual({ ok: true, takeover: true });
   });
 
+  it('takes over from a DEAD process on this host at once — the restart case', () => {
+    // systemd restarts the worker under a new pid. The old pid's claim is still live for
+    // up to a full lease, and without this the new worker cannot take a lease it is the
+    // rightful owner of — while driving the bench anyway, since `everHeld` resets on
+    // restart. Liveness is checkable locally, so there is nothing to wait for.
+    const predecessor = claimOf({ host: ME.host, pid: 1111 }, NOW + 199_000);
+    expect(mayTake(predecessor, ME, NOW, () => false)).toEqual({ ok: true, takeover: true });
+  });
+
+  it('still refuses a LIVE process on this host — two workers on one machine', () => {
+    const sibling = claimOf({ host: ME.host, pid: 1111 }, NOW + 199_000);
+    expect(mayTake(sibling, ME, NOW, () => true).ok).toBe(false);
+  });
+
+  it('never reads liveness across hosts — a pid number means nothing there', () => {
+    // The expiry exists precisely because this cannot be checked remotely. If the host
+    // differs, a dead-looking pid must not shorten anyone's lease.
+    const remote = claimOf(OTHER, NOW + 199_000);
+    expect(mayTake(remote, ME, NOW, () => false).ok).toBe(false);
+  });
+
   it('refuses while another host is still live, and says for how long', () => {
-    const decision = mayTake(claimOf(OTHER, NOW + 90_000), ME, NOW);
+    const decision = mayTake(claimOf(OTHER, NOW + 90_000), ME, NOW, () => true);
     expect(decision.ok).toBe(false);
     expect(decision.why).toContain('laptop');
     expect(decision.why).toContain('90 s');

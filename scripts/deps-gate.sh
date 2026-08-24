@@ -17,20 +17,24 @@
 #      the packages it is supposed to replace: a green bench/gate that tests nothing about
 #      the bump. node_modules is gitignored, so the install does not disturb the tree
 #      fingerprint the attestation is bound to;
-#   3. `npm run gate` — the same command a session runs: local precheck, then a bench job,
+#   3. `git push`, then `npm run gate` — the same command a session runs. The bench gates a
 #      waited on. The worker attests the merged sha;
-#   4. ONLY on gate exit 0: `git push` the merged sha (a fast-forward of the PR branch), `gh pr merge
+#   4. ONLY on gate exit 0: `gh pr merge
 #      --squash --auto`, wait for MERGED, then `scripts/finish.sh` from the worktree (ff
 #      main, refresh main's node_modules, remove worktree + branch).
 #      Gate exit != 0: the worktree stays for inspection (GATE-FAIL), next PR.
 #
-# Why the push happens here, after the gate, in the same chain: the push hook
-# (.claude/hooks/pre-push-gate.sh) reads the command string a Claude session types into
-# its Bash tool. It does not see inside this script. That is not a loophole to rely on —
-# it is why this script must itself refuse to push anything the worker has not just
-# attested: the push comes strictly after a passing `npm run gate`, for that sha, and for
-# nothing else. The worker then publishes bench/gate on the pushed sha within ~30 s, and
-# the ruleset (PR + CI + bench/gate + up to date) takes it from there.
+# Why the push now happens BEFORE the gate: the bench fetches the commit it tests, so it
+# has to exist on origin first (#158 stage C). Gating first would fail "NOT PUSHED" on
+# every pull request here.
+#
+# The old order was not arbitrary — the push hook refused anything the bench had not
+# attested, so this script had to gate first and then push exactly that sha and nothing
+# else. That rule is gone, and pushing an ungated sha to a PR branch costs nothing:
+# `bench/gate` is a required status check on `main` with an empty bypass list, so the
+# `gh pr merge --auto` below cannot land a commit the worker has not attested. The
+# guarantee moved from the push to the merge, which is where the irreversible act
+# always was. The worker publishes bench/gate on the pushed sha within ~30 s.
 set -euo pipefail
 
 MAIN_REPO="${SPO_MAIN_REPO:-$HOME/SPO-WebClient}"
@@ -78,6 +82,29 @@ for n in "${prs[@]}"; do
   echo "-- npm ci in $wt (the bench builds against THIS node_modules, not main's)"
   (cd "$wt" && npm ci --no-audit --no-fund)
 
+  # PUSH FIRST, then gate. The order was the other way round until #158 stage C, because
+  # the push hook refused any push the bench had not attested — so the gate had to come
+  # first, and the script had to guarantee it pushed nothing else.
+  #
+  # The gate now tests a commit the worker FETCHES from GitHub, so the commit has to be
+  # there before it can be gated at all. Gating first would fail with "NOT PUSHED" on
+  # every Dependabot pull request.
+  #
+  # Nothing is weakened by pushing an ungated sha to a PR branch: `bench/gate` is a
+  # required status check on `main` with an empty bypass list, so the `gh pr merge --auto`
+  # below cannot land anything the worker has not attested. The guarantee moved from the
+  # push to the merge, which is where the irreversible act always was.
+  echo "-- pushing ${sha:0:8} so the bench can fetch it (fast-forward, no force)"
+  # Dependabot may have recreated the branch (its conflict rebase): the remote then holds
+  # work we do not have, and a fast-forward is rightly refused. That is not ours to force —
+  # leave the worktree, report, and let the next run pick the new head up.
+  if ! git -C "$wt" push origin "HEAD:$branch"; then
+    note "$n SKIPPED-moved (the remote branch changed before the gate — ${sha:0:8} is not its head; rerun)"
+    git -C "$MAIN_REPO" worktree remove --force "$wt"
+    git -C "$MAIN_REPO" branch -D "$branch" >/dev/null 2>&1 || true
+    continue
+  fi
+
   # The log lives OUTSIDE the worktree: an untracked file inside it would dirty the tree
   # fingerprint and the worker would refuse to attest.
   gate_log="$WORKTREES/deps-$n.gate.log"
@@ -88,17 +115,7 @@ for n in "${prs[@]}"; do
     continue
   fi
 
-  echo "-- gate PASS for ${sha:0:8}: pushing the updated branch (fast-forward, no force)"
-  # Dependabot may have recreated the branch while the gate ran (its conflict rebase): the
-  # remote then holds work we do not have, and a fast-forward is rightly refused. That is
-  # not ours to force — the attested sha is no longer the PR's; leave the worktree, report,
-  # and let the next run pick the new head up.
-  if ! git -C "$wt" push origin "HEAD:$branch"; then
-    note "$n SKIPPED-moved (the remote branch changed during the gate — attested ${sha:0:8} is not its head; rerun)"
-    git -C "$MAIN_REPO" worktree remove --force "$wt"
-    git -C "$MAIN_REPO" branch -D "$branch" >/dev/null 2>&1 || true
-    continue
-  fi
+  echo "-- gate PASS for ${sha:0:8}: arming auto-merge"
   gh pr merge "$n" --squash --auto
 
   deadline=$(( $(date +%s) + MERGE_TIMEOUT_S ))
