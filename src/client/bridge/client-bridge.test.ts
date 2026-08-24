@@ -214,10 +214,19 @@ describe('ClientBridge mail responses (T6)', () => {
     expect(showToast).toHaveBeenCalledWith('Message not sent. Your draft is kept.', 'error');
   });
 
-  it('a successful send clears the draft', () => {
+  it('a successful send clears the draft and asks for the folder to be read again', () => {
+    const before = useMailStore.getState().folderRefreshToken;
     ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_SENT, success: true } as never);
     expect(useMailStore.getState().currentView).toBe('list');
     expect(useMailStore.getState().composeTo).toBe('');
+    // OB-11: the listing behind the compose form predates the send.
+    expect(useMailStore.getState().folderRefreshToken).toBe(before + 1);
+  });
+
+  it('a failed send does not ask for a refresh', () => {
+    const before = useMailStore.getState().folderRefreshToken;
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_SENT, success: false } as never);
+    expect(useMailStore.getState().folderRefreshToken).toBe(before);
   });
 
   it('a confirmed delete removes the pending row locally; a failed one keeps it', () => {
