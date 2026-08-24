@@ -237,6 +237,7 @@ export function formatReport(report: JobReport): string {
   if (report.type === 'lease' && report.leaseUntil) {
     lines.push(`  gateway on port ${report.port} until ${report.leaseUntil}`);
   }
+  if (report.baseMain) lines.push(`  gated against main ${report.baseMain.slice(0, 8)}`);
   if (report.gateArtifact) lines.push(`  gate artifact: ${report.gateArtifact}`);
   if (report.logFile) lines.push(`  full log: ${report.logFile}`);
   return lines.join('\n');

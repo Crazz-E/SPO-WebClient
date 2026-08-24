@@ -244,6 +244,13 @@ describe('formatReport', () => {
     expect(text).toContain('gate artifact: /wt/a/report/e2e/gate-abc.json');
     expect(text).toContain('full log: /bench/done/job-1.log');
   });
+
+  it('names the main the job was gated against, and says nothing when there is none', () => {
+    expect(formatReport(reportFor('job-1', { baseMain: 'abcdef1234567890' }))).toContain(
+      'gated against main abcdef12',
+    );
+    expect(formatReport(reportFor('job-1', {}))).not.toContain('gated against main');
+  });
 });
 
 describe('release', () => {

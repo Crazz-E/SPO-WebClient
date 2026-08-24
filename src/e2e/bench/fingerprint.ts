@@ -59,3 +59,22 @@ export function fingerprintTree(worktree: string, git: GitRunner = runGit): Tree
     .digest('hex');
   return { head, hash, clean: diff === '' && status === '' };
 }
+
+/**
+ * The sha a ref points at, or undefined when it does not exist.
+ *
+ * Used for `origin/main` — the base a gate was judged against. It is genuinely optional:
+ * a fetch can fail offline, and a repo with no remote has no such ref. An absent base is
+ * reported as absent, never as "the base matches".
+ */
+export function resolveRef(
+  worktree: string,
+  ref: string,
+  git: GitRunner = runGit,
+): string | undefined {
+  try {
+    return git(worktree, ['rev-parse', '--verify', '--quiet', ref]).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}

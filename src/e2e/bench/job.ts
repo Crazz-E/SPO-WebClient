@@ -63,6 +63,13 @@ export interface JobReport {
     atEnd?: TreeFingerprint;
   };
   targetMoved: boolean;
+  /**
+   * The `origin/main` sha the job was judged against. `main` moving past it is what
+   * makes an attestation stale, now that the branch is no longer forced to be up to
+   * date — see doc/bench-worker.md § The gate base. Absent when the ref could not be
+   * resolved (offline, no remote).
+   */
+  baseMain?: string;
   startedAt: string;
   finishedAt?: string;
   /** Human-readable summary or error. */

@@ -26,7 +26,7 @@ import {
   writeWorkerInfo,
   type BenchPaths,
 } from './paths';
-import { fingerprintTree, type TreeFingerprint } from './fingerprint';
+import { fingerprintTree, resolveRef, type TreeFingerprint } from './fingerprint';
 import { Spool, type JobReport, type JobRequest, type JobVerdict } from './job';
 import { clearPort, realGatewayDeps, startGateway, type RunningGateway } from './gateway';
 import { ghStatusPublisher, publishPendingStatuses, writeVerdict, type StatusPublisher } from './verdict';
@@ -42,6 +42,8 @@ export interface WorkerDeps {
   spool: Spool;
   port: number;
   fingerprint: (worktree: string) => TreeFingerprint;
+  /** The sha a ref points at, or undefined when it does not exist in that worktree. */
+  resolveRef: (worktree: string, ref: string) => string | undefined;
   /** Run a command to completion, appending output to logFile; resolves to the exit code. */
   runCommand: (cmd: string, args: string[], options: RunCommandOptions) => Promise<number>;
   gateway: {
@@ -146,6 +148,7 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
       worktree: request.worktree,
       verdict: report.verdict,
       fingerprintStable: !report.targetMoved,
+      baseMain: report.baseMain,
       jobId: request.id,
       createdAt: new Date(deps.now()).toISOString(),
       exceptions: countCapabilityExceptions(report.gateArtifact),
@@ -217,6 +220,11 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
   // Refresh origin/main so verify-gate judges the branch against the real main, not a
   // lagging local one. Best-effort: offline, the gate falls back on its own.
   await deps.runCommand('git', ['fetch', '--quiet', 'origin', 'main'], { cwd: request.worktree, logFile });
+
+  // Which `main` this run stands on. The ruleset no longer forces the branch to be up to
+  // date, so nothing else records the base — without this the attestation could not say
+  // whether `main` had moved past it. Read AFTER the fetch, so it is the real remote tip.
+  report.baseMain = deps.resolveRef(request.worktree, 'origin/main');
 
   // The worker always builds — a stale dist/ would run yesterday's code and produce a
   // silently wrong PASS, which is the exact failure this bench exists to prevent.
@@ -362,6 +370,7 @@ export function realWorkerDeps(paths: BenchPaths): WorkerDeps {
     spool: new Spool(paths),
     port: BENCH_PORT,
     fingerprint: fingerprintTree,
+    resolveRef,
     runCommand: realRunCommand,
     gateway: {
       clearPort: port => clearPort(port, gatewayDeps),

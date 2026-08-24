@@ -28,6 +28,16 @@ export interface BenchVerdict {
   verdict: JobVerdict;
   /** false when the tree moved between deposit and the end of the run. */
   fingerprintStable: boolean;
+  /**
+   * The `origin/main` sha this run was judged against.
+   *
+   * The ruleset no longer requires the branch to be up to date with `main` (that rule
+   * cost every parallel session a full re-gate on every merge). What replaces it is this
+   * field: the attestation says WHICH `main` it stood on, so a reader — the pre-push
+   * hook, the commit status, a human at merge time — can see that `main` has moved past
+   * it. Staleness became visible instead of enforced; that is the whole trade.
+   */
+  baseMain?: string;
   jobId: string;
   createdAt: string;
   /** Capability exceptions the gate recorded (doc/E2E-POLICY.md §7) — shown on GitHub. */
@@ -116,7 +126,8 @@ export function publishPendingStatuses(
         verdict.head,
         statusState(verdict.verdict),
         `${verdict.verdict}${verdict.fingerprintStable ? '' : ' (tree moved)'}` +
-          `${verdict.exceptions ? ` — ${verdict.exceptions} capability exception(s)` : ''} — job ${verdict.jobId}`,
+          `${verdict.exceptions ? ` — ${verdict.exceptions} capability exception(s)` : ''}` +
+          `${verdict.baseMain ? ` — base ${verdict.baseMain.slice(0, 8)}` : ''} — job ${verdict.jobId}`,
       );
       writeVerdict(paths, { ...verdict, published: true });
       log(`published bench/gate=${statusState(verdict.verdict)} for ${verdict.head.slice(0, 8)}`);

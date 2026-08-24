@@ -412,9 +412,14 @@ cannot hold the locked credentials, so the worker publishes each attestation as 
 `bench/gate` **commit status** once the sha reaches GitHub (retried automatically until
 the push happens). **`main` is governed by one ruleset that binds the owner too** (empty
 bypass list): PR required (0 approvals — solo maintainer), `typecheck + tests` **and**
-`bench/gate` required, branch **up to date** with `main`, no force-push, no deletion. So a
-PR cannot merge on CI alone, and **if `main` moves after your gate, update the branch and
-re-run `npm run gate`** — the new sha needs its own attestation. The detailed live
+`bench/gate` required, no force-push, no deletion. So a PR cannot merge on CI alone.
+**The branch is deliberately NOT required to be up to date with `main`** — that rule made
+every merge invalidate every other session's gate, at a cost growing as N² on a serialised
+bench. What replaced it: every attestation records `baseMain`, the `origin/main` it was
+judged against, and `main` having moved past it is *announced* — in the `bench/gate` status
+description, in the gate report, and as a `NOTE:` from the push hook — not refused. **Read
+the note and judge**: if the incoming `main` touches the same ground, merge `origin/main`
+in and re-gate (the new sha needs its own attestation). The detailed live
 evidence still rides in the PR body. Setup checklist: [bench-worker.md §5](doc/bench-worker.md).
 **The last link is the release:** every merge to `main` runs `electron-release.yml`, which
 computes the version from the last `v*` tag and the commits since it (`feat` → minor,

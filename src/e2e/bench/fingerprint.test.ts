@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { fingerprintTree } from './fingerprint';
+import { fingerprintTree, resolveRef } from './fingerprint';
 
 /** A real scratch repo — the fingerprint's whole job is to read real git state. */
 function scratchRepo(): string {
@@ -84,5 +84,22 @@ describe('fingerprintTree', () => {
   it('throws on a directory that is not a worktree', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-nogit-'));
     expect(() => fingerprintTree(dir)).toThrow();
+  });
+});
+
+describe('resolveRef — the gate base', () => {
+  it('returns the sha a ref points at', () => {
+    const dir = scratchRepo();
+    const head = fingerprintTree(dir).head;
+    execFileSync('git', ['-C', dir, 'update-ref', 'refs/remotes/origin/main', head]);
+    expect(resolveRef(dir, 'origin/main')).toBe(head);
+  });
+
+  it('returns undefined for a ref that does not exist — absent is not "matching"', () => {
+    expect(resolveRef(scratchRepo(), 'origin/main')).toBeUndefined();
+  });
+
+  it('returns undefined outside a worktree instead of throwing', () => {
+    expect(resolveRef(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-noref-')), 'origin/main')).toBeUndefined();
   });
 });

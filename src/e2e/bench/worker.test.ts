@@ -32,6 +32,8 @@ interface Harness {
   hashes: string[];
   /** What every fingerprint reports for `clean`. */
   clean: boolean;
+  /** What `origin/main` resolves to in the worktree; undefined = the ref does not exist. */
+  baseMain: string | undefined;
   published: string[];
   gatewayFails: boolean;
   clock: { nowMs: number };
@@ -56,6 +58,7 @@ function harness(): Harness {
     submitterAlive: true,
     hashes: ['h1'],
     clean: true,
+    baseMain: 'main-sha-1',
     published: [],
     gatewayFails: false,
     clock: { nowMs: 1_000_000 },
@@ -67,6 +70,7 @@ function harness(): Harness {
         const hash = h.hashes[Math.min(fingerprintCalls++, h.hashes.length - 1)];
         return { head: `head-of-${path.basename(wt)}`, hash, clean: h.clean };
       },
+      resolveRef: (_wt, ref) => (ref === 'origin/main' ? h.baseMain : undefined),
       runCommand: async (cmd, args, options) => {
         h.commands.push({ cmd, args, cwd: options.cwd, env: options.env });
         return h.exitCodes.shift() ?? 0;
@@ -153,6 +157,24 @@ describe('processOldest — the queue discipline', () => {
       fingerprintStable: true,
       worktree: h.worktree,
     });
+  });
+
+  it('records the origin/main the run was judged against, in the report and the attestation', async () => {
+    const h = harness();
+    const job = deposit(h);
+    await processOldest(h.deps);
+    // The base is read AFTER `git fetch origin main`, or it would name a lagging local ref.
+    expect(h.commands.some(c => c.cmd === 'git' && c.args[0] === 'fetch')).toBe(true);
+    expect(h.spool.readReport(job.id)?.baseMain).toBe('main-sha-1');
+    expect(listVerdicts(h.paths)[0].verdict.baseMain).toBe('main-sha-1');
+  });
+
+  it('leaves the base absent when origin/main does not resolve — never guesses one', async () => {
+    const h = harness();
+    h.baseMain = undefined;
+    deposit(h);
+    await processOldest(h.deps);
+    expect(listVerdicts(h.paths)[0].verdict.baseMain).toBeUndefined();
   });
 
   it('carries the gate artifact\'s capability exceptions into the attestation', async () => {
