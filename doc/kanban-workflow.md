@@ -67,6 +67,48 @@ English. Conversation with the maintainer is not board content and is not affect
    non-technical English** why the task failed — what was attempted, what blocked it, in
    words a non-programmer follows. The human reclassifies from there.
 
+## The orphan watch — the law's missing half
+
+Rule 3 says a session that ends without closing its ownership leaves a locked card, and only
+the human may free it. Nothing told the human it had happened. With several sessions running
+in parallel on one machine, a session dying mid-flight is the likeliest failure of the
+assignment process, and its card sat in In progress / Gate / PR — owned by nobody alive —
+until somebody happened to re-read the board.
+
+[`.github/workflows/orphan-cards.yml`](../.github/workflows/orphan-cards.yml) runs
+[`scripts/orphan-cards.js`](../scripts/orphan-cards.js) every morning at 07:10 UTC and makes
+that visible. **It frees nothing.** It never edits the board, never clears a `Session`, never
+moves a card — rule 1 is untouched, and the job holds no token that could break it.
+
+| Decision | Answer | Why |
+|---|---|---|
+| What is a suspect | `Session` non-empty **and** column ∈ {In progress, Gate, PR} **and** the card's `updatedAt` is ≥ N old | `updatedAt` is the one clock that ticks on every milestone a live session must write. A missing branch or a missing PR is **evidence printed next to the card**, never the trigger — a card in In progress legitimately has neither. |
+| N | **24 h** (`ORPHAN_STALE_HOURS`) | The bench serialises every session's gate on one machine, so an L-sized task behind a queue can honestly be quiet for most of a working day. 12 h fires on a card claimed in the evening and worked next morning; every card that has landed so far was claimed and finished the same day. |
+| Shape of the reminder | **One comment on the quiet card**, once per ownership episode, plus a table in the run's job summary | A digest issue would be auto-added to the board (see below) and a `/next-task` session would eventually claim the machine's own bookkeeping as work. A comment creates no card and lands where the decision is made. |
+| Repeat | Never, for the same owner | Each comment carries a hidden `<!-- orphan-watch:<Session> -->` marker. Keyed on the `Session` text, not a timestamp: posting the comment can itself bump `updatedAt`, and a timestamp key would make the job re-fire on the trace of its own last run every day. A freed and re-claimed card gets a new `Session` and re-arms. |
+
+**One human step, once.** The board is a *user-scoped* project, which the repository's
+`GITHUB_TOKEN` cannot read at any permission level. Provision a PAT with `read:project` as
+the `PROJECTS_TOKEN` secret (Settings → Secrets and variables → Actions). Until it exists the
+job is inert: green, skipped, one notice — never a red X every morning. `--dry-run` and
+`workflow_dispatch` give a manual check without commenting on anything.
+
+### The built-in Projects workflows are on
+
+The other half of #124 — the mechanical transitions nobody should have to remember — needs no
+code and is already configured. All seven built-in workflows on the project report enabled:
+
+```bash
+gh api graphql -f query='query{user(login:"Crazz-E"){projectV2(number:2){workflows(first:20){nodes{name enabled}}}}}'
+```
+
+`Auto-add to project` (a new issue becomes a Todo card without an `item-add`), `Item closed`
+and `Pull request merged` (→ Done), `Auto-close issue`, `Item added to project`, `Pull request
+linked to issue`, `Auto-add sub-issues`. The Done cards with an empty `Session` field are the
+trace of `Item closed` firing on its own. A session should still write its milestones — the
+built-ins cover creation and closure, not the columns in between — but a forgotten `item-add`
+no longer loses a finding.
+
 ## What a session writes on the board — and only this
 
 Board writes happen at **state transitions only** — no running log, no progress notes.
