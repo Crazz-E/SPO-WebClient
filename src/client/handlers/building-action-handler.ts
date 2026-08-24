@@ -326,12 +326,16 @@ async function setBuildingPropertyImpl(
 
     if (response.success) {
       // M-E: `success` means the command went out, not that it took effect.
-      // `confirmed === false` means the gateway re-read the property and found
-      // nothing — the mutation may have been discarded by the server. Marking
-      // that as confirmed would paint an optimistic value the server does not
-      // hold, which is precisely the lie the audit found. `undefined` means the
-      // command has no read-back property (the disconnect family), so there is
-      // nothing to contradict and the optimistic value stands.
+      // `confirmed === false` means the gateway re-read the value and the server
+      // positively disagrees with the write. Marking that as confirmed would
+      // paint an optimistic value the server does not hold, which is precisely
+      // the lie the audit found.
+      //
+      // `undefined` means nothing contradicts the write and the optimistic value
+      // stands: the command has no witness property (the disconnect family), the
+      // witness reads the same either way, or the read-back is still the old
+      // value because the object cache refreshes a civic write 30-90 s late
+      // (OB-28/OB-29). Reverting on those would fail writes that landed.
       if (response.confirmed === false) {
         ClientBridge.failPendingUpdate(pendingKey, value, 'Change could not be confirmed by the server');
         ClientBridge.log('Error', `${propertyName} was sent but could not be confirmed`);

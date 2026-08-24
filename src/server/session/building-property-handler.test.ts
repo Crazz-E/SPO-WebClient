@@ -162,6 +162,18 @@ interface MatrixEntry {
    */
   readBack: string | null;
   /**
+   * What the witness holds once this row's write has landed — the value the
+   * cache would answer, which is not always the one we sent (`AutoProd` is a
+   * word, `srvPrices{i}` is halved and doubled back).
+   *
+   * Absent means the witness cannot answer the question at all: it is a count,
+   * an aggregate, a derived figure, or it lives on a gate sub-object the
+   * verification read never binds. Those rows must report `confirmed:
+   * undefined` however the cacher answers — OB-28, where "the property is
+   * readable" was taken for "the write landed".
+   */
+  echo?: string;
+  /**
    * The confirmation is a live `get` on CurrBlock, not a cacher read. Only
    * AcceptCloning: TBlock.StoreToCache (Kernel/Kernel.pas:5824-5905) never
    * writes it, so the cacher would answer '' and report every correct write as
@@ -184,9 +196,12 @@ const MATRIX: readonly MatrixEntry[] = [
 
   // ── Booleans as WordBool: #-1 / #0, never #1 ─────────────────────────────
   {
+    // `Cache.WriteString('AutoProd', 'YES'/'NO')` — MovieStudios.pas:770-772.
+    // The wordbool we emit is never what comes back.
     command: 'RDOAutoProduce', value: '1',
     args: [RdoValue.int(-1)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'AutoProd',
+    echo: 'YES',
   },
   {
     command: 'RDOSelSelected', value: '1',
@@ -216,11 +231,15 @@ const MATRIX: readonly MatrixEntry[] = [
     command: 'RDOCacncelTransc', value: '0',
     args: [], // the Delphi typo is load-bearing: the member really is spelled that way
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'Transcended',
+    // WriteBoolean writes '1'/'0' (Cache/CacheAgent.pas:150-152); the
+    // cancellation clears the flag (TranscendBlock.pas:202).
+    echo: '0',
   },
   {
     command: 'RDOSetWordsOfWisdom', value: 'Carpe diem',
     args: [RdoValue.string('Carpe diem')],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'WordsOfWisdom',
+    echo: 'Carpe diem', // stored verbatim — TranscendBlock.pas:216 / cache :200
   },
 
   // ── Movie studio (FilmsSheet.pas:330/350, MovieStudios.pas) ──────────────
@@ -240,6 +259,10 @@ const MATRIX: readonly MatrixEntry[] = [
     // autoInfo bitmask: flgAutoRelease=$01 | flgAutoProduce=$02 → 3
     args: [RdoValue.string('Le Grand Bleu'), RdoValue.double(2500000), RdoValue.int(6), RdoValue.int(3)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'InProd',
+    // `Cache.WriteString('InProd', 'YES')` while a project exists —
+    // MovieStudios.pas:763. Its siblings above END the project, so their
+    // success is this property's absence: no echo, no verdict.
+    echo: 'YES',
   },
 
   // ── Research — no read-back mapping, falls through to the default ────────
@@ -347,11 +370,15 @@ const MATRIX: readonly MatrixEntry[] = [
     command: 'RDOSetPrice', value: '220', params: { index: '2' },
     args: [RdoValue.int(2), RdoValue.int(220)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'srvPrices2',
+    // Halved on the way in, doubled on the way out — ServiceBlock.pas:1585 /
+    // :1731. An even price survives the round-trip exactly.
+    echo: '220',
   },
   {
     command: 'RDOSetTradeLevel', value: '3',
     args: [RdoValue.int(3)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'TradeLevel',
+    echo: '3', // Kernel/Kernel.pas:6408-6412 (assign) / :5894 (cache)
   },
   {
     command: 'RDOSetRole', value: '2',
@@ -374,11 +401,15 @@ const MATRIX: readonly MatrixEntry[] = [
     command: 'RDOSetSalaries', value: '500', params: { salary0: '500', salary1: '600', salary2: '700' },
     args: [RdoValue.int(500), RdoValue.int(600), RdoValue.int(700)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'Salaries0',
+    // Assigned unscaled — WorkCenterBlock.pas:591-593 / cache :571. The witness
+    // is the first of the triplet, so it echoes `salary0`, not `value`.
+    echo: '500',
   },
   {
     command: 'RDOSetMinSalaryValue', value: '120', params: { levelIndex: '1' },
     args: [RdoValue.int(1), RdoValue.int(120)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'midMinSalary',
+    echo: '120', // Kernel/Population.pas:1292-1305 (assign, clamped at 255) / :1219
   },
 
   // ── Town hall / capitol (TownTaxesSheet.pas, CapitolTownsSheet.pas) ──────
@@ -387,11 +418,15 @@ const MATRIX: readonly MatrixEntry[] = [
     command: 'RDOSetTaxValue', value: '12', params: { index: '1', taxId: RESOLVED_TAX_ID },
     args: [RdoValue.int(110), RdoValue.string('12')],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'Tax1Percent',
+    // `StrToInt(value)/100` in, `round(100*Percent)` out — BasicTaxes.pas:249 /
+    // :220. The percentage we send is the integer the cache holds.
+    echo: '12',
   },
   {
     command: 'RDOSetTownTaxes', value: '15', params: { index: '2' },
     args: [RdoValue.int(2), RdoValue.int(15)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'TownTax2',
+    echo: '15', // WorldPolitics.pas:1765 / cache :1380 — same /100, *100 pair
   },
   {
     command: 'RDOSitMayor', value: 'innos', params: { townName: 'Podan', index: '1' },
@@ -437,7 +472,10 @@ describe('setBuildingProperty — command matrix', () => {
   });
 
   it.each(MATRIX)('$command — target, separator, verb and arguments', async (entry) => {
-    const fake = makeConstructionCtx();
+    // A row that can be confirmed is driven with the value a landed write would
+    // leave behind; the others keep the neutral READ_BACK, which is exactly the
+    // "readable but meaningless" answer OB-28 used to accept as a confirmation.
+    const fake = makeConstructionCtx({ readBack: [entry.echo ?? READ_BACK] });
 
     const result = await settle(
       setBuildingProperty(fake.ctx, X, Y, entry.command, entry.value, entry.params),
@@ -496,8 +534,11 @@ describe('setBuildingProperty — command matrix', () => {
     } else {
       expect(listCalls[listCalls.length - 1][1]).toEqual([entry.readBack]);
       expect(result.success).toBe(true);
-      expect(result.newValue).toBe(READ_BACK);
-      expect(result.confirmed).toBe(true);
+      // `newValue` is what the server holds, whether or not it settles anything.
+      expect(result.newValue).toBe(entry.echo ?? READ_BACK);
+      // OB-28: only a witness that echoes the write earns `true`. Every other
+      // row read a perfectly valid value and used to call it a confirmation.
+      expect(result.confirmed).toBe(entry.echo === undefined ? undefined : true);
     }
 
     // Every cacher object opened is closed, including the verify one.
@@ -1114,20 +1155,61 @@ describe('read-back', () => {
 
     const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetPrice', '220', { index: '0' }));
 
-    expect(result).toEqual({ success: true, newValue: '218', confirmed: true });
+    // This row used to assert `confirmed: true`: the price we sent was 220, the
+    // server held 218, and the verdict came from the value being READABLE. That
+    // is OB-28. `newValue` still reports what the server holds — the honest
+    // half of the old behaviour, kept.
+    expect(result).toEqual({ success: true, newValue: '218', confirmed: undefined });
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('"srvPrices0" holds 218, the write sent 220'),
+    );
+  });
+
+  it('accepts either even neighbour for an odd price, and nothing else', async () => {
+    // `min(high(Price), round(value/2))` on the way in, `2*Price` on the way out
+    // (ServiceBlock.pas:1585 / :1731): an odd price cannot come back unchanged,
+    // and which neighbour it lands on depends on Delphi's .5 tie-break.
+    for (const held of ['220', '222']) {
+      const fake = makeConstructionCtx({ readBack: [held] });
+      const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetPrice', '221', { index: '0' }));
+      expect(result.confirmed).toBe(true);
+    }
+
+    const off = makeConstructionCtx({ readBack: ['224'] });
+    const result = await settle(setBuildingProperty(off.ctx, X, Y, 'RDOSetPrice', '221', { index: '0' }));
+    expect(result.confirmed).toBeUndefined();
+  });
+
+  it('gives no verdict when the witness cannot answer the question', async () => {
+    // `cnxCount` is a connection COUNT on the gate cache object
+    // (Kernel/KernelCache.pas:459-471), not a copy of what we sent — it reads
+    // the same whether the disconnect connected nothing or everything.
+    const fake = makeConstructionCtx({ readBack: ['3'] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDODisconnectInput', '0', {
+      fluidId: 'Plastics', connectionList: '706,436,',
+    }));
+
+    expect(result).toEqual({ success: true, newValue: '3', confirmed: undefined });
+    expect(fake.log.debug).toHaveBeenCalledWith(
+      expect.stringContaining('reads the same whether or not the write landed'),
+    );
   });
 
   // KNOWN BUG — building-property-handler.ts:259. M-E is fixed (an empty
   // read-back no longer echoes the requested value), but `success` is still
   // hard-coded `true` on this path: a mutation the server discarded returns
-  // `{ success: true, confirmed: false }`. Clients that only look at `success`
-  // — which is most of them, `confirmed` being optional — still see a win.
+  // `{ success: true, confirmed: undefined }`. Clients that only look at
+  // `success` — which is most of them, `confirmed` being optional — still see
+  // a win.
   it('still reports success when nothing could be confirmed (known defect)', async () => {
     const fake = makeConstructionCtx({ readBack: [] });
 
     const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetPrice', '220', { index: '0' }));
 
-    expect(result.confirmed).toBe(false);
+    // Was `false`, i.e. "the server refused" — which the client paints red and
+    // reverts. An absent cache property says nothing of the kind (OB-28).
+    expect(result.confirmed).toBeUndefined();
     expect(result.newValue).toBe('');
     expect(result.success).toBe(true); // ← the defect, pinned
     expect(fake.log.warn).toHaveBeenCalledWith(expect.stringContaining('could not be confirmed'));
@@ -1138,16 +1220,16 @@ describe('read-back', () => {
 
     const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetPrice', '220', { index: '0' }));
 
-    expect(result.confirmed).toBe(false);
+    expect(result.confirmed).toBeUndefined();
     expect(result.newValue).toBe('');
   });
 
   it('logs the confirmed value when the server agrees', async () => {
-    const fake = makeConstructionCtx({ readBack: ['218'] });
+    const fake = makeConstructionCtx({ readBack: ['220'] });
 
     await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetPrice', '220', { index: '0' }));
 
-    expect(fake.log.debug).toHaveBeenCalledWith(expect.stringContaining('confirmed at 218'));
+    expect(fake.log.debug).toHaveBeenCalledWith(expect.stringContaining('confirmed at 220'));
   });
 
   it('reports failure when the read-back itself throws, after the command was sent', async () => {
@@ -1198,6 +1280,21 @@ describe('read-back', () => {
     const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOAcceptCloning', '0'));
 
     expect(result).toEqual({ success: true, newValue: '0', confirmed: true });
+  });
+
+  it('reports AcceptCloning refused when the live get disagrees with the write', async () => {
+    // The only place `false` is defensible: the get reads the very field the set
+    // assigns, with no object cache in between, so a flag that still says 0
+    // after we sent -1 is a write that did not land — not a cache lagging
+    // behind (OB-29). Everywhere else that same reading means "no verdict".
+    const fake = makeConstructionCtx({ liveCloning: '0' });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOAcceptCloning', '1'));
+
+    expect(result).toEqual({ success: true, newValue: '0', confirmed: false });
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('holds 0, the write sent -1'),
+    );
   });
 
   it('reports AcceptCloning unconfirmed when the live get answers nothing', async () => {
