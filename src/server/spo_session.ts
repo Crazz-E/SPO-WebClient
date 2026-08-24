@@ -239,8 +239,6 @@ export class StarpeaceSession extends EventEmitter {
   private _rdoCnntId: string | null = null;
   public get rdoCnntId(): string | null { return this._rdoCnntId; }
   public cacherId: string | null = null;
-  /** Deduplication map for in-flight getBuildingDetails requests by "x,y" key */
-  private inFlightBuildingDetails = new Map<string, Promise<BuildingDetailsResponse>>();
   public worldId: string | null = null;
   public daAddr: string | null = null;
   public daPort: number | null = null;
@@ -430,15 +428,6 @@ export class StarpeaceSession extends EventEmitter {
   public setAspActionCache(aspPath: string, actions: Map<string, import('./asp-url-extractor').AspActionUrl>): void {
     this.aspActionCache.set(aspPath, actions);
   }
-  public getInFlightBuildingDetails(key: string): Promise<import('../shared/types').BuildingDetailsResponse> | undefined {
-    return this.inFlightBuildingDetails.get(key);
-  }
-  public setInFlightBuildingDetails(key: string, promise: Promise<import('../shared/types').BuildingDetailsResponse>): void {
-    this.inFlightBuildingDetails.set(key, promise);
-  }
-  public deleteInFlightBuildingDetails(key: string): void {
-    this.inFlightBuildingDetails.delete(key);
-  }
   public setCurrentChannel(channel: string): void {
     this.currentChannel = channel;
   }
@@ -618,6 +607,11 @@ export class StarpeaceSession extends EventEmitter {
     return this.availableWorlds.get(name);
   }
 
+  /**
+   * The RDO people search. Currently unreachable: REQ_SEARCH_MENU_PEOPLE_SEARCH is
+   * served by SearchMenuService.searchPeople, an HTML scrape of the ASP pages.
+   * Which of the two survives is #118.
+   */
   public async searchPeople(searchStr: string): Promise<string[]> {
     return loginHandler.searchPeople(this, searchStr, this.cachedZonePath);
   }
@@ -1088,10 +1082,6 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     return mailHandler.getMailUnreadCount(this);
   }
 
-  public getMailAccount(): string | null {
-    return mailHandler.getMailAccount(this);
-  }
-
   public async getMailFolder(folder: string): Promise<MailMessageHeader[]> {
     return mailHandler.getMailFolder(this, folder);
   }
@@ -1369,23 +1359,6 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
     } finally {
       await this.cacherCloseObject(tempObjectId);
     }
-  }
-
-  /**
-   * NEW [HIGH-02]: Helper to get RDO ObjectId at specific coordinates
-   * This is the "real" object ID used for construction operations
-   */
-  public async getObjectRdoId(x: number, y: number): Promise<string> {
-    this.log.debug(`[MapService] Getting RDO ObjectId at (${x}, ${y})`);
-    const props = await this.getCacherPropertyListAt(x, y, ['ObjectId']);
-    if (props.length === 0 || !props[0]) {
-      this.log.warn(`[MapService] No ObjectId found at (${x}, ${y})`);
-      return '';
-    }
-
-    const objectId = props[0];
-    this.log.debug(`[MapService] Found ObjectId: ${objectId} at (${x}, ${y})`);
-    return objectId;
   }
 
   public async cacherCreateObject(): Promise<string> {
@@ -2949,10 +2922,6 @@ private handlePush(socketName: string, packet: RdoPacket) {
   }
 
   // -- BUILDING DETAILS (facade -> building-details-handler) ----------------
-  public async getBuildingDetails(x: number, y: number, visualClass: string): Promise<BuildingDetailsResponse> {
-    return buildingDetailsHandler.getBuildingDetails(this, x, y, visualClass);
-  }
-
   public async getBuildingBasicDetails(x: number, y: number, visualClass: string): Promise<BuildingDetailsResponse> {
     return buildingDetailsHandler.getBuildingBasicDetails(this, x, y, visualClass);
   }

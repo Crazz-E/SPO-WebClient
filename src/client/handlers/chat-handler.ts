@@ -12,7 +12,8 @@ import {
   WsRespChatUserList,
   WsReqChatGetChannels,
   WsRespChatChannelList,
-  WsReqChatJoinChannel
+  WsReqChatJoinChannel,
+  WsReqChatTypingStatus
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';
@@ -46,6 +47,25 @@ export async function sendChatMessage(ctx: ClientHandlerContext, message: string
   } finally {
     ctx.isSendingChatMessage = false;
   }
+}
+
+/**
+ * Tell the world whether we are composing a message.
+ *
+ * Fire-and-forget on purpose: the gateway turns this into `MsgCompositionChanged`,
+ * a void RDO push that answers nothing, and a lost notice must never cost the
+ * user a keystroke. Only the two transitions go out — never one frame per
+ * character — which is what the flag guards.
+ */
+export function setTypingStatus(ctx: ClientHandlerContext, isTyping: boolean): void {
+  if (ctx.isTypingInChat === isTyping) return;
+  ctx.isTypingInChat = isTyping;
+
+  const req: WsReqChatTypingStatus = {
+    type: WsMessageType.REQ_CHAT_TYPING_STATUS,
+    isTyping,
+  };
+  ctx.sendMessage(req);
 }
 
 export async function requestUserList(ctx: ClientHandlerContext): Promise<void> {

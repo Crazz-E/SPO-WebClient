@@ -60,7 +60,6 @@ export enum WsMessageType {
   REQ_MAP_LOAD = 'REQ_MAP_LOAD',
   REQ_SELECT_COMPANY = 'REQ_SELECT_COMPANY',
   REQ_SWITCH_COMPANY = 'REQ_SWITCH_COMPANY',
-  REQ_MANAGE_CONSTRUCTION = 'REQ_MANAGE_CONSTRUCTION',
 
   // Gateway -> Client (Responses)
   RESP_AUTH_SUCCESS = 'RESP_AUTH_SUCCESS',
@@ -69,7 +68,6 @@ export enum WsMessageType {
   RESP_RDO_RESULT = 'RESP_RDO_RESULT',
   RESP_ERROR = 'RESP_ERROR',
   RESP_MAP_DATA = 'RESP_MAP_DATA',
-  RESP_CONSTRUCTION_SUCCESS = 'RESP_CONSTRUCTION_SUCCESS',
 
   // Gateway -> Client (Async Events / Pushes)
   EVENT_CHAT_MSG = 'EVENT_CHAT_MSG',
@@ -179,7 +177,6 @@ export enum WsMessageType {
   REQ_SEARCH_MENU_HOME = 'REQ_SEARCH_MENU_HOME',
   REQ_SEARCH_MENU_TOWNS = 'REQ_SEARCH_MENU_TOWNS',
   REQ_SEARCH_MENU_TYCOON_PROFILE = 'REQ_SEARCH_MENU_TYCOON_PROFILE',
-  REQ_SEARCH_MENU_PEOPLE = 'REQ_SEARCH_MENU_PEOPLE',
   REQ_SEARCH_MENU_PEOPLE_SEARCH = 'REQ_SEARCH_MENU_PEOPLE_SEARCH',
   REQ_SEARCH_MENU_RANKINGS = 'REQ_SEARCH_MENU_RANKINGS',
   REQ_SEARCH_MENU_RANKING_DETAIL = 'REQ_SEARCH_MENU_RANKING_DETAIL',
@@ -188,7 +185,6 @@ export enum WsMessageType {
   RESP_SEARCH_MENU_HOME = 'RESP_SEARCH_MENU_HOME',
   RESP_SEARCH_MENU_TOWNS = 'RESP_SEARCH_MENU_TOWNS',
   RESP_SEARCH_MENU_TYCOON_PROFILE = 'RESP_SEARCH_MENU_TYCOON_PROFILE',
-  RESP_SEARCH_MENU_PEOPLE = 'RESP_SEARCH_MENU_PEOPLE',
   RESP_SEARCH_MENU_PEOPLE_SEARCH = 'RESP_SEARCH_MENU_PEOPLE_SEARCH',
   RESP_SEARCH_MENU_RANKINGS = 'RESP_SEARCH_MENU_RANKINGS',
   RESP_SEARCH_MENU_RANKING_DETAIL = 'RESP_SEARCH_MENU_RANKING_DETAIL',
@@ -355,14 +351,6 @@ export interface WsReqMapLoad extends WsMessage {
   height: number;
 }
 
-export interface WsReqManageConstruction extends WsMessage {
-  type: WsMessageType.REQ_MANAGE_CONSTRUCTION;
-  x: number;
-  y: number;
-  action: 'START' | 'STOP' | 'DOWN';
-  count?: number;
-}
-
 export interface WsReqSelectCompany extends WsMessage {
   type: WsMessageType.REQ_SELECT_COMPANY;
   companyId: string;
@@ -406,13 +394,6 @@ export interface WsRespLoginSuccess extends WsMessage {
 export interface WsRespRdoResult extends WsMessage {
   type: WsMessageType.RESP_RDO_RESULT;
   result: string | string[];
-}
-
-export interface WsRespConstructionSuccess extends WsMessage {
-  type: WsMessageType.RESP_CONSTRUCTION_SUCCESS;
-  action: string;
-  x: number;
-  y: number;
 }
 
 export interface WsRespMapData extends WsMessage {
@@ -506,6 +487,7 @@ export interface WsReqChatGetChannels extends WsMessage {
   type: WsMessageType.REQ_CHAT_GET_CHANNELS;
 }
 
+/** Not emitted yet — the payload format is unknown. See #117. */
 export interface WsReqChatGetChannelInfo extends WsMessage {
   type: WsMessageType.REQ_CHAT_GET_CHANNEL_INFO;
   channelName: string;
@@ -955,14 +937,6 @@ export interface WsRespSearchMenuTycoonProfile extends WsMessage {
   profile: TycoonProfile;
 }
 
-export interface WsReqSearchMenuPeople extends WsMessage {
-  type: WsMessageType.REQ_SEARCH_MENU_PEOPLE;
-}
-
-export interface WsRespSearchMenuPeople extends WsMessage {
-  type: WsMessageType.RESP_SEARCH_MENU_PEOPLE;
-}
-
 export interface WsReqSearchMenuPeopleSearch extends WsMessage {
   type: WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH;
   searchStr: string;
@@ -1024,6 +998,11 @@ export interface WsRespBuildRoad extends WsMessage {
   partial?: boolean;
 }
 
+/**
+ * Not emitted yet: the client prices a road itself with `estimateRoadCost`
+ * (`@/shared/road-cost`). This is the gateway-side door #99 needs — bridges and
+ * already-paved tiles have to be priced where the world is known. Kept for it.
+ */
 export interface WsReqGetRoadCost extends WsMessage {
   type: WsMessageType.REQ_GET_ROAD_COST;
   x1: number;
@@ -1159,6 +1138,7 @@ export interface WsEventNewMail extends WsMessage {
   unreadCount: number;
 }
 
+/** Not emitted yet — the compose view has no "save draft" control. See #120, blocked on #108. */
 export interface WsReqMailSaveDraft extends WsMessage {
   type: WsMessageType.REQ_MAIL_SAVE_DRAFT;
   to: string;
@@ -1575,6 +1555,7 @@ export interface WsRespClusterFacilities extends WsMessage {
 // TRANSPORT MESSAGES
 // =============================================================================
 
+/** Half-built feature: no gateway handler and no emitter. See #114. */
 export interface WsReqTransportData extends WsMessage {
   type: WsMessageType.REQ_TRANSPORT_DATA;
 }

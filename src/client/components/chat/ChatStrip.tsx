@@ -13,6 +13,9 @@ import { useClient } from '../../context';
 import { NobilityBadge } from './NobilityBadge';
 import styles from './ChatStrip.module.css';
 
+/** How long a pause retracts the "typing..." notice, in ms. */
+const TYPING_IDLE_MS = 4000;
+
 interface ChatMessageProps {
   id: string;
   from: string;
@@ -57,6 +60,7 @@ export function ChatStrip({ mode = 'desktop' }: ChatStripProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const typingIdleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const channelMessages = messages[currentChannel] ?? [];
   const lastMessage = channelMessages[channelMessages.length - 1];
@@ -87,12 +91,41 @@ export function ChatStrip({ mode = 'desktop' }: ChatStripProps) {
     };
   }, [channelDropdownOpen]);
 
+  // Announce composition to the other players. The notice is a hint, not state:
+  // it goes out on the transitions only, and an idle pause retracts it so a user
+  // who wanders off mid-sentence does not stay "typing..." forever.
+  const announceTyping = useCallback((isTyping: boolean) => {
+    if (typingIdleTimer.current) {
+      clearTimeout(typingIdleTimer.current);
+      typingIdleTimer.current = null;
+    }
+    client.onChatTypingChange(isTyping);
+    if (isTyping) {
+      typingIdleTimer.current = setTimeout(() => {
+        typingIdleTimer.current = null;
+        client.onChatTypingChange(false);
+      }, TYPING_IDLE_MS);
+    }
+  }, [client]);
+
+  // Retract the notice if the strip goes away mid-sentence.
+  useEffect(() => () => {
+    if (typingIdleTimer.current) clearTimeout(typingIdleTimer.current);
+  }, []);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    setInput(text);
+    announceTyping(text.length > 0);
+  }, [announceTyping]);
+
   const handleSend = useCallback(() => {
     const text = input.trim();
     if (!text) return;
     setInput('');
+    announceTyping(false);
     client.onSendChatMessage(text);
-  }, [input, client]);
+  }, [input, client, announceTyping]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -263,7 +296,7 @@ export function ChatStrip({ mode = 'desktop' }: ChatStripProps) {
           className={styles.input}
           placeholder="Type a message..."
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={handleInputChange}
           onKeyDown={handleKeyDown}
         />
         <button

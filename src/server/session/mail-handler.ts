@@ -376,13 +376,6 @@ export async function getMailUnreadCount(ctx: SessionContext): Promise<number> {
 }
 
 /**
- * Get mail account address.
- */
-export function getMailAccount(ctx: SessionContext): string | null {
-  return ctx.mailAccount;
-}
-
-/**
  * Fetch mail folder listing via HTTP (MessageList.asp on World Web Server).
  * The original Voyager used ASP pages backed by a COM MailBrowser DLL
  * to enumerate mail directories -- there is no RDO method for folder listing.

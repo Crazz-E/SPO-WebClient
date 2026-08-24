@@ -73,6 +73,8 @@ export interface ClientHandlerContext {
   isFocusingBuilding: boolean;
   isSendingChatMessage: boolean;
   isJoiningChannel: boolean;
+  /** Last typing state announced to the server — keeps the notice to transitions. */
+  isTypingInChat: boolean;
   isSelectingCompany: boolean;
 
   // ── Road Building State ──────────────────────────────────────────────────

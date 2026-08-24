@@ -92,12 +92,7 @@ const UNROUTED: ReadonlyArray<{ type: string; reason: string }> = [
   {
     type: 'REQ_TRANSPORT_DATA',
     reason: 'No handler and no emitter. Feeding it requires the ActorPoolModified push ' +
-      '(family B), which is not implemented — TransportPanel is dead. Analysis §7 F-1.',
-  },
-  {
-    type: 'REQ_SEARCH_MENU_PEOPLE',
-    reason: 'Vestige. REQ_SEARCH_MENU_PEOPLE_SEARCH — a distinct type — is routed and ' +
-      'emitted; this one never was. Analysis §7 F-1.',
+      '(family B), which is not implemented — TransportPanel is dead. Issue #114.',
   },
 ];
 
@@ -109,39 +104,23 @@ const UNROUTED: ReadonlyArray<{ type: string; reason: string }> = [
 const UNWIRED: ReadonlyArray<{ type: string; reason: string }> = [
   {
     type: 'REQ_TRANSPORT_DATA',
-    reason: 'Same gap as UNROUTED: neither side exists. Analysis §7 F-1.',
-  },
-  {
-    type: 'REQ_SEARCH_MENU_PEOPLE',
-    reason: 'Same gap as UNROUTED: vestigial type. Analysis §7 F-1.',
+    reason: 'Same gap as UNROUTED: neither side exists. Issue #114.',
   },
   {
     type: 'REQ_CHAT_GET_CHANNEL_INFO',
-    reason: 'handleChatGetChannelInfo exists; channel info is never requested by the UI.',
-  },
-  {
-    type: 'REQ_CHAT_TYPING_STATUS',
-    reason: 'handleChatTypingStatus exists. ChatStrip DISPLAYS incoming "is typing" but ' +
-      'never sends its own — the asymmetry of analysis §7 F-2.',
+    reason: 'handleChatGetChannelInfo exists and the RDO read works, but GetChannelInfo ' +
+      'returns a raw string of unknown shape — nothing can be drawn from it until a live ' +
+      'capture says what is inside. Issue #117.',
   },
   {
     type: 'REQ_GET_ROAD_COST',
-    reason: 'handleGetRoadCost exists; no cost estimate is shown before building a road ' +
-      '(Voyager shows one).',
-  },
-  {
-    type: 'REQ_MAIL_GET_UNREAD_COUNT',
-    reason: 'handleMailGetUnreadCount exists; the unread badge is fed only by the NewMail ' +
-      'push, so it is wrong on first load.',
+    reason: 'handleGetRoadCost exists; the client prices the road itself with ' +
+      'estimateRoadCost. This is the gateway-side door bridge pricing needs. Issue #99.',
   },
   {
     type: 'REQ_MAIL_SAVE_DRAFT',
     reason: 'handleMailSaveDraft exists; MailPanel shows a Drafts tab with no way to write ' +
-      'into it.',
-  },
-  {
-    type: 'REQ_MANAGE_CONSTRUCTION',
-    reason: 'handleManageConstruction exists; not exposed in the UI.',
+      'into it. Issue #120, blocked on #108.',
   },
 ];
 

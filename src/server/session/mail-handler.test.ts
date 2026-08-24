@@ -36,7 +36,6 @@ import {
   readMailMessage,
   deleteMailMessage,
   getMailUnreadCount,
-  getMailAccount,
   getMailFolder,
 } from './mail-handler';
 import { makeSessionCtx, FAKE_CONTEXT_IDS } from '../__tests__/session/fake-session-context';
@@ -690,17 +689,6 @@ describe('getMailUnreadCount', () => {
     const fake = makeMailCtx(override);
     await expect(getMailUnreadCount(fake.ctx)).rejects.toThrow('Mail service not connected');
     expect(fake.sent).toHaveLength(0);
-  });
-});
-
-// ===========================================================================
-// getMailAccount
-// ===========================================================================
-
-describe('getMailAccount', () => {
-  it('returns the session mail account, or null', () => {
-    expect(getMailAccount(makeMailCtx().ctx)).toBe(ACCOUNT);
-    expect(getMailAccount(makeSessionCtx().ctx)).toBeNull();
   });
 });
 

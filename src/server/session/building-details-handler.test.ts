@@ -27,7 +27,6 @@ import {
   getActiveInspectorTempObjectId,
   setActiveInspectorForTest,
   AsyncMutex,
-  getBuildingDetails,
   getBuildingBasicDetails,
   getBuildingTabData,
   getBuildingGateConnections,
@@ -37,7 +36,7 @@ import type { ActiveInspector } from './building-details-handler';
 import { makeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { FakeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { SessionContext } from './session-context';
-import type { BuildingDetailsResponse, BuildingPropertyValue, RdoPacket } from '../../shared/types';
+import type { BuildingPropertyValue, RdoPacket } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
@@ -1240,188 +1239,6 @@ describe('upgrade enrichment', () => {
       expect.stringContaining('AcceptCloning enrichment failed'),
     );
   });
-});
-
-// ===========================================================================
-// getBuildingDetails — the legacy full fetch and its in-flight dedup
-// ===========================================================================
-
-describe('getBuildingDetails', () => {
-  /** A context whose in-flight map behaves like the session's real one. */
-  function withInFlightMap(fake: FakeSessionCtx): Map<string, Promise<BuildingDetailsResponse>> {
-    const map = new Map<string, Promise<BuildingDetailsResponse>>();
-    Object.assign(fake.ctx, {
-      getInFlightBuildingDetails: jest.fn((k: string) => map.get(k)),
-      setInFlightBuildingDetails: jest.fn((k: string, p: Promise<BuildingDetailsResponse>) => { map.set(k, p); }),
-      deleteInFlightBuildingDetails: jest.fn((k: string) => { map.delete(k); }),
-    });
-    return map;
-  }
-
-  it('runs one RDO sequence for two concurrent requests on the same tile', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    registerTabs('4722', ['unkGeneral']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, { Name: 'Shop' });
-
-    const [first, second] = await Promise.all([
-      getBuildingDetails(fake.ctx, X, Y, '4722'),
-      getBuildingDetails(fake.ctx, X, Y, '4722'),
-    ]);
-
-    // What matters is the call count, not the value: a second sequence would
-    // create a second Delphi temp object for the same building.
-    expect(fake.cacher.createObject).toHaveBeenCalledTimes(1);
-    expect(first).toBe(second); // literally the same promise result
-    expect(fake.log.debug).toHaveBeenCalledWith(expect.stringContaining('Dedup hit'));
-  });
-
-  it('keys the dedup by coordinates, so a second tile still goes out', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    registerTabs('4722', ['unkGeneral']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, { Name: 'Shop' });
-
-    await Promise.all([
-      getBuildingDetails(fake.ctx, X, Y, '4722'),
-      getBuildingDetails(fake.ctx, X + 1, Y, '4722'),
-    ]);
-
-    expect(fake.cacher.createObject).toHaveBeenCalledTimes(2);
-  });
-
-  it('clears the in-flight entry once settled, so a later request refetches', async () => {
-    const fake = makeDetailsCtx();
-    const map = withInFlightMap(fake);
-    registerTabs('4722', ['unkGeneral']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, { Name: 'Shop' });
-
-    await getBuildingDetails(fake.ctx, X, Y, '4722');
-    expect(map.size).toBe(0);
-
-    await getBuildingDetails(fake.ctx, X, Y, '4722');
-    expect(fake.cacher.createObject).toHaveBeenCalledTimes(2);
-  });
-
-  it('clears the in-flight entry when the fetch fails', async () => {
-    const fake = makeDetailsCtx({ cacherId: null });
-    const map = withInFlightMap(fake);
-    registerTabs('4722', ['unkGeneral']);
-    focusReturns(fake, '40133602');
-
-    await expect(getBuildingDetails(fake.ctx, X, Y, '4722')).rejects.toThrow(
-      'Map service not initialized'
-    );
-    expect(map.size).toBe(0);
-  });
-
-  it('closes the temp object when the full fetch is done', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    registerTabs('4722', ['unkGeneral']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, { Name: 'Shop' });
-
-    await getBuildingDetails(fake.ctx, X, Y, '4722');
-
-    // Unlike the lazy path this one owns the object and hands it back.
-    expect(fake.cacher.closeObject).toHaveBeenCalledWith(FIRST_TEMP);
-    expect(getActiveInspectorTempObjectId(fake.ctx)).toBeUndefined();
-  });
-
-  it('keeps going when the focus call fails', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    (fake.ctx.focusBuilding as FocusMock).mockRejectedValue(new Error('busy'));
-    cacheValues(fake, { CurrBlock: '40133888' });
-
-    const details = await getBuildingDetails(fake.ctx, X, Y, 'unregistered');
-
-    expect(details.buildingId).toBe('40133888');
-    expect(fake.log.warn).toHaveBeenCalled();
-  });
-
-  it('fetches supplies, products, company inputs and wares in one shot', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    registerTabs('9012', ['WHGeneral', 'Supplies', 'Products', 'compInputs']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, {
-      GateMap: '11', InputCount: '2', 'Input0.0': 'Books', 'Input1.0': 'Cars',
-      cInputCount: '1',
-      'cInput0.0': 'Advertising', cInputSup0: '12.5', cInputDem0: '20', cInputRatio0: '62',
-      cInputMax0: '100', cEditable0: 'yes', 'cUnits0.0': 'units',
-      MetaFluid: 'Books', FluidValue: '120', cnxCount: '0',
-      LastFluid: '80', FluidQuality: '90%', PricePc: '100', AvgPrice: '$4', MarketPrice: '$5',
-    });
-    fake.respond((packet) => {
-      switch (packet.member) {
-        case 'GetInputNames': return 'res="%Segment0::\nBooks"';
-        case 'GetOutputNames': return 'res="%Gate0::\nCars"';
-        default: return '';
-      }
-    });
-
-    const details = await getBuildingDetails(fake.ctx, X, Y, '9012');
-
-    // The gates are listed, not read: the header properties the cache would
-    // happily answer above are never asked for, so they arrive undefined.
-    expect(details.supplies).toEqual([{ path: 'Segment0', name: 'Books', connections: [] }]);
-    expect(details.products).toEqual([{ path: 'Gate0', name: 'Cars', connections: [] }]);
-    expect(fake.sent.filter(f => f.packet.member === 'SetPath')).toHaveLength(0);
-    expect(details.compInputs).toEqual([{
-      name: 'Advertising', supplied: 12.5, demanded: 20, ratio: 62,
-      maxDemand: 100, editable: true, units: 'units',
-    }]);
-    expect(details.warehouseWares).toHaveLength(2);
-  });
-
-  it('reports an empty building id when nothing identifies the building', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    HANDLER_TO_GROUP['probeBlock'] = PROBE_BLOCK_GROUP;
-    // unkGeneral collects neither ObjectId nor CurrBlock; the probe group also
-    // has no icon, which is the other fallback on this path.
-    registerTabs('9023', ['unkGeneral', 'probeBlock']);
-    focusReturns(fake, '');
-    cacheValues(fake, { Name: 'Shop', CurrBlock: 'error' });
-
-    const details = await getBuildingDetails(fake.ctx, X, Y, '9023');
-
-    expect(details.buildingId).toBe('');
-    expect(details.tabs.find(t => t.id === 'probeBlock')?.icon).toBe('');
-  });
-
-  it('reads a warehouse with an unreadable GateMap on the legacy path', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    registerTabs('7001', ['WHGeneral']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, { GateMap: 'error', InputCount: '1', 'Input0.0': 'Books' });
-
-    const details = await getBuildingDetails(fake.ctx, X, Y, '7001');
-
-    expect(details.warehouseWares).toEqual([{ name: 'Books', enabled: false, index: 0 }]);
-  });
-
-  it('leaves the lazy fields undefined when the template declares no such tab', async () => {
-    const fake = makeDetailsCtx();
-    withInFlightMap(fake);
-    registerTabs('4722', ['unkGeneral']);
-    focusReturns(fake, '40133602');
-    cacheValues(fake, { Name: 'Shop' });
-
-    const details = await getBuildingDetails(fake.ctx, X, Y, '4722');
-
-    expect(details.supplies).toBeUndefined();
-    expect(details.products).toBeUndefined();
-    expect(details.compInputs).toBeUndefined();
-    expect(details.warehouseWares).toBeUndefined();
-  });
-
 });
 
 // ===========================================================================
