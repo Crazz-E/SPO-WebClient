@@ -1,0 +1,94 @@
+# The orphan watch — a daily reminder that a card is claimed by nobody alive.
+#
+# The ownership law (doc/kanban-workflow.md § The ownership law) deliberately has no
+# staleness timeout: a card whose `Session` field is filled belongs to that session, and
+# only the human may free it. This job does not weaken that by one word — it never edits
+# the board, never clears a `Session`, never moves a card. It reports.
+#
+# ## What it writes
+#
+# One comment on the quiet card itself, once per ownership episode, plus a table in the run's
+# job summary. It deliberately never OPENS an issue: "Auto-add to project" is enabled on the
+# board, so a digest issue would land in the Todo pool as a card and a `/next-task` session
+# would eventually claim the machine's own bookkeeping as work.
+#
+# ## Why a PAT and not GITHUB_TOKEN
+#
+# The board is a **user-scoped** project (`users/Crazz-E/projects/2`). The repository's
+# `GITHUB_TOKEN` cannot read one at any permission level — the resource is not the
+# repository. So the project read needs a personal access token with `read:project`,
+# provisioned as `PROJECTS_TOKEN` under Settings → Secrets and variables → Actions.
+#
+# Until it exists, every step is guarded on it: an unprovisioned repository gets a green,
+# skipped job with a notice, not a red X in the Actions tab every morning. Same posture as
+# claude-review.yml, for the same reason.
+#
+# The issue writes use the ordinary `GITHUB_TOKEN` with `issues: write` — a repository
+# resource, so the PAT's blast radius stays at "read the board".
+name: Orphan cards
+
+on:
+  schedule:
+    # 07:10 UTC daily — after any overnight session has stopped, before the working day.
+    - cron: '10 7 * * *'
+  workflow_dispatch:
+    inputs:
+      stale-hours:
+        description: 'Hours of silence before a claimed card is reported'
+        required: false
+        default: '24'
+      dry-run:
+        description: 'Report what would be said, without commenting on any card'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: orphan-cards
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: orphan watch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      # `secrets` cannot be read in a job-level or step-level `if` — GitHub rejects the
+      # whole file at validation. The guard is therefore a step that exports a flag.
+      - name: Check for PROJECTS_TOKEN
+        id: guard
+        env:
+          PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+        run: |
+          if [ -n "$PROJECTS_TOKEN" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PROJECTS_TOKEN is not provisioned — the orphan watch is inert. Add a PAT with read:project under Settings → Secrets and variables → Actions."
+          fi
+
+      - name: Checkout
+        if: steps.guard.outputs.ready == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        if: steps.guard.outputs.ready == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      # No `npm ci`: the script uses only the Node 22 standard library, so the job needs no
+      # install step and cannot be broken by a dependency.
+      - name: Detect orphan cards
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          PROJECTS_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORPHAN_STALE_HOURS: ${{ inputs.stale-hours || '24' }}
+        run: node scripts/orphan-cards.js ${{ inputs.dry-run && '--dry-run' || '' }}
