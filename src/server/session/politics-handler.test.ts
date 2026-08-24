@@ -1051,6 +1051,9 @@ describe('getDefaultPoliticsData', () => {
     expect(data.popularRatings).toEqual([]);
     expect(data.canLaunchCampaign).toBe(false);
     expect(data.campaignMessage).toBeTruthy();
+    // Unreachable server means unknown, and unknown must not read as "yes":
+    // this field opens a control downstream.
+    expect(data.isRuler).toBe(false);
   });
 
   it('returns zero for all numeric fields', () => {
@@ -1222,7 +1225,42 @@ describe('getPoliticsData', () => {
       projects: [],
       promise: '',
       townHallId: 90210,
+      // The session is `SPO_test3` and the mayor is `Rio` — no office.
+      isRuler: false,
     });
+  });
+
+  // OB-31. The answer used to be computed inside the campaign branch and thrown
+  // away with it. It is now part of the payload, because the browser has no way
+  // to recompute it: `activeUsername` is the ROLE name after a company switch,
+  // and `ActualRuler` is the human one.
+  it('publishes isRuler, and finds the office through the role-company name', async () => {
+    const fake = makeWebCtx({ activeUsername: 'Mayor of New Town', cachedUsername: 'Rio' });
+    stubPages({ campaign: campaignPage({ view: 'invite' }) });
+    stubTownRead(fake, RULER_ROW);
+
+    const data = await getPoliticsData(fake.ctx, 'New Town', 118, 226);
+
+    expect(data.isRuler).toBe(true);
+  });
+
+  // The same read, one page short: a campaign panel that cannot be reached must
+  // not take the office with it. The rail downstream refuses the rating control
+  // on this field alone, so losing it would hand the mayor a dead control.
+  it('still publishes isRuler when the campaign page fails', async () => {
+    const fake = makeWebCtx({ activeUsername: 'Mayor of New Town', cachedUsername: 'Rio' });
+    mockFetch
+      .mockResolvedValueOnce(htmlResponse(''))
+      .mockResolvedValueOnce(htmlResponse(''))
+      .mockResolvedValueOnce(htmlResponse(''))
+      .mockResolvedValueOnce(htmlResponse(''))
+      .mockRejectedValueOnce(new Error('campaign page unreachable'));
+    stubTownRead(fake, RULER_ROW);
+
+    const data = await getPoliticsData(fake.ctx, 'New Town', 118, 226);
+
+    expect(data.isRuler).toBe(true);
+    expect(data.campaignMessage).toBe('The campaign page could not be reached.');
   });
 
   // The whole point of the `isCapitol` flag: `popularratings.asp:9-17` resolves

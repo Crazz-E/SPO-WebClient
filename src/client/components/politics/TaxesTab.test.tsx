@@ -77,13 +77,17 @@ describe('TaxesTab', () => {
     expect(screen.getByRole('radiogroup', { name: 'Tax mode' })).toBeTruthy();
   });
 
+  // A tax write is the archetypal unconfirmed one: `RDOSetTaxValue` is a Pascal
+  // `procedure`, and the cache carrying `Tax<i>Percent` is invalidated on the
+  // TOWN rather than the Town Hall facility (OB-29), so the gateway answers
+  // `confirmed: undefined` and the row shows its own sentence, not a tick.
   it('shows the effective-date notice instead of a confirmation tick', () => {
     const { container } = renderWithProviders(
       <TaxesTab properties={TAXES} buildingX={1} buildingY={2} canGovern />,
     );
     selectCdStores();
 
-    act(() => useBuildingStore.getState().confirmPending(cdStoresKey));
+    act(() => useBuildingStore.getState().confirmPending(cdStoresKey, 'unconfirmed'));
 
     expect(screen.getByRole('status').textContent)
       .toBe('The new tax rate will take effect tomorrow.');

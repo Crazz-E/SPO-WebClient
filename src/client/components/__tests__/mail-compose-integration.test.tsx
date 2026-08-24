@@ -38,6 +38,7 @@ describe('Mail compose — integration flow', () => {
       isSending: false,
       isMessageLoading: false,
       pendingDeleteId: null,
+      folderRefreshToken: 0,
     });
   });
 
@@ -220,5 +221,19 @@ describe('Mail compose — integration flow', () => {
 
     expect(useMailStore.getState().currentFolder).toBe('Sent');
     expect(getFolderSpy).toHaveBeenCalledWith('Sent');
+  });
+
+  // OB-11: a confirmed send used to leave the listing as it was before the send.
+  it('a refresh asked for by the store re-reads the open folder', () => {
+    const getFolderSpy = jest.fn();
+    renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailGetFolder: getFolderSpy }) });
+
+    expect(getFolderSpy).toHaveBeenCalledTimes(1);
+
+    // What the bridge does on RESP_MAIL_SENT success.
+    act(() => { useMailStore.getState().clearCompose(); useMailStore.getState().refreshFolder(); });
+
+    expect(getFolderSpy).toHaveBeenCalledTimes(2);
+    expect(getFolderSpy).toHaveBeenLastCalledWith('Inbox');
   });
 });

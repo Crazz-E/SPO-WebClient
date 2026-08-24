@@ -638,6 +638,7 @@ describe('CapitolPanel', () => {
       projects: [],
       promise: '',
       townHallId: 90210,
+      isRuler: false,
     };
 
     function setupElectionsTab(opts: {
