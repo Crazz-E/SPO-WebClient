@@ -5,6 +5,9 @@
   position: fixed;
   left: var(--space-2);
   right: var(--space-2);
+  /* Tablet cap (lot g): a 1000 px pill reads as a broken field — centre it */
+  max-width: var(--search-pill-max);
+  margin-inline: auto;
   bottom: calc(var(--bottomnav-height) + var(--space-2) + var(--sai-bottom));
   z-index: var(--z-hud);
   align-items: center;
@@ -36,7 +39,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .pill {
     display: flex;
   }

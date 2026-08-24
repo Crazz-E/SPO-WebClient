@@ -110,24 +110,9 @@
   scrollbar-color: var(--surface-border-strong) transparent;
 }
 
-/* Tablet — docked to the right edge, full height, the HUD shifts beside it. */
-@media (max-width: 1023px) {
-  .sheet {
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: var(--panel-width-tablet);
-    border-radius: 0;
-    border-width: 0 0 0 1px;
-  }
-
-  .closed {
-    transform: translateX(100%);
-  }
-}
 
 /* Mobile — the MobileShell routes the stack into its BottomSheet instead. */
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .sheet {
     display: none;
   }

@@ -7,8 +7,9 @@
   right: 0;
   min-height: var(--bottomnav-height);
   z-index: var(--z-bottomnav);
-  display: none; /* Only on mobile */
+  display: none; /* Only on mobile and tablet (lot g) */
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   padding-bottom: calc(var(--space-2) + var(--sai-bottom));
@@ -20,6 +21,8 @@
 .text {
   flex: 1;
   min-width: 0;
+  /* Tablet cap (lot g): keeps the words and the way-out button together */
+  max-width: calc(var(--mobile-hud-max) - 120px);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -103,7 +106,7 @@
   line-height: 1;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .bar {
     display: flex;
   }

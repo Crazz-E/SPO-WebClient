@@ -14,7 +14,7 @@
 }
 
 /* On mobile, adjust for BottomNav */
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .screen {
     padding-bottom: 56px; /* BottomNav height */
   }

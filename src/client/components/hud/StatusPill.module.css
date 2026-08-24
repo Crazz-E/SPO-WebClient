@@ -216,25 +216,9 @@
   font-size: var(--text-2xs);
 }
 
-/* Tablet — the panel is narrower */
+/* Mobile AND tablet — hidden, the mobile shell's info bar takes over (lot g:
+   the 768-1023 band joined the mobile model; the docked-panel shift is gone) */
 @media (max-width: 1023px) {
-  .shifted {
-    left: calc(var(--minimap-size) + var(--space-10));
-    right: calc(var(--panel-width-tablet) + var(--space-3));
-    max-width: calc(100% - var(--minimap-size) - var(--space-10) - var(--panel-width-tablet) - var(--space-3));
-  }
-
-  /* The slot is under 300 px: cash and name only. */
-  .shifted .incomePositive,
-  .shifted .incomeNegative,
-  .shifted .incomeNeutral,
-  .shifted .rankBadge {
-    display: none;
-  }
-}
-
-/* Mobile — hidden, the mobile bar stays */
-@media (max-width: 767px) {
   .pill {
     display: none;
   }

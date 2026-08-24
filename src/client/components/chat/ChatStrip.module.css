@@ -481,7 +481,7 @@
 /* MOBILE — hidden in desktop mode (chat on mobile is via Chat tab)          */
 /* ========================================================================= */
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .strip:not(.embedded) {
     display: none;
   }
