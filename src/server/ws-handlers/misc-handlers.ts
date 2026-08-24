@@ -12,6 +12,12 @@ import {
   type WsReqSearchConnections,
   type WsRespSearchConnections,
   type WsRespEmpireFacilities,
+  type WsReqFavoriteAdd,
+  type WsRespFavoriteAdd,
+  type WsReqFavoriteDelete,
+  type WsRespFavoriteDelete,
+  type WsReqFavoriteRename,
+  type WsRespFavoriteRename,
   type WsReqResearchInventory,
   type WsRespResearchInventory,
   type WsReqResearchDetails,
@@ -117,6 +123,59 @@ export const handleEmpireFacilities: WsHandler = async (ctx: WsHandlerContext, m
     facilities,
   };
   sendResponse(ctx.ws, response);
+};
+
+/**
+ * The three favourites mutations.
+ *
+ * `success` is copied from what the server answered and nothing else — a
+ * refused write must never leave here as an OK (OB-1). A transport failure
+ * throws and leaves through `withErrorHandler` as a RESP_ERROR.
+ */
+export const handleFavoriteAdd: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_Unknown, async () => {
+    const req = msg as WsReqFavoriteAdd;
+    console.log(`[Gateway] Adding favorite "${req.name}" at (${req.x}, ${req.y})`);
+    const result = await ctx.session.addFavorite(req.name, req.x, req.y);
+    const response: WsRespFavoriteAdd = {
+      type: WsMessageType.RESP_FAVORITE_ADD,
+      wsRequestId: msg.wsRequestId,
+      success: result.success,
+      id: result.id,
+      message: result.message,
+    };
+    sendResponse(ctx.ws, response);
+  });
+};
+
+export const handleFavoriteDelete: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_Unknown, async () => {
+    const req = msg as WsReqFavoriteDelete;
+    console.log(`[Gateway] Deleting favorite at "${req.path}"`);
+    const result = await ctx.session.deleteFavorite(req.path);
+    const response: WsRespFavoriteDelete = {
+      type: WsMessageType.RESP_FAVORITE_DELETE,
+      wsRequestId: msg.wsRequestId,
+      success: result.success,
+      message: result.message,
+    };
+    sendResponse(ctx.ws, response);
+  });
+};
+
+export const handleFavoriteRename: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_Unknown, async () => {
+    const req = msg as WsReqFavoriteRename;
+    console.log(`[Gateway] Renaming favorite at "${req.path}"`);
+    const result = await ctx.session.renameFavorite(req.path, req.name);
+    const response: WsRespFavoriteRename = {
+      type: WsMessageType.RESP_FAVORITE_RENAME,
+      wsRequestId: msg.wsRequestId,
+      success: result.success,
+      message: result.message,
+    };
+    sendResponse(ctx.ws, response);
+  });
 };
 
 export const handleResearchInventory: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {

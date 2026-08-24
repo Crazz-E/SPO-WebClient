@@ -37,7 +37,7 @@ import { handleNewspaperBoard, handleNewspaperPost } from './newspaper-handlers'
 import { handlePoliticsData, handlePoliticsVote, handlePoliticsLaunchCampaign, handlePoliticsCancelCampaign, handlePoliticsSetRating, handlePoliticsSetPublicity, handlePoliticsSetProject, handleTycoonRole } from './politics-handlers';
 
 // Miscellaneous
-import { handleDefineZone, handleCreateCompany, handleClusterInfo, handleClusterFacilities, handleSearchConnections, handleEmpireFacilities, handleResearchInventory, handleResearchDetails } from './misc-handlers';
+import { handleDefineZone, handleCreateCompany, handleClusterInfo, handleClusterFacilities, handleSearchConnections, handleEmpireFacilities, handleFavoriteAdd, handleFavoriteDelete, handleFavoriteRename, handleResearchInventory, handleResearchDetails } from './misc-handlers';
 
 export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   // Auth & session
@@ -137,6 +137,9 @@ export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   [WsMessageType.REQ_CLUSTER_FACILITIES]: handleClusterFacilities,
   [WsMessageType.REQ_SEARCH_CONNECTIONS]: handleSearchConnections,
   [WsMessageType.REQ_EMPIRE_FACILITIES]: handleEmpireFacilities,
+  [WsMessageType.REQ_FAVORITE_ADD]: handleFavoriteAdd,
+  [WsMessageType.REQ_FAVORITE_DELETE]: handleFavoriteDelete,
+  [WsMessageType.REQ_FAVORITE_RENAME]: handleFavoriteRename,
   [WsMessageType.REQ_RESEARCH_INVENTORY]: handleResearchInventory,
   [WsMessageType.REQ_RESEARCH_DETAILS]: handleResearchDetails,
 };

@@ -9,7 +9,6 @@
 
 import type { SessionContext } from './session-context';
 import type {
-  FavoritesItem,
   PoliticsData,
   PoliticsCampaignEntry,
   PoliticsRatingEntry,
@@ -21,9 +20,8 @@ import type {
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
 import { rdoCall } from '../../shared/rdo-frame';
-import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
+import { writeRdoFrame } from '../rdo-helpers';
 import { splitMultilinePayload as splitMultilinePayloadHelper, isTrueOrdinal } from '../rdo-helpers';
-import { parseFavoritesResponse } from './session-utils';
 import { toErrorMessage } from '../../shared/error-utils';
 import { config } from '../../shared/config';
 import fetch from 'node-fetch';
@@ -725,20 +723,6 @@ export function getDefaultPoliticsData(townName: string, isCapitol = false): Pol
 // =========================================================================
 // PUBLIC FUNCTIONS
 // =========================================================================
-
-export async function fetchOwnedFacilities(ctx: SessionContext): Promise<FavoritesItem[]> {
-  if (!ctx.worldContextId) {
-    throw new Error('Not logged in — no worldContextId');
-  }
-
-  const packet = await ctx.sendRdoRequest('world', rdoCall(
-    'RDOFavoritesGetSubItems', ctx.worldContextId,
-    RdoValue.string(''),
-  ).packet, undefined, TimeoutCategory.NORMAL);
-
-  const raw = parsePropertyResponseHelper(packet.payload!, 'res');
-  return parseFavoritesResponse(raw);
-}
 
 /**
  * Fetch politics data for a Town Hall building.

@@ -302,6 +302,12 @@ export type {
   // Empire (Owned Facilities)
   WsReqEmpireFacilities,
   WsRespEmpireFacilities,
+  WsReqFavoriteAdd,
+  WsRespFavoriteAdd,
+  WsReqFavoriteDelete,
+  WsRespFavoriteDelete,
+  WsReqFavoriteRename,
+  WsRespFavoriteRename,
   // Research / Inventions
   WsReqResearchInventory,
   WsRespResearchInventory,

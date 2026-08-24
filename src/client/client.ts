@@ -36,6 +36,7 @@ import * as chatHandler from './handlers/chat-handler';
 import * as buildingFocusHandler from './handlers/building-focus-handler';
 import * as buildingActionHandler from './handlers/building-action-handler';
 import * as roadHandler from './handlers/road-handler';
+import * as favoritesHandler from './handlers/favorites-handler';
 import * as zoneHandler from './handlers/zone-handler';
 import * as buildMenuHandler from './handlers/build-menu-handler';
 import * as mapHandler from './handlers/map-handler';
@@ -510,6 +511,9 @@ export class StarpeaceClient implements ClientHandlerContext {
         ClientBridge.setEmpireLoading(true);
         this.sendMessage({ type: WsMessageType.REQ_EMPIRE_FACILITIES });
       },
+      onAddFavorite: (name, x, y) => { void favoritesHandler.addFavorite(this, name, x, y); },
+      onRemoveFavorite: (path, name) => { void favoritesHandler.removeFavorite(this, path, name); },
+      onRenameFavorite: (path, name) => { void favoritesHandler.renameFavorite(this, path, name); },
 
       // Zone painting
       onToggleZonePainting: (zoneType: number) => zoneHandler.toggleZonePaintingMode(this, zoneType),

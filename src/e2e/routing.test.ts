@@ -16,6 +16,16 @@ describe('route', () => {
     expect(decision.staticOnly).toBe(false);
   });
 
+  it('routes a Favorites change to its own flow, not to the governance ones', () => {
+    const d = route(['src/server/session/favorites-handler.ts']);
+    expect(d.required).toEqual(['login-spine', 'favorites-roundtrip']);
+  });
+
+  it('routes the Empire panel the same way — it is the surface of that tree', () => {
+    const d = route(['src/client/components/empire/FacilityList.tsx']);
+    expect(d.required).toContain('favorites-roundtrip');
+  });
+
   it('routes politics UI to the permission-negative flow, not only the happy path', () => {
     const decision = route(['src/client/components/politics/TaxesTab.tsx']);
     expect(decision.required).toContain('permission-negative');
