@@ -49,7 +49,6 @@ one process (the worker) consumes the spool.
 | Worker | `src/e2e/bench/worker.ts` | the permanent loop — claims, builds, drives, reports |
 | Client | `src/e2e/bench/cli.ts` | `submit` / `wait` / `status` (wrapped by `scripts/bench-*.sh`) |
 | Fingerprint | `src/e2e/bench/fingerprint.ts` | moving-target detector (HEAD + diff + status + untracked content) |
-| Merge queue | `src/e2e/bench/merge-queue.ts` | discovery, priority and the tree dedup for queue entries (§12) |
 | Gateway | `src/e2e/bench/gateway.ts` | clean-port guarantee, per-job gateway start/stop |
 | Attestations | `src/e2e/bench/verdict.ts` | `verdicts/<sha>.json` + `bench/gate` GitHub commit status |
 | Supervision | `scripts/bench-install.sh` | systemd --user unit, `Restart=always`, linger |
@@ -488,7 +487,49 @@ nothing about the moment the gate runs. A gate can run before the pull request e
 because the push hook refused anything unattested; that rule is gone, and `gh pr merge --auto`
 still cannot land a commit `bench/gate` has not passed.
 
-## 12. Acceptance criteria (verified by the test suites)
+## 12. The merge queue — why there is none
+
+GitHub's merge queue requires an **organization-owned** repository. This one is owned by a
+personal account:
+
+```
+$ gh api repos/Crazz-E/SPO-WebClient --jq '{owner_type:.owner.type,visibility}'
+{"owner_type":"User","visibility":"public"}
+```
+
+Adding a `merge_queue` rule to ruleset 21111153 fails **422 Validation Failed**. The identical
+payload *without* that one rule is accepted — which is what isolates it: the shape is fine,
+the rule is refused. Public visibility is not enough; *public* and *organization-owned* are
+two conditions and only the first holds here.
+
+**The consequence for the gate, which is the part that matters.** A queue entry would have
+been `merge(branch, main-now)` — the exact tree about to land — so driving it live would have
+proved the merged combination rather than the branch's own base. Without it, a gate proves
+`merge(branch, the main it was based on)`.
+
+**So `baseMain` stays, and it is load-bearing rather than transitional.** It records which
+`main` the live evidence stood on; the `bench/gate` status shows it; the push hook announces a
+moved base without refusing it (§ The gate base). [#158](https://github.com/Crazz-E/SPO-WebClient/issues/158)
+planned to delete it *because* the queue would prove the stronger property directly. The queue
+cannot exist here, so the weaker, **visible** guarantee is the one this repository has — and
+deleting `baseMain` would have left nothing in its place.
+
+**The serving code was written, tested, and then removed.** It discovered
+`gh-readonly-queue/main/*` refs, gated them ahead of the spool, and reused a verdict when the
+entry's *tree* matched one already driven live. It worked; it simply could never find a ref.
+Keeping code that cannot run is how a reader comes to believe a mechanism is in place, so it
+was reverted rather than left dormant. It is recoverable from
+[#170](https://github.com/Crazz-E/SPO-WebClient/pull/170) and
+[#168](https://github.com/Crazz-E/SPO-WebClient/pull/168) (the `merge_group` CI trigger, which
+went with it — that event cannot fire here either).
+
+**If this repository ever moves to an organization**, restoring it is: revert those two pull
+requests, then one ruleset write adding `merge_queue` with `max_entries_to_build: 1`,
+`max_entries_to_merge: 1`, `check_response_timeout_minutes: 60` (above the 33 min worst-case
+lease), `merge_method: MERGE`, `grouping_strategy: ALLGREEN`. Verify one thing then, because
+no GitHub document states it: that the sha the queue lands is the sha it tested.
+
+## 13. Acceptance criteria (verified by the test suites)
 
 - Two simultaneous deposits execute one after the other, in deposit order, each with an
   attributable report — `job.test.ts`, `worker.test.ts`.
