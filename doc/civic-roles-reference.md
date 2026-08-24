@@ -414,9 +414,12 @@ to its starting values and the model-server log confirms it.
 | PoliticsData | mayor=SPO_test3, 15 rows on each ratings rail, publicity 15 rows |
 
 Four defects are filed against the civic write path — read them before touching it: `OB-28` (a
-write is reported confirmed when it was discarded), `OB-29` (a tax write lands but the cached copy
-the client reads is never invalidated), `OB-30` (nobody can rate their own term — closed, and the
-reference agrees) and `OB-31` (the ruler test needs two prongs, not one).
+write was reported confirmed when it was discarded — closed: the gateway now confirms only when the
+re-read value is one the write would have produced, and answers `confirmed: undefined` rather than
+guessing, `expectedWitnessValues` in `src/server/session/building-property-handler.ts`), `OB-29` (a
+tax write lands but the cached copy the client reads is never invalidated), `OB-30` (nobody can rate
+their own term — closed, and the reference agrees) and `OB-31` (the ruler test needs two prongs, not
+one).
 
 ⚠ `OB-29` **replaced an earlier entry that said a mayor's writes need the role company.** That was
 wrong: `MasterRole` climbs to the role holder (`Kernel/Kernel.pas:10960-10965`), so
