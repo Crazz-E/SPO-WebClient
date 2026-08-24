@@ -52,6 +52,7 @@ one process (the worker) consumes the spool.
 | Attestations | `src/e2e/bench/verdict.ts` | `verdicts/<sha>.json` + `bench/gate` GitHub commit status |
 | Supervision | `scripts/bench-install.sh` | systemd --user unit, `Restart=always`, linger |
 | Nightly | `src/e2e/bench/nightly.ts` | the schedule, the `main` checkout, `nightly/latest.json` (§8) |
+| Owner lease | `src/e2e/bench/owner.ts` | the cross-host exclusion — the `BENCH_OWNER` repository variable (§9) |
 
 ## 3. A job's life
 
@@ -62,14 +63,19 @@ one process (the worker) consumes the spool.
    a queued session spends **zero tokens** waiting.
 2. **Claim**: the worker takes the oldest deposit. If the depositing session's pid is
    dead → report `ABANDONED`, nothing runs, the queue cleans itself.
-3. **Clean bench**: kill anything on 8080 (safe because no session may start a gateway
+3. **Owner lease** (§9): the worker must hold `BENCH_OWNER`, or the job is `ENVIRONMENT`
+   and **nothing runs** — checked before the port is cleared, because clearing it SIGKILLs
+   whatever holds 8080 and on a second host that would be the other worker's gateway.
+   While the lease has never been established on this machine the check passes, so a host
+   that cannot reach GitHub behaves exactly as it did before the lease existed.
+4. **Clean bench**: kill anything on 8080 (safe because no session may start a gateway
    there — enforced by `.claude/hooks/bench-port-guard.sh`, §7), verify the port is free.
-4. **Fingerprint `atStart`**, compare with `atSubmit`. A **gate on a dirty tree is `DIRTY`**
+5. **Fingerprint `atStart`**, compare with `atSubmit`. A **gate on a dirty tree is `DIRTY`**
    — nothing runs, nothing is attested: the attestation names a sha, so the tested tree
    must be exactly that commit (the client already refuses it at deposit, exit 2; the
    worker enforces it again). Then `git fetch origin main` (best-effort)
    so verify-gate routes the diff against the real `origin/main`, not a lagging local one.
-5. **Build**: in the job's worktree, always — a stale `dist/` runs yesterday's code and
+6. **Build**: in the job's worktree, always — a stale `dist/` runs yesterday's code and
    produces a silently wrong PASS. But only what the body will actually load, because the
    bench is serialised and a build nobody reads is time every other session waits for:
 
@@ -83,10 +89,10 @@ one process (the worker) consumes the spool.
    The full build also used to double as a "does the client still compile" check. CI runs
    exactly that build on every pull request, so the proof moved rather than disappeared.
    A failing step is a `FAIL` naming the step, before any gateway starts.
-6. **Gateway** from that worktree, with `SPO_CACHE_DIR=~/.spo-bench/cache` so it reads the
+7. **Gateway** from that worktree, with `SPO_CACHE_DIR=~/.spo-bench/cache` so it reads the
    machine-wide asset mirror instead of priming an empty one in the worktree; wait for
    `phase=ready`.
-7. **Precheck receipt** (gate only): look in `~/.spo-bench/receipts/` for a receipt whose
+8. **Precheck receipt** (gate only): look in `~/.spo-bench/receipts/` for a receipt whose
    key is the fingerprint taken at step 4 — the worker's own reading of the tree, never a
    value the session supplied. On a match, `--skip-static` is passed to verify-gate and the
    ~113 s of typecheck + lint + Jest is not replayed on the exclusive bench; the report
@@ -95,7 +101,7 @@ one process (the worker) consumes the spool.
    the job log. **Only stage 1 is ever skipped**: `build:e2e`, the routing, the President
    exclusion and the live drive are what the bench alone can do, and they always run. See
    `src/e2e/bench/receipt.ts`.
-8. **Body**, with `E2E_WORLD_STATE_DIR=~/.spo-bench/world` and
+9. **Body**, with `E2E_WORLD_STATE_DIR=~/.spo-bench/world` and
    `SPO_CACHE_DIR=~/.spo-bench/cache` — the same two variables the gateway was started
    with at step 6, so a replayed Jest suite reads the assets the gateway served:
    - `gate` → `node scripts/verify-gate.js` (static replay, President exclusion, routing,
@@ -107,11 +113,11 @@ one process (the worker) consumes the spool.
      waiting CLI exits the moment the report lands, and a session has no longer-lived pid
      to offer — so a session killed mid-lease simply lets the lease run to its expiry
      (30 min default, 120 max); the worker tears the gateway down then, never later
-9. **Teardown**: stop the gateway, re-verify 8080 is free. **No gateway survives between
+10. **Teardown**: stop the gateway, re-verify 8080 is free. **No gateway survives between
    two jobs.**
-10. **Fingerprint `atEnd`**; if the three differ → verdict **`STALE`, never PASS** — the
+11. **Fingerprint `atEnd`**; if the three differ → verdict **`STALE`, never PASS** — the
    report says so plainly and carries all three fingerprints.
-11. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs) or
+12. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs) or
     `nightly/latest.json` (nightly jobs — never both, §8), running slot released, next job.
 
 Verdicts: `PASS` (possibly with capability exceptions listed — §7 of the policy) · `FAIL` ·
@@ -323,7 +329,59 @@ so a night refused for a dirty world lock reads as `FAIL` until a human opens `l
 `detail` and `logFile` fields exist for exactly that reading. Tightening the mapping is a
 separate change to the driver, not to the schedule.
 
-## 9. Acceptance criteria (verified by the test suites)
+## 9. The owner lease — one live bench across machines
+
+**Status:** stage A of [#158](https://github.com/Crazz-E/SPO-WebClient/issues/158) · Code: `src/e2e/bench/owner.ts`
+
+Everything in §1–§8 excludes two live drives *on this machine*: one systemd unit, one port,
+one `bench-port-guard.sh`. That worked because the worker and its sessions share a
+filesystem — a second worker had to be a second process here, and the port refused it.
+
+#158 removes that coupling. Once the worker fetches its work from GitHub it is not
+host-bound at all, and a worker started on a laptop would drive the **same** Helartia world
+with the **same** LOCKED account. Two drives in one world is the one genuinely destructive
+failure of the whole change: a `FIVEMODELSERVER/Survival` line stops being attributable,
+which is the single property the bench exists to provide.
+
+So the exclusion moved somewhere both hosts can see — the repository variable
+**`BENCH_OWNER`**:
+
+```json
+{ "host": "bench-pc", "pid": 4242, "renewedAt": "…", "expiresAt": "…" }
+```
+
+**It is a lease, not a flag.** A bare "host X owns the bench" claim fails in the way that
+matters most: a worker that dies holding it locks the live world for every host forever, and
+only a human with API access could clear it. The claim therefore carries an expiry
+(`OWNER_LEASE_MS`, 5 min), the holder renews it on its own timer (`OWNER_RENEW_PERIOD_MS`,
+60 s — four failed renewals of grace, so a network blip never drops the bench), and anyone
+may take it once it has lapsed. **A dead worker frees the bench by doing nothing.**
+
+**Enforcement is earned, not configured.** A mechanism that failed closed from its first
+minute would take down the bench on the machine where it works today, for a second host that
+does not exist yet. So while the lease has never been established here — no permission, no
+network, first ever run — the worker logs and proceeds exactly as before. Once it has held
+the lease *even once*, the mechanism is known to work on this host, and losing it afterwards
+means somebody else may hold it: from that moment a job that cannot hold it is refused.
+There is no flag to set, and the direction that stops the bench is the one that needs
+evidence.
+
+**What a refusal looks like:** verdict `ENVIRONMENT`, nothing built, no gateway, **no
+attestation**. `ENVIRONMENT` sits beside `DIRTY` in the write at step 12 for a reason —
+writing one would overwrite a perfectly good `PASS` for that sha, and publish
+`bench/gate=error` on a commit that genuinely passed, on the strength of something that
+never read a line of the code.
+
+**The residual race, stated rather than hidden.** A repository variable has no
+compare-and-swap: two workers observing an expired lease in the same instant can both write.
+The mitigation is the handshake the kanban already uses for claiming a card — write, then
+**re-read**, and keep the lease only if what comes back is ours — plus a jitter before
+taking a lease that is not already ours. That shrinks the window to two writes landing
+between one write and its read-back; it does not close it. Closing it needs a CAS primitive
+(a `git push` of a ref is one), and that is worth building only if this proves insufficient
+in practice.
+
+## 10. Acceptance criteria (verified by the test suites)
 
 - Two simultaneous deposits execute one after the other, in deposit order, each with an
   attributable report — `job.test.ts`, `worker.test.ts`.
@@ -341,6 +399,11 @@ separate change to the driver, not to the schedule.
 - A deposit against a dead worker fails immediately with exit 3. `cli.test.ts`, `paths.test.ts`.
 - A moved tree yields `STALE`, never PASS; the hook refuses unstable attestations.
   `worker.test.ts`, `pre-push-gate.test.ts`.
+- A lease held by another live host refuses the job before the port is cleared, and a lapsed
+  one frees the bench on its own; a host where the lease has never worked is unaffected.
+  `owner.test.ts`, `worker.test.ts`.
+- Nothing that ran no code — `DIRTY`, `ENVIRONMENT` — can overwrite an existing attestation
+  for the same sha. `worker.test.ts`.
 - A nightly is deposited only from an idle queue, inside its UTC window, at most one per
   20 h, and only by the worker; it publishes to `nightly/latest.json` and writes no
   attestation. A worker death mid-nightly stamps `INTERRUPTED` rather than leaving

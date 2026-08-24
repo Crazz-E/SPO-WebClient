@@ -38,6 +38,18 @@ import {
 } from './gateway';
 import { ghStatusPublisher, publishPendingStatuses, writeVerdict, type StatusPublisher } from './verdict';
 import { maybeRunNightly, nightlyResultFromReport, writeNightlyResult } from './nightly';
+import {
+  ghVariableReader,
+  ghVariableWriter,
+  localIdentity,
+  mayDriveLive,
+  newLeaseState,
+  renewLease,
+  OWNER_RENEW_PERIOD_MS,
+  type DriveDecision,
+  type OwnerDeps,
+  type RenewOutcome,
+} from './owner';
 
 export interface RunCommandOptions {
   cwd: string;
@@ -64,6 +76,10 @@ export interface WorkerDeps {
     ) => Promise<RunningGateway>;
   };
   publishStatus: StatusPublisher;
+  /** May this worker take the live bench right now? See ./owner. */
+  mayDriveLive: (nowMs: number) => DriveDecision;
+  /** One owner-lease renewal pass; the loop calls it on a timer. See ./owner. */
+  renewLease: (nowMs: number) => Promise<RenewOutcome>;
   processAlive: (pid: number) => boolean;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
@@ -191,9 +207,16 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   }
   deps.spool.writeReport(report);
 
-  // DIRTY ran nothing and attests nothing: the sha is neither passed nor failed, and an
-  // earlier clean attestation of the same sha stays valid.
-  if (request.type === 'gate' && report.verdict !== 'DIRTY') {
+  // DIRTY and ENVIRONMENT ran nothing and attest nothing: the sha is neither passed nor
+  // failed, and an earlier clean attestation of the same sha stays valid.
+  //
+  // ENVIRONMENT joined DIRTY here with the owner lease (./owner). Writing one would
+  // overwrite a perfectly good PASS for that sha — and publish `bench/gate=error` on it,
+  // because statusState maps ENVIRONMENT to `error` — on the strength of something that
+  // never read a line of the code: a lease that could not be renewed, or a gateway that
+  // never came up. Both already "do not consume an attempt" (doc/E2E-POLICY.md §8); an
+  // attestation they can destroy is the same claim made in a place that outlives them.
+  if (request.type === 'gate' && report.verdict !== 'DIRTY' && report.verdict !== 'ENVIRONMENT') {
     const head =
       report.fingerprints.atEnd?.head ?? report.fingerprints.atStart?.head ?? request.fingerprint.head;
     writeVerdict(deps.paths, {
@@ -254,6 +277,16 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
 
   if (!fs.existsSync(request.worktree)) {
     return finish('ABANDONED', 'the worktree no longer exists on disk; nothing ran');
+  }
+
+  // The cross-host exclusion, before anything touches the bench. clearPort SIGKILLs
+  // whatever holds 8080, and the body after it drives the one live world with the one
+  // LOCKED account — so this is the last moment at which refusing is free. ENVIRONMENT
+  // and not FAIL: nothing about the code was learned, and it must not burn one of the
+  // three attempts (doc/E2E-POLICY.md §8).
+  const lease = deps.mayDriveLive(deps.now());
+  if (!lease.ok) {
+    return finish('ENVIRONMENT', lease.why ?? 'this worker does not hold the bench owner lease');
   }
 
   // A clean bench before anything else: nothing may listen on the port. Safe because
@@ -467,6 +500,21 @@ export function realWorkerDeps(
   paths: BenchPaths,
   gatewayDeps: GatewayDeps = realGatewayDeps(),
 ): WorkerDeps {
+  // The lease lives here, next to the two closures that read and renew it, so nothing
+  // else in the process can hold a second copy of "do we own the bench".
+  const lease = newLeaseState();
+  const log = (line: string): void => {
+    process.stdout.write(`[bench] ${new Date().toISOString()} ${line}\n`);
+  };
+  const runGh = (cmd: string, args: string[], cwd: string): string =>
+    execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const ownerDeps: OwnerDeps = {
+    readVariable: ghVariableReader(runGh, process.cwd()),
+    writeVariable: ghVariableWriter(runGh, process.cwd()),
+    identity: localIdentity(),
+    log,
+    random: Math.random,
+  };
   return {
     paths,
     spool: new Spool(paths),
@@ -481,10 +529,12 @@ export function realWorkerDeps(
     publishStatus: ghStatusPublisher((cmd, args, cwd) => {
       execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     }),
+    mayDriveLive: nowMs => mayDriveLive(lease, nowMs),
+    renewLease: nowMs => renewLease(ownerDeps, lease, nowMs),
     processAlive,
     now: () => Date.now(),
     sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
-    log: line => process.stdout.write(`[bench] ${new Date().toISOString()} ${line}\n`),
+    log,
   };
 }
 
@@ -505,6 +555,19 @@ export async function main(deps?: WorkerDeps, maxTicks: number = Infinity): Prom
   const beat = setInterval(() => touchHeartbeat(paths), HEARTBEAT_PERIOD_MS);
   beat.unref();
 
+  // The owner lease is the heartbeat's cross-host twin: the heartbeat says this process
+  // is alive to this machine, the lease says it holds the live world to every machine.
+  // Renewed on its own timer for the same reason — a long build or live drive must not
+  // let it lapse. The first pass is awaited so a worker that CAN hold the lease is
+  // holding it before it claims its first job.
+  const renew = async (): Promise<void> => {
+    const outcome = await resolved.renewLease(resolved.now());
+    if (!outcome.held) resolved.log(`bench lease NOT held — ${outcome.why ?? 'unknown'}`);
+  };
+  await renew();
+  const leaseTimer = setInterval(() => void renew(), OWNER_RENEW_PERIOD_MS);
+  leaseTimer.unref();
+
   recoverInterrupted(resolved);
   await resolved.gateway.clearPort(resolved.port);
   resolved.log(`bench worker up — pid ${process.pid}, port ${resolved.port}, root ${paths.root}`);
@@ -512,6 +575,7 @@ export async function main(deps?: WorkerDeps, maxTicks: number = Infinity): Prom
     await workerLoop(resolved, maxTicks);
   } finally {
     clearInterval(beat);
+    clearInterval(leaseTimer);
   }
 }
 
