@@ -5,9 +5,10 @@
  * its first version blocked a command that merely *mentioned* `git push` inside a document
  * being written. That class of false positive is what this suite pins down.
  *
- * Since 2026-08-22 the artifact it verifies is the bench worker's per-HEAD attestation
- * (~/.spo-bench/verdicts/<sha>.json), not a session-written gate file: only the worker
- * attests, so a session cannot unblock its own push.
+ * Between 2026-08-22 and #158 stage C it also verified the bench worker's per-HEAD
+ * attestation. That check is gone: the gate now tests a commit the worker fetches, so a
+ * push has to come FIRST, and the merge — not the push — is where `bench/gate` is
+ * required. What remains is push detection and the `main` block.
  */
 
 import { execFileSync } from 'child_process';
@@ -55,6 +56,19 @@ function invoke(command: string, env: NodeJS.ProcessEnv = {}): HookRun {
  */
 function runHook(command: string, dir: string = scratchRepo()): number {
   return invoke(command, { GATE_REPO_DIR: dir, SPO_BENCH_DIR: scratchBench() }).code;
+}
+
+/**
+ * Did the hook recognise this command as a push?
+ *
+ * Engagement used to be observable as a refusal: any push on a feature branch was blocked
+ * for want of an attestation. #158 stage C allows those, so the signal is now the line the
+ * hook prints only once it has decided a push is happening. Without a signal of its own,
+ * "ignored" and "engaged and allowed" would be indistinguishable — and telling those apart
+ * is the entire reason this suite exists.
+ */
+function engaged(command: string, dir: string = scratchRepo()): boolean {
+  return /npm run gate/.test(invoke(command, { GATE_REPO_DIR: dir, SPO_BENCH_DIR: scratchBench() }).stdout);
 }
 
 function scratchBench(): string {
@@ -128,15 +142,15 @@ describe('commands the hook must ignore', () => {
     ['a remote-branch deletion with --delete, which pushes no code', 'git push origin --delete fix/old'],
     ['a remote-branch deletion with -d', 'git push -d origin fix/old'],
     ['a remote-branch deletion by empty-source refspec', 'git push origin :fix/old'],
-  ])('allows %s', (_label, command) => {
+  ])('allows %s, without ever engaging', (_label, command) => {
     expect(runHook(command)).toBe(0);
+    expect(engaged(command)).toBe(false);
   });
 
-  it('allows them even from a repo that would refuse a real push', () => {
-    // The point is that the hook never engages, not that the attestation check passed.
+  it('never engages on a mention, even from a repo where a real push would', () => {
     const dir = scratchRepo();
-    expect(runHook('grep -rn "git push" doc/', dir)).toBe(0);
-    expect(runHook('git push', dir)).toBe(2);
+    expect(engaged('grep -rn "git push" doc/', dir)).toBe(false);
+    expect(engaged('git push', dir)).toBe(true);
   });
 });
 
@@ -150,147 +164,61 @@ describe('commands the hook must catch', () => {
     ['a push with a global git flag', 'git -C . push origin main'],
     ['a refspec that has a source — code moves', 'git push origin fix/x:fix/x'],
     ['a deletion chained with a real push', 'git push origin --delete fix/old && git push -u origin HEAD'],
-  ])('blocks %s', (_label, command) => {
-    // The scratch repo is on a feature branch with no attestation, so an engaged push is
-    // refused for that reason alone — independent of the real repo's state.
-    expect(runHook(command)).toBe(2);
+  ])('recognises %s', (_label, command) => {
+    // On a feature branch an engaged push is now ALLOWED (#158 stage C), so recognition is
+    // read from the hook's own line rather than from a refusal. The `main` guard below
+    // proves recognition still has teeth where it matters.
+    expect(engaged(command)).toBe(true);
   });
 });
 
-describe('the attestation gate, on a feature branch', () => {
+describe('what the hook no longer refuses — #158 stage C', () => {
   const push = 'git push -u origin HEAD';
 
   function invokeWith(dir: string, bench: string, env: NodeJS.ProcessEnv = {}): HookRun {
     return invoke(push, { GATE_REPO_DIR: dir, SPO_BENCH_DIR: bench, ...env });
   }
 
-  it('judges the repo a `git -C <dir> push` names, not the session cwd', () => {
-    const dir = scratchRepo();
-    const bench = benchWith(dir, {});
-    expect(invoke(`git -C ${dir} push -u origin HEAD`, { SPO_BENCH_DIR: bench }).code).toBe(0);
-    const other = scratchRepo();
-    const blocked = invoke(`git -C ${other} push -u origin HEAD`, { SPO_BENCH_DIR: bench });
-    expect(blocked.code).toBe(2);
-    // Either the scratch repos share a HEAD (same commit second) and the attestation
-    // names the other worktree, or they differ and `other` has none — both prove the
-    // hook judged `other`, not the cwd.
-    expect(blocked.stderr).toMatch(/attested for another worktree|no bench attestation for HEAD/);
-  });
-
-  it('judges the repo a preceding `cd <dir>` selects', () => {
-    const dir = scratchRepo();
-    const bench = benchWith(dir, {});
-    expect(invoke(`cd ${dir} && npm run build && git push -u origin HEAD`, { SPO_BENCH_DIR: bench }).code).toBe(0);
-  });
-
-  it('blocks when the bench has no attestation for HEAD', () => {
+  /**
+   * These tests replace a block that pinned the attestation gate: no push without a fresh,
+   * stable, this-worktree PASS in `~/.spo-bench/verdicts/<sha>.json`.
+   *
+   * They are not relaxed because the old ones were inconvenient. The rule became
+   * self-contradictory when the gate started testing a commit the worker FETCHES: a commit
+   * has to be pushed before it can be gated, so "no push without an attestation" and "no
+   * attestation without a push" cannot both hold. The card retires it in stage C by name.
+   *
+   * The guarantee did not weaken, it moved to the irreversible act. `bench/gate` is a
+   * required status check on `main` with an empty bypass list, so a pull request still
+   * cannot merge without the worker's live evidence — the maintainer included. What the
+   * hook still owns is the `main` block, tested below.
+   */
+  it('allows a push with no attestation at all — that is how a session asks to be gated', () => {
     const dir = scratchRepo();
     const result = invokeWith(dir, scratchBench());
-    expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/no bench attestation for HEAD/);
-    expect(result.stderr).toMatch(/npm run gate/);
-    expect(result.stderr).toMatch(/Only the worker attests/);
-  });
-
-  it('allows a fresh, stable PASS attested for this worktree', () => {
-    const dir = scratchRepo();
-    expect(invokeWith(dir, benchWith(dir, {})).code).toBe(0);
-  });
-
-  it('blocks a FAIL verdict and points at the three-attempt rule', () => {
-    const dir = scratchRepo();
-    const result = invokeWith(dir, benchWith(dir, { verdict: 'FAIL' }));
-    expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/Three attempts maximum/);
-  });
-
-  it('blocks a BLOCKED verdict — the live stage never ran — and says how to clear it', () => {
-    const dir = scratchRepo();
-    const result = invokeWith(dir, benchWith(dir, { verdict: 'BLOCKED' }));
-    expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/refused before running/);
-    expect(result.stderr).toMatch(/e2e:unlock/);
-  });
-
-  it('blocks a STALE verdict — the tree moved, the result attests nothing current', () => {
-    const dir = scratchRepo();
-    const result = invokeWith(dir, benchWith(dir, { verdict: 'STALE' }));
-    expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/tree changed while the job was queued or running/);
-  });
-
-  it('blocks a PASS whose fingerprint is not stable', () => {
-    const dir = scratchRepo();
-    const result = invokeWith(dir, benchWith(dir, { fingerprintStable: false }));
-    expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/not fingerprint-stable/);
-  });
-
-  it('blocks a PASS attested for a different worktree', () => {
-    const dir = scratchRepo();
-    const result = invokeWith(dir, benchWith(dir, { worktree: '/somewhere/else' }));
-    expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/attested for another worktree/);
-  });
-
-  it('blocks a stale PASS — the live world moves, so old evidence is not evidence', () => {
-    const dir = scratchRepo();
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const result = invokeWith(dir, benchWith(dir, { createdAt: twoHoursAgo }));
-    expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/min old \(limit 60\)/);
-  });
-
-  it('honours a wider freshness window when one is configured', () => {
-    const dir = scratchRepo();
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const bench = benchWith(dir, { createdAt: twoHoursAgo });
-    expect(invokeWith(dir, bench, { GATE_MAX_AGE_MINUTES: '240' }).code).toBe(0);
-  });
-
-  it('blocks an attestation belonging to a different commit', () => {
-    const dir = scratchRepo();
-    const bench = scratchBench();
-    fs.writeFileSync(
-      path.join(bench, 'verdicts', '0000000000000000000000000000000000000000.json'),
-      JSON.stringify({ verdict: 'PASS', fingerprintStable: true, createdAt: new Date().toISOString() }),
-      'utf8',
-    );
-    expect(invokeWith(dir, bench).code).toBe(2);
-  });
-
-  it('announces a moved base without blocking — staleness is visible, not enforced', () => {
-    const dir = scratchRepo();
-    // `main` moved on: the attestation names a base the remote no longer points at.
-    execFileSync('git', ['-C', dir, 'update-ref', 'refs/remotes/origin/main', headOf(dir)]);
-    const result = invokeWith(dir, benchWith(dir, { baseMain: '0'.repeat(40) }));
     expect(result.code).toBe(0);
-    expect(result.stdout).toMatch(/main has moved since this gate/);
-    expect(result.stdout).toMatch(/attested against 00000000/);
+    expect(result.stdout).toMatch(/npm run gate/);
   });
 
-  it('says nothing when the base still matches origin/main', () => {
+  it('allows a push whose sha the bench previously FAILED', () => {
+    // The branch is pushed so the worker can fetch and re-gate it; refusing here would
+    // strand a session that has just fixed the failure.
     const dir = scratchRepo();
-    execFileSync('git', ['-C', dir, 'update-ref', 'refs/remotes/origin/main', headOf(dir)]);
-    const result = invokeWith(dir, benchWith(dir, { baseMain: headOf(dir) }));
-    expect(result.code).toBe(0);
-    expect(result.stdout).not.toMatch(/main has moved/);
+    expect(invokeWith(dir, benchWith(dir, { verdict: 'FAIL' })).code).toBe(0);
   });
 
-  it('says nothing when there is no origin/main to compare against', () => {
-    const dir = scratchRepo();
-    const result = invokeWith(dir, benchWith(dir, { baseMain: '0'.repeat(40) }));
-    expect(result.code).toBe(0);
-    expect(result.stdout).not.toMatch(/main has moved/);
+  it('still judges the repo a `git -C <dir> push` names, not the session cwd', () => {
+    // The attestation branches are gone, but WHICH repo the hook reads still decides the
+    // branch name — and `main` is still refused. That resolution keeps its test.
+    const dir = scratchRepo(); // a feature branch
+    expect(invoke(`git -C ${dir} push -u origin HEAD`, { SPO_BENCH_DIR: scratchBench() }).code).toBe(0);
   });
 
-  it('blocks an unreadable attestation instead of trusting it', () => {
+  it('still judges the repo a preceding `cd <dir>` selects', () => {
     const dir = scratchRepo();
-    const bench = scratchBench();
-    fs.writeFileSync(path.join(bench, 'verdicts', `${headOf(dir)}.json`), '{corrupt', 'utf8');
-    const result = invokeWith(dir, bench);
-    expect(result.code).toBe(2);
-    expect(result.stderr).toMatch(/UNKNOWN, not PASS/);
+    expect(
+      invoke(`cd ${dir} && npm run build && git push -u origin HEAD`, { SPO_BENCH_DIR: scratchBench() }).code,
+    ).toBe(0);
   });
 });
 
