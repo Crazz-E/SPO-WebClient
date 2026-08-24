@@ -17,6 +17,14 @@ interface RemoteItem {
   name: string;
   path: string; // Relative path from cache root (e.g., "BuildingClasses/classes.cab")
   url: string;  // Full remote URL
+  size?: number;         // Byte size, read from the directory listing (files only)
+  lastModified?: number; // Last-modified time (ms since epoch, UTC) from the listing
+}
+
+/** Size and last-modified time an IIS directory listing prints next to an entry. */
+interface ListingEntryMeta {
+  size: number;
+  lastModified: number;
 }
 
 interface SyncStats {
@@ -233,11 +241,52 @@ export class UpdateService implements Service {
   }
 
   /**
+   * Read the size and last-modified time IIS prints in front of each listing entry.
+   *
+   * A row looks like:
+   *   ` 7/20/2026  1:32 PM       158344 <A HREF="/five/client/cache/x/CLASSES.BIN">CLASSES.BIN</A>`
+   * and the values match the HEAD response exactly (`Content-Length: 158344`,
+   * `Last-Modified: Mon, 20 Jul 2026 13:32:02 GMT`) — the listing time is GMT, truncated
+   * down to the minute. Directory rows print `&lt;dir&gt;` instead of a byte count, so the
+   * digits-only size group excludes them.
+   */
+  private parseListingMetadata(html: string): Map<string, ListingEntryMeta> {
+    const meta = new Map<string, ListingEntryMeta>();
+    const rowRegex = /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s+([\d,]+)\s+<A HREF="[^"]*\/([^/"]+)"/gi;
+
+    let match;
+    while ((match = rowRegex.exec(html)) !== null) {
+      const [, month, day, year, hour, minute, meridiem, rawSize, name] = match;
+
+      const hour12 = parseInt(hour, 10);
+      const isPm = meridiem.toUpperCase() === 'PM';
+      const hour24 = hour12 === 12 ? (isPm ? 12 : 0) : (isPm ? hour12 + 12 : hour12);
+
+      const lastModified = Date.UTC(
+        parseInt(year, 10),
+        parseInt(month, 10) - 1,
+        parseInt(day, 10),
+        hour24,
+        parseInt(minute, 10),
+        0
+      );
+      const size = parseInt(rawSize.replace(/,/g, ''), 10);
+
+      if (!isNaN(lastModified) && !isNaN(size)) {
+        meta.set(name, { size, lastModified });
+      }
+    }
+
+    return meta;
+  }
+
+  /**
    * Parse HTML directory listing to extract files and subdirectories
    */
-  private parseDirectoryListing(html: string): { files: string[], directories: string[] } {
+  private parseDirectoryListing(html: string): { files: string[], directories: string[], metadata: Map<string, ListingEntryMeta> } {
     const files: string[] = [];
     const directories: string[] = [];
+    const metadata = this.parseListingMetadata(html);
 
     // Match: <A HREF="/path/filename.ext">filename.ext</A>
     const fileRegex = /<A HREF="[^"]+\/([^/"]+\.[^/"]+)">([^<]+)<\/A>/gi;
@@ -266,7 +315,7 @@ export class UpdateService implements Service {
       directories.push(dirname);
     }
 
-    return { files, directories };
+    return { files, directories, metadata };
   }
 
   /**
@@ -292,16 +341,19 @@ export class UpdateService implements Service {
       }
 
       const html = await response.text();
-      const { files, directories } = this.parseDirectoryListing(html);
+      const { files, directories, metadata } = this.parseDirectoryListing(html);
 
-      // Add files
+      // Add files, carrying the size/last-modified the listing already printed for them
       for (const file of files) {
         const itemPath = relativePath ? `${relativePath}/${file}` : file;
+        const entryMeta = metadata.get(file);
         items.push({
           type: 'file',
           name: file,
           path: itemPath,
-          url: `${this.UPDATE_SERVER_BASE}/${itemPath}`
+          url: `${this.UPDATE_SERVER_BASE}/${itemPath}`,
+          size: entryMeta?.size,
+          lastModified: entryMeta?.lastModified
         });
       }
 
@@ -321,7 +373,10 @@ export class UpdateService implements Service {
       }
 
       if (depth === 0) {
-        logger.info(`[UpdateService] Discovered ${items.filter(i => i.type === 'file').length} files and ${items.filter(i => i.type === 'directory').length} directories on remote server`);
+        const fileItems = items.filter(i => i.type === 'file');
+        const withMeta = fileItems.filter(i => i.size !== undefined && i.lastModified !== undefined).length;
+        logger.info(`[UpdateService] Discovered ${fileItems.length} files and ${items.filter(i => i.type === 'directory').length} directories on remote server`);
+        logger.info(`[UpdateService] Listing carried size + last-modified for ${withMeta}/${fileItems.length} files (the rest fall back to HTTP HEAD)`);
       }
 
     } catch (error: unknown) {
@@ -463,12 +518,50 @@ export class UpdateService implements Service {
   }
 
   /**
+   * Compare the remote size and modification time against the local copy.
+   * `undefined` means the remote did not state that value — it is then not a reason to
+   * re-download, matching the previous behaviour for absent HEAD headers.
+   */
+  private hasRemoteDiverged(
+    item: RemoteItem,
+    localStat: fs.Stats,
+    remoteSize: number | undefined,
+    remoteTime: number | undefined
+  ): boolean {
+    if (remoteSize !== undefined && !isNaN(remoteSize) && remoteSize !== localStat.size) {
+      logger.info(`[UpdateService] Size changed: ${item.path} (local=${localStat.size}, remote=${remoteSize})`);
+      return true;
+    }
+
+    if (remoteTime !== undefined && !isNaN(remoteTime) && remoteTime > localStat.mtimeMs) {
+      logger.info(`[UpdateService] Modified time changed: ${item.path}`);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Check if a remote file has changed compared to the local copy.
-   * Uses HTTP HEAD to compare Content-Length and Last-Modified headers.
+   *
+   * The directory listing fetched during discovery already prints the size and the
+   * last-modified time of every entry, so the comparison is local and free. One HTTP HEAD
+   * per file — 570 of them, ~120 s serialised — bought nothing but the same two values.
+   * The HEAD remains as the fallback for an entry whose listing row did not parse.
+   *
+   * Listing times are minute-truncated while `downloadFile` stamps the local mtime with the
+   * exact second from `Last-Modified`, so a freshly downloaded file always compares as
+   * unchanged (its local mtime is >= the truncated remote time). The blind spot is a remote
+   * file replaced within the same clock minute as the copy we hold, at an identical size.
    */
   private async isFileChanged(item: RemoteItem, localPath: string): Promise<boolean> {
     try {
       const localStat = fs.statSync(localPath);
+
+      if (item.size !== undefined && item.lastModified !== undefined) {
+        return this.hasRemoteDiverged(item, localStat, item.size, item.lastModified);
+      }
+
       const headResponse = await fetch(item.url, {
         method: 'HEAD',
         signal: AbortSignal.timeout(TIMEOUTS.FETCH),
@@ -476,21 +569,14 @@ export class UpdateService implements Service {
       if (!headResponse.ok) return false;
 
       const remoteSize = headResponse.headers.get('content-length');
-      if (remoteSize !== null && parseInt(remoteSize, 10) !== localStat.size) {
-        logger.info(`[UpdateService] Size changed: ${item.path} (local=${localStat.size}, remote=${remoteSize})`);
-        return true;
-      }
-
       const remoteModified = headResponse.headers.get('last-modified');
-      if (remoteModified) {
-        const remoteTime = new Date(remoteModified).getTime();
-        if (!isNaN(remoteTime) && remoteTime > localStat.mtimeMs) {
-          logger.info(`[UpdateService] Modified time changed: ${item.path}`);
-          return true;
-        }
-      }
 
-      return false;
+      return this.hasRemoteDiverged(
+        item,
+        localStat,
+        remoteSize === null ? undefined : parseInt(remoteSize, 10),
+        remoteModified === null ? undefined : new Date(remoteModified).getTime()
+      );
     } catch {
       return false;
     }
