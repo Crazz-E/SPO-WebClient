@@ -81,22 +81,33 @@ describe('claude-review workflow', () => {
   });
 
   describe('an unprovisioned repository stays green', () => {
+    it('reads the secret only where GitHub allows it', () => {
+      // `secrets` is available in neither a job-level nor a step-level `if`. Using it there
+      // does not fail the job — it invalidates the whole file, so the workflow never runs,
+      // no annotation is produced, and every other check stays green. That silence is why
+      // this is pinned: the mistake is invisible on a passing pull request.
+      const ifLines = [...yaml.matchAll(/^\s*if: (.+)$/gm)].map(m => m[1]);
+      expect(ifLines.length).toBeGreaterThan(0);
+      for (const condition of ifLines) {
+        expect(condition).not.toMatch(/secrets\./);
+      }
+      expect(yaml).toMatch(/^\s+HAS_ANTHROPIC_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY != '' \}\}$/m);
+    });
+
     it('guards every step that needs the key on the key being present', () => {
-      // The `secrets` context is not available in a job-level `if`, so the guard has to be
-      // repeated per step; a step that forgets it fails the run on a repo with no secret.
+      // Job-level `env` is evaluated once, but each step carries its own guard; a step that
+      // forgets it fails the run on a repository with no secret.
       const checkout = yaml.indexOf('name: Checkout');
       const review = yaml.indexOf('name: Review the diff');
       expect(checkout).toBeGreaterThan(-1);
       expect(review).toBeGreaterThan(-1);
       for (const start of [checkout, review]) {
-        expect(yaml.slice(start, start + 400)).toMatch(
-          /if: \$\{\{ secrets\.ANTHROPIC_API_KEY != '' \}\}/,
-        );
+        expect(yaml.slice(start, start + 400)).toMatch(/if: env\.HAS_ANTHROPIC_KEY == 'true'/);
       }
     });
 
     it('says why nothing was reviewed instead of failing silently', () => {
-      expect(yaml).toMatch(/if: \$\{\{ secrets\.ANTHROPIC_API_KEY == '' \}\}/);
+      expect(yaml).toMatch(/if: env\.HAS_ANTHROPIC_KEY != 'true'/);
       expect(yaml).toMatch(/::notice title=Claude Review skipped::/);
     });
 

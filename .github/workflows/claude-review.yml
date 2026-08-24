@@ -56,23 +56,30 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    # `secrets` is available in neither a job-level nor a step-level `if` — GitHub rejects
+    # the whole file at validation, which shows up as a run named after the path with no
+    # jobs and no annotation, and leaves every other check green. `jobs.<id>.env` IS one of
+    # the places `secrets` may be read, and `env` IS one of the contexts a step `if` may
+    # read, so the presence of the key is turned into a boolean here and tested downstream.
+    # Only the boolean crosses; the key itself never lands in the environment.
+    env:
+      HAS_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
     steps:
-      # The `secrets` context is unavailable in a job-level `if`, so the guard lives on the
-      # steps. This one is unconditional: it is how a human learns why nothing was reviewed.
+      # Unconditional by design: it is how a human learns why nothing was reviewed.
       - name: Announce a missing key
-        if: ${{ secrets.ANTHROPIC_API_KEY == '' }}
+        if: env.HAS_ANTHROPIC_KEY != 'true'
         run: |
           echo "::notice title=Claude Review skipped::ANTHROPIC_API_KEY is not set on this repository — no review was produced. Add it under Settings > Secrets and variables > Actions."
 
       - name: Checkout
-        if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        if: env.HAS_ANTHROPIC_KEY == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The reviewer reads the PR head and the files around the diff, not the history.
           fetch-depth: 1
 
       - name: Review the diff
-        if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        if: env.HAS_ANTHROPIC_KEY == 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@c81e3bc69d1b18badbb63ba39581218f02421678 # v1
         with:
