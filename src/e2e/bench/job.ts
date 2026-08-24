@@ -53,6 +53,13 @@ export interface JobRequest {
    * unlike every other job type the subject need not exist on this machine at all.
    */
   ref?: string;
+  /**
+   * Set when the worker deposited this itself to serve a GitHub merge-queue entry. It is
+   * the priority marker: such a job is taken before anything else waiting, because the
+   * queue ejects an entry whose checks time out and the bench is serialised. See
+   * ./merge-queue.
+   */
+  queueEntry?: boolean;
 }
 
 export interface JobReport {
@@ -115,12 +122,21 @@ export class Spool {
   constructor(private readonly paths: BenchPaths) {}
 
   /**
-   * Deposit a request. Refuses (DuplicateJobError) while an earlier request for the
-   * same worktree is still queued — the usual cause is a retry after an edit, and what
-   * the session wants then is the newest tree tested once, not twice.
+   * Deposit a request. Refuses (DuplicateJobError) while an earlier request for the same
+   * **subject** is still queued — the usual cause is a retry after an edit, and what the
+   * session wants then is the newest tree tested once, not twice.
+   *
+   * The subject is the worktree *and*, for a `ref` job, the ref. Keying on the worktree
+   * alone was right while every job tested a directory; since #158 stage C every gate is a
+   * `ref` job run in the ONE shared checkout, so that rule would refuse every second
+   * gate — and, worse, refuse a merge-queue entry whenever any session gate happened to be
+   * queued. The entry would then never be gated, and GitHub would eject it on the
+   * check-response timeout for a reason that had nothing to do with its code.
    */
   submit(request: Omit<JobRequest, 'id' | 'submittedAt'>, nowMs: number = Date.now()): JobRequest {
-    const pending = this.queued().find(entry => entry.request.worktree === request.worktree);
+    const pending = this.queued().find(
+      entry => entry.request.worktree === request.worktree && entry.request.ref === request.ref,
+    );
     if (pending) throw new DuplicateJobError(pending.request);
 
     const full: JobRequest = {

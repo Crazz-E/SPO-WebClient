@@ -45,6 +45,10 @@ interface Harness {
   leaseDecision: { ok: boolean; why?: string };
   /** What CI is said to have concluded for the sha under test. See ./ci-proof. */
   ciProof: { proven: boolean; why?: string };
+  /** How many times the loop asked the merge queue for work. */
+  queueServed: number;
+  /** What resolveRef answers for refs other than origin/main (e.g. `HEAD^{tree}`). */
+  trees: Record<string, string | undefined>;
   /** The step name prepareRef reports as failed; null = the fetch worked. */
   prepareRefFails: string | null;
   prepareRefCalls: string[];
@@ -77,6 +81,8 @@ function harness(): Harness {
     gatewayFails: false,
     leaseDecision: { ok: true },
     ciProof: { proven: false, why: 'no CI run for this commit yet' },
+    queueServed: 0,
+    trees: {},
     prepareRefFails: null,
     prepareRefCalls: [],
     leaseRenewals: 0,
@@ -89,7 +95,7 @@ function harness(): Harness {
         const hash = h.hashes[Math.min(fingerprintCalls++, h.hashes.length - 1)];
         return { head: `head-of-${path.basename(wt)}`, hash, clean: h.clean };
       },
-      resolveRef: (_wt, ref) => (ref === 'origin/main' ? h.baseMain : undefined),
+      resolveRef: (_wt, ref) => (ref === 'origin/main' ? h.baseMain : h.trees[ref]),
       runCommand: async (cmd, args, options) => {
         h.commands.push({ cmd, args, cwd: options.cwd, env: options.env });
         return h.exitCodes.shift() ?? 0;
@@ -105,6 +111,7 @@ function harness(): Harness {
       },
       publishStatus: (_wt, head) => h.published.push(head),
       ciStaticProof: () => h.ciProof,
+      serveMergeQueue: () => (h.queueServed++, 0),
       prepareRef: async ref => {
         h.prepareRefCalls.push(ref);
         // The real one resets a checkout on disk; the harness just makes the directory
@@ -925,5 +932,65 @@ describe('workerLoop and main', () => {
     h.leaseDecision = { ok: false, why: 'laptop (pid 77) holds the bench' };
     await main(h.deps, 0);
     expect(h.logs.join('\n')).toMatch(/bench lease NOT held/);
+  });
+});
+
+describe('the merge queue takes the bench first', () => {
+  it('serves the queue only on an idle tick, never over a waiting job', async () => {
+    // An entry jumps the spool once deposited, but the pass that deposits it must not run
+    // while something is mid-flight — otherwise "jumping the line" becomes "interrupting".
+    const h = harness();
+    deposit(h);
+    await workerLoop(h.deps, 1, async () => false);
+    expect(h.queueServed).toBe(0);
+
+    await workerLoop(h.deps, 1, async () => false);
+    expect(h.queueServed).toBe(1);
+  });
+
+  it('takes a queue entry ahead of an older ordinary deposit', async () => {
+    // The whole point of the priority: a lease measured at up to 33 min would otherwise
+    // eject a healthy branch on the queue's check-response timeout.
+    const h = harness();
+    const ordinary = deposit(h);
+    const entry = h.spool.submit(
+      {
+        type: 'ref',
+        worktree: h.worktree,
+        branch: 'gh-readonly-queue/main/pr-1-abc',
+        fingerprint: { head: 'q'.repeat(40), hash: 'ref:q', clean: true },
+        submitter: { pid: 0 },
+        args: [],
+        ref: 'q'.repeat(40),
+        queueEntry: true,
+      },
+      h.clock.nowMs + 1000, // deposited LATER than the ordinary job
+    );
+
+    await processOldest(h.deps);
+
+    expect(h.spool.readReport(entry.id)?.verdict).toBe('PASS');
+    expect(h.spool.readReport(ordinary.id)).toBeNull(); // still waiting its turn
+  });
+
+  it('records the tree a ref job drove, so the queue can skip an identical one', async () => {
+    const h = harness();
+    h.trees['HEAD^{tree}'] = 'tree-abc';
+    h.spool.submit(
+      {
+        type: 'ref',
+        worktree: h.worktree,
+        branch: 'x',
+        fingerprint: { head: 'r'.repeat(40), hash: 'ref:r', clean: true },
+        submitter: { pid: 0 },
+        args: [],
+        ref: 'r'.repeat(40),
+      },
+      h.clock.nowMs,
+    );
+
+    await processOldest(h.deps);
+
+    expect(listVerdicts(h.paths)[0].verdict.tree).toBe('tree-abc');
   });
 });

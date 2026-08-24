@@ -152,3 +152,58 @@ describe('Spool — reports', () => {
     expect(spool.readReport('job-new')).not.toBeNull();
   });
 });
+
+describe('the duplicate guard keys on the subject, not the directory', () => {
+  it('refuses a second job for the same worktree AND ref', () => {
+    const paths = tempBench();
+    const spool = new Spool(paths);
+    const base = {
+      type: 'ref' as const,
+      worktree: '/bench/ref/checkout',
+      branch: 'x',
+      fingerprint: { head: 'a'.repeat(40), hash: 'ref:a', clean: true },
+      submitter: { pid: 0 },
+      args: [],
+      ref: 'a'.repeat(40),
+    };
+    spool.submit(base, 1000);
+    expect(() => spool.submit(base, 2000)).toThrow(DuplicateJobError);
+  });
+
+  it('allows two ref jobs for DIFFERENT refs in the one shared checkout', () => {
+    // Since #158 stage C every gate is a ref job run in the same checkout. Keying on the
+    // directory alone would refuse every second gate — and would refuse a merge-queue
+    // entry whenever any session gate happened to be queued, leaving the entry ungated
+    // until GitHub ejected it on the check-response timeout.
+    const paths = tempBench();
+    const spool = new Spool(paths);
+    const make = (ref: string) => ({
+      type: 'ref' as const,
+      worktree: '/bench/ref/checkout',
+      branch: ref,
+      fingerprint: { head: ref, hash: `ref:${ref}`, clean: true },
+      submitter: { pid: 0 },
+      args: [],
+      ref,
+    });
+    spool.submit(make('a'.repeat(40)), 1000);
+    expect(() => spool.submit(make('b'.repeat(40)), 2000)).not.toThrow();
+    expect(spool.queued()).toHaveLength(2);
+  });
+
+  it('still refuses a second worktree job for the same worktree', () => {
+    // Unchanged for the jobs that genuinely test a directory: both have ref undefined.
+    const paths = tempBench();
+    const spool = new Spool(paths);
+    const base = {
+      type: 'lease' as const,
+      worktree: '/home/dev/wt',
+      branch: 'fix/x',
+      fingerprint: { head: 'h', hash: 'h1', clean: true },
+      submitter: { pid: 1 },
+      args: [],
+    };
+    spool.submit(base, 1000);
+    expect(() => spool.submit(base, 2000)).toThrow(DuplicateJobError);
+  });
+});
