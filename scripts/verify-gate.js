@@ -76,6 +76,18 @@ function changedFiles() {
 }
 
 /**
+ * The paths this branch removed. The router needs them apart: a path that no longer exists
+ * and that no rule covers is not an unmapped area the gate must fail closed on.
+ */
+function deletedFiles() {
+  const base = diffBase();
+  const args = base
+    ? ['diff', '--name-only', '--diff-filter=D', base, 'HEAD']
+    : ['diff', '--name-only', '--diff-filter=D', 'HEAD'];
+  return git(args).split('\n').filter(Boolean);
+}
+
+/**
  * A unified diff of everything this branch introduces, including untracked files.
  *
  * `git diff` never shows an untracked file, so a brand-new module calling a President-only
@@ -186,7 +198,7 @@ async function main() {
   const capabilities = capabilitiesFor(president);
 
   // --- Stage 3: routing ------------------------------------------------------
-  const decision = route(files);
+  const decision = route(files, deletedFiles());
   artifact.routing = {
     changed: decision.changed,
     required: decision.required,

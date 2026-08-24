@@ -64,6 +64,22 @@ describe('route', () => {
     expect(route(['package.json']).staticOnly).toBe(false);
   });
 
+  it('does not fail closed on a removed path no rule covers — nothing is left there to drive', () => {
+    const removed = ['some-removed-tree/thing.js', 'some-removed-tree/icons/app.ico'];
+    const decision = route(removed, removed);
+    expect(decision.unmapped).toEqual([]);
+    expect(decision.staticOnly).toBe(true);
+  });
+
+  it('still fails closed on a removed path when the branch did not remove it', () => {
+    expect(route(['some-removed-tree/thing.js']).unmapped).toEqual(['some-removed-tree/thing.js']);
+  });
+
+  it('routes a removed file a rule does cover — a deleted handler still changes behaviour', () => {
+    const gone = ['src/server/session/favorites-handler.ts'];
+    expect(route(gone, gone).required).toEqual([SPINE_FLOW, 'favorites-roundtrip']);
+  });
+
   it('fails closed on a path no rule covers', () => {
     const decision = route(['src/brand-new-area/thing.ts']);
     expect(decision.unmapped).toEqual(['src/brand-new-area/thing.ts']);
