@@ -32,6 +32,53 @@
   background: var(--glass-bg-hover);
 }
 
+/* The bar is now a DIV holding tap zones (a button cannot nest the Debt
+   button); the zones inherit the row layout and reset their button chrome. */
+.tapArea,
+.identityTap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  color: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.tapArea {
+  flex: 1;
+}
+
+.identityTap {
+  flex-shrink: 0;
+}
+
+/* H6 — tappable Debt tag: one interaction to the losing facilities */
+.debtTag {
+  flex-shrink: 0;
+  min-width: 44px;
+  height: 26px;
+  padding: 0 var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--error-bg);
+  border: 1px solid var(--error);
+  border-radius: var(--radius-full);
+  color: var(--money-negative);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+}
+
 .world {
   color: var(--accent-gold);
   font-weight: var(--font-semibold);

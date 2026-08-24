@@ -13,7 +13,7 @@ import styles from './RightRail.module.css';
 
 export function RightRail() {
   const client = useClient();
-  const surfaceOpen = useUiStore((s) => s.stack.length > 0);
+  const surfaceOpen = useUiStore((s) => s.stack.length > 0 && !s.connectMode.active);
 
   const railClass = [styles.rail, surfaceOpen ? styles.shifted : ''].filter(Boolean).join(' ');
 

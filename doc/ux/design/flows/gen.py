@@ -407,7 +407,9 @@ def picker_body(selected=True, empty=False, loading=False):
 
 def t3_3(variant='results'):
     body = picker_body(selected=(variant == 'results'), empty=(variant == 'empty'), loading=(variant == 'loading'))
-    footer = (f'<span style="font-size: 12px; color: {T2};">1 sélectionné · Coton du Sud</span>{btn("Connecter", "primary")}' if variant == 'results' else
+    # N10 (PR #80) : « Choisir sur la carte » vit au pied du picker, toujours offert
+    pick = btn('Choisir sur la carte', 'secondary') + '<span style="flex: 1;"></span>'
+    footer = pick + (f'<span style="font-size: 12px; color: {T2};">1 sélectionné · Coton du Sud</span>{btn("Connecter", "primary")}' if variant == 'results' else
               f'<span style="font-size: 12px; color: {T2};">0 sélectionné</span>{btn("Connecter", "disabled")}')
     title = f'<div style="padding: 12px 16px 0; display: flex; flex-direction: column; gap: 2px;"><h2 style="margin: 0; font-size: 16px; font-weight: 600;">Trouver un fournisseur de coton</h2><span style="font-size: 12px; color: {T3};">pour Usine textile · Helartia</span></div>'
     notes = {'results': 'T3-3 · La recherche s\'empile sur la feuille (jetons cliquables, le milieu replié en …). Entrée lance ; filtres = jetons, conservés. Résultats = ce que le serveur renvoie (nom, compagnie, ville, prix, qualité) + distance calculée localement. Coche → « Connecter ».',
@@ -416,6 +418,13 @@ def t3_3(variant='results'):
     return page(blocks(CITY) + blocks([(700, 420, 90, 90, 'selected')]) + status_pill() + command_bar() + zoom() + chat_pill()
                 + sheet([('Usine textile', False), ('…', False), ('Trouver un fournisseur', True)], title, body, footer)
                 + note_box(notes[variant], 70))
+
+def t3_3d():
+    # N10 — the connect mode: the sheet HIDES (the stack survives), the mode bar says it all
+    mr = mode_row('Connect', 'Coton', hint='Cliquer un bâtiment pour connecter',
+                  actions=btn('Annuler', 'secondary', 32))
+    return page(blocks(CITY) + blocks([(700, 420, 90, 90, 'selected')]) + status_pill() + command_bar(mode=mr) + zoom() + chat_pill()
+                + note_box('T3-3d · « Choisir sur la carte » (N10, PR #80) : la feuille se MASQUE — la pile de surfaces survit intacte —, la barre de mode annonce CONNECT · Coton, le curseur devient crosshair. Un clic sur un fournisseur connecte (one-shot) puis la pile revient : le picker réapparaît tel quel. Annuler / Échap ramènent aussi le picker, sans effet. Le « connectMap » de l\'inspecteur passe par le même mode — parité Voyager PICKONMAP (MapIsoHandler.pas:277-285), interaction repensée fenêtré.', 70))
 
 def t3_4():
     # back on Coton expanded, supplier connected, save indicator + toast
@@ -456,9 +465,19 @@ def t3_mobile():
     for n, co, pr, q, town, dist, sel in SUPPLIERS[:3]:
         box = (f'<span style="width: 22px; height: 22px; border-radius: 4px; background: {GOLD}; display: inline-flex; align-items: center; justify-content: center;">{ic(P["check"],14,BG0,3)}</span>' if sel else f'<span style="width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2);"></span>')
         prow += (f'<label style="display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 10px; min-height: 56px; padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.04); font-size: 13px; {"background: " + BG2 + ";" if sel else ""}">{box}<span style="display: flex; flex-direction: column; min-width: 0;"><span style="color: {T0}; font-weight: 500;">{n}</span><span style="font-size: 12px; color: {T3};">{co} · {dist}</span></span><span style="display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums;"><span style="color: {T0};">{pr}</span><span style="font-size: 12px; color: {POS if int(q[:2]) >= 80 else WARN};">{q}</span></span></label>')
-    foot = f'<span style="font-size: 12px; color: {T2};">1 sélectionné</span>{btn("Connecter", "primary", 44)}'
+    foot = (f'{btn("Choisir sur la carte", "secondary", 44)}<span style="flex: 1;"></span>'
+            f'<span style="font-size: 12px; color: {T2};">1 sélectionné</span>{btn("Connecter", "primary", 44)}')
     p2 = phone(status_pill(True) + msheet([('Usine textile', False), ('…', False), ('Trouver', True)], filt, prow, foot, 700), left=430)
-    return page(p1 + p2, 820, 780, map_bg=False)
+    # phone 3 — connect mode (N10): the sheet is hidden, the mode bar replaces the tiles
+    modebar = (f'<div style="position: absolute; left: 0; right: 0; bottom: 0; min-height: 64px; display: flex; align-items: center; gap: 8px; padding: 8px 12px 12px; background: {BG1}; border-top: 1px solid {GOLD_D}; z-index: 350;">'
+               f'<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">'
+               f'<span style="display: flex; align-items: center; gap: 8px;"><span style="width: 8px; height: 8px; border-radius: 9999px; background: {GOLD};"></span>'
+               f'<span style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: {GOLD};">Connect</span>'
+               f'<span style="font-size: 14px; font-weight: 500; color: {T0};">Coton</span></span>'
+               f'<span style="font-size: 12px; color: {T2};">Cliquer un bâtiment pour connecter</span></div>'
+               f'{btn("Annuler", "secondary", 44)}</div>')
+    p3 = phone(blocks([(120, 300, 80, 80, 'other'), (240, 380, 70, 70, 'own')]) + status_pill(True) + modebar, left=860)
+    return page(p1 + p2 + p3, 1250, 780, map_bg=False)
 
 # ======================================================================
 ARTBOARDS = [
@@ -474,9 +493,10 @@ ARTBOARDS = [
     ('T3-3', lambda: t3_3('results'), 1440, 900, 'T3-3 · Trouver un fournisseur — résultats'),
     ('T3-3b', lambda: t3_3('empty'), 1440, 900, 'T3-3b · Aucun résultat'),
     ('T3-3c', lambda: t3_3('loading'), 1440, 900, 'T3-3c · Recherche en cours'),
+    ('T3-3d', t3_3d, 1440, 900, 'T3-3d · Choisir sur la carte — mode connect'),
     ('T3-4', t3_4, 1440, 900, 'T3-4 · Connecté'),
     ('T3-5', t3_5, 1440, 900, 'T3-5 · Déconnecter — confirmation'),
-    ('T3-Mobile', t3_mobile, 820, 780, 'T3 · Mobile — feuille / recherche'),
+    ('T3-Mobile', t3_mobile, 1250, 780, 'T3 · Mobile — feuille / recherche / mode connect'),
 ]
 
 if __name__ == '__main__':
@@ -494,7 +514,7 @@ if __name__ == '__main__':
         'artboards': arts,
         'annotations': [
             {'id': 'flows-brief', 'x': 0, 'y': -420, 'w': 760, 'text': "FLUX T1 — CONSTRUIRE et T3 — RACCORDER UN FOURNISSEUR, option C, desktop + mobile.\nChaque planche porte une note (cadre pointillé or) qui dit ce qu'elle montre. Règles tenues : aucune requête RDO de plus que le code actuel (catégories → liste au clic, détail d'une porte à l'ouverture, recherche à Entrée) ; ligne repliée = nom seul ; diagnostic tiré du bloc Inspect ; confirmation sur dépense et destruction ; « Tourner la vue » (pas de rotation de bâtiment) ; distances calculées localement.\nCe qui suppose une implémentation est dans doc/ux/missing-features.md (H1, H2, H4, B4, B5, B7, N9, N10)."},
-            {'id': 'flows-impl', 'x': 800, 'y': -420, 'w': 620, 'text': "ÉTAT D'IMPLÉMENTATION — RÉFÉRENCE (23/08, PR #55–#74 fusionnées ; tous les lots du plan portés, travaux hors plan en cours)\n✅ T1 Construire (#59) — surface Build (B / tuile / palette), catégories gardées pour la session, filtre local, « Cash after », Placer désactivé si insuffisant, barre de mode, Dialog de dépense (opt-out de session), toast « Built — View ». Écart voulu : la feuille ne se réduit pas à 300 px pendant le placement (elle se ferme) — planches T1-3/T1-3b = cible.\n✅ T3 Fournisseur (#60) — picker = surface empilée sur le bâtiment, Entrée lance, filtres gardés, tri par distance, déconnexion → Dialog destructif, « View on map », toast « Connected ». Écart : pas de « Choisir sur la carte » (N10, hors lot).\n✅ T6 Courrier (#62) · ✅ T2 Diagnostic (#63, bandeau sévérité + action) · ✅ T7 Recherche (#64, palette : mes bâtiments, villes, x,y ; mobile via la pastille #70) · ✅ T5 Taxes (#65) · ✅ T8 Modes carte (#66, overlay symétrique, tarif route, Dialogs) · ✅ Carte-1/2 (#67/#68, surface Map + Bookmarks) · ✅ Feuille flottante (#69) · ✅ Barre mobile (#70).\n✅ Barre de mode mobile routes/zones (#72) · ✅ B6 SaveIndicator sur toute écriture (#73) : curseurs fournisseurs, connexions (un indicateur par porte) et renommage — la planche T3-4 « SaveIndicator Connecté » est désormais le code.\n⚠️ → ✅ (#74) : jusqu'au 23/08 les planches T3 dessinaient une liste de portes que le CODE NE LIVRAIT PAS — l'onglet Approvisionnements répondait « No supply inputs » sur tous les bâtiments (un ObjectId d'en-tête faisait croire la porte déjà chargée). Corrigé : les portes se lisent et se remplissent, les planches T3-2/T3-3 disent enfin le vrai.\nReste hors plan (brief « Restent » / missing-features 🟡) : tablette, N5 chat, N6/N7, B5 rétrogradation, H3, H6, N10, favoris serveur et tarif des ponts (RDO à cataloguer)."},
+            {'id': 'flows-impl', 'x': 800, 'y': -420, 'w': 620, 'text': "ÉTAT D'IMPLÉMENTATION — RÉFÉRENCE (23/08, PR #55–#74 fusionnées ; tous les lots du plan portés, travaux hors plan en cours)\n✅ T1 Construire (#59) — surface Build (B / tuile / palette), catégories gardées pour la session, filtre local, « Cash after », Placer désactivé si insuffisant, barre de mode, Dialog de dépense (opt-out de session), toast « Built — View ». Écart voulu : la feuille ne se réduit pas à 300 px pendant le placement (elle se ferme) — planches T1-3/T1-3b = cible.\n✅ T3 Fournisseur (#60) — picker = surface empilée sur le bâtiment, Entrée lance, filtres gardés, tri par distance, déconnexion → Dialog destructif, « View on map », toast « Connected ».\n✅ N10 (#80) : « Pick on map » au pied du picker (planches T3-3/T3-3d, 3ᵉ téléphone mobile) — un seul mode connect à deux origines, barre de mode desktop + mobile, pile masquée sans destruction, sortie Cancel/Échap, retour au picker intact.\n✅ T6 Courrier (#62) · ✅ T2 Diagnostic (#63, bandeau sévérité + action) · ✅ T7 Recherche (#64, palette : mes bâtiments, villes, x,y ; mobile via la pastille #70) · ✅ T5 Taxes (#65) · ✅ T8 Modes carte (#66, overlay symétrique, tarif route, Dialogs) · ✅ Carte-1/2 (#67/#68, surface Map + Bookmarks) · ✅ Feuille flottante (#69) · ✅ Barre mobile (#70).\n✅ Barre de mode mobile routes/zones (#72) · ✅ B6 SaveIndicator sur toute écriture (#73) : curseurs fournisseurs, connexions (un indicateur par porte) et renommage — la planche T3-4 « SaveIndicator Connecté » est désormais le code.\n⚠️ → ✅ (#74) : jusqu'au 23/08 les planches T3 dessinaient une liste de portes que le CODE NE LIVRAIT PAS — l'onglet Approvisionnements répondait « No supply inputs » sur tous les bâtiments (un ObjectId d'en-tête faisait croire la porte déjà chargée). Corrigé : les portes se lisent et se remplissent, les planches T3-2/T3-3 disent enfin le vrai.\n✅ Hors plan fermés depuis : N6/N7 + H3 (#78), B5 rétrogradation (#79), H6 + N10 (#80).\nReste hors plan (brief « Restent ») : tablette, N5 chat, favoris serveur et tarif des ponts (RDO à cataloguer)."},
             {'id': 'flows-t3', 'x': 0, 'y': 2080, 'w': 560, 'text': "T3 — du clic sur la carte au fournisseur connecté : 5 interactions (clic bâtiment → Inspecter → Trouver un fournisseur → cocher → Connecter), contre 8–10 aujourd'hui sur 3 surfaces imbriquées. Tout se passe dans UNE feuille empilée ; la carte reste visible et cliquable."},
         ],
         'launch': {'view': 'canvas'},

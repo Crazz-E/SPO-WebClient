@@ -65,6 +65,18 @@ describe('ConnectionPickerContent (T3)', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('Pick on map enters the connect mode without closing the picker (N10)', () => {
+    openPicker();
+    const onConnectionPickOnMap = jest.fn();
+    const onClose = jest.fn();
+    renderWithProviders(<ConnectionPickerContent onClose={onClose} />, { clientCallbacks: createSpiedCallbacks({ onConnectionPickOnMap }) });
+    fireEvent.click(screen.getByRole('button', { name: 'Pick on map' }));
+    expect(onConnectionPickOnMap).toHaveBeenCalledTimes(1);
+    // The surface is hidden by the mode, never popped — its context survives
+    expect(onClose).not.toHaveBeenCalled();
+    expect(useBuildingStore.getState().connectionPicker?.fluidName).toBe('Cotton');
+  });
+
   it('the bridge stacks the picker on the building surface and closing pops it', () => {
     useUiStore.getState().setRootSurface({ kind: 'building' });
     ClientBridge.showConnectionPicker({ fluidName: 'Cotton', fluidId: 'Cotton', direction: 'input', buildingX: 1, buildingY: 2 });

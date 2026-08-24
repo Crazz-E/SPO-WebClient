@@ -50,7 +50,7 @@ function ModeRow({ mode }: { mode: ModeDescriptor }) {
         </Button>
       )}
       <Button size="sm" variant="outline" kbd="Esc" onClick={mode.onDone}>
-        Done
+        {mode.doneLabel}
       </Button>
     </div>
   );
@@ -138,7 +138,8 @@ export function CommandBar() {
     { id: 'more', label: 'More', icon: <MoreHorizontal size={20} />, active: moreOpen || isRoadBuild || isRoadDemolish || isZone, onClick: () => setMoreOpen((v) => !v) },
   ];
 
-  const cls = [styles.bar, stack.length > 0 ? styles.shifted : ''].filter(Boolean).join(' ');
+  const connectActive = useUiStore((s) => s.connectMode.active);
+  const cls = [styles.bar, stack.length > 0 && !connectActive ? styles.shifted : ''].filter(Boolean).join(' ');
 
   return (
     <div className={cls}>

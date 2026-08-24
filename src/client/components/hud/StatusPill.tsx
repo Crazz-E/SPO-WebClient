@@ -4,7 +4,8 @@
  * Everything the InfoWidget knew, in one horizontal glass pill centred on the free
  * area above the map: world · game date · cash · income/h · sparkline · Debt tag ·
  * rank · name · role · company · facilities · freshness. The cash and name segments
- * open the empire surface; the Debt tag is information, not a control.
+ * open the empire surface; the Debt tag opens the grouped My facilities list
+ * (H6) — an alert that leads nowhere is a dead end, not information.
  */
 
 import { useEffect, useState } from 'react';
@@ -72,7 +73,7 @@ export function StatusPill() {
   const ownerRole = useGameStore((s) => s.ownerRole);
   const cashHistory = useGameStore((s) => s.cashHistory);
   const lastStatsUpdate = useGameStore((s) => s.lastStatsUpdate);
-  const surfaceOpen = useUiStore((s) => s.stack.length > 0);
+  const surfaceOpen = useUiStore((s) => s.stack.length > 0 && !s.connectMode.active);
 
   // Tick every second to keep the "Xs ago" label fresh
   const [timeAgo, setTimeAgo] = useState(() => formatTimeAgo(lastStatsUpdate));
@@ -120,10 +121,17 @@ export function StatusPill() {
           {failureLevel >= 1 && (
             <>
               <Divider />
-              <span className={debtClass} title={`Debt — level ${failureLevel}`}>
+              {/* H6 — the alert leads somewhere: the grouped My facilities list */}
+              <button
+                type="button"
+                className={debtClass}
+                onClick={() => useUiStore.getState().openLeftPanel('facilities')}
+                aria-label="View facilities losing money"
+                title={`Debt — level ${failureLevel}. View facilities losing money.`}
+              >
                 <span className={styles.debtDot} aria-hidden="true" />
                 Debt
-              </span>
+              </button>
             </>
           )}
 

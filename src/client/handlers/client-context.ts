@@ -94,7 +94,8 @@ export interface ClientHandlerContext {
 
   // ── Connect Mode ─────────────────────────────────────────────────────────
   isConnectMode: boolean;
-  connectSourceBuilding: BuildingDetailsResponse | null;
+  /** The source of the pending connection — the inspected building, or the picker's. */
+  connectSourceBuilding: { x: number; y: number } | null;
   connectKeyboardHandler: ((e: KeyboardEvent) => void) | null;
 
   // ── Logout ───────────────────────────────────────────────────────────────

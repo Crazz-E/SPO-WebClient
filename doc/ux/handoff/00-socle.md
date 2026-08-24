@@ -257,6 +257,11 @@ calque ; un bouton « Done » de 44 px sort du mode) et la pastille de recherche
 barres lisent la même description (`components/hud/use-mode-descriptor.ts`) : mêmes mots, même sortie.
 **Écart voulu** : le **placement** garde `PlacementHUD` (Cancel / Rotate / Confirm), dont les trois
 cibles pleine largeur valent mieux au pouce qu'une ligne de texte.
+**Mode Connect (N10, PR #80)** : quatrième mode du descripteur — « CONNECT · <sujet> ·
+Click a building to connect », sortie **Cancel** (pas Done : rien à valider) / Échap ; pendant
+ce mode la **pile de surfaces se masque sans se détruire** (la feuille couvrait la carte sur
+mobile) et revient telle quelle à la sortie ; deux origines (connectMap de l'inspecteur,
+« Pick on map » du picker), un seul mode.
 
 Zoom : `right: 504px; bottom: 150px` (desktop), `right: 12px; bottom: 150px` (mobile), 40 / 44
 px. Pastille chat : `left: 16px; bottom: 150px`, ouvre `ChatStrip` étendu.

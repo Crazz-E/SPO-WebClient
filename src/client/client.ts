@@ -220,7 +220,7 @@ export class StarpeaceClient implements ClientHandlerContext {
 
   // Connect mode
   public isConnectMode: boolean = false;
-  public connectSourceBuilding: BuildingDetailsResponse | null = null;
+  public connectSourceBuilding: { x: number; y: number } | null = null;
   public connectKeyboardHandler: ((e: KeyboardEvent) => void) | null = null;
 
   // Logout state
@@ -522,6 +522,8 @@ export class StarpeaceClient implements ClientHandlerContext {
       onConfirmBuildingPlacement: () => this.mapNavigationUI?.getRenderer()?.confirmCurrentPlacement(),
       onRotateCW: () => this.mapNavigationUI?.getRenderer()?.rotateCW(),
       onRotateCCW: () => this.mapNavigationUI?.getRenderer()?.rotateCCW(),
+      onConnectionPickOnMap: () => buildingActionHandler.startConnectModeFromPicker(this),
+      onCancelConnectMode: () => buildingActionHandler.cancelConnectMode(this),
       onTriggerReconnect: () => this.triggerImmediateReconnect(),
     };
 

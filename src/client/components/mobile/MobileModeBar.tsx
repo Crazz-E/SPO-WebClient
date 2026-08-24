@@ -26,9 +26,9 @@ export function MobileModeBar({ mode }: { mode: ModeDescriptor }) {
           {mode.overlayNote ? ` · ${mode.overlayNote}` : ''}
         </span>
       </div>
-      <button type="button" className={styles.done} onClick={mode.onDone} aria-label={`Done — leave ${mode.kind} mode`}>
+      <button type="button" className={styles.done} onClick={mode.onDone} aria-label={`${mode.doneLabel} — leave ${mode.kind} mode`}>
         <Check size={20} aria-hidden="true" />
-        <span className={styles.doneLabel}>Done</span>
+        <span className={styles.doneLabel}>{mode.doneLabel}</span>
       </button>
     </div>
   );

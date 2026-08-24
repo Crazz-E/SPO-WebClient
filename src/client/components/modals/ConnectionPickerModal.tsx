@@ -310,6 +310,12 @@ export function ConnectionPickerContent({ onClose, showTitle = true, className }
 
         {/* Footer */}
         <div className={styles.footer}>
+          {/* N10 — Voyager's PICKONMAP (MapIsoHandler.pas:277-285): pick the
+              supplier by clicking the map. Always offered — often faster than
+              scanning a list when the player can see the building. */}
+          <button className={styles.secondaryBtn} onClick={() => client.onConnectionPickOnMap()}>
+            Pick on map
+          </button>
           <button className={styles.secondaryBtn} onClick={selectAll} disabled={results.length === 0}>
             Select All
           </button>

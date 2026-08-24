@@ -17,7 +17,7 @@ import { formatMoney } from '../../format-utils';
 
 export interface ModeDescriptor {
   /** What kind of mode is running — the small caps word of the bar */
-  kind: 'Placement' | 'Road' | 'Zones';
+  kind: 'Placement' | 'Road' | 'Zones' | 'Connect';
   /** The name of what is being placed or done */
   title: string;
   /** What the player has to do next */
@@ -36,6 +36,11 @@ export interface ModeDescriptor {
   isPlacing: boolean;
   /** Leaving the mode — cancel the placement, or toggle the mode off */
   onDone: () => void;
+  /**
+   * Label of the way-out button. 'Done' by default; connect says 'Cancel' —
+   * it has no partial state to validate, leaving without a click IS cancelling.
+   */
+  doneLabel: string;
 }
 
 /** The mode currently running, or null when the player is free on the map. */
@@ -47,6 +52,7 @@ export function useModeDescriptor(): ModeDescriptor | null {
   const isRoadBuild = useGameStore((s) => s.isRoadBuildingMode);
   const isRoadDemolish = useGameStore((s) => s.isRoadDemolishMode);
   const isZone = useGameStore((s) => s.isZonePaintingMode);
+  const connect = useUiStore((s) => s.connectMode);
   const cash = useGameStore((s) => s.tycoonStats?.cash);
   const overlayNote = overlayModeNote(useGameStore((s) => s.overlayBeforeMode));
 
@@ -64,10 +70,11 @@ export function useModeDescriptor(): ModeDescriptor | null {
       overlayNote,
       isPlacing: true,
       onDone: () => client.onCancelBuildingPlacement(),
+      doneLabel: 'Done',
     };
   }
 
-  const base = { invalid: false, cost: null, cashAfter: null, cashAfterNegative: false, overlayNote, isPlacing: false } as const;
+  const base = { invalid: false, cost: null, cashAfter: null, cashAfterNegative: false, overlayNote, isPlacing: false, doneLabel: 'Done' } as const;
 
   if (isRoadBuild) {
     return { ...base, kind: 'Road', title: 'Build', hint: `Drag on the map — ${formatMoney(ROAD_COST_PER_TILE)} per tile`, onDone: () => client.onBuildRoad() };
@@ -77,6 +84,12 @@ export function useModeDescriptor(): ModeDescriptor | null {
   }
   if (isZone) {
     return { ...base, kind: 'Zones', title: 'Paint', hint: 'Drag a rectangle on the map', onDone: () => client.onCancelZonePainting() };
+  }
+  if (connect.active) {
+    // N10 — one mode, two origins (the inspector's connectMap and the picker's
+    // Pick on map). The sheet stack is hidden while it runs; Cancel or Esc
+    // brings it back untouched.
+    return { ...base, kind: 'Connect', title: connect.subject || 'Building', hint: 'Click a building to connect', onDone: () => client.onCancelConnectMode(), doneLabel: 'Cancel' };
   }
   return null;
 }
