@@ -481,6 +481,7 @@ export interface WsReqChatGetChannels extends WsMessage {
   type: WsMessageType.REQ_CHAT_GET_CHANNELS;
 }
 
+/** Not emitted yet — the payload format is unknown. See #117. */
 export interface WsReqChatGetChannelInfo extends WsMessage {
   type: WsMessageType.REQ_CHAT_GET_CHANNEL_INFO;
   channelName: string;
@@ -991,6 +992,11 @@ export interface WsRespBuildRoad extends WsMessage {
   partial?: boolean;
 }
 
+/**
+ * Not emitted yet: the client prices a road itself with `estimateRoadCost`
+ * (`@/shared/road-cost`). This is the gateway-side door #99 needs — bridges and
+ * already-paved tiles have to be priced where the world is known. Kept for it.
+ */
 export interface WsReqGetRoadCost extends WsMessage {
   type: WsMessageType.REQ_GET_ROAD_COST;
   x1: number;
@@ -1126,6 +1132,7 @@ export interface WsEventNewMail extends WsMessage {
   unreadCount: number;
 }
 
+/** Not emitted yet — the compose view has no "save draft" control. See #120, blocked on #108. */
 export interface WsReqMailSaveDraft extends WsMessage {
   type: WsMessageType.REQ_MAIL_SAVE_DRAFT;
   to: string;
@@ -1542,6 +1549,7 @@ export interface WsRespClusterFacilities extends WsMessage {
 // TRANSPORT MESSAGES
 // =============================================================================
 
+/** Half-built feature: no gateway handler and no emitter. See #114. */
 export interface WsReqTransportData extends WsMessage {
   type: WsMessageType.REQ_TRANSPORT_DATA;
 }

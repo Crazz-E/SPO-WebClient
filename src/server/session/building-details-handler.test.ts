@@ -36,7 +36,7 @@ import type { ActiveInspector } from './building-details-handler';
 import { makeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { FakeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { SessionContext } from './session-context';
-import type { BuildingDetailsResponse, BuildingPropertyValue, RdoPacket } from '../../shared/types';
+import type { BuildingPropertyValue, RdoPacket } from '../../shared/types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';

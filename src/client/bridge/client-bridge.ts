@@ -149,6 +149,7 @@ export interface ClientCallbacks {
   // Chat
   onSendChatMessage: (message: string) => void;
   onJoinChannel: (channelName: string) => void;
+  onChatTypingChange: (isTyping: boolean) => void;
 
   // Build menu
   onRequestBuildingCategories: () => void;
