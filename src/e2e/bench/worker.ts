@@ -37,6 +37,7 @@ import {
   type RunningGateway,
 } from './gateway';
 import { ghStatusPublisher, publishPendingStatuses, writeVerdict, type StatusPublisher } from './verdict';
+import { maybeRunNightly, nightlyResultFromReport, writeNightlyResult } from './nightly';
 
 export interface RunCommandOptions {
   cwd: string;
@@ -88,6 +89,8 @@ const MAX_LEASE_MINUTES = 120;
  *   to be left over from some earlier run.
  * - `lease` — everything. It serves a real browser, so the client bundle and the
  *   terrain-test are exactly what the session came for.
+ * - `nightly` — the same as `live`, because it *is* a live drive; the only difference is
+ *   that the worker deposited it against `main` instead of a session against its branch.
  *
  * What is given up: the full build also happened to prove the client still compiles. CI
  * replays that same `npm run build` on every pull request, so the proof is not lost — it
@@ -97,6 +100,7 @@ const BUILD_STEPS: Record<JobType, string[]> = {
   gate: ['build:server'],
   live: ['build:server', 'build:e2e'],
   lease: ['build'],
+  nightly: ['build:server', 'build:e2e'],
 };
 
 /**
@@ -121,6 +125,18 @@ export function recoverInterrupted(deps: WorkerDeps): void {
         'the worker died while this job was executing; the body may have partially run — ' +
         'check the world lock before resubmitting',
     });
+    // Otherwise latest.json would keep yesterday's PASS while nothing is running and
+    // nothing is scheduled — main would read as proven on the strength of a job that died.
+    if (request.type === 'nightly') {
+      writeNightlyResult(deps.paths, {
+        jobId: request.id,
+        sha: request.fingerprint.head,
+        verdict: 'INTERRUPTED',
+        submittedAt: request.submittedAt,
+        finishedAt: new Date(deps.now()).toISOString(),
+        detail: 'the worker died while the nightly was driving main; nothing is proven',
+      });
+    }
     deps.spool.finish(file);
   }
 }
@@ -191,6 +207,11 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
       createdAt: new Date(deps.now()).toISOString(),
       exceptions: countCapabilityExceptions(report.gateArtifact),
     });
+  }
+
+  // The nightly publishes to its own file, never to verdicts/ — see ./nightly.
+  if (request.type === 'nightly') {
+    writeNightlyResult(deps.paths, nightlyResultFromReport(report, request.submittedAt));
   }
 
   deps.spool.finish(runningFile);
@@ -323,7 +344,7 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
         'e2e',
         `gate-${report.fingerprints.atStart.head}.json`,
       );
-    } else if (request.type === 'live') {
+    } else if (request.type === 'live' || request.type === 'nightly') {
       const code = await deps.runCommand('node', ['dist/e2e/run.js', ...request.args], {
         cwd: request.worktree,
         env,
@@ -385,7 +406,11 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
 /**
  * The loop. `maxTicks` exists for tests; production passes Infinity and never returns.
  */
-export async function workerLoop(deps: WorkerDeps, maxTicks: number = Infinity): Promise<void> {
+export async function workerLoop(
+  deps: WorkerDeps,
+  maxTicks: number = Infinity,
+  nightly: (deps: WorkerDeps) => Promise<boolean> = maybeRunNightly,
+): Promise<void> {
   let lastPublish = 0;
   for (let tick = 0; tick < maxTicks; tick++) {
     try {
@@ -396,7 +421,12 @@ export async function workerLoop(deps: WorkerDeps, maxTicks: number = Infinity):
         lastPublish = deps.now();
         publishPendingStatuses(deps.paths, deps.publishStatus, deps.log, deps.now());
       }
-      if (!worked) await deps.sleep(2_000);
+      if (!worked) {
+        // Only when the queue came back empty: the nightly takes the bench like any job,
+        // so it must never start while a session is waiting behind it.
+        await nightly(deps);
+        await deps.sleep(2_000);
+      }
     } catch (err: unknown) {
       deps.log(`worker loop error: ${toErrorMessage(err)}`);
       await deps.sleep(2_000);

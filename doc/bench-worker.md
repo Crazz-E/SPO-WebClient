@@ -28,6 +28,7 @@ discipline rule.
 ├── done/<jobid>.json + .log        reports, purged after 24 h
 ├── verdicts/<sha>.json             per-HEAD attestations — what the push hook reads
 ├── cache/                          the ~570-file asset mirror, ONE copy for the machine
+├── nightly/checkout + latest.json  the worker's own `main` clone, and last night's verdict
 └── world/                          world-lock.json + run-history.json — finally GLOBAL
 ```
 
@@ -50,6 +51,7 @@ one process (the worker) consumes the spool.
 | Gateway | `src/e2e/bench/gateway.ts` | clean-port guarantee, per-job gateway start/stop |
 | Attestations | `src/e2e/bench/verdict.ts` | `verdicts/<sha>.json` + `bench/gate` GitHub commit status |
 | Supervision | `scripts/bench-install.sh` | systemd --user unit, `Restart=always`, linger |
+| Nightly | `src/e2e/bench/nightly.ts` | the schedule, the `main` checkout, `nightly/latest.json` (§8) |
 
 ## 3. A job's life
 
@@ -76,6 +78,7 @@ one process (the worker) consumes the spool.
    | `gate` | `build:server` | the L2 drive is a headless `ws` client — no page, no bundle; the gateway starts without the Vite manifest (`server.ts:90-98`), and `verify-gate.js` compiles the e2e driver itself |
    | `live` | `build:server` + `build:e2e` | this branch runs `dist/e2e/run.js` directly, so it compiles it rather than hoping an earlier job left one behind |
    | `lease` | `build` (everything) | it serves a real browser — the client bundle and the terrain-test are the point |
+| `nightly` | `build:server` + `build:e2e` | it *is* a live drive; only the target differs (§8) |
 
    The full build also used to double as a "does the client still compile" check. CI runs
    exactly that build on every pull request, so the proof moved rather than disappeared.
@@ -97,7 +100,7 @@ one process (the worker) consumes the spool.
    with at step 6, so a replayed Jest suite reads the assets the gateway served:
    - `gate` → `node scripts/verify-gate.js` (static replay, President exclusion, routing,
      live drive) — exit 0 PASS / 2 BLOCKED / else FAIL
-   - `live` → `node dist/e2e/run.js [flags]`
+   - `live`, `nightly` → `node dist/e2e/run.js [flags]`
    - `lease` → report `LEASED` **immediately** (that is what the waiting session unblocks
      on), then hold the gateway until the lease expires or the session releases it
      (`npm run dev:release` drops a marker the hold loop watches). No pid watching: the
@@ -108,8 +111,8 @@ one process (the worker) consumes the spool.
    two jobs.**
 10. **Fingerprint `atEnd`**; if the three differ → verdict **`STALE`, never PASS** — the
    report says so plainly and carries all three fingerprints.
-11. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs), running
-    slot released, next job.
+11. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs) or
+    `nightly/latest.json` (nightly jobs — never both, §8), running slot released, next job.
 
 Verdicts: `PASS` (possibly with capability exceptions listed — §7 of the policy) · `FAIL` ·
 `BLOCKED` (the live stage was refused before running: dirty world or rate limit) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `DIRTY` (gate on
@@ -278,7 +281,49 @@ paragraph in CLAUDE.md. It had already been broken: a session verifying its own 
 took 8080, and a listener the worker cannot attribute blocks *every* session's gate until
 a human frees the port. The hook is what makes the assumption true.
 
-## 8. Acceptance criteria (verified by the test suites)
+## 8. The nightly proof of `main`
+
+Every job in §3 proves a **branch**, judged against the `main` it was based on (§ The gate
+base). Nothing ever drove `main` itself. So two branches that each pass alone and break
+together land unchallenged — each piece was proven, the mixture never was — and the
+regression surfaces days later, under a session working ground it does not own, which then
+spends its three gate attempts on somebody else's defect. The cost is the misattribution,
+not the failure.
+
+**One live drive of `origin/main` a night, deposited by the worker itself.**
+
+| Decision | Answer | Why |
+|---|---|---|
+| Where it runs | `~/.spo-bench/nightly/checkout` — a clone the worker owns, refreshed `fetch → reset --hard origin/main → clean -fd → npm ci` | Not the worker's own repo: a job builds its worktree, and the worker executes `dist/e2e/bench/worker.js` *from* that repo — building `main` there overwrites the running worker mid-flight. Not a `git worktree` of it either: `scripts/finish.sh` scans and reaps worktrees on its own schedule. |
+| How it is scheduled | The worker's idle branch (`worker.ts`, `workerLoop`), inside a window of **02:00–05:59 UTC**, at most one per **20 h** | No second scheduler racing the first for a serialised resource; GitHub Actions cannot reach this machine at all. UTC, not local time, so the window is one number everywhere. |
+| What "idle" means | It is a normal spool job, deposited only when the queue came back **empty** | Serialization, the `done/` report, the `.log`, `bench:status`, `INTERRUPTED` recovery and the 24 h purge all come for free. A session that deposits *during* the nightly simply queues behind it — the nightly is never aborted, and never starts while anyone waits. |
+| Who may deposit one | The worker alone — `cli.ts` does not accept `--type=nightly` | A session asking for one would be asking for the bench outside the queue's discipline. |
+| What it attests | **Nothing.** No `verdicts/<sha>.json` | That file means a *gate* ran — static stage, President exclusion, verify-gate routing — and this is a bare live drive. It would also hand `publishPendingStatuses` a `bench/gate` status to post on `main`'s own sha, a context branch protection reads, and the push hook matches an attestation to the pushing worktree, which this checkout never is. |
+
+**The published surface** is `~/.spo-bench/nightly/latest.json`, written tmp-then-rename:
+
+```json
+{ "jobId": "job-…", "sha": "<the main commit driven>", "verdict": "PASS",
+  "submittedAt": "…", "finishedAt": "…", "detail": "live drive exited 0",
+  "logFile": "/home/…/.spo-bench/done/job-….log" }
+```
+
+`submittedAt` is the **deposit** time, not the start: it is what the 20 h gap is measured
+from, so a night that queued behind a long job cannot buy itself a second slot. A failure to
+refresh the checkout at all is recorded as `ENVIRONMENT` with the failing step named — which
+is also what stops the idle loop retrying every two seconds until the window closes.
+
+**Reading it** is `/next-task`'s § 0, and the rule that follows — repair-only dispatch, no
+`origin/main` merges while red — is [kanban-workflow.md § While `main` is red](kanban-workflow.md).
+`main` counts as red only while the failing `sha` is *still* `origin/main`; `ENVIRONMENT` and
+`INTERRUPTED` are not red, because the run learned nothing about `main` either way.
+
+**Known limit.** `dist/e2e/run.js` maps to a binary PASS/FAIL (`worker.ts`, the live branch),
+so a night refused for a dirty world lock reads as `FAIL` until a human opens `logFile`. The
+`detail` and `logFile` fields exist for exactly that reading. Tightening the mapping is a
+separate change to the driver, not to the schedule.
+
+## 9. Acceptance criteria (verified by the test suites)
 
 - Two simultaneous deposits execute one after the other, in deposit order, each with an
   attributable report — `job.test.ts`, `worker.test.ts`.
@@ -296,3 +341,7 @@ a human frees the port. The hook is what makes the assumption true.
 - A deposit against a dead worker fails immediately with exit 3. `cli.test.ts`, `paths.test.ts`.
 - A moved tree yields `STALE`, never PASS; the hook refuses unstable attestations.
   `worker.test.ts`, `pre-push-gate.test.ts`.
+- A nightly is deposited only from an idle queue, inside its UTC window, at most one per
+  20 h, and only by the worker; it publishes to `nightly/latest.json` and writes no
+  attestation. A worker death mid-nightly stamps `INTERRUPTED` rather than leaving
+  yesterday's PASS standing. — `nightly.test.ts`, `worker.test.ts`.

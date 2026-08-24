@@ -332,3 +332,37 @@ gh issue comment <N> --repo Crazz-E/SPO-WebClient --body "…"
 The entry point for a working session is the **`/next-task`** command
 ([.claude/commands/next-task.md](../.claude/commands/next-task.md)) — it encodes the claim
 handshake and the milestone writes; this document is the rulebook it follows.
+
+## While `main` is red — the nightly rule
+
+The bench proves **branches**, each against the `main` it was based on. Two branches that
+each pass alone and break together therefore land unchallenged: the mixture is never driven
+live. One nightly run of the L2 flows against `origin/main` closes that gap — the worker
+deposits it itself when the queue is idle, and publishes the answer to
+`~/.spo-bench/nightly/latest.json`. Mechanism:
+[bench-worker.md § The nightly proof of `main`](bench-worker.md).
+
+**`main` is red** when that file's `verdict` is `FAIL` *and* its `sha` is still what
+`origin/main` points at. A verdict of `ENVIRONMENT` or `INTERRUPTED` is not red: the run
+never learned anything about `main`, and an unproven `main` is where the project already
+stood every night before this existed.
+
+Two rules follow, and they bind every session:
+
+1. **`/next-task` hands out only the repair.** No new card is claimed while `main` is red.
+   The repair is an ordinary card — issue `Nightly: main is red`, claimed, gated, merged like
+   any other — it is simply the only one on offer.
+2. **No session merges `origin/main` into its branch.** Updating from `main` must never
+   import a defect. A branch already based on the last green `main` keeps working; its
+   attestation records that `baseMain`, and the honest note the push hook prints about a
+   moved `main` is exactly the signal to wait rather than sync.
+
+Why the rule is written here rather than enforced by a hook: a red `main` is the moment the
+board's priority order stops being the human's to set, and that is a rule about *dispatch* —
+the thing this document governs. A hook refusing merges would also have to be sure which
+`main` a branch is being updated *from*, and would refuse the repair itself.
+
+**The misattribution this prevents** is the whole point. Without it, a later session claims a
+card, gates it, and burns its three attempts ([E2E-POLICY.md](E2E-POLICY.md) §8) on a
+regression it did not write, on ground it does not own. The failure is cheap; being unable to
+tell whose failure it is, is not.

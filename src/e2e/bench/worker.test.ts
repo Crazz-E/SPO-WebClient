@@ -4,6 +4,7 @@ import * as path from 'path';
 import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './paths';
 import { Spool, type JobRequest } from './job';
 import { listVerdicts } from './verdict';
+import { readNightlyResult } from './nightly';
 import { buildReceipt, writeReceipt } from './receipt';
 import { type GatewayDeps } from './gateway';
 import {
@@ -129,6 +130,30 @@ describe('recoverInterrupted', () => {
     const report = h.spool.readReport(job.id);
     expect(report?.verdict).toBe('INTERRUPTED');
     expect(report?.detail).toMatch(/worker died/);
+  });
+
+  it('stamps the nightly result INTERRUPTED, so main never reads as proven by a dead job', () => {
+    const h = harness();
+    const job = deposit(h, 'nightly');
+    h.spool.claim(h.spool.queued()[0].file);
+
+    recoverInterrupted(h.deps);
+
+    expect(readNightlyResult(h.paths)).toMatchObject({
+      jobId: job.id,
+      verdict: 'INTERRUPTED',
+      submittedAt: job.submittedAt,
+    });
+  });
+
+  it('leaves the nightly result alone when the interrupted job was a gate', () => {
+    const h = harness();
+    deposit(h);
+    h.spool.claim(h.spool.queued()[0].file);
+
+    recoverInterrupted(h.deps);
+
+    expect(readNightlyResult(h.paths)).toBeNull();
   });
 });
 
@@ -388,6 +413,33 @@ describe('runJob — gate', () => {
     expect(listVerdicts(h.paths)).toHaveLength(0);
   });
 
+  it('publishes a finished nightly to latest.json and attests nothing', async () => {
+    const h = harness();
+    const job = deposit(h, 'nightly');
+
+    await processOldest(h.deps);
+
+    expect(readNightlyResult(h.paths)).toMatchObject({
+      jobId: job.id,
+      verdict: 'PASS',
+      submittedAt: job.submittedAt,
+      sha: `head-of-${path.basename(h.worktree)}`,
+    });
+    // A nightly is not a gate: no sha of main may carry an attestation the push hook
+    // or a bench/gate commit status could read.
+    expect(listVerdicts(h.paths)).toHaveLength(0);
+  });
+
+  it('publishes a failing nightly too — red is the case the file exists for', async () => {
+    const h = harness();
+    deposit(h, 'nightly');
+    h.exitCodes = [0, 0, 0, 1]; // fetch, build:server, build:e2e, then the drive fails
+
+    await processOldest(h.deps);
+
+    expect(readNightlyResult(h.paths)).toMatchObject({ verdict: 'FAIL' });
+  });
+
   it('runs a live job on a dirty tree — only gate attests a sha', async () => {
     const h = harness();
     const job = deposit(h, 'live');
@@ -415,6 +467,19 @@ describe('runJob — gate', () => {
     const report = await runJob(h.deps, job);
     expect(report.verdict).toBe('FAIL');
     expect(report.targetMoved).toBe(true);
+  });
+});
+
+describe('runJob — nightly', () => {
+  it('builds and drives exactly what a live job does — it is a live drive against main', async () => {
+    const h = harness();
+    const job = deposit(h, 'nightly');
+
+    const report = await runJob(h.deps, job);
+
+    expect(npmRuns(h)).toEqual(['build:server', 'build:e2e']);
+    expect(h.commands[3]).toMatchObject({ cmd: 'node', args: ['dist/e2e/run.js'] });
+    expect(report.verdict).toBe('PASS');
   });
 });
 
@@ -571,6 +636,42 @@ describe('workerLoop and main', () => {
     await workerLoop(h.deps, 3);
     expect(h.logs.some(l => l.includes('transient fs error'))).toBe(true);
     expect(h.logs.some(l => l.includes('finished'))).toBe(true);
+  });
+
+  it('offers the bench to the nightly only when the queue came back empty', async () => {
+    const h = harness();
+    deposit(h);
+    const offered: boolean[] = [];
+
+    // Tick 1 runs the job (worked -> no offer); tick 2 finds nothing left.
+    await workerLoop(h.deps, 2, async () => {
+      offered.push(true);
+      return false;
+    });
+
+    expect(offered).toEqual([true]);
+  });
+
+  it('carries the real nightly by default — an idle loop deposits one when it is due', async () => {
+    const h = harness();
+    // 03:00 UTC: inside the window, whatever the machine's timezone.
+    h.clock.nowMs = Date.UTC(2026, 7, 25, 3, 0, 0);
+    h.exitCodes = [1]; // the clone fails, so nothing touches the network or the disk
+
+    await workerLoop(h.deps, 1);
+
+    expect(readNightlyResult(h.paths)).toMatchObject({ verdict: 'ENVIRONMENT' });
+    expect(h.commands[0]).toMatchObject({ cmd: 'git', args: expect.arrayContaining(['clone']) });
+  });
+
+  it('leaves the nightly alone at an hour a session might be waiting', async () => {
+    const h = harness();
+    h.clock.nowMs = Date.UTC(2026, 7, 25, 12, 0, 0);
+
+    await workerLoop(h.deps, 1);
+
+    expect(readNightlyResult(h.paths)).toBeNull();
+    expect(h.commands).toEqual([]);
   });
 
   it('publishes pending statuses from the loop', async () => {
