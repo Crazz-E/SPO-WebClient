@@ -31,6 +31,39 @@ The `Status` field is single-select: a task is in exactly one column.
 | `Session` | text | **The ownership marker.** Empty = claimable. Format: `<branch> @ <YYYY-MM-DD>` (e.g. `claude-crazz/mail-refresh-x1 @ 2026-08-24`). All sessions push as the same GitHub account, so the assignee cannot distinguish them — this field can. |
 | `Category` | single select | 🔴 Defect · 🟠 Latent trap · 🟡 Feature/Gap · ⚪ Observation · 📚 Doc/Infra — called `Category` and not `Type`, which GitHub Projects reserves |
 | `Size` | single select | S · M · L — rough estimate at creation, for scanning the pool. |
+| `Area` | single select | **The ground reservation.** Which part of the tree the card's change lands in — exactly one per card, from the partition below. No other field says what ground a task occupies, and `/next-task` skips a Todo card whose area another live session already holds. |
+
+### The areas — a partition, first match from the top
+
+Every path belongs to **exactly one** area. Where two rules could match, the earlier row wins.
+
+| `Area` | Paths |
+|---|---|
+| `rdo` | `src/shared/rdo-*.ts`, `src/server/rdo*.ts`, `src/server/session/rdo-*.ts`, `src/mock-server/**` |
+| `bench` | `src/e2e/bench/**`, `scripts/bench-*.sh`, `scripts/verify-gate.js`, `.claude/hooks/**` |
+| `renderer` | `src/client/renderer/**`, `src/client/**/*.module.css` |
+| `gateway` | `src/server/**` |
+| `client` | `src/client/**` |
+| `e2e` | `src/e2e/**` |
+| `electron` | `electron/**` |
+| `ci` | `.github/**`, `scripts/**` |
+| `docs` | `doc/**`, `**/*.md` |
+
+**This is not [`.github/labeler.yml`](../.github/labeler.yml).** That file's labels overlap on
+purpose — a PR can be both `client` and `renderer`. An area must *not* overlap, or two sessions
+holding `client` and `renderer` would each believe they are on separate ground while editing
+the same tree.
+
+**One area per card** — where the *majority* of the change lands. Incidental edits do not
+change the choice, specifically `CLAUDE.md`, `package.json`, `package-lock.json`, `README.md`,
+and anything under `doc/`: a card that touches `src/client/renderer/` plus three Markdown files
+is `renderer`, not `docs`. A task that genuinely spans two blocking areas is **split into two
+cards** — never invent a combined area, and never leave `Area` empty to dodge the rule.
+
+**No `area:` labels.** `Category` and `Size` carry labels because workflows and
+`gh issue list --label` cannot read a project field. `Area` is read only by `/next-task`, which
+reads project fields directly through `gh project item-list`. A hand-posted `area:` label would
+duplicate the automatic PR path labels and drift from them.
 
 ## The board is written in English — all of it
 
@@ -66,6 +99,58 @@ English. Conversation with the maintainer is not board content and is not affect
    `Session` filled (it is the trace), and post one issue comment explaining **in simple,
    non-technical English** why the task failed — what was attempted, what blocked it, in
    words a non-programmer follows. The human reclassifies from there.
+
+### One session per area — the ground reservation
+
+Git only refuses a merge when both sides changed the **same lines**. Two changes on different
+lines that break each other merge cleanly, and the defect is visible only once it is on `main`.
+Measured on 2026-08-24: **19** forced `Merge remote-tracking branch 'origin/main'` commits in a
+single day, one branch re-syncing **six times** before it landed. Ownership of a *card* is
+therefore joined by a reservation on its *ground*.
+
+**The busy set.** An area is **busy** when a card holds it in **In progress**, **Gate** or
+**PR**, and that card's reservation is still live (below). `Todo`, `Done` and `Needs triage`
+never make an area busy. `Gate` and `PR` do: the branch exists and is about to land.
+
+**`docs` never blocks.** Two or more cards may hold `docs` at the same time. A documentation
+change cannot break the build, and a same-line collision is caught by Git; blocking on it would
+freeze the board for no gain, since nearly every task edits some Markdown. **Every other area
+blocks.**
+
+**The claim rule.** `/next-task` walks Todo top-down and takes the first card whose `Area` is
+not in the busy set; a card with an **empty** `Area` is claimable and blocks nothing. The full
+algorithm — including what to do when the area determined *after* claiming turns out to be busy,
+and what to do when no card is claimable — is
+[.claude/commands/next-task.md](../.claude/commands/next-task.md) § 1.
+
+**The reservation expires on session inactivity — the card's ownership never does.** A task
+here can legitimately run for **several hours**, and board writes happen at state transitions
+only, so a busy session goes hours without touching its card. The reservation is keyed to
+factual activity instead: the liveness signal is the **session heartbeat**
+([.claude/hooks/session-heartbeat.sh](../.claude/hooks/session-heartbeat.sh)), which every hook
+stamps — a prompt, an edit, a Bash call, the end of a turn — so it moves continuously while a
+session works, whatever the task's length.
+
+Joining a card to a heartbeat takes four steps, because `Session` holds a **branch** while the
+heartbeat store is keyed by **worktree path**. Do not guess the mapping from the names:
+
+1. list `~/.spo-bench/sessions/*.alive` (`SPO_SESSION_DIR` overrides the directory);
+2. each file *contains* the absolute worktree path — read it;
+3. `git -C <path> rev-parse --abbrev-ref HEAD` gives that worktree's branch;
+4. a card matches when its `Session` field begins with that branch.
+
+The window is **`SPO_WORKTREE_IDLE_MIN`** — the same variable and the same 120-minute default
+[`scripts/finish.sh:51`](../scripts/finish.sh) already uses to decide a worktree is abandoned.
+One number to tune, not two. While the heartbeat is younger than that, the reservation is live.
+**When no heartbeat is found for the branch** (the store was cleared, or the session runs on
+another machine — [#158](https://github.com/Crazz-E/SPO-WebClient/issues/158)), fall back to the
+branch's last commit date on `origin`, with the same window. A branch with neither signal does
+not hold its area.
+
+**`Session` is never touched by any of this**, in any of these cases. Ownership law 1 stands
+unchanged: a card whose `Session` is filled still belongs to that session, and only the human
+may free it. What expires is the *ground reservation*, and nothing else — that distinction is
+the whole point of the field.
 
 ## The orphan watch — the law's missing half
 
@@ -208,9 +293,14 @@ finder's own turn, and it is paid by the finder rather than by the claimer.
 The project scope is required once per machine: `gh auth refresh -s project` (run inside WSL).
 
 ```bash
-# List cards with status + session (topmost Todo first = priority order)
+# List cards with status + session + area (topmost Todo first = priority order)
 gh project item-list 2 --owner Crazz-E --format json \
-  --jq '.items[] | {id, title: .content.title, number: .content.number, status: .status, session: .session}'
+  --jq '.items[] | {id, title: .content.title, number: .content.number, status, session, area}'
+
+# The busy set — areas held by a live card (docs excluded: it never blocks)
+gh project item-list 2 --owner Crazz-E --limit 100 --format json \
+  --jq '[.items[] | select(.status == "In progress" or .status == "Gate" or .status == "PR")
+        | select(.area != null and .area != "docs") | .area] | unique'
 
 # Resolve project and field ids (needed for item-edit)
 gh project view 2 --owner Crazz-E --format json --jq .id
@@ -223,6 +313,10 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 # Claim (text field Session)
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
   --field-id <SESSION_FIELD_ID> --text "<branch> @ <date>"
+
+# Fill Area before the card moves to In progress (single select, like Status)
+gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
+  --field-id <AREA_FIELD_ID> --single-select-option-id <OPTION_ID>
 
 # New finding → card review → issue → board (label = the queryable mirror of Category/Size)
 # The draft goes to the `card-reviewer` sub-agent FIRST; on DO NOT FILE, nothing below runs.

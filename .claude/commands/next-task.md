@@ -9,12 +9,40 @@ argument-hint: "[issue number or OB-N to take a specific item]"
 ownership law, board writes, model routing. Do not restate or reinvent it; follow it.
 Board: [github.com/users/Crazz-E/projects/2](https://github.com/users/Crazz-E/projects/2).
 
-## 1 · Pick
+## 1 · Pick — the first Todo card whose ground is free
 
-List the board (`gh project item-list 2 --owner Crazz-E --format json`). Candidates:
-Status = **Todo** and `Session` **empty**. Take the **topmost** (list order is the human's
-priority) — or the item named in `$ARGUMENTS` if given and unowned. If an argued item is
-owned, stop and say so: ownership is sacred.
+List the board (`gh project item-list 2 --owner Crazz-E --format json`): `status`, `session`
+and `area` come back on every item. Candidates: Status = **Todo** and `Session` **empty**.
+
+1. **Compute the busy set** (kanban-workflow § One session per area): every `Area` held by a
+   card in **In progress**, **Gate** or **PR** whose reservation is still live (below).
+   `docs` never enters the busy set — it does not block.
+2. **Walk Todo top-down** — list order is the human's priority — and take the first card whose
+   `Area` is **not** busy. A card with an **empty** `Area` is claimable and blocks nothing.
+   With `$ARGUMENTS`, take the item named there instead; if it is owned, stop and say so —
+   ownership is sacred.
+3. **Claim it** (§ 2 below).
+4. **If `Area` was empty, determine it now** from the partition in kanban-workflow § The areas
+   (one area per card: where the majority of the change lands), and **write it before** moving
+   the card to In progress.
+5. **If the area you just determined turns out to be busy**: clear `Session`, leave the card in
+   Todo with `Area` now filled, and go back to step 2. The card never reached In progress, so
+   this is the same back-off as a lost claim race — ownership law 3 is not violated.
+6. **If no Todo card is claimable, stop and say so.** Do not take a busy card, and do not
+   invent work outside the board.
+
+**Is a reservation live?** Not from the board clock — from the session heartbeat, which moves
+while a session works even when it has no reason to touch its card for hours:
+
+```bash
+now=$(date +%s); for f in ~/.spo-bench/sessions/*.alive; do read -r d < "$f"; [ -d "$d" ] || continue; printf '%s\t%s min\n' "$(git -C "$d" rev-parse --abbrev-ref HEAD)" "$(( (now - $(stat -c %Y "$f")) / 60 ))"; done
+```
+
+A card's reservation is live while the heartbeat of the worktree standing on the branch its
+`Session` field names is younger than `SPO_WORKTREE_IDLE_MIN` (default **120** minutes). No
+heartbeat for that branch → fall back to that branch's last commit date on `origin`, same
+window. Neither signal → the area is free, and the card's `Session` field is still left
+untouched: what expired is the ground reservation, never the ownership.
 
 ## 2 · Claim (handshake)
 
