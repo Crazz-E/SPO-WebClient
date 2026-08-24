@@ -69,6 +69,23 @@ a new issue on the board**, in Todo (bottom — the human prioritises), with `Ca
 synthetic body: what is wrong or missing, key `file:line` references, source (journey/date).
 A finding that only lives in a session report is lost.
 
+**Set the matching label too**, not only the project field. The field is the board's truth;
+the label is the only projection a workflow or `gh issue list --label` can read — GitHub
+cannot query a project field, and the emoji in the title is not a query either.
+
+| `Catégorie` | label | | `Taille` | label |
+|---|---|---|---|---|
+| 🔴 Défaut | `cat:défaut` | | S | `size:S` |
+| 🟠 Piège latent | `cat:piège-latent` | | M | `size:M` |
+| 🟡 Feature/Manque | `cat:feature` | | L | `size:L` |
+| ⚪ Observation | `cat:observation` | | | |
+| 📚 Doc/Infra | `cat:doc-infra` | | | |
+
+Pull requests are labelled by **path**, automatically (`actions/labeler`, `.github/labeler.yml`)
+— `rdo`, `gateway`, `client`, `renderer`, `e2e`, `bench`, `electron`, `ci`, `documentation`.
+Never post those by hand. One label is neither derived nor a session's to post:
+**`rdo-approved`**, which the maintainer alone adds to unlock a protected-file change.
+
 ## Context discipline for sessions
 
 - A good context stays **under ~250k tokens**. A session may deliberately exceed it when
@@ -109,8 +126,9 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
   --field-id <SESSION_FIELD_ID> --text "<branch> @ <date>"
 
-# New finding → issue → board
-gh issue create --repo Crazz-E/SPO-WebClient --title "…" --body "…"
+# New finding → issue → board (label = the queryable mirror of Catégorie/Taille)
+gh issue create --repo Crazz-E/SPO-WebClient --title "…" --body "…" \
+  --label "cat:piège-latent" --label "size:M"
 gh project item-add 2 --owner Crazz-E --url <ISSUE_URL>
 
 # Final comment

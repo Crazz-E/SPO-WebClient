@@ -54,3 +54,23 @@ jobs:
       - name: Coverage of changed lines
         if: github.event_name == 'pull_request'
         run: npm run coverage:changed
+
+      # The three rules CLAUDE.md states and the ruleset cannot express. This runs inside
+      # the REQUIRED check rather than as a job of its own, so it blocks a merge without
+      # anyone having to touch the ruleset. `rdo-approved` is posted by a human — the
+      # author of a diff cannot unlock their own protected-file change.
+      - name: PR rules (protected files, coverage ratchet, RDO citation)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/check-pr-rules.js
+
+      # The harness the agent itself runs on. A broken hook makes the push gate silently
+      # optional, and nothing else in the suite would notice.
+      - name: Skills manifest is current
+        run: node .claude/generate-skills-manifest.js --check
+
+      - name: Hooks parse
+        run: bash -n .claude/hooks/*.sh scripts/*.sh

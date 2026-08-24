@@ -18,8 +18,11 @@ not. Treat RDO work as the highest-stakes work in the repo.
 - Use `any` — `unknown` in catch blocks, typed interfaces for data
 - Modify a file without reading it first
 - Ship code without tests — new/modified lines must reach ≥ 93 % coverage
-- Modify without discussion: `src/shared/rdo-types.ts`, `src/server/rdo.ts`,
-  `src/__fixtures__/*`, `jest.config.js` (thresholds only go UP)
+- Modify without discussion: `src/shared/rdo-types.ts`, `src/shared/rdo-frame.ts`,
+  `src/server/rdo.ts`, `src/__fixtures__/*`, `jest.config.js` (thresholds only go UP) —
+  **enforced**: `scripts/check-pr-rules.js` runs inside the required CI check and fails the
+  PR unless the maintainer posted the `rdo-approved` label. It also fails a change to
+  `rdo-members.ts` whose PR body cites no `File.pas:Line`, and any lowered Jest threshold
 - Load screenshots into the main context during debug/E2E — delegate to a sub-agent
 - Add a UI element without wiring its action — no dead buttons
 
@@ -228,6 +231,10 @@ explicit `PORT=8080`) or drive the live world outside the worker (`test:live:loc
 `dist/e2e/run.js`) is refused with the sanctioned form named in the message. The worker
 SIGKILLs whatever it finds on 8080 before a job, so a session's gateway there is either
 killed mid-run or blocks every session's gate until a human frees the port.
+**Read the verdict from the exit code, never from the printed report** — 0 PASS · 1 verdict
+not passing · 2 refused at deposit (dirty tree) · 3 worker down · 4 wait timed out. The
+report text is for a human; the machine-readable surfaces are that code and
+`~/.spo-bench/verdicts/<sha>.json`.
 Full spec: [doc/bench-worker.md](doc/bench-worker.md).
 
 
