@@ -166,6 +166,9 @@ PR · Done · Needs triage), the `Session` field as ownership marker, board writ
 transitions only, and the model routing (Fable 5 for plan/analysis, Opus 5 for execution).
 A working session starts with **`/next-task`**. **Ownership is sacred** — never touch a
 card whose `Session` is filled; every owner closes its ownership (Done or Needs triage).
+A session that dies without closing it leaves a locked card, and only the human may free
+it — `.github/workflows/orphan-cards.yml` comments once on any card claimed and quiet for
+24 h, so the human sees it; it frees nothing itself.
 **Feeding rule:** every finding lands as a new issue in Todo, with its `Category` and the
 matching `cat:` / `size:` labels — a finding that only lives in a session report is lost.
 **The board is written in English — all of it**, whatever language the session, the source
