@@ -161,13 +161,16 @@ duplicates it. Everything lives in [doc/](doc/); start from
 **All open work lives on the kanban:**
 [github.com/users/Crazz-E/projects/2](https://github.com/users/Crazz-E/projects/2) — every
 task is a GitHub issue on the board. The rulebook is
-[doc/kanban-workflow.md](doc/kanban-workflow.md): six columns (Todo · En cours · Gate · PR ·
-Done · À reclasser), the `Session` field as ownership marker, board writes at state
+[doc/kanban-workflow.md](doc/kanban-workflow.md): six columns (Todo · In progress · Gate ·
+PR · Done · Needs triage), the `Session` field as ownership marker, board writes at state
 transitions only, and the model routing (Fable 5 for plan/analysis, Opus 5 for execution).
 A working session starts with **`/next-task`**. **Ownership is sacred** — never touch a
-card whose `Session` is filled; every owner closes its ownership (Done or À reclasser).
-**Feeding rule:** every finding lands as a new issue in Todo — a finding that only lives in
-a session report is lost. The former `doc/BACKLOG*.md` files are deleted; their text is
+card whose `Session` is filled; every owner closes its ownership (Done or Needs triage).
+**Feeding rule:** every finding lands as a new issue in Todo, with its `Category` and the
+matching `cat:` / `size:` labels — a finding that only lives in a session report is lost.
+**The board is written in English — all of it**, whatever language the session, the source
+or the conversation was in: titles, bodies, every comment, columns, fields, labels.
+Translate on the way in; never transcribe. The former `doc/BACKLOG*.md` files are deleted; their text is
 archived at commit `94b059a0`.
 
 ## Environment

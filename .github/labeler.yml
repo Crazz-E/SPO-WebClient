@@ -1,6 +1,6 @@
 # Which domain a pull request touches, derived from its paths.
 #
-# The board carries `Catégorie` and `Taille` as project fields, and the issue title carries
+# The board carries `Category` and `Size` as project fields, and the issue title carries
 # an emoji — neither is readable from a workflow or from `gh issue list --label`. These
 # labels are the queryable projection: they are what lets a later job route by domain
 # (a stricter review on the wire, a lighter one on docs) instead of treating every PR alike.
