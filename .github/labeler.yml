@@ -44,11 +44,6 @@ bench:
           - 'scripts/verify-gate.js'
           - '.claude/hooks/**'
 
-electron:
-  - changed-files:
-      - any-glob-to-any-file:
-          - 'electron/**'
-
 ci:
   - changed-files:
       - any-glob-to-any-file:

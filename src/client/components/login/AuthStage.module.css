@@ -79,7 +79,7 @@
   color: var(--text-disabled);
 }
 
-/* Remember username checkbox (Electron only) */
+/* Remember username checkbox (single-user mode only) */
 .rememberMe {
   display: flex;
   align-items: center;

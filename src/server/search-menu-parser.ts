@@ -13,7 +13,7 @@ import type {
   TycoonProfile,
   RankingCategory,
   RankingEntry
-} from '../shared/types.js';
+} from '../shared/types';
 
 /**
  * Parse DirectoryMain.asp - Home page with category grid

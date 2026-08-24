@@ -18,22 +18,11 @@ updates:
       # supports TypeScript 7.
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
-      # node-fetch 3 is ESM-only and the server bundle is CJS (build:electron-bundle),
-      # so the major can never land as a plain bump. The real fix is Node 22's global
-      # fetch — a code change, not a dependency update.
+      # node-fetch 3 is ESM-only and this tree is CJS on the server side, so the major
+      # can never land as a plain bump. The real fix is Node 22's global fetch — a code
+      # change, not a dependency update.
       - dependency-name: node-fetch
         update-types: ['version-update:semver-major']
-    commit-message:
-      prefix: chore
-
-  - package-ecosystem: npm
-    directory: /electron
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 1
-    groups:
-      electron-shell:
-        patterns: ['*']
     commit-message:
       prefix: chore
 

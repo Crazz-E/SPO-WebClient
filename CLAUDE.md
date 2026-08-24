@@ -183,15 +183,14 @@ archived at commit `94b059a0`.
 
 **WSL2 (Linux) on a Windows 11 host** — the working shell is bash inside WSL, with the repo at
 `/home/<user>/SPO-WebClient`. Node.js 22 / npm 10, installed in WSL (`/usr/bin/node`).
-PowerShell on the host is only needed for what WSL cannot do: signing and running the packaged
-Electron installer.
+Everything the project needs runs inside WSL.
 
 - Use Claude Code tools (Read, Grep, Glob, Edit, Write) rather than shell `grep`/`find`/`cat`/`sed`.
   The permission allowlist deliberately excludes those shell aliases.
 - Processes: `ps` / `kill` inside WSL; `tasklist` / `taskkill` only for host-side processes
 - Line endings: LF only (`.gitattributes` and `.editorconfig`) — never introduce CRLF
 - Minimum supported runtime is Node 22 (`engines` in package.json, `node:22` in the Dockerfile,
-  Node 22 in CI). The Electron shell bundles its own Node.
+  Node 22 in CI).
 
 ## Commands
 
@@ -431,9 +430,9 @@ description, in the gate report, and as a `NOTE:` from the push hook — not ref
 the note and judge**: if the incoming `main` touches the same ground, merge `origin/main`
 in and re-gate (the new sha needs its own attestation). The detailed live
 evidence still rides in the PR body. Setup checklist: [bench-worker.md §5](doc/bench-worker.md).
-**The last link is the release:** every merge to `main` runs `electron-release.yml`, which
+**The last link is the release:** every merge to `main` runs `release.yml`, which
 computes the version from the last `v*` tag and the commits since it (`feat` → minor,
-otherwise patch), builds the installer, tags and publishes the GitHub Release — never create
+otherwise patch), builds, tags and publishes the GitHub Release — never create
 `v*` tags by hand (a tag ruleset forbids updating or deleting them).
 
 **An update is finished only after `npm run finish`.** GitHub deletes the remote branch at

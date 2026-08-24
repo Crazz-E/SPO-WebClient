@@ -9,8 +9,7 @@ Run the live smoke test against the real servers using Playwright MCP tools.
 
 **L3 is the narrow layer.** Regression coverage belongs to L2 — the headless WebSocket
 drive, `npm run test:live` — which reaches everything below the pixel. Use this command for
-what a socket cannot observe: rendering, layout, input, mobile, Electron, or a pre-release
-pass.
+what a socket cannot observe: rendering, layout, input, mobile, or a pre-release pass.
 
 **This command is a pointer — the procedure is maintained in one place:**
 

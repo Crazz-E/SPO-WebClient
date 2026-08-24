@@ -23,7 +23,7 @@
  *                                               pending HEAD entry as the next version
  *   node scripts/changelog.js --preview         print the pending notes to stdout
  *
- * Only the workflow (.github/workflows/electron-release.yml) runs --next/--notes/--json for
+ * Only the workflow (.github/workflows/release.yml) runs --next/--notes/--json for
  * real; locally, --preview is the one to reach for (`npm run release:preview`).
  */
 

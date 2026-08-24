@@ -8,7 +8,7 @@ pointers to this file.
 > **L3 is now the narrow layer.** Regression coverage belongs to **L2**, the headless
 > WebSocket drive in `src/e2e/` (`npm run test:live`), which reaches everything below the
 > pixel. Reach for a browser run when the change is one a WebSocket cannot observe —
-> rendering, layout, input, mobile, Electron — or before a release.
+> rendering, layout, input, mobile — or before a release.
 
 > **Selector status (verified live 2026-07-03):** the React UI no longer exposes the legacy
 > `#inp-username` / `#btn-connect` / `#build-menu` IDs that older revisions of this document

@@ -9,8 +9,7 @@
 #      is not rewritten, so the push needs no force (this repo forbids force pushes; the
 #      squash merge flattens the PR anyway). A merge conflict is not ours to
 #      solve: comment `@dependabot recreate`, drop the worktree, move on (SKIPPED-conflict);
-#   2. `npm ci` IN THAT WORKTREE (and `npm ci --prefix electron` when the PR touches
-#      electron/). This is the whole point of the script: a session worktree has no
+#   2. `npm ci` IN THAT WORKTREE. This is the whole point of the script: a session worktree has no
 #      node_modules of its own, so npm and Node resolution walk up to ~/SPO-WebClient/
 #      node_modules — the MAIN checkout's OLD dependencies. The bench worker builds and
 #      drives the worktree (`npm run build`, `node dist/server/server.js`) and never runs
@@ -78,10 +77,6 @@ for n in "${prs[@]}"; do
 
   echo "-- npm ci in $wt (the bench builds against THIS node_modules, not main's)"
   (cd "$wt" && npm ci --no-audit --no-fund)
-  if gh pr view "$n" --json files -q '.files[].path' | grep -q '^electron/'; then
-    echo "-- the PR touches electron/: npm ci --prefix electron"
-    (cd "$wt" && npm ci --no-audit --no-fund --prefix electron)
-  fi
 
   # The log lives OUTSIDE the worktree: an untracked file inside it would dirty the tree
   # fingerprint and the worker would refuse to attest.
