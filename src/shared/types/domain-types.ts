@@ -1069,6 +1069,22 @@ export interface PoliticsData {
    */
   rulerPhotoUrl: string;
 
+  /**
+   * Is the player reading this page the holder of the office it describes?
+   *
+   * Answered server-side, once, by `holdsOffice` (politics-handler.ts) — the
+   * only place in the codebase allowed to ask the question. It is not a
+   * comparison the client can redo safely: the reference test has two prongs
+   * (`tycooncampaign.asp:98`), and which prong fires depends on which identity
+   * the session is currently operating under. Only the gateway holds both the
+   * human login name and the role name a company switch installs, so only the
+   * gateway can answer without guessing (OB-31).
+   *
+   * `false` whenever the answer is unknown — including the offline default —
+   * so an unanswerable question never grants a power.
+   */
+  isRuler: boolean;
+
   // -- The rating rails (ratingtabs.asp) ------------------------------------
   popularRatings: PoliticsRatingEntry[];
   ifelRatings: PoliticsRatingEntry[];
