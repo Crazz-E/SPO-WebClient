@@ -72,7 +72,7 @@ esac
 
 case "$PROMPT" in
   *politic*|*mayor*|*maire*|*president*|*président*|*minist*|*capitol*|*town\ hall*|*tax*|*taxe*|*election*|*élection*)
-    add "CIVIC ROLES — doc/civic-roles-reference.md (Mayor/President/Minister powers, Voyager parity, server rules). Open gaps: OB-17..OB-27 in doc/BACKLOG-OPEN.md."
+    add "CIVIC ROLES — doc/civic-roles-reference.md (Mayor/President/Minister powers, Voyager parity, server rules). Open gaps: OB-* issues on the kanban (doc/kanban-workflow.md)."
     ;;
 esac
 

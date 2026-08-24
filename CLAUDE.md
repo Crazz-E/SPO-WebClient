@@ -151,8 +151,21 @@ their directory. They are authoritative for their area — read them rather than
 The `UserPromptSubmit` hook (`.claude/hooks/context-router.sh`) points at the right
 knowledge base from the prompt, before planning. It is the index — this file no longer
 duplicates it. Everything lives in [doc/](doc/); start from
-[architecture-overview.md](doc/architecture-overview.md) or
-[BACKLOG.md](doc/BACKLOG.md) for history.
+[architecture-overview.md](doc/architecture-overview.md).
+
+## Backlog — GitHub Projects
+
+**All open work lives on the kanban:**
+[github.com/users/Crazz-E/projects/2](https://github.com/users/Crazz-E/projects/2) — every
+task is a GitHub issue on the board. The rulebook is
+[doc/kanban-workflow.md](doc/kanban-workflow.md): six columns (Todo · En cours · Gate · PR ·
+Done · À reclasser), the `Session` field as ownership marker, board writes at state
+transitions only, and the model routing (Fable 5 for plan/analysis, Opus 5 for execution).
+A working session starts with **`/next-task`**. **Ownership is sacred** — never touch a
+card whose `Session` is filled; every owner closes its ownership (Done or À reclasser).
+**Feeding rule:** every finding lands as a new issue in Todo — a finding that only lives in
+a session report is lost. The former `doc/BACKLOG*.md` files are deleted; their text is
+archived at commit `94b059a0`.
 
 ## Environment
 
@@ -311,8 +324,10 @@ security-auditor, typescript, web-accessibility, web-performance.
 - **Direct tools** for anything targeted — never spawn an agent for a one-liner
 - **Never delegate understanding.** Do not write "based on your findings, fix the bug."
   Synthesise the agent's results yourself, then act.
-- **Model routing:** Opus for protocol reasoning and architecture; Fable for high-volume
-  mechanical work (coverage parsing, release notes, link checks).
+- **Model routing:** Fable 5 for planning and analysis (implementation plans, bug
+  diagnosis, feature analysis); Opus 5 for execution (implementation, tests, mechanical
+  sweeps) — effort adapted in both cases. If the session cannot switch its own model,
+  apply the routing to its sub-agents.
 
 ## MCP
 
@@ -349,7 +364,8 @@ Procedure and selectors: `/e2e-test` skill and [E2E-TESTING.md](doc/E2E-TESTING.
 ## Live server logs — http://158.69.153.134/logs/
 
 The Delphi servers write their logs to an open IIS directory listing, no auth. This is how a
-live run is proved rather than assumed — `doc/BACKLOG-OPEN.md` already cites it as evidence.
+live run is proved rather than assumed — backlog issues (the former `BACKLOG-OPEN.md`
+entries) already cite it as evidence.
 
 | Path | Carries |
 |------|---------|

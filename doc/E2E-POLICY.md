@@ -236,9 +236,10 @@ clean-tree rule (`DIRTY`), the President exclusion (`BLOCKED`) and the hook.
 **On exhaustion:** push the branch, open a **draft** PR titled `blocked: …`, attach the
 evidence and all three hypotheses, do not merge, hand back. Work is never discarded.
 
-Structured output, not a chat message: the report is appended to
-[BACKLOG-OPEN.md](BACKLOG-OPEN.md) with the three hypotheses, what each predicted, and what
-actually happened. That is the input that makes the next session start ahead of zero.
+Structured output, not a chat message: the report is posted as a comment on the task's
+issue ([kanban-workflow.md](kanban-workflow.md)) with the three hypotheses, what each
+predicted, and what actually happened. That is the input that makes the next session start
+ahead of zero.
 
 ---
 

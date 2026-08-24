@@ -192,7 +192,7 @@ When comparing Delphi original to TypeScript WebClient implementation:
 | **BUG** | WebClient diverges in a way that causes errors | File as bug with evidence from both sides |
 | **INTENTIONAL** | WebClient deliberately differs (modernization, simplification) | Document the decision and reasoning |
 | **DRIFT** | Minor difference, unclear if intentional | Flag for developer review with evidence |
-| **MISSING** | Feature exists in Delphi but not in WebClient | Add to doc/BACKLOG.md if relevant |
+| **MISSING** | Feature exists in Delphi but not in WebClient | File an issue on the kanban (doc/kanban-workflow.md) if relevant |
 | **UNKNOWN** | Cannot determine from available evidence | Mark and move on — don't guess |
 
 ### Conflict Resolution

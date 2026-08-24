@@ -82,8 +82,9 @@ Handle the outcome by verdict — the rules are [doc/E2E-POLICY.md](../../doc/E2
 | `FAIL` | Diagnose, write the hypothesis, fix, commit, re-run. **Three attempts maximum, each naming a different root cause.** Never edit a test that was failing in order to make it pass |
 
 After the third failed attempt: push the branch, open a **draft** PR titled `blocked: ...`
-with the three hypotheses and the evidence, append the report to
-[doc/BACKLOG-OPEN.md](../../doc/BACKLOG-OPEN.md), and hand back. Do not merge.
+with the three hypotheses and the evidence, post the report as a comment on the task's
+issue and move its card to **À reclasser**
+([doc/kanban-workflow.md](../../doc/kanban-workflow.md)), and hand back. Do not merge.
 
 ### 6. Push
 

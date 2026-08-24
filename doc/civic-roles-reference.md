@@ -25,7 +25,7 @@
 |----------|--------|
 | [facility-tabs-reference.md](facility-tabs-reference.md) | Tab configurations from CLASSES.BIN, handler registry |
 | [voyager-inspector-architecture.md](voyager-inspector-architecture.md) | Container lifecycle, `xfer_*` binding, the permission model in full |
-| [BACKLOG-OPEN.md](BACKLOG-OPEN.md) | `OB-17` … `OB-27` — the open gaps this document identified |
+| [The kanban board](https://github.com/users/Crazz-E/projects/2) | `OB-17` … `OB-27` — the open gaps this document identified (full text archived: [BACKLOG-OPEN @ 94b059a0](https://github.com/Crazz-E/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG-OPEN.md)) |
 
 ---
 
@@ -449,8 +449,11 @@ Both are recorded here so a later reader does not "fix" them back.
 
 ## 8. Open gaps
 
-Filed in [BACKLOG-OPEN.md](BACKLOG-OPEN.md) as **`OB-17` … `OB-27`**. Nine were fixed on
-2026-08-20; that file's status table says what shipped against each.
+Filed as **`OB-17` … `OB-27`** — the survivors are issues on
+[the kanban board](https://github.com/users/Crazz-E/projects/2). Nine were fixed on
+2026-08-20; the archived
+[BACKLOG-OPEN @ 94b059a0](https://github.com/Crazz-E/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG-OPEN.md)
+status table says what shipped against each.
 
 What remains:
 
