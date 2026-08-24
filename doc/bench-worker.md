@@ -27,8 +27,17 @@ discipline rule.
 ├── running/                        the one claimed job
 ├── done/<jobid>.json + .log        reports, purged after 24 h
 ├── verdicts/<sha>.json             per-HEAD attestations — what the push hook reads
+├── cache/                          the ~570-file asset mirror, ONE copy for the machine
 └── world/                          world-lock.json + run-history.json — finally GLOBAL
 ```
+
+`cache/` is the mirror of `update.starpeaceonline.com/five/client/cache/`. It used to sit
+at `<worktree>/cache`, so every new branch downloaded all 570 files again — the same bytes,
+on the same machine, on the bench's exclusive time (11 of 47 jobs in the #130 measurement).
+It is bench-wide because those files are a copy of a remote tree, not build output: no
+worktree can hold a version of them that differs from another's. The one-writer-at-a-time
+this assumes is the job queue itself. Nothing purges it; a stale mirror is repaired by the
+next sync, and `rm -rf ~/.spo-bench/cache` forces a full re-prime.
 
 Every hand-off is a same-filesystem `rename(2)`: atomic, no locks needed, because exactly
 one process (the worker) consumes the spool.
@@ -71,7 +80,9 @@ one process (the worker) consumes the spool.
    The full build also used to double as a "does the client still compile" check. CI runs
    exactly that build on every pull request, so the proof moved rather than disappeared.
    A failing step is a `FAIL` naming the step, before any gateway starts.
-6. **Gateway** from that worktree, wait for `phase=ready`.
+6. **Gateway** from that worktree, with `SPO_CACHE_DIR=~/.spo-bench/cache` so it reads the
+   machine-wide asset mirror instead of priming an empty one in the worktree; wait for
+   `phase=ready`.
 7. **Precheck receipt** (gate only): look in `~/.spo-bench/receipts/` for a receipt whose
    key is the fingerprint taken at step 4 — the worker's own reading of the tree, never a
    value the session supplied. On a match, `--skip-static` is passed to verify-gate and the
@@ -81,7 +92,9 @@ one process (the worker) consumes the spool.
    the job log. **Only stage 1 is ever skipped**: `build:e2e`, the routing, the President
    exclusion and the live drive are what the bench alone can do, and they always run. See
    `src/e2e/bench/receipt.ts`.
-8. **Body**, with `E2E_WORLD_STATE_DIR=~/.spo-bench/world`:
+8. **Body**, with `E2E_WORLD_STATE_DIR=~/.spo-bench/world` and
+   `SPO_CACHE_DIR=~/.spo-bench/cache` — the same two variables the gateway was started
+   with at step 6, so a replayed Jest suite reads the assets the gateway served:
    - `gate` → `node scripts/verify-gate.js` (static replay, President exclusion, routing,
      live drive) — exit 0 PASS / 2 BLOCKED / else FAIL
    - `live` → `node dist/e2e/run.js [flags]`

@@ -29,7 +29,13 @@ import {
 import { fingerprintTree, resolveRef, type TreeFingerprint } from './fingerprint';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
 import { lookupReceipt, pruneReceipts, RECEIPT_MAX_AGE_MS } from './receipt';
-import { clearPort, realGatewayDeps, startGateway, type RunningGateway } from './gateway';
+import {
+  clearPort,
+  realGatewayDeps,
+  startGateway,
+  type GatewayDeps,
+  type RunningGateway,
+} from './gateway';
 import { ghStatusPublisher, publishPendingStatuses, writeVerdict, type StatusPublisher } from './verdict';
 
 export interface RunCommandOptions {
@@ -49,7 +55,12 @@ export interface WorkerDeps {
   runCommand: (cmd: string, args: string[], options: RunCommandOptions) => Promise<number>;
   gateway: {
     clearPort: (port: number) => Promise<void>;
-    start: (worktree: string, port: number, logFile: string) => Promise<RunningGateway>;
+    start: (
+      worktree: string,
+      port: number,
+      logFile: string,
+      env: Record<string, string>,
+    ) => Promise<RunningGateway>;
   };
   publishStatus: StatusPublisher;
   processAlive: (pid: number) => boolean;
@@ -263,9 +274,16 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
     }
   }
 
+  // What every process this job starts is told about the bench's shared state: the world
+  // lock, and the asset mirror. The mirror is bench-wide on purpose — see BenchPaths.cache.
+  const env = {
+    E2E_WORLD_STATE_DIR: deps.paths.world,
+    SPO_CACHE_DIR: deps.paths.cache,
+  };
+
   let gateway: RunningGateway;
   try {
-    gateway = await deps.gateway.start(request.worktree, deps.port, logFile);
+    gateway = await deps.gateway.start(request.worktree, deps.port, logFile, env);
   } catch (err: unknown) {
     return finish('ENVIRONMENT', `gateway never became ready: ${toErrorMessage(err)}`);
   }
@@ -273,7 +291,6 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
   let bodyVerdict: JobVerdict;
   let bodyDetail: string;
   try {
-    const env = { E2E_WORLD_STATE_DIR: deps.paths.world };
     if (request.type === 'gate') {
       // The static stage — typecheck, lint, the Jest suite — is exactly what the session
       // already ran in `gate:precheck`. If it left a receipt for THIS tree, replaying it
@@ -412,8 +429,14 @@ export function realRunCommand(
   });
 }
 
-export function realWorkerDeps(paths: BenchPaths): WorkerDeps {
-  const gatewayDeps = realGatewayDeps();
+/**
+ * `gatewayDeps` is a parameter only so a test can prove the forwarding — chiefly that the
+ * job environment reaches `startGateway` — without a real gateway being spawned.
+ */
+export function realWorkerDeps(
+  paths: BenchPaths,
+  gatewayDeps: GatewayDeps = realGatewayDeps(),
+): WorkerDeps {
   return {
     paths,
     spool: new Spool(paths),
@@ -423,7 +446,7 @@ export function realWorkerDeps(paths: BenchPaths): WorkerDeps {
     runCommand: realRunCommand,
     gateway: {
       clearPort: port => clearPort(port, gatewayDeps),
-      start: (worktree, port, logFile) => startGateway(worktree, port, logFile, gatewayDeps),
+      start: (worktree, port, logFile, env) => startGateway(worktree, port, logFile, gatewayDeps, env),
     },
     publishStatus: ghStatusPublisher((cmd, args, cwd) => {
       execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });

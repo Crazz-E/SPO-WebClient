@@ -39,9 +39,13 @@ import {
   canReceiveConcrete
 } from './concrete-texture-system';
 import { Rotation } from './road-texture-system';
+import { getCacheDir } from '../../server/paths';
 
-// Path to cache directories
-const CACHE_DIR = path.join(__dirname, '../../../cache');
+// Where the asset mirror actually is. Asking getCacheDir() rather than assuming
+// `<checkout>/cache` keeps these integration tests running under the bench worker, which
+// points every job at one shared mirror (SPO_CACHE_DIR) instead of priming a copy per
+// worktree — with a hardcoded path they would silently fall through to it.skip.
+const CACHE_DIR = getCacheDir();
 const CONCRETE_CLASSES_DIR = path.join(CACHE_DIR, 'ConcreteClasses');
 const CONCRETE_IMAGES_DIR = path.join(CACHE_DIR, 'ConcreteImages');
 

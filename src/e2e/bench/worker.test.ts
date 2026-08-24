@@ -5,6 +5,7 @@ import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './pat
 import { Spool, type JobRequest } from './job';
 import { listVerdicts } from './verdict';
 import { buildReceipt, writeReceipt } from './receipt';
+import { type GatewayDeps } from './gateway';
 import {
   countCapabilityExceptions,
   main,
@@ -26,6 +27,8 @@ interface Harness {
   /** Queue of exit codes handed to successive runCommand calls (default 0). */
   exitCodes: number[];
   gatewayStarts: string[];
+  /** The environment each gateway start was handed, in start order. */
+  gatewayEnvs: Record<string, string>[];
   gatewayStops: number;
   logs: string[];
   submitterAlive: boolean;
@@ -54,6 +57,7 @@ function harness(): Harness {
     commands: [],
     exitCodes: [],
     gatewayStarts: [],
+    gatewayEnvs: [],
     gatewayStops: 0,
     logs: [],
     submitterAlive: true,
@@ -78,9 +82,10 @@ function harness(): Harness {
       },
       gateway: {
         clearPort: async () => {},
-        start: async wt => {
+        start: async (wt, _port, _logFile, env) => {
           if (h.gatewayFails) throw new Error('phase=caching forever');
           h.gatewayStarts.push(wt);
+          h.gatewayEnvs.push(env);
           return { pid: 999, stop: async () => void h.gatewayStops++ };
         },
       },
@@ -234,6 +239,20 @@ describe('runJob — gate', () => {
     expect(h.commands[2].env?.E2E_WORLD_STATE_DIR).toBe(h.paths.world);
     expect(h.gatewayStarts).toEqual([h.worktree]);
     expect(h.gatewayStops).toBe(1);
+  });
+
+  it('points the gateway and the body at the bench-wide asset cache, not the worktree', async () => {
+    const h = harness();
+    const job = deposit(h, 'gate');
+    await runJob(h.deps, job);
+    // The gateway is what primes and reads the mirror; without this it would download
+    // all ~570 files into a fresh worktree on the bench's exclusive time.
+    expect(h.gatewayEnvs).toEqual([
+      { E2E_WORLD_STATE_DIR: h.paths.world, SPO_CACHE_DIR: h.paths.cache },
+    ]);
+    // verify-gate replays the Jest suite when there is no receipt, and tests that read
+    // real assets must be pointed at the same mirror or they silently self-skip.
+    expect(h.commands[2].env?.SPO_CACHE_DIR).toBe(h.paths.cache);
   });
 
   it('builds the gateway alone — no client bundle, no terrain-test, for a browserless drive', async () => {
@@ -509,6 +528,32 @@ describe('the real command runner and deps', () => {
     deps.log('smoke'); // writes to stdout; must not throw
     // An unused high port: the real clearPort runs `ss`, finds nothing, returns.
     await expect(deps.gateway.clearPort(65_001)).resolves.toBeUndefined();
+  });
+
+  it('realWorkerDeps forwards the job environment to startGateway', async () => {
+    const paths = benchPaths(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-real-')));
+    ensureLayout(paths);
+    const spawned: { cwd: string; env: Record<string, string> }[] = [];
+    // A fake machine, so the wiring is exercised without a gateway being spawned.
+    const gatewayDeps: GatewayDeps = {
+      execFile: () => '',
+      spawnProcess: ((_cmd: string, _args: string[], opts: { cwd: string; env: Record<string, string> }) => {
+        spawned.push({ cwd: opts.cwd, env: opts.env });
+        return { pid: 4242, unref: () => {} };
+      }) as unknown as GatewayDeps['spawnProcess'],
+      fetchImpl: (async () => ({ ok: true, text: async () => 'data: {"phase":"ready"}\n\n' }) as Response) as typeof fetch,
+      sleep: async () => {},
+      kill: () => {},
+    };
+    const deps = realWorkerDeps(paths, gatewayDeps);
+
+    const logFile = path.join(paths.done, 'wiring.log');
+    const gateway = await deps.gateway.start('/wt/a', 8080, logFile, { SPO_CACHE_DIR: paths.cache });
+
+    expect(gateway.pid).toBe(4242);
+    expect(spawned[0].cwd).toBe('/wt/a');
+    expect(spawned[0].env.SPO_CACHE_DIR).toBe(paths.cache);
+    expect(spawned[0].env.PORT).toBe('8080');
   });
 });
 
