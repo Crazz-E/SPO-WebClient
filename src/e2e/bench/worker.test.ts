@@ -3,13 +3,14 @@ import * as os from 'os';
 import * as path from 'path';
 import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './paths';
 import { Spool, type JobRequest } from './job';
-import { listVerdicts } from './verdict';
+import { listVerdicts, writeVerdictIn } from './verdict';
 import { readNightlyResult } from './nightly';
 import { buildReceipt, writeReceipt } from './receipt';
 import { type GatewayDeps } from './gateway';
 import {
   countCapabilityExceptions,
   main,
+  mergeQueueDeps,
   processOldest,
   realRunCommand,
   realWorkerDeps,
@@ -45,6 +46,10 @@ interface Harness {
   leaseDecision: { ok: boolean; why?: string };
   /** What CI is said to have concluded for the sha under test. See ./ci-proof. */
   ciProof: { proven: boolean; why?: string };
+  /** How many times the loop asked the merge queue for work. */
+  queueServed: number;
+  /** What resolveRef answers for refs other than origin/main (e.g. `HEAD^{tree}`). */
+  trees: Record<string, string | undefined>;
   /** The step name prepareRef reports as failed; null = the fetch worked. */
   prepareRefFails: string | null;
   prepareRefCalls: string[];
@@ -77,6 +82,8 @@ function harness(): Harness {
     gatewayFails: false,
     leaseDecision: { ok: true },
     ciProof: { proven: false, why: 'no CI run for this commit yet' },
+    queueServed: 0,
+    trees: {},
     prepareRefFails: null,
     prepareRefCalls: [],
     leaseRenewals: 0,
@@ -89,7 +96,7 @@ function harness(): Harness {
         const hash = h.hashes[Math.min(fingerprintCalls++, h.hashes.length - 1)];
         return { head: `head-of-${path.basename(wt)}`, hash, clean: h.clean };
       },
-      resolveRef: (_wt, ref) => (ref === 'origin/main' ? h.baseMain : undefined),
+      resolveRef: (_wt, ref) => (ref === 'origin/main' ? h.baseMain : h.trees[ref]),
       runCommand: async (cmd, args, options) => {
         h.commands.push({ cmd, args, cwd: options.cwd, env: options.env });
         return h.exitCodes.shift() ?? 0;
@@ -105,6 +112,7 @@ function harness(): Harness {
       },
       publishStatus: (_wt, head) => h.published.push(head),
       ciStaticProof: () => h.ciProof,
+      serveMergeQueue: () => (h.queueServed++, 0),
       prepareRef: async ref => {
         h.prepareRefCalls.push(ref);
         // The real one resets a checkout on disk; the harness just makes the directory
@@ -925,5 +933,163 @@ describe('workerLoop and main', () => {
     h.leaseDecision = { ok: false, why: 'laptop (pid 77) holds the bench' };
     await main(h.deps, 0);
     expect(h.logs.join('\n')).toMatch(/bench lease NOT held/);
+  });
+});
+
+describe('the merge queue takes the bench first', () => {
+  it('serves the queue only on an idle tick, never over a waiting job', async () => {
+    // An entry jumps the spool once deposited, but the pass that deposits it must not run
+    // while something is mid-flight — otherwise "jumping the line" becomes "interrupting".
+    const h = harness();
+    deposit(h);
+    await workerLoop(h.deps, 1, async () => false);
+    expect(h.queueServed).toBe(0);
+
+    await workerLoop(h.deps, 1, async () => false);
+    expect(h.queueServed).toBe(1);
+  });
+
+  it('takes a queue entry ahead of an older ordinary deposit', async () => {
+    // The whole point of the priority: a lease measured at up to 33 min would otherwise
+    // eject a healthy branch on the queue's check-response timeout.
+    const h = harness();
+    const ordinary = deposit(h);
+    const entry = h.spool.submit(
+      {
+        type: 'ref',
+        worktree: h.worktree,
+        branch: 'gh-readonly-queue/main/pr-1-abc',
+        fingerprint: { head: 'q'.repeat(40), hash: 'ref:q', clean: true },
+        submitter: { pid: 0 },
+        args: [],
+        ref: 'q'.repeat(40),
+        queueEntry: true,
+      },
+      h.clock.nowMs + 1000, // deposited LATER than the ordinary job
+    );
+
+    await processOldest(h.deps);
+
+    expect(h.spool.readReport(entry.id)?.verdict).toBe('PASS');
+    expect(h.spool.readReport(ordinary.id)).toBeNull(); // still waiting its turn
+  });
+
+  it('records the tree a ref job drove, so the queue can skip an identical one', async () => {
+    const h = harness();
+    h.trees['HEAD^{tree}'] = 'tree-abc';
+    h.spool.submit(
+      {
+        type: 'ref',
+        worktree: h.worktree,
+        branch: 'x',
+        fingerprint: { head: 'r'.repeat(40), hash: 'ref:r', clean: true },
+        submitter: { pid: 0 },
+        args: [],
+        ref: 'r'.repeat(40),
+      },
+      h.clock.nowMs,
+    );
+
+    await processOldest(h.deps);
+
+    expect(listVerdicts(h.paths)[0].verdict.tree).toBe('tree-abc');
+  });
+});
+
+describe('mergeQueueDeps — what the queue service is given', () => {
+  function bench(): BenchPaths {
+    const paths = benchPaths(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-mq-')));
+    ensureLayout(paths);
+    return paths;
+  }
+
+  it('offers every attestation as a candidate, with the tree it drove', () => {
+    const paths = bench();
+    writeVerdictIn(paths.verdicts, {
+      head: 'a'.repeat(40),
+      branch: 'x',
+      worktree: paths.refCheckout,
+      verdict: 'PASS',
+      fingerprintStable: true,
+      tree: 'tree-1',
+      jobId: 'job-1',
+      createdAt: new Date().toISOString(),
+    });
+
+    expect(mergeQueueDeps(paths, () => {}).attested()).toEqual([
+      { head: 'a'.repeat(40), tree: 'tree-1', verdict: 'PASS', fingerprintStable: true },
+    ]);
+  });
+
+  it('reports a tree-less attestation as null rather than dropping it', () => {
+    // Older attestations predate the tree field. They are still real verdicts; they just
+    // cannot satisfy the dedup, which mayReuseVerdict already handles.
+    const paths = bench();
+    writeVerdictIn(paths.verdicts, {
+      head: 'b'.repeat(40),
+      branch: 'x',
+      worktree: '/wt',
+      verdict: 'PASS',
+      fingerprintStable: true,
+      jobId: 'job-2',
+      createdAt: new Date().toISOString(),
+    });
+    expect(mergeQueueDeps(paths, () => {}).attested()[0].tree).toBeNull();
+  });
+
+  it('deposits a queue entry as a PRIORITY ref job in the shared checkout', () => {
+    const paths = bench();
+    const deps = mergeQueueDeps(paths, () => {});
+    deps.deposit({ ref: 'gh-readonly-queue/main/pr-9-abc', sha: 'c'.repeat(40) });
+
+    const [{ request }] = new Spool(paths).queued();
+    expect(request).toMatchObject({
+      type: 'ref',
+      ref: 'c'.repeat(40),
+      queueEntry: true,
+      worktree: paths.refCheckout,
+      branch: 'gh-readonly-queue/main/pr-9-abc',
+      submitter: { pid: 0 },
+    });
+  });
+
+  it('sees its own deposit as pending, so a tick never deposits twice', () => {
+    const paths = bench();
+    const deps = mergeQueueDeps(paths, () => {});
+    expect(deps.pendingFor('d'.repeat(40))).toBe(false);
+    deps.deposit({ ref: 'gh-readonly-queue/main/pr-9-abc', sha: 'd'.repeat(40) });
+    expect(deps.pendingFor('d'.repeat(40))).toBe(true);
+  });
+
+  it('copies a reused verdict onto the entry, recording that it was not driven', () => {
+    const paths = bench();
+    writeVerdictIn(paths.verdicts, {
+      head: 'e'.repeat(40),
+      branch: 'x',
+      worktree: paths.refCheckout,
+      verdict: 'PASS',
+      fingerprintStable: true,
+      tree: 'tree-9',
+      jobId: 'job-src',
+      createdAt: new Date().toISOString(),
+      published: true,
+    });
+
+    mergeQueueDeps(paths, () => {}).reuse('e'.repeat(40), 'f'.repeat(40), 'identical tree');
+
+    const copy = listVerdicts(paths).find(v => v.verdict.head === 'f'.repeat(40))!.verdict;
+    expect(copy.verdict).toBe('PASS');
+    expect(copy.tree).toBe('tree-9');
+    // Unpublished, so the loop posts it to GitHub; and the id says plainly it was reused.
+    expect(copy.published).toBe(false);
+    expect(copy.jobId).toMatch(/job-src \(reused: identical tree\)/);
+  });
+
+  it('does nothing when the source verdict has vanished — the next tick gates it', () => {
+    // The 24 h purge can remove it between the decision and the copy. Leaving the entry
+    // unanswered is the safe direction: it gets gated properly rather than blessed.
+    const paths = bench();
+    mergeQueueDeps(paths, () => {}).reuse('0'.repeat(40), '1'.repeat(40), 'why');
+    expect(listVerdicts(paths)).toHaveLength(0);
   });
 });

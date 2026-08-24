@@ -29,6 +29,7 @@ import {
 import { fingerprintTree, resolveRef, runGit, type TreeFingerprint } from './fingerprint';
 import { prepareCheckout } from './checkout';
 import { ciStaticProof, type CiProof } from './ci-proof';
+import { serveMergeQueue, type MergeQueueDeps } from './merge-queue';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
 import { lookupReceipt, pruneReceipts, RECEIPT_MAX_AGE_MS } from './receipt';
 import {
@@ -40,6 +41,7 @@ import {
 } from './gateway';
 import {
   ghStatusPublisher,
+  listVerdicts,
   publishPendingStatuses,
   writeVerdictIn,
   type StatusPublisher,
@@ -90,6 +92,8 @@ export interface WorkerDeps {
   prepareRef: (ref: string, logFile: string) => Promise<string | null>;
   /** Has CI already proved this sha's static half? See ./ci-proof. */
   ciStaticProof: (sha: string) => CiProof;
+  /** One pass over GitHub's merge queue; returns how many entries it acted on. ./merge-queue */
+  serveMergeQueue: () => number;
   /** May this worker take the live bench right now? See ./owner. */
   mayDriveLive: (nowMs: number) => DriveDecision;
   /** One owner-lease renewal pass; the loop calls it on a timer. See ./owner. */
@@ -181,7 +185,14 @@ export function recoverInterrupted(deps: WorkerDeps): void {
  * without running anything — the queue cleans itself.
  */
 export async function processOldest(deps: WorkerDeps): Promise<boolean> {
-  const oldest = deps.spool.queued()[0];
+  // A merge-queue entry jumps the line. GitHub ejects an entry whose required checks
+  // exceed the queue's response timeout, and the bench is serialised machine-wide: a
+  // `lease` (median 11 min, max 33 measured) would otherwise eject a perfectly healthy
+  // branch, and its session would spend its three attempts on somebody else's `npm run
+  // dev`. Nothing starves for long — the queue runs one entry at a time, and an entry is
+  // one gate. See ./merge-queue.
+  const waiting = deps.spool.queued();
+  const oldest = waiting.find(entry => entry.request.queueEntry) ?? waiting[0];
   if (!oldest) return false;
 
   const { request } = oldest;
@@ -247,6 +258,10 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   ) {
     const head =
       report.fingerprints.atEnd?.head ?? report.fingerprints.atStart?.head ?? request.fingerprint.head;
+    // The tree, not just the sha: a merge-queue entry is a fresh merge commit even when
+    // nothing landed since this was gated, so only the tree can say "identical code".
+    const tree =
+      request.type === 'ref' ? deps.resolveRef(request.worktree, 'HEAD^{tree}') : undefined;
     writeVerdictIn(deps.paths.verdicts, {
       head,
       branch: request.branch,
@@ -254,6 +269,7 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
       verdict: report.verdict,
       fingerprintStable: !report.targetMoved,
       baseMain: report.baseMain,
+      ...(tree ? { tree } : {}),
       jobId: request.id,
       createdAt: new Date(deps.now()).toISOString(),
       exceptions: countCapabilityExceptions(report.gateArtifact),
@@ -521,8 +537,13 @@ export async function workerLoop(
         publishPendingStatuses(deps.paths, deps.publishStatus, deps.log, deps.now());
       }
       if (!worked) {
-        // Only when the queue came back empty: the nightly takes the bench like any job,
-        // so it must never start while a session is waiting behind it.
+        // Only when the queue came back empty: these take the bench like any job, so they
+        // must never start while a session is waiting behind one.
+        //
+        // The merge queue goes first. An entry it deposits jumps the spool (processOldest),
+        // because GitHub ejects an entry whose required checks time out — and an ejection
+        // costs a session its turn for a reason that was never about its code.
+        deps.serveMergeQueue();
         await nightly(deps);
         await deps.sleep(2_000);
       }
@@ -562,6 +583,60 @@ export function realRunCommand(
  * `gatewayDeps` is a parameter only so a test can prove the forwarding — chiefly that the
  * job environment reaches `startGateway` — without a real gateway being spawned.
  */
+/**
+ * What `serveMergeQueue` needs, built from the bench layout.
+ *
+ * Extracted from realWorkerDeps rather than inlined there because these closures are not
+ * wiring — they decide which verdicts count as candidates, what a reused attestation says
+ * about itself, and what shape a queue entry's job takes. That is behaviour, and it is
+ * tested directly.
+ */
+export function mergeQueueDeps(paths: BenchPaths, log: (line: string) => void): MergeQueueDeps {
+  const spool = new Spool(paths);
+  return {
+    lsRemote: cwd => runGit(cwd, ['ls-remote', 'origin', 'refs/heads/gh-readonly-queue/*']),
+    git: (args, cwd) => runGit(cwd, args),
+    attested: () =>
+      listVerdicts(paths).map(({ verdict }) => ({
+        head: verdict.head,
+        tree: verdict.tree ?? null,
+        verdict: verdict.verdict,
+        fingerprintStable: verdict.fingerprintStable,
+      })),
+    pendingFor: sha => [...spool.queued(), ...spool.running()].some(e => e.request.ref === sha),
+    reuse: (fromSha, toSha, why) => {
+      const source = listVerdicts(paths).find(v => v.verdict.head === fromSha);
+      // The source can vanish between the decision and here (the 24 h purge). Doing
+      // nothing leaves the entry unanswered, and the next tick gates it properly — which
+      // is the safe direction.
+      if (!source) return;
+      writeVerdictIn(paths.verdicts, {
+        ...source.verdict,
+        head: toSha,
+        // The reuse is recorded in the job id, so a human reading the status on the PR can
+        // see this entry was not driven live and why it did not need to be.
+        jobId: `${source.verdict.jobId} (reused: ${why})`,
+        createdAt: new Date().toISOString(),
+        published: false,
+      });
+    },
+    deposit: entry => {
+      spool.submit({
+        type: 'ref',
+        worktree: paths.refCheckout,
+        branch: entry.ref,
+        fingerprint: { head: entry.sha, hash: `ref:${entry.sha}`, clean: true },
+        submitter: { pid: 0 },
+        args: [],
+        ref: entry.sha,
+        queueEntry: true,
+      });
+    },
+    checkoutDir: paths.refCheckout,
+    log,
+  };
+}
+
 export function realWorkerDeps(
   paths: BenchPaths,
   gatewayDeps: GatewayDeps = realGatewayDeps(),
@@ -596,6 +671,7 @@ export function realWorkerDeps(
       start: (worktree, port, logFile, env) => startGateway(worktree, port, logFile, gatewayDeps, env),
     },
     publishStatus: ghStatusPublisher(ghExec),
+    serveMergeQueue: () => serveMergeQueue(mergeQueueDeps(paths, log)),
     ciStaticProof: sha => ciStaticProof((args, cwd) => runGh('gh', args, cwd), sha, paths.refCheckout),
     prepareRef: (ref, logFile) =>
       prepareCheckout(
