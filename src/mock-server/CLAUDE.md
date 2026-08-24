@@ -27,7 +27,17 @@ before it ever reaches the wire — and it is consumed by 19 suites under
 
 Scenario files in `scenarios/` define canned RDO exchanges. Each exports a `create*Scenario()` factory function that returns `{ ws: WsCaptureScenario; rdo: RdoScenario }`.
 
-Available scenarios: `auth`, `world-list`, `select-company`, `company-list`, `building-details`, `build-menu`, `build-roads`, `mail`, `switch-focus`.
+Available scenarios: `auth`, `world-list`, `select-company`, `company-list`, `building-details`, `build-menu`, `build-roads`, `mail`, `switch-focus`, `civic-mutations`.
+
+`civic-mutations` is the write half of the Politics surface — one RDO exchange per
+civic `procedure` the gateway emits (built by `rdoCall`, so it cannot drift), the two
+id lookups that precede a tax or budget write, and the five Politics ASP pages
+`getPoliticsData` fetches. Its mutation exchanges carry an **empty response** on
+purpose: a `procedure` answers nothing, so no reply can ever say the write landed.
+
+One convention it makes explicit: an exchange's `request` is stored **without the
+trailing `;`**. `RdoProtocol.parse` folds the terminator into the last argument, so a
+request that kept it would not match itself.
 
 ### Scenario Structure
 
