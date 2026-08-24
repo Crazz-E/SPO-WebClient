@@ -1,0 +1,32 @@
+/* The overlay is a viewport-fixed layer that must never intercept the pointer:
+   `document.elementFromPoint` has to keep resolving the real control underneath. */
+.layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+}
+
+.highlight {
+  position: fixed;
+  border: 2px solid var(--color-accent, #ff4d4f);
+  background: rgba(255, 77, 79, 0.12);
+  border-radius: 2px;
+  pointer-events: none;
+  transition: all 60ms linear;
+}
+
+.hint {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #fff;
+  font-size: 13px;
+  font-family: var(--font-ui, system-ui, sans-serif);
+  pointer-events: none;
+  white-space: nowrap;
+}

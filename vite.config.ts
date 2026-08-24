@@ -13,6 +13,12 @@ export default defineConfig({
     __BUILD_TIME__: JSON.stringify(new Date().toISOString().slice(11, 19)),
     __BUILD_NUMBER__: JSON.stringify(Math.floor(Date.now() / 1000).toString(36)),
   },
+  // Keep function and class names through minification. The bug-report component chain is
+  // read from React fiber `type.name`, and esbuild's default mangling turns it into `t`, `n`,
+  // `r` — which makes an anchor useless for locating the file. Costs ~1 % of bundle size.
+  esbuild: {
+    keepNames: true,
+  },
   root: '.',
   publicDir: false, // Don't copy public/ into build output
   build: {

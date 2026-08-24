@@ -1422,6 +1422,37 @@ export class IsometricMapRenderer {
   }
 
   /**
+   * Bug-report probe (read-only): what sits under a screen point, in map terms.
+   *
+   * Half the screen is this renderer, and `document.elementFromPoint` returns only "canvas"
+   * there — so a report anchored on the map needs the hit-test the gestures already use.
+   * This composes the existing private `screenToMap` and `getBuildingAt` with the road and
+   * concrete sets; it decides nothing new.
+   *
+   * Note the axis swap, which the tap handler does too: `screenToMap` yields row `i` and
+   * column `j`, while buildings, roads and concrete are all keyed `x,y` = column,row.
+   *
+   * `buildingId` is left unset on purpose: `MapBuilding` (ObjectsInArea) carries no building
+   * id — only its origin, owner and visual class. The tile plus the class identify it.
+   */
+  public getCanvasAnchorAt(clientX: number, clientY: number): {
+    tileX: number;
+    tileY: number;
+    visualClass?: string;
+    layer: 'building' | 'road' | 'concrete' | 'terrain';
+  } {
+    const { i: row, j: column } = this.screenToMap(clientX, clientY);
+    const building = this.getBuildingAt(column, row);
+    if (building) {
+      return { tileX: column, tileY: row, visualClass: building.visualClass, layer: 'building' };
+    }
+    const key = `${column},${row}`;
+    if (this.roadTilesMap.has(key)) return { tileX: column, tileY: row, layer: 'road' };
+    if (this.concreteTilesSet.has(key)) return { tileX: column, tileY: row, layer: 'concrete' };
+    return { tileX: column, tileY: row, layer: 'terrain' };
+  }
+
+  /**
    * Check if a tile is adjacent to an existing road (including diagonal adjacency)
    * Returns true if any of the 8 surrounding tiles has a road
    */

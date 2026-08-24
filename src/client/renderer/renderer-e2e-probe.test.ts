@@ -99,3 +99,119 @@ describe('getTileProbe', () => {
     expect(probe.landClass.length).toBe(1);
   });
 });
+
+/**
+ * getCanvasAnchorAt — the bug-report probe.
+ *
+ * Same prototype-call approach, with a slightly wider host: this one also composes the
+ * private `screenToMap` and `getBuildingAt`, so the crafted `this` carries a canvas, a
+ * terrain renderer and the building list they read.
+ */
+describe('getCanvasAnchorAt', () => {
+  type AnchorHost = {
+    canvas: { getBoundingClientRect: () => { left: number; top: number } };
+    terrainRenderer: { screenToMap: (x: number, y: number) => { x: number; y: number } };
+    allBuildings: Array<{ visualClass: string; x: number; y: number }>;
+    facilityDimensionsCache: { get: (visualClass: string) => { xsize: number; ysize: number } | undefined };
+    roadTilesMap: Map<string, boolean>;
+    concreteTilesSet: Set<string>;
+    screenToMap: (clientX: number, clientY: number) => { i: number; j: number };
+    getBuildingAt: (x: number, y: number) => unknown;
+  };
+
+  /**
+   * `screenToMap` yields row `i` and column `j`; everything else is keyed column,row.
+   * The host maps a screen point straight onto `{x: row, y: column}` so a test can name the
+   * tile it means without doing isometric maths.
+   */
+  function makeAnchorHost(opts: {
+    at: { row: number; column: number };
+    buildings?: Array<{ visualClass: string; x: number; y: number; xsize?: number; ysize?: number }>;
+    roads?: Array<[number, number]>;
+    concrete?: Array<[number, number]>;
+  }): AnchorHost {
+    const dims = new Map(
+      (opts.buildings ?? []).map(b => [b.visualClass, { xsize: b.xsize ?? 1, ysize: b.ysize ?? 1 }])
+    );
+    const host: AnchorHost = {
+      canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+      terrainRenderer: { screenToMap: () => ({ x: opts.at.row, y: opts.at.column }) },
+      allBuildings: (opts.buildings ?? []).map(b => ({ visualClass: b.visualClass, x: b.x, y: b.y })),
+      facilityDimensionsCache: { get: (visualClass: string) => dims.get(visualClass) },
+      roadTilesMap: new Map((opts.roads ?? []).map(([x, y]) => [`${x},${y}`, true])),
+      concreteTilesSet: new Set((opts.concrete ?? []).map(([x, y]) => `${x},${y}`)),
+      screenToMap: null as unknown as AnchorHost['screenToMap'],
+      getBuildingAt: null as unknown as AnchorHost['getBuildingAt'],
+    };
+    host.screenToMap = (clientX, clientY) =>
+      (proto.screenToMap as (this: AnchorHost, x: number, y: number) => { i: number; j: number }).call(host, clientX, clientY);
+    host.getBuildingAt = (x, y) =>
+      (proto.getBuildingAt as (this: AnchorHost, x: number, y: number) => unknown).call(host, x, y);
+    return host;
+  }
+
+  function anchorAt(host: AnchorHost) {
+    return (proto.getCanvasAnchorAt as (this: AnchorHost, x: number, y: number) => {
+      tileX: number; tileY: number; visualClass?: string; layer: string;
+    }).call(host, 100, 100);
+  }
+
+  it('reports bare terrain when nothing occupies the tile', () => {
+    expect(anchorAt(makeAnchorHost({ at: { row: 88, column: 412 } })))
+      .toEqual({ tileX: 412, tileY: 88, layer: 'terrain' });
+  });
+
+  it('names the building under the point, with its visual class', () => {
+    const host = makeAnchorHost({
+      at: { row: 88, column: 412 },
+      buildings: [{ visualClass: 'FarmClass', x: 412, y: 88 }],
+    });
+    expect(anchorAt(host)).toEqual({ tileX: 412, tileY: 88, visualClass: 'FarmClass', layer: 'building' });
+  });
+
+  it('finds a building the point falls inside, not only on its origin', () => {
+    const host = makeAnchorHost({
+      at: { row: 89, column: 413 },
+      buildings: [{ visualClass: 'BigFarm', x: 412, y: 88, xsize: 3, ysize: 3 }],
+    });
+    expect(anchorAt(host)).toMatchObject({ visualClass: 'BigFarm', layer: 'building' });
+  });
+
+  it('reads the tile in column,row order — the same axis swap the tap handler does', () => {
+    // The point is row 88 / column 412. A building at x=88,y=412 is the transposed tile and
+    // must NOT match; one at x=412,y=88 must.
+    const transposed = makeAnchorHost({
+      at: { row: 88, column: 412 },
+      buildings: [{ visualClass: 'Wrong', x: 88, y: 412 }],
+    });
+    expect(anchorAt(transposed).layer).toBe('terrain');
+  });
+
+  it('falls back to road, then concrete, in that order', () => {
+    expect(anchorAt(makeAnchorHost({ at: { row: 88, column: 412 }, roads: [[412, 88]] })))
+      .toEqual({ tileX: 412, tileY: 88, layer: 'road' });
+    expect(anchorAt(makeAnchorHost({ at: { row: 88, column: 412 }, concrete: [[412, 88]] })))
+      .toEqual({ tileX: 412, tileY: 88, layer: 'concrete' });
+    // A road tile that also carries concrete is reported as road.
+    expect(anchorAt(makeAnchorHost({ at: { row: 88, column: 412 }, roads: [[412, 88]], concrete: [[412, 88]] })).layer)
+      .toBe('road');
+  });
+
+  it('prefers a building over the road and concrete beneath it', () => {
+    const host = makeAnchorHost({
+      at: { row: 88, column: 412 },
+      buildings: [{ visualClass: 'FarmClass', x: 412, y: 88 }],
+      roads: [[412, 88]],
+      concrete: [[412, 88]],
+    });
+    expect(anchorAt(host).layer).toBe('building');
+  });
+
+  it('carries no buildingId — ObjectsInArea does not send one', () => {
+    const host = makeAnchorHost({
+      at: { row: 1, column: 2 },
+      buildings: [{ visualClass: 'FarmClass', x: 2, y: 1 }],
+    });
+    expect(anchorAt(host)).not.toHaveProperty('buildingId');
+  });
+});
