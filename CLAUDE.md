@@ -228,6 +228,10 @@ explicit `PORT=8080`) or drive the live world outside the worker (`test:live:loc
 `dist/e2e/run.js`) is refused with the sanctioned form named in the message. The worker
 SIGKILLs whatever it finds on 8080 before a job, so a session's gateway there is either
 killed mid-run or blocks every session's gate until a human frees the port.
+**Read the verdict from the exit code, never from the printed report** — 0 PASS · 1 verdict
+not passing · 2 refused at deposit (dirty tree) · 3 worker down · 4 wait timed out. The
+report text is for a human; the machine-readable surfaces are that code and
+`~/.spo-bench/verdicts/<sha>.json`.
 Full spec: [doc/bench-worker.md](doc/bench-worker.md).
 
 

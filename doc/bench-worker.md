@@ -127,6 +127,32 @@ Only the worker writes attestations. A session cannot unblock its own push, and 
 cannot merge on CI alone — the live evidence must exist even if the local hook were
 sidestepped.
 
+### What a session reads to know the verdict
+
+**The exit code is the interface. The printed report is not.**
+
+`npm run gate`, `npm run test:live` and `scripts/bench-wait.sh` all end in the same client
+(`src/e2e/bench/cli.ts`) and return the same codes:
+
+| exit | means | what the session does |
+|---|---|---|
+| 0 | `PASS` — or `LEASED`, for `npm run dev` | push |
+| 1 | the job ran and the verdict is not passing (`FAIL`, `BLOCKED`, `STALE`, `ABANDONED`, `INTERRUPTED`) | read the report, fix, retry — 3 attempts, each naming a different root cause |
+| 2 | refused at deposit: a gate on a **dirty tree**, or a duplicate of a job already queued | commit (an attestation names a sha, so the tested tree must BE that sha), then re-deposit |
+| 3 | **worker down** — nothing was queued | `systemctl --user restart spo-bench-worker`, then re-deposit |
+| 4 | the wait timed out; the job may still be queued or running | `npm run bench:status` before assuming anything |
+
+The two machine-readable surfaces are that exit code and `~/.spo-bench/verdicts/<sha>.json`
+(the file the push hook itself reads). **Never parse or grep the `=== bench job … ===`
+report**: it is formatted for a human, its wording is not a contract, and a session has
+already mistaken a readable line for an API and drawn the wrong verdict from it. A `grep`
+that finds nothing is indistinguishable from a `grep` that ran against a changed heading —
+the exit code cannot fail that way.
+
+The same reflex applies one level down, inside the live drive: a mutation is proven by the
+`FIVEMODELSERVER/Survival` log line, never by a `success: true` in a response
+(E2E-POLICY.md, `OB-28`).
+
 **Dependabot PRs** ride the same chain through `npm run deps:gate`: it merges main in, installs
 (`npm ci` *in the PR's worktree* — a worktree has no `node_modules` of its own and would
 otherwise build against the main checkout's old packages), gates, pushes and auto-merges
