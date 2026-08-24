@@ -239,6 +239,9 @@ export interface ClientCallbacks {
 
   // Empire
   onRequestFacilities: () => void;
+  onAddFavorite: (name: string, x: number, y: number) => void;
+  onRemoveFavorite: (path: string, name: string) => void;
+  onRenameFavorite: (path: string, name: string) => void;
 
   // Zone painting
   onToggleZonePainting: (zoneType: number) => void;

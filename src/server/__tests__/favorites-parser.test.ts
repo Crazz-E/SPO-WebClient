@@ -4,6 +4,10 @@
  * Wire format: items separated by \x02, fields by \x01.
  * Fields per item: id, kind, name, info, subFolderCount
  * Link info: "displayName,x,y,select"
+ *
+ * Each item also carries its Location — the path a delete or a rename
+ * addresses (`TFavorites.LocateItem`, `Kernel/Favorites.pas:312-334`). At the
+ * root, which is the only level the client reads today, that path is the id.
  */
 
 import { parseFavoritesResponse } from '../spo_session';
@@ -31,7 +35,7 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toEqual([
-      { id: 1, name: 'Company Headquarters', x: 670, y: 116 },
+      { id: 1, name: 'Company Headquarters', x: 670, y: 116, path: '1' },
     ]);
   });
 
@@ -45,9 +49,9 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toHaveLength(3);
-    expect(result[0]).toEqual({ id: 1, name: 'Company Headquarters', x: 670, y: 116 });
-    expect(result[1]).toEqual({ id: 2, name: "Caesar's Atrium", x: 615, y: 96 });
-    expect(result[2]).toEqual({ id: 3, name: 'Delmar Apts.', x: 687, y: 162 });
+    expect(result[0]).toEqual({ id: 1, name: 'Company Headquarters', x: 670, y: 116, path: '1' });
+    expect(result[1]).toEqual({ id: 2, name: "Caesar's Atrium", x: 615, y: 96, path: '2' });
+    expect(result[2]).toEqual({ id: 3, name: 'Delmar Apts.', x: 687, y: 162, path: '3' });
   });
 
   it('skips folder items (kind=0)', () => {
@@ -59,7 +63,7 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 1, name: 'Factory', x: 100, y: 200 });
+    expect(result[0]).toEqual({ id: 1, name: 'Factory', x: 100, y: 200, path: '1' });
   });
 
   it('handles name with commas in info cookie', () => {
@@ -71,7 +75,7 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 5, name: 'Building, Inc.', x: 450, y: 300 });
+    expect(result[0]).toEqual({ id: 5, name: 'Building, Inc.', x: 450, y: 300, path: '5' });
   });
 
   it('handles trailing \\x02 separator', () => {
@@ -80,7 +84,7 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 1, name: 'Farm 1', x: 641, y: 66 });
+    expect(result[0]).toEqual({ id: 1, name: 'Farm 1', x: 641, y: 66, path: '1' });
   });
 
   it('parses real trace data (from RDO capture)', () => {
@@ -119,12 +123,22 @@ describe('parseFavoritesResponse', () => {
     expect(result[0].name).toBe('Good Entry');
   });
 
+  it('nests the Location under the parent it was asked for', () => {
+    // Not reachable from the UI yet — the client only ever lists the root —
+    // but the parser is what would have to be right the day folders are, and
+    // an id alone would address the wrong item one level down.
+    const raw = favLink(7, 'Mart 3', 678, 159);
+
+    expect(parseFavoritesResponse(raw, '100')[0].path).toBe('100/7');
+    expect(parseFavoritesResponse(raw, '100/12')[0].path).toBe('100/12/7');
+  });
+
   it('handles select=0 items', () => {
     const raw = favLink(7, 'Mart 3', 678, 159, 0);
 
     const result = parseFavoritesResponse(raw);
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 7, name: 'Mart 3', x: 678, y: 159 });
+    expect(result[0]).toEqual({ id: 7, name: 'Mart 3', x: 678, y: 159, path: '7' });
   });
 });

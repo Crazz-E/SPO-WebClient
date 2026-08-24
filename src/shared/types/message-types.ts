@@ -288,6 +288,12 @@ export enum WsMessageType {
   // Empire (Owned Facilities via Favorites)
   REQ_EMPIRE_FACILITIES = 'REQ_EMPIRE_FACILITIES',
   RESP_EMPIRE_FACILITIES = 'RESP_EMPIRE_FACILITIES',
+  REQ_FAVORITE_ADD = 'REQ_FAVORITE_ADD',
+  RESP_FAVORITE_ADD = 'RESP_FAVORITE_ADD',
+  REQ_FAVORITE_DELETE = 'REQ_FAVORITE_DELETE',
+  RESP_FAVORITE_DELETE = 'RESP_FAVORITE_DELETE',
+  REQ_FAVORITE_RENAME = 'REQ_FAVORITE_RENAME',
+  RESP_FAVORITE_RENAME = 'RESP_FAVORITE_RENAME',
 
   // Research / Inventions
   REQ_RESEARCH_INVENTORY = 'REQ_RESEARCH_INVENTORY',
@@ -1588,6 +1594,12 @@ export interface FavoritesItem {
   name: string;
   x: number;
   y: number;
+  /**
+   * The item's Location — the '/'-separated path of ids the server resolves
+   * (`TFavorites.LocateItem`, `Kernel/Favorites.pas:312-334`). Delete and
+   * rename address an item by this path, never by its bare id.
+   */
+  path: string;
 }
 
 export interface WsReqEmpireFacilities extends WsMessage {
@@ -1597,6 +1609,50 @@ export interface WsReqEmpireFacilities extends WsMessage {
 export interface WsRespEmpireFacilities extends WsMessage {
   type: WsMessageType.RESP_EMPIRE_FACILITIES;
   facilities: FavoritesItem[];
+}
+
+/**
+ * Add a link to the Favorites tree — `RDOFavoritesNewItem` at the root.
+ * `Interface Server/InterfaceServer.pas:200`.
+ */
+export interface WsReqFavoriteAdd extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_ADD;
+  name: string;
+  x: number;
+  y: number;
+}
+
+export interface WsRespFavoriteAdd extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_ADD;
+  success: boolean;
+  /** The id the server assigned, present only on success. */
+  id?: number;
+  message?: string;
+}
+
+/** Remove one favourite — `RDOFavoritesDelItem` (`InterfaceServer.pas:201`). */
+export interface WsReqFavoriteDelete extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_DELETE;
+  path: string;
+}
+
+export interface WsRespFavoriteDelete extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_DELETE;
+  success: boolean;
+  message?: string;
+}
+
+/** Rename one favourite — `RDOFavoritesRenameItem` (`InterfaceServer.pas:203`). */
+export interface WsReqFavoriteRename extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_RENAME;
+  path: string;
+  name: string;
+}
+
+export interface WsRespFavoriteRename extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_RENAME;
+  success: boolean;
+  message?: string;
 }
 
 // =============================================================================
