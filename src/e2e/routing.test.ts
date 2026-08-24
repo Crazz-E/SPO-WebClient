@@ -64,6 +64,23 @@ describe('route', () => {
     expect(route(['package.json']).staticOnly).toBe(false);
   });
 
+  it('routes the vite config like a dependency change, plus a browser look', () => {
+    // It ends in .ts, so the repo-root config rule (.json/.js/.yml) never covered it and the
+    // gate failed closed on it — the hole #172 hit.
+    const decision = route(['vite.config.ts']);
+    expect(decision.unmapped).toEqual([]);
+    expect(decision.required).toEqual([SPINE_FLOW, 'building-details']);
+    expect(decision.needsL3).toBe(true);
+    expect(decision.staticOnly).toBe(false);
+  });
+
+  it('still treats the other repo-root configs as tooling', () => {
+    // The new rule is anchored on that one filename; nothing else changed meaning.
+    const decision = route(['tsconfig.json', 'jest.config.js', 'eslint.config.js']);
+    expect(decision.staticOnly).toBe(true);
+    expect(decision.needsL3).toBe(false);
+  });
+
   it('does not fail closed on a removed path no rule covers — nothing is left there to drive', () => {
     const removed = ['some-removed-tree/thing.js', 'some-removed-tree/icons/app.ico'];
     const decision = route(removed, removed);

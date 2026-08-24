@@ -35,6 +35,15 @@ export const ROUTES: RouteRule[] = [
     why: 'dependency change — the shipped code moved even though no src/ file did',
   },
   {
+    // Before the tooling rule: that one ends at .json/.js/.yml, so a TypeScript build config
+    // fell through to no rule at all and the gate failed closed (#172). This file is not
+    // tooling — it is what produces the bundle the browser runs.
+    test: /^vite\.config\.ts$/,
+    flows: ['building-details'],
+    needsL3: true,
+    why: 'the client bundle is built here — the shipped code moved even though no src/ file did, and a minifier or chunking setting is only observable once a browser runs it',
+  },
+  {
     test: /^src\/e2e\/|^scripts\/|^\.claude\/|^\.github\/|^\.[^/]*$|^[^/]+\.(json|js|cjs|mjs|ya?ml)$/,
     flows: [],
     why: 'tooling and repo config — verified by its own unit tests',
