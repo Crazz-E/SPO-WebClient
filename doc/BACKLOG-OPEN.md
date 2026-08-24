@@ -622,6 +622,67 @@ functionality was removed:** `RDOSelSelected` stays in place and covers the togg
 
 ---
 
+## Instruits par la refonte ergonomique (2026-08-24) — RDO à cataloguer, hors PR d'UI
+
+### ⚪ OB-33 · N4 — favoris de position côté serveur (l'arbre Favorites, pas les cookies LINKS)
+
+Les favoris de position du WebClient (Carte-2, PR #68) sont **locaux** (`localStorage`) ; Voyager
+les tenait côté serveur. Deux systèmes coexistent dans le legacy : l'ancien panneau « Links »
+(cookies tycoon génériques `LinkCount`/`Link<n>` via `SetTycoonCookie`) et l'arbre moderne
+**Favorites** — celui que le WebClient lit déjà (`RDOFavoritesGetSubItems`, catalogué). L'écriture
+passe par quatre membres publiés sur le **même objet `TClientView`** de l'Interface Server que le
+reste de la session (BindTo `fClientViewId`) :
+
+| Membre | Kind | Arité | Signature (autorité) |
+|---|---|---|---|
+| `RDOFavoritesNewItem` | function (`^`) | 4 | `Location: widestring; Kind: integer; Name, Info: widestring` — `Interface Server/InterfaceServer.pas:200` |
+| `RDOFavoritesDelItem` | function (`^`) | 1 | `Location: widestring` — `:201` |
+| `RDOFavoritesMoveItem` | function (`^`) | 2 | `ItemLoc, Dest: widestring` — `:202` |
+| `RDOFavoritesRenameItem` | function (`^`) | 2 | `ItemLoc, Name: widestring` — `:203` |
+
+Sémantique : `Kind` ∈ {`fvkFolder = 0`, `fvkLink = 1`} (`Kernel/FavProtocol.pas:6-7`), chemins
+séparés par `/`, items sérialisés `#1`/`#2` (`FavProtocol.pas:10-12`) ; `Info` d'un lien =
+`Name,x,y,select` (`ComposeLinkCookie`, `Protocol/Protocol.pas:447-450` ; émis tel quel par
+`Voyager/FavView.pas:622-623`). `RDOFavoritesNewItem` retourne un id (`>= 0` = succès,
+`FavView.pas:624`) ; retour exact de Del/Move/Rename **[UNKNOWN]** (impl `TTycoon` non lue).
+L'IS relaie vers le Model Server (`InterfaceServer.pas:1733-1798` → `Kernel/Kernel.pas:2542-2546`).
+**À faire si retenu** : cataloguer les quatre membres dans `rdo-members.ts`, migrer les favoris
+locaux (fusion, pas écrasement), garder la lecture existante. Les cookies LINKS ne sont PAS
+nécessaires pour la parité moderne.
+
+### ⚪ OB-34 · H7 — la passerelle ne tarife ni les ponts ni la gratuité des tuiles routées
+
+La tarification actuelle (`src/shared/road-cost.ts` : longueur Manhattan × 2 M) diverge de la
+formule Voyager, et **le serveur facture le chiffre reçu sans le recalculer**
+(`Kernel/World.pas:4252-4309` : garde `Budget - LoanAmount > cost` puis
+`Tycoon.GenMoney(-cost, accIdx_RoadConstruction)` à `:4289`) — c'est une divergence de
+wire-behavior, pas d'affichage. Formule client exacte
+(`Voyager/Components/MapIsoView/Map.pas:6607-6632`, constantes `:56-59`) :
+
+- tuile **déjà routée** : +0 ; sinon +2 M (terre) ou **+4 M (pont)** ;
+- **pont** = classe de terrain eau (`LandClassOf = lncZoneD`) **sans béton** (`CheckForConcrete`)
+  — une tuile d'eau bétonnée se paie comme de la terre ;
+- +4 M supplémentaires par case void (`IsVoidSquare`, `:6627-6628` — définition [UNKNOWN]) ;
+- validité pont : rectiligne uniquement (`IsBridgeableLand`/`UnfeasibleBridge`/`IsCombinableBridge`,
+  `:6469/:6483/:6573`) ; le tracé doit toucher une route existante (`ok := RoadAhead`, `:6630-6633`,
+  contrainte client seulement [INFERRED]) ;
+- l'envoi répartit le total en `cost div SegmentCount` **par segment** (un `CreateCircuitSeg`
+  par segment rectiligne, `Voyager/URLHandlers/MapIsoHandler.pas:1085-1104`).
+
+`CreateCircuitSeg` est déjà catalogué — function (`^`), 7 int (`CircuitId, OwnerId, x1, y1, x2,
+y2, cost`, `Interface Server/InterfaceServer.pas:156`). **À faire si retenu** : porter la formule
+dans la passerelle (les données suffisent : terrain + béton + routes connues du client
+[INFERRED]), reproduire la division par segment, et aligner l'aperçu H7 de la barre de mode.
+Après l'an 50 du monde, le serveur ajoute un quota `CanBuildRoad(tiles)` (`World.pas:4270-4272`,
+barème [UNKNOWN]).
+
+- **Source :** `../SPO-Original` (`Interface Server/InterfaceServer.pas`, `Voyager/FavView.pas`,
+  `Voyager/URLHandlers/ServerCnxHandler.pas`, `Voyager/Components/MapIsoView/Map.pas`,
+  `Kernel/World.pas`, `Kernel/FavProtocol.pas`, `Protocol/Protocol.pas`), 2026-08-24. Jamais
+  sondé live ; déclarations relues à la main sur les lignes citées.
+
+---
+
 ## Retired
 
 Gaps in the ID sequence are deliberate — these entries were closed by deletion, not by fix:
