@@ -45,11 +45,6 @@ export interface SessionContext {
   getAspActionCache(aspPath: string): Map<string, AspActionUrl> | undefined;
   setAspActionCache(aspPath: string, actions: Map<string, AspActionUrl>): void;
 
-  // ── Dedup map for in-flight building details ───────────────────────────
-  getInFlightBuildingDetails(key: string): Promise<import('../../shared/types').BuildingDetailsResponse> | undefined;
-  setInFlightBuildingDetails(key: string, promise: Promise<import('../../shared/types').BuildingDetailsResponse>): void;
-  deleteInFlightBuildingDetails(key: string): void;
-
   // ── Read-only Session State ────────────────────────────────────────────
   readonly worldContextId: string | null;
   readonly interfaceServerId: string | null;

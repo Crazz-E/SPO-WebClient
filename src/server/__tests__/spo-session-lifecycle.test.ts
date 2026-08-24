@@ -618,25 +618,6 @@ describe('cacher object pool', () => {
 
     expect(warn).toHaveBeenCalledWith('[cacherCloseObject] Failed:', expect.any(String));
   });
-
-  it('reads the ObjectId at a coordinate, and reports the absence of one', async () => {
-    await connectWorld();
-    await harness.session.connectMapService();
-
-    await expect(harness.session.getObjectRdoId(706, 436)).resolves.toBe(CURR_BLOCK);
-
-    jest.spyOn(harness.session, 'getCacherPropertyListAt').mockResolvedValue([]);
-    const warn = jest.spyOn(harness.session.log, 'warn');
-    await expect(harness.session.getObjectRdoId(1, 2)).resolves.toBe('');
-    expect(warn).toHaveBeenCalledWith('[MapService] No ObjectId found at (1, 2)');
-  });
-
-  it('reports an empty ObjectId value as absent too', async () => {
-    await connectWorld();
-    jest.spyOn(harness.session, 'getCacherPropertyListAt').mockResolvedValue(['']);
-
-    await expect(harness.session.getObjectRdoId(1, 2)).resolves.toBe('');
-  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

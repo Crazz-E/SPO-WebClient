@@ -191,6 +191,7 @@ export class StarpeaceClient implements ClientHandlerContext {
   public isFocusingBuilding: boolean = false;
   public isSendingChatMessage: boolean = false;
   public isJoiningChannel: boolean = false;
+  public isTypingInChat: boolean = false;
   public isSelectingCompany: boolean = false;
 
   // Road building state — delegated to game-store (single source of truth)
@@ -278,6 +279,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       onServerSwitchZoneSelect: (zonePath: string) => authHandler.serverSwitchZoneSelect(this, zonePath),
       onSendChatMessage: (message: string) => chatHandler.sendChatMessage(this, message),
       onJoinChannel: (channelName: string) => chatHandler.joinChannel(this, channelName),
+      onChatTypingChange: (isTyping: boolean) => chatHandler.setTypingStatus(this, isTyping),
       onAuthCheck: (username: string, password: string) => authHandler.performAuthCheck(this, username, password),
       onDirectoryConnect: (username: string, password: string, zonePath?: string) =>
         authHandler.performDirectoryLogin(this, username, password, zonePath),

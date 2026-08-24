@@ -1,8 +1,6 @@
 import {
   WsMessageType,
   type WsMessage,
-  type WsReqManageConstruction,
-  type WsRespConstructionSuccess,
   type WsReqDefineZone,
   type WsRespDefineZone,
   type WsReqCreateCompany,
@@ -28,26 +26,6 @@ import {
 import * as ErrorCodes from '../../shared/error-codes';
 import type { WsHandlerContext, WsHandler } from './types';
 import { sendResponse, sendError, withErrorHandler } from './ws-utils';
-
-export const handleManageConstruction: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
-  const req = msg as WsReqManageConstruction;
-  console.log(`[WS] Construction request: ${req.action} at (${req.x}, ${req.y})`);
-
-  const result = await ctx.session.manageConstruction(req.x, req.y, req.action, req.count || 1);
-
-  if (result.status === 'OK') {
-    const response: WsRespConstructionSuccess = {
-      type: WsMessageType.RESP_CONSTRUCTION_SUCCESS,
-      wsRequestId: msg.wsRequestId,
-      action: req.action,
-      x: req.x,
-      y: req.y,
-    };
-    sendResponse(ctx.ws, response);
-  } else {
-    sendError(ctx.ws, msg.wsRequestId, result.error || 'Construction operation failed', ErrorCodes.ERROR_RequestDenied);
-  }
-};
 
 export const handleDefineZone: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
   await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_AccessDenied, async () => {

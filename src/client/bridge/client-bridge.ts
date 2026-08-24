@@ -149,6 +149,7 @@ export interface ClientCallbacks {
   // Chat
   onSendChatMessage: (message: string) => void;
   onJoinChannel: (channelName: string) => void;
+  onChatTypingChange: (isTyping: boolean) => void;
 
   // Build menu
   onRequestBuildingCategories: () => void;
@@ -706,10 +707,6 @@ export const ClientBridge = {
         break;
       case WsMessageType.RESP_SEARCH_MENU_TOWNS:
         search.setTownsData(msg as WsRespSearchMenuTowns);
-        break;
-      case WsMessageType.RESP_SEARCH_MENU_PEOPLE:
-        // Acknowledges page ready — no data to store
-        search.setLoading(false);
         break;
       case WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH:
         search.setPeopleData(msg as WsRespSearchMenuPeopleSearch);

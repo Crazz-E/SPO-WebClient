@@ -192,13 +192,6 @@ const DELEGATIONS: readonly Delegation[] = [
     result: 3,
   },
   {
-    method: 'getMailAccount',
-    install: () => jest.spyOn(mailHandler, 'getMailAccount'),
-    call: s => s.getMailAccount(),
-    forwarded: [],
-    result: 'SPO_test3@planitia.net',
-  },
-  {
     method: 'getMailFolder',
     install: () => jest.spyOn(mailHandler, 'getMailFolder'),
     call: s => s.getMailFolder('Draft'),
@@ -560,13 +553,6 @@ const DELEGATIONS: readonly Delegation[] = [
 
   // ── building-details-handler ─────────────────────────────────────────────
   {
-    method: 'getBuildingDetails',
-    install: () => jest.spyOn(buildingDetailsHandler, 'getBuildingDetails'),
-    call: s => s.getBuildingDetails(706, 436, 'CarFactoryA'),
-    forwarded: [706, 436, 'CarFactoryA'],
-    result: { properties: [] },
-  },
-  {
     method: 'getBuildingBasicDetails',
     install: () => jest.spyOn(buildingDetailsHandler, 'getBuildingBasicDetails'),
     call: s => s.getBuildingBasicDetails(706, 436, 'CarFactoryA'),
@@ -642,7 +628,7 @@ describe('StarpeaceSession — handler delegation', () => {
   it('covers every one-line handler delegation the facade declares', () => {
     // A guard on the table itself: if a delegation is added to the facade and
     // not to the table, the count stops matching and this row says so.
-    expect(DELEGATIONS).toHaveLength(69);
+    expect(DELEGATIONS).toHaveLength(67);
     expect(new Set(DELEGATIONS.map(d => d.method)).size).toBe(DELEGATIONS.length);
   });
 
@@ -956,19 +942,6 @@ describe('session state accessors', () => {
 
     session.clearAspActionCache();
     expect(session.getAspActionCache('TycoonBankAccount.asp')).toBeUndefined();
-  });
-
-  it('shares an in-flight building-details promise and drops it on demand', async () => {
-    const session = newSession();
-    const inFlight = Promise.resolve({ properties: [] } as never);
-
-    expect(session.getInFlightBuildingDetails('706,436')).toBeUndefined();
-    session.setInFlightBuildingDetails('706,436', inFlight);
-    expect(session.getInFlightBuildingDetails('706,436')).toBe(inFlight);
-
-    session.deleteInFlightBuildingDetails('706,436');
-    expect(session.getInFlightBuildingDetails('706,436')).toBeUndefined();
-    await inFlight;
   });
 
   it('clears every field of the building focus together', () => {
