@@ -18,7 +18,7 @@ owned, stop and say so: ownership is sacred.
 
 ## 2 · Claim (handshake)
 
-Write `Session` = `<branch> @ <YYYY-MM-DD>`, move Status → **En cours**, then **re-read**
+Write `Session` = `<branch> @ <YYYY-MM-DD>`, move Status → **In progress**, then **re-read**
 `Session`. Not your identity → you lost the race: take the next candidate. One card at a
 time.
 
@@ -39,14 +39,14 @@ The repo process applies unchanged — this command adds nothing to it:
 ## 4 · If it fails
 
 Three gate attempts max, each naming a different root cause — as ever. If the task cannot
-land (blocked, out of reach, wrongly scoped): Status → **À reclasser**, keep `Session`
-filled, post one comment **in simple, non-technical French** explaining what was attempted
-and what blocked it. Never leave the card in En cours/Gate/PR at session end — close your
+land (blocked, out of reach, wrongly scoped): Status → **Needs triage**, keep `Session`
+filled, post one comment **in simple, non-technical English** explaining what was attempted
+and what blocked it. Never leave the card in In progress/Gate/PR at session end — close your
 ownership, one way or the other.
 
 ## 5 · Findings along the way
 
-Anything discovered out of scope: new issue, added to the board in Todo (bottom), `Catégorie`
+Anything discovered out of scope: new issue, added to the board in Todo (bottom), `Category`
 **and the matching `cat:` / `size:` labels** set (kanban-workflow § Feeding rule — the project
 field is not queryable, the label is), synthetic body — then back to the task. Never expand
 your own scope with it.
