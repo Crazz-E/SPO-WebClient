@@ -453,3 +453,106 @@ describe('mail-roundtrip', () => {
     expect(compose).toMatchObject({ to: 'Crazz' });
   });
 });
+
+describe('favorites-roundtrip', () => {
+  interface FavRow { id: number; name: string; x: number; y: number; path: string }
+
+  /**
+   * A stub tree that behaves like `TFavorites`: the add assigns the next id
+   * and the listing serves what the writes actually did. That is what makes
+   * these tests worth having — a flow that asserted against its own request
+   * instead of against the tree would pass while the tree stayed empty.
+   */
+  function favSession(
+    seed: FavRow[] = [],
+    opts: { refuseAdd?: boolean; renameLies?: boolean } = {},
+  ) {
+    const tree: FavRow[] = [...seed];
+    let nextId = 100;
+    const sent: WsMessage[] = [];
+    const s = stubSession(msg => {
+      sent.push(msg);
+      const m = msg as unknown as { name?: string; x?: number; y?: number; path?: string };
+      switch (msg.type) {
+        case WsMessageType.REQ_EMPIRE_FACILITIES:
+          return { type: WsMessageType.RESP_EMPIRE_FACILITIES, facilities: [...tree] };
+        case WsMessageType.REQ_FAVORITE_ADD: {
+          if (opts.refuseAdd) return { type: WsMessageType.RESP_FAVORITE_ADD, success: false };
+          const id = nextId++;
+          tree.push({ id, name: m.name!, x: m.x!, y: m.y!, path: String(id) });
+          return { type: WsMessageType.RESP_FAVORITE_ADD, success: true, id };
+        }
+        case WsMessageType.REQ_FAVORITE_RENAME: {
+          // `renameLies` is the case only a read-back can catch: the write is
+          // acknowledged and nothing changes.
+          if (opts.renameLies) return { type: WsMessageType.RESP_FAVORITE_RENAME, success: true };
+          const row = tree.find(f => f.path === m.path);
+          if (row) row.name = m.name!;
+          return { type: WsMessageType.RESP_FAVORITE_RENAME, success: true };
+        }
+        default: {
+          const i = tree.findIndex(f => f.path === m.path);
+          if (i >= 0) tree.splice(i, 1);
+          return { type: WsMessageType.RESP_FAVORITE_DELETE, success: true };
+        }
+      }
+    });
+    return { session: s, tree, sent };
+  }
+
+  function install(fav: ReturnType<typeof favSession>): void {
+    jest.spyOn(session, 'login').mockResolvedValue(fav.session);
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+  }
+
+  it('adds, renames and deletes, leaving the tree exactly as it found it', async () => {
+    const fav = favSession();
+    install(fav);
+
+    const result = await flowByName('favorites-roundtrip').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(fav.tree).toEqual([]);
+  });
+
+  it('sweeps a marker left by an earlier run that died mid-flow', async () => {
+    const fav = favSession([{ id: 9, name: 'e2e-favorite 2026-01-01', x: 1, y: 2, path: '9' }]);
+    install(fav);
+
+    const result = await flowByName('favorites-roundtrip').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(fav.tree).toEqual([]);
+    expect(fav.sent.filter(m => m.type === WsMessageType.REQ_FAVORITE_DELETE)).toHaveLength(2);
+  });
+
+  it('leaves a favourite that is not its own alone', async () => {
+    const mine: FavRow = { id: 3, name: 'Farm 1', x: 641, y: 66, path: '3' };
+    const fav = favSession([mine]);
+    install(fav);
+
+    await flowByName('favorites-roundtrip').run(ctx);
+
+    expect(fav.tree).toEqual([mine]);
+  });
+
+  it('fails when the add is refused — a refusal is never read as a success', async () => {
+    const fav = favSession([], { refuseAdd: true });
+    install(fav);
+
+    const result = await flowByName('favorites-roundtrip').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/add was accepted/);
+  });
+
+  it('fails when the rename is acknowledged but the tree still serves the old name', async () => {
+    const fav = favSession([], { renameLies: true });
+    install(fav);
+
+    const result = await flowByName('favorites-roundtrip').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/serves the new name/);
+  });
+});
