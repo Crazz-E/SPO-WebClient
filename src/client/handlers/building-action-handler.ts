@@ -342,8 +342,24 @@ async function setBuildingPropertyImpl(
         return false;
       }
 
-      ClientBridge.confirmPendingUpdate(pendingKey);
-      ClientBridge.log('Building', `Property ${propertyName} updated to ${response.newValue}`);
+      // OB-1: `undefined` is not `true`, and the indicator must not spell it as
+      // one. `RDOConnectInput` is the case the audit found — a Pascal
+      // `procedure`, so nothing comes back, and its witness (`cnxCount`) is a
+      // count that reads the same whether the connection was made or thrown
+      // away. The gateway says so honestly; the client used to answer both with
+      // the same green tick, and told the player the connection had been made.
+      //
+      // The optimistic value still stands — reverting it would fail the many
+      // writes that do land and simply cannot be witnessed (OB-28/OB-29). What
+      // changes is the claim made about it.
+      const verdict = response.confirmed === true ? 'confirmed' : 'unconfirmed';
+      ClientBridge.confirmPendingUpdate(pendingKey, verdict);
+      ClientBridge.log(
+        'Building',
+        verdict === 'confirmed'
+          ? `Property ${propertyName} updated to ${response.newValue}`
+          : `Property ${propertyName} was sent; the server could not confirm it`,
+      );
       return true;
     } else {
       ClientBridge.failPendingUpdate(pendingKey, value, 'Server rejected the change');
@@ -433,7 +449,11 @@ export async function renameFacility(ctx: ClientHandlerContext, x: number, y: nu
     const response = await ctx.sendRequest(req) as WsRespRenameFacility;
 
     if (response.success) {
-      ClientBridge.confirmPendingUpdate(RENAME_PENDING_KEY);
+      // `unconfirmed` for the same reason as above: the gateway sends
+      // `set Name` and never inspects the reply's result code
+      // (building-management-handler.ts:272-274), so `success` here means the
+      // round-trip did not throw — not that the name changed.
+      ClientBridge.confirmPendingUpdate(RENAME_PENDING_KEY, 'unconfirmed');
       ClientBridge.log('Building', `Building renamed to "${response.newName}"`);
       return true;
     } else {

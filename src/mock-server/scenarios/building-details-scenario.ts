@@ -380,20 +380,33 @@ const MOCK_CAPITOL: MockBuilding = {
     { id: 'votes', name: 'VOTES', icon: 'V', order: 30, handlerName: 'Votes' },
   ],
   groups: {
+    // The Capitol's coverage names carry NO language suffix, and that is not a
+    // detail the two civic sheets share: the town writes them through
+    // `StoreMultiStringToCache('covName' + i + '.', ...)` (Population.pas:1090)
+    // and Voyager reads `covName0.` + ActiveLanguage (TownHallSheet.pas:279),
+    // while the Capitol writes a plain `Cache.WriteString('covName' + i, ...)`
+    // (WorldPolitics.pas:1303) and reads it back bare (CapitolSheet.pas:209).
+    // This fixture served `covName0.0` on both, so every key the Capitol
+    // template asks for came back missing.
     'capitolGeneral': [
+      { name: 'SecurityId', value: '131655160' },
+      { name: 'QOL', value: '71' },
+      { name: 'ActualRuler', value: 'President SPO_test3' },
       { name: 'HasRuler', value: '1' },
       { name: 'YearsToElections', value: '2' },
       { name: 'RulerActualPrestige', value: '850' },
       { name: 'RulerRating', value: '72' },
       { name: 'TycoonsRating', value: '65' },
+      { name: 'IFELRating', value: '58' },
+      { name: 'RulerPeriods', value: '1' },
       { name: 'covCount', value: '4' },
-      { name: 'covName0.0', value: 'Health', index: 0 },
+      { name: 'covName0', value: 'Health', index: 0 },
       { name: 'covValue0', value: '85', index: 0 },
-      { name: 'covName1.0', value: 'Education', index: 1 },
+      { name: 'covName1', value: 'Education', index: 1 },
       { name: 'covValue1', value: '72', index: 1 },
-      { name: 'covName2.0', value: 'Police', index: 2 },
+      { name: 'covName2', value: 'Police', index: 2 },
       { name: 'covValue2', value: '90', index: 2 },
-      { name: 'covName3.0', value: 'Fire Dept', index: 3 },
+      { name: 'covName3', value: 'Fire Dept', index: 3 },
       { name: 'covValue3', value: '68', index: 3 },
     ],
     'capitolTowns': [
@@ -444,6 +457,7 @@ const MOCK_CAPITOL: MockBuilding = {
       { name: 'MinisterBudget2', value: '3000000', index: 2 },
     ],
     'votes': [
+      { name: 'Trouble', value: '0' },
       { name: 'RulerName', value: 'President SPO_test3' },
       { name: 'RulerVotes', value: '15200' },
       { name: 'RulerCmpRat', value: '72' },
@@ -481,6 +495,9 @@ const MOCK_TOWN_HALL: MockBuilding = {
   ],
   groups: {
     'townGeneral': [
+      // Requested, never displayed: `grantAccess` computes `canGovern` from it,
+      // so a fixture without it cannot exercise a single civic control.
+      { name: 'SecurityId', value: '131655160' },
       { name: 'ActualRuler', value: 'Mayor Chen' },
       { name: 'Town', value: 'Shamba' },
       { name: 'NewspaperName', value: 'Shamba Daily' },
@@ -490,6 +507,10 @@ const MOCK_TOWN_HALL: MockBuilding = {
       { name: 'YearsToElections', value: '3' },
       { name: 'HasRuler', value: '1' },
       { name: 'RulerPeriods', value: '2' },
+      // PoliticsCache.pas:153 writes IFELRating on the TOWN folder, not on the
+      // facility; the template marks it hideEmpty for exactly that reason.
+      { name: 'IFELRating', value: '' },
+      { name: 'CampaignCount', value: '2' },
       { name: 'covCount', value: '3' },
       { name: 'covName0.0', value: 'Health', index: 0 },
       { name: 'covValue0', value: '78', index: 0 },
@@ -503,16 +524,19 @@ const MOCK_TOWN_HALL: MockBuilding = {
       { name: 'hiPrivateWorkDemand', value: '45' },
       { name: 'hiSalary', value: '72' },
       { name: 'hiSalaryValue', value: '65' },
+      { name: 'hiMinSalary', value: '140' },
       { name: 'hiActualMinSalary', value: '150' },
       { name: 'midWorkDemand', value: '340' },
       { name: 'midPrivateWorkDemand', value: '120' },
       { name: 'midSalary', value: '58' },
       { name: 'midSalaryValue', value: '50' },
+      { name: 'midMinSalary', value: '95' },
       { name: 'midActualMinSalary', value: '100' },
       { name: 'loWorkDemand', value: '890' },
       { name: 'loPrivateWorkDemand', value: '350' },
       { name: 'loSalary', value: '45' },
       { name: 'loSalaryValue', value: '38' },
+      { name: 'loMinSalary', value: '55' },
       { name: 'loActualMinSalary', value: '60' },
     ],
     'townRes': [
