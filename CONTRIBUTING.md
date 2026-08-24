@@ -73,6 +73,14 @@ If `main` moves while your PR is open, update the branch and run `npm run gate` 
 new sha needs its own attestation. Fill in [the PR template](.github/pull_request_template.md),
 and say which RDO members the change touches, if any.
 
+A third job, **`claude review`**, posts a review comment on every PR
+([.github/workflows/claude-review.yml](.github/workflows/claude-review.yml)). It is a second
+reader with none of the authoring session's context, looking for what the two required checks
+cannot see: a hand-built RDO string, an `any`, a UI element whose action is not wired, a test
+edited to make it pass, an abstraction built for a need nobody has. It is **not** a required
+check and cannot fail your PR — read it, answer it, merge anyway if it is wrong. It stays
+silent until `ANTHROPIC_API_KEY` exists on the repository.
+
 **Merge with squash**, and make the PR title a conventional commit (`type: summary`) — it
 becomes the one squash commit, and that commit is the changelog line. GitHub deletes the
 remote branch at merge; then **`npm run finish`** closes the local side (main fast-forwarded,

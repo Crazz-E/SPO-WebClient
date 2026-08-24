@@ -1,0 +1,148 @@
+# A second reader for every pull request.
+#
+# On this repository the code is written by an agent session, and that same session ticks
+# the template's boxes and merges the PR. `bench/gate` proves the code runs live against
+# planitia; `typecheck + tests` proves it compiles, passes and covers its own lines. Neither
+# says anything about design, debt, or a CLAUDE.md rule quietly worked around — because
+# until now the only reader of the diff was the one who wrote it.
+#
+# This job is that reader. It carries no session context, which is the whole point: it does
+# not share the blind spots of whoever produced the change.
+#
+# ## Informational, deliberately
+#
+# `continue-on-error: true` and no entry in the `main` ruleset: this check can never block a
+# merge. Recommended by #122 for the first dozen PRs, to calibrate how noisy the reviewer is
+# before anything depends on it. Making it blocking later is a two-part decision — drop the
+# flag here AND update src/__tests__/claude-review-workflow.test.ts, which pins the current
+# posture so the change cannot happen by accident.
+#
+# ## `pull_request`, never `pull_request_target`
+#
+# The opposite choice from labeler.yml, for the opposite reason. That job checks out nothing
+# and runs no repository code, so the elevated token is safe there. This one checks out the
+# PR head and hands a live API key to a process reading it — under `pull_request_target`
+# that pair is a credential-exfiltration hole, and a fork PR could open it by editing a file.
+# `pull_request` gives a fork a read-only token instead: the review simply cannot post, which
+# is the correct failure. Same-repo branches (every session PR) get the write token they need.
+#
+# ## Until the secret exists
+#
+# `ANTHROPIC_API_KEY` is not provisioned yet; provision it under Settings → Secrets and
+# variables → Actions. Every step is guarded on it, so an unprovisioned repository gets a
+# green, skipped job with a notice — not a red X on every pull request.
+name: Claude Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: claude review
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Dependabot runs with its own secret store and cannot read ANTHROPIC_API_KEY, so the
+    # guard below would skip it anyway. Stated here because a lockfile bump is the one diff
+    # a design reviewer has nothing to say about, and silence should be intended, not lucky.
+    if: github.actor != 'dependabot[bot]'
+    permissions:
+      contents: read
+      pull-requests: write
+    # `secrets` is available in neither a job-level nor a step-level `if` — GitHub rejects
+    # the whole file at validation, which shows up as a run named after the path with no
+    # jobs and no annotation, and leaves every other check green. `jobs.<id>.env` IS one of
+    # the places `secrets` may be read, and `env` IS one of the contexts a step `if` may
+    # read, so the presence of the key is turned into a boolean here and tested downstream.
+    # Only the boolean crosses; the key itself never lands in the environment.
+    env:
+      HAS_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      # Unconditional by design: it is how a human learns why nothing was reviewed.
+      - name: Announce a missing key
+        if: env.HAS_ANTHROPIC_KEY != 'true'
+        run: |
+          echo "::notice title=Claude Review skipped::ANTHROPIC_API_KEY is not set on this repository — no review was produced. Add it under Settings > Secrets and variables > Actions."
+
+      - name: Checkout
+        if: env.HAS_ANTHROPIC_KEY == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The reviewer reads the PR head and the files around the diff, not the history.
+          fetch-depth: 1
+
+      - name: Review the diff
+        if: env.HAS_ANTHROPIC_KEY == 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@c81e3bc69d1b18badbb63ba39581218f02421678 # v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # CLAUDE.md § Model routing: analysis goes to Fable 5, execution to Opus 5. A
+          # review is analysis. One line to change if calibration says otherwise.
+          claude_args: |
+            --model claude-fable-5
+            --allowedTools "Read,Grep,Glob,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),mcp__github_inline_comment__create_inline_comment"
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are reviewing a pull request on Starpeace Online WebClient — a browser client
+            that must stay wire-compatible with the original Delphi servers. The PR branch is
+            already checked out in the working directory. Read CLAUDE.md first, and the nested
+            CLAUDE.md in any directory the diff touches (src/server/, src/shared/,
+            src/client/, src/mock-server/) — they are the rules this repository is held to.
+
+            Get the diff with `gh pr diff`. Review only what the diff changes.
+
+            ## What to look for, in priority order
+
+            1. **A hand-built RDO protocol string.** Every frame comes from `rdoCall`,
+               `rdoGet` or `rdoSet` in `@/shared/rdo-frame`, with `RdoValue` arguments. A
+               separator ("^", "*") written by hand, or a frame assembled by concatenation,
+               is the most serious defect this repository can ship: a wrong separator means a
+               server freeze or an arbitrary memory write, and there is no self-recovery.
+            2. **`any`.** Catch blocks take `unknown` plus `toErrorMessage(err)`; data takes a
+               typed interface. A cast that launders `any` through `as` counts.
+            3. **A UI element added without its action wired.** A button, menu entry or
+               control that renders but whose handler is missing, empty, or a TODO.
+            4. **A test modified to make it pass.** A changed assertion, a loosened matcher, a
+               removed case, a `skip` — where the production change should have been the fix
+               instead. Say which test and what it stopped guarding.
+            5. **An abstraction built for a hypothetical need.** A layer, option, generic or
+               registry with exactly one caller and no second one in sight. The rule is the
+               simplest solution that meets the criterion.
+
+            Beyond that list, raise real correctness bugs, and anything that quietly widens
+            the blast radius of the live E2E accounts (mutations belong on Helartia only).
+
+            ## What NOT to say
+
+            The `typecheck + tests` check already enforces, mechanically, on this same PR:
+            lint, TypeScript, the full Jest suite, ≥93% coverage on changed lines, the
+            protected-file lock, the Jest threshold ratchet and the `File.pas:Line` citation
+            for `rdo-members.ts`. Repeating any of them is pure noise — skip them entirely.
+            Skip formatting too: Prettier is configured but deliberately not enforced.
+
+            Do not praise, do not summarise the diff back, do not restate the PR description.
+            You are a second reader, not a status report.
+
+            ## How to report
+
+            Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`)
+            for anything that lands on specific lines.
+
+            Then post exactly one top-level comment with `gh pr comment`, starting with the
+            line `### Claude review`, listing anything that does not belong on a line, and
+            naming the rule each finding breaks. **If you found nothing worth raising, say so
+            in one sentence and stop** — a short comment is the expected outcome on most PRs,
+            and inventing a finding to look useful is the failure mode that gets this job
+            switched off.
+
+            Post GitHub comments only. Do not return review text as a message.
