@@ -31,6 +31,15 @@ interface MailState {
   isMessageLoading: boolean;
   /** The id a delete was requested for — removed from the list when the server confirms. */
   pendingDeleteId: string | null;
+  /**
+   * Bumped whenever the open folder must be read again.
+   *
+   * The bridge is the inbound half of the client and holds no socket, so it
+   * cannot re-issue REQ_MAIL_GET_FOLDER itself. The panel's fetch effect
+   * watches this counter alongside the folder, which is the same path that
+   * loaded the folder in the first place (OB-11).
+   */
+  folderRefreshToken: number;
 
   // Actions
   setFolder: (folder: MailFolder) => void;
@@ -49,6 +58,8 @@ interface MailState {
   setPendingDeleteId: (id: string | null) => void;
   /** Drop a message from the current list (after a confirmed delete) — no refetch needed. */
   removeMessage: (messageId: string) => void;
+  /** Ask the open folder to be read again — the panel's fetch effect answers. */
+  refreshFolder: () => void;
 }
 
 export const useMailStore = create<MailState>((set) => ({
@@ -66,6 +77,7 @@ export const useMailStore = create<MailState>((set) => ({
   isSending: false,
   isMessageLoading: false,
   pendingDeleteId: null,
+  folderRefreshToken: 0,
 
   setFolder: (folder) => set({ currentFolder: folder, currentView: 'list', currentMessage: null, messages: [], isLoading: true }),
   setView: (view) => set({ currentView: view }),
@@ -114,5 +126,6 @@ export const useMailStore = create<MailState>((set) => ({
       currentMessage: s.currentMessage?.messageId === messageId ? null : s.currentMessage,
       currentView: s.currentMessage?.messageId === messageId ? 'list' : s.currentView,
     })),
+  refreshFolder: () => set((s) => ({ folderRefreshToken: s.folderRefreshToken + 1, isLoading: true })),
 
 }));
