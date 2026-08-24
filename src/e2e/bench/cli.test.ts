@@ -4,6 +4,7 @@ import * as path from 'path';
 import { benchPaths, ensureLayout, type BenchPaths } from './paths';
 import { Spool, type JobReport } from './job';
 import { formatReport, main, parseArgs, type CliDeps } from './cli';
+import { lookupReceipt, readReceipt, receiptFile } from './receipt';
 
 interface Harness {
   deps: CliDeps;
@@ -295,6 +296,32 @@ describe('unknown command', () => {
   it('is refused with usage guidance', async () => {
     const h = harness();
     expect(await main(['frobnicate'], h.deps)).toBe(1);
-    expect(h.err[0]).toMatch(/expected submit, wait, release or status/);
+    expect(h.err[0]).toMatch(/expected submit, wait, receipt, release or status/);
+  });
+});
+
+describe('receipt — the precheck stamps the tree it proved', () => {
+  it('writes a receipt the worker can match against this worktree', async () => {
+    const h = harness();
+    expect(await main(['receipt'], h.deps)).toBe(0);
+
+    const tree = { head: 'abc123', hash: 'h1', clean: true };
+    const written = readReceipt(receiptFile(h.paths, tree, '/wt/a'));
+    expect(written?.worktree).toBe('/wt/a');
+    expect(written?.branch).toBe('fix/x');
+    expect(written?.steps).toEqual(['typecheck', 'lint', 'test']);
+    expect(lookupReceipt(h.paths, tree, '/wt/a', h.clock.nowMs).ok).toBe(true);
+    expect(h.out.join('\n')).toContain('precheck receipt written');
+  });
+
+  it('never fails the precheck when the bench cannot be written', async () => {
+    const h = harness();
+    h.deps.git = () => {
+      throw new Error('not a git worktree');
+    };
+    // Exit 0 is the point: a receipt that cannot be written costs a replay on the bench,
+    // never a red precheck on a branch that is actually green.
+    expect(await main(['receipt'], h.deps)).toBe(0);
+    expect(h.err.join('\n')).toContain('the worker will replay the static stage');
   });
 });

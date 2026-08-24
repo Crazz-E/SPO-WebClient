@@ -15,6 +15,11 @@
  *     Sleeps until the report exists (exit 0 on PASS/LEASED, 1 otherwise), the worker
  *     dies (exit 3), or the timeout passes (exit 4).
  *
+ *   receipt
+ *     Record that `gate:precheck` passed on the CURRENT worktree, so the worker does not
+ *     replay typecheck/lint/tests inside the exclusive bench (see ./receipt). Best-effort
+ *     by design: it never fails the precheck — a missing receipt only costs a replay.
+ *
  *   release
  *     End the running lease held for the CURRENT worktree early (`npm run dev:release`).
  *
@@ -35,6 +40,7 @@ import {
   type BenchPaths,
 } from './paths';
 import { fingerprintTree, type TreeFingerprint } from './fingerprint';
+import { buildReceipt, pruneReceipts, writeReceipt, RECEIPT_MAX_AGE_MS } from './receipt';
 import { DuplicateJobError, Spool, type JobReport, type JobType } from './job';
 
 export interface CliDeps {
@@ -109,12 +115,16 @@ export async function main(argv: string[], deps: CliDeps = realCliDeps()): Promi
       }
       return wait(id, timeoutMin(parsed), deps);
     }
+    case 'receipt':
+      return receipt(deps);
     case 'release':
       return release(deps);
     case 'status':
       return status(deps);
     default:
-      deps.err(`unknown command "${parsed.command}" — expected submit, wait, release or status`);
+      deps.err(
+        `unknown command "${parsed.command}" — expected submit, wait, receipt, release or status`,
+      );
       return 1;
   }
 }
@@ -193,6 +203,30 @@ async function submit(parsed: ParsedArgs, deps: CliDeps): Promise<number> {
 
   if (parsed.known.has('wait')) return wait(request.id, timeoutMin(parsed), deps);
   deps.out(`wait with:  bash scripts/bench-wait.sh ${request.id}`);
+  return 0;
+}
+
+/**
+ * Stamp the precheck proof for the current worktree.
+ *
+ * Deliberately exit 0 on every failure: this runs at the end of `gate:precheck`, and a
+ * bench that cannot be written to must not turn a green precheck into a red one. The
+ * worst case is the worker finding no receipt and replaying the static stage — exactly
+ * what it did before this existed.
+ */
+export function receipt(deps: CliDeps): number {
+  try {
+    const worktree = deps.git(['rev-parse', '--show-toplevel']);
+    const branch = deps.git(['rev-parse', '--abbrev-ref', 'HEAD']);
+    const file = writeReceipt(
+      deps.paths,
+      buildReceipt(deps.fingerprint(worktree), worktree, branch, deps.now()),
+    );
+    pruneReceipts(deps.paths, RECEIPT_MAX_AGE_MS, deps.now());
+    deps.out(`precheck receipt written: ${file}`);
+  } catch (err: unknown) {
+    deps.err(`could not write the precheck receipt (${toErrorMessage(err)}); the worker will replay the static stage`);
+  }
   return 0;
 }
 

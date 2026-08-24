@@ -22,6 +22,8 @@ export interface BenchPaths {
   done: string;
   /** Per-HEAD gate attestations — what `.claude/hooks/pre-push-gate.sh` reads. */
   verdicts: string;
+  /** Precheck receipts: the static proof a session produced, keyed by tree (see ./receipt). */
+  receipts: string;
   /** Shared world lock / dirty flag / run history (see WORLD_STATE_DIR in ../config). */
   world: string;
   /** Touched every few seconds by the worker; its mtime is the liveness signal. */
@@ -50,6 +52,7 @@ export function benchPaths(root: string = benchRoot()): BenchPaths {
     running: path.join(root, 'running'),
     done: path.join(root, 'done'),
     verdicts: path.join(root, 'verdicts'),
+    receipts: path.join(root, 'receipts'),
     world: path.join(root, 'world'),
     heartbeat: path.join(root, 'heartbeat'),
     workerFile: path.join(root, 'worker.json'),
@@ -57,7 +60,8 @@ export function benchPaths(root: string = benchRoot()): BenchPaths {
 }
 
 export function ensureLayout(paths: BenchPaths): void {
-  for (const dir of [paths.root, paths.spool, paths.running, paths.done, paths.verdicts, paths.world]) {
+  const dirs = [paths.root, paths.spool, paths.running, paths.done, paths.verdicts, paths.receipts, paths.world];
+  for (const dir of dirs) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }

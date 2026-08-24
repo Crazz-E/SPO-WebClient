@@ -69,15 +69,18 @@ The unit of enforcement is the **push**, not the commit.
 npm run gate
 ```
 
-   It **prechecks locally** (`npm run typecheck`, `npm run lint`, `npm test` — free,
-   parallelizable, consumes no bench slot), then **queues a job on the bench worker** and
-   waits (one background command, zero tokens). The worker, in the depositing worktree:
+   It **prechecks locally** (`npm run typecheck`, `npm run lint`, then
+   `npm run coverage:changed`, which runs the Jest suite **once** and measures the changed
+   lines from that same run — free, parallelizable, consumes no bench slot), stamps a
+   **precheck receipt** for the tree it just proved, then **queues a job on the bench
+   worker** and waits (one background command, zero tokens). The worker, in the depositing
+   worktree:
 
    | Stage | Check |
    |---|---|
    | Clean bench | nothing listens on 8080; fingerprint the tree — uncommitted changes -> `DIRTY`, nothing runs (the attestation names a sha, so the tree must be that commit) |
    | Build | `npm run build:server` in the worktree — the tested gateway IS this tree's code. Only the gateway: an L2 gate opens no browser, so the client bundle and the terrain-test are not built here (a `live` job adds `build:e2e`, a `lease` builds everything — [bench-worker.md §3](bench-worker.md)) |
-   | Static (replayed) | typecheck, lint, tests — the attestation is the worker's, not the session's |
+   | Static | typecheck, lint, tests — **replayed here unless the session's precheck receipt matches the tree the worker fingerprinted itself** (`src/e2e/bench/receipt.ts`), in which case the artifact records `RECEIPT` and the ~113 s of exclusive bench is not spent re-proving it. Fail closed: no receipt, wrong tree, wrong worktree, or older than 120 min → full replay. The attestation stays the worker's: it decides which receipt to look for, and CI replays all three independently on every PR |
    | Capabilities | President members / Capitol governance in the diff -> the live stage reads, from the server, whether the account holds the capability (§7): granted -> a flow must drive it (fail closed); refused -> recorded exception |
    | Routing | map the diff to the required L2 flows (§4) |
    | Live | pre-flight, acquire the (now machine-global) lock, run the flows against planitia, release |

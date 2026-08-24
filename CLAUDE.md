@@ -268,10 +268,11 @@ L3  LIVE browser smoke        Playwright MCP, SPO_test3 / Crazz       pixels onl
 **The push gate.** `git push` is blocked by a hook unless the **bench worker** has
 attested the current HEAD (`~/.spo-bench/verdicts/<sha>.json`): verdict PASS, tree
 fingerprint stable across the run, attested for THIS worktree, younger than 60 min.
-`npm run gate` produces that attestation: it prechecks locally (typecheck, lint, tests —
-free, parallelizable), then queues a bench job; the worker builds the worktree, runs
-verify-gate (static replayed, President exclusion, diff routing) and drives the routed
-flows live. **Only the worker attests** — `npm run gate:local` is evidence for reading,
+`npm run gate` produces that attestation: it prechecks locally (typecheck, lint, then one
+Jest pass that also measures the changed lines — free, parallelizable) and leaves a
+**precheck receipt** for that exact tree; then it queues a bench job. The worker builds the
+worktree, runs verify-gate (static — replayed unless its own fingerprint of the tree matches
+the receipt — President exclusion, diff routing) and drives the routed flows live. **Only the worker attests** — `npm run gate:local` is evidence for reading,
 never a push unblock. **A crash is a failure, but silence is not a pass**: a mutation is
 proven by the `FIVEMODELSERVER/Survival` log line, not by a `success: true` response
 (`OB-28`); a lagging read-back is expected (`OB-29`) and does not fail a probe, a missing
@@ -283,7 +284,9 @@ and `component` (jsdom, `.test.tsx`).
 
 **Two coverage numbers — do not conflate them.** New/modified lines must reach ≥ 93 %,
 enforced by `npm run coverage:changed` (`scripts/coverage-changed.js`, run by `gate:precheck`
-and by CI on every pull request; `COVERAGE_CHANGED_MIN` overrides the floor). `jest.config.js`
+and by CI on every pull request; `COVERAGE_CHANGED_MIN` overrides the floor). **That script IS
+the precheck's suite pass** — `--collectCoverageFrom` restricts instrumentation, not execution,
+so running `npm test` beside it ran all 310 test files twice. `jest.config.js`
 separately enforces a machine floor (global 38 %, higher per directory), unchanged by that
 script. Thresholds only go UP. Details: **`spo-testing`** skill.
 

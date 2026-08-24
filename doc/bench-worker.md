@@ -72,7 +72,16 @@ one process (the worker) consumes the spool.
    exactly that build on every pull request, so the proof moved rather than disappeared.
    A failing step is a `FAIL` naming the step, before any gateway starts.
 6. **Gateway** from that worktree, wait for `phase=ready`.
-7. **Body**, with `E2E_WORLD_STATE_DIR=~/.spo-bench/world`:
+7. **Precheck receipt** (gate only): look in `~/.spo-bench/receipts/` for a receipt whose
+   key is the fingerprint taken at step 4 — the worker's own reading of the tree, never a
+   value the session supplied. On a match, `--skip-static` is passed to verify-gate and the
+   ~113 s of typecheck + lint + Jest is not replayed on the exclusive bench; the report
+   carries `staticReceipt.used`. Anything else — no receipt, another tree, another worktree,
+   another version, older than 120 min — replays the static stage in full and says why in
+   the job log. **Only stage 1 is ever skipped**: `build:e2e`, the routing, the President
+   exclusion and the live drive are what the bench alone can do, and they always run. See
+   `src/e2e/bench/receipt.ts`.
+8. **Body**, with `E2E_WORLD_STATE_DIR=~/.spo-bench/world`:
    - `gate` → `node scripts/verify-gate.js` (static replay, President exclusion, routing,
      live drive) — exit 0 PASS / 2 BLOCKED / else FAIL
    - `live` → `node dist/e2e/run.js [flags]`
@@ -82,11 +91,11 @@ one process (the worker) consumes the spool.
      waiting CLI exits the moment the report lands, and a session has no longer-lived pid
      to offer — so a session killed mid-lease simply lets the lease run to its expiry
      (30 min default, 120 max); the worker tears the gateway down then, never later
-8. **Teardown**: stop the gateway, re-verify 8080 is free. **No gateway survives between
+9. **Teardown**: stop the gateway, re-verify 8080 is free. **No gateway survives between
    two jobs.**
-9. **Fingerprint `atEnd`**; if the three differ → verdict **`STALE`, never PASS** — the
+10. **Fingerprint `atEnd`**; if the three differ → verdict **`STALE`, never PASS** — the
    report says so plainly and carries all three fingerprints.
-10. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs), running
+11. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs), running
     slot released, next job.
 
 Verdicts: `PASS` (possibly with capability exceptions listed — §7 of the policy) · `FAIL` ·
@@ -117,7 +126,8 @@ npm run bench:status                           # liveness + queue, from any work
 
 ```
 session edits worktree
-  → npm run gate            local precheck (typecheck/lint/tests) — fails free, queues nothing
+  → npm run gate            local precheck (typecheck/lint/one Jest pass) — fails free, queues
+                            nothing; leaves a receipt for the tree it proved
   → bench job               worker builds THIS tree, drives it live, attests
   → git push                hook reads verdicts/<HEAD>.json: PASS + stable + this worktree + <60 min
   → GitHub PR               CI re-runs L0/L1 (ubuntu, no credentials)
@@ -259,6 +269,10 @@ a human frees the port. The hook is what makes the assumption true.
 
 - Two simultaneous deposits execute one after the other, in deposit order, each with an
   attributable report — `job.test.ts`, `worker.test.ts`.
+- A precheck receipt skips the static replay **only** for the tree the worker fingerprinted
+  itself; a receipt for another tree, another worktree, another version, or one past its
+  window replays everything and says why — `receipt.test.ts`, `worker.test.ts`. And a
+  receipt never skips more than stage 1 — `verify-gate.test.ts`.
 - A session killed while queued (with `--wait`, the npm default) leaves nothing:
   `ABANDONED`, queue cleaned — no orphan gateway is possible since sessions start none.
   Killed mid-lease: the gateway lives until the lease expires, then the worker tears it
