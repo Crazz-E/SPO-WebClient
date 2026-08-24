@@ -288,6 +288,14 @@ proven by the `FIVEMODELSERVER/Survival` log line, not by a `success: true` resp
 log line does. Three attempts maximum, each naming a different root cause. Full rules:
 [doc/E2E-POLICY.md](doc/E2E-POLICY.md); bench mechanics: [doc/bench-worker.md](doc/bench-worker.md).
 
+**The nightly proves `main`.** The gate proves branches, each against the `main` it was based
+on — so two branches that pass alone and break together land unchallenged. Once a night, on an
+idle queue, the worker drives the L2 flows against `origin/main` and publishes the answer to
+`~/.spo-bench/nightly/latest.json`. **While `main` is red** (verdict `FAIL` and the sha is
+still `origin/main`), `/next-task` hands out only the repair and **no session merges
+`origin/main` into its branch** — updating from `main` must never import a defect.
+[bench-worker.md §8](doc/bench-worker.md), [kanban-workflow.md](doc/kanban-workflow.md).
+
 `module.ts` → `module.test.ts`, same directory. Two Jest projects: `unit` (node, `.test.ts`)
 and `component` (jsdom, `.test.tsx`).
 

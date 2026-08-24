@@ -14,7 +14,7 @@ import * as path from 'path';
 import type { BenchPaths } from './paths';
 import type { TreeFingerprint } from './fingerprint';
 
-export type JobType = 'gate' | 'live' | 'lease';
+export type JobType = 'gate' | 'live' | 'lease' | 'nightly';
 
 export type JobVerdict =
   | 'PASS'

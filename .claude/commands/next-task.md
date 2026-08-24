@@ -9,6 +9,31 @@ argument-hint: "[issue number or OB-N to take a specific item]"
 ownership law, board writes, model routing. Do not restate or reinvent it; follow it.
 Board: [github.com/users/Crazz-E/projects/2](https://github.com/users/Crazz-E/projects/2).
 
+## 0 · Is `main` red?
+
+The bench proves branches; one nightly run proves `main` itself
+([bench-worker.md § The nightly proof of `main`](../../doc/bench-worker.md)). Read its
+result before claiming anything:
+
+```bash
+f="${SPO_BENCH_DIR:-$HOME/.spo-bench}/nightly/latest.json"; [ -f "$f" ] && cat "$f"; git fetch -q origin main && git rev-parse origin/main
+```
+
+**`main` is red** when that file's `verdict` is `FAIL` **and** its `sha` is still the sha
+`origin/main` points at. While it is red:
+
+- claim **no ordinary card** — the only admissible work is the repair;
+- **merge `origin/main` into no branch**, in this session or any other: updating from `main`
+  must never import a defect.
+
+Take the open issue titled `Nightly: main is red` if one exists; otherwise file it (Category
+🔴 Defect, `cat:defect`, area from where the failure lands) quoting the `sha`, the `detail`
+and the `logFile` from that file, then claim it and drive it like any other card.
+
+Anything else — the file is missing, the verdict is `PASS`, the verdict is `ENVIRONMENT` or
+`INTERRUPTED` (the run never learned anything about `main`), or the `sha` is one `main` has
+already moved past — is **not** red. Proceed to § 1.
+
 ## 1 · Pick — the first Todo card whose ground is free
 
 List the board (`gh project item-list 2 --owner Crazz-E --format json`): `status`, `session`

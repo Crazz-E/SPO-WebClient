@@ -27,7 +27,7 @@ const INFO: WorkerInfo = { pid: 4242, startedAt: '2026-08-22T09:00:00Z', repo: '
 describe('bench layout', () => {
   it('creates every shared directory', () => {
     const paths = tempBench();
-    for (const dir of [paths.spool, paths.running, paths.done, paths.verdicts, paths.receipts, paths.world, paths.cache]) {
+    for (const dir of [paths.spool, paths.running, paths.done, paths.verdicts, paths.receipts, paths.world, paths.cache, paths.nightly]) {
       expect(fs.statSync(dir).isDirectory()).toBe(true);
     }
   });

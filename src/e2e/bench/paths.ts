@@ -33,6 +33,11 @@ export interface BenchPaths {
    * so the one writer at a time this directory assumes is guaranteed by the queue.
    */
   cache: string;
+  /**
+   * The nightly proof of `main`: the worker-owned checkout it drives and the result it
+   * publishes. Outside every session's worktree because no session owns it — see ./nightly.
+   */
+  nightly: string;
   /** Touched every few seconds by the worker; its mtime is the liveness signal. */
   heartbeat: string;
   /** Who the worker is: pid, repo it runs from, port it owns. */
@@ -62,6 +67,7 @@ export function benchPaths(root: string = benchRoot()): BenchPaths {
     receipts: path.join(root, 'receipts'),
     world: path.join(root, 'world'),
     cache: path.join(root, 'cache'),
+    nightly: path.join(root, 'nightly'),
     heartbeat: path.join(root, 'heartbeat'),
     workerFile: path.join(root, 'worker.json'),
   };
@@ -77,6 +83,7 @@ export function ensureLayout(paths: BenchPaths): void {
     paths.receipts,
     paths.world,
     paths.cache,
+    paths.nightly,
   ];
   for (const dir of dirs) {
     fs.mkdirSync(dir, { recursive: true });
