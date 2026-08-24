@@ -113,7 +113,7 @@ session edits worktree
   → GitHub PR               CI re-runs L0/L1 (ubuntu, no credentials)
   → bench/gate status       the worker publishes the attestation as a commit status once
                             the sha exists on GitHub (retried on a 30 s cycle until then)
-  → merge                   ruleset: PR, CI green AND bench/gate green, up to date, no bypass;
+  → merge                   ruleset: PR, CI green AND bench/gate green, no bypass;
                             GitHub deletes the remote branch
   → npm run finish          main ff'd, refs pruned, worker reinstalled if its sources changed,
                             worktree RETIRED (removed by the next run, once no session is in
@@ -126,6 +126,33 @@ session edits worktree
 Only the worker writes attestations. A session cannot unblock its own push, and a PR
 cannot merge on CI alone — the live evidence must exist even if the local hook were
 sidestepped.
+
+### The gate base
+
+Every attestation records `baseMain`: the `origin/main` sha the run was judged against,
+read in the worktree right after the worker's `git fetch origin main`.
+
+It exists because the ruleset no longer requires a branch to be **up to date** with
+`main`. That rule was correct and unaffordable: the bench is serialised and every merge
+invalidated every other session's gate, so N parallel sessions cost N² bench runs — each
+one a build plus a full live drive, for a merge that changed nothing they touched
+([#134](https://github.com/Crazz-E/SPO-WebClient/issues/134)).
+
+What replaces it is not a weaker rule but a **visible** one. `baseMain` says which `main`
+the live evidence stands on, and three surfaces read it back:
+
+| Surface | Shows |
+|---|---|
+| `verdicts/<sha>.json` | `baseMain` — the machine-readable field |
+| the `bench/gate` commit status | `PASS — base <sha8> — job <id>`, readable on the PR at merge time |
+| `.claude/hooks/pre-push-gate.sh` | a `NOTE:` naming both shas when `origin/main` has moved past the base — it **allows** the push |
+
+The honest trade: a branch can now merge while `main` has moved past its base, and nothing
+refuses it. What the gate proved is `merge(branch, baseMain)`, not `merge(branch,
+main-as-of-the-merge)`. Judgement replaces the rule — if the incoming `main` touches the
+same ground, merge `origin/main` in and re-gate; the new sha needs its own attestation
+either way. A base that cannot be resolved (offline, no remote ref) is recorded as absent,
+never as matching.
 
 ### What a session reads to know the verdict
 
@@ -162,8 +189,10 @@ them one by one; a lockfile change routes to spine + building-details.
 merge around it, so the rule must bind the admin too. On `main`:
 
 - *Require status checks to pass* → **`typecheck + tests`** (CI) **and `bench/gate`**,
-  with *require branches to be up to date* — a branch updated after its gate (merge `origin/main` in — never a force push) gets a new
-  sha, which needs a new attestation.
+  **without** *require branches to be up to date* — that box is deliberately off, and
+  `baseMain` (§ The gate base) is what replaced it. Turning it back on restores the N²
+  re-gate cost. A branch updated after its gate (merge `origin/main` in — never a force
+  push) gets a new sha, which needs a new attestation.
 - *Require a pull request before merging* with **0 required approvals** — a single
   maintainer cannot approve their own PR, and a 1-approval rule only teaches the admin to
   use the bypass button, which also skips `bench/gate`.

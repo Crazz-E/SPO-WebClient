@@ -21,21 +21,27 @@ const REPO_ROOT = process.cwd();
 interface HookRun {
   code: number;
   stderr: string;
+  /** Where an ALLOWED run speaks — the base-moved notice rides here, not on stderr. */
+  stdout: string;
 }
 
 /** 0 = allowed through, 2 = blocked. */
 function invoke(command: string, env: NodeJS.ProcessEnv = {}): HookRun {
   try {
-    execFileSync('bash', [path.join(REPO_ROOT, HOOK)], {
+    const stdout = execFileSync('bash', [path.join(REPO_ROOT, HOOK)], {
       input: JSON.stringify({ tool_input: { command } }),
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: REPO_ROOT,
       env: { ...process.env, ...env },
     });
-    return { code: 0, stderr: '' };
+    return { code: 0, stderr: '', stdout: stdout.toString() };
   } catch (err: unknown) {
-    const failure = err as { status?: number; stderr?: Buffer };
-    return { code: failure.status ?? -1, stderr: failure.stderr?.toString() ?? '' };
+    const failure = err as { status?: number; stderr?: Buffer; stdout?: Buffer };
+    return {
+      code: failure.status ?? -1,
+      stderr: failure.stderr?.toString() ?? '',
+      stdout: failure.stdout?.toString() ?? '',
+    };
   }
 }
 
@@ -251,6 +257,31 @@ describe('the attestation gate, on a feature branch', () => {
       'utf8',
     );
     expect(invokeWith(dir, bench).code).toBe(2);
+  });
+
+  it('announces a moved base without blocking — staleness is visible, not enforced', () => {
+    const dir = scratchRepo();
+    // `main` moved on: the attestation names a base the remote no longer points at.
+    execFileSync('git', ['-C', dir, 'update-ref', 'refs/remotes/origin/main', headOf(dir)]);
+    const result = invokeWith(dir, benchWith(dir, { baseMain: '0'.repeat(40) }));
+    expect(result.code).toBe(0);
+    expect(result.stdout).toMatch(/main has moved since this gate/);
+    expect(result.stdout).toMatch(/attested against 00000000/);
+  });
+
+  it('says nothing when the base still matches origin/main', () => {
+    const dir = scratchRepo();
+    execFileSync('git', ['-C', dir, 'update-ref', 'refs/remotes/origin/main', headOf(dir)]);
+    const result = invokeWith(dir, benchWith(dir, { baseMain: headOf(dir) }));
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toMatch(/main has moved/);
+  });
+
+  it('says nothing when there is no origin/main to compare against', () => {
+    const dir = scratchRepo();
+    const result = invokeWith(dir, benchWith(dir, { baseMain: '0'.repeat(40) }));
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toMatch(/main has moved/);
   });
 
   it('blocks an unreadable attestation instead of trusting it', () => {

@@ -99,6 +99,22 @@ describe('publishPendingStatuses — the retry-until-pushed loop', () => {
     expect(descriptions[0]).toMatch(/PASS — 2 capability exception\(s\) — job/);
   });
 
+  it('names the gate base in the GitHub description — the merge-time staleness signal', () => {
+    const paths = tempBench();
+    writeVerdict(paths, verdictFor('c1', { baseMain: 'abcdef1234567890' }));
+    const descriptions: string[] = [];
+    publishPendingStatuses(paths, (_wt, _head, _state, description) => descriptions.push(description), () => {});
+    expect(descriptions[0]).toBe('PASS — base abcdef12 — job job-1');
+  });
+
+  it('omits the base when the attestation carries none', () => {
+    const paths = tempBench();
+    writeVerdict(paths, verdictFor('c2'));
+    const descriptions: string[] = [];
+    publishPendingStatuses(paths, (_wt, _head, _state, description) => descriptions.push(description), () => {});
+    expect(descriptions[0]).toBe('PASS — job job-1');
+  });
+
   it('does not republish', () => {
     const paths = tempBench();
     writeVerdict(paths, verdictFor('abc123', { published: true }));

@@ -99,11 +99,11 @@ if [ ! -f "$attestation" ]; then
   exit 2
 fi
 
-read -r verdict stable wtree age_minutes <<EOF
+read -r verdict stable wtree age_minutes base_main <<EOF
 $(node -e "
   const a = require(require('path').resolve('${attestation}'));
   const age = Math.floor((Date.now() - Date.parse(a.createdAt)) / 60000);
-  process.stdout.write([a.verdict || 'UNKNOWN', String(a.fingerprintStable === true), a.worktree || '?', String(age)].join(' '));
+  process.stdout.write([a.verdict || 'UNKNOWN', String(a.fingerprintStable === true), a.worktree || '?', String(age), a.baseMain || '-'].join(' '));
 " 2>/dev/null)
 EOF
 
@@ -141,6 +141,19 @@ if [ -n "${age_minutes:-}" ] && [ "$age_minutes" -gt "$max_age" ]; then
   echo "BLOCKED: the bench attestation is ${age_minutes} min old (limit ${max_age})." >&2
   echo "The live world moves; stale evidence is not evidence. Re-run: npm run gate" >&2
   exit 2
+fi
+
+# The gate base. `main` is no longer required to be up to date with the branch — that rule
+# made every merge invalidate every other session's gate, at a cost growing as N². What
+# replaces it is this comparison: the attestation records WHICH `main` it was judged
+# against, and a base that has moved is ANNOUNCED, not enforced. Re-gating becomes an
+# informed choice instead of a blind rule. doc/bench-worker.md § The gate base.
+current_main="$(git -C "$repo" rev-parse --verify --quiet origin/main 2>/dev/null)"
+if [ -n "${base_main:-}" ] && [ "$base_main" != "-" ] && [ -n "$current_main" ] &&
+   [ "$base_main" != "$current_main" ]; then
+  echo "NOTE: main has moved since this gate — attested against ${base_main:0:8}, origin/main is now ${current_main:0:8}."
+  echo "The push is allowed and the PR can merge; what was driven live is the older base."
+  echo "If the merge is not trivial, merge origin/main and re-run npm run gate."
 fi
 
 echo "Bench attestation PASS for ${head_sha:0:8} (${age_minutes:-?} min old) — push allowed."
