@@ -9,9 +9,17 @@
 # HEAD. This changes the transport, not what is proven: the worker fetches the sha into a
 # checkout it owns, builds it, drives it live, and attests it.
 #
-# Two things this asks of the session, both one-liners to satisfy:
-#   1. commit  — a sha is what gets attested
-#   2. push    — the worker fetches from GitHub, so the commit has to be there
+# Three things this asks of the session, all one-liners to satisfy:
+#   1. commit       — a sha is what gets attested
+#   2. push         — the worker fetches from GitHub, so the commit has to be there
+#   3. open the PR  — see below; not enforced, but gate BEFORE it and you pay for it
+#
+# Why the pull request should exist first, even though nothing here refuses without it:
+# `ci.yml` triggers on `pull_request`, so a branch with no PR has NO run for its sha. The
+# worker then replays the whole Jest suite on the exclusive bench — ~50 s of two projects
+# and many workers, running alongside the job's gateway. That is both the slowest path and
+# the heaviest: it has already killed a gateway mid-job and cost a gate an ENVIRONMENT.
+# Open the PR, let CI conclude, then gate: the static stage is skipped entirely.
 #
 # What is NOT asked any more: running the whole suite locally. CI runs typecheck, lint and
 # the suite on the same sha, and the worker reads that result rather than replaying it

@@ -431,8 +431,16 @@ sha:
 
 ```bash
 git push -u origin <branch>
+gh pr create ...            # do this BEFORE gating — see below
 npm run gate                # refuses with exit 2 if HEAD is not on origin
 ```
+
+⚠ **Open the pull request before gating.** Nothing refuses a gate without one, but `ci.yml`
+triggers on `pull_request`: a branch with no PR has **no CI run for its sha**, so the worker
+replays the entire Jest suite on the exclusive bench — ~50 s of two projects and many workers,
+alongside the job's own gateway. That is the slowest path and the heaviest one; it has already
+killed a gateway mid-job and cost a gate an `ENVIRONMENT`. With the PR open and CI concluded,
+the static stage is skipped outright.
 
 `npm run gate` (`scripts/bench-gate.sh`) checks the tree is clean and the sha is on origin,
 then deposits a `ref` job. Everything after that is §10.
