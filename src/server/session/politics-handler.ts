@@ -702,6 +702,9 @@ export function getDefaultPoliticsData(townName: string, isCapitol = false): Pol
     ifelRating: 0,
     mandateNo: 0,
     rulerPhotoUrl: '',
+    // Unknown is not "yes": the offline default must never hand the player a
+    // power the server never confirmed.
+    isRuler: false,
     popularRatings: [],
     ifelRatings: [],
     tycoonsRatings: [],
@@ -786,6 +789,12 @@ export async function getPoliticsData(
 
     const rulerData = await fetchRulerData(ctx, isCapitol, townName, buildingX, buildingY);
 
+    // Asked ONCE, here, and carried to every consumer in the payload. The
+    // campaign panel below needs it, and so does the ratings rail in the
+    // browser — which used to re-derive it from the single identity the client
+    // happens to keep. One question, one answer (OB-31).
+    const isRuler = holdsOffice(ctx, rulerData.mayorName, townName);
+
     // YOUR CAMPAIGN — the same page the Launch/Cancel buttons post to, fetched
     // with neither marker so it reports without mutating (`buildCampaignParams`).
     let campaignState: CampaignState = 'refused';
@@ -799,7 +808,6 @@ export async function getPoliticsData(
         `${baseUrl}/tycooncampaign.asp?${params.toString().replace(/\+/g, '%20')}`,
         'campaign panel',
       );
-      const isRuler = holdsOffice(ctx, rulerData.mayorName, townName);
       ({ state: campaignState, message: campaignMessage } = parseCampaignState(campaignHtml, isRuler));
       projects = parseCampaignProjects(campaignHtml);
       promise = parseCampaignPromise(campaignHtml);
@@ -822,6 +830,7 @@ export async function getPoliticsData(
       rulerPhotoUrl: rulerData.mayorName
         ? `http://${worldIp}/fivedata/userinfo/${encodeURIComponent(ctx.currentWorldInfo?.name || '')}/${encodeURIComponent(rulerData.mayorName)}/largephoto.jpg`
         : '',
+      isRuler,
       popularRatings,
       ifelRatings,
       tycoonsRatings,
