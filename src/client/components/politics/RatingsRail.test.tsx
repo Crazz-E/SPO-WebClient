@@ -5,6 +5,11 @@
  * `RDOSetRatingFrom` drops a self-rating in silence (`Kernel/TownPolitics.pas:195`),
  * so a live `<select>` there is a dead control — the UI has to refuse the
  * gesture, because there is no failure coming back to report.
+ *
+ * Since OB-31 the rail does not decide who the holder is — the gateway does,
+ * and ships the answer as `data.isRuler`. These tests therefore drive that
+ * field, and one of them pins the point of the change: the local login name
+ * must not be able to overrule it either way.
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
@@ -45,8 +50,18 @@ const DATA: PoliticsData = {
   projects: [],
   promise: '',
   townHallId: 1234,
+  isRuler: false,
 };
 
+const AS_RULER: PoliticsData = { ...DATA, isRuler: true };
+
+/**
+ * Open the tycoons rail while logged in as `username`.
+ *
+ * The name still goes into the store because the rest of the panel reads it —
+ * but it no longer decides this rail, which is exactly what the last test here
+ * asserts.
+ */
 function showTycoonsRailAs(username: string): void {
   act(() => {
     useGameStore.getState().setCredentials(username);
@@ -78,17 +93,28 @@ describe('RatingsRail — tycoons rail', () => {
 
   it('gives the office holder no control at all — nobody rates themselves', () => {
     showTycoonsRailAs('SPO_test3');
-    renderWithProviders(<RatingsRail data={DATA} />);
+    renderWithProviders(<RatingsRail data={AS_RULER} />);
 
     expect(screen.queryByLabelText('Your rating for College')).toBeNull();
     expect(screen.getByText(/You cannot rate your own term in office/)).toBeTruthy();
   });
 
-  it('matches the holder regardless of case', () => {
-    showTycoonsRailAs('spo_TEST3');
-    renderWithProviders(<RatingsRail data={DATA} />);
+  // OB-31. Playing the mayoral company renames the session, and the browser has
+  // only one of the two names the reference test compares. So the rail must
+  // follow the gateway's verdict and nothing else — in both directions.
+  it('withholds the control on the gateway verdict alone, whatever name is logged in', () => {
+    showTycoonsRailAs('someone-else-entirely');
+    renderWithProviders(<RatingsRail data={AS_RULER} />);
 
     expect(screen.queryByLabelText('Your rating for College')).toBeNull();
+    expect(screen.getByText(/You cannot rate your own term in office/)).toBeTruthy();
+  });
+
+  it('offers the control when the gateway says no office, even to a matching name', () => {
+    showTycoonsRailAs('SPO_test3');
+    renderWithProviders(<RatingsRail data={DATA} />);
+
+    expect(screen.getByLabelText('Your rating for College')).toBeTruthy();
   });
 
   it('keeps the prestige-weighting note for everyone else', () => {

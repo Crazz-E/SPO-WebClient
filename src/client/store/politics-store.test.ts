@@ -178,7 +178,7 @@ describe('politics-store — building context', () => {
       mandateNo: 0, rulerPhotoUrl: '', popularRatings: [], ifelRatings: [], tycoonsRatings: [],
       publicity: [], publicityAds: '', campaignCount: 0, campaigns: [],
       campaignState: 'available', campaignMessage: '', canLaunchCampaign: true,
-      prestigeThreshold: 200, projects: [], promise: '', townHallId: 0,
+      prestigeThreshold: 200, projects: [], promise: '', townHallId: 0, isRuler: false,
     });
 
     const s = usePoliticsStore.getState();

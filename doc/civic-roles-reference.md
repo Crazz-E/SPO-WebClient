@@ -419,7 +419,23 @@ re-read value is one the write would have produced, and answers `confirmed: unde
 guessing, `expectedWitnessValues` in `src/server/session/building-property-handler.ts`), `OB-29` (a
 tax write lands but the cached copy the client reads is never invalidated), `OB-30` (nobody can rate
 their own term — closed, and the reference agrees) and `OB-31` (the ruler test needs two prongs, not
-one).
+one — closed, see below).
+
+**`OB-31`, and the sweep that closed it.** The two-pronged test lives in exactly one function,
+`holdsOffice` (`src/server/session/politics-handler.ts`): the ruler's name against the active
+identity, against the human login name, and against `"Mayor of " + Town.Name`
+(`tycooncampaign.asp:98`, plus one prong of our own the ASP had no need of). The sweep asked where
+else the codebase decides "am I the holder of this office?", and found one other site: the ratings
+rail in the browser, which compared `ActualRuler` against the single login name the game store
+keeps. That comparison gave the right answer, but by luck rather than by construction — the browser
+holds only one of the two identities the reference test compares.
+
+It no longer asks. `holdsOffice` is computed once per Politics read and shipped as
+`PoliticsData.isRuler`; the rail consumes it. **Nothing else in `src/` may re-derive the answer** —
+if a new civic control needs it, take it from the payload. Two neighbouring comparisons are *not*
+this question and were left alone: `canGovern` (server-computed from `SecurityId`, a capability
+rather than an identity) and `client-bridge.ts:838` ("is this role response about me?", which
+matches the name the query was issued with).
 
 ⚠ `OB-29` **replaced an earlier entry that said a mayor's writes need the role company.** That was
 wrong: `MasterRole` climbs to the role holder (`Kernel/Kernel.pas:10960-10965`), so

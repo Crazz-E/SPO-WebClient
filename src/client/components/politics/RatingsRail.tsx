@@ -23,8 +23,13 @@
  * resolve to the same tycoon.
  *
  * The UI must therefore prevent the gesture rather than report a failure —
- * there is no failure to report. `isRuler` is the gate, and it compares against
- * the human login name, which company switching never changes.
+ * there is no failure to report. `isRuler` is the gate, and the gateway is what
+ * decides it: `data.isRuler`, computed once by `holdsOffice`
+ * (politics-handler.ts) from BOTH identities the session holds. This rail used
+ * to answer the question itself, comparing the ruler's name against the single
+ * login name the browser keeps. That comparison happened to be right, but it
+ * was a second, weaker copy of a two-pronged test — right by luck rather than
+ * by construction, and invisible to anyone auditing the civic surface (OB-31).
  *
  * Verified live 2026-08-20: `Setting town politics Tycoon rating: SPO_test3,
  * College, 90` on the Helartia Town Hall, of which SPO_test3 is mayor. The
@@ -55,7 +60,6 @@
 import { useCallback } from 'react';
 import type { PoliticsData, PoliticsRatingEntry } from '@/shared/types';
 import { usePoliticsStore, type RatingRail } from '../../store/politics-store';
-import { useGameStore } from '../../store/game-store';
 import { useClient } from '../../context';
 import { ProgressBar } from '../common';
 import styles from './PoliticsPanel.module.css';
@@ -115,9 +119,8 @@ export function RatingsRail({ data }: RatingsRailProps) {
   const setActiveRail = usePoliticsStore((s) => s.setActiveRatingRail);
   const pendingRatings = usePoliticsStore((s) => s.pendingRatings);
   const pendingPublicity = usePoliticsStore((s) => s.pendingPublicity);
-  const username = useGameStore((s) => s.username);
 
-  const isRuler = username !== '' && data.mayorName.toLowerCase() === username.toLowerCase();
+  const isRuler = data.isRuler;
 
   const handleRate = useCallback((ratingId: string, value: string) => {
     client.onSetPoliticsRating(ratingId, parseInt(value, 10));
