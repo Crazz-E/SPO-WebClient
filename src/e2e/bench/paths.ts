@@ -22,8 +22,6 @@ export interface BenchPaths {
   done: string;
   /** Per-HEAD gate attestations — what `.claude/hooks/pre-push-gate.sh` reads. */
   verdicts: string;
-  /** Precheck receipts: the static proof a session produced, keyed by tree (see ./receipt). */
-  receipts: string;
   /** Shared world lock / dirty flag / run history (see WORLD_STATE_DIR in ../config). */
   world: string;
   /**
@@ -70,7 +68,6 @@ export function benchPaths(root: string = benchRoot()): BenchPaths {
     running: path.join(root, 'running'),
     done: path.join(root, 'done'),
     verdicts: path.join(root, 'verdicts'),
-    receipts: path.join(root, 'receipts'),
     world: path.join(root, 'world'),
     cache: path.join(root, 'cache'),
     nightly: path.join(root, 'nightly'),
@@ -87,7 +84,6 @@ export function ensureLayout(paths: BenchPaths): void {
     paths.running,
     paths.done,
     paths.verdicts,
-    paths.receipts,
     paths.world,
     paths.cache,
     paths.nightly,

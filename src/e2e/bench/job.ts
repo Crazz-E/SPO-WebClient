@@ -14,7 +14,7 @@ import * as path from 'path';
 import type { BenchPaths } from './paths';
 import type { TreeFingerprint } from './fingerprint';
 
-export type JobType = 'gate' | 'live' | 'lease' | 'nightly' | 'ref';
+export type JobType = 'live' | 'lease' | 'nightly' | 'ref';
 
 export type JobVerdict =
   | 'PASS'
@@ -87,14 +87,14 @@ export interface JobReport {
   finishedAt?: string;
   /** Human-readable summary or error. */
   detail?: string;
-  /** gate only: path of report/e2e/gate-<sha>.json inside the worktree. */
+  /** `ref` only: path of report/e2e/gate-<sha>.json inside the checkout. */
   gateArtifact?: string;
   /**
-   * gate only: whether the static stage (typecheck, lint, tests) was taken from the
-   * session's precheck receipt instead of replayed on the bench, and why not when it was
-   * not. See ./receipt — absent means the question was never asked (live/lease job).
+   * `ref` only: whether the static stage (typecheck, lint, tests) was taken from CI's run
+   * on this sha instead of replayed on the bench, and why not when it was not. See
+   * ./ci-proof — absent means the question was never asked (live/lease/nightly job).
    */
-  staticReceipt?: { used: boolean; why?: string };
+  staticProof?: { used: boolean; why?: string };
   /** Where the job's stdout/stderr went. */
   logFile?: string;
   /** lease only. */

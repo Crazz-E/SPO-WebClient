@@ -30,7 +30,7 @@
     "test:live": "bash scripts/bench-submit.sh --type=live --wait",
     "test:live:local": "npm run build:e2e && node dist/e2e/run.js",
     "gate": "bash scripts/bench-gate.sh",
-    "gate:precheck": "npm run typecheck && npm run lint && npm run coverage:changed && bash scripts/bench-receipt.sh",
+    "gate:precheck": "npm run typecheck && npm run lint && npm run coverage:changed",
     "coverage:changed": "node scripts/coverage-changed.js",
     "gate:local": "node scripts/verify-gate.js",
     "finish": "bash scripts/finish.sh",

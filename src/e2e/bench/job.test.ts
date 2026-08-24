@@ -14,7 +14,7 @@ const FP = { head: 'abc123', hash: 'deadbeef', clean: true };
 
 function requestFor(worktree: string): Omit<JobRequest, 'id' | 'submittedAt'> {
   return {
-    type: 'gate',
+    type: 'ref',
     worktree,
     branch: 'fix/x',
     fingerprint: FP,
@@ -26,7 +26,7 @@ function requestFor(worktree: string): Omit<JobRequest, 'id' | 'submittedAt'> {
 function reportFor(id: string): JobReport {
   return {
     id,
-    type: 'gate',
+    type: 'ref',
     worktree: '/wt/a',
     branch: 'fix/x',
     verdict: 'PASS',
