@@ -11,7 +11,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { validateBugReport, type BugReport } from '../shared/bug-report-schema';
+import { validateBugReport, MAX_BODY_BYTES, type BugReport } from '../shared/bug-report-schema';
 import { toErrorMessage } from '../shared/error-utils';
 
 /**
@@ -68,4 +68,64 @@ export function depositBugReport(
   }
 
   return { status: 200, body: { ok: true, file } };
+}
+
+/** Just enough of `http.IncomingMessage` to stream a body — so a test can pass a fake. */
+export interface BugReportRequest {
+  on(event: 'data', listener: (chunk: Buffer) => void): unknown;
+  on(event: 'end', listener: () => void): unknown;
+}
+
+/** Just enough of `http.ServerResponse` to answer with JSON. */
+export interface BugReportResponse {
+  writeHead(status: number, headers: Record<string, string>): unknown;
+  end(body: string): unknown;
+}
+
+export interface BugReportRequestDeps {
+  enabled: boolean;
+  queueDir: string;
+  /** `false` means the caller is over its allowance; the answer is 429. */
+  allowRequest: () => boolean;
+}
+
+/**
+ * The whole `POST /api/bug-report` route.
+ *
+ * It lives here rather than in `server.ts` for one reason: nothing can import `server.ts`,
+ * so every line written there is untested by construction. The route body is transport —
+ * accumulate, cap, answer — and `depositBugReport` above holds the decisions.
+ */
+export function handleBugReportRequest(
+  req: BugReportRequest,
+  res: BugReportResponse,
+  deps: BugReportRequestDeps,
+): void {
+  const answer = (result: DepositResult | { status: number; body: unknown }): void => {
+    res.writeHead(result.status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(result.body));
+  };
+
+  if (!deps.allowRequest()) {
+    answer({ status: 429, body: { error: 'Too many bug reports. Try again in a minute.' } });
+    return;
+  }
+
+  const chunks: Buffer[] = [];
+  let bodySize = 0;
+  req.on('data', (chunk: Buffer) => {
+    bodySize += chunk.length;
+    // Past the cap the bytes are dropped rather than buffered — the answer is already decided.
+    if (bodySize <= MAX_BODY_BYTES) chunks.push(chunk);
+  });
+  req.on('end', () => {
+    if (bodySize > MAX_BODY_BYTES) {
+      answer({ status: 413, body: { error: 'Payload too large' } });
+      return;
+    }
+    answer(depositBugReport(Buffer.concat(chunks).toString('utf8'), {
+      enabled: deps.enabled,
+      queueDir: deps.queueDir,
+    }));
+  });
 }

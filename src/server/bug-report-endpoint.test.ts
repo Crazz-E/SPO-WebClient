@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { depositBugReport, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
-import { BUG_REPORT_SCHEMA_VERSION, computeAnchorKey, type DomAnchor } from '../shared/bug-report-schema';
+import { depositBugReport, handleBugReportRequest, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
+import { BUG_REPORT_SCHEMA_VERSION, MAX_BODY_BYTES, computeAnchorKey, type DomAnchor } from '../shared/bug-report-schema';
 
 const anchor: DomAnchor = {
   kind: 'dom',
@@ -161,5 +161,83 @@ describe('depositBugReport — when the disk refuses', () => {
 
     expect(result.status).toBe(500);
     expect(result.body.error).toContain('Could not write the report');
+  });
+});
+
+/** A body stream that hands over the chunks it was built with, then ends. */
+function fakeRequest(chunks: Buffer[]): { on: (event: 'data' | 'end', listener: never) => unknown; flush: () => void } {
+  const listeners: { data: Array<(c: Buffer) => void>; end: Array<() => void> } = { data: [], end: [] };
+  return {
+    on(event, listener) {
+      listeners[event].push(listener);
+      return this;
+    },
+    flush() {
+      for (const chunk of chunks) for (const l of listeners.data) l(chunk);
+      for (const l of listeners.end) l();
+    },
+  };
+}
+
+function fakeResponse() {
+  const res = {
+    status: 0,
+    body: undefined as unknown,
+    headers: {} as Record<string, string>,
+    writeHead(status: number, headers: Record<string, string>) {
+      res.status = status;
+      res.headers = headers;
+      return res;
+    },
+    end(body: string) {
+      res.body = JSON.parse(body);
+      return res;
+    },
+  };
+  return res;
+}
+
+function drive(chunks: Buffer[], deps: { enabled: boolean; queueDir: string; allowRequest?: () => boolean }) {
+  const req = fakeRequest(chunks);
+  const res = fakeResponse();
+  handleBugReportRequest(
+    req as never,
+    res,
+    { enabled: deps.enabled, queueDir: deps.queueDir, allowRequest: deps.allowRequest ?? (() => true) },
+  );
+  req.flush();
+  return res;
+}
+
+describe('handleBugReportRequest — the transport', () => {
+  it('reassembles a body split across chunks and deposits it', () => {
+    const raw = Buffer.from(JSON.stringify(report()), 'utf8');
+    const res = drive([raw.subarray(0, 20), raw.subarray(20)], { enabled: true, queueDir });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['Content-Type']).toBe('application/json');
+    expect(fs.readdirSync(queueDir)).toHaveLength(1);
+  });
+
+  it('answers 429 without reading the body when the caller is over its allowance', () => {
+    const res = drive([Buffer.from(JSON.stringify(report()))], {
+      enabled: true, queueDir, allowRequest: () => false,
+    });
+
+    expect(res.status).toBe(429);
+    expect(res.body).toEqual({ error: 'Too many bug reports. Try again in a minute.' });
+    expect(fs.readdirSync(queueDir)).toEqual([]);
+  });
+
+  it('answers 413 on a body past the 4 MB cap, and buffers none of the excess', () => {
+    const res = drive([Buffer.alloc(MAX_BODY_BYTES), Buffer.alloc(1)], { enabled: true, queueDir });
+
+    expect(res.status).toBe(413);
+    expect(res.body).toEqual({ error: 'Payload too large' });
+    expect(fs.readdirSync(queueDir)).toEqual([]);
+  });
+
+  it('passes the disabled flag through — the route 404s like the deposit does', () => {
+    expect(drive([Buffer.from(JSON.stringify(report()))], { enabled: false, queueDir }).status).toBe(404);
   });
 });
