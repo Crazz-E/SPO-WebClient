@@ -26,7 +26,7 @@ discipline rule.
 ├── spool/job-<epochms>-<rand>.json deposits; filename order = queue order
 ├── running/                        the one claimed job
 ├── done/<jobid>.json + .log        reports, purged after 24 h
-├── verdicts/<sha>.json             per-HEAD attestations — what the push hook reads
+├── verdicts/<sha>.json             per-commit attestations — what `bench/gate` publishes
 ├── cache/                          the ~570-file asset mirror, ONE copy for the machine
 ├── nightly/checkout + latest.json  the worker's own `main` clone, and last night's verdict
 ├── ref/checkout                    the checkout a fetched commit is gated in
@@ -48,7 +48,8 @@ one process (the worker) consumes the spool.
 |---|---|---|
 | Worker | `src/e2e/bench/worker.ts` | the permanent loop — claims, builds, drives, reports |
 | Client | `src/e2e/bench/cli.ts` | `submit` / `wait` / `status` (wrapped by `scripts/bench-*.sh`) |
-| Fingerprint | `src/e2e/bench/fingerprint.ts` | moving-target detector (HEAD + diff + status + untracked content) and the clean-tree test a gate requires |
+| Fingerprint | `src/e2e/bench/fingerprint.ts` | moving-target detector (HEAD + diff + status + untracked content) |
+| Merge queue | `src/e2e/bench/merge-queue.ts` | discovery, priority and the tree dedup for queue entries (§12) |
 | Gateway | `src/e2e/bench/gateway.ts` | clean-port guarantee, per-job gateway start/stop |
 | Attestations | `src/e2e/bench/verdict.ts` | `verdicts/<sha>.json` + `bench/gate` GitHub commit status |
 | Supervision | `scripts/bench-install.sh` | systemd --user unit, `Restart=always`, linger |
@@ -84,7 +85,7 @@ one process (the worker) consumes the spool.
 
    | Type | Built | Why not more |
    |---|---|---|
-   | `gate` | `build:server` | the L2 drive is a headless `ws` client — no page, no bundle; the gateway starts without the Vite manifest (`server.ts:90-98`), and `verify-gate.js` compiles the e2e driver itself |
+   | `ref` | `build:server` | the L2 drive is a headless `ws` client — no page, no bundle; the gateway starts without the Vite manifest (`server.ts:90-98`), and `verify-gate.js` compiles the e2e driver itself |
    | `live` | `build:server` + `build:e2e` | this branch runs `dist/e2e/run.js` directly, so it compiles it rather than hoping an earlier job left one behind |
    | `lease` | `build` (everything) | it serves a real browser — the client bundle and the terrain-test are the point |
 | `nightly` | `build:server` + `build:e2e` | it *is* a live drive; only the target differs (§8) |
@@ -95,20 +96,19 @@ one process (the worker) consumes the spool.
 7. **Gateway** from that worktree, with `SPO_CACHE_DIR=~/.spo-bench/cache` so it reads the
    machine-wide asset mirror instead of priming an empty one in the worktree; wait for
    `phase=ready`.
-8. **Precheck receipt** (gate only): look in `~/.spo-bench/receipts/` for a receipt whose
-   key is the fingerprint taken at step 4 — the worker's own reading of the tree, never a
-   value the session supplied. On a match, `--skip-static` is passed to verify-gate and the
-   ~113 s of typecheck + lint + Jest is not replayed on the exclusive bench; the report
-   carries `staticReceipt.used`. Anything else — no receipt, another tree, another worktree,
-   another version, older than 120 min — replays the static stage in full and says why in
-   the job log. **Only stage 1 is ever skipped**: `build:e2e`, the routing, the President
-   exclusion and the live drive are what the bench alone can do, and they always run. See
-   `src/e2e/bench/receipt.ts`.
+8. **Static witness** (`ref` only): ask GitHub whether `typecheck + tests` concluded
+   **success for this exact sha**. On a recorded success, `--skip-static --static-from=ci`
+   is passed to verify-gate and the ~113 s of typecheck + lint + Jest is not replayed on the
+   exclusive bench; the report carries `staticProof.used`. Anything else — no run yet, still
+   running, failed, cancelled, GitHub unreachable, an answer that cannot be parsed — replays
+   the static stage in full and says why in the job log. **Only stage 1 is ever skipped**:
+   `build:e2e`, the routing, the President exclusion and the live drive are what the bench
+   alone can do, and they always run. See `src/e2e/bench/ci-proof.ts` and §11.
 9. **Body**, with `E2E_WORLD_STATE_DIR=~/.spo-bench/world` and
    `SPO_CACHE_DIR=~/.spo-bench/cache` — the same two variables the gateway was started
    with at step 6, so a replayed Jest suite reads the assets the gateway served:
-   - `gate` → `node scripts/verify-gate.js` (static replay, President exclusion, routing,
-     live drive) — exit 0 PASS / 2 BLOCKED / else FAIL
+   - `ref` → `node scripts/verify-gate.js` (static, President exclusion, routing, live
+     drive) — exit 0 PASS / 2 BLOCKED / else FAIL
    - `live`, `nightly` → `node dist/e2e/run.js [flags]`
    - `lease` → report `LEASED` **immediately** (that is what the waiting session unblocks
      on), then hold the gateway until the lease expires or the session releases it
@@ -151,13 +151,12 @@ npm run bench:status                           # liveness + queue, from any work
 
 ```
 session edits worktree
-  → npm run gate            local precheck (typecheck/lint/one Jest pass) — fails free, queues
-                            nothing; leaves a receipt for the tree it proved
-  → bench job               worker builds THIS tree, drives it live, attests
-  → git push                hook reads verdicts/<HEAD>.json: PASS + stable + this worktree + <60 min
-  → GitHub PR               CI re-runs L0/L1 (ubuntu, no credentials)
-  → bench/gate status       the worker publishes the attestation as a commit status once
-                            the sha exists on GitHub (retried on a 30 s cycle until then)
+  → git commit              a sha is what gets attested
+  → git push                hook refuses `main` and nothing else now
+  → GitHub CI               typecheck + tests on that sha — the static authority (§11)
+  → npm run gate            refuses if HEAD is not on origin, else deposits a `ref` job
+  → bench job               worker FETCHES the sha into its own checkout, builds, drives it
+                            live, attests, publishes bench/gate on it
   → merge                   ruleset: PR, CI green AND bench/gate green, no bypass;
                             GitHub deletes the remote branch
   → npm run finish          main ff'd, refs pruned, worker reinstalled if its sources changed,
@@ -485,10 +484,8 @@ still cannot land a commit `bench/gate` has not passed.
 
 - Two simultaneous deposits execute one after the other, in deposit order, each with an
   attributable report — `job.test.ts`, `worker.test.ts`.
-- A precheck receipt skips the static replay **only** for the tree the worker fingerprinted
-  itself; a receipt for another tree, another worktree, another version, or one past its
-  window replays everything and says why — `receipt.test.ts`, `worker.test.ts`. And a
-  receipt never skips more than stage 1 — `verify-gate.test.ts`.
+- The static stage is skipped **only** on a recorded CI success for that exact sha, and never
+  skips more than stage 1 — `ci-proof.test.ts`, `worker.test.ts`, `verify-gate.test.ts`.
 - A session killed while queued (with `--wait`, the npm default) leaves nothing:
   `ABANDONED`, queue cleaned — no orphan gateway is possible since sessions start none.
   Killed mid-lease: the gateway lives until the lease expires, then the worker tears it

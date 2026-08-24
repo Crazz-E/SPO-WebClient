@@ -31,7 +31,6 @@ import { prepareCheckout } from './checkout';
 import { ciStaticProof, type CiProof } from './ci-proof';
 import { serveMergeQueue, type MergeQueueDeps } from './merge-queue';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
-import { lookupReceipt, pruneReceipts, RECEIPT_MAX_AGE_MS } from './receipt';
 import {
   clearPort,
   realGatewayDeps,
@@ -115,7 +114,7 @@ const MAX_LEASE_MINUTES = 120;
  * something the job never loads is a second every other session waits for. So the build
  * follows the body, not the habit.
  *
- * - `gate` — the gateway alone. The L2 drive is a headless `ws` client that never opens a
+ * - `ref` — the gateway alone. The L2 drive is a headless `ws` client that never opens a
  *   page, and the gateway starts happily without the Vite bundle (`server.ts:90-98` falls
  *   back and logs it). `verify-gate.js` compiles the e2e driver itself (`build:e2e`).
  * - `live` — the gateway **and** the e2e driver. This branch runs `dist/e2e/run.js`
@@ -125,20 +124,16 @@ const MAX_LEASE_MINUTES = 120;
  *   terrain-test are exactly what the session came for.
  * - `nightly` — the same as `live`, because it *is* a live drive; the only difference is
  *   that the worker deposited it against `main` instead of a session against its branch.
- * - `ref` — the same as `gate`, because it *is* a gate; the only difference is where the
- *   tree came from. A session's gate tests a worktree the session named; a ref job tests
- *   a commit the worker fetched, which is what lets the subject live nowhere but GitHub.
  *
  * What is given up: the full build also happened to prove the client still compiles. CI
  * replays that same `npm run build` on every pull request, so the proof is not lost — it
  * just no longer occupies the bench.
  */
 const BUILD_STEPS: Record<JobType, string[]> = {
-  gate: ['build:server'],
+  ref: ['build:server'],
   live: ['build:server', 'build:e2e'],
   lease: ['build'],
   nightly: ['build:server', 'build:e2e'],
-  ref: ['build:server'],
 };
 
 /**
@@ -252,7 +247,7 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   // PASS on 514bc4e3, `verdicts/` untouched) and the split has done its job. A ref job is
   // now THE gate, so it attests where the merge rule reads.
   if (
-    (request.type === 'gate' || request.type === 'ref') &&
+    request.type === 'ref' &&
     report.verdict !== 'DIRTY' &&
     report.verdict !== 'ENVIRONMENT'
   ) {
@@ -297,11 +292,6 @@ export function countCapabilityExceptions(artifactPath: string | undefined): num
   } catch {
     return 0;
   }
-}
-
-/** Both static witnesses, in one shape, so the decision below reads as one decision. */
-function ciProofAsReceipt(proof: CiProof): { ok: boolean; why?: string; from: 'ci' } {
-  return { ok: proof.proven, why: proof.why, from: 'ci' };
 }
 
 export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<JobReport> {
@@ -363,7 +353,7 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
 
   // A gate attests HEAD by sha. If the tree on disk is not that commit, whatever passes
   // is not what the sha holds — refuse before spending a build or a live slot on it.
-  if (request.type === 'gate' && !report.fingerprints.atStart.clean) {
+  if (request.type === 'ref' && !report.fingerprints.atStart.clean) {
     return finish(
       'DIRTY',
       'the worktree has uncommitted or untracked changes; a gate attests HEAD by sha, so ' +
@@ -407,39 +397,24 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
   let bodyVerdict: JobVerdict;
   let bodyDetail: string;
   try {
-    if (request.type === 'gate' || request.type === 'ref') {
-      // The static stage — typecheck, lint, the Jest suite — is exactly what the session
-      // already ran in `gate:precheck`. If it left a receipt for THIS tree, replaying it
-      // inside the exclusive bench buys nothing but ~113 s of everyone else's queue.
-      // The tree is the one the worker fingerprinted itself at :atStart, never a value
-      // the session supplied — a receipt for any other tree is simply never opened.
-      // Two possible witnesses, one rule: skip on positive evidence, never on assumption.
+    if (request.type === 'ref') {
+      // The static stage — typecheck, lint, the Jest suite — needs nothing the bench has:
+      // no gateway, no LOCKED account, no world state. It occupied the one serialised
+      // resource on this machine only because that is where the gate happened to run.
       //
-      // A `ref` job's subject is a pushed commit, so the better authority exists — GitHub
-      // ran `typecheck + tests` on that exact sha, on a machine nobody here controls, and
-      // the ruleset requires it green before a merge. A worktree gate has no sha on
-      // GitHub to ask about, so it still uses the session's precheck receipt.
-      const proof =
-        request.type === 'ref'
-          ? ciProofAsReceipt(deps.ciStaticProof(report.fingerprints.atStart.head))
-          : (() => {
-              const found = lookupReceipt(
-                deps.paths,
-                report.fingerprints.atStart as TreeFingerprint,
-                request.worktree,
-                deps.now(),
-              );
-              return { ok: found.ok, why: found.why, from: 'receipt' as const };
-            })();
-      report.staticReceipt = { used: proof.ok, ...(proof.ok ? {} : { why: proof.why }) };
+      // CI already ran it on this exact sha, on a machine nobody here controls, and the
+      // ruleset requires it green before a merge. So the worker asks GitHub rather than
+      // replaying ~113 s of everyone else's queue — but only on a recorded success:
+      // **skip on positive evidence, never on assumption**. Anything else replays it and
+      // says why, because a gate can run before the pull request exists. See ./ci-proof.
+      const proof = deps.ciStaticProof(report.fingerprints.atStart.head);
+      report.staticProof = { used: proof.proven, ...(proof.proven ? {} : { why: proof.why }) };
       deps.log(
-        proof.ok
-          ? `static stage from ${proof.from === 'ci' ? 'CI (it ran on this sha)' : 'the precheck receipt'}`
+        proof.proven
+          ? 'static stage from CI (it ran on this sha)'
           : `replaying the static stage — ${proof.why}`,
       );
-      const args = proof.ok
-        ? ['--skip-static', ...(proof.from === 'ci' ? ['--static-from=ci'] : []), ...request.args]
-        : request.args;
+      const args = proof.proven ? ['--skip-static', '--static-from=ci', ...request.args] : request.args;
       const code = await deps.runCommand('node', ['scripts/verify-gate.js', ...args], {
         cwd: request.worktree,
         env,
@@ -531,7 +506,6 @@ export async function workerLoop(
     try {
       const worked = await processOldest(deps);
       deps.spool.purgeDone(DONE_RETENTION_MS, deps.now());
-      pruneReceipts(deps.paths, RECEIPT_MAX_AGE_MS, deps.now());
       if (deps.now() - lastPublish > 30_000) {
         lastPublish = deps.now();
         publishPendingStatuses(deps.paths, deps.publishStatus, deps.log, deps.now());

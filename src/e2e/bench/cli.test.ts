@@ -4,7 +4,6 @@ import * as path from 'path';
 import { benchPaths, ensureLayout, type BenchPaths } from './paths';
 import { Spool, type JobReport } from './job';
 import { formatReport, main, parseArgs, type CliDeps } from './cli';
-import { lookupReceipt, readReceipt, receiptFile } from './receipt';
 
 interface Harness {
   deps: CliDeps;
@@ -34,7 +33,11 @@ function harness(): Harness {
       paths,
       spool,
       fingerprint: () => ({ head: 'abc123', hash: 'h1', clean: h.clean }),
-      git: args => (args.includes('--show-toplevel') ? '/wt/a' : 'fix/x'),
+      git: args => {
+        if (args.includes('--show-toplevel')) return '/wt/a';
+        if (args.includes('--abbrev-ref')) return 'fix/x';
+        return 'head-sha'; // rev-parse HEAD
+      },
       workerAlive: () => ({ alive: h.alive, reason: h.aliveReason }),
       now: () => (h.clock.nowMs += 100),
       sleep: async () => {},
@@ -49,7 +52,7 @@ function harness(): Harness {
 function reportFor(id: string, overrides: Partial<JobReport> = {}): JobReport {
   return {
     id,
-    type: 'gate',
+    type: 'ref',
     worktree: '/wt/a',
     branch: 'fix/x',
     verdict: 'PASS',
@@ -76,20 +79,24 @@ describe('submit', () => {
     const h = harness();
     h.alive = false;
     h.aliveReason = 'heartbeat is 45 s old';
-    expect(await main(['submit', '--type=gate'], h.deps)).toBe(3);
+    expect(await main(['submit', '--type=ref'], h.deps)).toBe(3);
     expect(h.err[0]).toMatch(/WORKER DOWN: heartbeat is 45 s old/);
     expect(h.spool.queued()).toHaveLength(0);
   });
 
-  it('queues a job for the current worktree and prints the id', async () => {
+  it('queues a job naming the COMMIT, run in the worker\'s own checkout', async () => {
+    // Not the session's worktree: since #158 the subject of a gate is a pushed sha, and
+    // the worker fetches it into a checkout it owns. `--ref` defaults to HEAD so a bare
+    // submit still means something.
     const h = harness();
-    expect(await main(['submit', '--type=gate'], h.deps)).toBe(0);
+    expect(await main(['submit', '--type=ref'], h.deps)).toBe(0);
     const queued = h.spool.queued();
     expect(queued).toHaveLength(1);
     expect(queued[0].request).toMatchObject({
-      type: 'gate',
-      worktree: '/wt/a',
-      branch: 'fix/x',
+      type: 'ref',
+      ref: 'head-sha',
+      branch: 'head-sha',
+      worktree: h.deps.paths.refCheckout,
       // No --wait: nobody stays alive to watch, so no pid is recorded.
       submitter: { pid: 0 },
     });
@@ -100,7 +107,7 @@ describe('submit', () => {
     const h = harness();
     // The harness clock advances 100 ms per call, so a 1-minute wait times out (exit 4)
     // almost at once; the deposit itself is what we check.
-    expect(await main(['submit', '--type=gate', '--wait', '--timeout-min=1'], h.deps)).toBe(4);
+    expect(await main(['submit', '--type=ref', '--wait', '--timeout-min=1'], h.deps)).toBe(4);
     expect(h.spool.queued()[0].request.submitter.pid).toBe(777);
   });
 
@@ -112,24 +119,27 @@ describe('submit', () => {
 
   it('forwards unrecognized flags to the job body verbatim', async () => {
     const h = harness();
-    await main(['submit', '--type=gate', '--manual-verified=ran the Capitol flow'], h.deps);
+    await main(['submit', '--type=ref', '--manual-verified=ran the Capitol flow'], h.deps);
     expect(h.spool.queued()[0].request.args).toEqual(['--manual-verified=ran the Capitol flow']);
   });
 
   it('refuses a duplicate deposit, naming the queued job — exit 2', async () => {
     const h = harness();
-    await main(['submit', '--type=gate'], h.deps);
+    await main(['submit', '--type=ref'], h.deps);
     const first = h.spool.queued()[0].request.id;
-    expect(await main(['submit', '--type=gate'], h.deps)).toBe(2);
+    expect(await main(['submit', '--type=ref'], h.deps)).toBe(2);
     expect(h.err.join('\n')).toContain(first);
   });
 
-  it('refuses a gate on a dirty tree at deposit — exit 2, nothing queued', async () => {
+  it('does NOT care about a dirty worktree — the subject is a pushed commit', async () => {
+    // This used to be refused here. A ref job tests a sha on GitHub, so the state of the
+    // session's working tree says nothing about what will be gated. The guard that still
+    // matters — "you are about to gate HEAD while holding uncommitted work" — lives in
+    // scripts/bench-gate.sh, the session-facing command, where it can name the fix.
     const h = harness();
     h.clean = false;
-    expect(await main(['submit', '--type=gate'], h.deps)).toBe(2);
-    expect(h.err.join('\n')).toMatch(/DIRTY TREE/);
-    expect(h.spool.queued()).toHaveLength(0);
+    expect(await main(['submit', '--type=ref'], h.deps)).toBe(0);
+    expect(h.spool.queued()).toHaveLength(1);
   });
 
   it('still accepts a live or lease job on a dirty tree — they attest nothing', async () => {
@@ -168,7 +178,7 @@ describe('submit', () => {
       h.spool.writeReport(reportFor(id));
       return originalRead(id);
     };
-    expect(await main(['submit', '--type=gate', '--wait'], h.deps)).toBe(0);
+    expect(await main(['submit', '--type=ref', '--wait'], h.deps)).toBe(0);
     expect(h.out.join('\n')).toMatch(/PASS/);
   });
 });
@@ -221,7 +231,7 @@ describe('wait', () => {
 describe('status', () => {
   it('shows a live worker with the queue', async () => {
     const h = harness();
-    await main(['submit', '--type=gate'], h.deps);
+    await main(['submit', '--type=ref'], h.deps);
     h.out = [];
     expect(await main(['status'], h.deps)).toBe(0);
     expect(h.out[0]).toMatch(/worker ALIVE/);
@@ -296,32 +306,7 @@ describe('unknown command', () => {
   it('is refused with usage guidance', async () => {
     const h = harness();
     expect(await main(['frobnicate'], h.deps)).toBe(1);
-    expect(h.err[0]).toMatch(/expected submit, wait, receipt, release or status/);
+    expect(h.err[0]).toMatch(/expected submit, wait, release or status/);
   });
 });
 
-describe('receipt — the precheck stamps the tree it proved', () => {
-  it('writes a receipt the worker can match against this worktree', async () => {
-    const h = harness();
-    expect(await main(['receipt'], h.deps)).toBe(0);
-
-    const tree = { head: 'abc123', hash: 'h1', clean: true };
-    const written = readReceipt(receiptFile(h.paths, tree, '/wt/a'));
-    expect(written?.worktree).toBe('/wt/a');
-    expect(written?.branch).toBe('fix/x');
-    expect(written?.steps).toEqual(['typecheck', 'lint', 'test']);
-    expect(lookupReceipt(h.paths, tree, '/wt/a', h.clock.nowMs).ok).toBe(true);
-    expect(h.out.join('\n')).toContain('precheck receipt written');
-  });
-
-  it('never fails the precheck when the bench cannot be written', async () => {
-    const h = harness();
-    h.deps.git = () => {
-      throw new Error('not a git worktree');
-    };
-    // Exit 0 is the point: a receipt that cannot be written costs a replay on the bench,
-    // never a red precheck on a branch that is actually green.
-    expect(await main(['receipt'], h.deps)).toBe(0);
-    expect(h.err.join('\n')).toContain('the worker will replay the static stage');
-  });
-});

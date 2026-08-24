@@ -5,7 +5,6 @@ import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './pat
 import { Spool, type JobRequest } from './job';
 import { listVerdicts, writeVerdictIn } from './verdict';
 import { readNightlyResult } from './nightly';
-import { buildReceipt, writeReceipt } from './receipt';
 import { type GatewayDeps } from './gateway';
 import {
   countCapabilityExceptions,
@@ -139,7 +138,14 @@ function npmRuns(h: Harness): string[] {
   return h.commands.filter(c => c.cmd === 'npm').map(c => c.args[1]);
 }
 
-function deposit(h: Harness, type: JobRequest['type'] = 'gate', args: string[] = []): JobRequest {
+/**
+ * A deposit shaped the way the client shapes one.
+ *
+ * The default is `ref`, because since #158 that IS the gate — the old worktree `gate` type
+ * is gone, and every test that used to say 'gate' means "the job that produces an
+ * attestation".
+ */
+function deposit(h: Harness, type: JobRequest['type'] = 'ref', args: string[] = []): JobRequest {
   return h.spool.submit(
     {
       type,
@@ -149,6 +155,7 @@ function deposit(h: Harness, type: JobRequest['type'] = 'gate', args: string[] =
       submitter: { pid: 4321 },
       args,
       ...(type === 'lease' ? { leaseMinutes: 1 } : {}),
+      ...(type === 'ref' ? { ref: `head-of-${path.basename(h.worktree)}` } : {}),
     },
     h.clock.nowMs,
   );
@@ -286,7 +293,7 @@ describe('processOldest — the queue discipline', () => {
 describe('runJob — gate', () => {
   it('builds in the worktree, then runs verify-gate with the shared world state', async () => {
     const h = harness();
-    const job = deposit(h, 'gate', ['--attempt=2']);
+    const job = deposit(h, 'ref', ['--attempt=2']);
     await runJob(h.deps, job);
     expect(h.commands[0]).toMatchObject({ cmd: 'git', args: ['fetch', '--quiet', 'origin', 'main'], cwd: h.worktree });
     expect(h.commands[1]).toMatchObject({ cmd: 'npm', args: ['run', 'build:server'], cwd: h.worktree });
@@ -302,7 +309,7 @@ describe('runJob — gate', () => {
 
   it('points the gateway and the body at the bench-wide asset cache, not the worktree', async () => {
     const h = harness();
-    const job = deposit(h, 'gate');
+    const job = deposit(h);
     await runJob(h.deps, job);
     // The gateway is what primes and reads the mirror; without this it would download
     // all ~570 files into a fresh worktree on the bench's exclusive time.
@@ -316,76 +323,11 @@ describe('runJob — gate', () => {
 
   it('builds the gateway alone — no client bundle, no terrain-test, for a browserless drive', async () => {
     const h = harness();
-    await runJob(h.deps, deposit(h, 'gate'));
+    await runJob(h.deps, deposit(h));
     expect(npmRuns(h)).toEqual(['build:server']);
   });
 
-  it('replays the static stage when no receipt covers the tree, and says why', async () => {
-    const h = harness();
-    await runJob(h.deps, deposit(h, 'gate'));
-    const gate = h.commands.find(c => c.cmd === 'node');
-    expect(gate?.args).toEqual(['scripts/verify-gate.js']);
-    expect(h.logs.join('\n')).toContain('replaying the static stage');
-  });
 
-  it('skips the static replay when the precheck receipt matches the tree it fingerprinted', async () => {
-    const h = harness();
-    const job = deposit(h, 'gate', ['--attempt=2']);
-    // The tree the WORKER will fingerprint at atStart — the session's own reading never
-    // enters the decision.
-    writeReceipt(
-      h.paths,
-      buildReceipt(
-        { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1', clean: true },
-        h.worktree,
-        'fix/x',
-        h.clock.nowMs,
-      ),
-    );
-    const report = await runJob(h.deps, job);
-
-    const gate = h.commands.find(c => c.cmd === 'node');
-    expect(gate?.args).toEqual(['scripts/verify-gate.js', '--skip-static', '--attempt=2']);
-    expect(report.staticReceipt).toEqual({ used: true });
-    expect(h.logs.join('\n')).toContain('static stage from the precheck receipt');
-  });
-
-  it('ignores a receipt written for a tree the worker is not holding', async () => {
-    const h = harness();
-    // The session prechecked h1 and then committed again: the worker now fingerprints h2.
-    h.hashes = ['h2'];
-    writeReceipt(
-      h.paths,
-      buildReceipt(
-        { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1', clean: true },
-        h.worktree,
-        'fix/x',
-        h.clock.nowMs,
-      ),
-    );
-    const report = await runJob(h.deps, deposit(h, 'gate'));
-
-    expect(h.commands.find(c => c.cmd === 'node')?.args).toEqual(['scripts/verify-gate.js']);
-    expect(report.staticReceipt?.used).toBe(false);
-    expect(report.staticReceipt?.why).toContain('no readable precheck receipt');
-  });
-
-  it('ignores a receipt that has gone past its window', async () => {
-    const h = harness();
-    writeReceipt(
-      h.paths,
-      buildReceipt(
-        { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1', clean: true },
-        h.worktree,
-        'fix/x',
-        h.clock.nowMs - 3 * 60 * 60 * 1000,
-      ),
-    );
-    const report = await runJob(h.deps, deposit(h, 'gate'));
-
-    expect(h.commands.find(c => c.cmd === 'node')?.args).toEqual(['scripts/verify-gate.js']);
-    expect(report.staticReceipt?.why).toContain('min old');
-  });
 
   it('maps verify-gate exit codes: 0 PASS, 2 BLOCKED, else FAIL', async () => {
     for (const [code, verdict] of [
@@ -446,8 +388,10 @@ describe('runJob — gate', () => {
   });
 
   it('reports ABANDONED when the worktree vanished from disk', async () => {
+    // A worktree job only: a `ref` job's checkout is CREATED by prepareRef, so the
+    // directory cannot be missing by the time this check runs.
     const h = harness();
-    const job = deposit(h);
+    const job = deposit(h, 'live');
     fs.rmSync(h.worktree, { recursive: true, force: true });
     const report = await runJob(h.deps, job);
     expect(report.verdict).toBe('ABANDONED');
@@ -524,8 +468,11 @@ describe('runJob — gate', () => {
   });
 
   it('downgrades a PASS to STALE when the tree moved, keeping the body verdict visible', async () => {
+    // A worktree job only: this is the deposit-vs-start half of the comparison, which a
+    // `ref` job waives because its checkout is reset to the ref AFTER the deposit. The
+    // start-vs-end half still applies to both — see the ref describe above.
     const h = harness();
-    const job = deposit(h);
+    const job = deposit(h, 'live');
     h.hashes = ['h2', 'h2']; // differs from the h1 taken at deposit
     const report = await runJob(h.deps, job);
     expect(report.verdict).toBe('STALE');
@@ -642,7 +589,7 @@ describe('runJob — ref: gating a commit the worker fetched', () => {
     // The artifact must name its witness. Recording CI as RECEIPT would make two different
     // authorities indistinguishable in the one file a human reads afterwards.
     expect(verify?.args).toContain('--static-from=ci');
-    expect(h.spool.readReport(job.id)?.staticReceipt).toEqual({ used: true });
+    expect(h.spool.readReport(job.id)?.staticProof).toEqual({ used: true });
     expect(h.logs.join('\n')).toMatch(/static stage from CI/);
   });
 
@@ -658,27 +605,12 @@ describe('runJob — ref: gating a commit the worker fetched', () => {
 
     const verify = h.commands.find(c => c.args[0] === 'scripts/verify-gate.js');
     expect(verify?.args).not.toContain('--skip-static');
-    expect(h.spool.readReport(job.id)?.staticReceipt).toEqual({
+    expect(h.spool.readReport(job.id)?.staticProof).toEqual({
       used: false,
       why: expect.stringContaining('no "typecheck + tests" run'),
     });
   });
 
-  it('never reads a session receipt for a ref job — the sha has a better witness', async () => {
-    // A receipt is written by the session, for a tree. A pushed commit has CI's answer on
-    // the sha itself, produced by a machine the session does not control.
-    const h = harness();
-    h.ciProof = { proven: false, why: 'still queued' };
-    writeReceipt(
-      h.paths,
-      buildReceipt({ head: 'a'.repeat(40), hash: 'h1', clean: true }, h.worktree, 'main', h.clock.nowMs),
-    );
-    depositRef(h);
-
-    await processOldest(h.deps);
-
-    expect(h.commands.find(c => c.args[0] === 'scripts/verify-gate.js')?.args).not.toContain('--skip-static');
-  });
 
   it('reports ENVIRONMENT when the ref cannot be fetched, and builds nothing', async () => {
     const h = harness();
@@ -756,7 +688,7 @@ describe('runJob — live and lease', () => {
     const h = harness();
     const job = h.spool.submit(
       {
-        type: 'gate',
+        type: 'ref',
         worktree: h.worktree,
         branch: 'fix/x',
         fingerprint: { head: `head-of-${path.basename(h.worktree)}`, hash: 'h1', clean: true },
