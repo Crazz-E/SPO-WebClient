@@ -56,8 +56,15 @@ const BASE: PoliticsData = {
   projects: [],
   promise: '',
   townHallId: 90210,
+  isRuler: false,
 };
 
+/**
+ * Seed the politics store.
+ *
+ * `username` no longer decides who holds the office — the gateway does, and
+ * ships the verdict as `PoliticsData.isRuler` (OB-31). Pass it through `data`.
+ */
 function seed(data: Partial<PoliticsData> = {}, username = 'Someone'): void {
   usePoliticsStore.setState({
     data: { ...BASE, ...data },
@@ -233,7 +240,7 @@ describe('PoliticsSection — ratings rail', () => {
   // `mayorpub.asp:52` — only the office holder may move a priority.
   it('lets the office holder change a publicity priority', () => {
     const spy = jest.fn();
-    seed({}, 'SPO_test3');
+    seed({ isRuler: true });
     renderWithProviders(
       <PoliticsSection buildingX={1} buildingY={2} />,
       { clientCallbacks: createSpiedCallbacks({ onSetPoliticsPublicity: spy }) },
@@ -244,7 +251,7 @@ describe('PoliticsSection — ratings rail', () => {
   });
 
   it('shows a bystander the priority without a control', () => {
-    seed({}, 'SomeoneElse');
+    seed({ isRuler: false });
     renderWithProviders(<PoliticsSection buildingX={1} buildingY={2} />);
     fireEvent.click(screen.getByText('Publicity'));
     expect(screen.queryByLabelText('Publicity priority for Jails')).toBeNull();
