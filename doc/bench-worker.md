@@ -151,7 +151,7 @@ session edits worktree
   → npm run finish          main ff'd, refs pruned, worker reinstalled if its sources changed,
                             worktree RETIRED (removed by the next run, once no session is in
                             it) — the end state is main alone. `--now` removes it at once.
-  → electron-release.yml    on the push to main: computes the version from the last v* tag
+  → release.yml             on the push to main: computes the version from the last v* tag
                             and the commits since it, builds, tags, publishes the GitHub
                             Release — never create v* tags by hand
 ```

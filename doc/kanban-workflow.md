@@ -143,7 +143,7 @@ cannot query a project field, and the emoji in the title is not a query either.
 | 📚 Doc/Infra | `cat:doc-infra` | | | |
 
 Pull requests are labelled by **path**, automatically (`actions/labeler`, `.github/labeler.yml`)
-— `rdo`, `gateway`, `client`, `renderer`, `e2e`, `bench`, `electron`, `ci`, `documentation`.
+— `rdo`, `gateway`, `client`, `renderer`, `e2e`, `bench`, `ci`, `documentation`.
 Never post those by hand. One label is neither derived nor a session's to post:
 **`rdo-approved`**, which the maintainer alone adds to unlock a protected-file change.
 

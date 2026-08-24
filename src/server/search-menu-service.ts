@@ -11,7 +11,7 @@ import {
   TycoonProfile,
   RankingCategory,
   RankingEntry
-} from '../shared/types.js';
+} from '../shared/types';
 import {
   parseHomePage,
   parseTownsPage,
@@ -19,7 +19,7 @@ import {
   parsePeopleSearchResults,
   parseRankingsPage,
   parseRankingDetail
-} from './search-menu-parser.js';
+} from './search-menu-parser';
 import { toProxyUrl, isProxyUrl } from '../shared/proxy-utils';
 
 export class SearchMenuService {

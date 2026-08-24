@@ -351,14 +351,14 @@ describe('Pre-auth message gate', () => {
  *
  * @param origin - The Origin header value (may be undefined/empty)
  * @param expectedOrigin - The server's own origin (e.g. "http://localhost:8080")
- * @param singleUserMode - Whether SINGLE_USER_MODE is enabled (e.g. Electron)
+ * @param singleUserMode - Whether SINGLE_USER_MODE is enabled
  */
 function isOriginAllowed(
   origin: string | undefined,
   expectedOrigin: string,
   singleUserMode: boolean,
 ): boolean {
-  // In single-user mode (Electron), missing origin is acceptable
+  // In single-user mode, missing origin is acceptable
   if (!origin) return singleUserMode;
   return origin === expectedOrigin;
 }

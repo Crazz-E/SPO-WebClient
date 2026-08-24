@@ -35,11 +35,6 @@ export const ROUTES: RouteRule[] = [
     why: 'dependency change — the shipped code moved even though no src/ file did',
   },
   {
-    test: /^electron\//,
-    flows: [],
-    why: 'Electron shell — packaged by electron-release.yml, not observable over the wire',
-  },
-  {
     test: /^src\/e2e\/|^scripts\/|^\.claude\/|^\.github\/|^\.[^/]*$|^[^/]+\.(json|js|cjs|mjs|ya?ml)$/,
     flows: [],
     why: 'tooling and repo config — verified by its own unit tests',
@@ -113,17 +108,26 @@ export interface RoutingDecision {
   reasons: string[];
 }
 
-export function route(changedFiles: string[]): RoutingDecision {
+/**
+ * @param changedFiles every path this branch touched, repo-relative.
+ * @param deletedFiles the subset of those the branch removed from the tree. A removed path
+ *   that no rule covers is not an unmapped area waiting for a rule — there is nothing left
+ *   at it to drive, and no later diff can name it again. A removed path a rule *does* cover
+ *   still routes: deleting a session handler changes behaviour, and the rule says which
+ *   flows see it.
+ */
+export function route(changedFiles: string[], deletedFiles: string[] = []): RoutingDecision {
   const required = new Set<string>();
   const unmapped: string[] = [];
   const reasons = new Set<string>();
+  const deleted = new Set(deletedFiles);
   let needsL3 = false;
   let touchedCode = false;
 
   for (const file of changedFiles) {
     const rule = ROUTES.find(r => r.test.test(file));
     if (!rule) {
-      unmapped.push(file);
+      if (!deleted.has(file)) unmapped.push(file);
       continue;
     }
     if (rule.needsL3) needsL3 = true;
