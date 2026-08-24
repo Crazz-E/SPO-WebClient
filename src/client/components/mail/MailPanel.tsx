@@ -58,6 +58,7 @@ export function MailPanel() {
   const currentMessage = useMailStore((s) => s.currentMessage);
   const unreadCount = useMailStore((s) => s.unreadCount);
   const isLoading = useMailStore((s) => s.isLoading);
+  const folderRefreshToken = useMailStore((s) => s.folderRefreshToken);
   const setFolder = useMailStore((s) => s.setFolder);
   const setView = useMailStore((s) => s.setView);
   const startCompose = useMailStore((s) => s.startCompose);
@@ -77,11 +78,12 @@ export function MailPanel() {
   const client = useClient();
   const setLoading = useMailStore((s) => s.setLoading);
 
-  // Fetch folder contents on mount and when folder changes
+  // Fetch folder contents on mount, when the folder changes, and whenever an
+  // action asked for a re-read (a confirmed send bumps the token — OB-11).
   useEffect(() => {
     setLoading(true);
     client.onMailGetFolder(currentFolder);
-  }, [currentFolder, client, setLoading]);
+  }, [currentFolder, folderRefreshToken, client, setLoading]);
 
   const handleReadMessage = useCallback(
     (msg: MailMessageHeader) => {
