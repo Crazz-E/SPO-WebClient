@@ -35,6 +35,15 @@
  * new and costs a live slot, so the verdict is reused and the status published at once.
  * When `main` HAS moved the trees differ, the drive happens, and that is exactly the case
  * where it is worth paying for.
+ *
+ * ## Why the entry is fetched before its tree is read
+ *
+ * A queue entry exists on GitHub and in no checkout. Reading `<sha>^{tree}` before fetching
+ * it can therefore only fail, which is how the dedup shipped and why it never hit once:
+ * every entry fell through the safe branch — "tree unknown, drive it live" — and paid a
+ * full live slot, including the common case where the tree had been driven minutes earlier.
+ * So the objects come down first. That costs a round trip on an idle tick, against the
+ * ~113 s of exclusive bench time a needless drive costs.
  */
 
 import { toErrorMessage } from '../../shared/error-utils';
@@ -115,9 +124,38 @@ export function treeOf(git: (args: string[], cwd: string) => string, ref: string
   try {
     return git(['rev-parse', `${ref}^{tree}`], cwd).trim() || null;
   } catch {
-    // A ref the checkout does not have yet is not an error here — it is a reason to fetch
-    // and gate it normally, which is what a null answer produces.
+    // A ref the checkout still does not have is not an error here — it is a reason to gate
+    // it normally, which is what a null answer produces.
     return null;
+  }
+}
+
+/**
+ * Bring an entry's objects into the checkout, so that its tree can be read at all.
+ *
+ * Fetched **by ref name, with no local destination**: `refs/heads/gh-readonly-queue/…`
+ * rather than the bare sha, because a server need not serve an arbitrary sha it was not
+ * asked to advertise; and with no refspec, because the objects are all that is wanted —
+ * nothing is written under `refs/`, so an entry GitHub deletes leaves nothing behind. Almost
+ * every object is already present from the pull request head, so this is a round trip rather
+ * than a transfer.
+ *
+ * Best-effort on purpose, and the caller reads the tree whether this succeeded or not: the
+ * checkout may already hold the objects from an earlier tick. A failure is logged and never
+ * thrown, and a tree that still cannot be read means *gate it* — never "assume it matches".
+ */
+export function fetchEntry(
+  git: (args: string[], cwd: string) => string,
+  entry: QueueEntry,
+  cwd: string,
+  log: (line: string) => void,
+): boolean {
+  try {
+    git(['fetch', '--no-tags', '--quiet', 'origin', `refs/heads/${entry.ref}`], cwd);
+    return true;
+  } catch (err: unknown) {
+    log(`merge queue: could not fetch ${entry.ref} (${toErrorMessage(err)})`);
+    return false;
   }
 }
 
@@ -185,9 +223,10 @@ export function serveMergeQueue(deps: MergeQueueDeps): number {
     const decision = shouldGate(entry, hasStatus, deps.pendingFor);
     if (decision.skip) continue;
 
-    // The tree is read from the checkout, so it is only available once the ref has been
-    // fetched at least once. A null answer simply means "gate it", which is correct and
-    // is what happens on the first sight of any entry.
+    // Fetch, THEN read. The tree is read out of the checkout, and a speculative commit is
+    // never in one until it is fetched — reading first made the answer unconditionally
+    // "unknown", so the dedup could not hit even when the tree was identical.
+    fetchEntry(deps.git, entry, deps.checkoutDir, deps.log);
     const reuse = mayReuseVerdict(treeOf(deps.git, entry.sha, deps.checkoutDir), attested);
     if (reuse.reuseFrom) {
       deps.log(`merge queue: ${entry.sha.slice(0, 8)} reuses ${reuse.reuseFrom.slice(0, 8)} — ${reuse.why}`);
