@@ -31,12 +31,16 @@ const COMMAND = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const CLAUDE_MD = path.join(ROOT, 'CLAUDE.md');
 const HEARTBEAT = path.join(ROOT, '.claude', 'hooks', 'session-heartbeat.sh');
 const FINISH = path.join(ROOT, 'scripts', 'finish.sh');
+const HEARTBEAT_SCAN = path.join(ROOT, 'scripts', 'heartbeat-scan.sh');
+const CLAIM_READ = path.join(ROOT, 'scripts', 'claim-read.sh');
 
 let rulebook: string;
 let command: string;
 let claudeMd: string;
 let heartbeat: string;
 let finish: string;
+let heartbeatScan: string;
+let claimRead: string;
 
 /**
  * Prose in these files is hard-wrapped at ~95 columns, so an assertion written against the
@@ -52,6 +56,8 @@ beforeAll(() => {
   claudeMd = fs.readFileSync(CLAUDE_MD, 'utf8');
   heartbeat = fs.readFileSync(HEARTBEAT, 'utf8');
   finish = fs.readFileSync(FINISH, 'utf8');
+  heartbeatScan = fs.readFileSync(HEARTBEAT_SCAN, 'utf8');
+  claimRead = fs.readFileSync(CLAIM_READ, 'utf8');
 });
 
 /** The partition of §2, in the order the first-match rule depends on. */
@@ -386,8 +392,11 @@ describe('the /next-task command implements the claim algorithm', () => {
 
   it('carries a runnable heartbeat probe and the window it is read against', () => {
     const text = pick();
-    expect(text).toMatch(/~\/\.spo-bench\/sessions\/\*\.alive/);
-    expect(text).toMatch(/rev-parse --abbrev-ref HEAD/);
+    // The probe is a named script now, not a composed one-liner: the § reaches it by alias,
+    // and the alive-file walk it used to inline is asserted against that script instead.
+    expect(text).toMatch(/npm run board:sessions/);
+    expect(heartbeatScan).toMatch(/\*\.alive/);
+    expect(heartbeatScan).toMatch(/rev-parse --abbrev-ref HEAD/);
     expect(collapse(text)).toMatch(/`SPO_WORKTREE_IDLE_MIN` \(default \*\*120\*\* minutes\)/);
     expect(collapse(text)).toMatch(/last commit date on `origin`, same window/);
   });
@@ -418,14 +427,16 @@ describe('the gh recipes a session copies from', () => {
     expect(start).toBeGreaterThan(-1);
     const recipes = rulebook.slice(start);
     expect(recipes).toMatch(/THE CLAIM READ/);
-    // The claim read's jq prints status, area and session for every item.
-    expect(recipes).toMatch(/\[\\\(\.Status \/\/ "-"\)\]/);
-    expect(recipes).toMatch(/area=\\\(\.Area \/\/ "-"\)/);
-    expect(recipes).toMatch(/session=\\\(\.Session \/\/ "-"\)/);
+    expect(recipes).toMatch(/npm run board:claim/);
+    // The claim read's jq prints status, area and session for every item. It lives in the
+    // script the alias runs, so the invariants are pinned there rather than in the prose.
+    expect(claimRead).toMatch(/\[\\\(\.Status \/\/ "-"\)\]/);
+    expect(claimRead).toMatch(/area=\\\(\.Area \/\/ "-"\)/);
+    expect(claimRead).toMatch(/session=\\\(\.Session \/\/ "-"\)/);
     // The busy set itself — the same three statuses, with docs still exempt.
-    expect(recipes).toMatch(/"busy areas: /);
-    expect(recipes).toMatch(/\.Status == "In progress" or \.Status == "Gate" or \.Status == "PR"/);
-    expect(recipes).toMatch(/\.Area != "docs"/);
+    expect(claimRead).toMatch(/"busy areas: /);
+    expect(claimRead).toMatch(/\.Status == "In progress" or \.Status == "Gate" or \.Status == "PR"/);
+    expect(claimRead).toMatch(/\.Area != "docs"/);
     expect(recipes).toMatch(/# Fill Area before the card moves to In progress/);
   });
 });

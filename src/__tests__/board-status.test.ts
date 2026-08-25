@@ -104,7 +104,7 @@ describe('the rulebook names the re-read', () => {
   it('carries the recipe in the gh CLI recipes section', () => {
     const recipes = rulebook.indexOf('## gh CLI recipes');
     expect(recipes).toBeGreaterThan(-1);
-    expect(rulebook.slice(recipes)).toMatch(/bash scripts\/board-status\.sh 144 106/);
+    expect(rulebook.slice(recipes)).toMatch(/npm run board:status -- 144 106/);
   });
 });
 
@@ -124,7 +124,7 @@ describe('the /next-task command names the re-read moment', () => {
   });
 
   it('names the helper and its cost', () => {
-    expect(work).toMatch(/scripts\/board-status\.sh <n>…/);
+    expect(work).toMatch(/npm run board:status -- <n>…/);
     expect(collapse(work)).toMatch(/~1 point for any number of issues, never the pool/);
   });
 });
