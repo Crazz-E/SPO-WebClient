@@ -76,7 +76,8 @@
       "Bash(gh issue comment*)",
       "Bash(gh project item-edit*)",
       "Bash(gh project item-add*)",
-      "Bash(gh auth status*)"
+      "Bash(gh auth status*)",
+      "mcp__ccd_session_mgmt__set_session_title"
     ],
     "deny": [
       "Workflow",

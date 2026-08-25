@@ -46,6 +46,10 @@ function truncate(text: string, max = MAX_TEXT_LENGTH): string {
  *
  * A payload that cannot be serialized at all (a cycle, a DOM node) is not a reason to lose
  * the entry — the message type alone still tells the triage session what crossed the wire.
+ *
+ * When truncating, re-measure with JSON.stringify to account for escaping: stored as a string,
+ * re-serialization adds quotes and escapes every quote/backslash, inflating the size. Shrink
+ * until JSON.stringify(truncated).length fits the cap.
  */
 function boundPayload(payload: unknown): { payload: unknown; truncated?: true } {
   let serialized: string;
@@ -56,7 +60,13 @@ function boundPayload(payload: unknown): { payload: unknown; truncated?: true } 
   }
   if (serialized === undefined) return { payload: null };
   if (serialized.length <= MAX_WS_PAYLOAD_BYTES) return { payload };
-  return { payload: `${serialized.slice(0, MAX_WS_PAYLOAD_BYTES - 32)}…[cut]`, truncated: true };
+
+  // Cut to a conservative length, then re-measure with escaping.
+  let truncated = `${serialized.slice(0, MAX_WS_PAYLOAD_BYTES - 32)}…[cut]`;
+  while (JSON.stringify(truncated).length > MAX_WS_PAYLOAD_BYTES) {
+    truncated = truncated.slice(0, -1);
+  }
+  return { payload: truncated, truncated: true };
 }
 
 /** Which way a stack changed between two renders. */

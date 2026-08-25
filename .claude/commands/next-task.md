@@ -11,7 +11,8 @@ Board: [github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/
 
 **Run the scripted steps verbatim.** Every board and bench read below is a named script,
 reached through an npm alias: `bench:nightly`, `board:claim`, `board:verify`,
-`board:sessions`, `board:status`, `bench:wait`, `pr:wait`. Call each in exactly the form written here —
+`board:sessions`, `board:status`, `board:wait`, `bench:wait`, `pr:wait`. Call each in
+exactly the form written here —
 `npm run <alias>`, arguments after `--` — from the worktree you are in, with **no `cd`
 prefix and no shell composition around it**. None of them needs a working directory other
 than yours.
@@ -22,12 +23,20 @@ A `cd … && …` compound, a variable assignment, a `[ -f … ] &&` guard or th
 prompt — which is the one thing these aliases exist to remove. Compose no GraphQL by hand
 either: raw `gh api graphql` deliberately still prompts.
 
-**A wait is a scripted step too.** Every "wait for X" in this command has an alias, and none
-of them is a loop you write: `npm run gate` and `npm run test:live` wait for their own job,
-`npm run bench:wait -- <job-id>` re-attaches to one whose wait was interrupted, and
-`npm run pr:wait -- <n>` waits for a pull request to leave the merge queue. Composing
-`until … do sleep … done` around `gh` instead stops to ask the human **and** polls GitHub
-under the 30 s floor — `.claude/hooks/poll-loop-guard.sh` refuses it and names the alias.
+**A wait is a scripted step too.** Every "wait for X" in this command has an allowlisted
+form, and none of them is a loop you write: `npm run gate` and `npm run test:live` wait for
+their own job, `npm run bench:wait -- <job-id>` re-attaches to one whose wait was
+interrupted, `gh pr checks <n> --watch` blocks on CI, `npm run board:wait` on an exhausted
+quota, and `npm run pr:wait -- <n>` on a pull request leaving the merge queue. Composing
+`until … do sleep … done` instead stops to ask the human **and** polls GitHub under the
+30 s floor — `.claude/hooks/poll-loop-guard.sh` refuses that shape and names the form.
+
+**Multi-line text goes through a file, never through substitution.** A commit message, a PR
+body or a long comment written as `git commit -m "$(cat <<'EOF' …)"` is compound shell and
+stops to ask. Write the text to a file, then `git commit -F <file>`,
+`gh pr create --body-file <file>` or `gh issue comment --body-file <file>` — all three are
+plain prefix-matched calls that pass. Same reasoning as the aliases: the content belongs in
+a file, never in the command line.
 
 ## 0 · Is `main` red?
 
@@ -120,9 +129,10 @@ from the claim read you already hold. One card at a time.
 
 **If GitHub answers `RATE_LIMITED` mid-handshake, the write half decides** (kanban-workflow
 § GitHub API discipline, rule 5). The write failed → nothing landed: the card is untouched,
-you own nothing — claim nothing else, read the bucket's `reset` from `gh api rate_limit`
-(free, it still answers when the bucket is empty), wait for it once in the background, then
-start the handshake over. The write succeeded and the re-read failed → the card is
+you own nothing — claim nothing else, then wait for the bucket once with `npm run board:wait`
+and start the handshake over. That alias reads the `reset` from `gh api rate_limit` itself
+(free, and it still answers when the bucket is empty) and returns immediately when the bucket
+was never exhausted, so there is nothing to compute and no `sleep` loop to hand-roll. The write succeeded and the re-read failed → the card is
 provisionally yours: do not walk away half-claimed — wait for `reset`, finish the re-read,
 and if this session must end first, name the card and the unverified write in your final
 report so the human can read the board.
@@ -172,9 +182,15 @@ The repo process applies unchanged — this command adds nothing to it:
   (2–4 lines: what changed, PR number, anything the human should know) → title
   `#<issue> · Done`. **Checking is one read, not a vigil**: your gate PASS *is* the
   `bench/gate` status, and CI normally concluded while the gate was queued —
-  `gh pr checks <n>` once; genuinely pending → `npm run pr:wait -- <n>` in the background,
-  which *is* that ≥ 30 s interval and that deadline — never a tight loop, and never one you
-  compose yourself (kanban-workflow § GitHub API discipline).
+  `gh pr checks <n>` once. Genuinely pending → `gh pr checks <n> --watch --interval 20`,
+  which blocks until every check concludes and exits non-zero if any failed. Read that exit
+  code, not the printed table. Then `gh pr merge <n> --merge` **enqueues** — the queue lands
+  it later, so the wait after the merge is a different wait: `npm run pr:wait -- <n>` in the
+  background, which carries the ≥ 30 s floor and both bounds of the discipline and answers
+  in its exit code (0 merged · 1 closed unmerged · 4 still open). Never hand-roll either
+  poll, and **never a tight loop**: a `while`/`sleep` loop is compound shell, so it stops to
+  ask for permission, and it re-reads GitHub far harder than the sanctioned forms do
+  (kanban-workflow § GitHub API discipline).
 
 ## 4 · If it fails
 
