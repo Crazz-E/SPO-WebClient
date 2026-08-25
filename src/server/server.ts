@@ -33,6 +33,7 @@ import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '.
 import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 import { buildRuntimeConfigScript } from './runtime-config';
 import { handleBugReportRequest, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
+import { enforceProductionConfig } from './production-config';
 
 /**
  * Starpeace Gateway Server
@@ -1075,10 +1076,11 @@ const server = http.createServer(async (req, res) => {
 const wsConnectionsPerIp = new Map<string, number>();
 // 1000 since 2026-08-22 (developer decision, test phase — see the rate-limit note above).
 const WS_MAX_CONNECTIONS_PER_IP = 1000;
+const WS_MAX_PAYLOAD_BYTES = 64 * 1024; // 64KB max message size (policy SEC-W-2)
 
 const wss = new WebSocketServer({
   server,
-  maxPayload: 64 * 1024, // 64KB max message size
+  maxPayload: WS_MAX_PAYLOAD_BYTES,
   verifyClient: (info, callback) => {
     // Validate Origin header to prevent Cross-Site WebSocket Hijacking
     const origin = info.origin || info.req.headers.origin || '';
@@ -1393,6 +1395,24 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
   if (options?.host !== undefined) HOST = options.host;
   if (options?.port !== undefined) PORT = options.port;
   if (options?.singleUserMode !== undefined) SINGLE_USER_MODE = options.singleUserMode;
+
+  // Validate the production configuration and report it BEFORE anything binds a port
+  // (policy SEC-R-2). A forbidden combination throws, main() logs it and exits 1.
+  enforceProductionConfig(
+    process.env,
+    config.logging.level,
+    {
+      trustProxy: TRUST_PROXY,
+      hstsEnabled: process.env.ENABLE_HSTS === 'true',
+      rateLimitWindowMs: RATE_LIMIT_WINDOW_MS,
+      rateLimitMaxAuth: RATE_LIMIT_MAX_AUTH,
+      rateLimitMaxProxy: RATE_LIMIT_MAX_PROXY,
+      wsMaxConnectionsPerIp: WS_MAX_CONNECTIONS_PER_IP,
+      wsMaxPayloadBytes: WS_MAX_PAYLOAD_BYTES,
+      singleUserMode: SINGLE_USER_MODE,
+    },
+    logger
+  );
 
   // Load Vite manifest for content-hashed asset resolution
   loadViteManifest();

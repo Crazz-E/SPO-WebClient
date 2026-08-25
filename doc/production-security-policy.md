@@ -51,7 +51,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 | ID | Requirement | Status | Enforcement |
 |---|---|---|---|
 | SEC-L-1 | Passwords MUST never be written to any log; RDO wire logs MUST redact `RDOLogonUser`/`Logon`/`AccountStatus`/`RDOLogonClient` arguments. Passwords are held in memory only and cleared at session end. | Met (`spo_session.ts:114-120,2613`) | L4 (log-scan after real login attempt) |
-| SEC-L-2 | Production MUST run `LOG_LEVEL=info` or stricter — never `debug` (session IDs leak at debug). This supersedes the older `warn` recommendation; `info` is the policy floor and the `.env.example` default. | Met by config | L4 + SEC-R-2 startup check |
+| SEC-L-2 | Production MUST run `LOG_LEVEL=info` or stricter — never `debug` (session IDs leak at debug). This supersedes the older `warn` recommendation; `info` is the policy floor and the `.env.example` default. | Met (`shared/config.ts` defaults to `info`; the SEC-R-2 startup check refuses an explicit `debug` in production) | L0 (`server/production-config.test.ts`) |
 | SEC-L-3 | Logs MUST be structured NDJSON in production (`LOG_JSON=true`), size-rotated (app 10 MB×5, Docker 10 m×5), with a separate error stream. | Met | manual (env review) |
 | SEC-L-4 | `.env` MUST be `chmod 600`, never committed; `SPO_GM_USERS` MUST be explicitly set (empty = no GMs). | Met by procedure | manual |
 
@@ -60,7 +60,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 | ID | Requirement | Status | Enforcement |
 |---|---|---|---|
 | SEC-R-1 | Production MUST run `NODE_ENV=production`, as non-root (uid 1001), with memory/CPU limits (512 M/1.0) and a container healthcheck on `/api/startup-status`. | Met (Dockerfile, compose) | manual + deploy health gate |
-| SEC-R-2 | The server MUST validate its production configuration at startup and **fail fast** on forbidden combinations (at minimum: `NODE_ENV=production` + `LOG_LEVEL=debug`). It MUST log the effective security configuration (headers on, HSTS, trust-proxy, rate limits) once at boot, and warn when `TRUST_PROXY`/`ENABLE_HSTS` are unset in production. | **Missing — required work** | L4 (boot-failure test lands with fix) |
+| SEC-R-2 | The server MUST validate its production configuration at startup and **fail fast** on forbidden combinations (at minimum: `NODE_ENV=production` + `LOG_LEVEL=debug`). It MUST log the effective security configuration (headers on, HSTS, trust-proxy, rate limits) once at boot, and warn when `TRUST_PROXY`/`ENABLE_HSTS` are unset in production. | Met (`server/production-config.ts`, called from `server.ts` `startGateway()` before the listen) | L0 (`server/production-config.test.ts` — boot-failure path and readout) |
 | SEC-R-3 | Deploys MUST pass the health gate (`phase:ready` within 120 s) before old containers are pruned; a failed gate MUST leave the previous deployment reachable. | Met (`deploy/deploy.sh`) | manual/script |
 
 ## 7. Dependencies & Supply Chain (SEC-D)
@@ -83,6 +83,6 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 ## 9. Compliance Gate & Exceptions
 
 - The **L4 compliance suite is the machine-readable form of this policy.** A PR that makes L4 fail is a policy violation and MUST NOT merge.
-- Items marked **Missing — required work** (SEC-G-4, SEC-R-2, SEC-D-1, global cap of SEC-W-3) are the initial remediation backlog; each fix ships with its L4/L1 test.
+- Items marked **Missing — required work** (SEC-G-4, global cap of SEC-W-3) are the remaining remediation backlog; each fix ships with its test. SEC-D-1 landed 2026-08-22 (CI audit step); SEC-R-2 landed 2026-08-25 (`server/production-config.ts`).
 - Exceptions: documented here, with owner, rationale, and expiry date. Current exceptions: **none**.
 - Review cadence: re-audit this policy whenever the deployment topology changes (new public endpoint, new proxy layer, new distribution channel) and at least once per release cycle.
