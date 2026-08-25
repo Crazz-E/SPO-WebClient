@@ -23,6 +23,29 @@ Browser ──wss:443──▶ nginx (TLS termination)
 
 ---
 
+## Before the first public deployment
+
+The gateway currently runs with **per-IP rate-limit ceilings raised for the automated test
+phase** — recorded as exception **SEC-X-1** in
+[doc/production-security-policy.md §9](../doc/production-security-policy.md). That exception
+expires the moment this deployment serves traffic that is not the bench worker. Restore the
+policy floors **before** going public:
+
+```bash
+grep -nE 'RATE_LIMIT_MAX_AUTH|RATE_LIMIT_MAX_PROXY|WS_MAX_CONNECTIONS_PER_IP' src/server/server.ts
+```
+
+| Constant | Test phase (now) | Required before public traffic |
+|---|---|---|
+| `RATE_LIMIT_MAX_AUTH` | 1000 | **10** (SEC-H-4) |
+| `RATE_LIMIT_MAX_PROXY` | 1000 | **60** (SEC-H-4) |
+| `WS_MAX_CONNECTIONS_PER_IP` | 1000 | **5** (SEC-W-3) |
+
+Then update SEC-H-4, SEC-W-3 and the SEC-X-1 entry in the policy to say the exception is
+closed. This check is repeated in Step 9.
+
+---
+
 ## Step 1: Initial Server Setup
 
 SSH into your VPS as root:
@@ -364,6 +387,11 @@ curl -sI https://spo.yourdomain.com/ | grep -ci content-security-policy  # 1
 # TLS grade:
 # Visit https://www.ssllabs.com/ssltest/analyze.html?d=spo.yourdomain.com
 # Expected: A or A+
+
+# Rate-limit ceilings back at the policy floor? (exception SEC-X-1 expires at public launch)
+grep -nE 'RATE_LIMIT_MAX_AUTH|RATE_LIMIT_MAX_PROXY|WS_MAX_CONNECTIONS_PER_IP' src/server/server.ts
+# Expected before ANY public traffic: 10, 60, 5 — not the test-phase 1000s.
+# See "Before the first public deployment" above and doc/production-security-policy.md §9.
 ```
 
 ---

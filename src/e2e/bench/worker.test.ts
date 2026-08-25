@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './paths';
 import { Spool, type JobRequest } from './job';
-import { listVerdicts, writeVerdictIn } from './verdict';
+import { listVerdicts, publishPendingStatuses, writeVerdictIn } from './verdict';
 import { readNightlyResult } from './nightly';
 import { type GatewayDeps } from './gateway';
 import {
@@ -329,17 +329,30 @@ describe('runJob — gate', () => {
 
 
 
-  it('maps verify-gate exit codes: 0 PASS, 2 BLOCKED, else FAIL', async () => {
+  it('maps every verify-gate exit code explicitly: 0 PASS, 1 FAIL, 2 BLOCKED, 3 ENVIRONMENT', async () => {
+    // One code per outcome, matching the EXIT table in scripts/verify-gate.js. The pair
+    // that matters is 3 -> ENVIRONMENT: the gate used to exit 1 for it, so a run that
+    // judged nothing arrived here as FAIL and was attested as a verdict on the code.
     for (const [code, verdict] of [
       [0, 'PASS'],
-      [2, 'BLOCKED'],
       [1, 'FAIL'],
+      [2, 'BLOCKED'],
+      [3, 'ENVIRONMENT'],
     ] as const) {
       const h = harness();
       const job = deposit(h);
       h.exitCodes = [0, 0, code]; // fetch, build, body
-      expect((await runJob(h.deps, job)).verdict).toBe(verdict);
+      const report = await runJob(h.deps, job);
+      expect(report.verdict).toBe(verdict);
+      expect(report.detail).toBe(`verify-gate exited ${code} (${verdict})`);
     }
+  });
+
+  it('reads a code the table does not name as FAIL — never as a silent pass', async () => {
+    const h = harness();
+    const job = deposit(h);
+    h.exitCodes = [0, 0, 139]; // e.g. killed by a signal
+    expect((await runJob(h.deps, job)).verdict).toBe('FAIL');
   });
 
   it('ignores a failed origin/main fetch — offline, the gate falls back on its own', async () => {
@@ -385,6 +398,81 @@ describe('runJob — gate', () => {
     const verdicts = listVerdicts(h.paths);
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0].verdict.verdict).toBe('PASS');
+  });
+
+  describe('which verdicts may write verdicts/<sha>.json', () => {
+    // An attestation is the one artefact the merge rule trusts, and merge-queue.ts treats
+    // any existing one as "already answered" — so a sha is never re-gated once a file
+    // exists for it. Every verdict therefore has exactly one right answer here, and the
+    // pairs are pinned rather than left to follow from whatever the guard happens to test.
+    const attests: [string, (h: Harness) => void][] = [
+      ['PASS', () => {}],
+      ['FAIL', h => void (h.exitCodes = [0, 0, 1])],
+      ['BLOCKED', h => void (h.exitCodes = [0, 0, 2])],
+      // STALE is a real judgement — the tree moved under a run that did read the code —
+      // so it attests, and the hook refuses it for being unstable rather than absent.
+      ['STALE', h => void (h.hashes = ['h1', 'h2'])],
+    ];
+
+    const attestsNot: [string, string, (h: Harness) => void][] = [
+      ['DIRTY', 'the tree is not the sha', h => void (h.clean = false)],
+      ['ENVIRONMENT', 'the live stage aborted', h => void (h.exitCodes = [0, 0, 3])],
+      ['ENVIRONMENT', 'the gateway never came up', h => void (h.gatewayFails = true)],
+      ['ENVIRONMENT', 'the ref could not be fetched', h => void (h.prepareRefFails = 'fetch')],
+      [
+        'ENVIRONMENT',
+        'the owner lease was refused',
+        h => void (h.leaseDecision = { ok: false, why: 'another host holds it' }),
+      ],
+      [
+        'ABANDONED',
+        'the worktree was gone',
+        h => {
+          h.deps.prepareRef = async () => {
+            fs.rmSync(h.worktree, { recursive: true, force: true });
+            return null;
+          };
+        },
+      ],
+    ];
+
+    it.each(attests)('%s attests: the run judged the code', async (verdict, arrange) => {
+      const h = harness();
+      arrange(h);
+      deposit(h);
+      await processOldest(h.deps);
+      expect(listVerdicts(h.paths).map(v => v.verdict.verdict)).toEqual([verdict]);
+    });
+
+    it.each(attestsNot)('%s attests nothing — %s', async (verdict, _why, arrange) => {
+      const h = harness();
+      arrange(h);
+      const job = deposit(h);
+      await processOldest(h.deps);
+      expect(h.spool.readReport(job.id)?.verdict).toBe(verdict);
+      expect(listVerdicts(h.paths)).toHaveLength(0);
+      // No file, so nothing for the publisher to post: `bench/gate` stays unset on the sha.
+      publishPendingStatuses(h.paths, h.deps.publishStatus, h.deps.log, h.clock.nowMs);
+      expect(h.published).toEqual([]);
+    });
+
+    it.each(attestsNot)(
+      'a later %s leaves an earlier PASS for the same sha untouched (%s)',
+      async (_verdict, _why, arrange) => {
+        const h = harness();
+        deposit(h);
+        await processOldest(h.deps);
+        const passed = listVerdicts(h.paths)[0].verdict;
+        expect(passed.verdict).toBe('PASS');
+
+        arrange(h);
+        deposit(h);
+        await processOldest(h.deps);
+
+        // Same sha, same file: byte-for-byte the attestation the passing run wrote.
+        expect(listVerdicts(h.paths).map(v => v.verdict)).toEqual([passed]);
+      },
+    );
   });
 
   it('reports ABANDONED when the worktree vanished from disk', async () => {
