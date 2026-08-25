@@ -116,14 +116,19 @@ for n in "${prs[@]}"; do
   fi
 
   echo "-- gate PASS for ${sha:0:8}: arming auto-merge"
-  gh pr merge "$n" --squash --auto
+  # --merge, never --squash: main's merge queue is set to MERGE and overrides the flag anyway.
+  # Never --delete-branch here — it would destroy the queue entry (CLAUDE.md § merge queue).
+  gh pr merge "$n" --merge --auto
 
   deadline=$(( $(date +%s) + MERGE_TIMEOUT_S ))
   state=""
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    state="$(gh pr view "$n" --json state -q .state)"
+    # REST, not `gh pr view` (which goes through GraphQL): a bounded merge poll spends the
+    # request bucket, not the GraphQL points every session's board reads share
+    # (doc/kanban-workflow.md § GitHub API discipline).
+    state="$(gh api "repos/{owner}/{repo}/pulls/$n" --jq 'if .merged then "MERGED" else .state end')"
     [ "$state" = "MERGED" ] && break
-    sleep 20
+    sleep 30
   done
   if [ "$state" != "MERGED" ]; then
     note "$n TIMEOUT (state $state after ${MERGE_TIMEOUT_S}s; auto-merge armed, worktree kept at $wt)"

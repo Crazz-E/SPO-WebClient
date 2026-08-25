@@ -179,6 +179,16 @@ it). `/next-task` reads the whole blocked set in one GraphQL call and does not c
 whose blocker is still open: it skips it and names the skip, or refuses out loud when that card
 was the one it was handed. A dependency records *cannot start yet*, never priority — priority
 stays the human's vertical order in Todo.
+**GitHub reads are budgeted like board writes.** Every session and workflow, on every
+machine, spends one account's quota — 5000 GraphQL points per hour, and one
+`gh project item-list` costs ~103 of them (measured), which is how five looping sessions made
+the board unreadable on 2026-08-25. A second PC adds nothing: the quota is per account. So a
+session reads the pool **once**, at claim, with the composite claim read (~2 points) in
+[kanban-workflow.md § GitHub API discipline](doc/kanban-workflow.md); it never polls GitHub
+for a state that has a local surface (bench verdict, nightly, heartbeats — all under
+`~/.spo-bench/`), it asks `rateLimit { cost remaining resetAt }` in every hand-written
+GraphQL call, and on `RATE_LIMITED` mid-claim the **write half decides**: a half-made claim
+is never walked away from, because it leaves a card only a human can free.
 **Feeding rule:** every finding lands as a new issue in Todo, with its `Category` and the
 matching `cat:` / `size:` labels — a finding that only lives in a session report is lost.
 **Filing the issue is all it takes on the way in.** `Auto-add to project` puts a new issue on
@@ -382,7 +392,7 @@ security-auditor, typescript, web-accessibility, web-performance.
 | Server | For |
 |--------|-----|
 | Playwright | Browser automation, E2E |
-| GitHub | PRs, issues, code search |
+| GitHub | PRs, issues, code search — same account quota as `gh`; kanban-workflow.md § GitHub API discipline binds it too |
 | Context7 | Live library docs (TS, Jest, Node) |
 
 ## E2E credentials — LOCKED
@@ -467,11 +477,18 @@ otherwise patch), builds, tags and publishes the GitHub Release — never create
 `v*` tags by hand (a tag ruleset forbids updating or deleting them).
 
 **`main` has a merge queue** — so `gh pr merge <N> --merge` **enqueues**; it does not merge.
-Never add `--delete-branch`: `gh` honours it the instant the entry is created, which destroys
-the entry and leaves the pull request CLOSED and unmerged, exit 0, one warning line. GitHub
-deletes the branch itself when the entry lands. Recovery is `git push -u origin <branch>` +
-`gh pr reopen <N>` + merge again — same sha, so the attestation still holds
-([bench-worker.md §12](doc/bench-worker.md)).
+Every `gh pr merge` here — the correct form included — prints one stderr warning,
+`! The merge strategy for main is set by the merge queue`, and exits 0: **expected and
+benign**, not a failure. It is a statement of fact, not a complaint: the queue's method is
+`MERGE`, so a `--squash` or `--rebase` you pass is **overridden, not refused** — the merge
+commit is enqueued either way. Pass `--merge` so the command says what will happen. Judge on the **exit code and the PR state, never on stderr text** —
+in doubt, one REST call settles it: `gh api repos/Crazz-Org/SPO-WebClient/pulls/<N> --jq
+'{state,merged}'` (`open` = enqueued; the queue lands it). Never "recover" a merge that did
+not fail. Never add `--delete-branch`: `gh` honours it the instant the entry is created,
+which destroys the entry and leaves the pull request CLOSED and unmerged — same exit 0, same
+warning line. GitHub deletes the branch itself when the entry lands. Recovery is
+`git push -u origin <branch>` + `gh pr reopen <N>` + merge again — same sha, so the
+attestation still holds ([bench-worker.md §12](doc/bench-worker.md)).
 
 **`gh pr edit` does not work on this repository.** Every invocation — `--body-file`,
 `--add-label`, any flag — fails with `GraphQL: Projects (classic) is being deprecated …
