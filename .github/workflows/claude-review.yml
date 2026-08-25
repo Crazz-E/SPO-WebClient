@@ -26,6 +26,21 @@
 # `pull_request` gives a fork a read-only token instead: the review simply cannot post, which
 # is the correct failure. Same-repo branches (every session PR) get the write token they need.
 #
+# ## Two credentials, not one
+#
+# The subscription token below authenticates to Claude. It says nothing about GitHub, and the
+# action does NOT fall back to the workflow's own token: with no `github_token` input it takes
+# the GitHub App path, which exchanges a GitHub OIDC token and therefore needs
+# `id-token: write` plus the Claude app installed. Neither is true here, so the action died
+# before Claude ran — `Could not fetch an OIDC token`, three attempts, then exit 1 — and
+# `continue-on-error` reported that as a green check (run 32826227442, 2026-08-25).
+#
+# `secrets.GITHUB_TOKEN` is the simpler half of the same choice: this job reads the diff and
+# writes comments on one pull request, which is exactly `contents: read` +
+# `pull-requests: write` as already declared. No app to install, no OIDC, no extra permission
+# — and on a fork PR that token is read-only, so the review still fails to post rather than
+# failing open.
+#
 # ## The credential is a subscription token, not an API key
 #
 # This repository has no Anthropic API key and does not want one: the maintainer holds a
@@ -92,11 +107,15 @@ jobs:
           fetch-depth: 1
 
       - name: Review the diff
+        id: review
         if: env.HAS_CLAUDE_TOKEN == 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@c81e3bc69d1b18badbb63ba39581218f02421678 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Authenticates to GitHub, not to Claude. See the header: without it the action
+          # takes the GitHub App path and needs `id-token: write` and an app install.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           # CLAUDE.md § Model routing: analysis goes to Fable 5, execution to Opus 5. A
           # review is analysis. One line to change if calibration says otherwise.
           claude_args: |
@@ -159,3 +178,13 @@ jobs:
             switched off.
 
             Post GitHub comments only. Do not return review text as a message.
+
+      # `continue-on-error` is the posture #122 asked for: this reviewer may not fail a pull
+      # request. It also makes a CRASHED action indistinguishable from a quiet one — the job
+      # goes green either way, which is how the OIDC failure above survived unnoticed. The
+      # step outcome is the one place that difference is still readable, so it is said out
+      # loud here. Still not a failure: a warning annotation, on a job that stays green.
+      - name: Say so when the reviewer crashed
+        if: env.HAS_CLAUDE_TOKEN == 'true' && steps.review.outcome == 'failure'
+        run: |
+          echo "::warning title=Claude Review failed::The reviewer errored instead of reviewing — no review was produced. This job stays green by design; open the 'Review the diff' step for the cause."

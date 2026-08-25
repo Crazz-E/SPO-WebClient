@@ -32,9 +32,15 @@ import * as path from 'path';
 const WORKFLOW = path.join(process.cwd(), '.github', 'workflows', 'claude-review.yml');
 
 let yaml: string;
+/** The same file with every comment line removed — what GitHub actually acts on. */
+let directives: string;
 
 beforeAll(() => {
   yaml = fs.readFileSync(WORKFLOW, 'utf8');
+  directives = yaml
+    .split('\n')
+    .filter(line => !/^\s*#/.test(line))
+    .join('\n');
 });
 
 describe('claude-review workflow', () => {
@@ -96,6 +102,18 @@ describe('claude-review workflow', () => {
       expect(yaml).not.toMatch(/anthropic_api_key:/);
       expect(yaml).not.toMatch(/secrets\.ANTHROPIC_API_KEY/);
     });
+
+    it('authenticates to GitHub with the workflow token, not the GitHub App path', () => {
+      // Two different credentials. Dropping `github_token` does not fall back to the
+      // workflow's own token — it selects the App path, which exchanges a GitHub OIDC token
+      // and needs `id-token: write` plus the Claude app installed on the repository. Neither
+      // is true here, and the action then dies before Claude runs: `Could not fetch an OIDC
+      // token`, exit 1, reported green by `continue-on-error` (run 32826227442).
+      expect(yaml).toMatch(/github_token: \$\{\{ secrets\.GITHUB_TOKEN \}\}/);
+      // Against `directives`, not `yaml`: the header explains the App path in prose, and
+      // naming a permission is not granting it.
+      expect(directives).not.toMatch(/id-token:/);
+    });
   });
 
   describe('an unprovisioned repository stays green', () => {
@@ -149,6 +167,15 @@ describe('claude-review workflow', () => {
 
     it('bounds the run', () => {
       expect(yaml).toMatch(/timeout-minutes: \d+/);
+    });
+
+    it('still says so when the reviewer crashed instead of staying quiet', () => {
+      // The cost of `continue-on-error` is that a crash and an empty review look identical
+      // from the checks list. The step outcome is the only place they differ, so the crash
+      // gets an annotation — without failing the job, which stays the #122 posture.
+      expect(yaml).toMatch(/^\s+id: review$/m);
+      expect(yaml).toMatch(/steps\.review\.outcome == 'failure'/);
+      expect(yaml).toMatch(/::warning title=Claude Review failed::/);
     });
   });
 
