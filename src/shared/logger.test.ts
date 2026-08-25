@@ -194,9 +194,9 @@ describe('Logger JSON mode', () => {
 });
 
 describe('generateSessionId', () => {
-  it('returns a string matching s-<base36>-<4chars> format', () => {
+  it('returns a string matching s-<base36>-<uuid-hex> format', () => {
     const sid = generateSessionId();
-    expect(sid).toMatch(/^s-[a-z0-9]+-[a-z0-9]{4}$/);
+    expect(sid).toMatch(/^s-[a-z0-9]+-[0-9a-f]{12}$/);
   });
 
   it('generates unique IDs', () => {
