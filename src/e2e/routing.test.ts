@@ -59,6 +59,22 @@ describe('route', () => {
     expect(decision.staticOnly).toBe(true);
   });
 
+  it('treats the container image and the deploy path as static-only', () => {
+    // The bench builds the worktree and runs dist/server/server.js — it never builds the
+    // image and never deploys, so no live flow can observe either. Before this rule the
+    // gate failed closed on them (#215).
+    const decision = route([
+      'Dockerfile',
+      'Dockerfile.cache-sync',
+      '.dockerignore',
+      'deploy/deploy.sh',
+      'deploy/nginx/spo-webclient.conf',
+    ]);
+    expect(decision.unmapped).toEqual([]);
+    expect(decision.staticOnly).toBe(true);
+    expect(decision.required).toEqual([]);
+  });
+
   it('routes a dependency change to the spine and the inspector — the shipped code moved', () => {
     expect(route(['package-lock.json']).required).toEqual([SPINE_FLOW, 'building-details']);
     expect(route(['package.json']).staticOnly).toBe(false);

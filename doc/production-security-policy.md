@@ -61,7 +61,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 |---|---|---|---|
 | SEC-R-1 | Production MUST run `NODE_ENV=production`, as non-root (uid 1001), with memory/CPU limits (512 M/1.0) and a container healthcheck on `/api/startup-status`. | Met (Dockerfile, compose) | manual + deploy health gate |
 | SEC-R-2 | The server MUST validate its production configuration at startup and **fail fast** on forbidden combinations (at minimum: `NODE_ENV=production` + `LOG_LEVEL=debug`). It MUST log the effective security configuration (headers on, HSTS, trust-proxy, rate limits) once at boot, and warn when `TRUST_PROXY`/`ENABLE_HSTS` are unset in production. | **Missing — required work** | L4 (boot-failure test lands with fix) |
-| SEC-R-3 | Deploys MUST pass the health gate (`phase:ready` within 120 s) before old containers are pruned; a failed gate MUST leave the previous deployment reachable. | Met (`deploy/deploy.sh`) | manual/script |
+| SEC-R-3 | Deploys MUST pass the health gate (a `healthy` container within 120 s) before old containers are pruned; a failed gate MUST exit non-zero and leave the previous deployment reachable. | Met (`deploy/deploy.sh`, `Dockerfile` HEALTHCHECK) | L0 (`deploy-health-gate`, `container-healthcheck`) |
 
 ## 7. Dependencies & Supply Chain (SEC-D)
 
