@@ -16,7 +16,9 @@
 - [ ] TypeScript compiles cleanly (`npx tsc --noEmit`) *(CI)*
 - [ ] Conventional commit format (`type: summary`) — the PR title is the squash commit and the changelog line
 - [ ] **Bench attestation**: `npm run gate` PASS for the pushed HEAD (job id: `…`); `bench/gate` status will turn green once the worker sees the push
-- [ ] **Up to date with `main`** — if `main` moved after the gate, the branch was updated and gated again
+- [ ] **`main` moved after the gate?** — not required to be up to date; if it touches the
+      same ground as this PR, the branch was merged with `origin/main` and gated again,
+      otherwise it was left as is
 - [ ] **L3 owed?** — if the diff touches pixels (renderer, layout, CSS), the browser smoke (`/e2e`) ran or is listed under Test Plan
 - [ ] **RDO changes**: Verified against Delphi source using `delphi-archaeologist` — a change to
       `rdo-members.ts` needs a `File.pas:Line` citation **in this body** (CI checks it)

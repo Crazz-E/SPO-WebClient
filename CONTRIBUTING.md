@@ -66,12 +66,16 @@ Commits: `type: short summary`, where type is `feat`, `fix`, `refactor`, `perf`,
 `main` takes pull requests only — one ruleset, no bypass, binding the owner as well. Two
 required checks: **CI** (`typecheck + tests`, GitHub-hosted) and **`bench/gate`** — the live
 attestation the bench worker publishes as a commit status once your branch is pushed
-([doc/bench-worker.md](doc/bench-worker.md) §5); no approval is required (solo maintainer),
-and the branch must be **up to date** with `main`. `git push` itself is blocked locally until
-the worker has attested HEAD (`npm run gate`, on a committed tree — a dirty tree is refused).
-If `main` moves while your PR is open, update the branch and run `npm run gate` again: the
-new sha needs its own attestation. Fill in [the PR template](.github/pull_request_template.md),
-and say which RDO members the change touches, if any.
+([doc/bench-worker.md](doc/bench-worker.md) §5); no approval is required (solo maintainer).
+The branch is **not** required to be up to date with `main` — every attestation records the
+`baseMain` it was judged against instead, so `main` moving is *announced*, not refused: the
+`bench/gate` status description, the gate report and the push hook's `NOTE:` all say so.
+`git push` itself is blocked locally until the worker has attested HEAD (`npm run gate`, on a
+committed tree — a dirty tree is refused). If `main` moves while your PR is open, read the
+note and judge: merge `origin/main` in and gate again only when the incoming `main` touches
+the same ground your branch does; otherwise merge as is — updating unrelated ground is not a
+reason to re-gate. Fill in [the PR template](.github/pull_request_template.md), and say which
+RDO members the change touches, if any.
 
 A third job, **`claude review`**, posts a review comment on every PR
 ([.github/workflows/claude-review.yml](.github/workflows/claude-review.yml)). It is a second
