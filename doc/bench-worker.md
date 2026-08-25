@@ -552,6 +552,27 @@ the ruleset gains the rule. Enable the queue first and the very pull request tha
 trigger cannot merge: its queue entry waits for checks that no event fires, and the entry is
 ejected on timeout.
 
+### ⚠ Never pass `--delete-branch` while the queue is on
+
+`gh pr merge <N> --merge --delete-branch` **does not merge** any more — the queue owns the
+merge strategy, so `gh` enqueues the pull request, prints one warning line
+(`! The merge strategy for main is set by the merge queue`) and then honours
+`--delete-branch` immediately. Deleting the head branch destroys the entry GitHub was about
+to build: the queue empties, the pull request is **CLOSED unmerged**, and `main` never moves.
+
+It is quiet about it. The command exits 0, and the only clue in the output is a warning that
+reads like advice rather than "your merge did not happen".
+
+The correct form is `gh pr merge <N> --merge`, with nothing else. GitHub deletes the branch
+itself once the entry lands, because `delete_branch_on_merge` is on — the flag was always
+redundant here and is now actively harmful.
+
+Recovery, if it has already happened: push the local branch back (`git push -u origin <branch>`),
+`gh pr reopen <N>`, and merge again without the flag. The head sha is unchanged, so the
+`bench/gate` attestation still applies and nothing needs re-gating.
+
+Observed on 2026-08-25, on the first pull request ever sent through this queue.
+
 ### Two things to verify by observation
 
 Neither is stated in any GitHub document, and neither is verified yet:

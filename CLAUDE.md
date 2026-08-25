@@ -452,6 +452,13 @@ computes the version from the last `v*` tag and the commits since it (`feat` →
 otherwise patch), builds, tags and publishes the GitHub Release — never create
 `v*` tags by hand (a tag ruleset forbids updating or deleting them).
 
+**`main` has a merge queue** — so `gh pr merge <N> --merge` **enqueues**; it does not merge.
+Never add `--delete-branch`: `gh` honours it the instant the entry is created, which destroys
+the entry and leaves the pull request CLOSED and unmerged, exit 0, one warning line. GitHub
+deletes the branch itself when the entry lands. Recovery is `git push -u origin <branch>` +
+`gh pr reopen <N>` + merge again — same sha, so the attestation still holds
+([bench-worker.md §12](doc/bench-worker.md)).
+
 **An update is finished only after `npm run finish`.** GitHub deletes the remote branch at
 merge (`delete_branch_on_merge`); the local side does not clean itself. `finish` refuses
 unless the PR is MERGED, fast-forwards `~/SPO-WebClient` to `origin/main`, prunes stale
