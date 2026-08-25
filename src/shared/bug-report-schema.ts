@@ -94,6 +94,20 @@ export interface GeometryCapture {
   safeAreaInsets: { top: number; right: number; bottom: number; left: number };
 }
 
+/**
+ * What the aggregate body budget had to throw away.
+ *
+ * Present only on a report that was actually cut, so its absence means "nothing was lost".
+ * Without it a triage session cannot tell a quiet 60 seconds from a journal that was
+ * amputated to fit the transport (#269).
+ */
+export interface ReportTrim {
+  /** Journal entries dropped from the oldest end. */
+  journalDropped: number;
+  /** Whether the canvas screenshot had to go as well. */
+  screenshotDropped: boolean;
+}
+
 export interface BugReport {
   version: typeof BUG_REPORT_SCHEMA_VERSION;
   id: string;                       // crypto.randomUUID()
@@ -118,6 +132,8 @@ export interface BugReport {
   geometry?: GeometryCapture;       // mobile only
   /** Last ~60 s, oldest first. */
   journal: JournalEntry[];
+  /** Set by the capture only when the report had to be cut to fit `MAX_BODY_BYTES`. */
+  trimmed?: ReportTrim;
 }
 
 const PROFILES: readonly string[] = ['desktop', 'mobile'];
@@ -286,6 +302,16 @@ export function validateBugReport(
   for (let i = 0; i < value.journal.length; i++) {
     const entryError = checkJournalEntry(value.journal[i], i);
     if (entryError) return { ok: false, error: entryError };
+  }
+
+  if (value.trimmed !== undefined) {
+    const trimmed = value.trimmed;
+    if (!isRec(trimmed) || !isFiniteNumber(trimmed.journalDropped) || trimmed.journalDropped < 0) {
+      return { ok: false, error: 'trimmed.journalDropped must be a count' };
+    }
+    if (typeof trimmed.screenshotDropped !== 'boolean') {
+      return { ok: false, error: 'trimmed.screenshotDropped must be a boolean' };
+    }
   }
 
   return { ok: true, report: value as unknown as BugReport };
