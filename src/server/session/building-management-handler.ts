@@ -271,9 +271,22 @@ async function renameFacilityImpl(
 
     // Send RDO SET command to Construction server (port 7001)
     // Format: C sel <CurrBlock> set Name="%<newName>";
-    await ctx.sendRdoRequest('construction', rdoSet(
+    const result = await ctx.sendRdoRequest('construction', rdoSet(
       'Name', buildingId, RdoValue.string(newName),
     ).packet, undefined, TimeoutCategory.SLOW);
+
+    // A `set` failure comes back as "error <code> setting <PropName>"
+    // (RDOQueryServer.pas:344), which rdo.ts already parses into
+    // errorCode/errorName — the response was never read, so a rename the
+    // server refused (RDOObjectServer.pas:176, errUnexistentProperty) was
+    // reported to the caller as a success.
+    if (result.errorCode && result.errorCode > 0) {
+      ctx.log.warn(`[Session] Building rename refused by server: ${result.errorName ?? result.errorCode}`);
+      return {
+        success: false,
+        message: `Building rename refused by the server (${result.errorName ?? `error ${result.errorCode}`})`,
+      };
+    }
 
     ctx.log.debug(`[Session] Building renamed successfully`);
     return { success: true, message: 'Building renamed successfully' };
