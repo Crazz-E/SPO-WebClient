@@ -153,7 +153,22 @@ prune_worktrees() {
     processes_inside "$dir" && continue
 
     retired=0
-    [ -f "$SESSIONS_DIR/$(session_key "$dir").finished" ] && retired=1
+    local marker_file
+    marker_file="$SESSIONS_DIR/$(session_key "$dir").finished"
+    if [ -f "$marker_file" ]; then
+      retired=1
+      # Un-retire when the worktree gained a commit or switched branch since finish ran.
+      local marker_branch marker_sha current_sha current_branch_now
+      marker_branch="$(cut -f2 "$marker_file")"
+      marker_sha="$(cut -f3 "$marker_file")"  # empty on old two-column markers → no movement check
+      current_branch_now="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
+      current_sha="$(git -C "$dir" rev-parse HEAD 2>/dev/null || echo unknown)"
+      if [ -n "$marker_sha" ] && { [ "$current_branch_now" != "$marker_branch" ] || [ "$current_sha" != "$marker_sha" ]; }; then
+        echo "== un-retiring $dir — new work detected since finish (branch or HEAD moved)"
+        rm -f "$marker_file"
+        retired=0
+      fi
+    fi
     window="$IDLE_MIN"
     [ "$retired" = "1" ] && window="$RETIRED_IDLE_MIN"
     age="$(heartbeat_age_min "$dir")"
@@ -232,7 +247,7 @@ if [ "$branch_only" = 0 ] && [ "$here" != "$MAIN_REPO" ]; then
     # marker is what lets the next run reap it without asking GitHub again; until then
     # the directory is still there and the session can keep working in it.
     mkdir -p "$SESSIONS_DIR"
-    printf '%s\t%s\n' "$here" "$branch" > "$SESSIONS_DIR/$(session_key "$here").finished"
+    printf '%s\t%s\t%s\n' "$here" "$branch" "$(git -C "$here" rev-parse HEAD)" > "$SESSIONS_DIR/$(session_key "$here").finished"
     retired_here=1
     echo "== retiring worktree $here — kept while this session is in it"
   fi
