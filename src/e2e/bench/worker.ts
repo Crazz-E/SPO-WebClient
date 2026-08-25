@@ -137,6 +137,45 @@ const BUILD_STEPS: Record<JobType, string[]> = {
 };
 
 /**
+ * `scripts/verify-gate.js` exit code -> verdict, one entry per outcome the gate can reach.
+ *
+ * The gate used to return 0 or 1 and nothing else, so every non-passing outcome arrived here
+ * as `FAIL` — including the ENVIRONMENT abort, which judged nothing at all and must not be
+ * written as an attestation (see NON_ATTESTING). The codes are declared beside the `EXIT`
+ * table at the top of that script; the two must be read together.
+ *
+ * An unlisted code — an uncaught crash exits 1, a signal exits 128+n — is `FAIL`. That is
+ * the safe direction: it attests, so a merge is blocked, rather than passing in silence.
+ */
+const GATE_EXIT_VERDICT: Readonly<Record<number, JobVerdict>> = {
+  0: 'PASS',
+  1: 'FAIL',
+  2: 'BLOCKED',
+  3: 'ENVIRONMENT',
+};
+
+/**
+ * Verdicts that ran no code, and therefore attest nothing.
+ *
+ * An attestation is the one artefact the merge rule trusts, and it is not self-correcting:
+ * `merge-queue.ts` treats any existing `verdicts/<sha>.json` as "already answered", so a
+ * false one is never revisited. A run that learned nothing about the commit must leave both
+ * the file and the `bench/gate` status exactly as it found them — including an earlier PASS.
+ *
+ * - `DIRTY` — a gate on uncommitted changes; the tested tree is not the sha.
+ * - `ENVIRONMENT` — the fetch, the owner lease, the gateway or the live stage refused before
+ *   the change could be judged. It already "does not consume an attempt"
+ *   (doc/E2E-POLICY.md §8); an attestation would be that same non-event made durable.
+ * - `ABANDONED` — the worktree was gone by the time the job started. Nothing could be read,
+ *   let alone driven.
+ */
+export const NON_ATTESTING: ReadonlySet<JobVerdict> = new Set<JobVerdict>([
+  'DIRTY',
+  'ENVIRONMENT',
+  'ABANDONED',
+]);
+
+/**
  * Jobs found in running/ at startup were cut mid-flight by a worker death. They are
  * reported INTERRUPTED, never silently re-run: the body may have half-executed against
  * the live world, and the session should look before resubmitting.
@@ -231,8 +270,8 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   }
   deps.spool.writeReport(report);
 
-  // DIRTY and ENVIRONMENT ran nothing and attest nothing: the sha is neither passed nor
-  // failed, and an earlier clean attestation of the same sha stays valid.
+  // NON_ATTESTING ran nothing and attests nothing: the sha is neither passed nor failed,
+  // and an earlier clean attestation of the same sha stays valid.
   //
   // ENVIRONMENT joined DIRTY here with the owner lease (./owner). Writing one would
   // overwrite a perfectly good PASS for that sha — and publish `bench/gate=error` on it,
@@ -241,16 +280,18 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   // never came up. Both already "do not consume an attempt" (doc/E2E-POLICY.md §8); an
   // attestation they can destroy is the same claim made in a place that outlives them.
   //
+  // The set is read from `report.verdict`, so it only protects what SURVIVES as itself down
+  // to this line. Two ways in used to be closed off before it: the live stage's ENVIRONMENT
+  // arrived here as FAIL, because verify-gate exited 1 for everything but PASS; and
+  // ABANDONED — the worktree vanished mid-queue — was never in the set at all, so a job that
+  // could not even find the code attested `failure` for it.
+  //
   // `ref` and `gate` write to the same place again. They were split for #158 stage B, so
   // one live exercise of the fetched-ref path could be compared against the session path
   // without either overwriting the other; that comparison ran (job-01787603001316-a0c610,
   // PASS on 514bc4e3, `verdicts/` untouched) and the split has done its job. A ref job is
   // now THE gate, so it attests where the merge rule reads.
-  if (
-    request.type === 'ref' &&
-    report.verdict !== 'DIRTY' &&
-    report.verdict !== 'ENVIRONMENT'
-  ) {
+  if (request.type === 'ref' && !NON_ATTESTING.has(report.verdict)) {
     const head =
       report.fingerprints.atEnd?.head ?? report.fingerprints.atStart?.head ?? request.fingerprint.head;
     // The tree, not just the sha: a merge-queue entry is a fresh merge commit even when
@@ -420,8 +461,8 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
         env,
         logFile,
       });
-      bodyVerdict = code === 0 ? 'PASS' : code === 2 ? 'BLOCKED' : 'FAIL';
-      bodyDetail = `verify-gate exited ${code}`;
+      bodyVerdict = GATE_EXIT_VERDICT[code] ?? 'FAIL';
+      bodyDetail = `verify-gate exited ${code} (${bodyVerdict})`;
       report.gateArtifact = path.join(
         request.worktree,
         'report',

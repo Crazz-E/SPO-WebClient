@@ -89,6 +89,17 @@ export const READY_POLL_ATTEMPTS = 180;
 const READY_POLL_MS = 1_000;
 
 /**
+ * How long ONE readiness probe may hang before it is abandoned and retried.
+ *
+ * It used to be the whole budget — `READY_POLL_ATTEMPTS * READY_POLL_MS` — handed to a fetch
+ * inside the loop that is supposed to make 180 attempts. A single request that never answers
+ * therefore ate all three minutes, so "180 chances" was in practice one, and the job ended as
+ * ENVIRONMENT with a gateway that may well have come up a second later. The budget belongs to
+ * the loop; a request only gets its own slice of it.
+ */
+export const READY_REQUEST_TIMEOUT_MS = 5_000;
+
+/**
  * Start `node dist/server/server.js` from the worktree, in its own process group, and
  * wait for /api/startup-status to report phase=ready. Stdout/stderr go to `logFile`.
  *
@@ -130,7 +141,7 @@ export async function startGateway(
   for (let attempt = 0; attempt < READY_POLL_ATTEMPTS; attempt++) {
     try {
       const response = await deps.fetchImpl(`http://localhost:${port}/api/startup-status`, {
-        signal: AbortSignal.timeout(READY_POLL_ATTEMPTS * READY_POLL_MS),
+        signal: AbortSignal.timeout(READY_REQUEST_TIMEOUT_MS),
       });
       const status = parseStartupStream(await response.text());
       if (response.ok && status.phase === 'ready') return gateway;

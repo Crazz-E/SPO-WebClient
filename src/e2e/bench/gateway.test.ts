@@ -6,6 +6,8 @@ import {
   listenersOnPort,
   parseListeners,
   startGateway,
+  READY_POLL_ATTEMPTS,
+  READY_REQUEST_TIMEOUT_MS,
   type GatewayDeps,
 } from './gateway';
 
@@ -183,6 +185,45 @@ describe('startGateway', () => {
       { pid: -999, signal: 'SIGTERM' },
       { pid: -999, signal: 'SIGKILL' },
     ]);
+  });
+
+  it('times out each probe on its own, not on the loop\'s whole budget', async () => {
+    // The loop owns the budget: 180 attempts, one second apart. The abort signal used to be
+    // built from that same product, so one request that never answered consumed all three
+    // minutes and "180 chances" became a single attempt — surfacing as ENVIRONMENT for a
+    // gateway that may well have answered the next second.
+    const world = spawningWorld(['loading', 'loading', 'ready']);
+    const timeouts = jest.spyOn(AbortSignal, 'timeout');
+    try {
+      await startGateway('/wt/a', 8080, tmpLog(), world.deps);
+      expect(timeouts.mock.calls.map(call => call[0])).toEqual([
+        READY_REQUEST_TIMEOUT_MS,
+        READY_REQUEST_TIMEOUT_MS,
+        READY_REQUEST_TIMEOUT_MS,
+      ]);
+    } finally {
+      timeouts.mockRestore();
+    }
+    // One probe can never eat more than a small slice of the attempts it is one of.
+    expect(READY_REQUEST_TIMEOUT_MS).toBeLessThan(READY_POLL_ATTEMPTS * 1_000);
+  });
+
+  it('retries after a probe is aborted, rather than ending the job on one hung request', async () => {
+    const world = spawningWorld(['ready']);
+    let attempts = 0;
+    const readyFetch = world.deps.fetchImpl;
+    world.deps.fetchImpl = (async (...args: Parameters<typeof fetch>) => {
+      if (attempts++ < 3) {
+        throw Object.assign(new Error('The operation was aborted due to timeout'), {
+          name: 'TimeoutError',
+        });
+      }
+      return readyFetch(...args);
+    }) as typeof fetch;
+    await expect(startGateway('/wt/a', 8080, tmpLog(), world.deps)).resolves.toMatchObject({
+      pid: 999,
+    });
+    expect(attempts).toBe(4);
   });
 
   it('survives fetch errors while the gateway boots', async () => {

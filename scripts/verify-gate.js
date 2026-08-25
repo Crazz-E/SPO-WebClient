@@ -17,6 +17,11 @@
  *                 one it REFUSES is a recorded exception, never a human override
  *   artifact      report/e2e/gate-<sha>.json, which the push hook reads
  *
+ * Exit codes — the interface, one per outcome (see EXIT below):
+ *
+ *   0  PASS         1  FAIL         2  BLOCKED        3  ENVIRONMENT (nothing was judged;
+ *                                                        the worker attests nothing)
+ *
  * Usage:
  *   node scripts/verify-gate.js
  *   node scripts/verify-gate.js --static-only
@@ -32,6 +37,24 @@ const path = require('path');
 
 const REPORT_DIR = path.join('report', 'e2e');
 const argv = process.argv.slice(2);
+
+/**
+ * The exit code IS the verdict — one code per outcome, never a single "not zero".
+ *
+ * The bench worker maps these back one-for-one (`GATE_EXIT_VERDICT` in
+ * src/e2e/bench/worker.ts), and two of them — `ENVIRONMENT` above all — must NOT produce an
+ * attestation: a run that judged no code cannot be allowed to overwrite a good `PASS` for the
+ * same sha, nor publish `bench/gate=failure` on it. Collapsing everything to 1 made that
+ * distinction unreachable, because the worker only ever saw the 1.
+ *
+ * A code this table does not name is read as `FAIL` — including the 1 an uncaught crash
+ * exits with, which is the safe direction: it attests, it does not silently pass.
+ */
+const EXIT = { PASS: 0, FAIL: 1, BLOCKED: 2, ENVIRONMENT: 3 };
+
+function exitCodeFor(verdict) {
+  return EXIT[verdict] ?? EXIT.FAIL;
+}
 
 function flag(name) {
   const hit = argv.find(a => a === `--${name}` || a.startsWith(`--${name}=`));
@@ -251,10 +274,25 @@ async function main() {
   artifact.live = live;
   process.stdout.write(`${formatSummary(live)}\n`);
 
-  artifact.verdict = live.status === 'PASS' ? 'PASS' : live.status === 'BLOCKED' ? 'BLOCKED' : 'FAIL';
+  // The live status is CARRIED, not collapsed. An ENVIRONMENT abort used to arrive here and
+  // leave as `FAIL`, and every reader downstream — the exit code, the worker's verdict, the
+  // attestation, the `bench/gate` status — then spoke about the code on the strength of a run
+  // that never judged it. Each outcome keeps its own name from here to the exit code (EXIT).
+  artifact.verdict =
+    live.status === 'PASS'
+      ? 'PASS'
+      : live.status === 'BLOCKED'
+        ? 'BLOCKED'
+        : live.status === 'ENVIRONMENT'
+          ? 'ENVIRONMENT'
+          : 'FAIL';
 
   // --- Stage 5: judge the capability evidence --------------------------------
-  for (const evidence of live.capabilities || []) {
+  // An ENVIRONMENT abort learned nothing — including nothing about the capabilities. Judging
+  // evidence that was never read would turn "the servers were not in a state to answer" back
+  // into a verdict on the change, which is exactly the collapse the line above just undid.
+  const capabilityEvidence = live.status === 'ENVIRONMENT' ? [] : live.capabilities || [];
+  for (const evidence of capabilityEvidence) {
     if (!evidence.determined) {
       artifact.verdict = 'FAIL';
       process.stdout.write(
@@ -303,10 +341,10 @@ async function main() {
     process.stdout.write(
       '\nThis was an ENVIRONMENT abort, not a failed attempt: the servers were not in a\n' +
         'state where the change could be judged. Do not count it against the three tries\n' +
-        '(doc/E2E-POLICY.md §8).\n',
+        '(doc/E2E-POLICY.md §8). Exiting 3, so the bench worker attests nothing for this sha.\n',
     );
   }
-  return artifact.verdict === 'PASS' ? 0 : 1;
+  return exitCodeFor(artifact.verdict);
 }
 
 function warnL3() {

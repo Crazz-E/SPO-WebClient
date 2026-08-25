@@ -108,7 +108,11 @@ one process (the worker) consumes the spool.
    `SPO_CACHE_DIR=~/.spo-bench/cache` — the same two variables the gateway was started
    with at step 6, so a replayed Jest suite reads the assets the gateway served:
    - `ref` → `node scripts/verify-gate.js` (static, President exclusion, routing, live
-     drive) — exit 0 PASS / 2 BLOCKED / else FAIL
+     drive) — **one exit code per outcome**: 0 `PASS` · 1 `FAIL` · 2 `BLOCKED` ·
+     3 `ENVIRONMENT`. Anything else is read as `FAIL`. The gate used to return 0 or 1 and
+     nothing else, so a live stage that aborted arrived here as `FAIL` — and step 12 then
+     attested a sha whose code was never judged. The two tables must move together:
+     `EXIT` in `scripts/verify-gate.js`, `GATE_EXIT_VERDICT` in `src/e2e/bench/worker.ts`
    - `live`, `nightly` → `node dist/e2e/run.js [flags]`
    - `lease` → report `LEASED` **immediately** (that is what the waiting session unblocks
      on), then hold the gateway until the lease expires or the session releases it
@@ -122,6 +126,12 @@ one process (the worker) consumes the spool.
    report says so plainly and carries all three fingerprints.
 12. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs) or
     `nightly/latest.json` (nightly jobs — never both, §8), running slot released, next job.
+    **Three verdicts attest nothing** — `NON_ATTESTING` in `src/e2e/bench/worker.ts`:
+    `DIRTY` (the tree is not the sha), `ENVIRONMENT` (fetch, owner lease, gateway or live
+    stage refused before the change could be judged) and `ABANDONED` (the worktree was
+    gone). None of them read a line of the code, so none may write a file the merge rule
+    trusts — and `merge-queue.ts` treats any existing attestation as *already answered*, so
+    a wrong one is never revisited.
 
 Verdicts: `PASS` (possibly with capability exceptions listed — §7 of the policy) · `FAIL` ·
 `BLOCKED` (the live stage was refused before running: dirty world or rate limit) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `DIRTY` (gate on
@@ -208,7 +218,7 @@ never as matching.
 | exit | means | what the session does |
 |---|---|---|
 | 0 | `PASS` — or `LEASED`, for `npm run dev` | push |
-| 1 | the job ran and the verdict is not passing (`FAIL`, `BLOCKED`, `STALE`, `ABANDONED`, `INTERRUPTED`) | read the report, fix, retry — 3 attempts, each naming a different root cause |
+| 1 | the job ran and the verdict is not passing (`FAIL`, `BLOCKED`, `STALE`, `ABANDONED`, `INTERRUPTED`, `ENVIRONMENT`) | read the report, fix, retry — 3 attempts, each naming a different root cause. `ENVIRONMENT` and `ABANDONED` are the exceptions: they judged nothing, so they cost no attempt and leave `verdicts/<sha>.json` exactly as they found it — resubmit |
 | 2 | refused at deposit: a gate on a **dirty tree**, or a duplicate of a job already queued | commit (an attestation names a sha, so the tested tree must BE that sha), then re-deposit |
 | 3 | **worker down** — nothing was queued | `systemctl --user restart spo-bench-worker`, then re-deposit |
 | 4 | the wait timed out; the job may still be queued or running | `npm run bench:status` before assuming anything |
@@ -369,8 +379,8 @@ There is no flag to set, and the direction that stops the bench is the one that 
 evidence.
 
 **What a refusal looks like:** verdict `ENVIRONMENT`, nothing built, no gateway, **no
-attestation**. `ENVIRONMENT` sits beside `DIRTY` in the write at step 12 for a reason —
-writing one would overwrite a perfectly good `PASS` for that sha, and publish
+attestation**. `ENVIRONMENT` sits in `NON_ATTESTING` beside `DIRTY` and `ABANDONED` for a
+reason — writing one would overwrite a perfectly good `PASS` for that sha, and publish
 `bench/gate=error` on a commit that genuinely passed, on the strength of something that
 never read a line of the code.
 
@@ -639,8 +649,14 @@ believe a mechanism is in place. It was restored by reverting #178 once the repo
 - A lease held by another live host refuses the job before the port is cleared, and a lapsed
   one frees the bench on its own; a host where the lease has never worked is unaffected.
   `owner.test.ts`, `worker.test.ts`.
-- Nothing that ran no code — `DIRTY`, `ENVIRONMENT` — can overwrite an existing attestation
-  for the same sha. `worker.test.ts`.
+- Nothing that ran no code — `DIRTY`, `ENVIRONMENT`, `ABANDONED` — can overwrite an existing
+  attestation for the same sha, whichever stage produced it, and none of them publishes a
+  `bench/gate` status. Every verdict is pinned to written / not-written. `worker.test.ts`.
+- The gate body distinguishes its outcomes in the exit code (0/1/2/3) and the worker maps
+  each one back explicitly; an unlisted code is `FAIL`, never a silent pass.
+  `verify-gate.test.ts`, `worker.test.ts`.
+- A readiness probe times out on its own budget, so one hung request cannot consume the
+  gateway's whole 180-attempt window. `gateway.test.ts`.
 - A `ref` job fetches before it builds, is never `STALE` for the tree it reset itself, still
   catches one that moves mid-run, and writes beside the session path rather than over it.
   `checkout.test.ts`, `worker.test.ts`.
