@@ -21,6 +21,7 @@
  *     against the script itself, so the doc cannot drift away from the code it cites.
  */
 
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -55,15 +56,15 @@ beforeAll(() => {
 
 /** The partition of §2, in the order the first-match rule depends on. */
 const AREAS = [
+  'docs',
   'rdo',
   'bench',
   'renderer',
   'gateway',
   'client',
   'e2e',
-  'electron',
+  'shared',
   'ci',
-  'docs',
 ] as const;
 
 /** The slice of the rulebook holding the partition table — between its heading and the next one. */
@@ -104,15 +105,15 @@ describe('the areas are a partition, first match from the top', () => {
   });
 
   it.each([
+    ['docs', 'doc/**'],
     ['rdo', 'src/mock-server/**'],
     ['bench', '.claude/hooks/**'],
     ['renderer', 'src/client/renderer/**'],
     ['gateway', 'src/server/**'],
     ['client', 'src/client/**'],
     ['e2e', 'src/e2e/**'],
-    ['electron', 'electron/**'],
+    ['shared', 'src/shared/**'],
     ['ci', '.github/**'],
-    ['docs', 'doc/**'],
   ])('gives %s at least the path %s', (area, glob) => {
     const row = new RegExp(`^\\| \`${area}\` \\|.*\`${glob.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\``, 'm');
     expect(partitionSection()).toMatch(row);
@@ -138,6 +139,106 @@ describe('the areas are a partition, first match from the top', () => {
     const section = collapse(partitionSection());
     expect(section).toMatch(/\*\*No `area:` labels\.\*\*/);
     expect(section).toMatch(/`Area` is read only by `\/next-task`/);
+  });
+});
+
+/**
+ * The table's two failure modes, pinned (#160). A partition can break in both directions, and
+ * neither break is visible in a diff of the file that caused it:
+ *
+ *   - a **reachable path no row claims** — the session must write some area, is forbidden from
+ *     leaving `Area` empty, and has nothing to read, so it guesses. Two sessions guessing
+ *     differently reintroduces the overlap the field exists to remove, silently.
+ *   - a **row nothing can match** — `electron` was written 73 minutes after `electron/` was
+ *     deleted, and was then offered at every classification until #160.
+ */
+describe('the partition is total in both directions', () => {
+  /** Every path the table cites, in table order, as `[area, glob]`. */
+  const citedPaths = (): Array<[string, string]> => {
+    const out: Array<[string, string]> = [];
+    for (const row of partitionSection().matchAll(/^\| `([a-z0-9]+)` \| (.+) \|$/gm)) {
+      for (const cell of row[2].matchAll(/`([^`]+)`/g)) out.push([row[1], cell[1]]);
+    }
+    return out;
+  };
+
+  /**
+   * A table glob as a regex over repository-relative paths: `**` crosses directory
+   * boundaries, `*` does not, and `** /` also matches zero directories so `**` + `/*.md`
+   * reaches a file at the root.
+   */
+  const globToRegExp = (glob: string): RegExp => {
+    let out = '';
+    for (let i = 0; i < glob.length; i += 1) {
+      const c = glob[i];
+      if (c === '*' && glob[i + 1] === '*' && glob[i + 2] === '/') {
+        out += '(?:.*/)?';
+        i += 2;
+      } else if (c === '*' && glob[i + 1] === '*') {
+        out += '.*';
+        i += 1;
+      } else if (c === '*') {
+        out += '[^/]*';
+      } else if ('.+^${}()|[]\\'.includes(c)) {
+        out += `\\${c}`;
+      } else {
+        out += c;
+      }
+    }
+    return new RegExp(`^${out}$`);
+  };
+
+  /** The tracked tree — not the working directory: an untracked leftover must not keep a row alive. */
+  const tracked = (): string[] =>
+    execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
+      .split('\n')
+      .filter(Boolean);
+
+  it('names `ci` last and says it is the catch-all, which is what makes the table total', () => {
+    const rows = [...partitionSection().matchAll(/^\| `([a-z0-9]+)` \| `/gm)].map(m => m[1]);
+    expect(rows[rows.length - 1]).toBe('ci');
+    const section = collapse(partitionSection());
+    expect(section).toMatch(/\*\*`ci` is the last row and the catch-all\.\*\*/);
+    expect(section).toMatch(/Anything reachable that no earlier row claims is `ci`/);
+  });
+
+  it('puts `docs` first, so Markdown is documentation wherever it lives', () => {
+    const rows = [...partitionSection().matchAll(/^\| `([a-z0-9]+)` \| `/gm)].map(m => m[1]);
+    expect(rows[0]).toBe('docs');
+    expect(collapse(partitionSection())).toMatch(
+      /\*\*`docs` comes first, so a Markdown file is documentation wherever it lives\*\*/
+    );
+  });
+
+  it('gives `src/shared/` ground of its own, which neither half owns', () => {
+    expect(partitionSection()).toMatch(/^\| `shared` \| `src\/shared\/\*\*`/m);
+    expect(collapse(partitionSection())).toMatch(/\*\*`shared` is ground of its own\*\*/);
+  });
+
+  it('has no row that matches nothing — every cited path exists in the tracked tree', () => {
+    const files = tracked();
+    const dead = citedPaths().filter(([, glob]) => !files.some(f => globToRegExp(glob).test(f)));
+    expect(dead).toEqual([]);
+  });
+
+  it('leaves no `electron` row, and nothing tracked under `electron/` to justify one', () => {
+    expect(partitionSection()).not.toMatch(/^\| `electron` \|/m);
+    expect(tracked().some(f => f.startsWith('electron/'))).toBe(false);
+  });
+
+  it.each([
+    ['src/shared/logger.ts', 'shared'],
+    ['src/shared/rdo-frame.ts', 'rdo'],
+    ['src/__tests__/area-reservation.test.ts', 'ci'],
+    ['jest.config.js', 'ci'],
+    ['.claude/commands/next-task.md', 'docs'],
+    ['.github/workflows/ci.yml', 'ci'],
+    ['src/client/renderer/chunk-cache.ts', 'renderer'],
+    ['src/e2e/bench/worker.ts', 'bench'],
+  ])('classifies %s as %s by first match from the top', (file, area) => {
+    const hit = citedPaths().find(([, glob]) => globToRegExp(glob).test(file));
+    expect(hit).toBeDefined();
+    expect((hit as [string, string])[0]).toBe(area);
   });
 });
 
