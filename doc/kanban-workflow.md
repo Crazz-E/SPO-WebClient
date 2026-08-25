@@ -40,15 +40,39 @@ Every path belongs to **exactly one** area. Where two rules could match, the ear
 
 | `Area` | Paths |
 |---|---|
+| `docs` | `**/*.md`, `doc/**` |
 | `rdo` | `src/shared/rdo-*.ts`, `src/server/rdo*.ts`, `src/server/session/rdo-*.ts`, `src/mock-server/**` |
 | `bench` | `src/e2e/bench/**`, `scripts/bench-*.sh`, `scripts/verify-gate.js`, `.claude/hooks/**` |
 | `renderer` | `src/client/renderer/**`, `src/client/**/*.module.css` |
 | `gateway` | `src/server/**` |
-| `client` | `src/client/**` |
+| `client` | `src/client/**`, `public/**` |
 | `e2e` | `src/e2e/**` |
-| `electron` | `electron/**` |
-| `ci` | `.github/**`, `scripts/**` |
-| `docs` | `doc/**`, `**/*.md` |
+| `shared` | `src/shared/**`, `src/*.d.ts` |
+| `ci` | `.github/**`, `scripts/**`, `.claude/**`, `src/__tests__/**`, `src/__mocks__/**`, `jest.config.js`, `eslint.config.js`, `tsconfig*.json`, `vite.config.ts`, `Dockerfile*`, `docker-compose.yml`, `deploy/**` |
+
+**`ci` is the last row and the catch-all.** Anything reachable that no earlier row claims is
+`ci` — the machinery that builds, tests, ships and automates the repository. That is what makes
+this table a *partition* rather than a list to be extended every time a file appears at the
+root: a session can always read an area off it, so §4's "never leave `Area` empty" is a rule it
+is possible to obey.
+
+**`docs` comes first, so a Markdown file is documentation wherever it lives** —
+`.github/pull_request_template.md`, `.claude/commands/*.md`, `src/mock-server/CLAUDE.md`. Prose
+cannot break a build, and `docs` never blocks (§ One session per area), so reserving no ground
+for it costs nothing; the reverse costs a great deal — editing one slash command would hold the
+whole `ci` area, and nearly every task edits some Markdown.
+
+**`shared` is ground of its own**, because `src/shared/` is consumed by both halves and neither
+owns it. `gateway` and `client` were each plausible for `logger.ts` or `road-cost.ts`, and two
+sessions guessing differently is exactly the silent overlap this field exists to remove. A card
+centred on `src/shared/` blocks neither half; one that genuinely has to change `src/shared/`
+*and* `src/server/` is two cards, by the rule below.
+
+**No row may match nothing.** `electron` had one until 2026-08-25, and it was dead from birth:
+`electron/` was deleted at 19:25 on 2026-08-24 (`ba7822a6`, #149) and the row was written at 20:38
+the same evening (`eb6307b6`, #159) — 73 minutes later. A row that can never match is offered at
+every classification and read by every session, so `src/__tests__/area-reservation.test.ts` now
+checks each row's directories against the tracked tree.
 
 **This is not [`.github/labeler.yml`](../.github/labeler.yml).** That file's labels overlap on
 purpose — a PR can be both `client` and `renderer`. An area must *not* overlap, or two sessions
