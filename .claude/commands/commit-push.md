@@ -93,17 +93,31 @@ Push to the current branch with the `-u` flag:
 git push -u origin HEAD
 ```
 
-Then open (or refresh) the PR. `main` requires the branch to be **up to date**: if `main`
-moved since your gate, `gh pr update-branch <n>` (or merge `origin/main` locally), commit,
-and **run `npm run gate` again** — the new sha has no attestation of its own. A PR merges on
+Then open (or refresh) the PR. The branch is **not** required to be up to date with `main`
+(that rule was removed 2026-08-24 — CLAUDE.md § Git). If `main` moved past your gate's
+`baseMain`, the `bench/gate` status and the push hook *announce* it rather than refuse:
+read the note and judge — if the incoming `main` touches the same ground, merge
+`origin/main` in, commit, and **run `npm run gate` again**, because the new sha has no
+attestation of its own. A PR merges on
 `typecheck + tests` + `bench/gate` only; nobody, the owner included, can bypass.
 
 ### 7. Merge, then finish
 
-When both statuses are green (`gh pr checks <n>`), squash-merge (`gh pr merge <n> --squash
---delete-branch`; "`main` is already used by worktree" after a successful merge is not an
-error — the merge happened, only the local checkout switch failed). Then, **as the very last
-command**:
+When both statuses are green, merge. **Check once, do not poll**: your gate PASS *is*
+the `bench/gate` status, and CI normally concluded while the gate was queued — run
+`gh pr checks <n>` once, and only if something is genuinely pending re-read at ≥ 30 s
+intervals with a deadline, never a tight loop
+([doc/kanban-workflow.md § GitHub API discipline](../../doc/kanban-workflow.md)).
+Then enqueue the merge: **`gh pr merge <n> --merge`, nothing else.** `main` has a merge
+queue, so this *enqueues* and the queue lands it; GitHub deletes the branch itself. **Never
+`--delete-branch`** — `gh` honours it the instant the entry is created, destroying it and
+leaving the PR CLOSED unmerged (CLAUDE.md § merge queue). The queue's method is `MERGE`, so
+`--squash` would be overridden anyway. The command prints `! The merge strategy for main is
+set by the merge queue` on stderr and exits **0**: expected and benign — judge on the exit
+code, never on stderr text, and in doubt on one REST call,
+`gh api repos/Crazz-Org/SPO-WebClient/pulls/<n> --jq '{state,merged}'` (`open` = enqueued).
+("`main` is already used by worktree" is likewise not an error — the merge happened, only the
+local checkout switch failed.) Then, **as the very last command**:
 
 ```bash
 npm run finish

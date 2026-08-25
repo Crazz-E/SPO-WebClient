@@ -588,9 +588,18 @@ to build: the queue empties, the pull request is **CLOSED unmerged**, and `main`
 It is quiet about it. The command exits 0, and the only clue in the output is a warning that
 reads like advice rather than "your merge did not happen".
 
-The correct form is `gh pr merge <N> --merge`, with nothing else. GitHub deletes the branch
-itself once the entry lands, because `delete_branch_on_merge` is on — the flag was always
-redundant here and is now actively harmful.
+⚠ The warning is not the tell, in either direction. The **correct** form prints the very
+same line and also exits 0 — every `gh pr merge` against `main` does, because the queue owns
+the strategy — so its presence proves nothing. Reading it as a failure and starting to
+"recover" an entry that is safely queued is the mirror image of this trap: recovery moves
+against a live entry (closing, re-merging with extra flags) are exactly what can destroy it.
+The verdict lives in the exit code and the pull request's state, one REST call:
+`gh api repos/Crazz-Org/SPO-WebClient/pulls/<N> --jq '{state,merged}'` — `open` means
+enqueued and fine; `closed` with `merged: false` is the destroyed entry above.
+
+The correct form is `gh pr merge <N> --merge`, with nothing else — same warning, exit 0.
+GitHub deletes the branch itself once the entry lands, because `delete_branch_on_merge` is
+on — the flag was always redundant here and is now actively harmful.
 
 Recovery, if it has already happened: push the local branch back (`git push -u origin <branch>`),
 `gh pr reopen <N>`, and merge again without the flag. The head sha is unchanged, so the

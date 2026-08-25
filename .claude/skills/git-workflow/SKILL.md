@@ -301,6 +301,21 @@ Is this a feature or fix branch?
     ├── Yes → Merge commit (preserve history)
     └── No → Consider context
 ```
+
+### Merge queues override all of the above
+
+When the target branch has a **merge queue** (this repository's `main` does), `gh pr merge`
+**enqueues** instead of merging, and the queue's configured strategy replaces the tables
+above. It is not *refused*, it is **overridden**: this repository's queue is set to `MERGE`,
+so a `--squash` you pass is silently enqueued as a merge commit — which is precisely what the
+warning is telling you. Pass `--merge`, so the command says what will actually happen.
+**Every** invocation, the correct form included,
+prints `! The merge strategy for main is set by the merge queue` on stderr and exits 0:
+that warning is expected and benign, not a failure. Judge the result on the **exit code**
+and, in doubt, on the PR state — one REST call, no polling:
+`gh api repos/<owner>/<repo>/pulls/<N> --jq '{state,merged}'` (`open` = enqueued) — never
+on stderr text. Never pass `--delete-branch` into a queue: it destroys the entry and closes
+the PR unmerged (CLAUDE.md § merge queue, doc/bench-worker.md §12).
 </merge_strategies>
 
 <commit_hooks>

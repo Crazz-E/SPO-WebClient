@@ -36,19 +36,21 @@ already moved past — is **not** red. Proceed to § 1.
 
 ## 1 · Pick — the first Todo card whose ground is free
 
-List the board (`gh project item-list 1 --owner Crazz-Org --format json`): `status`, `session`
-and `area` come back on every item. Candidates: Status = **Todo** and `Session` **empty**.
+**One read for the whole claim.** Run **the claim read** — the composite query in
+kanban-workflow § gh CLI recipes (~2 GraphQL points; never `gh project item-list`, which
+costs ~103 and is why the board went unreadable on 2026-08-25). It returns, in a single
+call: `status`, `session` and `area` come back on every item, in board order (topmost Todo =
+the human's priority), with the project, field and option ids § 2's writes take; the blocked
+set; and
+`rateLimit { cost remaining resetAt }` — state the last `remaining` you saw in your final
+report (kanban-workflow § GitHub API discipline). Candidates: Status = **Todo** and
+`Session` **empty**.
 
 A card's **blockers are not on the card** — the relation lives on the issue, so no project field
-carries it. Read the whole blocked set in **one** call, before walking (kanban-workflow
-§ Blocking order):
-
-```bash
-gh api graphql -f query='{ repository(owner:"Crazz-Org", name:"SPO-WebClient") { issues(first:100, states:OPEN) { nodes { number issueDependenciesSummary { blockedBy } blockedBy(first:10) { nodes { number state } } } } } }' --jq '.data.repository.issues.nodes[] | select(.issueDependenciesSummary.blockedBy > 0) | "#\(.number) blocked by \([.blockedBy.nodes[] | select(.state=="OPEN") | "#\(.number)"] | join(", "))"'
-```
-
-`issueDependenciesSummary.blockedBy` counts **open** blockers only: a closed blocker frees the
-card, so anything this query prints is blocked right now.
+carries it. Read the whole blocked set in **one** call, before walking — it rides in the claim
+read, whose `issueDependenciesSummary { blockedBy }` tail counts **open** blockers only: a
+closed blocker frees the card, so anything it prints is blocked right now (kanban-workflow
+§ Blocking order).
 
 1. **Compute the busy set** (kanban-workflow § One session per area): every `Area` held by a
    card in **In progress**, **Gate** or **PR** whose reservation is still live (below).
@@ -64,7 +66,8 @@ card, so anything this query prints is blocked right now.
    (one area per card: where the majority of the change lands), and **write it before** moving
    the card to In progress.
 5. **If the area you just determined turns out to be busy**: clear `Session`, leave the card in
-   Todo with `Area` now filled, and go back to step 2. The card never reached In progress, so
+   Todo with `Area` now filled, and go back to step 2 **reusing the first claim read** — the
+   pool is never re-read for a back-off. The card never reached In progress, so
    this is the same back-off as a lost claim race — ownership law 3 is not violated. The
    session title follows: it names the card you end up holding, so a back-off leaves it to be
    rewritten by the next claim, never pointing at a card you released.
@@ -90,8 +93,18 @@ untouched: what expired is the ground reservation, never the ownership.
 ## 2 · Claim (handshake)
 
 Write `Session` = `<branch> @ <YYYY-MM-DD>`, move Status → **In progress**, then **re-read**
-`Session`. Not your identity → you lost the race: take the next candidate. One card at a
-time.
+`Session` — with the single-item recipe (1 point), never by listing the pool again. Not your
+identity → you lost the race: take the next candidate, from the claim read you already hold.
+One card at a time.
+
+**If GitHub answers `RATE_LIMITED` mid-handshake, the write half decides** (kanban-workflow
+§ GitHub API discipline, rule 5). The write failed → nothing landed: the card is untouched,
+you own nothing — claim nothing else, read the bucket's `reset` from `gh api rate_limit`
+(free, it still answers when the bucket is empty), wait for it once in the background, then
+start the handshake over. The write succeeded and the re-read failed → the card is
+provisionally yours: do not walk away half-claimed — wait for `reset`, finish the re-read,
+and if this session must end first, name the card and the unverified write in your final
+report so the human can read the board.
 
 **Then rename this session** — `mcp__ccd_session_mgmt__set_session_title` with
 `session_id: "self"` and `title: "#<issue> · <Status>"`, e.g. `#212 · In progress`. Issue
@@ -124,7 +137,10 @@ The repo process applies unchanged — this command adds nothing to it:
   `#<issue> · PR`.
 - Checks green → merge, `npm run finish` → Status → **Done** + one final comment
   (2–4 lines: what changed, PR number, anything the human should know) → title
-  `#<issue> · Done`.
+  `#<issue> · Done`. **Checking is one read, not a vigil**: your gate PASS *is* the
+  `bench/gate` status, and CI normally concluded while the gate was queued —
+  `gh pr checks <n>` once; genuinely pending → re-read at ≥ 30 s intervals with a deadline,
+  never a tight loop (kanban-workflow § GitHub API discipline).
 
 ## 4 · If it fails
 

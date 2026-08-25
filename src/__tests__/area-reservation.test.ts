@@ -410,14 +410,22 @@ describe('the rule is reachable from CLAUDE.md, which every session reads', () =
 });
 
 describe('the gh recipes a session copies from', () => {
-  it('list the area field and a busy-set query that excludes docs', () => {
+  // Since the GraphQL-quota incident of 2026-08-25 the pool is read ONCE — the claim read —
+  // so the busy set is derived inside that same call instead of by a second listing. It stays
+  // an executable filter, not prose: the rule is only as good as the jq a session copies.
+  it('carry the area on every item, and compute the busy set inside the one call', () => {
     const start = rulebook.indexOf('## gh CLI recipes');
     expect(start).toBeGreaterThan(-1);
     const recipes = rulebook.slice(start);
-    expect(recipes).toMatch(/status, session, area/);
-    expect(recipes).toMatch(/# The busy set/);
-    expect(recipes).toMatch(/"In progress" or \.status == "Gate" or \.status == "PR"/);
-    expect(recipes).toMatch(/\.area != "docs"/);
+    expect(recipes).toMatch(/THE CLAIM READ/);
+    // The claim read's jq prints status, area and session for every item.
+    expect(recipes).toMatch(/\[\\\(\.Status \/\/ "-"\)\]/);
+    expect(recipes).toMatch(/area=\\\(\.Area \/\/ "-"\)/);
+    expect(recipes).toMatch(/session=\\\(\.Session \/\/ "-"\)/);
+    // The busy set itself — the same three statuses, with docs still exempt.
+    expect(recipes).toMatch(/"busy areas: /);
+    expect(recipes).toMatch(/\.Status == "In progress" or \.Status == "Gate" or \.Status == "PR"/);
+    expect(recipes).toMatch(/\.Area != "docs"/);
     expect(recipes).toMatch(/# Fill Area before the card moves to In progress/);
   });
 });

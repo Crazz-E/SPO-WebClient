@@ -87,8 +87,8 @@ cards** — never invent a combined area, and never leave `Area` empty to dodge 
 
 **No `area:` labels.** `Category` and `Size` carry labels because workflows and
 `gh issue list --label` cannot read a project field. `Area` is read only by `/next-task`, which
-reads project fields directly through `gh project item-list`. A hand-posted `area:` label would
-duplicate the automatic PR path labels and drift from them.
+reads project fields directly through the claim read (§ gh CLI recipes). A hand-posted `area:`
+label would duplicate the automatic PR path labels and drift from them.
 
 ## The board is written in English — all of it
 
@@ -190,8 +190,8 @@ to agree, and any reprioritisation would have destroyed it silently.
 GitHub records the relation on the **issue**, not on the card — `blocked by` / `blocks`
 (`Issue.blockedBy`, `Issue.issueDependenciesSummary`, the `addBlockedBy` / `removeBlockedBy`
 mutations). The project's fields do not include it, so `gh project item-list` cannot see one:
-reading the relation is one extra GraphQL call over the open issues — for the whole set, never
-one per card (recipe in § gh CLI recipes).
+reading the relation rides in the claim read's single GraphQL call over the open issues — for
+the whole set, never one per card (recipe in § gh CLI recipes).
 
 **A blocked card is not claimable, and closing the blocker is the whole lifecycle.**
 `issueDependenciesSummary.blockedBy` counts the **open** blockers only, so a blocker that closes
@@ -343,6 +343,79 @@ Every write is very short.
 | Released | Status → Needs triage + the non-technical explanation comment |
 | Gate attempt failed | Nothing on the board (Status stays Gate or returns to In progress); the detail lives in the PR/commits |
 
+## GitHub API discipline — reads are budgeted like writes
+
+Every session, every workflow and every machine authenticates as **one GitHub account**, and
+the account is the quota: **5000 GraphQL points per hour**, and separately 5000 REST requests
+per hour (`gh api rate_limit` shows both buckets; a second PC adds nothing). On 2026-08-25,
+five sessions re-reading the board in a loop emptied the GraphQL bucket and the board went
+unreadable for ~5 minutes, mid-claim. The rules below make that behaviour impossible to write
+by accident: if there are ever too many requests, it must be because of a real need, never
+because a session used the API badly.
+
+**The costs are measured, not guessed** — measured 2026-08-25 by asking `rateLimit { cost }`
+inside the query, which is the measure every hand-written call carries (rule 3):
+
+| Call | Bucket | Cost |
+|---|---|---|
+| `gh project item-list 1 --limit 100` | GraphQL | **~103 points** — its generated query nests every field's options inside every field value of every item, and pulls every card body |
+| the claim read (§ gh CLI recipes) | GraphQL | **2 points** |
+| the single-item handshake re-read | GraphQL | 1 point |
+| one `item-edit` / issue mutation | GraphQL | ~1 point |
+| `gh api repos/…` (issue, PR, branch, comment) | REST | 1 request, the other bucket |
+| `gh api rate_limit` | neither | **free — and still answers when a bucket is empty** |
+
+~48 `item-list` calls end the hour for every session at once. That is why a session never
+reads the pool with `gh project item-list`: the claim read returns the same decision data
+*plus* the ids `item-edit` needs, fifty times cheaper (2 points against 103, both measured
+2026-08-25 on this board). (`item-list` stays fine for a human
+one-off at a terminal; it is the loop and the fan-out that killed the board.)
+
+**The five rules:**
+
+1. **Reads happen at state transitions only, exactly like writes.** One pool read at claim —
+   the claim read, once; it carries the board, the blocked set and every project/field/option
+   id the claim's writes take. The handshake re-read is the single-item recipe, never a second
+   listing. A back-off to the next candidate reuses the first read. After the claim, milestone
+   writes are blind `item-edit`s: nothing between claim and Done re-reads the pool.
+2. **Never poll GitHub for a state that has a local surface.** The bench verdict is the exit
+   code of `npm run gate` (one background command) and `~/.spo-bench/verdicts/<sha>.json`; the
+   nightly is `~/.spo-bench/nightly/latest.json`; session liveness is the heartbeat files in
+   `~/.spo-bench/sessions/`. None of these is ever asked of GitHub. The only GitHub-only waits
+   are **CI and the merge queue**: check once when you arrive — CI normally concluded while
+   the gate was queued — and if something is genuinely pending, re-read at **≥ 30 s**
+   intervals, over REST (`gh api repos/Crazz-Org/SPO-WebClient/pulls/<N>`), the way
+   `scripts/deps-gate.sh` waits for its merge, and **for at most 20 polls or 10 minutes,
+   whichever comes first** — "a hard deadline" is not a number, and a wait that never states
+   one is a wait a background loop can run forever without anyone noticing. A tight retry
+   loop on any GitHub error is never correct: on failure, read the bucket's `reset` from
+   `gh api rate_limit` (free) and wait once, in the background, until then. The same rule
+   [doc/E2E-POLICY.md](E2E-POLICY.md) states for live evidence holds for a watch loop too —
+   a crash is a failure, but silence is not a pass: a watcher that has printed nothing is
+   suspect, not calm, and its own bound is what tells you which.
+3. **Ask the price inside the query.** Every hand-written GraphQL call includes
+   `rateLimit { cost remaining resetAt }` — it costs nothing and turns drift into a number in
+   the transcript instead of a discovery at exhaustion. The session's final report states the
+   last `remaining` it saw. Below **500 remaining**, stop every optional read and say so: what
+   is left belongs to claims and milestone writes.
+4. **REST where GraphQL is not required.** Projects v2 items and fields, issue dependencies
+   and project workflows exist **only** in GraphQL — those reads are the budget's legitimate
+   owners. Issues, PRs, comments, labels and branches all exist in REST, and `gh issue …` /
+   `gh pr … --json` go through GraphQL even when they look REST-shaped — for a repeated or
+   bulk read of those, prefer the `gh api repos/…` form and spend the other bucket. The MCP
+   GitHub tools spend this same account's quota and are bound by every rule here
+   (`search_issues` also draws on the search bucket, 30/min). The recipes below are the
+   sanctioned forms; a GitHub read outside them needs a reason the session's report can state.
+5. **`RATE_LIMITED` mid-claim: the write half decides.** The handshake is write → re-read. If
+   the **write** failed rate-limited, nothing landed: the card is untouched, you own nothing —
+   claim nothing else, wait for `reset` (rule 2), then start the handshake over. If the write
+   succeeded and the **re-read** is what failed, the card is provisionally yours and must not
+   be abandoned half-claimed: wait for `reset` in the background, then finish the re-read. A
+   session that must end before the bucket resets names the card and the unverified write in
+   its final report — that report is what lets the human read the board instead of discovering
+   a locked card. Ownership law 3 — every owner closes its ownership — binds the rate-limited
+   case too.
+
 ## Feeding rule (replaces the BACKLOG-OPEN feeding rule)
 
 Every live-journey finding, investigation result, or defect discovered in passing **lands as
@@ -486,20 +559,62 @@ so pinning it to one model is exactly the mistake this section exists to prevent
 The project scope is required once per machine: `gh auth refresh -s project` (run inside WSL).
 
 ```bash
-# List cards with status + session + area (topmost Todo first = priority order)
-gh project item-list 1 --owner Crazz-Org --format json \
-  --jq '.items[] | {id, title: .content.title, number: .content.number, status, session, area}'
+# THE CLAIM READ — one query, ~2 GraphQL points, everything a claim needs: every card with
+# Status/Session/Area in board order (topmost Todo first = priority order), the blocked set,
+# the project/field/option ids item-edit takes, and the price of asking. Run it ONCE per claim.
+# Never read the pool with `gh project item-list` in a session: same data, ~103 points
+# (§ GitHub API discipline). The busy set is computed inside this call, never by a second one.
+gh api graphql -f query='{
+  rateLimit { cost remaining resetAt }
+  organization(login: "Crazz-Org") { projectV2(number: 1) {
+    id
+    fields(first: 20) { nodes {
+      ... on ProjectV2FieldCommon { id name }
+      ... on ProjectV2SingleSelectField { options { id name } } } }
+    items(first: 100) { nodes {
+      id
+      content { ... on Issue { number title } }
+      fieldValues(first: 12) { nodes {
+        ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { name } } }
+        ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } } } } } } } }
+  repository(owner: "Crazz-Org", name: "SPO-WebClient") {
+    issues(first: 100, states: OPEN) { nodes {
+      number issueDependenciesSummary { blockedBy }
+      blockedBy(first: 10) { nodes { number state } } } } }
+}' --jq '
+  ([.data.organization.projectV2.items.nodes[]
+    | ([.fieldValues.nodes[] | select(.field != null) | {(.field.name): (.text // .name)}] | add // {})
+      + {id: .id, number: (.content.number // 0), title: (.content.title // "")}]) as $cards
+  | (.data.rateLimit | "rateLimit: cost \(.cost), remaining \(.remaining), resets \(.resetAt)"),
+    ("projectId: \(.data.organization.projectV2.id)"),
+    (.data.organization.projectV2.fields.nodes[]
+      | select(.name == "Status" or .name == "Session" or .name == "Area")
+      | "field \(.name): \(.id)\(if .options then " " + ([.options[] | "\(.name)=\(.id)"] | join(" ")) else "" end)"),
+    ("busy areas: \([$cards[]
+        | select(.Status == "In progress" or .Status == "Gate" or .Status == "PR")
+        | select(.Area != null and .Area != "docs") | .Area] | unique | join(" "))"),
+    ($cards[]
+      | "item \(.id) #\(.number) [\(.Status // "-")] area=\(.Area // "-") session=\(.Session // "-") \(.title)"),
+    (.data.repository.issues.nodes[]
+      | select(.issueDependenciesSummary.blockedBy > 0)
+      | "#\(.number) blocked by \([.blockedBy.nodes[] | select(.state == "OPEN") | "#\(.number)"] | join(", "))")'
+# The `busy areas:` line IS the busy set (§ One session per area) — derived inside this one
+# call, never fetched by a second: In progress, Gate or PR, `docs` excluded because it never
+# blocks. It is computed rather than eyeballed off the item lines so the rule stays executable;
+# `$cards` is bound once and both outputs read it.
+# The blocked lines: `issueDependenciesSummary { blockedBy }` counts OPEN blockers only, so a
+# closed blocker frees the card by itself. Raise `first:` (or paginate) if the repository ever
+# exceeds 100 open issues or the board 100 items.
+# There is no standalone `jq` on this machine — only `gh --jq`. That is why the whole claim
+# read is one program over one response, and not a saved file filtered twice.
 
-# The busy set — areas held by a live card (docs excluded: it never blocks)
-gh project item-list 1 --owner Crazz-Org --limit 100 --format json \
-  --jq '[.items[] | select(.status == "In progress" or .status == "Gate" or .status == "PR")
-        | select(.area != null and .area != "docs") | .area] | unique'
+# The handshake re-read — ONE item, 1 point, after writing `Session`. Never a second listing.
+gh api graphql -f query='{ rateLimit { cost remaining resetAt }
+  node(id: "<ITEM_ID>") { ... on ProjectV2Item { fieldValues(first: 12) { nodes {
+    ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { name } } } } } } } }' \
+  --jq '.data.node.fieldValues.nodes[] | select(.field.name == "Session") | .text'
 
-# Resolve project and field ids (needed for item-edit)
-gh project view 1 --owner Crazz-Org --format json --jq .id
-gh project field-list 1 --owner Crazz-Org --format json
-
-# Move a card (single-select field, e.g. Status)
+# Move a card (single-select field, e.g. Status) — every id below comes from the claim read
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
   --field-id <STATUS_FIELD_ID> --single-select-option-id <OPTION_ID>
 
@@ -511,14 +626,8 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
   --field-id <AREA_FIELD_ID> --single-select-option-id <OPTION_ID>
 
-# The blocked set — Todo cards that cannot be claimed. ONE call for the whole pool, never one
-# per card. `issueDependenciesSummary.blockedBy` counts OPEN blockers only, so a closed blocker
-# frees the card. Raise `first:` (or paginate) if the repository ever exceeds 100 open issues.
-gh api graphql -f query='{ repository(owner:"Crazz-Org", name:"SPO-WebClient") {
-  issues(first:100, states:OPEN) { nodes { number
-    issueDependenciesSummary { blockedBy } blockedBy(first:10) { nodes { number state } } } } } }' \
-  --jq '.data.repository.issues.nodes[] | select(.issueDependenciesSummary.blockedBy > 0)
-        | "#\(.number) blocked by \([.blockedBy.nodes[] | select(.state=="OPEN") | "#\(.number)"] | join(", "))"'
+# The blocked set — Todo cards that cannot be claimed — is the tail of the claim read above:
+# ONE call for the whole pool, never one per card, and never a separate query beside the claim.
 
 # Record a blocking order (§ Blocking order). The mutation takes node ids, not numbers:
 # issueId = the card that waits, blockingIssueId = the card it waits on.
