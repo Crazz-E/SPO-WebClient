@@ -599,6 +599,43 @@ describe('renameFacility', () => {
     expect(result.message).toBe('SwitchFocusEx failed');
     expect(fake.sent).toEqual([]);
   });
+
+  // The server answers a refused SET with "error <code> setting <PropName>"
+  // (RDOQueryServer.pas:344), which rdo.ts already parses into
+  // errorCode/errorName. The response used to be discarded entirely, so a
+  // rename the server refused (e.g. errUnexistentProperty,
+  // RDOObjectServer.pas:176) came back to the caller as a success.
+  it('reports a server-refused rename as a failure instead of a success', async () => {
+    const fake = makeSessionCtx({ sockets: ['construction'] });
+    focus(fake).mockResolvedValue({ buildingId: OBJECT_ID, buildingName: '', ownerName: '' });
+    const refused: RdoPacket = {
+      raw: '', type: 'RESPONSE', rid: 1, payload: 'error 15 setting Name',
+      errorCode: 15, errorName: 'errUnexistentProperty',
+    };
+    fake.respond(() => refused);
+
+    const result = await renameFacility(fake.ctx, X, Y, 'Refused');
+
+    expect(result).toEqual({
+      success: false,
+      message: 'Building rename refused by the server (errUnexistentProperty)',
+    });
+    expect(fake.log.warn).toHaveBeenCalled();
+  });
+
+  it('falls back to the raw code when the server error is unnamed', async () => {
+    const fake = makeSessionCtx({ sockets: ['construction'] });
+    focus(fake).mockResolvedValue({ buildingId: OBJECT_ID, buildingName: '', ownerName: '' });
+    const unnamed: RdoPacket = { raw: '', type: 'RESPONSE', rid: 1, errorCode: 42 };
+    fake.respond(() => unnamed);
+
+    const result = await renameFacility(fake.ctx, X, Y, 'Unnamed');
+
+    expect(result).toEqual({
+      success: false,
+      message: 'Building rename refused by the server (error 42)',
+    });
+  });
 });
 
 // ===========================================================================
