@@ -42,7 +42,7 @@ describe('MobileModeBar', () => {
     const bar = screen.getByRole('status');
     expect(bar.textContent).toContain('Road');
     expect(bar.textContent).toContain('Build');
-    expect(bar.textContent).toContain('$2,000,000 per tile');
+    expect(bar.textContent).toContain('$2,000,000 per tile, $4,000,000 over water; existing road is free');
     fireEvent.click(screen.getByRole('button', { name: /Done/ }));
     expect(onBuildRoad).toHaveBeenCalledTimes(1);
   });

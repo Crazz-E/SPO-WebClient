@@ -48,6 +48,7 @@ import {
   RdoParser,
 } from '../shared/rdo-types';
 import { rdoCall, rdoGet, rdoIdOf } from '../shared/rdo-frame';
+import type { RoadTileFacts } from '../shared/road-cost';
 import { config } from '../shared/config';
 import { createLogger, generateSessionId } from '../shared/logger';
 import { toProxyUrl, isProxyUrl } from '../shared/proxy-utils';
@@ -1475,12 +1476,12 @@ public async loadMapArea(x?: number, y?: number, w: number = 64, h: number = 64)
   }
 
   // -- ROADS (facade -> road-handler) ---------------------------------------
-  public async buildRoad(x1: number, y1: number, x2: number, y2: number): Promise<{ success: boolean; cost: number; tileCount: number; message?: string; errorCode?: number; partial?: boolean }> {
-    return roadHandler.buildRoad(this, x1, y1, x2, y2);
+  public async buildRoad(x1: number, y1: number, x2: number, y2: number, facts?: readonly RoadTileFacts[]): Promise<{ success: boolean; cost: number; tileCount: number; message?: string; errorCode?: number; partial?: boolean }> {
+    return roadHandler.buildRoad(this, x1, y1, x2, y2, facts);
   }
 
-  public getRoadCostEstimate(x1: number, y1: number, x2: number, y2: number): { cost: number; tileCount: number; costPerTile: number; valid: boolean; error?: string } {
-    return roadHandler.getRoadCostEstimate(x1, y1, x2, y2);
+  public getRoadCostEstimate(x1: number, y1: number, x2: number, y2: number, facts?: readonly RoadTileFacts[]): { cost: number; tileCount: number; costPerTile: number; valid: boolean; error?: string } {
+    return roadHandler.getRoadCostEstimate(x1, y1, x2, y2, facts);
   }
 
   public async demolishRoad(x: number, y: number): Promise<{ success: boolean; message?: string; errorCode?: number }> {

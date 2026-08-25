@@ -18,8 +18,9 @@ import { ClientBridge } from '../bridge/client-bridge';
 import type { ClientHandlerContext } from './client-context';
 import { setupEscapeHandler } from './handler-utils';
 import { useUiStore } from '../store/ui-store';
+import type { DialogRow } from '../components/common/Dialog';
 import { useGameStore } from '../store/game-store';
-import { estimateRoadCost } from '@/shared/road-cost';
+import { estimateRoadCost, type RoadTileFacts } from '@/shared/road-cost';
 import { formatMoney } from '../format-utils';
 
 export function toggleRoadBuildingMode(ctx: ClientHandlerContext): void {
@@ -83,35 +84,43 @@ export function buildRoadSegment(ctx: ClientHandlerContext, x1: number, y1: numb
     }
   }
 
-  const { tileCount, cost } = estimateRoadCost(x1, y1, x2, y2);
+  // Price the drag from what the renderer knows — existing road is free, water without
+  // concrete is a bridge (issue #99). The same facts ride with the request, so the amount
+  // confirmed here is the amount the gateway puts on the wire.
+  const tileFacts = renderer ? renderer.getRoadPathFacts(x1, y1, x2, y2) : undefined;
+  const { tileCount, cost } = estimateRoadCost(x1, y1, x2, y2, tileFacts);
+  const bridgeTiles = tileFacts ? tileFacts.filter(t => !t.hasRoad && t.isBridge).length : 0;
+  const freeTiles = tileFacts ? tileFacts.filter(t => t.hasRoad).length : 0;
   const cashRaw = useGameStore.getState().tycoonStats?.cash;
   const cashNum = cashRaw ? parseFloat(String(cashRaw).replace(/,/g, '')) : NaN;
-  const rows = [
+  const rows: DialogRow[] = [
     { label: 'Tiles', value: String(tileCount) },
-    { label: 'Cost', value: formatMoney(cost), tone: 'gold' as const },
   ];
+  if (bridgeTiles > 0) rows.push({ label: 'Bridge tiles', value: String(bridgeTiles) });
+  if (freeTiles > 0) rows.push({ label: 'Already paved', value: `${freeTiles} (free)` });
+  rows.push({ label: 'Cost', value: formatMoney(cost), tone: 'gold' });
   if (!Number.isNaN(cashNum)) {
     const after = cashNum - cost;
-    rows.push({ label: 'Cash after', value: formatMoney(after), tone: (after < 0 ? 'negative' : 'positive') as never });
+    rows.push({ label: 'Cash after', value: formatMoney(after), tone: after < 0 ? 'negative' : 'positive' });
   }
   return new Promise<void>((resolve) => {
     useUiStore.getState().requestConfirm(
       'Build this road?',
       `From (${x1}, ${y1}) to (${x2}, ${y2}).`,
-      () => { void sendBuildRoad(ctx, x1, y1, x2, y2).then(resolve); },
+      () => { void sendBuildRoad(ctx, x1, y1, x2, y2, tileFacts).then(resolve); },
       { kind: 'spend', confirmLabel: 'Build', typeToConfirm: null, rows, dontAskAgainKey: 'road' },
     );
   });
 }
 
-async function sendBuildRoad(ctx: ClientHandlerContext, x1: number, y1: number, x2: number, y2: number): Promise<void> {
+async function sendBuildRoad(ctx: ClientHandlerContext, x1: number, y1: number, x2: number, y2: number, tileFacts?: RoadTileFacts[]): Promise<void> {
   ctx.isBuildingRoad = true;
   ClientBridge.log('Road', `Building road from (${x1}, ${y1}) to (${x2}, ${y2})...`);
 
   try {
     const req: WsReqBuildRoad = {
       type: WsMessageType.REQ_BUILD_ROAD,
-      x1, y1, x2, y2
+      x1, y1, x2, y2, tileFacts
     };
 
     const response = await ctx.sendRequest(req) as WsRespBuildRoad;

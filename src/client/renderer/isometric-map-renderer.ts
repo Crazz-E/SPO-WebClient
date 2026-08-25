@@ -15,7 +15,7 @@
  * 9. UI overlays
  */
 
-import { ROAD_COST_PER_TILE } from '../../shared/road-cost';
+import { priceRoadPath, roadPathTiles, type RoadTileFacts } from '../../shared/road-cost';
 import { IsometricTerrainRenderer } from './isometric-terrain-renderer';
 import { GameObjectTextureCache } from './game-object-texture-cache';
 import { VegetationFlatMapper } from './vegetation-flat-mapper';
@@ -479,7 +479,6 @@ export class IsometricMapRenderer {
     isMouseDown: false,
     mouseDownTime: 0
   };
-  private roadCostPerTile: number = ROAD_COST_PER_TILE;
 
   // Connect mode (map-click to connect two buildings)
   private connectMode: boolean = false;
@@ -1382,6 +1381,32 @@ export class IsometricMapRenderer {
    */
   private hasRoadAt(x: number, y: number): boolean {
     return this.roadTilesMap.has(`${x},${y}`);
+  }
+
+  /**
+   * What the world says about one tile, in the terms the road price is made of
+   * (`@/shared/road-cost`). The renderer is the only half that holds all three layers —
+   * terrain, roads and concrete — so this is where the facts come from.
+   *
+   * `isVoid` stays false: the WebClient models no reserved-plot layer (`IsVoidSquare`,
+   * `Voyager/Components/MapIsoView/Map.pas:2605`).
+   */
+  private getRoadTileFacts(x: number, y: number): RoadTileFacts {
+    const terrainLoader = this.terrainRenderer.getTerrainLoader();
+    const onWater = terrainLoader ? decodeLandId(terrainLoader.getLandId(x, y)).isWater : false;
+    return {
+      hasRoad: this.hasRoadAt(x, y),
+      isBridge: onWater && !this.hasConcrete(x, y),
+      isVoid: false,
+    };
+  }
+
+  /**
+   * The per-tile facts for a whole drag, in path order — what the client attests to the
+   * gateway so both halves price the same road (issue #99).
+   */
+  public getRoadPathFacts(x1: number, y1: number, x2: number, y2: number): RoadTileFacts[] {
+    return roadPathTiles(x1, y1, x2, y2).map(t => this.getRoadTileFacts(t.x, t.y));
   }
 
   /**
@@ -4332,7 +4357,7 @@ export class IsometricMapRenderer {
     // Draw cost tooltip (expanded to show connection status)
     const endPos = this.terrainRenderer.mapToScreen(state.endY, state.endX);
     const tileCount = pathTiles.length;
-    const cost = tileCount * this.roadCostPerTile;
+    const cost = priceRoadPath(pathTiles.map(t => this.getRoadTileFacts(t.x, t.y)));
 
     // Determine error message
     let errorMessage = '';
@@ -4577,32 +4602,9 @@ export class IsometricMapRenderer {
    * Generate staircase path between two points (for diagonal roads)
    */
   private generateStaircasePath(x1: number, y1: number, x2: number, y2: number): Point[] {
-    const tiles: Point[] = [];
-
-    let x = x1;
-    let y = y1;
-    tiles.push({ x, y });
-
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const sx = dx > 0 ? 1 : dx < 0 ? -1 : 0;
-    const sy = dy > 0 ? 1 : dy < 0 ? -1 : 0;
-
-    let remainingX = Math.abs(dx);
-    let remainingY = Math.abs(dy);
-
-    while (remainingX > 0 || remainingY > 0) {
-      if (remainingX >= remainingY && remainingX > 0) {
-        x += sx;
-        remainingX--;
-      } else if (remainingY > 0) {
-        y += sy;
-        remainingY--;
-      }
-      tiles.push({ x, y });
-    }
-
-    return tiles;
+    // One path for the whole codebase: the preview, the validation and the gateway's
+    // segment split must walk the same tiles, or the priced tiles are not the paved ones.
+    return roadPathTiles(x1, y1, x2, y2);
   }
 
   /**

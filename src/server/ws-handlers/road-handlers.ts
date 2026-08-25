@@ -19,7 +19,7 @@ export async function handleBuildRoad(ctx: WsHandlerContext, msg: WsMessage): Pr
   console.log(`[Gateway] Build road from (${req.x1}, ${req.y1}) to (${req.x2}, ${req.y2})`);
 
   await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_AccessDenied, async () => {
-    const result = await ctx.session.buildRoad(req.x1, req.y1, req.x2, req.y2);
+    const result = await ctx.session.buildRoad(req.x1, req.y1, req.x2, req.y2, req.tileFacts);
 
     const response: WsRespBuildRoad = {
       type: WsMessageType.RESP_BUILD_ROAD,
@@ -40,7 +40,7 @@ export async function handleGetRoadCost(ctx: WsHandlerContext, msg: WsMessage): 
   console.log(`[Gateway] Get road cost from (${req.x1}, ${req.y1}) to (${req.x2}, ${req.y2})`);
 
   await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_Unknown, async () => {
-    const result = ctx.session.getRoadCostEstimate(req.x1, req.y1, req.x2, req.y2);
+    const result = ctx.session.getRoadCostEstimate(req.x1, req.y1, req.x2, req.y2, req.tileFacts);
 
     const response: WsRespGetRoadCost = {
       type: WsMessageType.RESP_GET_ROAD_COST,

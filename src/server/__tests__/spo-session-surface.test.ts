@@ -96,11 +96,17 @@ interface Delegation {
   readonly result: unknown;
   /**
    * `false` for the one handler that is NOT given the session.
-   * `getRoadCostEstimate` is a pure geometry+price computation with no session
-   * state at all, and the facade reflects that by not passing `this`.
+   * `getRoadCostEstimate` is a pure computation over geometry and the caller's tile facts,
+   * with no session state at all, and the facade reflects that by not passing `this`.
    */
   readonly passesSession?: boolean;
 }
+
+/**
+ * The per-tile facts a road drag carries (#99) — the fifth argument both road delegations
+ * now forward. One entry is enough here: the table proves forwarding, not pricing.
+ */
+const ROAD_FACTS = [{ hasRoad: false, isBridge: true, isVoid: false }];
 
 const DELEGATIONS: readonly Delegation[] = [
   // ── login-handler ────────────────────────────────────────────────────────
@@ -412,15 +418,15 @@ const DELEGATIONS: readonly Delegation[] = [
   {
     method: 'buildRoad',
     install: () => jest.spyOn(roadHandler, 'buildRoad'),
-    call: s => s.buildRoad(700, 430, 706, 436),
-    forwarded: [700, 430, 706, 436],
+    call: s => s.buildRoad(700, 430, 706, 436, ROAD_FACTS),
+    forwarded: [700, 430, 706, 436, ROAD_FACTS],
     result: { success: true, cost: 1200, tileCount: 12 },
   },
   {
     method: 'getRoadCostEstimate',
     install: () => jest.spyOn(roadHandler, 'getRoadCostEstimate'),
-    call: s => s.getRoadCostEstimate(700, 430, 706, 436),
-    forwarded: [700, 430, 706, 436],
+    call: s => s.getRoadCostEstimate(700, 430, 706, 436, ROAD_FACTS),
+    forwarded: [700, 430, 706, 436, ROAD_FACTS],
     result: { cost: 1200, tileCount: 12, costPerTile: 100, valid: true },
     passesSession: false,
   },
@@ -633,15 +639,15 @@ describe('StarpeaceSession — handler delegation', () => {
   });
 
   it('does not hand the session to the pure road cost estimate', () => {
-    // The single deliberate exception, restated positively: the estimate is
-    // geometry and a per-tile price, so passing session state would be noise.
+    // The single deliberate exception, restated positively: the estimate is geometry and
+    // the tile facts the caller attests, so passing session state would be noise.
     const session = newSession();
     const spy = jest.spyOn(roadHandler, 'getRoadCostEstimate');
     spy.mockReturnValue({ cost: 0, tileCount: 0, costPerTile: 100, valid: false });
 
-    session.getRoadCostEstimate(1, 2, 3, 4);
+    session.getRoadCostEstimate(1, 2, 3, 4, ROAD_FACTS);
 
-    expect(spy.mock.calls[0]).toEqual([1, 2, 3, 4]);
+    expect(spy.mock.calls[0]).toEqual([1, 2, 3, 4, ROAD_FACTS]);
   });
 
   it('reads back the channel setCurrentChannel wrote, and calls the lobby by name', () => {

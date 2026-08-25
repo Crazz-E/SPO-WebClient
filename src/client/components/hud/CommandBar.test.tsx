@@ -184,7 +184,8 @@ describe('CommandBar', () => {
     act(() => useGameStore.setState({ overlayBeforeMode: { type: 'zones' } }));
     expect(screen.getByRole('status').textContent).not.toContain('overlay shown');
     act(() => useGameStore.setState({ isZonePaintingMode: false, isRoadBuildingMode: true, overlayBeforeMode: null }));
-    expect(screen.getByRole('status').textContent).toContain('$2,000,000 per tile');
+    // H7 (#99): the tariff is not flat — water costs the bridge rate, paved tiles are free.
+    expect(screen.getByRole('status').textContent).toContain('$2,000,000 per tile, $4,000,000 over water; existing road is free');
   });
   it('placement cash after the spend is negative when the building costs more than the cash', () => {
     useGameStore.setState({ tycoonStats: { cash: '1,000', incomePerHour: '0', failureLevel: 0 } as never });
