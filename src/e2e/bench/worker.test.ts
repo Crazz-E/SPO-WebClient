@@ -547,6 +547,35 @@ describe('runJob — gate', () => {
     expect(readNightlyResult(h.paths)).toMatchObject({ verdict: 'FAIL' });
   });
 
+  it('a world-lock refusal reads as BLOCKED, not FAIL — nothing ran, main does not go red', async () => {
+    const h = harness();
+    deposit(h, 'nightly');
+    h.exitCodes = [0, 0, 0, 2]; // fetch, build:server, build:e2e, then run.js exits BLOCKED
+
+    await processOldest(h.deps);
+
+    expect(readNightlyResult(h.paths)).toMatchObject({ verdict: 'BLOCKED' });
+  });
+
+  it('a preflight abort reads as ENVIRONMENT, not FAIL — main does not go red', async () => {
+    const h = harness();
+    deposit(h, 'nightly');
+    h.exitCodes = [0, 0, 0, 3]; // fetch, build:server, build:e2e, then run.js exits ENVIRONMENT
+
+    await processOldest(h.deps);
+
+    expect(readNightlyResult(h.paths)).toMatchObject({ verdict: 'ENVIRONMENT' });
+  });
+
+  it('maps a live job exit code the same way as the gate — BLOCKED, not FAIL', async () => {
+    const h = harness();
+    const job = deposit(h, 'live');
+    h.exitCodes = [0, 0, 0, 2]; // fetch, build:server, build:e2e, then run.js exits BLOCKED
+    const report = await runJob(h.deps, job);
+    expect(report.verdict).toBe('BLOCKED');
+    expect(report.detail).toMatch(/live drive exited 2 \(BLOCKED\)/);
+  });
+
   it('runs a live job on a dirty tree — only gate attests a sha', async () => {
     const h = harness();
     const job = deposit(h, 'live');

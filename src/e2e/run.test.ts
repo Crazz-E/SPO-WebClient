@@ -321,4 +321,16 @@ describe('main', () => {
     const written = path.join('report', 'e2e', 'live-2026-08-21T10-00-00-000Z.json');
     if (fs.existsSync(written)) fs.unlinkSync(written);
   });
+
+  it.each([
+    ['PASS', 0],
+    ['FAIL', 1],
+    ['BLOCKED', 2],
+    ['ENVIRONMENT', 3],
+  ] as const)('maps status %s to exit code %d — the worker reads this to tell a refusal from a real failure', async (status, code) => {
+    const outcome = { ...result, status };
+    expect(await main(['--flows=login-spine'], async () => outcome, sink().stream)).toBe(code);
+    const written = path.join('report', 'e2e', 'live-2026-08-21T10-00-00-000Z.json');
+    if (fs.existsSync(written)) fs.unlinkSync(written);
+  });
 });

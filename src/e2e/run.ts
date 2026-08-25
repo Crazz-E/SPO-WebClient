@@ -14,6 +14,19 @@ import { FLOWS, flowByName, runFlow, type FlowResult } from './flows';
 import { preflight, type PreflightResult } from './preflight';
 import { WorldLock } from './world-lock';
 
+/**
+ * Exit codes — matches `EXIT` in scripts/verify-gate.js, and read the same way by
+ * `worker.ts`'s `GATE_EXIT_VERDICT`: 0 PASS, 1 FAIL, 2 BLOCKED (refused before driving
+ * anything — a rate limit or a dirty world), 3 ENVIRONMENT (a preflight abort; does not
+ * consume an attempt, doc/E2E-POLICY.md §8).
+ */
+const EXIT: Readonly<Record<LiveRunResult['status'], number>> = {
+  PASS: 0,
+  FAIL: 1,
+  BLOCKED: 2,
+  ENVIRONMENT: 3,
+};
+
 export interface LiveRunResult {
   world: string;
   branch: string;
@@ -129,7 +142,7 @@ export async function main(
   fs.writeFileSync(file, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 
   out.write(`${formatSummary(result)}\nArtifact: ${file}\n`);
-  return result.status === 'PASS' ? 0 : 1;
+  return EXIT[result.status];
 }
 
 export function formatSummary(result: LiveRunResult): string {
