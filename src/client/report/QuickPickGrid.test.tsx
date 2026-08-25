@@ -230,6 +230,19 @@ describe('the mobile profile, end to end through BugReportRoot', () => {
     expect(screen.queryByTestId('report-fab')).toBeNull();
   });
 
+  it('cancelling the sheet sends nothing and brings the button back', () => {
+    renderRoot();
+    tapFab();
+    act(() => {
+      window.dispatchEvent(new MouseEvent('click', { clientX: 20, clientY: 810, bubbles: true, cancelable: true }));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByTestId('report-quick-pick')).toBeNull();
+    expect(screen.getByTestId('report-fab')).toBeTruthy();
+    expect(posted).toEqual([]);
+  });
+
   it('a second tap on the FAB disarms without capturing', () => {
     renderRoot();
     tapFab();
