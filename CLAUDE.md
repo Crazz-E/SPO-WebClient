@@ -372,10 +372,15 @@ security-auditor, typescript, web-accessibility, web-performance.
 - **Direct tools** for anything targeted — never spawn an agent for a one-liner
 - **Never delegate understanding.** Do not write "based on your findings, fix the bug."
   Synthesise the agent's results yourself, then act.
-- **Model routing:** Fable 5 for planning and analysis (implementation plans, bug
-  diagnosis, feature analysis); Opus 5 for execution (implementation, tests, mechanical
-  sweeps) — effort adapted in both cases. If the session cannot switch its own model,
-  apply the routing to its sub-agents.
+- **Model routing — the driver is the expensive part.** The main loop re-reads its whole
+  context every turn, so the model a session *runs on* dominates the bill: drive on the
+  cheapest model the step needs and escalate by delegating, never the reverse. Haiku 4.5
+  for the scripted steps (board reads and writes, gate wait, PR/merge/`finish`); Fable 5
+  for planning and diagnosis; Sonnet 5 for ordinary execution; **Opus 5 only where being
+  wrong is not caught by a test** — the RDO wire, an `L`-sized card, an unreproduced
+  defect. Effort follows the card's `Size` (S low · M medium · L high to plan). Full step
+  table: [kanban-workflow.md § Model routing](doc/kanban-workflow.md). If the session
+  cannot switch its own model, apply the routing to its sub-agents.
 
 ## MCP
 
