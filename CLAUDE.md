@@ -173,6 +173,12 @@ it — `.github/workflows/orphan-cards.yml` comments once on any card claimed an
 lands in — and a session claims the topmost Todo card whose area no live card already holds.
 `docs` never blocks; every other area does. The reservation expires with the session heartbeat
 (`SPO_WORKTREE_IDLE_MIN`, 120 min), the card's `Session` field never does.
+**Order, where it exists, is a `blocked by` link** between two issues (GitHub issue
+dependencies — the relation lives on the issue, not on the card, so no project field carries
+it). `/next-task` reads the whole blocked set in one GraphQL call and does not claim a card
+whose blocker is still open: it skips it and names the skip, or refuses out loud when that card
+was the one it was handed. A dependency records *cannot start yet*, never priority — priority
+stays the human's vertical order in Todo.
 **Feeding rule:** every finding lands as a new issue in Todo, with its `Category` and the
 matching `cat:` / `size:` labels — a finding that only lives in a session report is lost.
 ⚠ **Filing the issue is not enough right now.** `Auto-add to project` is on and verified — a

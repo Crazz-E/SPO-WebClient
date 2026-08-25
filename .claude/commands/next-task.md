@@ -39,13 +39,26 @@ already moved past — is **not** red. Proceed to § 1.
 List the board (`gh project item-list 1 --owner Crazz-Org --format json`): `status`, `session`
 and `area` come back on every item. Candidates: Status = **Todo** and `Session` **empty**.
 
+A card's **blockers are not on the card** — the relation lives on the issue, so no project field
+carries it. Read the whole blocked set in **one** call, before walking (kanban-workflow
+§ Blocking order):
+
+```bash
+gh api graphql -f query='{ repository(owner:"Crazz-Org", name:"SPO-WebClient") { issues(first:100, states:OPEN) { nodes { number issueDependenciesSummary { blockedBy } blockedBy(first:10) { nodes { number state } } } } } }' --jq '.data.repository.issues.nodes[] | select(.issueDependenciesSummary.blockedBy > 0) | "#\(.number) blocked by \([.blockedBy.nodes[] | select(.state=="OPEN") | "#\(.number)"] | join(", "))"'
+```
+
+`issueDependenciesSummary.blockedBy` counts **open** blockers only: a closed blocker frees the
+card, so anything this query prints is blocked right now.
+
 1. **Compute the busy set** (kanban-workflow § One session per area): every `Area` held by a
    card in **In progress**, **Gate** or **PR** whose reservation is still live (below).
    `docs` never enters the busy set — it does not block.
 2. **Walk Todo top-down** — list order is the human's priority — and take the first card whose
-   `Area` is **not** busy. A card with an **empty** `Area` is claimable and blocks nothing.
-   With `$ARGUMENTS`, take the item named there instead; if it is owned, stop and say so —
-   ownership is sacred.
+   `Area` is **not** busy **and** which the query above did not print. A card with an **empty**
+   `Area` is claimable and blocks nothing. A card with an open blocker is **skipped, and the
+   skip is named in your final report** (`#120 skipped: blocked by #108`) — never silently.
+   With `$ARGUMENTS`, take the item named there instead; if it is owned, or if it is blocked by
+   an open issue, **stop and say so** — ownership is sacred, and so is the order.
 3. **Claim it** (§ 2 below).
 4. **If `Area` was empty, determine it now** from the partition in kanban-workflow § The areas
    (one area per card: where the majority of the change lands), and **write it before** moving
@@ -53,8 +66,11 @@ and `area` come back on every item. Candidates: Status = **Todo** and `Session` 
 5. **If the area you just determined turns out to be busy**: clear `Session`, leave the card in
    Todo with `Area` now filled, and go back to step 2. The card never reached In progress, so
    this is the same back-off as a lost claim race — ownership law 3 is not violated.
-6. **If no Todo card is claimable, stop and say so.** Do not take a busy card, and do not
-   invent work outside the board.
+6. **If no Todo card is claimable, stop and say so.** Do not take a busy card, do not take a
+   blocked one, and do not invent work outside the board.
+
+**A blocked card is never written to.** `Session` stays empty, Status stays **Todo**, no
+comment: nothing failed and nobody owned it. It is not Needs triage.
 
 **Is a reservation live?** Not from the board clock — from the session heartbeat, which moves
 while a session works even when it has no reason to touch its card for hours:
