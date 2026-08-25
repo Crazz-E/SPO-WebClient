@@ -35,13 +35,15 @@ describe('server module', () => {
  * registry is reset around each case instead of the config object being poked.
  */
 describe('startGateway — production configuration (SEC-R-2)', () => {
-  const saved = { NODE_ENV: process.env.NODE_ENV, LOG_LEVEL: process.env.LOG_LEVEL };
+  const KEYS = ['NODE_ENV', 'LOG_LEVEL', 'TRUST_PROXY', 'ENABLE_HSTS'] as const;
+  const saved: Record<string, string | undefined> = {};
+  for (const key of KEYS) saved[key] = process.env[key];
 
   afterEach(() => {
-    process.env.NODE_ENV = saved.NODE_ENV;
-    process.env.LOG_LEVEL = saved.LOG_LEVEL;
-    if (saved.NODE_ENV === undefined) delete process.env.NODE_ENV;
-    if (saved.LOG_LEVEL === undefined) delete process.env.LOG_LEVEL;
+    for (const key of KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
     jest.clearAllTimers();
     jest.useRealTimers();
     jest.resetModules();
@@ -65,6 +67,40 @@ describe('startGateway — production configuration (SEC-R-2)', () => {
       );
     } finally {
       quiet.forEach(spy => spy.mockRestore());
+    }
+  });
+
+  it('writes the boot record through the LOG_LEVEL bypass, not through plain info', async () => {
+    jest.useFakeTimers();
+    jest.resetModules();
+    process.env.NODE_ENV = 'production';
+    process.env.LOG_LEVEL = 'debug';
+    delete process.env.TRUST_PROXY;
+    delete process.env.ENABLE_HSTS;
+
+    // A recorder in place of the real logger: what matters is WHICH method server.ts
+    // reaches for. `warn` and `error` are compliant production levels, so a readout sent
+    // through plain `info` would be filtered away exactly where the policy needs it.
+    const always = jest.fn();
+    const plain = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+    jest.doMock('../../shared/logger', () => {
+      const actual = jest.requireActual('../../shared/logger') as typeof import('../../shared/logger');
+      return { ...actual, createLogger: () => ({ ...plain, always, child: () => ({ ...plain, always }) }) };
+    });
+
+    try {
+      const mod = require('../server') as typeof import('../server');
+      await expect(mod.startGateway({ port: 0 })).rejects.toThrow(/Refusing to start/);
+
+      const { LogLevel } = require('../../shared/logger') as typeof import('../../shared/logger');
+      const written = always.mock.calls.map(call => `${call[0]}|${call[1]}`).join('\n');
+      expect(written).toContain(`${LogLevel.INFO}|[SEC-R-2] Effective security configuration:`);
+      expect(written).toContain(`${LogLevel.WARN}|[SEC-R-2] TRUST_PROXY`);
+      expect(written).toContain(`${LogLevel.WARN}|[SEC-R-2] ENABLE_HSTS`);
+      expect(written).toContain(`${LogLevel.ERROR}|[SEC-R-2] LOG_LEVEL=debug is forbidden`);
+      expect(plain.info).not.toHaveBeenCalled();
+    } finally {
+      jest.dontMock('../../shared/logger');
     }
   });
 });

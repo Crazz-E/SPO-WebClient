@@ -5,7 +5,7 @@ import * as path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { StarpeaceSession } from './spo_session';
 import { config } from '../shared/config';
-import { createLogger, getFileTransport, getErrorFileTransport } from '../shared/logger';
+import { createLogger, getFileTransport, getErrorFileTransport, LogLevel } from '../shared/logger';
 import { UPDATE_SERVER } from '../shared/constants';
 import { fileToProxyUrl, PROXY_IMAGE_ENDPOINT } from '../shared/proxy-utils';
 import * as ErrorCodes from '../shared/error-codes';
@@ -1411,7 +1411,13 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
       wsMaxPayloadBytes: WS_MAX_PAYLOAD_BYTES,
       singleUserMode: SINGLE_USER_MODE,
     },
-    logger
+    // The SEC-R-2 record bypasses LOG_LEVEL: `warn` and `error` are compliant production
+    // levels, and a readout the policy says MUST appear cannot be one the verbosity hides.
+    {
+      info: (message: string) => logger.always(LogLevel.INFO, message),
+      warn: (message: string) => logger.always(LogLevel.WARN, message),
+      error: (message: string) => logger.always(LogLevel.ERROR, message),
+    }
   );
 
   // Load Vite manifest for content-hashed asset resolution
