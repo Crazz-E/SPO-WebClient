@@ -338,23 +338,42 @@ describe('stage 4 — live', () => {
     expect(run.artifact).toMatchObject({ verdict: 'FAIL', live: { status: 'FAIL' } });
   });
 
-  it('exits 1 on a live BLOCKED and records the verdict as BLOCKED', () => {
+  it('exits 2 on a live BLOCKED and records the verdict as BLOCKED', () => {
     const run = runGate(scratchRepo(), [], {
       FAKE_ROUTING: needsLive,
       FAKE_LIVE: JSON.stringify({ status: 'BLOCKED' }),
     });
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(2);
     expect(run.artifact).toMatchObject({ verdict: 'BLOCKED' });
   });
 
-  it('exits 1 on an ENVIRONMENT abort but says it does not count as an attempt', () => {
+  it('exits 3 on an ENVIRONMENT abort, keeps the verdict, and says it is not an attempt', () => {
+    // The exit code is what the bench worker reads. Collapsed to 1 it arrived there as
+    // FAIL, and the worker then attested a sha whose code was never judged.
     const run = runGate(scratchRepo(), [], {
       FAKE_ROUTING: needsLive,
       FAKE_LIVE: JSON.stringify({ status: 'ENVIRONMENT' }),
     });
-    expect(run.code).toBe(1);
+    expect(run.code).toBe(3);
     expect(run.stdout).toMatch(/ENVIRONMENT abort, not a failed attempt/);
-    expect(run.artifact).toMatchObject({ verdict: 'FAIL' });
+    expect(run.stdout).toMatch(/Exiting 3, so the bench worker attests nothing/);
+    expect(run.artifact).toMatchObject({ verdict: 'ENVIRONMENT' });
+  });
+
+  it('does not judge capability evidence an ENVIRONMENT abort never gathered', () => {
+    // An aborted run answers "undetermined" for every capability it never got to read.
+    // Judging that answer would put the ENVIRONMENT straight back into FAIL through the
+    // side door, and with it the attestation the abort must not produce.
+    const run = runGate(scratchRepo(), [], {
+      FAKE_ROUTING: needsLive,
+      FAKE_LIVE: JSON.stringify({
+        status: 'ENVIRONMENT',
+        capabilities: [{ account: 'SPO_test3', capability: 'president', determined: false }],
+      }),
+    });
+    expect(run.code).toBe(3);
+    expect(run.artifact).toMatchObject({ verdict: 'ENVIRONMENT' });
+    expect(run.stdout).not.toMatch(/did not answer whether/);
   });
 
   it('lets --flows= override the routed set', () => {
