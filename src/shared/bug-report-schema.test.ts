@@ -139,6 +139,13 @@ describe('validateBugReport — the shapes it accepts', () => {
     const anchor = { ...domAnchor, componentChain: [] };
     expect(validateBugReport(desktopReport({ anchor, anchorKey: computeAnchorKey(anchor) })).ok).toBe(true);
   });
+
+  it('accepts the trim marker a report cut to fit the body cap carries', () => {
+    const trimmed = { journalDropped: 340, screenshotDropped: true };
+    const result = validateBugReport(desktopReport({ trimmed }));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.report.trimmed).toEqual(trimmed);
+  });
 });
 
 describe('validateBugReport — the shapes it refuses', () => {
@@ -197,6 +204,13 @@ describe('validateBugReport — the shapes it refuses', () => {
 
   it('refuses a geometry block that is not an object', () => {
     rejects(mobileReport({ geometry: 'wide' as never }), 'geometry');
+  });
+
+  it('refuses a trim marker that does not say what was dropped', () => {
+    rejects(desktopReport({ trimmed: 'some' as never }), 'journalDropped');
+    rejects(desktopReport({ trimmed: { screenshotDropped: false } as never }), 'journalDropped');
+    rejects(desktopReport({ trimmed: { journalDropped: -1, screenshotDropped: false } }), 'journalDropped');
+    rejects(desktopReport({ trimmed: { journalDropped: 3 } as never }), 'screenshotDropped');
   });
 });
 

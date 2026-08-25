@@ -3,6 +3,8 @@ import {
   validateBugReport,
   computeAnchorKey,
   MAX_BODY_BYTES,
+  MAX_JOURNAL_ENTRIES,
+  MAX_SCREENSHOT_DATA_URL_LENGTH,
   MAX_WS_PAYLOAD_BYTES,
   type DomAnchor,
 } from '../../shared/bug-report-schema';
@@ -105,39 +107,81 @@ describe('buildReport', () => {
     expect(report.profile).toBe('mobile');
   });
 
-  it('trims journal and screenshot to fit under MAX_BODY_BYTES', () => {
-    // Build a huge journal: 400 max entries, each with a ~16 KB payload
-    const hugePayload = JSON.stringify({ data: 'x'.repeat(MAX_WS_PAYLOAD_BYTES - 100) });
+  it('leaves an ordinary report untouched, and marks nothing as dropped', () => {
     reportJournal.arm();
-    for (let i = 0; i < 400; i++) {
-      reportJournal.record('ws-out', { type: 'TEST', payload: hugePayload });
-    }
+    reportJournal.record('ws-out', { type: 'REQ_SET_TAX' });
 
-    // Also add a 3 MB screenshot
-    const screenshot = 'data:image/jpeg;base64,' + 'A'.repeat(3 * 1024 * 1024 - 30);
+    const report = buildReport(draft);
+
+    expect(report.journal).toHaveLength(1);
+    expect(report).not.toHaveProperty('trimmed');
+  });
+});
+
+/**
+ * #269 — every per-field limit is enforced alone and they do not sum below MAX_BODY_BYTES,
+ * so the gateway answered 413 on a report nobody could shrink by hand.
+ */
+describe('buildReport — the aggregate body budget', () => {
+  /** A journal at its documented worst: MAX_JOURNAL_ENTRIES entries of MAX_WS_PAYLOAD_BYTES. */
+  function fillJournalToTheBrim(): void {
+    // No quote or backslash in the payload: `boundPayload` re-measures escaped output, and a
+    // payload full of quotes makes it shrink one character at a time for several seconds.
+    const oversized = 'x'.repeat(MAX_WS_PAYLOAD_BYTES + 4096);
+    reportJournal.arm();
+    for (let i = 0; i < MAX_JOURNAL_ENTRIES; i++) {
+      reportJournal.record('ws-out', { type: 'RES_MAP_CHUNK', payload: oversized });
+    }
+  }
+
+  it('fits a maxed-out journal and a screenshot under the cap, keeping the newest entries', () => {
+    fillJournalToTheBrim();
+    const naiveJournalBytes = JSON.stringify(reportJournal.snapshot()).length;
+    // The premise of the card: the journal alone already exceeds the whole body cap.
+    expect(naiveJournalBytes).toBeGreaterThan(MAX_BODY_BYTES);
 
     const report = buildReport({
+      ...draft,
       profile: 'mobile',
       kind: 'visual',
       anchor: {
-        kind: 'canvas',
-        tileX: 0,
-        tileY: 0,
-        layer: 'terrain',
-        screenshotDataUrl: screenshot,
+        kind: 'canvas', tileX: 412, tileY: 88, layer: 'building',
+        screenshotDataUrl: `data:image/jpeg;base64,${'A'.repeat(MAX_SCREENSHOT_DATA_URL_LENGTH - 100)}`,
       },
-      username: 'SPO_test3',
-      world: 'planitia',
     });
 
-    const serialized = JSON.stringify(report);
-    expect(serialized.length).toBeLessThanOrEqual(MAX_BODY_BYTES);
+    expect(JSON.stringify(report).length).toBeLessThanOrEqual(MAX_BODY_BYTES);
     expect(validateBugReport(report).ok).toBe(true);
-    // Journal or screenshot should have been trimmed
-    const hasScreenshot = report.anchor.kind === 'canvas' && !!report.anchor.screenshotDataUrl;
-    expect(
-      report.journal.length < 400 || !hasScreenshot
-    ).toBe(true);
+    // The screenshot is what the report was filed about — the journal yields first.
+    expect(report.anchor).toHaveProperty('screenshotDataUrl');
+    expect(report.journal.length).toBeGreaterThan(0);
+    expect(report.journal.length).toBeLessThan(MAX_JOURNAL_ENTRIES);
+  });
+
+  it('records how much it dropped, so triage never reads a cut journal as a quiet one', () => {
+    fillJournalToTheBrim();
+    const kept = buildReport(draft);
+
+    expect(kept.trimmed).toEqual({
+      journalDropped: MAX_JOURNAL_ENTRIES - kept.journal.length,
+      screenshotDropped: false,
+    });
+    expect(kept.trimmed?.journalDropped).toBeGreaterThan(0);
+  });
+
+  it('drops a screenshot too big to keep even with an empty journal', () => {
+    const anchor = {
+      kind: 'canvas' as const, tileX: 412, tileY: 88, layer: 'building' as const,
+      screenshotDataUrl: `data:image/jpeg;base64,${'A'.repeat(MAX_BODY_BYTES)}`,
+    };
+
+    const report = buildReport({ ...draft, anchor });
+
+    expect(JSON.stringify(report).length).toBeLessThanOrEqual(MAX_BODY_BYTES);
+    expect(report.anchor).not.toHaveProperty('screenshotDataUrl');
+    expect(report.trimmed).toEqual({ journalDropped: 0, screenshotDropped: true });
+    // The draft the caller still holds keeps its screenshot — the trim copied, it did not empty.
+    expect(anchor.screenshotDataUrl).toHaveLength(MAX_BODY_BYTES + 23);
   });
 });
 

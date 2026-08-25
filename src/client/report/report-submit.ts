@@ -48,6 +48,58 @@ function withoutEmpty<T extends Record<string, unknown>>(value: T): T {
   return out as T;
 }
 
+/**
+ * Room kept for the `trimmed` marker, which the trim itself adds to the report.
+ *
+ * `,"trimmed":{"journalDropped":400,"screenshotDropped":true}` is 58 characters at its
+ * longest; trimming to a slightly lower target is what stops the marker from pushing a
+ * just-fitting report back over the cap.
+ */
+const TRIM_MARKER_BYTES = 64;
+
+/**
+ * Bring a report under the transport's body cap, and record what that cost.
+ *
+ * Every per-field limit is enforced on its own and they do not sum below `MAX_BODY_BYTES`:
+ * `MAX_JOURNAL_ENTRIES` × `MAX_WS_PAYLOAD_BYTES` is 6.4 MB before the 3 MB screenshot is
+ * counted at all. Over the cap the gateway answers 413 and the report is lost — and since the
+ * journal fills by itself, no gesture a human could make would avoid it (#269).
+ *
+ * Oldest journal entries go first and the screenshot only if emptying the journal was not
+ * enough, so a canvas report keeps the picture it was filed about. Sizes are measured once per
+ * entry rather than by re-serializing the whole report after each drop: this runs on the main
+ * thread of the browser of the person already looking at a bug.
+ */
+function fitToBodyCap(report: BugReport): BugReport {
+  let size = JSON.stringify(report).length;
+  if (size <= MAX_BODY_BYTES) return report;
+
+  const target = MAX_BODY_BYTES - TRIM_MARKER_BYTES;
+  let journalDropped = 0;
+  while (size > target && report.journal.length > 0) {
+    // An entry costs its own serialization, plus the comma before the next one when there is
+    // one. Counting the comma only while it exists keeps the running total exact.
+    const entry = JSON.stringify(report.journal[0]).length;
+    size -= report.journal.length > 1 ? entry + 1 : entry;
+    report.journal.shift();
+    journalDropped++;
+  }
+
+  const anchor = report.anchor;
+  const screenshotDropped = size > target
+    && anchor.kind === 'canvas'
+    && anchor.screenshotDataUrl !== undefined;
+  if (screenshotDropped && anchor.kind === 'canvas') {
+    // Rebuilt rather than deleted through: `anchor` is still the caller's own draft object,
+    // and building a report must not empty the draft it was built from.
+    const { screenshotDataUrl: _dropped, ...kept } = anchor;
+    report.anchor = kept;
+  }
+
+  report.trimmed = { journalDropped, screenshotDropped };
+  return report;
+}
+
 /** A complete report, ready to POST. Split out so tests can assert on it without a fetch. */
 export function buildReport(draft: ReportDraft): BugReport {
   const viewport = typeof window === 'undefined'
@@ -74,20 +126,7 @@ export function buildReport(draft: ReportDraft): BugReport {
     journal: reportJournal.snapshot(),
   }) as BugReport;
 
-  // Trim if serialized size exceeds MAX_BODY_BYTES: drop oldest journal entries, then screenshot.
-  let serialized = JSON.stringify(report);
-  while (serialized.length > MAX_BODY_BYTES) {
-    if (report.journal.length > 0) {
-      report.journal.shift();
-    } else if (report.anchor.kind === 'canvas' && report.anchor.screenshotDataUrl) {
-      delete report.anchor.screenshotDataUrl;
-    } else {
-      break;
-    }
-    serialized = JSON.stringify(report);
-  }
-
-  return report;
+  return fitToBodyCap(report);
 }
 
 export interface SubmitOutcome {
