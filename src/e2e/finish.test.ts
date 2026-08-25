@@ -308,9 +308,22 @@ describe('after a merge', () => {
     git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/live', live);
     heartbeat(bench, live, 3);
 
-    const run = runFinish(bench, bench.mainRepo);
+    const run = runFinish(bench, bench.mainRepo, { SPO_WORKTREE_IDLE_MIN: '120' });
     expect(run.code).toBe(0);
-    expect(run.stdout).toMatch(/== keeping .*live — a session was working there 3 min ago/);
+    // The exact age is not ours to predict. finish.sh reads it off the wall clock —
+    // `(date +%s) - (stat -c %Y)`, whole seconds, scripts/finish.sh:119-126 — so a stamp
+    // made 180 s ago prints 3 only while the clock moves forward at one second per second.
+    // It cannot print 2 by rounding (stat truncates), which means the 2 that failed this
+    // assertion in CI came from the clock itself stepping between the stamp and the read;
+    // a step is unbounded in both directions, and no pinned number survives one.
+    const keeping =
+      /== keeping .*live — a session was working there (-?\d+) min ago \(idle window 120 min\)/;
+    const kept = keeping.exec(run.stdout);
+    // That line is printed by one branch and no other, and only for the live window (120)
+    // rather than the retired one (15) — which is the whole of what the case is about.
+    expect(kept).not.toBeNull();
+    // Whatever the clock said, the age the guard printed has to be the age it kept on.
+    expect(Number(kept?.[1])).toBeLessThan(120);
     expect(fs.existsSync(live)).toBe(true);
   });
 
