@@ -25,11 +25,13 @@ const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
 const NEXT_TASK = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const COMMIT_PUSH = path.join(ROOT, '.claude', 'commands', 'commit-push.md');
 const DEPS_GATE = path.join(ROOT, 'scripts', 'deps-gate.sh');
+const CLAIM_READ = path.join(ROOT, 'scripts', 'claim-read.sh');
 
 let rulebook: string;
 let nextTask: string;
 let commitPush: string;
 let depsGate: string;
+let claimRead: string;
 
 /** Prose is hard-wrapped at ~95 columns; sentence assertions run against the collapsed copy. */
 const collapse = (text: string): string => text.replace(/\s+/g, ' ');
@@ -39,6 +41,7 @@ beforeAll(() => {
   nextTask = fs.readFileSync(NEXT_TASK, 'utf8');
   commitPush = fs.readFileSync(COMMIT_PUSH, 'utf8');
   depsGate = fs.readFileSync(DEPS_GATE, 'utf8');
+  claimRead = fs.readFileSync(CLAIM_READ, 'utf8');
 });
 
 describe('the rulebook carries the discipline', () => {
@@ -90,7 +93,10 @@ describe('the rulebook carries the discipline', () => {
   it('ships the claim read in the recipes, and no pool listing beside it', () => {
     const recipes = rulebook.slice(rulebook.indexOf('## gh CLI recipes'));
     expect(recipes).toMatch(/THE CLAIM READ/);
-    expect(recipes).toMatch(/rateLimit \{ cost remaining resetAt \}/);
+    // The query itself lives in the script the alias runs, never inline here: a session
+    // drives its scripted steps on Haiku and must not be composing shell (§ Model routing).
+    expect(recipes).toMatch(/npm run board:claim/);
+    expect(claimRead).toMatch(/rateLimit \{ cost remaining resetAt \}/);
     // The expensive listing must not survive as a copy-pastable recipe line.
     expect(recipes).not.toMatch(/^gh project item-list/m);
     // The handshake re-read is a single item, not a second listing.

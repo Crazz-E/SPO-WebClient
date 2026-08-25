@@ -62,7 +62,21 @@
       "Bash(wc *)",
       "Bash(tree *)",
       "Bash(which *)",
-      "Bash(echo *)"
+      "Bash(echo *)",
+      "Bash(gh api rate_limit*)",
+      "Bash(gh api repos/Crazz-Org/SPO-WebClient/pulls*)",
+      "Bash(gh pr create*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr merge*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh issue create*)",
+      "Bash(gh issue view*)",
+      "Bash(gh issue list*)",
+      "Bash(gh issue comment*)",
+      "Bash(gh project item-edit*)",
+      "Bash(gh project item-add*)",
+      "Bash(gh auth status*)"
     ],
     "deny": [
       "Workflow",
@@ -76,7 +90,12 @@
       "Bash(git push --force*)",
       "Bash(git push -f*)",
       "Bash(git reset --hard*)",
-      "Bash(git branch -D*)"
+      "Bash(git branch -D*)",
+      "Bash(gh pr close*)",
+      "Bash(gh pr edit*)",
+      "Bash(gh issue close*)",
+      "Bash(gh issue delete*)",
+      "Bash(gh repo delete*)"
     ]
   },
   "hooks": {
