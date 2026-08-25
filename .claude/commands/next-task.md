@@ -22,6 +22,13 @@ A `cd … && …` compound, a variable assignment, a `[ -f … ] &&` guard or th
 prompt — which is the one thing these aliases exist to remove. Compose no GraphQL by hand
 either: raw `gh api graphql` deliberately still prompts.
 
+**Multi-line text goes through a file, never through substitution.** A commit message, a PR
+body or a long comment written as `git commit -m "$(cat <<'EOF' …)"` is compound shell and
+stops to ask. Write the text to a file, then `git commit -F <file>`,
+`gh pr create --body-file <file>` or `gh issue comment --body-file <file>` — all three are
+plain prefix-matched calls that pass. Same reasoning as the aliases: the content belongs in
+a file, never in the command line.
+
 ## 0 · Is `main` red?
 
 The bench proves branches; one nightly run proves `main` itself
@@ -113,9 +120,10 @@ from the claim read you already hold. One card at a time.
 
 **If GitHub answers `RATE_LIMITED` mid-handshake, the write half decides** (kanban-workflow
 § GitHub API discipline, rule 5). The write failed → nothing landed: the card is untouched,
-you own nothing — claim nothing else, read the bucket's `reset` from `gh api rate_limit`
-(free, it still answers when the bucket is empty), wait for it once in the background, then
-start the handshake over. The write succeeded and the re-read failed → the card is
+you own nothing — claim nothing else, then wait for the bucket once with `npm run board:wait`
+and start the handshake over. That alias reads the `reset` from `gh api rate_limit` itself
+(free, and it still answers when the bucket is empty) and returns immediately when the bucket
+was never exhausted, so there is nothing to compute and no `sleep` loop to hand-roll. The write succeeded and the re-read failed → the card is
 provisionally yours: do not walk away half-claimed — wait for `reset`, finish the re-read,
 and if this session must end first, name the card and the unverified write in your final
 report so the human can read the board.
@@ -158,8 +166,11 @@ The repo process applies unchanged — this command adds nothing to it:
   (2–4 lines: what changed, PR number, anything the human should know) → title
   `#<issue> · Done`. **Checking is one read, not a vigil**: your gate PASS *is* the
   `bench/gate` status, and CI normally concluded while the gate was queued —
-  `gh pr checks <n>` once; genuinely pending → re-read at ≥ 30 s intervals with a deadline,
-  never a tight loop (kanban-workflow § GitHub API discipline).
+  `gh pr checks <n>` once. Genuinely pending → `gh pr checks <n> --watch --interval 20`,
+  which blocks until every check concludes and exits non-zero if any failed. Read that exit
+  code, not the printed table. Never hand-roll the poll, and **never a tight loop**: a
+  `while`/`sleep` loop is compound shell, so it stops to ask for permission, and it re-reads
+  GitHub far harder than `--watch` does (kanban-workflow § GitHub API discipline).
 
 ## 4 · If it fails
 
