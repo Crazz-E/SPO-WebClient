@@ -2,7 +2,11 @@
 
 ## Zustand Stores
 
-All stores in `store/`. Created with `create()` and `subscribeWithSelector` middleware.
+All stores in `store/`. Created with `create()`. Only `map-store.ts` adds the
+`subscribeWithSelector` middleware — the rest are plain `create<T>((set, get) => ({ ... }))`.
+Reach for the middleware only when non-React code needs `.subscribe(selector, cb)` on a slice
+(what `map-store` needs it for); a plain store's `.subscribe(listener)` only takes the whole-state
+form, so a selector-form call against one of the other twelve will not compile.
 
 Patterns:
 - **Map-based caches** for keyed data (buildings, research categories)

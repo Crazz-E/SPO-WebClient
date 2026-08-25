@@ -27,28 +27,35 @@ exceeded) — an infinite re-render loop, not a warning.
 **Rule:** never write `?? []`, `?? {}`, or `|| []` inside a selector body. Move the
 fallback outside the call.
 
-## Always wrap in subscribeWithSelector
+## Wrap in subscribeWithSelector only when something subscribes to a slice
+
+Most stores don't need it: `create<T>((set, get) => ({ ... }))` is the default, and eleven of
+the twelve non-`map` stores stay plain. Reach for the middleware only when non-React code (the
+renderer, the WebSocket bridge) needs to subscribe to a *slice* rather than the whole state —
+`map-store.ts` is the one store that does this today:
 
 ```typescript
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 
-export const useGameStore = create<GameStore>()(
+export const useMapStore = create<MapStoreState>()(
   subscribeWithSelector((set, get) => ({
     // state and actions
   }))
 );
 ```
 
-Non-React code (the renderer, the WebSocket bridge) subscribes to slices directly, which
-requires this middleware:
+That middleware is what makes the selector form of `.subscribe` available:
 
 ```typescript
-useGameStore.subscribe(
+useMapStore.subscribe(
   (state) => state.selectedBuildingId,
   (id) => renderer.highlight(id)
 );
 ```
+
+Without it, vanilla zustand types `.subscribe` as taking a single whole-state listener — the
+selector form above will not compile against a plain store.
 
 ## Separate state from actions
 
@@ -81,7 +88,7 @@ Never leave an action that only sets local state when the server also needs to k
 ## Checklist
 
 - [ ] No `??`/`||` fallback inside any selector
-- [ ] `subscribeWithSelector` applied
+- [ ] `subscribeWithSelector` applied only if non-React code needs a slice subscription
 - [ ] State and action interfaces declared separately
 - [ ] No `any` — `unknown` in catch blocks, `toErrorMessage(err)` from `@/shared/error-utils`
 - [ ] Test added at `src/client/store/<name>-store.test.ts` (coverage floor 93%)
