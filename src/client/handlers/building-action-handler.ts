@@ -957,6 +957,7 @@ function electMinisterInline(ctx: ClientHandlerContext, buildingDetails: Buildin
         const success = await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDOSitMinister', '0', {
           ministryId,
           ministerName: playerName,
+          index: rowData['_index'] ?? '0',
         });
         if (success) {
           ctx.showNotification(`${playerName} appointed as ${ministryName}`, 'success');
@@ -980,6 +981,7 @@ async function deposeMinisterInline(ctx: ClientHandlerContext, buildingDetails: 
   try {
     const success = await setBuildingProperty(ctx, buildingDetails.x, buildingDetails.y, 'RDOBanMinister', '0', {
       ministryId,
+      index: rowData['_index'] ?? '0',
     });
     if (success) {
       ctx.showNotification('Minister deposed', 'success');

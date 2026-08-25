@@ -210,20 +210,29 @@ const MATRIX: readonly MatrixEntry[] = [
   },
 
   // ── Ministries (MinisteriesSheet.pas:251/271/293) ────────────────────────
+  // `ministryId` (9) is the wire argument — the actual MinistryId a caller may
+  // have resolved. `index` (3) is the row position, and it is what the witness
+  // is keyed by (WorldPolitics.pas:1354/1357/1358): a fixture where the two
+  // disagree is the only one that catches a regression back to `ministryId`.
   {
-    command: 'RDOBanMinister', value: '0', params: { ministryId: '3' },
-    args: [RdoValue.int(3)],
+    command: 'RDOBanMinister', value: '0', params: { ministryId: '9', index: '3' },
+    args: [RdoValue.int(9)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'Minister3',
   },
   {
-    command: 'RDOSitMinister', value: '0', params: { ministryId: '3', ministerName: 'innos' },
-    args: [RdoValue.int(3), RdoValue.string('innos')],
+    command: 'RDOSitMinister', value: '0', params: { ministryId: '9', ministerName: 'innos', index: '3' },
+    args: [RdoValue.int(9), RdoValue.string('innos')],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'Minister3',
+    // `Tycoon.AssumeRole(Min)` makes `Minister.MasterRole` the tycoon looked up
+    // by name (WorldPolitics.pas:1719,1726) — the cache echoes that name.
+    echo: 'innos',
   },
   {
-    command: 'RDOSetMinistryBudget', value: '3000', params: { ministryId: '3' },
-    args: [RdoValue.int(3), RdoValue.string('3000')],
+    command: 'RDOSetMinistryBudget', value: '3000', params: { ministryId: '9', index: '3' },
+    args: [RdoValue.int(9), RdoValue.string('3000')],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'MinisterBudget3',
+    // `Min.YearBudget := StrToCurr(Budget)` (WorldPolitics.pas:1688,1692).
+    echo: '3000',
   },
 
   // ── Mausoleum (MausoleumSheet.pas) ───────────────────────────────────────
@@ -318,9 +327,14 @@ const MATRIX: readonly MatrixEntry[] = [
     target: 'objectId', verb: 'call', channel: 'frame', readBack: 'minK',
   },
   {
+    // `CacheExtraInfo('CnxInfo'+i, ...)` writes `'OverPrice'+Name`
+    // (Kernel/KernelCache.pas:473-483, call at :580) — one key per connection,
+    // never the bare `OverPriceCnxInfo`. No `echo`: it is written by
+    // `TInputCacheAgent`, a per-input sub-object, while the verification read
+    // binds by (x, y) and lands on the facility — it comes back empty either way.
     command: 'RDOSetInputOverPrice', value: '20', params: { fluidId: 'Plastics', index: '1' },
     args: [RdoValue.string('Plastics'), RdoValue.int(1), RdoValue.int(20)],
-    target: 'objectId', verb: 'call', channel: 'frame', readBack: 'OverPriceCnxInfo',
+    target: 'objectId', verb: 'call', channel: 'frame', readBack: 'OverPriceCnxInfo1',
   },
   {
     // The first argument is the MODEL SERVER POINTER (fTycoonProxyId), never the
@@ -381,14 +395,20 @@ const MATRIX: readonly MatrixEntry[] = [
     echo: '3', // Kernel/Kernel.pas:6408-6412 (assign) / :5894 (cache)
   },
   {
+    // `fRole := TFacilityRole(aRole)` (StdBlocks/Warehouses.pas:527-532) is what
+    // the cache echoes — `WriteInteger('TradeRole', integer(Role))`,
+    // Kernel/Kernel.pas:5893. `Role` does not exist in `TBlock.StoreToCache`.
     command: 'RDOSetRole', value: '2',
     args: [RdoValue.int(2)],
-    target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'Role',
+    target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'TradeRole',
+    echo: '2',
   },
   {
+    // The write lands on the tycoon, not this cache — the cache line is
+    // commented out (Banks.pas:173-180,193) — so there is no witness at all.
     command: 'RDOSetLoanPerc', value: '50',
     args: [RdoValue.int(50)],
-    target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'BudgetPerc',
+    target: 'currBlock', verb: 'call', channel: 'frame', readBack: null,
   },
   {
     command: 'RDOSelectWare', value: '1', params: { index: '2' },
@@ -695,9 +715,11 @@ describe('index → server id resolution', () => {
       RdoCommand.sel(CURR_BLOCK).call('RDOSetMinistryBudget').push()
         .args(RdoValue.int(77), RdoValue.string('3000')).build(),
     );
-    // …and the read-back follows the resolved id, not the row.
+    // …but the read-back stays keyed by the row: the cache writes
+    // `MinisterBudget{i}` by position (WorldPolitics.pas:1358), not by the
+    // resolved MinistryId — `MinisterBudget77` does not exist.
     const listCalls = fake.cacher.getPropertyList.mock.calls;
-    expect(listCalls[listCalls.length - 1][1]).toEqual(['MinisterBudget77']);
+    expect(listCalls[listCalls.length - 1][1]).toEqual(['MinisterBudget2']);
   });
 
   it('keeps the row index when the server has no MinistryId for that row', async () => {

@@ -892,6 +892,26 @@ function expectedWitnessValues(
     case 'property':
       return params.propertyName === undefined ? null : [value.trim()];
 
+    // Direct field assignment, no scaling — `fRole := TFacilityRole(aRole)`
+    // (StdBlocks/Warehouses.pas:527-532) is what the cache echoes verbatim
+    // (`WriteInteger('TradeRole', integer(Role))`, Kernel/Kernel.pas:5893).
+    case 'RDOSetRole':
+      return [value.trim()];
+
+    // `Tycoon.AssumeRole(Min)` (WorldPolitics.pas:1726) makes `Minister.MasterRole`
+    // the tycoon looked up by exact name (`TycoonByName[name]`, :1719); the cache
+    // echoes that tycoon's Name verbatim (`Cache.WriteString('Minister'+i,
+    // Minister.MasterRole.Name)`, :1354). The witness is `ministerName`, not
+    // `value` — RDOSitMinister's `value` is a dummy `'0'`.
+    case 'RDOSitMinister':
+      return params.ministerName === undefined ? null : [params.ministerName.trim()];
+
+    // `Min.YearBudget := StrToCurr(Budget)` (WorldPolitics.pas:1688,1692) is what
+    // the cache echoes (`WriteCurrency('MinisterBudget'+i, Minister.YearBudget)`,
+    // :1358).
+    case 'RDOSetMinistryBudget':
+      return [value.trim()];
+
     default:
       return null;
   }
@@ -962,10 +982,16 @@ function mapRdoCommandToPropertyName(
       return 'TradeLevel';
 
     case 'RDOSetRole':
-      return 'Role';
+      // `fRole := TFacilityRole(aRole)` (StdBlocks/Warehouses.pas:527-532) is
+      // what the cache echoes — `WriteInteger('TradeRole', integer(Role))`
+      // (Kernel/Kernel.pas:5893). `Role` does not exist in `TBlock.StoreToCache`
+      // (Kernel/Kernel.pas:5824-5905).
+      return 'TradeRole';
 
     case 'RDOSetLoanPerc':
-      return 'BudgetPerc';
+      // The write lands on the *tycoon*, not this cache, and the cache line is
+      // commented out (`Banks.pas:173-180,193`) — there is nothing to read back.
+      return null;
 
     case 'RDOSetTaxValue':
       return `Tax${params.index || '0'}Percent`;
@@ -993,7 +1019,14 @@ function mapRdoCommandToPropertyName(
       return 'cnxCount';
 
     case 'RDOSetInputOverPrice':
-      return 'OverPriceCnxInfo';
+      // One key per connection — `CacheExtraInfo('CnxInfo'+i, ...)` writes
+      // `'OverPrice'+Name` (Kernel/KernelCache.pas:473-483, call at :580). The
+      // bare `OverPriceCnxInfo` does not exist, so the name below is at least
+      // readable — but it is written by `TInputCacheAgent`, a per-input
+      // sub-object (`GetPath`, :488-494), while the verification read binds by
+      // (x, y) and lands on the facility. It comes back empty whatever
+      // happens, so `expectedWitnessValues` has no case for this command.
+      return `OverPriceCnxInfo${params.index || '0'}`;
 
     case 'RDOSetInputSortMode':
       return 'SortMode';
@@ -1043,11 +1076,17 @@ function mapRdoCommandToPropertyName(
       return 'InProd';
 
     case 'RDOSetMinistryBudget':
-      return `MinisterBudget${params.ministryId || '0'}`;
+      // Keyed by position in the list, not by the resolved MinistryId —
+      // `Cache.WriteCurrency('MinisterBudget'+IntToStr(i), Minister.YearBudget)`,
+      // `WorldPolitics.pas:1358`, with `MinistryId{i}` written alongside for the
+      // mapping (`:1357`).
+      return `MinisterBudget${params.index || '0'}`;
 
     case 'RDOBanMinister':
     case 'RDOSitMinister':
-      return `Minister${params.ministryId || '0'}`;
+      // Same positional keying — `Cache.WriteString('Minister'+IntToStr(i),
+      // Minister.MasterRole.Name)`, `WorldPolitics.pas:1354`.
+      return `Minister${params.index || '0'}`;
 
     case 'RDOSelectWare':
       return 'GateMap';
