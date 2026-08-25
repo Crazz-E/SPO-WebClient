@@ -557,7 +557,7 @@ The project scope is required once per machine: `gh auth refresh -s project` (ru
 # THE CLAIM READ — one query, ~2 GraphQL points, everything a claim needs: every card with
 # Status/Session/Area in board order (topmost Todo first = priority order), the blocked set,
 # the project/field/option ids item-edit takes, and the price of asking. Run it ONCE per claim.
-# Never read the pool with `gh project item-list` in a session: same data, ~102 points
+# Never read the pool with `gh project item-list` in a session: same data, ~103 points
 # (§ GitHub API discipline). The busy set is computed inside this call, never by a second one.
 gh api graphql -f query='{
   rateLimit { cost remaining resetAt }
