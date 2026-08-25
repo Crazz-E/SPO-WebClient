@@ -60,8 +60,9 @@ const LOGIN_PROPERTIES: Readonly<Record<string, string>> = {
   WorldName: '%planitia',
   WorldURL: '%http://1.2.3.4',
   DAAddr: '%1.2.3.4',
-  DAPort: '#7001',
-  DALockPort: '#80',
+  // DALockPort is DAPort + 1 on the wire (InterfaceServer.pas:2639-2640); the fixture
+  // keeps that relation so a value picked up from the wrong property is visible here.
+  DALockPort: '#7002',
   MailAddr: '%1.2.3.5',
   MailPort: '#1234',
   WorldXSize: '#1000',
@@ -437,7 +438,8 @@ describe('loginWorld', () => {
     const result = await runLoginWorld(fake);
 
     expect(fake.state.daAddr).toBe('1.2.3.4');
-    expect(fake.state.daPort).toBe(7001);
+    // Fed by DALockPort, as Voyager feeds its own fDAPort (ServerCnxHandler.pas:1046).
+    expect(fake.state.daPort).toBe(7002);
     expect(fake.state.mailAddr).toBe('1.2.3.5');
     expect(fake.state.mailPort).toBe(1234);
     expect(fake.state.worldXSize).toBe(1000);

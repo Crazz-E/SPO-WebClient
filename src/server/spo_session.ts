@@ -543,7 +543,11 @@ export class StarpeaceSession extends EventEmitter {
   }
 
   /**
-   * Get Directory Agent port (from InterfaceServer DAPort property)
+   * Get the Direct Access port the ASP pages are handed.
+   *
+   * Filled from the InterfaceServer's `DALockPort`, exactly as Voyager fills its own
+   * `fDAPort` (`Voyager/URLHandlers/ServerCnxHandler.pas:1046`) — the name follows the
+   * `&DAPort=` URL parameter it feeds, not the InterfaceServer property it comes from.
    */
   public getDAPort(): number {
     return this.daPort || config.rdo.ports.directory;

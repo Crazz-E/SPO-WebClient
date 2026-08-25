@@ -46,9 +46,10 @@ const CONTEXT_ID = '8161308';
 const TYCOON_ID = '22';
 const RDO_CNNT_ID = '12345678';
 
-// Must match the legacy Delphi client's property list exactly (no DSArea)
+// Voyager's own sweep, minus DSArea — see the DSArea test below for why that one is
+// deliberately absent (`Voyager/URLHandlers/ServerCnxHandler.pas:1043-1051`).
 const WORLD_PROPERTY_NAMES = [
-  'WorldName', 'WorldURL', 'DAAddr', 'DAPort', 'DALockPort',
+  'WorldName', 'WorldURL', 'DAAddr', 'DALockPort',
   'MailAddr', 'MailPort', 'WorldXSize', 'WorldYSize', 'WorldSeason',
 ];
 
@@ -189,26 +190,43 @@ describe('Protocol Validation: loginWorld()', () => {
   });
 
   describe('World property GET commands', () => {
-    it('should send 10 GET commands for world properties', async () => {
+    it('should send 9 GET commands for world properties', async () => {
       await runFullLoginFlow();
 
       const worldCmds = getWorldCommands();
       const getCmds = worldCmds.filter(cmd => cmd.includes(' get '));
 
-      // 10 world properties + 3 user properties (MailAccount, TycoonId, RDOCnntId) + 1 GetCompanyCount = 14 GETs total
-      // Filter specifically for the 10 world props
+      // 9 world properties + 3 user properties (MailAccount, TycoonId, RDOCnntId) + 1 GetCompanyCount = 13 GETs total
+      // Filter specifically for the 9 world props
       for (const prop of WORLD_PROPERTY_NAMES) {
         const propCmd = getCmds.find(cmd => cmd.includes(`get ${prop}`));
         expect(propCmd).toBeDefined();
       }
     });
 
-    it('should NOT query DSArea (not in legacy client)', async () => {
+    // Voyager DOES read DSArea (`Voyager/URLHandlers/ServerCnxHandler.pas:2750`), but only
+    // to persist `Root/Areas/<area>/Worlds/<world>/Interface` in its local registry
+    // (`:2610`) so a later sign-in can re-find the Interface Server without the world list
+    // (`LogonHandlerViewer.pas:554`). The gateway resolves that address from the Directory
+    // Server on every login, so there is no key to cache and nothing to read the area for.
+    it('should NOT query DSArea (nothing in the gateway consumes it)', async () => {
       await runFullLoginFlow();
 
       const worldCmds = getWorldCommands();
       const dsAreaCmd = worldCmds.find(cmd => cmd.includes('get DSArea'));
       expect(dsAreaCmd).toBeUndefined();
+    });
+
+    // The `&DAPort=` the ASP pages receive carries the InterfaceServer's DALockPort, as
+    // Voyager sends it (`ServerCnxHandler.pas:1046`, `:2756`). The InterfaceServer's own
+    // `DAPort` is a different socket (`InterfaceServer.pas:2639-2640`) and the gateway has
+    // no use for it, so it is never read.
+    it('should NOT query DAPort (Voyager reads DALockPort instead)', async () => {
+      await runFullLoginFlow();
+
+      const worldCmds = getWorldCommands();
+      const daPortCmd = worldCmds.find(cmd => / get DAPort\b/.test(cmd));
+      expect(daPortCmd).toBeUndefined();
     });
 
     it('should target InterfaceServer ID for all world property GETs', async () => {
