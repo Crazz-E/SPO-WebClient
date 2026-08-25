@@ -137,12 +137,15 @@ const BUILD_STEPS: Record<JobType, string[]> = {
 };
 
 /**
- * `scripts/verify-gate.js` exit code -> verdict, one entry per outcome the gate can reach.
+ * Exit code -> verdict, shared by both bodies this worker runs: `scripts/verify-gate.js`
+ * (the `gate` job) and `dist/e2e/run.js` (the `live` / `nightly` jobs) — both declare the
+ * same four-outcome `EXIT` table (verify-gate.js; src/e2e/run.ts), so one map reads either.
  *
  * The gate used to return 0 or 1 and nothing else, so every non-passing outcome arrived here
  * as `FAIL` — including the ENVIRONMENT abort, which judged nothing at all and must not be
- * written as an attestation (see NON_ATTESTING). The codes are declared beside the `EXIT`
- * table at the top of that script; the two must be read together.
+ * written as an attestation (see NON_ATTESTING). `live`/`nightly` had the same bug: a
+ * BLOCKED refusal (rate limit, dirty world — nothing ran) or an ENVIRONMENT abort (preflight
+ * failed) both used to read as FAIL.
  *
  * An unlisted code — an uncaught crash exits 1, a signal exits 128+n — is `FAIL`. That is
  * the safe direction: it attests, so a merge is blocked, rather than passing in silence.
@@ -475,8 +478,8 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
         env,
         logFile,
       });
-      bodyVerdict = code === 0 ? 'PASS' : 'FAIL';
-      bodyDetail = `live drive exited ${code}`;
+      bodyVerdict = GATE_EXIT_VERDICT[code] ?? 'FAIL';
+      bodyDetail = `live drive exited ${code} (${bodyVerdict})`;
     } else {
       // Lease: the report is written EARLY — it is what the waiting session unblocks on.
       // Then the worker holds the bench until the lease expires or the session releases it
