@@ -92,11 +92,10 @@ export class LogRingBuffer {
 
 // ── Session ID Generator ───────────────────────────────────────────────
 
-/** Generate a short, unique, sortable session ID (e.g. `s-m1abc2d-x7k2`). */
+/** Generate a unique, sortable session ID. */
 export function generateSessionId(): string {
   const ts = Date.now().toString(36);
-  const rand = Math.random().toString(36).substring(2, 6);
-  return `s-${ts}-${rand}`;
+  return `s-${ts}-${crypto.randomUUID().replace(/-/g, '').substring(0, 12)}`;
 }
 
 // ── Logger ─────────────────────────────────────────────────────────────
