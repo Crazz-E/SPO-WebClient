@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from '@j
 import { screen, fireEvent, act } from '@testing-library/react';
 import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup/render-helpers';
 import { useMapStore } from '../../store/map-store';
+import { useEmpireStore } from '../../store/empire-store';
 import { useGameStore } from '../../store/game-store';
 import { useSearchStore } from '../../store/search-store';
 import { useUiStore } from '../../store/ui-store';
@@ -71,6 +72,7 @@ describe('MapSurface', () => {
     useGameStore.setState({ tycoonId: '37', worldName: 'planitia', username: 'SPO_test3' });
     localStorage.clear();
     useUiStore.setState({ modal: null, promptPayload: null });
+    useEmpireStore.getState().reset();
     useSearchStore.setState({ townsData: null, isLoading: false });
   });
   afterEach(() => {
@@ -171,23 +173,56 @@ describe('MapSurface', () => {
     jest.useRealTimers();
   });
 
-  it('bookmarks: add the current view through a prompt, go, rename, delete — kept per world and player', () => {
+  it('bookmarks: the server list is asked for, and add / go / rename / delete go to the Favorites tree', () => {
     const src = fakeSource();
     useMapStore.getState().setSource(src);
-    renderWithProviders(<MapSurface />);
+    const onRequestFacilities = jest.fn();
+    const onAddFavorite = jest.fn();
+    const onRenameFavorite = jest.fn();
+    const onRemoveFavorite = jest.fn();
+    renderWithProviders(<MapSurface />, {
+      clientCallbacks: createSpiedCallbacks({ onRequestFacilities, onAddFavorite, onRenameFavorite, onRemoveFavorite }),
+    });
+
+    expect(onRequestFacilities).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/No bookmarks yet/)).toBeTruthy();
+
     fireEvent.click(screen.getByRole('button', { name: /Bookmark this place/ }));
     const prompt = useUiStore.getState().promptPayload;
     expect(prompt?.title).toBe('Bookmark this place');
     expect(prompt?.defaultValue).toBe('(20, 20)');
-    act(() => prompt?.onSubmit('Home'));
+    act(() => prompt?.onSubmit('  Home '));
+    expect(onAddFavorite).toHaveBeenCalledWith('Home', 20, 20);
+
+    // Nothing appears until the server answers — the list is the tree, not a local guess.
+    expect(screen.getByText(/No bookmarks yet/)).toBeTruthy();
+    act(() => useEmpireStore.getState().setFacilities([{ id: 4211, name: 'Home', x: 20, y: 20, path: '4211' }]));
+
     fireEvent.click(screen.getByRole('button', { name: /Go to Home/ }));
     expect(src.centerOn).toHaveBeenLastCalledWith(20, 20);
+
     fireEvent.click(screen.getByRole('button', { name: 'Rename Home' }));
     act(() => useUiStore.getState().promptPayload?.onSubmit('Base'));
-    expect(screen.getByText('Base')).toBeTruthy();
-    expect(JSON.parse(localStorage.getItem('spo.bookmarks.planitia.SPO_test3') ?? '[]')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Base' }));
-    expect(screen.getByText(/No bookmarks yet/)).toBeTruthy();
+    expect(onRenameFavorite).toHaveBeenCalledWith('4211', 'Base');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Home' }));
+    expect(onRemoveFavorite).toHaveBeenCalledWith('4211', 'Home');
+  });
+
+  it('an empty name falls back to the coordinates, and an empty rename is not sent', () => {
+    const src = fakeSource();
+    useMapStore.getState().setSource(src);
+    const onAddFavorite = jest.fn();
+    const onRenameFavorite = jest.fn();
+    renderWithProviders(<MapSurface />, { clientCallbacks: createSpiedCallbacks({ onAddFavorite, onRenameFavorite }) });
+    act(() => useEmpireStore.getState().setFacilities([{ id: 4211, name: 'Home', x: 20, y: 20, path: '4211' }]));
+
+    fireEvent.click(screen.getByRole('button', { name: /Bookmark this place/ }));
+    act(() => useUiStore.getState().promptPayload?.onSubmit('   '));
+    expect(onAddFavorite).toHaveBeenCalledWith('(20, 20)', 20, 20);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Home' }));
+    act(() => useUiStore.getState().promptPayload?.onSubmit('   '));
+    expect(onRenameFavorite).not.toHaveBeenCalled();
   });
 });

@@ -8,8 +8,11 @@
  * if something had changed. That is the OB-1 defect, in the client half.
  */
 
-import { addFavorite, removeFavorite, renameFavorite } from './favorites-handler';
+import { addFavorite, removeFavorite, renameFavorite, migrateLocalBookmarks } from './favorites-handler';
 import { ClientBridge } from '../bridge/client-bridge';
+import { useGameStore } from '../store/game-store';
+import { useEmpireStore } from '../store/empire-store';
+import { BOOKMARKS_KEY_PREFIX } from '../store/legacy-bookmarks';
 import { WsMessageType } from '../../shared/types';
 import type { ClientHandlerContext } from './client-context';
 
@@ -145,5 +148,129 @@ describe('renameFavorite', () => {
 
     expect(showNotification).toHaveBeenCalledWith('Failed to rename favourite: socket closed', 'error');
     expect(sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('migrateLocalBookmarks', () => {
+  const store = new Map<string, string>();
+  let world = 0;
+
+  /** A fresh world per test: the "once per session" guard is keyed on world/player. */
+  function freshWorld(): string {
+    const name = `w${++world}`;
+    useGameStore.setState({ worldName: name, username: 'SPO_test3' });
+    return name;
+  }
+
+  function seedLocal(world: string, list: object[]): string {
+    const key = `${BOOKMARKS_KEY_PREFIX}${world}.SPO_test3`;
+    store.set(key, JSON.stringify(list));
+    return key;
+  }
+
+  beforeEach(() => {
+    store.clear();
+    (globalThis as unknown as { localStorage: unknown }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+    };
+    useEmpireStore.getState().reset();
+  });
+  afterEach(() => { delete (globalThis as unknown as { localStorage?: unknown }).localStorage; });
+
+  it('pushes only the places the tree does not already hold, then drops the local key', async () => {
+    const w = freshWorld();
+    const key = seedLocal(w, [
+      { id: 'bm-1', name: 'Cotton farms', x: 120, y: 340 },
+      { id: 'bm-2', name: 'Mill', x: 10, y: 20 },
+    ]);
+    useEmpireStore.getState().setFacilities([{ id: 4210, name: 'Mill', x: 10, y: 20, path: '4210' }]);
+    const { ctx, sendRequest, sendMessage, showNotification } = makeCtx({ success: true, id: 4211 });
+
+    await migrateLocalBookmarks(ctx);
+
+    expect(sendRequest).toHaveBeenCalledTimes(1);
+    expect(sendRequest).toHaveBeenCalledWith({
+      type: WsMessageType.REQ_FAVORITE_ADD, name: 'Cotton farms', x: 120, y: 340,
+    });
+    expect(store.has(key)).toBe(false);
+    expect(showNotification).toHaveBeenCalledWith('1 saved place moved to your account', 'success');
+    expect(sendMessage).toHaveBeenCalledWith({ type: WsMessageType.REQ_EMPIRE_FACILITIES });
+  });
+
+  it('says how many when there are several, and asks nothing twice for the same player', async () => {
+    const w = freshWorld();
+    seedLocal(w, [{ name: 'a', x: 1, y: 1 }, { name: 'b', x: 2, y: 2 }]);
+    const { ctx, sendRequest, showNotification } = makeCtx({ success: true, id: 1 });
+
+    await migrateLocalBookmarks(ctx);
+    expect(sendRequest).toHaveBeenCalledTimes(2);
+    expect(showNotification).toHaveBeenCalledWith('2 saved places moved to your account', 'success');
+
+    // A second facilities response must not replay the migration.
+    seedLocal(w, [{ name: 'a', x: 1, y: 1 }]);
+    await migrateLocalBookmarks(ctx);
+    expect(sendRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('does nothing at all when this browser kept no places', async () => {
+    freshWorld();
+    const { ctx, sendRequest, showNotification } = makeCtx({ success: true });
+    await migrateLocalBookmarks(ctx);
+    expect(sendRequest).not.toHaveBeenCalled();
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it('drops the local key without a single write when the tree already holds every place', async () => {
+    const w = freshWorld();
+    const key = seedLocal(w, [{ name: 'Mill', x: 10, y: 20 }]);
+    useEmpireStore.getState().setFacilities([{ id: 4210, name: 'Mill', x: 10, y: 20, path: '4210' }]);
+    const { ctx, sendRequest, showNotification } = makeCtx({ success: true });
+
+    await migrateLocalBookmarks(ctx);
+
+    expect(sendRequest).not.toHaveBeenCalled();
+    expect(showNotification).not.toHaveBeenCalled();
+    expect(store.has(key)).toBe(false);
+  });
+
+  it('a refusal keeps the local list, tells the player, and lets a later read try again', async () => {
+    const w = freshWorld();
+    const key = seedLocal(w, [{ name: 'a', x: 1, y: 1 }]);
+    const refused = makeCtx({ success: false, message: 'Nope.' });
+
+    await migrateLocalBookmarks(refused.ctx);
+
+    expect(store.has(key)).toBe(true);
+    expect(refused.showNotification).toHaveBeenCalledWith(
+      'Could not move your saved places to your account: Nope.', 'error',
+    );
+    expect(refused.sendMessage).not.toHaveBeenCalled();
+
+    const retried = makeCtx({ success: true, id: 9 });
+    await migrateLocalBookmarks(retried.ctx);
+    expect(retried.sendRequest).toHaveBeenCalledTimes(1);
+    expect(store.has(key)).toBe(false);
+  });
+
+  it('a refusal with no reason, and a transport failure, both keep the list', async () => {
+    const w1 = freshWorld();
+    const k1 = seedLocal(w1, [{ name: 'a', x: 1, y: 1 }]);
+    const silent = makeCtx({ success: false });
+    await migrateLocalBookmarks(silent.ctx);
+    expect(silent.showNotification).toHaveBeenCalledWith(
+      'Could not move your saved places to your account: the server refused one of them', 'error',
+    );
+    expect(store.has(k1)).toBe(true);
+
+    const w2 = freshWorld();
+    const k2 = seedLocal(w2, [{ name: 'a', x: 1, y: 1 }]);
+    const dead = makeCtx(new Error('socket closed'));
+    await migrateLocalBookmarks(dead.ctx);
+    expect(dead.showNotification).toHaveBeenCalledWith(
+      'Could not move your saved places to your account: socket closed', 'error',
+    );
+    expect(store.has(k2)).toBe(true);
   });
 });

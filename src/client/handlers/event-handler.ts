@@ -31,6 +31,7 @@ import {
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 import { requestBuildingRefreshProperties } from './building-action-handler';
+import { migrateLocalBookmarks } from './favorites-handler';
 import { ClientBridge } from '../bridge/client-bridge';
 import { useGameStore, delphiTDateTimeToJsDate } from '../store/game-store';
 import { useUiStore } from '../store/ui-store';
@@ -366,6 +367,9 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
 
     case WsMessageType.RESP_EMPIRE_FACILITIES:
       ClientBridge.handleEmpireResponse(msg);
+      // The tree is now known, so the places this browser still holds can be
+      // merged into it (N4, OB-33). The call is a no-op after the first one.
+      void migrateLocalBookmarks(ctx);
       break;
 
     case WsMessageType.RESP_RESEARCH_INVENTORY: {

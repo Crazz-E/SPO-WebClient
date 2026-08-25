@@ -5,6 +5,10 @@
  * game view is built; null before, and in tests a fake). The history is Voyager's
  * `MapIsoView.pas:1009-1036` idea — a list of positions with Back / Next — kept here so it
  * accumulates while the player pans the iso map, not only while the surface is open.
+ *
+ * Bookmarks are NOT here any more (N4, OB-33): the places a player keeps live in the server's
+ * Favorites tree, read through `empire-store` and written through `handlers/favorites-handler`.
+ * `store/legacy-bookmarks` only reads the old browser list, once, so it can be migrated.
  */
 
 import { create } from 'zustand';
@@ -15,17 +19,6 @@ export interface MapPosition {
   x: number;
   y: number;
 }
-
-/** A named place the player keeps (N4) — local to this browser, per world and player. */
-export interface MapBookmark {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-}
-
-export const BOOKMARKS_KEY_PREFIX = 'spo.bookmarks.';
-export const BOOKMARKS_MAX = 50;
 
 /** Voyager keeps 100 entries (`MapIsoView.pas:1009`). */
 export const HISTORY_MAX = 100;
@@ -45,14 +38,6 @@ export interface MapStoreState {
   goBack: () => MapPosition | null;
   goNext: () => MapPosition | null;
 
-  /** Bookmarks for the current world / player; `bookmarksKey` says which list is loaded. */
-  bookmarks: MapBookmark[];
-  bookmarksKey: string | null;
-  /** Load the list for (world, player) from localStorage — called when the surface opens. */
-  loadBookmarks: (world: string, player: string) => void;
-  addBookmark: (name: string, x: number, y: number) => MapBookmark | null;
-  renameBookmark: (id: string, name: string) => void;
-  removeBookmark: (id: string) => void;
   reset: () => void;
 }
 
@@ -60,42 +45,7 @@ const initialState = {
   source: null as MinimapRendererAPI | null,
   history: [] as MapPosition[],
   historyIndex: -1,
-  bookmarks: [] as MapBookmark[],
-  bookmarksKey: null as string | null,
 };
-
-function storage(): Storage | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function readBookmarks(key: string): MapBookmark[] {
-  try {
-    const raw = storage()?.getItem(key);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((b): b is MapBookmark => typeof b === 'object' && b !== null && typeof (b as MapBookmark).name === 'string' && Number.isFinite((b as MapBookmark).x) && Number.isFinite((b as MapBookmark).y))
-      .map((b, i) => ({ id: typeof b.id === 'string' && b.id ? b.id : `bm-${i}-${b.x}-${b.y}`, name: b.name, x: b.x, y: b.y }))
-      .slice(0, BOOKMARKS_MAX);
-  } catch {
-    return [];
-  }
-}
-
-function writeBookmarks(key: string, list: MapBookmark[]): void {
-  try {
-    storage()?.setItem(key, JSON.stringify(list));
-  } catch {
-    /* quota or private mode — the list still lives in memory for the session */
-  }
-}
-
-let bookmarkSeq = 0;
 
 function farEnough(a: MapPosition, b: MapPosition): boolean {
   return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) >= HISTORY_MIN_MOVE;
@@ -131,40 +81,6 @@ export const useMapStore = create<MapStoreState>()(
       if (historyIndex >= history.length - 1) return null;
       set({ historyIndex: historyIndex + 1 });
       return history[historyIndex + 1];
-    },
-
-    loadBookmarks: (world, player) => {
-      const key = `${BOOKMARKS_KEY_PREFIX}${world || 'world'}.${player || 'player'}`;
-      if (get().bookmarksKey === key) return;
-      set({ bookmarks: readBookmarks(key), bookmarksKey: key });
-    },
-
-    addBookmark: (name, x, y) => {
-      const { bookmarks, bookmarksKey } = get();
-      if (!bookmarksKey || bookmarks.length >= BOOKMARKS_MAX) return null;
-      const trimmed = name.trim() || `(${x}, ${y})`;
-      const bm: MapBookmark = { id: `bm-${++bookmarkSeq}-${x}-${y}`, name: trimmed, x, y };
-      const next = [...bookmarks, bm];
-      writeBookmarks(bookmarksKey, next);
-      set({ bookmarks: next });
-      return bm;
-    },
-
-    renameBookmark: (id, name) => {
-      const { bookmarks, bookmarksKey } = get();
-      const trimmed = name.trim();
-      if (!bookmarksKey || !trimmed) return;
-      const next = bookmarks.map((b) => (b.id === id ? { ...b, name: trimmed } : b));
-      writeBookmarks(bookmarksKey, next);
-      set({ bookmarks: next });
-    },
-
-    removeBookmark: (id) => {
-      const { bookmarks, bookmarksKey } = get();
-      if (!bookmarksKey) return;
-      const next = bookmarks.filter((b) => b.id !== id);
-      writeBookmarks(bookmarksKey, next);
-      set({ bookmarks: next });
     },
 
     reset: () => set({ ...initialState }),

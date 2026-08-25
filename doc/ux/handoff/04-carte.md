@@ -31,6 +31,10 @@ contrat commun (déplacé dans `minimap-colormap.ts`, ré-exporté par `minimap-
   pour la lecture visée (où sont les miens, lesquels perdent de l'argent).
 - **Favoris de position** (N4, Carte-2) : section « Bookmarks » sous la carte — « Bookmark this
   place » ouvre le PromptDialog (nom, défaut = coordonnées de la vue), chaque ligne = aller
-  (bouton nommé `Go to <nom> (x, y)`), renommer (Prompt), supprimer. Stockage **local**
-  (`localStorage`, clé `spo.bookmarks.<monde>.<joueur>`, 50 max) ; Voyager les gardait en
-  cookies serveur — l'écriture RDO est un ticket séparé.
+  (bouton nommé `Go to <nom> (x, y)`), renommer (Prompt), supprimer. Stockage **serveur**
+  (OB-33) : c'est l'arbre Favorites du joueur — la liste même que montre le panneau Empire —
+  écrite par `RDOFavoritesNewItem` / `DelItem` / `RenameItem`
+  (`Interface Server/InterfaceServer.pas:200-203`). Un favori posé ici se retrouve donc sur
+  n'importe quel navigateur. L'ancienne liste locale (`localStorage`, clé
+  `spo.bookmarks.<monde>.<joueur>`) est fusionnée dans l'arbre une seule fois, à la première
+  lecture des favoris, et n'écrase jamais ce que le serveur tient déjà.
