@@ -7,9 +7,12 @@
  *    not pull the bench into driving something nobody asked about.
  * 2. **An entry is gated exactly once.** Gating twice wastes the one serialised resource;
  *    gating zero times leaves a required check unreported until the queue ejects the entry.
+ * 3. **The entry is fetched before its tree is read.** The reverse order shipped once and
+ *    made the dedup unreachable — every entry read an unknown tree and paid a live drive.
  */
 
 import {
+  fetchEntry,
   listQueueEntries,
   mayReuseVerdict,
   parseQueueRefs,
@@ -129,6 +132,41 @@ describe('treeOf', () => {
   });
 });
 
+describe('fetchEntry — the objects have to be local before the tree can be read', () => {
+  it('fetches the REF, with no local destination — objects only, nothing left under refs/', () => {
+    const calls: string[][] = [];
+    const ok = fetchEntry(
+      (args, _cwd) => (calls.push(args), ''),
+      { ref: 'gh-readonly-queue/main/pr-1-abc', sha: SHA_A },
+      '/co',
+      () => undefined,
+    );
+    expect(ok).toBe(true);
+    // By ref name, not by sha: a server need not serve a bare sha it did not advertise.
+    expect(calls[0]).toEqual([
+      'fetch',
+      '--no-tags',
+      '--quiet',
+      'origin',
+      'refs/heads/gh-readonly-queue/main/pr-1-abc',
+    ]);
+  });
+
+  it('logs a failed fetch and returns false — never throws, never fatal', () => {
+    const logs: string[] = [];
+    const ok = fetchEntry(
+      () => {
+        throw new Error('could not read from remote');
+      },
+      { ref: 'gh-readonly-queue/main/pr-1-abc', sha: SHA_A },
+      '/co',
+      line => void logs.push(line),
+    );
+    expect(ok).toBe(false);
+    expect(logs.join('\n')).toMatch(/could not fetch gh-readonly-queue\/main\/pr-1-abc/);
+  });
+});
+
 describe('mayReuseVerdict — a live slot only where it proves something', () => {
   const passing = { head: SHA_B, tree: 'T1', verdict: 'PASS', fingerprintStable: true };
 
@@ -176,14 +214,22 @@ describe('serveMergeQueue — one pass over the queue', () => {
     attested: { head: string; tree: string | null; verdict: string; fingerprintStable: boolean }[] = [],
     trees: Record<string, string> = {},
     pending: (sha: string) => boolean = () => false,
+    fetched: string[] = [],
   ): Recorder {
     const r: Partial<Recorder> = { deposited: [], reused: [], logs: [] };
     r.deps = {
       lsRemote: () => refs,
+      // A checkout that only knows a sha once its ref has been fetched — which is the whole
+      // point of the ordering. `trees` is what the REMOTE holds; `fetched` is what came down.
       git: args => {
-        const ref = args[1].replace('^{tree}', '');
-        if (!(ref in trees)) throw new Error('unknown revision');
-        return trees[ref];
+        if (args[0] === 'fetch') {
+          fetched.push(args[args.length - 1].replace('refs/heads/', ''));
+          return '';
+        }
+        const sha = args[1].replace('^{tree}', '');
+        const local = fetched.some(ref => refs.includes(`${sha}\trefs/heads/${ref}`));
+        if (!local || !(sha in trees)) throw new Error('unknown revision');
+        return trees[sha];
       },
       attested: () => attested,
       pendingFor: pending,
@@ -211,14 +257,43 @@ describe('serveMergeQueue — one pass over the queue', () => {
 
   it('reuses a verdict when the entry tree is already driven — no live slot', () => {
     // The common case at one entry a time: the merge commit is new, its tree is not.
+    // This is the hit #192 says could never happen: the fake refuses to resolve a sha whose
+    // ref was not fetched, exactly as a real checkout does, so this only passes because the
+    // fetch now precedes the read.
+    const fetched: string[] = [];
+    const r = recorder(
+      `${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`,
+      [{ head: SHA_B, tree: 'T1', verdict: 'PASS', fingerprintStable: true }],
+      { [SHA_A]: 'T1' },
+      () => false,
+      fetched,
+    );
+    expect(serveMergeQueue(r.deps)).toBe(1);
+    expect(fetched).toEqual(['gh-readonly-queue/main/pr-1-abc']);
+    expect(r.reused).toEqual([{ from: SHA_B, to: SHA_A }]);
+    // The whole cost the dedup exists to avoid: no job is deposited, so no live slot.
+    expect(r.deposited).toHaveLength(0);
+    expect(r.logs.join('\n')).toMatch(/reuses bbbbbbbb — identical tree/);
+  });
+
+  it('gates when the entry cannot be fetched at all — an unread tree is never a match', () => {
+    // A checkout that does not exist yet, or an unreachable origin. The failure is logged,
+    // nothing is reused, and the entry takes the live drive it would have taken anyway.
     const r = recorder(
       `${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`,
       [{ head: SHA_B, tree: 'T1', verdict: 'PASS', fingerprintStable: true }],
       { [SHA_A]: 'T1' },
     );
+    const inner = r.deps.git;
+    r.deps.git = (args, cwd) => {
+      if (args[0] === 'fetch') throw new Error('not a git repository');
+      return inner(args, cwd);
+    };
     expect(serveMergeQueue(r.deps)).toBe(1);
-    expect(r.reused).toEqual([{ from: SHA_B, to: SHA_A }]);
-    expect(r.deposited).toHaveLength(0);
+    expect(r.reused).toHaveLength(0);
+    expect(r.deposited.map(x => x.sha)).toEqual([SHA_A]);
+    expect(r.logs.join('\n')).toMatch(/could not fetch gh-readonly-queue\/main\/pr-1-abc/);
+    expect(r.logs.join('\n')).toMatch(/the entry tree could not be read/);
   });
 
   it('gates rather than reuses when the tree differs — main moved', () => {

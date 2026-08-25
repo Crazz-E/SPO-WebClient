@@ -527,6 +527,21 @@ and § The gate base still announces a moved base rather than refusing it.
   entry at a time. An identical tree reuses the verdict and publishes the status at once.
   When `main` has moved the trees differ, the drive happens, and that is the case worth
   paying for.
+- **The entry is fetched before its tree is read.** A speculative commit exists on GitHub and
+  in no checkout, so `rev-parse <sha>^{tree}` can only answer "unknown" until its objects are
+  local. The ref is fetched by name with no refspec — objects only, nothing written under
+  `refs/`, so an entry GitHub deletes leaves nothing behind, and almost every object is
+  already present from the pull request head. A fetch that fails is logged and the tree read
+  is attempted anyway (an earlier tick may have brought it down); a tree that still cannot be
+  read means *gate it*, never "assume it matches".
+
+  ⚠ This is the one ordering the mechanism cannot survive being wrong about, and it shipped
+  wrong. Reading before fetching is **safe** — it fails toward driving — but it makes the hit
+  impossible, so every entry pays a full live drive on a serialised bench and the `tree` field
+  on every attestation is dead weight. It cost 113 s of exclusive bench time on the very first
+  entry, in the ideal case for a hit. Fixed in
+  [#192](https://github.com/Crazz-Org/SPO-WebClient/issues/192); pinned by a test whose fake
+  checkout refuses to resolve a sha whose ref was never fetched, exactly as a real one does.
 
 `ci.yml` reports on `merge_group` as well as `pull_request`, or an entry could never go
 green.
@@ -573,15 +588,24 @@ Recovery, if it has already happened: push the local branch back (`git push -u o
 
 Observed on 2026-08-25, on the first pull request ever sent through this queue.
 
-### Two things to verify by observation
+### Two things GitHub documents nowhere — both now observed
 
-Neither is stated in any GitHub document, and neither is verified yet:
+Both were assumptions when the queue was written. The first pull request through it, #190 on
+2026-08-25, settled both, and they held:
 
-1. **That the sha the queue lands is the sha it tested.** If it is rewritten, the attestation
-   names a commit that never existed on `main`. The *tree* survives either way, which is what
-   the dedup keys on.
-2. **That queue-ref jobs genuinely jump the bench spool in practice** — the bench is
-   serialised machine-wide, and the priority is ours to honour, not GitHub's to enforce.
+1. **The sha the queue lands IS the sha it tested.** The speculative commit was `9b038a2c`,
+   and `9b038a2c` is what `origin/main` points at — verbatim, not rewritten. Had it been
+   rewritten, every attestation would name a commit that never existed on `main`. (The *tree*
+   survives a rewrite either way, which is what the dedup keys on, so the dedup was never at
+   risk here — the attestation's identity was.)
+2. **A queue ref does jump the bench spool.** The worker picked the entry up on an idle tick
+   and published `bench/gate` on the speculative commit (`job-01787638564662-add2f3`), which
+   is what let the entry go green at all. The priority is ours to honour and GitHub's to
+   enforce nowhere; it was honoured.
+
+One entry, so neither is proven under contention — a `lease` holding the bench while an entry
+waits is still untested, and the 60 min `check_response_timeout_minutes` is the margin that
+covers it.
 
 `npm run test:live` is the documented post-ejection diagnostic: an ejected session uses it to
 separate "my defect" from "the combination" instead of re-queueing blind.
@@ -631,3 +655,7 @@ believe a mechanism is in place. It was restored by reverting #178 once the repo
   20 h, and only by the worker; it publishes to `nightly/latest.json` and writes no
   attestation. A worker death mid-nightly stamps `INTERRUPTED` rather than leaving
   yesterday's PASS standing. — `nightly.test.ts`, `worker.test.ts`.
+- A merge-queue entry is gated exactly once, only from GitHub's own queue refs, and its
+  objects are **fetched before its tree is read** — so an entry whose tree already carries a
+  passing attestation reuses it and takes no live slot, while an unfetchable or unreadable
+  tree gates. `merge-queue.test.ts`, `worker.test.ts`.
