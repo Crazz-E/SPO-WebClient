@@ -1,6 +1,6 @@
 /**
  * RightPanel — Slide-in panel from right edge.
- * Used for building inspector, mail, search, politics, transport.
+ * Used for building inspector, mail, search, politics.
  * Only one at a time — controlled by ui-store.rightPanel.
  */
 

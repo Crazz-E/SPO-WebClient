@@ -10,7 +10,6 @@ import { screen } from '@testing-library/react';
 import { renderWithProviders, resetStores } from '../__tests__/setup/render-helpers';
 import { MailPanel } from './mail/MailPanel';
 import { ChatStrip } from './chat/ChatStrip';
-import { TransportPanel } from './transport/TransportPanel';
 
 // ---------------------------------------------------------------------------
 // MailPanel
@@ -42,19 +41,6 @@ describe('ChatStrip', () => {
   it('renders without crashing', () => {
     const { container } = renderWithProviders(<ChatStrip />);
     expect(container).toBeTruthy();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// TransportPanel
-// ---------------------------------------------------------------------------
-
-describe('TransportPanel', () => {
-  beforeEach(resetStores);
-
-  it('renders empty state', () => {
-    renderWithProviders(<TransportPanel />);
-    expect(screen.getByText('No trains available')).toBeTruthy();
   });
 });
 

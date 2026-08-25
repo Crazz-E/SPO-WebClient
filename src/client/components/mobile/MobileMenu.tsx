@@ -7,7 +7,7 @@
  */
 
 import {
-  Mail, Search, Train, Landmark,
+  Mail, Search, Landmark,
   ZoomIn, ZoomOut, Layers, RefreshCw, RotateCw,
   Settings, Globe, Bug, Command, User, Heart,
 } from 'lucide-react';
@@ -65,7 +65,6 @@ export function MobileMenu() {
         { label: 'Command palette', icon: Command, action: () => doAction(() => openCommandPalette()) },
         { label: 'Profile', icon: User, action: () => openPanel(() => openLeftPanel('empire')) },
         { label: 'My facilities', icon: Heart, action: () => openPanel(() => openLeftPanel('facilities')) },
-        { label: 'Transport', icon: Train, action: () => openPanel(() => openRightPanel('transport')) },
         { label: 'Government', icon: Landmark, action: () => openPanel(() => openRightPanel('politics')) },
       ],
     },

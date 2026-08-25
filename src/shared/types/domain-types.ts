@@ -1195,35 +1195,3 @@ export interface RoadDrawingState {
   /** Timestamp when mouse was pressed */
   mouseDownTime: number;
 }
-
-// =============================================================================
-// TRANSPORT (RAILROAD/TRAIN) TYPES
-// =============================================================================
-
-/** Status of a train */
-export type TrainStatus = 'idle' | 'moving' | 'loading' | 'unloading';
-
-/** A stop on a train route */
-export interface TrainRouteStop {
-  stationName: string;
-  x: number;
-  y: number;
-  stopOrder: number;
-}
-
-/** A train entry in the transport system */
-export interface TrainInfo {
-  trainId: number;
-  name: string;
-  ownerName: string;
-  status: TrainStatus;
-  x: number;
-  y: number;
-  routeStops: TrainRouteStop[];
-}
-
-/** Overview data for the transport panel */
-export interface TransportData {
-  trains: TrainInfo[];
-  railSegmentCount: number;
-}
