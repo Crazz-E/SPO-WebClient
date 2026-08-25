@@ -262,7 +262,12 @@ killed mid-run or blocks every session's gate until a human frees the port.
 **Read the verdict from the exit code, never from the printed report** — 0 PASS · 1 verdict
 not passing · 2 refused at deposit (dirty tree) · 3 worker down · 4 wait timed out. The
 report text is for a human; the machine-readable surfaces are that code and
-`~/.spo-bench/verdicts/<sha>.json`.
+`~/.spo-bench/verdicts/<sha>.json`. **And a pipeline's exit code is the last stage's** — so
+never pipe a command whose exit code is the verdict: `npm test | tail -20` reports *tail*,
+which succeeds on anything it can read, while Jest's summary goes to stderr and misses the
+pipe entirely. That pair has already been read here as a green suite that had failed.
+Redirect to a file, capture the code, then filter the file
+(`.claude/hooks/verdict-pipe-guard.sh` enforces it and names the form).
 Full spec: [doc/bench-worker.md](doc/bench-worker.md).
 
 
@@ -275,6 +280,7 @@ Full spec: [doc/bench-worker.md](doc/bench-worker.md).
 | `sanctuarize.sh` | Stop | Runs `npm run typecheck` once per turn if dirty; blocks the turn on failure |
 | `pre-push-gate.sh` | PreToolUse (Bash) | Blocks a **direct push to `main`** — nothing else. It no longer demands an attestation for HEAD: the worker gates a *pushed* sha, so the two rules could not both hold — see **The gate** below |
 | `bench-port-guard.sh` | PreToolUse (Bash) | Blocks anything that would take the bench port (8080) or drive the live world outside the worker; names the sanctioned form |
+| `verdict-pipe-guard.sh` | PreToolUse (Bash) | Blocks piping a command whose exit code **is** the verdict (`npm test\|tail` reports tail, not Jest). Escape: `set -o pipefail` or a `PIPESTATUS` read |
 | `session-heartbeat.sh` | *sourced by the others* | Stamps `~/.spo-bench/sessions/<key>.alive` so `finish` never reaps a worktree a session is working in |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.
