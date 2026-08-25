@@ -506,7 +506,7 @@ The project scope is required once per machine: `gh auth refresh -s project` (ru
 # Status/Session/Area in board order (topmost Todo first = priority order), the blocked set,
 # the project/field/option ids item-edit takes, and the price of asking. Run it ONCE per claim.
 # Never read the pool with `gh project item-list` in a session: same data, ~102 points
-# (§ GitHub API discipline). The busy set is computed from this output, not from a second call.
+# (§ GitHub API discipline). The busy set is computed inside this call, never by a second one.
 gh api graphql -f query='{
   rateLimit { cost remaining resetAt }
   organization(login: "Crazz-Org") { projectV2(number: 1) {
@@ -525,22 +525,31 @@ gh api graphql -f query='{
       number issueDependenciesSummary { blockedBy }
       blockedBy(first: 10) { nodes { number state } } } } }
 }' --jq '
-  (.data.rateLimit | "rateLimit: cost \(.cost), remaining \(.remaining), resets \(.resetAt)"),
-  ("projectId: \(.data.organization.projectV2.id)"),
-  (.data.organization.projectV2.fields.nodes[]
-    | select(.name == "Status" or .name == "Session" or .name == "Area")
-    | "field \(.name): \(.id)\(if .options then " " + ([.options[] | "\(.name)=\(.id)"] | join(" ")) else "" end)"),
-  (.data.organization.projectV2.items.nodes[]
-    | ([.fieldValues.nodes[] | select(.field != null) | {(.field.name): (.text // .name)}] | add // {}) as $f
-    | "item \(.id) #\(.content.number // "-") [\($f.Status // "-")] area=\($f.Area // "-") session=\($f.Session // "-") \(.content.title // "")"),
-  (.data.repository.issues.nodes[]
-    | select(.issueDependenciesSummary.blockedBy > 0)
-    | "#\(.number) blocked by \([.blockedBy.nodes[] | select(.state == "OPEN") | "#\(.number)"] | join(", "))")'
+  ([.data.organization.projectV2.items.nodes[]
+    | ([.fieldValues.nodes[] | select(.field != null) | {(.field.name): (.text // .name)}] | add // {})
+      + {id: .id, number: (.content.number // 0), title: (.content.title // "")}]) as $cards
+  | (.data.rateLimit | "rateLimit: cost \(.cost), remaining \(.remaining), resets \(.resetAt)"),
+    ("projectId: \(.data.organization.projectV2.id)"),
+    (.data.organization.projectV2.fields.nodes[]
+      | select(.name == "Status" or .name == "Session" or .name == "Area")
+      | "field \(.name): \(.id)\(if .options then " " + ([.options[] | "\(.name)=\(.id)"] | join(" ")) else "" end)"),
+    ("busy areas: \([$cards[]
+        | select(.Status == "In progress" or .Status == "Gate" or .Status == "PR")
+        | select(.Area != null and .Area != "docs") | .Area] | unique | join(" "))"),
+    ($cards[]
+      | "item \(.id) #\(.number) [\(.Status // "-")] area=\(.Area // "-") session=\(.Session // "-") \(.title)"),
+    (.data.repository.issues.nodes[]
+      | select(.issueDependenciesSummary.blockedBy > 0)
+      | "#\(.number) blocked by \([.blockedBy.nodes[] | select(.state == "OPEN") | "#\(.number)"] | join(", "))")'
+# The `busy areas:` line IS the busy set (§ One session per area) — derived inside this one
+# call, never fetched by a second: In progress, Gate or PR, `docs` excluded because it never
+# blocks. It is computed rather than eyeballed off the item lines so the rule stays executable;
+# `$cards` is bound once and both outputs read it.
 # The blocked lines: `issueDependenciesSummary { blockedBy }` counts OPEN blockers only, so a
 # closed blocker frees the card by itself. Raise `first:` (or paginate) if the repository ever
 # exceeds 100 open issues or the board 100 items.
-# The busy set — read it off the claim read's item lines, never a second call: the areas on
-# lines whose [Status] is In progress, Gate or PR, docs excluded (it never blocks).
+# There is no standalone `jq` on this machine — only `gh --jq`. That is why the whole claim
+# read is one program over one response, and not a saved file filtered twice.
 
 # The handshake re-read — ONE item, 1 point, after writing `Session`. Never a second listing.
 gh api graphql -f query='{ rateLimit { cost remaining resetAt }
