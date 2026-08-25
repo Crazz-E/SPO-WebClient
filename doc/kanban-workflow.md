@@ -153,6 +153,56 @@ unchanged: a card whose `Session` is filled still belongs to that session, and o
 may free it. What expires is the *ground reservation*, and nothing else — that distinction is
 the whole point of the field.
 
+### Blocking order — the card that cannot start yet
+
+The area reservation above says *two sessions must not stand on the same ground at once*. It
+says nothing about **order**, and nothing else did either: a session could claim a card whose
+work cannot begin until another card's change exists. Until 2026-08-25 that order lived in
+prose — [#120](https://github.com/Crazz-Org/SPO-WebClient/issues/120) carried
+"⚠ Depends on #108 … Fix #108 first" inside its own body, and `/next-task` offered it at every
+claim like any other Todo card. Its order held only because the human's vertical rank happened
+to agree, and any reprioritisation would have destroyed it silently.
+
+GitHub records the relation on the **issue**, not on the card — `blocked by` / `blocks`
+(`Issue.blockedBy`, `Issue.issueDependenciesSummary`, the `addBlockedBy` / `removeBlockedBy`
+mutations). The project's fields do not include it, so `gh project item-list` cannot see one:
+reading the relation is one extra GraphQL call over the open issues — for the whole set, never
+one per card (recipe in § gh CLI recipes).
+
+**A blocked card is not claimable, and closing the blocker is the whole lifecycle.**
+`issueDependenciesSummary.blockedBy` counts the **open** blockers only, so a blocker that closes
+frees the card by itself, with no board write anywhere.
+
+**What a session does when it meets one** — and none of it touches the card:
+
+| The session was | It does |
+|---|---|
+| walking Todo top-down | **skips the card and names the skip in its final report** — `#120 skipped: blocked by #108`. A silent skip would make the board read *worse* with dependencies than without: the human sees a card passed over and is given no reason. |
+| handed the card by number (`/next-task 120`) | **stops and says so out loud**, exactly as it does for a card another session owns. The human named that card; claiming it anyway breaks the order, and skipping it silently answers nothing. |
+
+In both cases `Session` stays empty, `Status` stays **Todo**, and no comment is posted. A
+blocked card is **not** Needs triage — nothing failed, and it was never owned.
+
+**Who may post one, and what it may never be used for.**
+
+1. **The human always may**, on any card.
+2. **A session may add one** when the relation is a fact of the code — the blocked card's work
+   cannot begin until the blocker's change exists — and it says why in one comment on the
+   blocked card. A session **never removes** one: that is the human's, or the blocker closing.
+3. **A dependency is never a substitute for priority.** Priority is the vertical rank of Todo
+   and it belongs to the human (§ The board). A dependency says *cannot start yet*, never
+   *matters less* — to push work back, move the card down; do not invent a blocker.
+4. **It neither substitutes for the `Area` reservation nor is substituted by it.** Areas guard
+   against merge collisions between two live sessions; dependencies guard logical order between
+   two cards that may never be live at the same moment. Both are checked, independently.
+5. **A sub-issue link is not a dependency.** `Parent issue` / `Sub-issues progress` decompose a
+   task ([#167](https://github.com/Crazz-Org/SPO-WebClient/issues/167) → #171–#174); nothing in
+   that link orders the children.
+
+[src/\_\_tests\_\_/card-dependencies.test.ts](../src/__tests__/card-dependencies.test.ts) keeps
+the three surfaces of this rule — this rulebook, the `/next-task` command and `CLAUDE.md` — from
+drifting apart.
+
 ## The orphan watch — the law's missing half
 
 Rule 3 says a session that ends without closing its ownership leaves a locked card, and only
@@ -378,6 +428,22 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 # Fill Area before the card moves to In progress (single select, like Status)
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
   --field-id <AREA_FIELD_ID> --single-select-option-id <OPTION_ID>
+
+# The blocked set — Todo cards that cannot be claimed. ONE call for the whole pool, never one
+# per card. `issueDependenciesSummary.blockedBy` counts OPEN blockers only, so a closed blocker
+# frees the card. Raise `first:` (or paginate) if the repository ever exceeds 100 open issues.
+gh api graphql -f query='{ repository(owner:"Crazz-Org", name:"SPO-WebClient") {
+  issues(first:100, states:OPEN) { nodes { number
+    issueDependenciesSummary { blockedBy } blockedBy(first:10) { nodes { number state } } } } } }' \
+  --jq '.data.repository.issues.nodes[] | select(.issueDependenciesSummary.blockedBy > 0)
+        | "#\(.number) blocked by \([.blockedBy.nodes[] | select(.state=="OPEN") | "#\(.number)"] | join(", "))"'
+
+# Record a blocking order (§ Blocking order). The mutation takes node ids, not numbers:
+# issueId = the card that waits, blockingIssueId = the card it waits on.
+gh api graphql -f query='{repository(owner:"Crazz-Org",name:"SPO-WebClient"){issue(number:<N>){id}}}' \
+  --jq '.data.repository.issue.id'
+gh api graphql -f query='mutation { addBlockedBy(input:{
+  issueId:"<BLOCKED_NODE_ID>", blockingIssueId:"<BLOCKER_NODE_ID>"}) { issue { number } } }'
 
 # New finding → card review → issue → board (label = the queryable mirror of Category/Size)
 # The draft goes to the `card-reviewer` sub-agent FIRST; on DO NOT FILE, nothing below runs.
