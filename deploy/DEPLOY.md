@@ -393,7 +393,19 @@ docker compose logs -f --tail=50
 
 Asset cache persists in Docker volumes — no re-download on update.
 
+Those commands have no health gate and no rollback. The cron path
+(`deploy/deploy.sh`) has both — prefer it, with `--force` when there is nothing new to
+pull.
+
 ### Rollback
+
+`deploy/deploy.sh` rolls back on its own when the health gate fails: it tags the running
+image `spo-webclient:rollback` before building, and on a failed gate it rewinds the
+checkout, restores that tag and recreates the container. It then writes the bad commit to
+`logs/deploy-failed-sha` and refuses to redeploy it until a fix is pushed (or `--force` is
+passed), so cron does not retry a broken build every 30 minutes.
+
+To roll back by hand — to an older commit, or after a manual deploy:
 
 ```bash
 cd /opt/spo-webclient
@@ -401,6 +413,14 @@ git log --oneline -5
 git checkout <commit-hash>
 docker compose build
 docker compose up -d
+```
+
+To undo just the last automatic deploy, without rebuilding:
+
+```bash
+cd /opt/spo-webclient
+docker tag spo-webclient:rollback spo-webclient-spo-webclient
+docker compose up -d --force-recreate --no-build spo-webclient
 ```
 
 ### Container Debugging
