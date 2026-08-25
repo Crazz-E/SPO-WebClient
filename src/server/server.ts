@@ -547,6 +547,9 @@ const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 // Ceilings raised to 1000/min on 2026-08-22 (developer decision) for the automated test
 // phase: the bench worker serializes real live traffic, and the Delphi servers hold this
 // load without trouble. Tighten again before any public deployment.
+// Recorded as exception SEC-X-1 in doc/production-security-policy.md §9 — the policy floor
+// is auth 10/min and proxy 60/min, and deploy/DEPLOY.md ("Before the first public
+// deployment") is what raises the question at the right moment. This comment is not.
 const RATE_LIMIT_MAX_AUTH = 1000;     // max auth attempts per minute per IP
 const RATE_LIMIT_MAX_PROXY = 1000;    // max proxy-image requests per minute per IP
 const RATE_LIMIT_MAX_ENTRIES = 10_000; // max entries before forced cleanup
@@ -826,7 +829,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Rate limit: 1 report per IP per 30 seconds
+    // Rate limit: 2 reports per IP per RATE_LIMIT_WINDOW_MS (60 s) — the window is the shared
+    // one declared above, not a per-category 30 s. SEC-H-4 records these same numbers.
     const clientIp = getClientIp(req);
     if (!checkRateLimit(clientIp, 'debug-log', 2)) {
       res.writeHead(429, { 'Content-Type': 'application/json' });
@@ -1074,6 +1078,7 @@ const server = http.createServer(async (req, res) => {
 // Per-IP WebSocket connection tracking for rate limiting
 const wsConnectionsPerIp = new Map<string, number>();
 // 1000 since 2026-08-22 (developer decision, test phase — see the rate-limit note above).
+// Exception SEC-X-1; the SEC-W-3 floor is 5 per IP. Restore it before any public deployment.
 const WS_MAX_CONNECTIONS_PER_IP = 1000;
 
 const wss = new WebSocketServer({
