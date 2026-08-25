@@ -9,9 +9,11 @@
  * Click = jump there. Wheel = zoom around the cursor (1× … 8×), drag = pan when zoomed.
  * Toolbar: Back / Next through the camera history (`map-store`), nearest Town Hall from the
  * towns page Search / Government already hold (`search-store`), reset zoom.
- * Bookmarks (N4): named places kept in this browser per world and player (`map-store`) —
- * add the current view, go, rename, delete. Voyager kept its LINKS as server cookies
- * (`MapIsoView.pas:683-716`); writing them back would need an RDO member this lot does not add.
+ * Bookmarks (N4, OB-33): the places the player keeps, in the server's own Favorites tree —
+ * the same list the Empire panel shows, so a place kept here is there on any browser.
+ * Add the current view, go, rename, delete; the writes go through `RDOFavoritesNewItem` /
+ * `DelItem` / `RenameItem` (`Interface Server/InterfaceServer.pas:200-203`). Places kept in
+ * this browser before the move are merged in once, by `handlers/favorites-handler`.
  *
  * The docked diamond stays available from the More menu; this surface is the large, readable
  * version the brief asked for (« bouton Carte »).
@@ -21,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Bookmark, BookmarkPlus, Landmark, Locate, Pencil, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useMapStore } from '../../store/map-store';
+import { useEmpireStore } from '../../store/empire-store';
 import { useGameStore } from '../../store/game-store';
 import { useSearchStore } from '../../store/search-store';
 import { useClient } from '../../context';
@@ -80,13 +83,7 @@ export function MapSurface() {
   const goNext = useMapStore((s) => s.goNext);
   const recordPosition = useMapStore((s) => s.recordPosition);
   const towns = useSearchStore((s) => s.townsData?.towns);
-  const bookmarks = useMapStore((s) => s.bookmarks);
-  const loadBookmarks = useMapStore((s) => s.loadBookmarks);
-  const addBookmark = useMapStore((s) => s.addBookmark);
-  const renameBookmark = useMapStore((s) => s.renameBookmark);
-  const removeBookmark = useMapStore((s) => s.removeBookmark);
-  const worldName = useGameStore((s) => s.worldName);
-  const username = useGameStore((s) => s.username);
+  const bookmarks = useEmpireStore((s) => s.facilities);
   const tycoonIdRaw = useGameStore((s) => s.tycoonId);
   const myTycoonId = parseInt(tycoonIdRaw || '0', 10) || 0;
   const client = useClient();
@@ -105,10 +102,10 @@ export function MapSurface() {
     if (!towns) client.onSearchMenuTowns();
   }, [client, towns]);
 
-  // Bookmarks live per world and player.
+  // The bookmarks are the server's Favorites tree — ask for it when the surface opens.
   useEffect(() => {
-    loadBookmarks(worldName, username);
-  }, [loadBookmarks, worldName, username]);
+    client.onRequestFacilities();
+  }, [client]);
 
   // Fit the square canvas to the surface width.
   useEffect(() => {
@@ -260,10 +257,10 @@ export function MapSurface() {
     if (!camera) return;
     const x = Math.round(camera.x);
     const y = Math.round(camera.y);
-    useUiStore.getState().requestPrompt('Bookmark this place', `The view is at (${x}, ${y}). Name it:`, (name) => { addBookmark(name, x, y); }, { placeholder: 'e.g. Cotton farms', defaultValue: `(${x}, ${y})` });
+    useUiStore.getState().requestPrompt('Bookmark this place', `The view is at (${x}, ${y}). Name it:`, (name) => { client.onAddFavorite(name.trim() || `(${x}, ${y})`, x, y); }, { placeholder: 'e.g. Cotton farms', defaultValue: `(${x}, ${y})` });
   };
-  const onRenameBookmark = (id: string, current: string) => {
-    useUiStore.getState().requestPrompt('Rename bookmark', 'New name:', (name) => renameBookmark(id, name), { defaultValue: current });
+  const onRenameBookmark = (path: string, current: string) => {
+    useUiStore.getState().requestPrompt('Rename bookmark', 'New name:', (name) => { const t = name.trim(); if (t) client.onRenameFavorite(path, t); }, { defaultValue: current });
   };
 
   const camera = source?.getCameraPosition();
@@ -321,17 +318,17 @@ export function MapSurface() {
           </Button>
         </div>
         {bookmarks.length === 0 ? (
-          <p className={styles.bookmarksEmpty}>No bookmarks yet — keep a place you come back to.</p>
+          <p className={styles.bookmarksEmpty}>No bookmarks yet — keep a place and it follows you to any browser.</p>
         ) : (
           <ul className={styles.bookmarkList} role="list">
             {bookmarks.map((b) => (
-              <li key={b.id} className={styles.bookmarkRow}>
+              <li key={b.path} className={styles.bookmarkRow}>
                 <button type="button" className={styles.bookmarkGo} onClick={() => jumpTo(b.x, b.y)} aria-label={`Go to ${b.name} (${b.x}, ${b.y})`}>
                   <span className={styles.bookmarkName}>{b.name}</span>
                   <span className={styles.bookmarkCoords}>({b.x}, {b.y})</span>
                 </button>
-                <Button size="sm" variant="ghost" aria-label={`Rename ${b.name}`} iconLeft={<Pencil size={14} />} onClick={() => onRenameBookmark(b.id, b.name)} />
-                <Button size="sm" variant="ghost" aria-label={`Delete ${b.name}`} iconLeft={<Trash2 size={14} />} onClick={() => removeBookmark(b.id)} />
+                <Button size="sm" variant="ghost" aria-label={`Rename ${b.name}`} iconLeft={<Pencil size={14} />} onClick={() => onRenameBookmark(b.path, b.name)} />
+                <Button size="sm" variant="ghost" aria-label={`Delete ${b.name}`} iconLeft={<Trash2 size={14} />} onClick={() => client.onRemoveFavorite(b.path, b.name)} />
               </li>
             ))}
           </ul>
