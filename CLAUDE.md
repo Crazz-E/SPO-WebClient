@@ -175,11 +175,14 @@ lands in — and a session claims the topmost Todo card whose area no live card 
 (`SPO_WORKTREE_IDLE_MIN`, 120 min), the card's `Session` field never does.
 **Feeding rule:** every finding lands as a new issue in Todo, with its `Category` and the
 matching `cat:` / `size:` labels — a finding that only lives in a session report is lost.
-⚠ **Filing the issue is not enough right now.** The board's `Auto-add to project` workflow did
-not follow the repository into the organization and cannot be recreated from the API, so a new
-issue belongs to no board until someone adds it: `gh project item-add 1 --owner Crazz-Org --url
-<ISSUE_URL>`, then read the item back. [kanban-workflow.md](doc/kanban-workflow.md) carries the
-one-time UI step that retires this.
+⚠ **Filing the issue is not enough right now.** `Auto-add to project` is on and verified — a
+new issue reaches the board in seconds — but `Item added to project` is not, so **the card
+arrives with no `Status`**. `/next-task` selects on `Status = Todo`, so a statusless card is on
+the board and still outside the pool: filed, visible, and never picked up. Until that workflow
+is enabled, set the column yourself after filing — `gh project item-edit --id <ITEM_ID>
+--project-id <PROJECT_ID> --field-id <STATUS_FIELD_ID> --single-select-option-id <TODO_ID>` —
+and read the card back. [kanban-workflow.md](doc/kanban-workflow.md) carries the one-time UI
+step that retires this, and the ids.
 **Every draft card is read first by the `card-reviewer` sub-agent**, whose dated verdict
 becomes the card's first comment; on `DO NOT FILE` no issue is created and the session's
 report says why.
