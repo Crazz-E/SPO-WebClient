@@ -308,9 +308,17 @@ describe('after a merge', () => {
     git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/live', live);
     heartbeat(bench, live, 3);
 
-    const run = runFinish(bench, bench.mainRepo);
+    const run = runFinish(bench, bench.mainRepo, { SPO_WORKTREE_IDLE_MIN: '120' });
     expect(run.code).toBe(0);
-    expect(run.stdout).toMatch(/== keeping .*live — a session was working there 3 min ago/);
+    // The age is printed in whole minutes, so a stamp of 3 min ago reads back as 3 — or as 2
+    // when the stamp and the read fall on either side of a minute boundary. What this proves
+    // is the branch taken (kept, well inside the window), not the exact number.
+    const keeping =
+      /== keeping .*live — a session was working there (\d+) min ago \(idle window 120 min\)/;
+    const kept = keeping.exec(run.stdout);
+    expect(kept).not.toBeNull();
+    expect(Number(kept?.[1])).toBeGreaterThanOrEqual(2);
+    expect(Number(kept?.[1])).toBeLessThanOrEqual(3);
     expect(fs.existsSync(live)).toBe(true);
   });
 
