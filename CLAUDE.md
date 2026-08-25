@@ -243,7 +243,11 @@ npm run gate:local   # verify-gate.js directly — evidence for reading; does NO
 port 8080, the LOCKED accounts and the Helartia world state belong to one permanent process
 (systemd --user unit `spo-bench-worker`, installed by `scripts/bench-install.sh`). Sessions
 never start a gateway, never kill a process, never hold a lock: they deposit a job and wait for
-the report — one background shell command, zero tokens. Jobs run one at a time, oldest first,
+the report — one background command, zero tokens. **Background it with the tool's own
+`run_in_background`, never with a trailing `&`**: the shell then reports the fork rather
+than the run, so the exit code is 0 whatever happened and the verdict is destroyed before
+anyone reads it. The redirect to a log file is fine and needs no permission; only the
+ampersand does. Jobs run one at a time, oldest first,
 each in the depositing session's worktree, which the worker builds. `npm run dev:local` is the
 conscious exception, for debugging only — its results attest nothing.
 `.claude/hooks/bench-port-guard.sh` refuses every other route to the port and to the live
@@ -254,7 +258,10 @@ passing · 2 refused at deposit (dirty tree) · 3 worker down · 4 wait timed ou
 machine-readable surfaces are that code and `~/.spo-bench/verdicts/<sha>.json`. **And a
 pipeline's exit code is the last stage's**, so never pipe a command whose exit code is the
 verdict: `npm test | tail -20` reports *tail*, and has already been read here as a green suite
-that had failed. Redirect to a file, capture the code, then filter the file. Full spec:
+that had failed. Redirect to a file, capture the code, then filter the file. **A trailing `&`
+loses it the same way** — the shell reports the fork, so the code is 0 whatever happened;
+background with the tool's own `run_in_background`, keeping the redirect, which is fine on its
+own. So does `out=$(npm test)`, which keeps the text and drops the number. Full spec:
 [doc/bench-worker.md](doc/bench-worker.md).
 
 ## Automation (`.claude/hooks/`)
@@ -267,7 +274,7 @@ that had failed. Redirect to a file, capture the code, then filter the file. Ful
 | `pre-push-gate.sh` | PreToolUse (Bash) | Blocks a **direct push to `main`** — nothing else. It cannot demand an attestation for HEAD: the worker gates a *pushed* sha |
 | `bench-port-guard.sh` | PreToolUse (Bash) | Blocks anything that would take the bench port (8080) or drive the live world outside the worker; names the sanctioned form |
 | `verdict-pipe-guard.sh` | PreToolUse (Bash) | Blocks piping a command whose exit code **is** the verdict (`npm test\|tail` reports tail, not Jest). Escape: `set -o pipefail` or a `PIPESTATUS` read |
-| `poll-loop-guard.sh` | PreToolUse (Bash) | Blocks a hand-rolled wait loop (`until`/`while`/`for` + `sleep`) on a bench job or a GitHub read, and names `npm run bench:wait` / `npm run pr:wait` instead |
+| `poll-loop-guard.sh` | PreToolUse (Bash) | Blocks the two ways a verdict gets lost while waiting: a trailing `&` on a verdict command (the shell reports the fork — always 0), and a hand-rolled wait loop (`until`/`while`/`for` + `sleep`) on a bench job or a GitHub read. Names `run_in_background`, `npm run bench:wait` or `npm run pr:wait` |
 | `session-heartbeat.sh` | *sourced by the others* | Stamps `~/.spo-bench/sessions/<key>.alive` so `finish` never reaps a worktree a session is working in |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.

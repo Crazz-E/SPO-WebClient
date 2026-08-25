@@ -63,7 +63,7 @@ one process (the worker) consumes the spool.
 1. **Deposit** (`npm run gate` / `test:live` / `dev`): the client checks the worker is
    alive (pid + heartbeat < 20 s) — **a dead worker is exit 3, immediately, at deposit
    time**. It fingerprints the tree, writes the request, returns the job id. `--wait`
-   folds into the wait loop so the whole round trip is one background shell command —
+   folds into the wait loop so the whole round trip is one background command —
    a queued session spends **zero tokens** waiting.
 2. **Claim**: the worker takes the oldest deposit. If the depositing session's pid is
    dead → report `ABANDONED`, nothing runs, the queue cleans itself.
