@@ -114,44 +114,70 @@ export class RdoFramer {
 
 export class RdoProtocol {
   /**
+   * Drops the frame terminator, so it never reaches the content.
+   *
+   * `RdoCommand.build()` appends `;` to every frame it emits — that is the real
+   * frame, the one `writeRdoFrame` sends. `RdoFramer` eats the terminator while
+   * splitting the stream, so a packet arriving from the socket has none; a frame
+   * handed to `parse` whole still does, and without this it lands inside the last
+   * argument (`"%15";` instead of `%15`), closing quote and all.
+   *
+   * Only an *unquoted* terminator goes: a `;` inside a string is data, and
+   * `RdoFramer.findDelimiter` already refuses to split on one. Since the `;` is
+   * the last character, counting the quotes of the whole frame counts exactly
+   * those that precede it — even means the terminator stands outside a string.
+   * Doubling (`""`, what `format()` emits) keeps the count even; an unterminated
+   * string leaves it odd, and the frame is then returned untouched.
+   */
+  private static stripTerminator(frame: string): string {
+    if (!frame.endsWith(RDO_CONSTANTS.PACKET_DELIMITER)) return frame;
+    const quotes = (frame.match(/"/g) ?? []).length;
+    return quotes % 2 === 0 ? frame.slice(0, -1).trimEnd() : frame;
+  }
+
+  /**
    * Parses a raw protocol string into a structured RdoPacket.
+   *
+   * `packet.raw` keeps the frame as it arrived, terminator included; every
+   * parsed field is read from the body instead.
    */
   public static parse(raw: string): RdoPacket {
     const trimmed = raw.trim();
+    const body = this.stripTerminator(trimmed);
 
     // 1. Detect Packet Type
-    if (trimmed.startsWith(RDO_CONSTANTS.CMD_PREFIX_ANSWER)) {
-      return this.parseResponse(trimmed);
-    } else if (trimmed.startsWith(RDO_CONSTANTS.CMD_PREFIX_CLIENT)) {
-      return this.parseCommand(trimmed);
+    if (body.startsWith(RDO_CONSTANTS.CMD_PREFIX_ANSWER)) {
+      return this.parseResponse(body, trimmed);
+    } else if (body.startsWith(RDO_CONSTANTS.CMD_PREFIX_CLIENT)) {
+      return this.parseCommand(body, trimmed);
     }
 
     return {
       raw,
       type: 'PUSH',
-      payload: trimmed
+      payload: body
     };
   }
 
-	  private static parseResponse(raw: string): RdoPacket {
+	  private static parseResponse(body: string, raw: string): RdoPacket {
 		// Regex: A(\d+)\s+(.*)
-		const match = raw.match(/^A(\d+)\s*([\s\S]*)$/);
+		const match = body.match(/^A(\d+)\s*([\s\S]*)$/);
 		if (!match) {
 		  // Malformed busy rejection: "A"+"error <n>" with no QueryId
 		  // (WinSockRDOConnectionsServer.pas:812). Surface the error code so the
 		  // session can flip its busy flag instead of dropping the signal.
-		  const busyMatch = raw.match(/^A ?error (\d+)\s*$/);
+		  const busyMatch = body.match(/^A ?error (\d+)\s*$/);
 		  if (busyMatch) {
 			const code = parseInt(busyMatch[1], 10);
 			return {
 			  raw,
 			  type: 'RESPONSE',
-			  payload: raw.substring(1).trim(),
+			  payload: body.substring(1).trim(),
 			  errorCode: code,
 			  errorName: RDO_ERROR_CODES[code] ?? `unknownError(${code})`,
 			};
 		  }
-		  return { raw, type: 'RESPONSE', payload: raw };
+		  return { raw, type: 'RESPONSE', payload: body };
 		}
 
 		const payload = match[2];
@@ -211,8 +237,8 @@ export class RdoProtocol {
 	  }
 
 
-	 private static parseCommand(raw: string): RdoPacket {
-		let content = raw.substring(1).trim();
+	 private static parseCommand(body: string, raw: string): RdoPacket {
+		let content = body.substring(1).trim();
 		let rid: number | undefined;
 		let type: 'REQUEST' | 'PUSH' = 'PUSH';
 
