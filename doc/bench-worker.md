@@ -179,7 +179,7 @@ It exists because the ruleset no longer requires a branch to be **up to date** w
 `main`. That rule was correct and unaffordable: the bench is serialised and every merge
 invalidated every other session's gate, so N parallel sessions cost N² bench runs — each
 one a build plus a full live drive, for a merge that changed nothing they touched
-([#134](https://github.com/Crazz-E/SPO-WebClient/issues/134)).
+([#134](https://github.com/Crazz-Org/SPO-WebClient/issues/134)).
 
 What replaces it is not a weaker rule but a **visible** one. `baseMain` says which `main`
 the live evidence stands on, and three surfaces read it back:
@@ -332,7 +332,7 @@ separate change to the driver, not to the schedule.
 
 ## 9. The owner lease — one live bench across machines
 
-**Status:** stage A of [#158](https://github.com/Crazz-E/SPO-WebClient/issues/158) · Code: `src/e2e/bench/owner.ts`
+**Status:** stage A of [#158](https://github.com/Crazz-Org/SPO-WebClient/issues/158) · Code: `src/e2e/bench/owner.ts`
 
 Everything in §1–§8 excludes two live drives *on this machine*: one systemd unit, one port,
 one `bench-port-guard.sh`. That worked because the worker and its sessions share a
@@ -384,7 +384,7 @@ in practice.
 
 ## 10. Gating a commit the worker fetched — the `ref` job
 
-**Status:** stage B of [#158](https://github.com/Crazz-E/SPO-WebClient/issues/158) · Code: `src/e2e/bench/checkout.ts`
+**Status:** stage B of [#158](https://github.com/Crazz-Org/SPO-WebClient/issues/158) · Code: `src/e2e/bench/checkout.ts`
 
 Everything above tests **the depositing session's worktree**. That is the coupling #158
 removes: it is the only reason a session must live on this machine, and the reason GitHub's
@@ -493,7 +493,7 @@ GitHub's merge queue requires an **organization-owned** repository. This one is 
 personal account:
 
 ```
-$ gh api repos/Crazz-E/SPO-WebClient --jq '{owner_type:.owner.type,visibility}'
+$ gh api repos/Crazz-Org/SPO-WebClient --jq '{owner_type:.owner.type,visibility}'
 {"owner_type":"User","visibility":"public"}
 ```
 
@@ -509,7 +509,7 @@ proved the merged combination rather than the branch's own base. Without it, a g
 
 **So `baseMain` stays, and it is load-bearing rather than transitional.** It records which
 `main` the live evidence stood on; the `bench/gate` status shows it; the push hook announces a
-moved base without refusing it (§ The gate base). [#158](https://github.com/Crazz-E/SPO-WebClient/issues/158)
+moved base without refusing it (§ The gate base). [#158](https://github.com/Crazz-Org/SPO-WebClient/issues/158)
 planned to delete it *because* the queue would prove the stronger property directly. The queue
 cannot exist here, so the weaker, **visible** guarantee is the one this repository has — and
 deleting `baseMain` would have left nothing in its place.
@@ -519,8 +519,8 @@ deleting `baseMain` would have left nothing in its place.
 entry's *tree* matched one already driven live. It worked; it simply could never find a ref.
 Keeping code that cannot run is how a reader comes to believe a mechanism is in place, so it
 was reverted rather than left dormant. It is recoverable from
-[#170](https://github.com/Crazz-E/SPO-WebClient/pull/170) and
-[#168](https://github.com/Crazz-E/SPO-WebClient/pull/168) (the `merge_group` CI trigger, which
+[#170](https://github.com/Crazz-Org/SPO-WebClient/pull/170) and
+[#168](https://github.com/Crazz-Org/SPO-WebClient/pull/168) (the `merge_group` CI trigger, which
 went with it — that event cannot fire here either).
 
 **If this repository ever moves to an organization**, restoring it is: revert those two pull

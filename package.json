@@ -52,7 +52,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Crazz-E/SPO-WebClient.git"
+    "url": "git+https://github.com/Crazz-Org/SPO-WebClient.git"
   },
   "engines": {
     "node": ">=22.0.0",

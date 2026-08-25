@@ -2,13 +2,13 @@
 
 **Single source of truth for all open work:**
 [github.com/users/Crazz-E/projects/2](https://github.com/users/Crazz-E/projects/2)
-(user project #2, Kanban). Every task is a **GitHub issue** on `Crazz-E/SPO-WebClient`,
+(user project #2, Kanban). Every task is a **GitHub issue** on `Crazz-Org/SPO-WebClient`,
 added to the project. Draft items are not used.
 
 The former documentary backlog (`doc/BACKLOG.md`, `doc/BACKLOG-OPEN.md`) is **retired and
 deleted**; its full text stays readable at the archive permalink:
-[`doc/BACKLOG-OPEN.md` @ `94b059a0`](https://github.com/Crazz-E/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG-OPEN.md)
-· [`doc/BACKLOG.md` @ `94b059a0`](https://github.com/Crazz-E/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG.md).
+[`doc/BACKLOG-OPEN.md` @ `94b059a0`](https://github.com/Crazz-Org/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG-OPEN.md)
+· [`doc/BACKLOG.md` @ `94b059a0`](https://github.com/Crazz-Org/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG.md).
 `OB-N` identifiers survive as issue titles; new tasks get plain issue numbers.
 
 ## The board — six columns, one per milestone
@@ -143,7 +143,7 @@ The window is **`SPO_WORKTREE_IDLE_MIN`** — the same variable and the same 120
 [`scripts/finish.sh:51`](../scripts/finish.sh) already uses to decide a worktree is abandoned.
 One number to tune, not two. While the heartbeat is younger than that, the reservation is live.
 **When no heartbeat is found for the branch** (the store was cleared, or the session runs on
-another machine — [#158](https://github.com/Crazz-E/SPO-WebClient/issues/158)), fall back to the
+another machine — [#158](https://github.com/Crazz-Org/SPO-WebClient/issues/158)), fall back to the
 branch's last commit date on `origin`, with the same window. A branch with neither signal does
 not hold its area.
 
@@ -320,13 +320,13 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 
 # New finding → card review → issue → board (label = the queryable mirror of Category/Size)
 # The draft goes to the `card-reviewer` sub-agent FIRST; on DO NOT FILE, nothing below runs.
-gh issue create --repo Crazz-E/SPO-WebClient --title "…" --body "…" \
+gh issue create --repo Crazz-Org/SPO-WebClient --title "…" --body "…" \
   --label "cat:latent-trap" --label "size:M"
-gh issue comment <N> --repo Crazz-E/SPO-WebClient --body "<the verdict, verbatim>"
+gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body "<the verdict, verbatim>"
 gh project item-add 2 --owner Crazz-E --url <ISSUE_URL>
 
 # Final comment
-gh issue comment <N> --repo Crazz-E/SPO-WebClient --body "…"
+gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body "…"
 ```
 
 The entry point for a working session is the **`/next-task`** command

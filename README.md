@@ -2,7 +2,7 @@
 
 A browser-based multiplayer tycoon game client for [Starpeace Online](http://www.starpeaceonline.com), rebuilt from scratch in TypeScript with React 19 and a custom Canvas 2D isometric renderer.
 
-![release](https://img.shields.io/github/v/release/Crazz-E/SPO-WebClient)
+![release](https://img.shields.io/github/v/release/Crazz-Org/SPO-WebClient)
 
 ## Overview
 
@@ -310,7 +310,7 @@ The Node.js server exposes REST endpoints for game data and asset serving. Stati
 
 Every merge to `main` is a release: `release.yml` derives the version from the last
 `v*` tag and the conventional commits since it (`feat` → minor, otherwise patch), builds,
-tags and publishes it on [GitHub Releases](https://github.com/Crazz-E/SPO-WebClient/releases)
+tags and publishes it on [GitHub Releases](https://github.com/Crazz-Org/SPO-WebClient/releases)
 with generated notes. Nobody creates `v*` tags by hand. [CHANGELOG.md](CHANGELOG.md) is the
 frozen history up to 1.3.2-beta.
 
