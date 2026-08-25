@@ -65,7 +65,9 @@ card, so anything this query prints is blocked right now.
    the card to In progress.
 5. **If the area you just determined turns out to be busy**: clear `Session`, leave the card in
    Todo with `Area` now filled, and go back to step 2. The card never reached In progress, so
-   this is the same back-off as a lost claim race — ownership law 3 is not violated.
+   this is the same back-off as a lost claim race — ownership law 3 is not violated. The
+   session title follows: it names the card you end up holding, so a back-off leaves it to be
+   rewritten by the next claim, never pointing at a card you released.
 6. **If no Todo card is claimable, stop and say so.** Do not take a busy card, do not take a
    blocked one, and do not invent work outside the board.
 
@@ -91,6 +93,19 @@ Write `Session` = `<branch> @ <YYYY-MM-DD>`, move Status → **In progress**, th
 `Session`. Not your identity → you lost the race: take the next candidate. One card at a
 time.
 
+**Then rename this session** — `mcp__ccd_session_mgmt__set_session_title` with
+`session_id: "self"` and `title: "#<issue> · <Status>"`, e.g. `#212 · In progress`. Issue
+number and column, nothing else: the session list then shows at a glance which card each
+session holds and where it stands.
+
+**The title tracks the card.** Every time you move the card in § 3 or § 4, rewrite the title
+in the same breath — `#212 · Gate`, `#212 · PR`, `#212 · Done`, `#212 · Needs triage`. A
+gate retry that sends the card back to In progress renames it back too.
+
+It is a display name, never a source of truth: **the board write comes first**, and a failed
+rename is mentioned in your final report and nothing more — never retried in a loop, never a
+reason to stop working.
+
 ## 3 · Work the lot end-to-end
 
 The repo process applies unchanged — this command adds nothing to it:
@@ -100,16 +115,18 @@ The repo process applies unchanged — this command adds nothing to it:
   execution on **Opus 5** — via sub-agents if the session cannot switch itself.
 - **Context discipline**: stay under ~250k, delegate heavy reads to sub-agents, compact
   after exploration.
-- Gate deposited (`npm run gate`, background) → Status → **Gate**.
-- Gate PASS → push, PR with **`Closes #<issue>`** in the body → Status → **PR**.
+- Gate deposited (`npm run gate`, background) → Status → **Gate** → title `#<issue> · Gate`.
+- Gate PASS → push, PR with **`Closes #<issue>`** in the body → Status → **PR** → title
+  `#<issue> · PR`.
 - Checks green → merge, `npm run finish` → Status → **Done** + one final comment
-  (2–4 lines: what changed, PR number, anything the human should know).
+  (2–4 lines: what changed, PR number, anything the human should know) → title
+  `#<issue> · Done`.
 
 ## 4 · If it fails
 
 Three gate attempts max, each naming a different root cause — as ever. If the task cannot
-land (blocked, out of reach, wrongly scoped): Status → **Needs triage**, keep `Session`
-filled, post one comment **in simple, non-technical English** explaining what was attempted
+land (blocked, out of reach, wrongly scoped): Status → **Needs triage**, title
+`#<issue> · Needs triage`, keep `Session` filled, post one comment **in simple, non-technical English** explaining what was attempted
 and what blocked it. Never leave the card in In progress/Gate/PR at session end — close your
 ownership, one way or the other.
 
