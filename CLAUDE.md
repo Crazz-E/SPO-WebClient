@@ -246,6 +246,10 @@ npm run test:live    # the L2 live drive as a bench job
 npm run dev          # a bench LEASE: the worker builds THIS worktree and holds its gateway on 8080 for you
 npm run dev:release  # end your lease early (otherwise it expires, 30 min default)
 npm run bench:status # worker liveness + queue
+npm run bench:wait -- <job-id>   # re-attach to a job whose wait was interrupted. `gate` and
+                     # `test:live` already wait; this is for the wait you lost, not a second one
+npm run pr:wait -- <n>           # wait for a PR to leave the merge queue: 30 s floor, deadline,
+                     # exit 0 merged / 1 closed unmerged / 4 still open. NEVER hand-roll this loop
 npm run e2e:unlock   # clear a world-dirty lock after a human restore
 npm run finish       # THE END of an update — after the PR is merged: main ff'd, refs pruned, worker
                      # reinstalled if its sources changed, this worktree RETIRED (kept while you are in
@@ -299,6 +303,7 @@ Full spec: [doc/bench-worker.md](doc/bench-worker.md).
 | `pre-push-gate.sh` | PreToolUse (Bash) | Blocks a **direct push to `main`** — nothing else. It no longer demands an attestation for HEAD: the worker gates a *pushed* sha, so the two rules could not both hold — see **The gate** below |
 | `bench-port-guard.sh` | PreToolUse (Bash) | Blocks anything that would take the bench port (8080) or drive the live world outside the worker; names the sanctioned form |
 | `verdict-pipe-guard.sh` | PreToolUse (Bash) | Blocks piping a command whose exit code **is** the verdict (`npm test\|tail` reports tail, not Jest). Escape: `set -o pipefail` or a `PIPESTATUS` read |
+| `poll-loop-guard.sh` | PreToolUse (Bash) | Blocks a hand-rolled wait loop (`until`/`while`/`for` + `sleep`) on a bench job or a GitHub read, and names `npm run bench:wait` / `npm run pr:wait` instead |
 | `session-heartbeat.sh` | *sourced by the others* | Stamps `~/.spo-bench/sessions/<key>.alive` so `finish` never reaps a worktree a session is working in |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.

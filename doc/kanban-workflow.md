@@ -387,7 +387,14 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
    intervals, over REST (`gh api repos/Crazz-Org/SPO-WebClient/pulls/<N>`), the way
    `scripts/deps-gate.sh` waits for its merge, and **for at most 20 polls or 10 minutes,
    whichever comes first** — "a hard deadline" is not a number, and a wait that never states
-   one is a wait a background loop can run forever without anyone noticing. A tight retry
+   one is a wait a background loop can run forever without anyone noticing. **That wait is a
+   script, not a line you compose**: `npm run pr:wait -- <N>` is exactly this rule — REST,
+   the 30 s floor (refused below it, never clamped), both bounds, and an exit code for the
+   answer (0 merged · 1 closed unmerged · 4 still open). Four hand-rolled
+   `until … do sleep 5 … done` loops were proposed here on 2026-08-25, three of them polling
+   at 5 s; `.claude/hooks/poll-loop-guard.sh` now refuses the shape and names the alias, and
+   `npm run bench:wait -- <job-id>` is its counterpart for a bench job whose wait was
+   interrupted. A tight retry
    loop on any GitHub error is never correct: on failure, read the bucket's `reset` from
    `gh api rate_limit` (free) and wait once, in the background, until then. The same rule
    [doc/E2E-POLICY.md](E2E-POLICY.md) states for live evidence holds for a watch loop too —
@@ -504,6 +511,35 @@ finder's own turn, and it is paid by the finder rather than by the claimer.
   inventories, cross-corpus audits, multi-file investigations should be).
 - Compact deliberately: when the exploratory phase is over, summarise what matters and
   drop the rest.
+
+## Sub-agent handoffs
+
+**The spawn is the cost, not the payload.** Every sub-agent invocation re-pays a fixed
+preamble — the project instructions, the agent definition, the tool schemas it was granted —
+before it reads the first word of its task. Measured on this repo: `CLAUDE.md` alone is
+~8.8k tokens and `card-reviewer.md` ~1.7k, against a task payload of ~150. Re-encoding that
+payload from Markdown prose to a `key: value` block saves ~40 tokens — real, and worth
+taking, but it is a rounding error next to the four levers above it.
+
+In descending order of what they actually save:
+
+1. **Spawn fewer agents.** Two questions for the same reader are one prompt. A one-liner is
+   a direct tool call, never an agent (CLAUDE.md § Delegation strategy).
+2. **Grant the narrowest tool set.** An agent declared `tools: *` inherits the whole MCP
+   surface; the three agents in `.claude/agents/` declare `Read, Grep, Glob, Bash` and stay
+   that way. Prefer them, or `Explore`, over a general-purpose spawn.
+3. **Pass pointers, never bodies.** `src/server/session/push-dispatcher.ts:88` costs eight
+   tokens; the function pasted around it costs four hundred, and the agent can open the file
+   itself. The one exception is content that does not exist on disk — a draft card, a
+   verdict — which is exactly what the payload block is for.
+4. **Cap the reply in the prompt.** Name the shape you want and forbid the rest: no
+   preamble, no restatement of the task, no summary of what was read, no closing offer.
+   A reply that opens with "I have analysed the file you mentioned" is billed twice — once
+   as the agent's output, once as the session's input.
+5. **Then the encoding.** Compact `key: value`, one field per line, for anything the session
+   consumes; **Markdown for anything posted verbatim** to GitHub or read by the human — the
+   `card-reviewer` verdict becomes an issue comment, so encoding it as YAML only means
+   rendering it back to Markdown afterwards, at a net loss.
 
 ## Model routing
 

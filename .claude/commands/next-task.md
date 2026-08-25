@@ -11,7 +11,7 @@ Board: [github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/
 
 **Run the scripted steps verbatim.** Every board and bench read below is a named script,
 reached through an npm alias: `bench:nightly`, `board:claim`, `board:verify`,
-`board:sessions`, `board:status`. Call each in exactly the form written here —
+`board:sessions`, `board:status`, `bench:wait`, `pr:wait`. Call each in exactly the form written here —
 `npm run <alias>`, arguments after `--` — from the worktree you are in, with **no `cd`
 prefix and no shell composition around it**. None of them needs a working directory other
 than yours.
@@ -21,6 +21,13 @@ A `cd … && …` compound, a variable assignment, a `[ -f … ] &&` guard or th
 `bash scripts/…` path matches no allowlist entry and turns a scripted step into a permission
 prompt — which is the one thing these aliases exist to remove. Compose no GraphQL by hand
 either: raw `gh api graphql` deliberately still prompts.
+
+**A wait is a scripted step too.** Every "wait for X" in this command has an alias, and none
+of them is a loop you write: `npm run gate` and `npm run test:live` wait for their own job,
+`npm run bench:wait -- <job-id>` re-attaches to one whose wait was interrupted, and
+`npm run pr:wait -- <n>` waits for a pull request to leave the merge queue. Composing
+`until … do sleep … done` around `gh` instead stops to ask the human **and** polls GitHub
+under the 30 s floor — `.claude/hooks/poll-loop-guard.sh` refuses it and names the alias.
 
 ## 0 · Is `main` red?
 
@@ -151,6 +158,13 @@ The repo process applies unchanged — this command adds nothing to it:
   follows the card's `Size`. Via sub-agents if the session cannot switch itself.
 - **Context discipline**: stay under ~250k, delegate heavy reads to sub-agents, compact
   after exploration.
+- **Handoff discipline** (kanban-workflow § Sub-agent handoffs): a spawn costs a fixed
+  preamble whether you send ten lines or a hundred, so spend the spawn, not the prose.
+  Pass **paths and line numbers, never pasted file bodies**; give the payload as a compact
+  `key: value` block, one field per line, and keep prose only where a human reads the
+  result verbatim. Ask for the shortest reply that carries the answer — a verdict, a
+  `file:line`, a number — and say so in the prompt: **no preamble, no restatement of the
+  task, no summary of what was read, no closing offer.**
 - Gate deposited (`npm run gate`, background) → Status → **Gate** → title `#<issue> · Gate`.
 - Gate PASS → push, PR with **`Closes #<issue>`** in the body → Status → **PR** → title
   `#<issue> · PR`.
@@ -158,8 +172,9 @@ The repo process applies unchanged — this command adds nothing to it:
   (2–4 lines: what changed, PR number, anything the human should know) → title
   `#<issue> · Done`. **Checking is one read, not a vigil**: your gate PASS *is* the
   `bench/gate` status, and CI normally concluded while the gate was queued —
-  `gh pr checks <n>` once; genuinely pending → re-read at ≥ 30 s intervals with a deadline,
-  never a tight loop (kanban-workflow § GitHub API discipline).
+  `gh pr checks <n>` once; genuinely pending → `npm run pr:wait -- <n>` in the background,
+  which *is* that ≥ 30 s interval and that deadline — never a tight loop, and never one you
+  compose yourself (kanban-workflow § GitHub API discipline).
 
 ## 4 · If it fails
 

@@ -123,6 +123,13 @@ Four lines of substance is a complete review. `FILE` with the four checks answer
 clause each is the **expected outcome on most cards** — inventing an objection to look
 useful is the failure mode that gets this reviewer switched off.
 
+**Return that block and nothing else.** No sentence before it and none after — no
+acknowledgement of the task, no restatement of the card you were given, no summary of what
+you read, no offer to look further. The session posts your block verbatim; anything outside
+it is text a human never sees and a session pays for twice, once in your reply and once in
+its own context. One `file:line` beats a paragraph describing the file; where a clause
+says it, do not write a sentence.
+
 ## What you never do
 
 - **Never file anything.** No `gh issue create`, no `gh issue comment`, no `gh issue edit`,
