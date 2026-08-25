@@ -65,6 +65,7 @@
       "Bash(echo *)"
     ],
     "deny": [
+      "Workflow",
       "Bash(git clean*)",
       "Bash(git rm -rf*)",
       "Bash(git filter-branch*)",
