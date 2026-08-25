@@ -38,6 +38,15 @@ export interface BenchVerdict {
    * it. Staleness became visible instead of enforced; that is the whole trade.
    */
   baseMain?: string;
+  /**
+   * The TREE this attestation drove, when it is known.
+   *
+   * A merge-queue entry is a fresh merge commit even when nothing landed since the pull
+   * request head was gated, so no two shas ever match — but their trees do, and the tree
+   * is what a live drive actually exercises. Without this recorded, the queue would pay a
+   * live slot to re-prove byte-identical code. See ./merge-queue.
+   */
+  tree?: string;
   jobId: string;
   createdAt: string;
   /** Capability exceptions the gate recorded (doc/E2E-POLICY.md §7) — shown on GitHub. */

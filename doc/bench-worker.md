@@ -49,6 +49,7 @@ one process (the worker) consumes the spool.
 | Worker | `src/e2e/bench/worker.ts` | the permanent loop — claims, builds, drives, reports |
 | Client | `src/e2e/bench/cli.ts` | `submit` / `wait` / `status` (wrapped by `scripts/bench-*.sh`) |
 | Fingerprint | `src/e2e/bench/fingerprint.ts` | moving-target detector (HEAD + diff + status + untracked content) |
+| Merge queue | `src/e2e/bench/merge-queue.ts` | discovery, priority and the tree dedup for queue entries (§12) |
 | Gateway | `src/e2e/bench/gateway.ts` | clean-port guarantee, per-job gateway start/stop |
 | Attestations | `src/e2e/bench/verdict.ts` | `verdicts/<sha>.json` + `bench/gate` GitHub commit status |
 | Supervision | `scripts/bench-install.sh` | systemd --user unit, `Restart=always`, linger |
@@ -487,47 +488,92 @@ nothing about the moment the gate runs. A gate can run before the pull request e
 because the push hook refused anything unattested; that rule is gone, and `gh pr merge --auto`
 still cannot land a commit `bench/gate` has not passed.
 
-## 12. The merge queue — why there is none
+## 12. The merge queue
 
-GitHub's merge queue requires an **organization-owned** repository. This one is owned by a
-personal account:
+**Available since 2026-08-25**, when the repository moved from the personal account to the
+`Crazz-Org` organization. GitHub's merge queue requires an organization-owned repository —
+public visibility is not enough, the two are separate conditions — and the transfer is what
+lifted that. `gh api repos/Crazz-Org/SPO-WebClient --jq .owner.type` now answers
+`Organization`.
 
-```
-$ gh api repos/Crazz-Org/SPO-WebClient --jq '{owner_type:.owner.type,visibility}'
-{"owner_type":"User","visibility":"public"}
-```
+### What it buys, and why it is the point
 
-Adding a `merge_queue` rule to ruleset 21111153 fails **422 Validation Failed**. The identical
-payload *without* that one rule is accepted — which is what isolates it: the shape is fine,
-the rule is refused. Public visibility is not enough; *public* and *organization-owned* are
-two conditions and only the first holds here.
+A gate proves `merge(branch, the main it was based on)`. A queue entry is
+`merge(branch, main-now)` — a speculative commit GitHub builds by merging the pull request
+onto the current queue head — so driving *that* live proves the exact tree about to land.
+This is the hole [#157](https://github.com/Crazz-Org/SPO-WebClient/issues/157) named: two
+branches that pass alone can break together, and nothing drove the combination before it
+landed.
 
-**The consequence for the gate, which is the part that matters.** A queue entry would have
-been `merge(branch, main-now)` — the exact tree about to land — so driving it live would have
-proved the merged combination rather than the branch's own base. Without it, a gate proves
-`merge(branch, the main it was based on)`.
+`baseMain` stays regardless. It is what makes the *difference* visible on a gate that ran
+outside the queue — Dependabot, a `ref` job, a branch gated before its pull request exists —
+and § The gate base still announces a moved base rather than refusing it.
 
-**So `baseMain` stays, and it is load-bearing rather than transitional.** It records which
-`main` the live evidence stood on; the `bench/gate` status shows it; the push hook announces a
-moved base without refusing it (§ The gate base). [#158](https://github.com/Crazz-Org/SPO-WebClient/issues/158)
-planned to delete it *because* the queue would prove the stronger property directly. The queue
-cannot exist here, so the weaker, **visible** guarantee is the one this repository has — and
-deleting `baseMain` would have left nothing in its place.
+### What the worker does
 
-**The serving code was written, tested, and then removed.** It discovered
-`gh-readonly-queue/main/*` refs, gated them ahead of the spool, and reused a verdict when the
-entry's *tree* matched one already driven live. It worked; it simply could never find a ref.
-Keeping code that cannot run is how a reader comes to believe a mechanism is in place, so it
-was reverted rather than left dormant. It is recoverable from
-[#170](https://github.com/Crazz-Org/SPO-WebClient/pull/170) and
-[#168](https://github.com/Crazz-Org/SPO-WebClient/pull/168) (the `merge_group` CI trigger, which
-went with it — that event cannot fire here either).
+`src/e2e/bench/merge-queue.ts`, three behaviours and each one has a reason:
 
-**If this repository ever moves to an organization**, restoring it is: revert those two pull
-requests, then one ruleset write adding `merge_queue` with `max_entries_to_build: 1`,
-`max_entries_to_merge: 1`, `check_response_timeout_minutes: 60` (above the 33 min worst-case
-lease), `merge_method: MERGE`, `grouping_strategy: ALLGREEN`. Verify one thing then, because
-no GitHub document states it: that the sha the queue lands is the sha it tested.
+- **Discovery by polling.** Required checks in a merge queue report on the *speculative*
+  commit, and the worker takes no inbound connection — it pulls. One `git ls-remote` names
+  every `gh-readonly-queue/main/*` ref and its sha per idle tick.
+- **Priority over the spool.** GitHub ejects an entry whose checks exceed the queue's
+  response timeout. The bench is serialised machine-wide and a `lease` can hold it — median
+  11 min, **max 33 min** measured. Without priority a lease would eject a healthy branch, and
+  that session would spend its three attempts on somebody else's `npm run dev`. One entry at
+  a time, one gate per entry, so it cannot starve the spool for long.
+- **Dedup on the tree, never the commit.** A queue ref is a fresh merge commit every time, so
+  a sha dedup would never hit; its *tree* is byte-identical to the pull request head's
+  whenever the queue head has not moved since that head was gated — the common case at one
+  entry at a time. An identical tree reuses the verdict and publishes the status at once.
+  When `main` has moved the trees differ, the drive happens, and that is the case worth
+  paying for.
+
+`ci.yml` reports on `merge_group` as well as `pull_request`, or an entry could never go
+green.
+
+### The ruleset
+
+On ruleset 21111153, `merge_queue` with:
+
+| Parameter | Value | Why |
+|---|---|---|
+| `max_entries_to_build` | 1 | No speculative parallelism — an ejection must not invalidate another entry's live drive |
+| `max_entries_to_merge` | 1 | Same reason, on the landing side |
+| `check_response_timeout_minutes` | 60 | Above the 33 min worst-case `lease`, or a lease ejects a healthy branch |
+| `merge_method` | `MERGE` | |
+| `grouping_strategy` | `ALLGREEN` | |
+
+The `pull_request` rule's `allowed_merge_methods` is narrowed to `merge` at the same time —
+otherwise a hand-picked squash lands without ever entering the queue, and the whole
+guarantee is optional.
+
+⚠ **Order matters when enabling it.** The `merge_group` trigger has to be on `main` *before*
+the ruleset gains the rule. Enable the queue first and the very pull request that adds the
+trigger cannot merge: its queue entry waits for checks that no event fires, and the entry is
+ejected on timeout.
+
+### Two things to verify by observation
+
+Neither is stated in any GitHub document, and neither is verified yet:
+
+1. **That the sha the queue lands is the sha it tested.** If it is rewritten, the attestation
+   names a commit that never existed on `main`. The *tree* survives either way, which is what
+   the dedup keys on.
+2. **That queue-ref jobs genuinely jump the bench spool in practice** — the bench is
+   serialised machine-wide, and the priority is ours to honour, not GitHub's to enforce.
+
+`npm run test:live` is the documented post-ejection diagnostic: an ejected session uses it to
+separate "my defect" from "the combination" instead of re-queueing blind.
+
+### History
+
+Written in [#170](https://github.com/Crazz-Org/SPO-WebClient/pull/170) and
+[#168](https://github.com/Crazz-Org/SPO-WebClient/pull/168), then removed in
+[#178](https://github.com/Crazz-Org/SPO-WebClient/pull/178): the ruleset write returned **422
+Validation Failed** on that one rule while the identical payload without it was accepted, and
+that bisect is what proved a personal account cannot have a queue at all. The code worked; it
+simply could never find a ref, and keeping code that cannot run is how a reader comes to
+believe a mechanism is in place. It was restored by reverting #178 once the repository moved.
 
 ## 13. Acceptance criteria (verified by the test suites)
 
