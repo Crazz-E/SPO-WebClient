@@ -58,6 +58,29 @@ const READ_BACK = '42';
 /** What the construction socket answers to `get RDOAcceptCloning`. */
 const LIVE_CLONING = '-1';
 
+/**
+ * The gate every supply-chain row addresses, and the two cache paths the
+ * building publishes for it.
+ *
+ * Shapes are the Delphi ones: an input gate's path carries the `%.8x` gate index
+ * in front of the name (`Format('%.8x', [MetaInput.Index]) + '.' +
+ * MetaInput.Name + '.five\'`, Kernel/KernelCache.pas:491), an output's carries
+ * the bare name (:634). A second, non-matching gate sits alongside so a handler
+ * that took the first path it found — rather than the one named by `fluidId` —
+ * fails here.
+ */
+const GATE_FLUID = 'Plastics';
+const OTHER_FLUID = 'Cotton';
+const FACILITY_PATH = 'Worlds\\Helartia\\Towns\\Aldebaran.five\\Facilities\\706.436.five\\';
+const INPUT_PATHS = [
+  `${FACILITY_PATH}Inputs\\00000000.${OTHER_FLUID}.five\\`,
+  `${FACILITY_PATH}Inputs\\00000001.${GATE_FLUID}.five\\`,
+];
+const OUTPUT_PATHS = [
+  `${FACILITY_PATH}Outputs\\${OTHER_FLUID}.five\\`,
+  `${FACILITY_PATH}Outputs\\${GATE_FLUID}.five\\`,
+];
+
 /** Server-side identifiers resolved from a row index (see §"dynamic ids"). */
 const RESOLVED_TAX_ID = '110';
 const RESOLVED_MINISTRY_ID = '77';
@@ -82,6 +105,12 @@ function makeConstructionCtx(options: {
   fTycoonProxyId?: number | null;
   /** Value the construction socket answers to `get RDOAcceptCloning`. */
   liveCloning?: string;
+  /**
+   * Gate paths the facility object publishes, per side. `[]` reproduces a
+   * building with no gate of that kind at all.
+   */
+  inputPaths?: string[];
+  outputPaths?: string[];
 } = {}): FakeSessionCtx {
   const {
     currBlock = CURR_BLOCK,
@@ -90,6 +119,8 @@ function makeConstructionCtx(options: {
     sockets = ['construction'],
     fTycoonProxyId = FAKE_CONTEXT_IDS.tycoonProxyId,
     liveCloning = LIVE_CLONING,
+    inputPaths = INPUT_PATHS,
+    outputPaths = OUTPUT_PATHS,
   } = options;
 
   const fake = makeSessionCtx({ sockets, fTycoonProxyId });
@@ -104,6 +135,13 @@ function makeConstructionCtx(options: {
     }
     if (/^Tax\d+Id$/.test(props[0])) return [RESOLVED_TAX_ID];
     if (/^MinistryId\d+$/.test(props[0])) return [RESOLVED_MINISTRY_ID];
+    // The gate listing `TBlock.StoreToCache` writes on the facility object —
+    // `InputCount`/`InputPath{i}` (Kernel/Kernel.pas:5848,5853),
+    // `OutputCount`/`OutputPath{i}` (:5865,:5869).
+    if (props[0] === 'InputCount') return [String(inputPaths.length)];
+    if (props[0] === 'OutputCount') return [String(outputPaths.length)];
+    if (/^InputPath\d+$/.test(props[0])) return props.map((_, i) => inputPaths[i] ?? '');
+    if (/^OutputPath\d+$/.test(props[0])) return props.map((_, i) => outputPaths[i] ?? '');
     return readBack;
   });
   return fake;
@@ -167,8 +205,8 @@ interface MatrixEntry {
    * word, `srvPrices{i}` is halved and doubled back).
    *
    * Absent means the witness cannot answer the question at all: it is a count,
-   * an aggregate, a derived figure, or it lives on a gate sub-object the
-   * verification read never binds. Those rows must report `confirmed:
+   * an aggregate, a derived figure, or it lives on a sub-object the
+   * verification read never reaches. Those rows must report `confirmed:
    * undefined` however the cacher answers — OB-28, where "the property is
    * readable" was taken for "the write landed".
    */
@@ -204,9 +242,15 @@ const MATRIX: readonly MatrixEntry[] = [
     echo: 'YES',
   },
   {
-    command: 'RDOSelSelected', value: '1',
+    // `fSelected := value` (Kernel/Kernel.pas:7891) reaches the cache as a word
+    // boolean — `Cache.WriteBoolean('Selected', fSelected)` (:7815) writes '1'
+    // (Cache/CacheAgent.pas:150-152), never the `#-1` we emit. `fluidId` is not
+    // a wire argument here (the member takes one WordBool); it names the input
+    // gate the witness must be read from.
+    command: 'RDOSelSelected', value: '1', params: { fluidId: GATE_FLUID },
     args: [RdoValue.int(-1)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'Selected',
+    echo: '1',
   },
 
   // ── Ministries (MinisteriesSheet.pas:251/271/293) ────────────────────────
@@ -312,19 +356,29 @@ const MATRIX: readonly MatrixEntry[] = [
     target: 'objectId', verb: 'call', channel: 'frame', readBack: 'cnxCount',
   },
   {
+    // `Output.PricePerc := Price` (Kernel/Kernel.pas:4344) assigns fPricePerc
+    // with no clamp (:7193-7198) and the gate cache echoes it —
+    // `WriteInteger('PricePc', PricePerc)` (Kernel/KernelCache.pas:753).
     command: 'RDOSetOutputPrice', value: '220', params: { fluidId: 'Plastics' },
     args: [RdoValue.string('Plastics'), RdoValue.int(220)],
     target: 'objectId', verb: 'call', channel: 'frame', readBack: 'PricePc',
+    echo: '220',
   },
   {
+    // `Input.MaxPrice := MaxPrice` (Kernel/Kernel.pas:4402) writes fMaxPrice
+    // directly (:1591); `TPullInput.StoreToCache` echoes it (:7813).
     command: 'RDOSetInputMaxPrice', value: '500', params: { fluidId: 'Plastics' },
     args: [RdoValue.string('Plastics'), RdoValue.int(500)],
     target: 'objectId', verb: 'call', channel: 'frame', readBack: 'MaxPrice',
+    echo: '500',
   },
   {
+    // `Input.MinK := MinK` (Kernel/Kernel.pas:4428), cached as `MinK` (:7814)
+    // and read as `minK` — the cache lookup is a TStringList name.
     command: 'RDOSetInputMinK', value: '10', params: { fluidId: 'Plastics' },
     args: [RdoValue.string('Plastics'), RdoValue.int(10)],
     target: 'objectId', verb: 'call', channel: 'frame', readBack: 'minK',
+    echo: '10',
   },
   {
     // `CacheExtraInfo('CnxInfo'+i, ...)` writes `'OverPrice'+Name`
@@ -364,9 +418,12 @@ const MATRIX: readonly MatrixEntry[] = [
 
   // ── Supply chain — CurrBlock side ────────────────────────────────────────
   {
+    // `SetSortMode` masks the mode to one bit (Kernel/MediaGates.pas:374-382)
+    // and the gate cache echoes that bit (:389).
     command: 'RDOSetInputSortMode', value: '1', params: { fluidId: 'Plastics' },
     args: [RdoValue.string('Plastics'), RdoValue.int(1)],
     target: 'currBlock', verb: 'call', channel: 'frame', readBack: 'SortMode',
+    echo: '1',
   },
   {
     command: 'RDOSetCompanyInputDemand', value: '75', params: { index: '1' },
@@ -1338,6 +1395,248 @@ describe('read-back', () => {
     expect(fake.frames.construction).toHaveLength(1);
     expect(result).toEqual({ success: false, newValue: '' });
     expect(fake.cacher.closeObject).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Read-back on the gate object
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Nine supply-chain commands write a GATE, and their witness is written there
+ * too: `cnxCount` by `TGateCacheAgent.UpdateCache`
+ * (Kernel/KernelCache.pas:459-471), `MaxPrice`/`MinK`/`Selected` by
+ * `TPullInput.StoreToCache` (Kernel/Kernel.pas:7813-7815), `SortMode` by
+ * `TMediaInput.StoreToCache` (Kernel/MediaGates.pas:389), `PricePc` by
+ * `TOutputCacheAgent.UpdateCache` (Kernel/KernelCache.pas:753).
+ *
+ * The confirmation used to read them off the (x, y)-bound FACILITY object, where
+ * none of them exists — the cacher answers an unknown name with an empty string,
+ * so every one of those nine commands reported `confirmed: undefined` whatever
+ * the server had done. What follows pins the walk to the gate: which path is
+ * chosen, that `SetPath` is what lands on it, and that an unreachable gate is
+ * still "no verdict" rather than a failure.
+ */
+describe('read-back on the gate object', () => {
+  /** The property names asked of the cacher, in call order. */
+  function queries(fake: FakeSessionCtx): string[][] {
+    return fake.cacher.getPropertyList.mock.calls.map(c => c[1]);
+  }
+
+  it('walks to the input gate named by fluidId, and reads the witness there', async () => {
+    const fake = makeConstructionCtx({ readBack: ['420'] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetInputMaxPrice', '420', {
+      fluidId: GATE_FLUID,
+    }));
+
+    // The listing comes off the facility object the handler is already standing
+    // on — `InputCount` then one `InputPath{i}` per gate.
+    expect(queries(fake)).toEqual([
+      ['CurrBlock', 'ObjectId'],
+      ['InputCount'],
+      ['InputPath0', 'InputPath1'],
+      ['MaxPrice'],
+    ]);
+    // The SECOND path is the one named `Plastics`; a handler that took the first
+    // would land on Cotton's gate.
+    expect(fake.cacher.setPath).toHaveBeenCalledTimes(1);
+    expect(fake.cacher.setPath).toHaveBeenCalledWith(TEMP_OBJECT_ID, INPUT_PATHS[1]);
+    // And the witness is NOT read through a second coordinate bind: the only
+    // setObject calls are the ones that resolved the ids and opened the verify
+    // object.
+    expect(fake.cacher.setObject.mock.calls.every(c => c[1] === X && c[2] === Y)).toBe(true);
+    expect(result).toEqual({ success: true, newValue: '420', confirmed: true });
+  });
+
+  it('walks to the output gate for an output command', async () => {
+    const fake = makeConstructionCtx({ readBack: ['220'] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetOutputPrice', '220', {
+      fluidId: GATE_FLUID,
+    }));
+
+    expect(queries(fake)).toEqual([
+      ['CurrBlock', 'ObjectId'],
+      ['OutputCount'],
+      ['OutputPath0', 'OutputPath1'],
+      ['PricePc'],
+    ]);
+    expect(fake.cacher.setPath).toHaveBeenCalledWith(TEMP_OBJECT_ID, OUTPUT_PATHS[1]);
+    expect(result.confirmed).toBe(true);
+  });
+
+  it('accepts the metaFluid alias when naming the gate', async () => {
+    const fake = makeConstructionCtx({ readBack: ['12'] });
+
+    await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetInputMinK', '12', {
+      metaFluid: GATE_FLUID,
+    }));
+
+    expect(fake.cacher.setPath).toHaveBeenCalledWith(TEMP_OBJECT_ID, INPUT_PATHS[1]);
+  });
+
+  it('reads no gate at all when the command carried no fluid id', async () => {
+    // What the client sends today for RDOSelSelected. Nothing identifies the
+    // gate, so nothing is read — and `confirmed` stays undefined rather than
+    // being settled by a property off the wrong object.
+    const fake = makeConstructionCtx({ readBack: ['1'] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSelSelected', '1'));
+
+    expect(fake.cacher.setPath).not.toHaveBeenCalled();
+    expect(queries(fake)).toEqual([['CurrBlock', 'ObjectId']]);
+    expect(result).toEqual({ success: true, newValue: '', confirmed: undefined });
+    expect(fake.log.debug).toHaveBeenCalledWith(
+      expect.stringContaining('cannot tell which Input gate'),
+    );
+  });
+
+  it('warns and gives no verdict when no gate carries that fluid', async () => {
+    // A fluid the block does not gate is also a fluid the WRITE did not reach:
+    // the handler resolves it with `InputsByName[FluidId]`
+    // (Kernel/Kernel.pas:4398 -> :5321), the same name the path embeds.
+    const fake = makeConstructionCtx({ readBack: ['500'] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetInputMaxPrice', '500', {
+      fluidId: 'Uranium',
+    }));
+
+    expect(fake.cacher.setPath).not.toHaveBeenCalled();
+    expect(result).toEqual({ success: true, newValue: '', confirmed: undefined });
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining('no Input gate named "Uranium"'),
+    );
+  });
+
+  it('gives no verdict when the building publishes no gate of that side', async () => {
+    const fake = makeConstructionCtx({ inputPaths: [], readBack: ['500'] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetInputMaxPrice', '500', {
+      fluidId: GATE_FLUID,
+    }));
+
+    expect(queries(fake)).toEqual([['CurrBlock', 'ObjectId'], ['InputCount']]);
+    expect(result.newValue).toBe('');
+    expect(result.confirmed).toBeUndefined();
+    expect(fake.log.debug).toHaveBeenCalledWith(
+      expect.stringContaining('publishes no Input gates'),
+    );
+  });
+
+  it('gives no verdict when the gate count is not a number', async () => {
+    const fake = makeConstructionCtx();
+    fake.cacher.getPropertyList.mockImplementation(async (_id: string, props: string[]) => {
+      if (props[0] === 'CurrBlock') return [CURR_BLOCK, OBJECT_ID];
+      if (props[0] === 'InputCount') return [''];
+      return [READ_BACK];
+    });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetInputMinK', '10', {
+      fluidId: GATE_FLUID,
+    }));
+
+    expect(fake.cacher.setPath).not.toHaveBeenCalled();
+    expect(result.confirmed).toBeUndefined();
+  });
+
+  it('ignores a gate path that is not shaped like one', async () => {
+    // An input path without the `%.8x` prefix, and one that is not a `.five`
+    // folder at all: neither names a gate, so neither can be matched.
+    const fake = makeConstructionCtx({
+      inputPaths: [`${FACILITY_PATH}Inputs\\${GATE_FLUID}.five\\`, `${FACILITY_PATH}Inputs\\${GATE_FLUID}\\`],
+      readBack: ['500'],
+    });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetInputMaxPrice', '500', {
+      fluidId: GATE_FLUID,
+    }));
+
+    expect(fake.cacher.setPath).not.toHaveBeenCalled();
+    expect(result.confirmed).toBeUndefined();
+  });
+
+  it('still refuses a verdict on cnxCount, now that it is readable', async () => {
+    // Reaching the right object does not make a COUNT an echo: `cnxCount`
+    // (Kernel/KernelCache.pas:467) reads the same whether the disconnect
+    // dropped one supplier or none. The walk gives an honest `newValue`; the
+    // verdict stays `undefined`.
+    const fake = makeConstructionCtx({ readBack: ['3'] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDODisconnectOutput', '0', {
+      fluidId: GATE_FLUID, connectionList: '706,436,',
+    }));
+
+    expect(fake.cacher.setPath).toHaveBeenCalledWith(TEMP_OBJECT_ID, OUTPUT_PATHS[1]);
+    expect(result).toEqual({ success: true, newValue: '3', confirmed: undefined });
+  });
+
+  it('closes the verify object after walking to a gate', async () => {
+    const fake = makeConstructionCtx({ readBack: ['500'] });
+
+    await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetInputMaxPrice', '500', {
+      fluidId: GATE_FLUID,
+    }));
+
+    expect(fake.cacher.closeObject).toHaveBeenCalledTimes(fake.cacher.createObject.mock.calls.length);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Witness echoes — the five gate writes that can be settled
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('gate witness echoes', () => {
+  it.each([
+    // command, sent value, what a landed write leaves in the cache
+    ['RDOSetInputMaxPrice', 'MaxPrice', '500', '500'],
+    ['RDOSetInputMinK', 'minK', '0', '0'],
+    ['RDOSetOutputPrice', 'PricePc', '75', '75'],
+    // `mode := mode and $01` (Kernel/MediaGates.pas:376): 2 is stored as 0.
+    ['RDOSetInputSortMode', 'SortMode', '2', '0'],
+    ['RDOSetInputSortMode', 'SortMode', '1', '1'],
+    // `Cache.WriteBoolean` writes '1'/'0' (Cache/CacheAgent.pas:150-152), never
+    // the `#-1` the wordbool argument carries.
+    ['RDOSelSelected', 'Selected', '1', '1'],
+    ['RDOSelSelected', 'Selected', '0', '0'],
+  ])('%s confirms when %s holds %s as %s', async (command, _witness, sent, held) => {
+    const fake = makeConstructionCtx({ readBack: [held] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, command, sent, {
+      fluidId: GATE_FLUID,
+    }));
+
+    expect(result).toEqual({ success: true, newValue: held, confirmed: true });
+  });
+
+  it.each([
+    // A word field truncates an out-of-range write (fMaxPrice is a `word`,
+    // Kernel/Kernel.pas:1585); the mismatch is reported as NO verdict, never as
+    // a failure — the cache also lags a write by 30-90 s (OB-29).
+    ['RDOSetInputMaxPrice', '70000', '4464'],
+    ['RDOSetOutputPrice', '220', '100'],
+    ['RDOSelSelected', '1', '0'],
+  ])('%s gives no verdict when the gate holds something else', async (command, sent, held) => {
+    const fake = makeConstructionCtx({ readBack: [held] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, command, sent, {
+      fluidId: GATE_FLUID,
+    }));
+
+    expect(result.newValue).toBe(held);
+    expect(result.confirmed).toBeUndefined();
+  });
+
+  it('gives no verdict on a sort mode that is not a number', async () => {
+    // The mask needs an integer; `NaN & 1` is 0, which would confirm "sort by
+    // cost" for a value the server never parsed.
+    const fake = makeConstructionCtx({ readBack: ['0'] });
+
+    const result = await settle(setBuildingProperty(fake.ctx, X, Y, 'RDOSetInputSortMode', 'quality', {
+      fluidId: GATE_FLUID,
+    }));
+
+    expect(result.confirmed).toBeUndefined();
   });
 });
 

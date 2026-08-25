@@ -331,7 +331,17 @@ async function setBuildingPropertyImpl(
     try {
       await ctx.cacherSetObject(verifyObjectId, x, y);
 
-      const readValues = await ctx.cacherGetPropertyList(verifyObjectId, [propertyToRead]);
+      // Nine commands write a gate, not the facility. Their witness lives on the
+      // gate's own cache object and reading it off the (x, y)-bound facility
+      // object always came back empty — see GATE_WITNESS_COMMANDS.
+      const gateSide = GATE_WITNESS_COMMANDS.get(propertyName);
+      const readValues = gateSide
+        ? [await readGateWitness(
+            ctx, verifyObjectId, gateSide,
+            additionalParams?.fluidId || additionalParams?.metaFluid,
+            propertyToRead,
+          )]
+        : await ctx.cacherGetPropertyList(verifyObjectId, [propertyToRead]);
 
       // M-E: this used to be `readValues[0] || value` — when the read-back came
       // back empty, it echoed the value we had just ASKED for. A mutation the
@@ -789,6 +799,126 @@ function buildRdoCommandArgs(
 }
 
 // =========================================================================
+// MODULE-PRIVATE — readGateWitness
+// =========================================================================
+
+/**
+ * The commands whose witness property is written on a GATE, and which side of
+ * the block that gate is on.
+ *
+ * A facility's cache object and a gate's cache object are two different objects.
+ * `cacherSetObject(id, x, y)` binds the facility — `TFacilityCacheAgent`, which
+ * writes what `CurrBlock.StoreToCache` gives it (Kernel/KernelCache.pas:428).
+ * The supply-chain witnesses are written elsewhere: `cnxCount` by
+ * `TGateCacheAgent.UpdateCache` (Kernel/KernelCache.pas:467), `MaxPrice`,
+ * `MinK` and `Selected` by `TPullInput.StoreToCache` (Kernel/Kernel.pas:7813-7815),
+ * `SortMode` by `TMediaInput.StoreToCache` (Kernel/MediaGates.pas:389) and
+ * `PricePc` by `TOutputCacheAgent.UpdateCache` (Kernel/KernelCache.pas:753).
+ * None of them exists on the facility object, and the cacher answers an unknown
+ * name with an empty string (spo_session.ts:1416-1417) — which is why all nine
+ * commands reported `confirmed: undefined` whatever the server did.
+ *
+ * Reaching the gate is the same move the details panel already makes: `SetPath`
+ * onto the gate's cache path, then read its properties directly
+ * (building-details-handler.ts:1136-1158).
+ */
+const GATE_WITNESS_COMMANDS: ReadonlyMap<string, 'Input' | 'Output'> = new Map([
+  ['RDOSetInputMaxPrice', 'Input'],
+  ['RDOSetInputMinK', 'Input'],
+  ['RDOSetInputSortMode', 'Input'],
+  ['RDOSelSelected', 'Input'],
+  ['RDOConnectInput', 'Input'],
+  ['RDODisconnectInput', 'Input'],
+  ['RDOSetOutputPrice', 'Output'],
+  ['RDOConnectOutput', 'Output'],
+  ['RDODisconnectOutput', 'Output'],
+] as const);
+
+/**
+ * The gate name embedded in a gate's cache path, or `null` if the path is not
+ * shaped like one.
+ *
+ * An input gate's path ends `Inputs\<8 hex digits>.<MetaInput.Name>.five\`
+ * (`Format('%.8x', [MetaInput.Index]) + '.' + MetaInput.Name + '.five\'`,
+ * Kernel/KernelCache.pas:491); an output's ends `Outputs\<MetaOutput.Name>.five\`
+ * (:634). The folder names are `tidCachePath_Inputs`/`_Outputs` (:18-19).
+ */
+function gateNameOf(path: string, side: 'Input' | 'Output'): string | null {
+  const segments = path.split('\\').filter(Boolean);
+  const last = segments[segments.length - 1];
+  if (last === undefined || !last.toLowerCase().endsWith('.five')) return null;
+  const name = last.substring(0, last.length - '.five'.length);
+  if (side === 'Output') return name || null;
+  // Inputs carry the `%.8x` gate index in front of the name.
+  const dot = name.indexOf('.');
+  return dot === -1 ? null : name.substring(dot + 1) || null;
+}
+
+/**
+ * Read one witness property off the gate the write landed on.
+ *
+ * The gate is picked by NAME, and the name is the argument the command already
+ * carried: the handler resolves it with `CurrBlock.InputsByName[FluidId]`
+ * (Kernel/Kernel.pas:4398), which compares `MetaInput.Name`
+ * (`TBlock.GetInputIndex`, :5321) — the very string the gate's cache path
+ * embeds. Outputs resolve the same way (`OutputsByName`, :4340 -> :5328). So a
+ * path that matches is the gate the write reached, and a fluid with no matching
+ * path is one the write did not reach either.
+ *
+ * The list itself needs no extra RDO member: `TBlock.StoreToCache` writes
+ * `InputCount` / `InputPath{i}` (Kernel/Kernel.pas:5848,5853) and
+ * `OutputCount` / `OutputPath{i}` (:5865,:5869) onto the facility object we are
+ * already standing on — the same two properties `GetInputNames` reads to build
+ * its answer (Cache Server/CachedObjectWrap.pas:287-290).
+ *
+ * Returns `''` — "nothing to read" — rather than throwing: an unreachable gate
+ * is an unconfirmed write, not a failed one.
+ */
+async function readGateWitness(
+  ctx: SessionContext,
+  tempObjectId: string,
+  side: 'Input' | 'Output',
+  fluidId: string | undefined,
+  propertyToRead: string,
+): Promise<string> {
+  if (!fluidId) {
+    ctx.log.debug(
+      `[BuildingDetails] no fluid id supplied — cannot tell which ${side} gate ` +
+      `holds "${propertyToRead}"`
+    );
+    return '';
+  }
+
+  const [rawCount] = await ctx.cacherGetPropertyList(tempObjectId, [`${side}Count`]);
+  const count = parseInt(rawCount || '', 10);
+  if (!Number.isFinite(count) || count <= 0) {
+    ctx.log.debug(`[BuildingDetails] building publishes no ${side} gates — "${propertyToRead}" unreadable`);
+    return '';
+  }
+
+  const pathNames: string[] = [];
+  for (let i = 0; i < count; i++) pathNames.push(`${side}Path${i}`);
+  const paths = await ctx.cacherGetPropertyList(tempObjectId, pathNames);
+
+  const path = paths.find(p => !!p && gateNameOf(p, side) === fluidId);
+  if (!path) {
+    ctx.log.warn(
+      `[BuildingDetails] no ${side} gate named "${fluidId}" among the ${count} ` +
+      `the building publishes — "${propertyToRead}" cannot be read back`
+    );
+    return '';
+  }
+
+  // SetPath resolves through the world spool and releases whatever the object
+  // held (Cache Server/CachedObjectWrap.pas:156-168), so the object may still be
+  // bound to the facility here; it lands on the gate afterwards. Nothing reads
+  // the facility off this handle again.
+  await ctx.cacherSetPath(tempObjectId, path);
+  const [held] = await ctx.cacherGetPropertyList(tempObjectId, [propertyToRead]);
+  return held ?? '';
+}
+
+// =========================================================================
 // MODULE-PRIVATE — expectedWitnessValues / witnessMatches
 // =========================================================================
 
@@ -810,10 +940,11 @@ function buildRdoCommandArgs(
  *   (`RulerVotes`), a derived figure the gateway cannot recompute
  *   (`cInputDem{i}`, `nfActualMaxFluidValue`), or a flag whose success state is
  *   ABSENCE (`InProd` after a cancel). Readable either way: no verdict.
- * - **not on the object we read** — the supply-chain witnesses live on the gate
- *   sub-objects (`TGateCacheAgent.UpdateCache`, Kernel/KernelCache.pas:459-471),
- *   while the verification read binds by coordinates and therefore lands on the
- *   facility. They come back empty whatever happens.
+ * - **not on the object we read** — a witness written on a sub-object the
+ *   verification read never reaches. The supply-chain gates used to be the whole
+ *   of this family; {@link readGateWitness} now walks to them, so what is left
+ *   here is `OverPriceCnxInfo{i}`, written per connection by `TInputCacheAgent`
+ *   (Kernel/KernelCache.pas:473-483, call at :580).
  *
  * The last two return `null`, which the caller turns into `confirmed:
  * undefined` — "nothing contradicts the write". Never `false`: the cache the
@@ -912,6 +1043,49 @@ function expectedWitnessValues(
     case 'RDOSetMinistryBudget':
       return [value.trim()];
 
+    // The three gate writes that assign a plain field and cache it unscaled.
+    // Only reachable now that the read-back lands on the gate object
+    // (readGateWitness) — off the facility they read empty whatever happened.
+    //
+    //   PricePc   `Output.PricePerc := Price` Kernel/Kernel.pas:4344, the setter
+    //             assigning fPricePerc with no clamp :7193-7198, cache
+    //             `WriteInteger('PricePc', PricePerc)` Kernel/KernelCache.pas:753
+    //   MaxPrice  `Input.MaxPrice := MaxPrice` Kernel/Kernel.pas:4402, the
+    //             property writing fMaxPrice directly :1591, cache
+    //             `WriteInteger('MaxPrice', fMaxPrice)` :7813
+    //   minK      `Input.MinK := MinK` Kernel/Kernel.pas:4428, :1592, cache
+    //             `WriteInteger('MinK', fMinK)` :7814 (Voyager reads it as
+    //             `minK`, SupplySheetForm.pas:32 — the cache lookup is a
+    //             TStringList name, matched case-insensitively)
+    //
+    // fMaxPrice is a `word` and fMinK a `TPercent` (Kernel.pas:1585-1586), so a
+    // value outside their range is truncated on the way in and simply fails to
+    // match on the way out — no verdict, never a wrong one.
+    case 'RDOSetOutputPrice':
+    case 'RDOSetInputMaxPrice':
+    case 'RDOSetInputMinK':
+      return [value.trim()];
+
+    // `Input.SetSortMode(mode)` (Kernel/Kernel.pas:4454) masks the mode down to
+    // one bit before storing it — `mode := mode and $01`
+    // (Kernel/MediaGates.pas:374-382) — and the cache echoes that bit
+    // (`WriteInteger('SortMode', fSortMode)`, :389). Plain inputs override
+    // SetSortMode with an empty body (Kernel/Kernel.pas:7169-7171) and never
+    // write the property at all, so there the read comes back empty and the
+    // verdict is `undefined`, which is the honest reading.
+    case 'RDOSetInputSortMode': {
+      const mode = parseInt(value, 10);
+      if (!Number.isFinite(mode)) return null;
+      return [String(mode & 0x01)];
+    }
+
+    // `fSelected := value` (Kernel/Kernel.pas:7891) reaches the cache as a word
+    // boolean: `Cache.WriteBoolean('Selected', fSelected)` (:7815) writes '1' or
+    // '0' (Cache/CacheAgent.pas:150-152). We emit `#-1`/`#0`, and any non-zero
+    // ordinal is true (src/shared/CLAUDE.md).
+    case 'RDOSelSelected':
+      return parseInt(value, 10) !== 0 ? ['1'] : ['0'];
+
     default:
       return null;
   }
@@ -999,16 +1173,13 @@ function mapRdoCommandToPropertyName(
     case 'RDOAutoProduce':
       return 'AutoProd';
 
-    case 'RDOSetOutputPrice': {
-      // Output price is per-fluid; read back via PricePc (single-product) or indexed
-      const fluidId = params.fluidId;
-      if (fluidId) {
-        // Multi-product: read back the output PricePc for the specific fluid
-        // The cacher stores output properties per-fluid under the output sub-object
-        return 'PricePc';
-      }
+    case 'RDOSetOutputPrice':
+      // One name, whatever the building produces: the price lives on the OUTPUT
+      // GATE, one gate per ware (`WriteInteger('PricePc', PricePerc)`,
+      // Kernel/KernelCache.pas:753), and `fluidId` picks the gate rather than
+      // the property name (readGateWitness). This used to be an `if (fluidId)`
+      // whose two arms returned the same string.
       return 'PricePc';
-    }
 
     case 'RDOConnectInput':
     case 'RDODisconnectInput':
