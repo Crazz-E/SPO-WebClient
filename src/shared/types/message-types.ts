@@ -3,6 +3,7 @@
  * Contains all request/response types for Gateway <-> Browser communication
  */
 
+import type { RoadTileFacts } from '../road-cost';
 import type {
   WorldInfo,
   CompanyInfo,
@@ -986,6 +987,13 @@ export interface WsReqBuildRoad extends WsMessage {
   y1: number;
   x2: number;
   y2: number;
+  /**
+   * What the world says about each tile of the staircase path, in path order and start tile
+   * included (issue #99). Terrain, the road layer and concrete live in the renderer, so the
+   * client attests them and the gateway prices from them; omitted — or any other length —
+   * and the path is priced as plain land.
+   */
+  tileFacts?: RoadTileFacts[];
 }
 
 export interface WsRespBuildRoad extends WsMessage {
@@ -999,9 +1007,9 @@ export interface WsRespBuildRoad extends WsMessage {
 }
 
 /**
- * Not emitted yet: the client prices a road itself with `estimateRoadCost`
- * (`@/shared/road-cost`). This is the gateway-side door #99 needs — bridges and
- * already-paved tiles have to be priced where the world is known. Kept for it.
+ * Not emitted yet: the client prices a drag itself with `estimateRoadCost`
+ * (`@/shared/road-cost`), from the same formula and the same tile facts it sends with
+ * `REQ_BUILD_ROAD`. The door stays open for a caller that holds no renderer.
  */
 export interface WsReqGetRoadCost extends WsMessage {
   type: WsMessageType.REQ_GET_ROAD_COST;
@@ -1009,6 +1017,8 @@ export interface WsReqGetRoadCost extends WsMessage {
   y1: number;
   x2: number;
   y2: number;
+  /** Same contract as `WsReqBuildRoad.tileFacts`. */
+  tileFacts?: RoadTileFacts[];
 }
 
 export interface WsRespGetRoadCost extends WsMessage {
