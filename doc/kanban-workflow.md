@@ -371,11 +371,17 @@ Never post those by hand. One label is neither derived nor a session's to post:
 
 **Before the `gh issue create`, the draft card goes to the `card-reviewer` sub-agent**
 ([.claude/agents/card-reviewer.md](../.claude/agents/card-reviewer.md)) — title, body,
-`Category`, `Size`, verbatim, and nothing else. It is read-only, it carries none of the
+`Category`, `Size`, `Area`, verbatim, and nothing else. It is read-only, it carries none of the
 finder's context, and it does not want the work.
 
 Why: a pull request has had a second reader since #143. A card had none — the session that
-finds something also judges it worth doing, sizes it and picks its `Category`. The cost of a
+finds something also judges it worth doing, sizes it and picks its `Category`.
+
+**`Area` is checked here because nothing else checks it.** No workflow sets it, `/next-task`
+only fills it *after* a claim, and the claim rule reads it: a card filed without one is
+claimable by anyone and reserves no ground, which is the overlap § The areas exists to
+prevent. On 2026-08-25, 22 of 49 Todo cards had none — two of them filed after the field
+shipped ([#236](https://github.com/Crazz-Org/SPO-WebClient/issues/236)). The cost of a
 misread claim, a duplicate, a card with no `file:line` or no statement of what *done* looks
 like lands entirely on whoever claims it, never on whoever wrote it. That is the same
 asymmetry the English-only rule above exists to prevent.
@@ -385,7 +391,7 @@ Three verdicts, and what each does to the flow:
 | Verdict | The session |
 |---|---|
 | `FILE` | Files the card as written. |
-| `FILE AMENDED` | Applies the named corrections — body, `Category`, `Size` — then files. |
+| `FILE AMENDED` | Applies the named corrections — body, `Category`, `Size`, `Area` — then files. |
 | `DO NOT FILE` | Files nothing. Its final report says what was found and why no card exists. |
 
 `DO NOT FILE` names the code, the issue number or the commit that makes the finding moot. It
