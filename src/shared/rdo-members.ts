@@ -105,7 +105,6 @@ export const RDO_MEMBERS = {
   CreateObject:              { kind: 'function',  arity: 1 },                // src/server/spo_session.ts:1414
   DAAddr:                    { kind: 'accessor',  access: ['get'] },         // src/server/session/login-handler.ts:789
   DALockPort:                { kind: 'accessor',  access: ['get'] },         // src/server/session/login-handler.ts:789
-  DAPort:                    { kind: 'accessor',  access: ['get'] },         // src/server/session/login-handler.ts:789
   DefineZone:                { kind: 'function',  arity: 6 },                // src/server/session/zone-surface-handler.ts:41
   DeleteMessage:             { kind: 'procedure', arity: 4 },                // src/server/session/mail-handler.ts:391
   EnableEvents:              { kind: 'accessor',  access: ['set'] },         // src/server/session/login-handler.ts:525

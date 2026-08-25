@@ -146,11 +146,11 @@
 | `WorldSeason` | property | `get` | integer | 412 | |
 | `UserCount` | property | `get` | integer | 413 | |
 | `DAAddr` | property | `get` | string | 415 | Model server address |
-| `DAPort` | property | `get` | integer | 416 | |
-| `DALockPort` | property | `get` | integer | 417 | |
+| `DAPort` | property | `get` | integer | 416 | The model server's 8-thread channel, kept by the Interface Server for itself. **Neither Voyager nor the gateway reads it** — see below |
+| `DALockPort` | property | `get` | integer | 417 | `DAPort + 1` (`:2640`) — the 1-thread serialising listener for outside callers. **This is what `&DAPort=` carries** |
 | `DSAddr` | property | `get` | string | 418 | Directory server address |
 | `DSPort` | property | `get` | integer | 419 | |
-| `DSArea` | property | `get` | string | 420 | |
+| `DSArea` | property | `get` | string | 420 | Voyager reads it, the gateway deliberately does not — see below |
 | `GMAddr` | property | `get` | string | 421 | Game Master server address |
 | `GMPort` | property | `get` | integer | 422 | |
 | `MailAddr` | property | `get` | string | 423 | |
@@ -158,6 +158,48 @@
 | `ForceCommand` | property | `set` | integer | 425 | Write-only |
 | `MSDown` | property | `get` | boolean | 426 | |
 | `MinNobility` | property | `get` | integer | 427 | |
+
+#### `DAPort` is not the port called `DAPort`
+
+Two InterfaceServer properties name a socket on the model server, and the confusing one wins:
+
+```
+InterfaceServer.pas:2639-2640    fDAPort     := aMSPort;
+                                 fDALockPort := fDAPort + 1;
+ModelServer.pas:1256,1258       fDAConn     := ...Create(aDAPort,     DASpeed);  // 8 threads
+                                 fDALockConn := ...Create(aDAPort + 1, DASpeed);  // 1 thread
+```
+
+`DAPort` is the channel the Interface Server opens for its own model-server proxy
+(`InterfaceServer.pas:2636-2637`, `:2788`). `DALockPort` is a **second listener, one port
+higher**, served by a single thread — a serialising channel for everyone else.
+
+Voyager hands that second one to every ASP page. Its `fDAPort` field is filled from
+`fISProxy.DALockPort` (`Voyager/URLHandlers/ServerCnxHandler.pas:1046`, `:2756`), both
+`getDAPort` and `getDALockPort` return that same field (`:2469-2477`), and the pages read
+it straight back off the query string to open their own RDO connection
+(`Five/0/Visual/Voyager/Tycoon/TycoonAutoConnections.asp:15`). So **every `&DAPort=` on the
+wire is `DALockPort`** — the URL parameter and the property of the same name are different
+numbers.
+
+The gateway follows Voyager: `fetchWorldProperties` reads `DALockPort` into `ctx.daPort`
+and never reads `DAPort` at all (`src/server/session/login-handler.ts`). The field keeps
+the name `daPort` because it names the URL parameter it feeds, exactly as Voyager's
+`fDAPort` does.
+
+#### `DSArea` is a deliberate omission
+
+Voyager reads `DSArea` — but only when the sign-in URL carried no `Area` parameter
+(`ServerCnxHandler.pas:2748-2750`), and only to write `Area` into its local registry
+(`:2610`). That saved value builds a Directory Server key,
+`Root/Areas/<area>/Worlds/<world>/Interface`, which a later sign-in uses to re-find the
+Interface Server without walking the world list
+(`Voyager/URLHandlers/LogonHandlerViewer.pas:554`, `:963`).
+
+The gateway resolves the Interface Server address from the Directory Server on every
+login, so it has no key to cache and nothing to read the area name for. The omission is
+correct — but it is an omission, not (as the L1 test used to claim) something the legacy
+client never asked for.
 | `ServerBusy` | property | `get` | boolean | 428 | |
 
 ### Methods

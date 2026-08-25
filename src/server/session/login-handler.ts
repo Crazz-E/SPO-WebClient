@@ -716,11 +716,19 @@ export async function switchCompany(ctx: LoginContext, company: CompanyInfo): Pr
 // ── Private Helpers ─────────────────────────────────────────────────────────
 
 /**
- * Fetch world properties from InterfaceServer (10 sequential GET commands).
+ * Fetch world properties from InterfaceServer (9 sequential GET commands).
+ *
+ * The list and its order follow Voyager's own sweep
+ * (`Voyager/URLHandlers/ServerCnxHandler.pas:1043-1051`), with one deliberate
+ * omission: `DSArea`. Voyager reads it only to persist `Root/Areas/<area>/Worlds/
+ * <world>/Interface` in its local registry so a later sign-in can re-find the
+ * Interface Server without the world list (`:2610`, `LogonHandlerViewer.pas:554`).
+ * The gateway resolves that address from the Directory Server on every login, so it
+ * has no key to cache and no use for the area name.
  */
 async function fetchWorldProperties(ctx: LoginContext, interfaceServerId: string): Promise<void> {
   const props = [
-    'WorldName', 'WorldURL', 'DAAddr', 'DAPort', 'DALockPort',
+    'WorldName', 'WorldURL', 'DAAddr', 'DALockPort',
     'MailAddr', 'MailPort', 'WorldXSize', 'WorldYSize', 'WorldSeason',
   ] as const;
 
@@ -738,7 +746,16 @@ async function fetchWorldProperties(ctx: LoginContext, interfaceServerId: string
       ctx.setCurrentWorldInfo(wi);
     }
     if (prop === 'DAAddr') ctx.setDaAddr(value);
-    if (prop === 'DAPort') ctx.setDaPort(parseInt(value, 10));
+    // The `DAPort` this feeds is the one the ASP pages receive, and Voyager fills it
+    // from the Interface Server's `DALockPort`, never from its `DAPort`
+    // (`Voyager/URLHandlers/ServerCnxHandler.pas:1046`, `:2756` — and both
+    // `getDAPort` and `getDALockPort` return that same field, `:2469-2477`).
+    // The two are different sockets on the Model Server: `DAPort` is the 8-thread
+    // channel the Interface Server keeps for itself, `DALockPort` is `DAPort + 1`,
+    // a 1-thread serialising listener opened for outside callers
+    // (`Interface Server/InterfaceServer.pas:2639-2640`,
+    // `Model Server/ModelServer.pas:1256`, `:1258`).
+    if (prop === 'DALockPort') ctx.setDaPort(parseInt(value, 10));
     if (prop === 'MailAddr') ctx.setMailAddr(value);
     if (prop === 'MailPort') ctx.setMailPort(parseInt(value, 10));
     if (prop === 'WorldXSize') {
