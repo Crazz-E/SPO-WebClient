@@ -280,10 +280,11 @@ describe('after a merge', () => {
     const retired = path.join(base, 'retired');
     git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/retired', retired);
     commitFile(retired, 'src/done.ts', 'export const d = 1;\n', 'feat: done');
+    const sha = git(retired, 'rev-parse', 'HEAD');
     const key = sessionKey(retired); // the directory is gone by the time we check it
     fs.writeFileSync(
       path.join(bench.sessions, `${key}.finished`),
-      `${retired}\tclaude-x/retired\n`,
+      `${retired}\tclaude-x/retired\t${sha}\n`,
       'utf8',
     );
     // Its session signed off well past the retired idle window; gh is never consulted.
@@ -298,6 +299,33 @@ describe('after a merge', () => {
       spawnSync('git', ['-C', bench.mainRepo, 'rev-parse', '--verify', '-q', 'claude-x/retired'])
         .status,
     ).not.toBe(0);
+  });
+
+  it('does not reap a retired worktree that gained a commit since finish ran', () => {
+    const bench = scratchBench();
+    const base = path.join(bench.mainRepo, '.claude', 'worktrees');
+    fs.mkdirSync(base, { recursive: true });
+    const active = path.join(base, 'active');
+    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/active', active);
+    commitFile(active, 'src/first.ts', 'export const a = 1;\n', 'feat: first card');
+    const retireSha = git(active, 'rev-parse', 'HEAD');
+    const key = sessionKey(active);
+    fs.writeFileSync(
+      path.join(bench.sessions, `${key}.finished`),
+      `${active}\tclaude-x/active\t${retireSha}\n`,
+      'utf8',
+    );
+    // Session picks up a second card and makes a new commit — HEAD has moved.
+    commitFile(active, 'src/second.ts', 'export const b = 2;\n', 'feat: second card');
+    // Heartbeat is old enough that it would not save the worktree on its own.
+    heartbeat(bench, active, 60);
+
+    const run = runFinish(bench, bench.mainRepo);
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(/== un-retiring .*active.*new work detected/);
+    expect(fs.existsSync(active)).toBe(true);
+    // Marker is cleared so the next finish treats the worktree normally.
+    expect(isRetired(bench, active)).toBe(false);
   });
 
   it('keeps a worktree whose session stamped a heartbeat inside the idle window', () => {
