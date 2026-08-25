@@ -180,47 +180,66 @@ the `PROJECTS_TOKEN` secret (Settings → Secrets and variables → Actions). Un
 job is inert: green, skipped, one notice — never a red X every morning. `--dry-run` and
 `workflow_dispatch` give a manual check without commenting on anything.
 
-### The built-in Projects workflows — one of them is a standing human step
+### The built-in Projects workflows — configured, and four that stay off
 
 The other half of #124 — the mechanical transitions nobody should have to remember — is
-configuration, not code, and **it did not survive the move to the organization.** A project's
-`Auto-add to project` workflow is bound to a repository filter that belongs to *that* project;
-the board that now serves this repository is a different project, so the filter has to be
-created again. Read the current state rather than assuming it:
+configuration, not code, and **it did not survive the move to the organization**: a project's
+`Auto-add to project` workflow is bound to a repository filter belonging to *that* project, so
+the whole set had to be built again on the new board. That was done on **2026-08-25**. Read the
+current state rather than assuming it:
 
 ```bash
 gh api graphql -f query='query{organization(login:"Crazz-Org"){projectV2(number:1){workflows(first:20){nodes{name enabled}}}}}'
 ```
 
-⚠ **There is no mutation for this.** The public GraphQL API can *delete* a project workflow
-(`deleteProjectV2Workflow`) and can read them, but it can neither create nor enable one. A
-session cannot fix this for you; only the UI can — Project → ⋯ → Workflows.
+⚠ **There is no mutation for this, and the read is partial.** The public GraphQL API can
+*delete* a project workflow (`deleteProjectV2Workflow`) and can read its `enabled` flag, but it
+can neither create one, enable one, nor read the **value** a `Set value` step is configured
+with. So a session can prove a workflow is *on*; only the UI can turn it on, and only the
+board's behaviour proves it points at the right column. Project → ⋯ → Workflows.
 
-What to turn on there, and what each one buys:
+**On, and what each one buys:**
 
-| Workflow | Configure as | Why it matters |
+| Workflow | Configured as | Why it matters |
 |---|---|---|
-| **Auto-add to project** | repository **picker** → `Crazz-Org/SPO-WebClient`; filter box → `is:issue is:open` | **The feeding rule rests on this one.** Without it a new issue is created and belongs to no board, so a finding filed by a session is invisible unless that session also ran `item-add` by hand |
-| **Item added to project** | set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status and sits outside every column — added to the board and still invisible |
-| **Pull request linked to issue** | set `Status` = **PR** | The column the ownership law defines as "pull request open" |
-| **Pull request merged** | set `Status` = **Done** | The merge is the milestone; pairs with `Auto-close issue` |
-| Item closed | set `Status` = **Done** | The Done cards with an empty `Session` are the trace of this firing on its own |
-| Auto-close issue | on `Status` Done | Closes the issue when a session moves the card |
-| Auto-add sub-issues to project | already enabled | — |
+| **Auto-add to project** | repository **picker** → `Crazz-Org/SPO-WebClient`; filter box → `is:issue is:open` | **The feeding rule rests on this one.** Without it a new issue belongs to no board, so a finding filed by a session is invisible |
+| **Item added to project** | trigger `issue, pull request`; set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status — on the board and outside the pool at the same time, since `/next-task` selects on `Status = Todo` |
+| **Pull request linked to issue** | set `Status` = **PR** | The column the ownership law defines as "pull request open", reached from the `Closes #N` the PR body already carries |
+| **Item reopened** | trigger `issue, pull request`; set `Status` = **Needs triage** | Without it, reopening a closed issue leaves its card in Done, where it misrepresents the work. **Not Todo:** `Session` still holds the old owner and only the human may clear it — Needs triage is the human's column |
+| **Item closed** | trigger `issue, pull request`; set `Status` = **Done** | The Done cards with an empty `Session` are the trace of this firing on its own |
+| **Auto-close issue** | trigger *when the status is updated* → `Status: Done` | Closes the issue when a session moves the card |
+| **Auto-add sub-issues to project** | — | Inherited, no value to set |
 
-**Every one of those is a `Set value` step, and the value is not optional** — a workflow whose
+**Every `Set value` step needs its value, and the value is not optional** — a workflow whose
 value is unset shows a red **!** in the sidebar and its *Save and turn on workflow* button
-stays greyed. Expect all three of the `Set value` ones to arrive that way on a freshly built
-board: rebuilding `Status` with these six columns regenerates the option ids, so whatever
-GitHub pre-filled against its own `Todo` / `In Progress` / `Done` defaults is left pointing at
-options that no longer exist.
+stays greyed. Expect all of them to arrive that way on a freshly rebuilt board: rebuilding
+`Status` with these six columns regenerates the option ids, so whatever GitHub pre-filled
+against its own `Todo` / `In Progress` / `Done` defaults is left pointing at options that no
+longer exist.
 
-Four more workflows exist and are deliberately **left off**, as they were on the previous
-board: `Auto-archive items`, `Code changes requested`, `Code review approved`, `Item reopened`.
-The last is the only one worth reconsidering — without it, reopening a closed issue leaves its
-card in Done, where it misrepresents the work until somebody notices.
+**Off, and staying off.** Three of the four are **pull-request workflows on an issue-only
+board** — GitHub's wording for the merge one is *"when pull requests in your project are
+merged"*, and the auto-add filter is `is:issue is:open`, so no pull request is ever an item
+here and none of the three could fire whatever value it held.
 
-⚠ **Two traps in the first row, and the first one is a hard error.** The repository is chosen
+| Off | Fires on | Covered instead by |
+|---|---|---|
+| `Pull request merged` | PR items | merge → `Closes #N` closes the issue → `Item closed` → Done |
+| `Code review approved` | PR items | nothing to cover — solo maintainer, 0 approvals required |
+| `Code changes requested` | PR items | idem |
+| `Auto-archive items` | any item | deliberately nothing — Done **is** the record of finished work; archiving would hide it |
+
+⚠ **Never widen the auto-add filter to pull requests to "unlock" those three.** Combined with
+`Item added to project` → Todo, every open PR would drop into the pool and a `/next-task`
+session would claim a pull request as work.
+
+That is not a theoretical risk, and the reason is in the trigger rows above: `Item added to
+project`, `Item closed` and `Item reopened` are all typed **`issue, pull request`** — none of
+them excludes a pull request by itself. **The auto-add filter is the only thing keeping pull
+requests off this board**, and therefore the only thing that makes those three safe. It is a
+single UI field, and changing it changes the meaning of every column.
+
+⚠ **Two traps in the auto-add row, and the first is a hard error.** The repository is chosen
 from a *separate picker*; the filter box beside it accepts only `is:`, `label:`, `reason:`,
 `assignee:` and `no:` (all but `no:` negatable). Writing the repository into the filter is
 rejected outright — `Invalid filter: Unknown field name "repo"`. And **auto-add sets no field
@@ -228,26 +247,13 @@ value**: `Status` = Todo is the separate `Item added to project` workflow, so tu
 the first of the two leaves every new card statusless.
 ([GitHub docs](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/adding-items-automatically))
 
-**Verified live, 2026-08-25.** A throwaway issue was filed and reached the board in under ten
-seconds — `Auto-add to project` matches, and the `gh project item-add` stopgap it needed is
-retired. It arrived **with no `Status`**, which is the half that still bites: § 1 of
-`/next-task` selects candidates on `Status = Todo`, so a statusless card is on the board and
-outside the pool at the same time — filed, visible to a human browsing, and never picked up.
-
-**Until `Item added to project` is on, a session that files a card MUST set its column
-itself** and read the card back. The ids are stable:
-
-```bash
-PROJECT=PVT_kwDOEyAVD84BhYwk       # orgs/Crazz-Org/projects/1
-gh project item-list 1 --owner Crazz-Org --limit 300 --format json \
-  --jq '.items[]|select(.content.number==<N>)|.id'        # the ITEM id
-gh project field-list 1 --owner Crazz-Org --format json \
-  --jq '.fields[]|select(.name=="Status")|{id,options:.options}'   # field id + Todo option id
-```
-
-That is not belt-and-braces: a finding that never enters the Todo pool is lost exactly as
-surely as one that was never filed, and it is how one was nearly lost when the repository moved
-and the old board's filter stopped matching.
+**What a session still does by hand.** Nothing on the way in — a filed issue reaches Todo on
+its own (auto-add verified live 2026-08-25: a throwaway issue reached the board in under ten
+seconds). But no workflow sets `Category`, `Size` or `Area`, and every transition after the
+claim is still a board write its owner makes (§ *What a session writes on the board*). A
+finding that never enters the Todo pool is lost exactly as surely as one that was never filed —
+which is how one was nearly lost when the repository moved and the old board's filter stopped
+matching.
 
 ## What a session writes on the board — and only this
 
@@ -258,7 +264,7 @@ Every write is very short.
 |---|---|
 | Claim | `Session` field + Status → In progress |
 | Gate deposited | Status → Gate |
-| PR opened | Status → PR (the PR link appears on the card automatically via `Closes #N`) |
+| PR opened | Status → PR (the PR link appears on the card automatically via `Closes #N`, and `Pull request linked to issue` is configured to set the column from the same link — the owner sets it anyway and reads it back: the workflow has not yet been *observed* firing, and the owner's write is what the law relies on) |
 | Merged + finished | Status → Done + **one final comment, 2–4 lines**: what changed, PR number, anything the human should know |
 | Released | Status → Needs triage + the non-technical explanation comment |
 | Gate attempt failed | Nothing on the board (Status stays Gate or returns to In progress); the detail lives in the PR/commits |
@@ -378,6 +384,8 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 gh issue create --repo Crazz-Org/SPO-WebClient --title "…" --body "…" \
   --label "cat:latent-trap" --label "size:M"
 gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body "<the verdict, verbatim>"
+# `Auto-add to project` + `Item added to project` put the card in Todo on their own.
+# Only if a card has not appeared after ~30 s (a workflow was turned off):
 gh project item-add 1 --owner Crazz-Org --url <ISSUE_URL>
 
 # Final comment

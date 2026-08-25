@@ -175,14 +175,13 @@ lands in — and a session claims the topmost Todo card whose area no live card 
 (`SPO_WORKTREE_IDLE_MIN`, 120 min), the card's `Session` field never does.
 **Feeding rule:** every finding lands as a new issue in Todo, with its `Category` and the
 matching `cat:` / `size:` labels — a finding that only lives in a session report is lost.
-⚠ **Filing the issue is not enough right now.** `Auto-add to project` is on and verified — a
-new issue reaches the board in seconds — but `Item added to project` is not, so **the card
-arrives with no `Status`**. `/next-task` selects on `Status = Todo`, so a statusless card is on
-the board and still outside the pool: filed, visible, and never picked up. Until that workflow
-is enabled, set the column yourself after filing — `gh project item-edit --id <ITEM_ID>
---project-id <PROJECT_ID> --field-id <STATUS_FIELD_ID> --single-select-option-id <TODO_ID>` —
-and read the card back. [kanban-workflow.md](doc/kanban-workflow.md) carries the one-time UI
-step that retires this, and the ids.
+**Filing the issue is all it takes on the way in.** `Auto-add to project` puts a new issue on
+the board in seconds and `Item added to project` sets its `Status` to Todo, so a filed finding
+lands straight in the pool `/next-task` reads — no `item-add`, no column set by hand. What no
+workflow sets is `Category`, `Size` and `Area`; those stay the filer's job, and every
+transition after the claim is still a board write its owner makes.
+[kanban-workflow.md](doc/kanban-workflow.md) lists the board workflows that are on, the four
+deliberately off, and why three of those four could never fire here.
 **Every draft card is read first by the `card-reviewer` sub-agent**, whose dated verdict
 becomes the card's first comment; on `DO NOT FILE` no issue is created and the session's
 report says why.
@@ -215,7 +214,8 @@ npm test             # full Jest suite
 npm run test:coverage
 npm run test:changed # --onlyChanged --bail
 
-npm run gate         # THE PRE-PUSH GATE — local precheck, then a bench-worker job (queued, serialized)
+npm run gate         # THE GATE — a bench job for the PUSHED sha (queued, serialized).
+                     # Commit, push and open the PR FIRST; it refuses a sha that is not on origin
 npm run test:live    # the L2 live drive as a bench job
 npm run dev          # a bench LEASE: the worker builds THIS worktree and holds its gateway on 8080 for you
 npm run dev:release  # end your lease early (otherwise it expires, 30 min default)
@@ -265,7 +265,7 @@ Full spec: [doc/bench-worker.md](doc/bench-worker.md).
 | `context-router.sh` | UserPromptSubmit | Points at the relevant docs/skills before planning |
 | `typecheck-guard.sh` | PostToolUse (Edit\|Write) | Flags the tree dirty on `.ts`/`.tsx` writes — no work, ~0 ms |
 | `sanctuarize.sh` | Stop | Runs `npm run typecheck` once per turn if dirty; blocks the turn on failure |
-| `pre-push-gate.sh` | PreToolUse (Bash) | Blocks `git push` unless the bench worker has attested HEAD: PASS, fingerprint-stable, this worktree, < 60 min — see **The push gate** below |
+| `pre-push-gate.sh` | PreToolUse (Bash) | Blocks a **direct push to `main`** — nothing else. It no longer demands an attestation for HEAD: the worker gates a *pushed* sha, so the two rules could not both hold — see **The gate** below |
 | `bench-port-guard.sh` | PreToolUse (Bash) | Blocks anything that would take the bench port (8080) or drive the live world outside the worker; names the sanctioned form |
 | `session-heartbeat.sh` | *sourced by the others* | Stamps `~/.spo-bench/sessions/<key>.alive` so `finish` never reaps a worktree a session is working in |
 
@@ -277,20 +277,21 @@ Full spec: [doc/bench-worker.md](doc/bench-worker.md).
 L0  Unit + component          Jest node/jsdom, coverage ratchet           CI: every PR
 L1  Protocol conformance      Jest + src/mock-server/ (rdo-mock, strict   CI: every PR
                               validator) — NOT a mock backend for E2E
-L2  LIVE WS drive  <- gate    src/e2e/, headless `ws` -> gateway ->       PRE-PUSH: every code change
+L2  LIVE WS drive  <- gate    src/e2e/, headless `ws` -> gateway ->       PRE-MERGE: every code change
                               planitia. `npm run test:live`
 L3  LIVE browser smoke        Playwright MCP, SPO_test3 / Crazz       pixels only, + pre-release
 ```
 
-**The push gate.** `git push` is blocked by a hook unless the **bench worker** has
-attested the current HEAD (`~/.spo-bench/verdicts/<sha>.json`): verdict PASS, tree
-fingerprint stable across the run, attested for THIS worktree, younger than 60 min.
-`npm run gate` produces that attestation: it prechecks locally (typecheck, lint, then one
-Jest pass that also measures the changed lines — free, parallelizable) and leaves a
-**precheck receipt** for that exact tree; then it queues a bench job. The worker builds the
-worktree, runs verify-gate (static — replayed unless its own fingerprint of the tree matches
-the receipt — President exclusion, diff routing) and drives the routed flows live. **Only the worker attests** — `npm run gate:local` is evidence for reading,
-never a push unblock. **A crash is a failure, but silence is not a pass**: a mutation is
+**The gate.** The bench gates a **pushed commit**, not your worktree, so the order is
+**commit → push → open the PR → `npm run gate`** — the worker fetches the sha, and the gate
+refuses one that is not on origin. **Open the pull request before gating**: nothing refuses a
+gate without one, but `ci.yml` triggers on `pull_request`, so a branch with no PR has no CI run
+for its sha and the worker replays the entire Jest suite on the exclusive bench — the slowest
+and heaviest path, which has already killed a gateway mid-job. With CI concluded the static
+stage is skipped outright, and the worker builds the sha, applies the President exclusion and
+diff routing, and drives the routed flows live. **Only the worker attests** —
+`npm run gate:local` is evidence for reading, never a merge unblock. **A crash is a failure,
+but silence is not a pass**: a mutation is
 proven by the `FIVEMODELSERVER/Survival` log line, not by a `success: true` response
 (`OB-28`); a lagging read-back is expected (`OB-29`) and does not fail a probe, a missing
 log line does. Three attempts maximum, each naming a different root cause. Full rules:
@@ -432,14 +433,16 @@ what you touch, or make that sweep a commit of its own.
 
 ## Git
 
-**Nothing gates a local commit — the gate is on the push.** Commit freely on a branch;
-each retry attempt is its own commit so the loop stays readable. Before pushing, run
-`npm run gate`: `.claude/hooks/pre-push-gate.sh` blocks the push without a fresh bench
-attestation for HEAD, and blocks a direct push to `main` outright. `.github/workflows/ci.yml`
-re-runs lint, typecheck and tests on every push to `main` and every pull request. CI
-cannot hold the locked credentials, so the worker publishes each attestation as the
-`bench/gate` **commit status** once the sha reaches GitHub (retried automatically until
-the push happens). **`main` is governed by one ruleset that binds the owner too** (empty
+**Nothing gates a local commit, and nothing gates the push either — the gate is on the
+merge.** Commit freely on a branch; each retry attempt is its own commit so the loop stays
+readable. Then **push, open the pull request, and gate that sha**, in that order: the worker
+*fetches* the commit it judges, so "no push without an attestation" and "no attestation without
+a push" cannot both hold ([bench-worker.md §11](doc/bench-worker.md)).
+`.claude/hooks/pre-push-gate.sh` refuses one thing only — a direct push to `main`. Nothing is
+loosened by that, because the push was never the irreversible act: `.github/workflows/ci.yml`
+re-runs lint, typecheck and tests on every push to `main` and every pull request, and CI cannot
+hold the locked credentials, so the worker publishes its verdict as the `bench/gate` **commit
+status** on the sha. **`main` is governed by one ruleset that binds the owner too** (empty
 bypass list): PR required (0 approvals — solo maintainer), `typecheck + tests` **and**
 `bench/gate` required, no force-push, no deletion. So a PR cannot merge on CI alone.
 **The branch is deliberately NOT required to be up to date with `main`** — that rule made
@@ -461,6 +464,13 @@ the entry and leaves the pull request CLOSED and unmerged, exit 0, one warning l
 deletes the branch itself when the entry lands. Recovery is `git push -u origin <branch>` +
 `gh pr reopen <N>` + merge again — same sha, so the attestation still holds
 ([bench-worker.md §12](doc/bench-worker.md)).
+
+**`gh pr edit` does not work on this repository.** Every invocation — `--body-file`,
+`--add-label`, any flag — fails with `GraphQL: Projects (classic) is being deprecated …
+(repository.pullRequest.projectCards)`, exit 1, **and applies nothing**. The message goes to
+stderr, so a piped or backgrounded call reads as success while the PR is unchanged; verify, or
+better, use REST: `gh api -X PATCH repos/Crazz-Org/SPO-WebClient/pulls/<N> --input <json>`.
+`gh pr create`, `gh pr view` and `gh pr merge` are unaffected.
 
 **An update is finished only after `npm run finish`.** GitHub deletes the remote branch at
 merge (`delete_branch_on_merge`); the local side does not clean itself. `finish` refuses
