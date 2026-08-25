@@ -102,6 +102,14 @@ A copy of the same tree also sits on the Windows mount
 (`/mnt/c/Users/Crazz/Documents/SPO/SPO-Original`) — same commit, identical content, but CRLF.
 Read the WSL copy.
 
+⚠ **Some `.pas` files are ISO-8859-encoded and defeat grep's binary detection** — a plain
+`grep <pattern> some-file.pas` silently returns nothing and exits 1, as if the text were
+absent. At least `Kernel/KernelCache.pas`, `Kernel/rc4.pas`, `Kernel/MediaNameGenerator.pas`
+and `Kernel/PublicFacility.pas` are affected (`file *.pas` reports "ISO-8859 text" for these,
+"ASCII text" for a normal one). Use `grep -a`, or the Read/Grep tools, when searching the
+legacy tree — never conclude a name is absent from a `.pas` file on an unqualified `grep`
+alone. The tree is read-only: never re-encode a file to work around this.
+
 [spo-original-reference.md](doc/spo-original-reference.md) indexes it, but ⚠ **it is
 hand-maintained and has misclassified members before** — it once listed a `procedure` as a
 `function` because it cited a late-bound *client* call site instead of the server declaration.
