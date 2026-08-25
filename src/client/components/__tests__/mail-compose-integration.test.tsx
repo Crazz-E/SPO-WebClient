@@ -35,7 +35,9 @@ describe('Mail compose — integration flow', () => {
       composeSubject: '',
       composeBody: '',
       composeHeaders: '',
+      composeDraftId: null,
       isSending: false,
+      isSavingDraft: false,
       isMessageLoading: false,
       pendingDeleteId: null,
       folderRefreshToken: 0,
@@ -205,6 +207,97 @@ describe('Mail compose — integration flow', () => {
     expect(useMailStore.getState().messages).toHaveLength(0);
     expect(useMailStore.getState().currentView).toBe('list');
     expect(useMailStore.getState().pendingDeleteId).toBeNull();
+  });
+
+  // #120 — REQ_MAIL_SAVE_DRAFT had a gateway handler, a bridge response and a Drafts tab,
+  // and no control anywhere that emitted it.
+  describe('Save draft', () => {
+    it('saves what is typed, with no recipient required and no draft id for a new letter', () => {
+      const saveSpy = jest.fn();
+      renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSaveDraft: saveSpy }) });
+
+      fireEvent.click(screen.getByText('Compose'));
+      fireEvent.change(screen.getByPlaceholderText('Subject'), { target: { value: 'Half a thought' } });
+      fireEvent.change(screen.getByPlaceholderText('Message...'), { target: { value: 'to be continued' } });
+
+      // Send still refuses — a letter needs an address, a draft does not.
+      expect((screen.getByText('Send').closest('button') as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(screen.getByText('Save draft'));
+
+      expect(saveSpy).toHaveBeenCalledWith('', 'Half a thought', 'to be continued', undefined, undefined);
+      // The form is locked and stays on screen until the server answers, as a send does.
+      expect(useMailStore.getState().isSavingDraft).toBe(true);
+      expect(useMailStore.getState().currentView).toBe('compose');
+      expect((screen.getByText('Saving…').closest('button') as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByPlaceholderText('Subject') as HTMLInputElement).disabled).toBe(true);
+    });
+
+    it('an empty form has nothing to save', () => {
+      const saveSpy = jest.fn();
+      renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSaveDraft: saveSpy }) });
+      fireEvent.click(screen.getByText('Compose'));
+      const save = screen.getByText('Save draft').closest('button') as HTMLButtonElement;
+      expect(save.disabled).toBe(true);
+      fireEvent.click(save);
+      expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it('editing a saved draft sends its id back, so the server replaces the copy', () => {
+      const draft: MailMessageFull = {
+        messageId: 'draft-4', from: 'Me', fromAddr: 'me', to: 'Bob', toAddr: 'bob',
+        subject: 'Half written', date: '2025-01-15', dateFmt: 'Jan 15',
+        body: ['first line', 'second line'], read: true, stamp: 3, noReply: false, attachments: [],
+      };
+      const saveSpy = jest.fn();
+      useMailStore.setState({ currentFolder: 'Draft' });
+      renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSaveDraft: saveSpy }) });
+
+      act(() => useMailStore.getState().setCurrentMessage(draft));
+      // A draft has no sender to answer — the read view offers Edit in place of Reply.
+      expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit draft' }));
+
+      expect((screen.getByPlaceholderText('To') as HTMLInputElement).value).toBe('bob');
+      expect((screen.getByPlaceholderText('Message...') as HTMLTextAreaElement).value).toBe('first line\nsecond line');
+
+      fireEvent.change(screen.getByPlaceholderText('Message...'), { target: { value: 'finished now' } });
+      fireEvent.click(screen.getByText('Save draft'));
+
+      expect(saveSpy).toHaveBeenCalledWith('bob', 'Half written', 'finished now', undefined, 'draft-4');
+    });
+
+    it('a message outside Drafts still offers Reply', () => {
+      const msg: MailMessageFull = {
+        messageId: 'msg-1', from: 'Alice', fromAddr: 'alice', to: 'Me', toAddr: 'me',
+        subject: 'Hello', date: '2025-01-15', dateFmt: 'Jan 15',
+        body: ['hi'], read: true, stamp: 3, noReply: false, attachments: [],
+      };
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage(msg));
+      expect(screen.getByRole('button', { name: 'Reply' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Edit draft' })).toBeNull();
+    });
+
+    it('a send in flight locks the draft button too — one letter, one gesture', () => {
+      const saveSpy = jest.fn();
+      renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSaveDraft: saveSpy }) });
+      fireEvent.click(screen.getByText('Compose'));
+      fireEvent.change(screen.getByPlaceholderText('To'), { target: { value: 'player42' } });
+      fireEvent.click(screen.getByText('Send'));
+
+      const save = screen.getByText('Save draft').closest('button') as HTMLButtonElement;
+      expect(save.disabled).toBe(true);
+      fireEvent.click(save);
+      expect(saveSpy).not.toHaveBeenCalled();
+    });
+
+    it('the compose headers of a reply ride along with the draft', () => {
+      const saveSpy = jest.fn();
+      renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSaveDraft: saveSpy }) });
+      act(() => useMailStore.getState().startCompose('bob', 'Re: Trade', 'yes', 'X-Thread: 42'));
+      fireEvent.click(screen.getByText('Save draft'));
+      expect(saveSpy).toHaveBeenCalledWith('bob', 'Re: Trade', 'yes', 'X-Thread: 42', undefined);
+    });
   });
 
   it('switching folders triggers client.onMailGetFolder', () => {

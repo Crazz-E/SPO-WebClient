@@ -214,6 +214,7 @@ export interface ClientCallbacks {
   onMailGetFolder: (folder: MailFolder) => void;
   onMailReadMessage: (messageId: string) => void;
   onMailSend: (to: string, subject: string, body: string) => void;
+  onMailSaveDraft: (to: string, subject: string, body: string, headers?: string, existingDraftId?: string) => void;
   onMailDelete: (messageId: string) => void;
 
   // Search menu
@@ -705,7 +706,16 @@ export const ClientBridge = {
         if (resp.success) {
           mail.clearCompose();
           mail.setFolder('Draft');
-          showToast('Draft saved', 'info');
+          // Drafts now holds a message it did not before. setFolder alone cannot show
+          // it: when Draft was already the open folder nothing in the panel's deps
+          // changed, so its fetch effect never re-fired and the skeleton stayed
+          // forever (#108). The refresh token is the deps entry that always moves.
+          mail.refreshFolder();
+          showToast('Draft saved.', 'info', { title: 'Draft' });
+        } else {
+          // Same rule as a failed send: the text stays on screen rather than vanish.
+          mail.setSavingDraft(false);
+          showToast('Draft not saved. Your text is kept.', 'error');
         }
         break;
       }

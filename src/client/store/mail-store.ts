@@ -25,8 +25,17 @@ interface MailState {
   composeSubject: string;
   composeBody: string;
   composeHeaders: string;
+  /**
+   * The draft this compose form was opened from, or null for a fresh letter.
+   *
+   * Saving sends it as `existingDraftId` so the server deletes the old copy
+   * instead of leaving two (`saveDraft`, `mail-handler.ts:186`).
+   */
+  composeDraftId: string | null;
   /** A send is in flight — the compose form is kept until the server answers (T6). */
   isSending: boolean;
+  /** A draft save is in flight — the form is locked so one click cannot make two drafts. */
+  isSavingDraft: boolean;
   /** A message is being fetched after a click on its row. */
   isMessageLoading: boolean;
   /** The id a delete was requested for — removed from the list when the server confirms. */
@@ -50,10 +59,13 @@ interface MailState {
   setLoading: (loading: boolean) => void;
   startCompose: (to?: string, subject?: string, body?: string, headers?: string) => void;
   startReply: (message: MailMessageFull) => void;
+  /** Re-open a saved draft in the compose form, remembering the copy to replace. */
+  startEditDraft: (message: MailMessageFull) => void;
   clearCompose: () => void;
   /** Edit one compose field — the form is store-driven so Reply's prefill reaches it. */
   setComposeField: (field: 'to' | 'subject' | 'body', value: string) => void;
   setSending: (sending: boolean) => void;
+  setSavingDraft: (saving: boolean) => void;
   setMessageLoading: (loading: boolean) => void;
   setPendingDeleteId: (id: string | null) => void;
   /** Drop a message from the current list (after a confirmed delete) — no refetch needed. */
@@ -74,7 +86,9 @@ export const useMailStore = create<MailState>((set) => ({
   composeSubject: '',
   composeBody: '',
   composeHeaders: '',
+  composeDraftId: null,
   isSending: false,
+  isSavingDraft: false,
   isMessageLoading: false,
   pendingDeleteId: null,
   folderRefreshToken: 0,
@@ -93,6 +107,7 @@ export const useMailStore = create<MailState>((set) => ({
       composeSubject: subject,
       composeBody: body,
       composeHeaders: headers,
+      composeDraftId: null,
     }),
 
   startReply: (message) =>
@@ -102,6 +117,17 @@ export const useMailStore = create<MailState>((set) => ({
       composeSubject: message.subject.startsWith('Re: ') ? message.subject : `Re: ${message.subject}`,
       composeBody: '',
       composeHeaders: '',
+      composeDraftId: null,
+    }),
+
+  startEditDraft: (message) =>
+    set({
+      currentView: 'compose',
+      composeTo: message.toAddr || message.to,
+      composeSubject: message.subject,
+      composeBody: message.body.join('\n'),
+      composeHeaders: '',
+      composeDraftId: message.messageId,
     }),
 
   clearCompose: () =>
@@ -110,13 +136,16 @@ export const useMailStore = create<MailState>((set) => ({
       composeSubject: '',
       composeBody: '',
       composeHeaders: '',
+      composeDraftId: null,
       currentView: 'list',
       isSending: false,
+      isSavingDraft: false,
     }),
 
   setComposeField: (field, value) =>
     set(field === 'to' ? { composeTo: value } : field === 'subject' ? { composeSubject: value } : { composeBody: value }),
   setSending: (sending) => set({ isSending: sending }),
+  setSavingDraft: (saving) => set({ isSavingDraft: saving }),
   setMessageLoading: (loading) => set({ isMessageLoading: loading }),
   setPendingDeleteId: (id) => set({ pendingDeleteId: id }),
   removeMessage: (messageId) =>

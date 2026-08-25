@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, memo } from 'react';
-import { Send, Trash2, Reply, PenSquare } from 'lucide-react';
+import { Send, Trash2, Reply, PenSquare, Save } from 'lucide-react';
 import { useMailStore } from '../../store/mail-store';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
@@ -63,14 +63,19 @@ export function MailPanel() {
   const setView = useMailStore((s) => s.setView);
   const startCompose = useMailStore((s) => s.startCompose);
   const startReply = useMailStore((s) => s.startReply);
+  const startEditDraft = useMailStore((s) => s.startEditDraft);
   const clearCompose = useMailStore((s) => s.clearCompose);
 
   const composeTo = useMailStore((s) => s.composeTo);
   const composeSubject = useMailStore((s) => s.composeSubject);
   const composeBody = useMailStore((s) => s.composeBody);
   const setComposeField = useMailStore((s) => s.setComposeField);
+  const composeHeaders = useMailStore((s) => s.composeHeaders);
+  const composeDraftId = useMailStore((s) => s.composeDraftId);
   const isSending = useMailStore((s) => s.isSending);
   const setSending = useMailStore((s) => s.setSending);
+  const isSavingDraft = useMailStore((s) => s.isSavingDraft);
+  const setSavingDraft = useMailStore((s) => s.setSavingDraft);
   const isMessageLoading = useMailStore((s) => s.isMessageLoading);
   const setMessageLoading = useMailStore((s) => s.setMessageLoading);
   const requestConfirm = useUiStore((s) => s.requestConfirm);
@@ -95,12 +100,30 @@ export function MailPanel() {
 
   // The draft is kept until the server answers: RESP_MAIL_SENT clears it on success and a
   // failure leaves it in place with a toast (audit P2). Sending twice is blocked meanwhile.
-  const canSend = composeTo.trim().length > 0 && !isSending;
+  const isBusy = isSending || isSavingDraft;
+  const canSend = composeTo.trim().length > 0 && !isBusy;
   const handleSend = useCallback(() => {
     if (!canSend) return;
     setSending(true);
     client.onMailSend(composeTo.trim(), composeSubject, composeBody);
   }, [canSend, setSending, client, composeTo, composeSubject, composeBody]);
+
+  // A draft is what you keep BEFORE you have a recipient, so — unlike Send — it asks
+  // for no address: anything typed is enough. Editing an existing draft carries its id,
+  // which makes the server replace that copy instead of leaving two (#120).
+  const canSaveDraft =
+    !isBusy && (composeTo.trim() + composeSubject.trim() + composeBody.trim()).length > 0;
+  const handleSaveDraft = useCallback(() => {
+    if (!canSaveDraft) return;
+    setSavingDraft(true);
+    client.onMailSaveDraft(
+      composeTo.trim(),
+      composeSubject,
+      composeBody,
+      composeHeaders || undefined,
+      composeDraftId ?? undefined,
+    );
+  }, [canSaveDraft, setSavingDraft, client, composeTo, composeSubject, composeBody, composeHeaders, composeDraftId]);
 
   // Deleting asks first (B5); the row is removed locally when the server confirms.
   const handleDelete = useCallback(() => {
@@ -182,9 +205,16 @@ export function MailPanel() {
               ← Back
             </button>
             <div className={styles.readActions}>
-              <button className={styles.actionBtn} onClick={() => startReply(currentMessage)} aria-label="Reply" title="Reply">
-                <Reply size={14} aria-hidden="true" />
-              </button>
+              {/* A draft is unsent, so there is nobody to reply to — it is re-opened for editing. */}
+              {currentFolder === 'Draft' ? (
+                <button className={styles.actionBtn} onClick={() => startEditDraft(currentMessage)} aria-label="Edit draft" title="Edit draft">
+                  <PenSquare size={14} aria-hidden="true" />
+                </button>
+              ) : (
+                <button className={styles.actionBtn} onClick={() => startReply(currentMessage)} aria-label="Reply" title="Reply">
+                  <Reply size={14} aria-hidden="true" />
+                </button>
+              )}
               <button className={styles.actionBtn} onClick={handleDelete} aria-label="Delete" title="Delete">
                 <Trash2 size={14} aria-hidden="true" />
               </button>
@@ -212,7 +242,7 @@ export function MailPanel() {
             aria-label="To"
             value={composeTo}
             onChange={(e) => setComposeField('to', e.target.value)}
-            disabled={isSending}
+            disabled={isBusy}
           />
           <input
             className={styles.composeInput}
@@ -220,7 +250,7 @@ export function MailPanel() {
             aria-label="Subject"
             value={composeSubject}
             onChange={(e) => setComposeField('subject', e.target.value)}
-            disabled={isSending}
+            disabled={isBusy}
           />
           <textarea
             className={styles.composeBody}
@@ -229,14 +259,18 @@ export function MailPanel() {
             value={composeBody}
             onChange={(e) => setComposeField('body', e.target.value)}
             rows={8}
-            disabled={isSending}
+            disabled={isBusy}
           />
           <div className={styles.composeActions}>
             <button className={styles.sendBtn} onClick={handleSend} disabled={!canSend} aria-busy={isSending || undefined} title={composeTo.trim() ? undefined : 'Add a recipient'}>
               <Send size={14} aria-hidden="true" />
               <span>{isSending ? 'Sending…' : 'Send'}</span>
             </button>
-            <button className={styles.cancelBtn} onClick={clearCompose} disabled={isSending}>
+            <button className={styles.draftBtn} onClick={handleSaveDraft} disabled={!canSaveDraft} aria-busy={isSavingDraft || undefined} title={canSaveDraft || isBusy ? undefined : 'Write something first'}>
+              <Save size={14} aria-hidden="true" />
+              <span>{isSavingDraft ? 'Saving…' : 'Save draft'}</span>
+            </button>
+            <button className={styles.cancelBtn} onClick={clearCompose} disabled={isBusy}>
               Cancel
             </button>
           </div>

@@ -318,3 +318,27 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* Save draft — the same weight as Cancel, not Send: keeping a letter is not sending it. */
+.draftBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+
+.draftBtn:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.draftBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

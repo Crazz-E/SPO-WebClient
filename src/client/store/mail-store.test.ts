@@ -30,6 +30,8 @@ function resetStore() {
     composeSubject: '',
     composeBody: '',
     composeHeaders: '',
+    composeDraftId: null,
+    isSavingDraft: false,
   });
 }
 
@@ -116,5 +118,59 @@ describe('Mail Store — Compose', () => {
       subject: 'Re: Already replied',
     });
     expect(useMailStore.getState().composeSubject).toBe('Re: Already replied');
+  });
+});
+
+// #120 — the compose form has to say WHICH draft it came from, or saving an edited
+// draft leaves the old copy beside the new one.
+describe('Mail Store — Drafts', () => {
+  beforeEach(resetStore);
+
+  it('startEditDraft re-opens the draft with its recipient, subject, body and id', () => {
+    useMailStore.getState().startEditDraft({
+      ...mockFullMessage,
+      messageId: 'draft-4',
+      toAddr: 'bob@test.com',
+      subject: 'Half written',
+      body: ['line one', 'line two'],
+    });
+    const state = useMailStore.getState();
+    expect(state.currentView).toBe('compose');
+    expect(state.composeTo).toBe('bob@test.com');
+    expect(state.composeSubject).toBe('Half written');
+    expect(state.composeBody).toBe('line one\nline two');
+    expect(state.composeDraftId).toBe('draft-4');
+  });
+
+  it('startEditDraft falls back to the display name when there is no address', () => {
+    useMailStore.getState().startEditDraft({ ...mockFullMessage, toAddr: '', to: 'Me' });
+    expect(useMailStore.getState().composeTo).toBe('Me');
+  });
+
+  it('a fresh compose and a reply carry no draft id — saving them must create a new draft', () => {
+    useMailStore.getState().startEditDraft({ ...mockFullMessage, messageId: 'draft-4' });
+    useMailStore.getState().startCompose();
+    expect(useMailStore.getState().composeDraftId).toBeNull();
+
+    useMailStore.getState().startEditDraft({ ...mockFullMessage, messageId: 'draft-4' });
+    useMailStore.getState().startReply(mockFullMessage);
+    expect(useMailStore.getState().composeDraftId).toBeNull();
+  });
+
+  it('clearCompose forgets the draft id and releases the save lock', () => {
+    useMailStore.getState().startEditDraft({ ...mockFullMessage, messageId: 'draft-4' });
+    useMailStore.getState().setSavingDraft(true);
+    useMailStore.getState().clearCompose();
+    const state = useMailStore.getState();
+    expect(state.composeDraftId).toBeNull();
+    expect(state.isSavingDraft).toBe(false);
+    expect(state.currentView).toBe('list');
+  });
+
+  it('setSavingDraft toggles the in-flight flag', () => {
+    useMailStore.getState().setSavingDraft(true);
+    expect(useMailStore.getState().isSavingDraft).toBe(true);
+    useMailStore.getState().setSavingDraft(false);
+    expect(useMailStore.getState().isSavingDraft).toBe(false);
   });
 });
