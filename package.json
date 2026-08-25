@@ -36,6 +36,8 @@
     "finish": "bash scripts/finish.sh",
     "deps:gate": "bash scripts/deps-gate.sh",
     "bench:status": "bash scripts/bench-status.sh",
+    "bench:wait": "bash scripts/bench-wait.sh",
+    "pr:wait": "bash scripts/pr-wait.sh",
     "bench:nightly": "bash scripts/nightly-check.sh",
     "board:status": "bash scripts/board-status.sh",
     "board:claim": "bash scripts/claim-read.sh",

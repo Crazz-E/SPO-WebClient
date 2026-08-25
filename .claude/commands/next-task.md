@@ -11,7 +11,8 @@ Board: [github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/
 
 **Run the scripted steps verbatim.** Every board and bench read below is a named script,
 reached through an npm alias: `bench:nightly`, `board:claim`, `board:verify`,
-`board:sessions`, `board:status`. Call each in exactly the form written here —
+`board:sessions`, `board:status`, `board:wait`, `bench:wait`, `pr:wait`. Call each in
+exactly the form written here —
 `npm run <alias>`, arguments after `--` — from the worktree you are in, with **no `cd`
 prefix and no shell composition around it**. None of them needs a working directory other
 than yours.
@@ -21,6 +22,14 @@ A `cd … && …` compound, a variable assignment, a `[ -f … ] &&` guard or th
 `bash scripts/…` path matches no allowlist entry and turns a scripted step into a permission
 prompt — which is the one thing these aliases exist to remove. Compose no GraphQL by hand
 either: raw `gh api graphql` deliberately still prompts.
+
+**A wait is a scripted step too.** Every "wait for X" in this command has an allowlisted
+form, and none of them is a loop you write: `npm run gate` and `npm run test:live` wait for
+their own job, `npm run bench:wait -- <job-id>` re-attaches to one whose wait was
+interrupted, `gh pr checks <n> --watch` blocks on CI, `npm run board:wait` on an exhausted
+quota, and `npm run pr:wait -- <n>` on a pull request leaving the merge queue. Composing
+`until … do sleep … done` instead stops to ask the human **and** polls GitHub under the
+30 s floor — `.claude/hooks/poll-loop-guard.sh` refuses that shape and names the form.
 
 **Multi-line text goes through a file, never through substitution.** A commit message, a PR
 body or a long comment written as `git commit -m "$(cat <<'EOF' …)"` is compound shell and
@@ -159,6 +168,13 @@ The repo process applies unchanged — this command adds nothing to it:
   follows the card's `Size`. Via sub-agents if the session cannot switch itself.
 - **Context discipline**: stay under ~250k, delegate heavy reads to sub-agents, compact
   after exploration.
+- **Handoff discipline** (kanban-workflow § Sub-agent handoffs): a spawn costs a fixed
+  preamble whether you send ten lines or a hundred, so spend the spawn, not the prose.
+  Pass **paths and line numbers, never pasted file bodies**; give the payload as a compact
+  `key: value` block, one field per line, and keep prose only where a human reads the
+  result verbatim. Ask for the shortest reply that carries the answer — a verdict, a
+  `file:line`, a number — and say so in the prompt: **no preamble, no restatement of the
+  task, no summary of what was read, no closing offer.**
 - Gate deposited (`npm run gate`, background) → Status → **Gate** → title `#<issue> · Gate`.
 - Gate PASS → push, PR with **`Closes #<issue>`** in the body → Status → **PR** → title
   `#<issue> · PR`.
@@ -168,9 +184,13 @@ The repo process applies unchanged — this command adds nothing to it:
   `bench/gate` status, and CI normally concluded while the gate was queued —
   `gh pr checks <n>` once. Genuinely pending → `gh pr checks <n> --watch --interval 20`,
   which blocks until every check concludes and exits non-zero if any failed. Read that exit
-  code, not the printed table. Never hand-roll the poll, and **never a tight loop**: a
-  `while`/`sleep` loop is compound shell, so it stops to ask for permission, and it re-reads
-  GitHub far harder than `--watch` does (kanban-workflow § GitHub API discipline).
+  code, not the printed table. Then `gh pr merge <n> --merge` **enqueues** — the queue lands
+  it later, so the wait after the merge is a different wait: `npm run pr:wait -- <n>` in the
+  background, which carries the ≥ 30 s floor and both bounds of the discipline and answers
+  in its exit code (0 merged · 1 closed unmerged · 4 still open). Never hand-roll either
+  poll, and **never a tight loop**: a `while`/`sleep` loop is compound shell, so it stops to
+  ask for permission, and it re-reads GitHub far harder than the sanctioned forms do
+  (kanban-workflow § GitHub API discipline).
 
 ## 4 · If it fails
 
