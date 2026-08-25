@@ -129,6 +129,21 @@ describe('websocket entries', () => {
     reportJournal.record('ws-out', { type: 'x'.repeat(MAX_TEXT_LENGTH + 100) });
     expect((reportJournal.snapshot()[0] as { msgType: string }).msgType).toHaveLength(MAX_TEXT_LENGTH);
   });
+
+  it('truncated entries with escaping-heavy payloads pass validation', () => {
+    reportJournal.arm();
+    // Payload with many quotes and backslashes — worst-case for JSON.stringify escaping.
+    // Use a large base payload and pack it with quote/backslash chars to inflame escaping.
+    const heavyEscaping = '"\\'.repeat(5000);
+    reportJournal.record('ws-out', { type: 'BIG', data: heavyEscaping });
+
+    const entry = reportJournal.snapshot()[0] as { payload: unknown; truncated?: boolean };
+    expect(entry.truncated).toBe(true);
+
+    // The validator's check: JSON.stringify(payload ?? null).length <= MAX_WS_PAYLOAD_BYTES.
+    const reserializedLength = JSON.stringify(entry.payload ?? null).length;
+    expect(reserializedLength).toBeLessThanOrEqual(MAX_WS_PAYLOAD_BYTES);
+  });
 });
 
 describe('the console wrap', () => {
