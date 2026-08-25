@@ -9,6 +9,19 @@ argument-hint: "[issue number or OB-N to take a specific item]"
 ownership law, board writes, model routing. Do not restate or reinvent it; follow it.
 Board: [github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/projects/1).
 
+**Run the scripted steps verbatim.** Every board and bench read below is a named script,
+reached through an npm alias: `bench:nightly`, `board:claim`, `board:verify`,
+`board:sessions`, `board:status`. Call each in exactly the form written here —
+`npm run <alias>`, arguments after `--` — from the worktree you are in, with **no `cd`
+prefix and no shell composition around it**. None of them needs a working directory other
+than yours.
+
+That form is not cosmetic: `npm run …` is allowlisted, so these calls never stop to ask.
+A `cd … && …` compound, a variable assignment, a `[ -f … ] &&` guard or the raw
+`bash scripts/…` path matches no allowlist entry and turns a scripted step into a permission
+prompt — which is the one thing these aliases exist to remove. Compose no GraphQL by hand
+either: raw `gh api graphql` deliberately still prompts.
+
 ## 0 · Is `main` red?
 
 The bench proves branches; one nightly run proves `main` itself
@@ -16,7 +29,7 @@ The bench proves branches; one nightly run proves `main` itself
 result before claiming anything:
 
 ```bash
-f="${SPO_BENCH_DIR:-$HOME/.spo-bench}/nightly/latest.json"; [ -f "$f" ] && cat "$f"; git fetch -q origin main && git rev-parse origin/main
+npm run bench:nightly
 ```
 
 **`main` is red** when that file's `verdict` is `FAIL` **and** its `sha` is still the sha
@@ -36,10 +49,10 @@ already moved past — is **not** red. Proceed to § 1.
 
 ## 1 · Pick — the first Todo card whose ground is free
 
-**One read for the whole claim.** Run **the claim read** — the composite query in
-kanban-workflow § gh CLI recipes (~2 GraphQL points; never `gh project item-list`, which
-costs ~103 and is why the board went unreadable on 2026-08-25). It returns, in a single
-call: `status`, `session` and `area` come back on every item, in board order (topmost Todo =
+**One read for the whole claim.** Run **the claim read** — `npm run board:claim`, the
+composite query kept in `scripts/claim-read.sh` (~2 GraphQL points; never
+`gh project item-list`, which costs ~103 and is why the board went unreadable on
+2026-08-25). It returns, in a single call: `status`, `session` and `area` come back on every item, in board order (topmost Todo =
 the human's priority), with the project, field and option ids § 2's writes take; the blocked
 set; and
 `rateLimit { cost remaining resetAt }` — state the last `remaining` you saw in your final
@@ -81,7 +94,7 @@ comment: nothing failed and nobody owned it. It is not Needs triage.
 while a session works even when it has no reason to touch its card for hours:
 
 ```bash
-now=$(date +%s); for f in ~/.spo-bench/sessions/*.alive; do read -r d < "$f"; [ -d "$d" ] || continue; printf '%s\t%s min\n' "$(git -C "$d" rev-parse --abbrev-ref HEAD)" "$(( (now - $(stat -c %Y "$f")) / 60 ))"; done
+npm run board:sessions
 ```
 
 A card's reservation is live while the heartbeat of the worktree standing on the branch its
@@ -93,9 +106,10 @@ untouched: what expired is the ground reservation, never the ownership.
 ## 2 · Claim (handshake)
 
 Write `Session` = `<branch> @ <YYYY-MM-DD>`, move Status → **In progress**, then **re-read**
-`Session` — with the single-item recipe (1 point), never by listing the pool again. Not your
-identity → you lost the race: take the next candidate, from the claim read you already hold.
-One card at a time.
+`Session` — with `npm run board:verify -- <ITEM_ID>` (1 point), never by listing the pool
+again. It prints the three fields the claim writes, `Session`, `Status` and `Area`, so one
+call proves all three landed. Not your identity → you lost the race: take the next candidate,
+from the claim read you already hold. One card at a time.
 
 **If GitHub answers `RATE_LIMITED` mid-handshake, the write half decides** (kanban-workflow
 § GitHub API discipline, rule 5). The write failed → nothing landed: the card is untouched,
@@ -127,7 +141,7 @@ The repo process applies unchanged — this command adds nothing to it:
   discipline, rule 6). Your own claim-time snapshot goes stale within minutes — other
   sessions move cards while you work. Before you write anything durable that names another
   card — an issue comment, a PR body, this session's final report — re-read it first with
-  `scripts/board-status.sh <n>…` (~1 point for any number of issues, never the pool).
+  `npm run board:status -- <n>…` (~1 point for any number of issues, never the pool).
 - Branch, implement, tests (≥ 93 % on new/modified lines), typecheck, lint.
 - **Model routing** (kanban-workflow § Model routing — read the step table, it covers
   every § of this command, not just the two glamorous ones): drive the board steps, the

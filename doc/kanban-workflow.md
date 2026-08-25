@@ -571,46 +571,21 @@ so pinning it to one model is exactly the mistake this section exists to prevent
 
 The project scope is required once per machine: `gh auth refresh -s project` (run inside WSL).
 
+**The reads are npm aliases, and that is deliberate.** `board:claim`, `board:verify`,
+`board:status`, `board:sessions` and `bench:nightly` each wrap one script under `scripts/`.
+A session drives its scripted steps on Haiku 4.5 (§ Model routing), and a model driving
+scripted steps must not be composing shell: `npm run …` is allowlisted, so these calls never
+stop to ask, while a hand-composed `cd … &&`, a variable assignment or a raw `gh api graphql`
+still prompts. That asymmetry is the point — **the query belongs in the script, never in the
+prompt**. Change a query by editing its script; do not paste one back into this file.
+
 ```bash
 # THE CLAIM READ — one query, ~2 GraphQL points, everything a claim needs: every card with
 # Status/Session/Area in board order (topmost Todo first = priority order), the blocked set,
 # the project/field/option ids item-edit takes, and the price of asking. Run it ONCE per claim.
 # Never read the pool with `gh project item-list` in a session: same data, ~103 points
 # (§ GitHub API discipline). The busy set is computed inside this call, never by a second one.
-gh api graphql -f query='{
-  rateLimit { cost remaining resetAt }
-  organization(login: "Crazz-Org") { projectV2(number: 1) {
-    id
-    fields(first: 20) { nodes {
-      ... on ProjectV2FieldCommon { id name }
-      ... on ProjectV2SingleSelectField { options { id name } } } }
-    items(first: 100) { nodes {
-      id
-      content { ... on Issue { number title } }
-      fieldValues(first: 12) { nodes {
-        ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { name } } }
-        ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } } } } } } } }
-  repository(owner: "Crazz-Org", name: "SPO-WebClient") {
-    issues(first: 100, states: OPEN) { nodes {
-      number issueDependenciesSummary { blockedBy }
-      blockedBy(first: 10) { nodes { number state } } } } }
-}' --jq '
-  ([.data.organization.projectV2.items.nodes[]
-    | ([.fieldValues.nodes[] | select(.field != null) | {(.field.name): (.text // .name)}] | add // {})
-      + {id: .id, number: (.content.number // 0), title: (.content.title // "")}]) as $cards
-  | (.data.rateLimit | "rateLimit: cost \(.cost), remaining \(.remaining), resets \(.resetAt)"),
-    ("projectId: \(.data.organization.projectV2.id)"),
-    (.data.organization.projectV2.fields.nodes[]
-      | select(.name == "Status" or .name == "Session" or .name == "Area")
-      | "field \(.name): \(.id)\(if .options then " " + ([.options[] | "\(.name)=\(.id)"] | join(" ")) else "" end)"),
-    ("busy areas: \([$cards[]
-        | select(.Status == "In progress" or .Status == "Gate" or .Status == "PR")
-        | select(.Area != null and .Area != "docs") | .Area] | unique | join(" "))"),
-    ($cards[]
-      | "item \(.id) #\(.number) [\(.Status // "-")] area=\(.Area // "-") session=\(.Session // "-") \(.title)"),
-    (.data.repository.issues.nodes[]
-      | select(.issueDependenciesSummary.blockedBy > 0)
-      | "#\(.number) blocked by \([.blockedBy.nodes[] | select(.state == "OPEN") | "#\(.number)"] | join(", "))")'
+npm run board:claim                        # the query lives in scripts/claim-read.sh
 # The `busy areas:` line IS the busy set (§ One session per area) — derived inside this one
 # call, never fetched by a second: In progress, Gate or PR, `docs` excluded because it never
 # blocks. It is computed rather than eyeballed off the item lines so the rule stays executable;
@@ -623,14 +598,11 @@ gh api graphql -f query='{
 
 # Re-read before stating another card's status anywhere durable — a comment, a PR body, the
 # final report (§ GitHub API discipline, rule 6). ~1 point for any number of issues.
-bash scripts/board-status.sh 144 106
-# npm run board:status -- 144 106   # same thing, via package.json
+npm run board:status -- 144 106            # scripts/board-status.sh
 
-# The handshake re-read — ONE item, 1 point, after writing `Session`. Never a second listing.
-gh api graphql -f query='{ rateLimit { cost remaining resetAt }
-  node(id: "<ITEM_ID>") { ... on ProjectV2Item { fieldValues(first: 12) { nodes {
-    ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { name } } } } } } } }' \
-  --jq '.data.node.fieldValues.nodes[] | select(.field.name == "Session") | .text'
+# The handshake re-read — ONE item, ~1 point, after writing `Session`. Never a second listing.
+# It prints Session, Status and Area, so a single call proves all three claim writes landed.
+npm run board:verify -- <ITEM_ID>          # the query lives in scripts/claim-verify.sh
 
 # Move a card (single-select field, e.g. Status) — every id below comes from the claim read
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \

@@ -36,7 +36,11 @@
     "finish": "bash scripts/finish.sh",
     "deps:gate": "bash scripts/deps-gate.sh",
     "bench:status": "bash scripts/bench-status.sh",
+    "bench:nightly": "bash scripts/nightly-check.sh",
     "board:status": "bash scripts/board-status.sh",
+    "board:claim": "bash scripts/claim-read.sh",
+    "board:verify": "bash scripts/claim-verify.sh",
+    "board:sessions": "bash scripts/heartbeat-scan.sh",
     "e2e:unlock": "npm run build:e2e && node dist/e2e/unlock.js"
   },
   "keywords": [
