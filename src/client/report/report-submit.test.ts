@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { validateBugReport, computeAnchorKey, type DomAnchor } from '../../shared/bug-report-schema';
+import {
+  validateBugReport,
+  computeAnchorKey,
+  MAX_BODY_BYTES,
+  MAX_WS_PAYLOAD_BYTES,
+  type DomAnchor,
+} from '../../shared/bug-report-schema';
 import { reportJournal } from './journal';
 import { buildReport, submitReport, BUG_REPORT_ENDPOINT, type ReportDraft } from './report-submit';
 
@@ -97,6 +103,41 @@ describe('buildReport', () => {
 
     expect(validateBugReport(report).ok).toBe(true);
     expect(report.profile).toBe('mobile');
+  });
+
+  it('trims journal and screenshot to fit under MAX_BODY_BYTES', () => {
+    // Build a huge journal: 400 max entries, each with a ~16 KB payload
+    const hugePayload = JSON.stringify({ data: 'x'.repeat(MAX_WS_PAYLOAD_BYTES - 100) });
+    reportJournal.arm();
+    for (let i = 0; i < 400; i++) {
+      reportJournal.record('ws-out', { type: 'TEST', payload: hugePayload });
+    }
+
+    // Also add a 3 MB screenshot
+    const screenshot = 'data:image/jpeg;base64,' + 'A'.repeat(3 * 1024 * 1024 - 30);
+
+    const report = buildReport({
+      profile: 'mobile',
+      kind: 'visual',
+      anchor: {
+        kind: 'canvas',
+        tileX: 0,
+        tileY: 0,
+        layer: 'terrain',
+        screenshotDataUrl: screenshot,
+      },
+      username: 'SPO_test3',
+      world: 'planitia',
+    });
+
+    const serialized = JSON.stringify(report);
+    expect(serialized.length).toBeLessThanOrEqual(MAX_BODY_BYTES);
+    expect(validateBugReport(report).ok).toBe(true);
+    // Journal or screenshot should have been trimmed
+    const hasScreenshot = report.anchor.kind === 'canvas' && !!report.anchor.screenshotDataUrl;
+    expect(
+      report.journal.length < 400 || !hasScreenshot
+    ).toBe(true);
   });
 });
 

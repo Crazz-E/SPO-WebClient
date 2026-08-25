@@ -14,6 +14,7 @@
 import {
   BUG_REPORT_SCHEMA_VERSION,
   computeAnchorKey,
+  MAX_BODY_BYTES,
   type BugReport,
   type BugReportKind,
   type BugReportProfile,
@@ -53,7 +54,7 @@ export function buildReport(draft: ReportDraft): BugReport {
     ? { width: 0, height: 0 }
     : { width: window.innerWidth, height: window.innerHeight };
 
-  return withoutEmpty({
+  const report = withoutEmpty({
     version: BUG_REPORT_SCHEMA_VERSION,
     id: crypto.randomUUID(),
     profile: draft.profile,
@@ -72,6 +73,21 @@ export function buildReport(draft: ReportDraft): BugReport {
     geometry: draft.geometry,
     journal: reportJournal.snapshot(),
   }) as BugReport;
+
+  // Trim if serialized size exceeds MAX_BODY_BYTES: drop oldest journal entries, then screenshot.
+  let serialized = JSON.stringify(report);
+  while (serialized.length > MAX_BODY_BYTES) {
+    if (report.journal.length > 0) {
+      report.journal.shift();
+    } else if (report.anchor.kind === 'canvas' && report.anchor.screenshotDataUrl) {
+      delete report.anchor.screenshotDataUrl;
+    } else {
+      break;
+    }
+    serialized = JSON.stringify(report);
+  }
+
+  return report;
 }
 
 export interface SubmitOutcome {
