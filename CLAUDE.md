@@ -159,7 +159,7 @@ duplicates it. Everything lives in [doc/](doc/); start from
 ## Backlog — GitHub Projects
 
 **All open work lives on the kanban:**
-[github.com/users/Crazz-E/projects/2](https://github.com/users/Crazz-E/projects/2) — every
+[github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/projects/1) — every
 task is a GitHub issue on the board. The rulebook is
 [doc/kanban-workflow.md](doc/kanban-workflow.md): six columns (Todo · In progress · Gate ·
 PR · Done · Needs triage), the `Session` field as ownership marker, board writes at state
@@ -175,6 +175,11 @@ lands in — and a session claims the topmost Todo card whose area no live card 
 (`SPO_WORKTREE_IDLE_MIN`, 120 min), the card's `Session` field never does.
 **Feeding rule:** every finding lands as a new issue in Todo, with its `Category` and the
 matching `cat:` / `size:` labels — a finding that only lives in a session report is lost.
+⚠ **Filing the issue is not enough right now.** The board's `Auto-add to project` workflow did
+not follow the repository into the organization and cannot be recreated from the API, so a new
+issue belongs to no board until someone adds it: `gh project item-add 1 --owner Crazz-Org --url
+<ISSUE_URL>`, then read the item back. [kanban-workflow.md](doc/kanban-workflow.md) carries the
+one-time UI step that retires this.
 **Every draft card is read first by the `card-reviewer` sub-agent**, whose dated verdict
 becomes the card's first comment; on `DO NOT FILE` no issue is created and the session's
 report says why.
@@ -446,6 +451,13 @@ evidence still rides in the PR body. Setup checklist: [bench-worker.md §5](doc/
 computes the version from the last `v*` tag and the commits since it (`feat` → minor,
 otherwise patch), builds, tags and publishes the GitHub Release — never create
 `v*` tags by hand (a tag ruleset forbids updating or deleting them).
+
+**`main` has a merge queue** — so `gh pr merge <N> --merge` **enqueues**; it does not merge.
+Never add `--delete-branch`: `gh` honours it the instant the entry is created, which destroys
+the entry and leaves the pull request CLOSED and unmerged, exit 0, one warning line. GitHub
+deletes the branch itself when the entry lands. Recovery is `git push -u origin <branch>` +
+`gh pr reopen <N>` + merge again — same sha, so the attestation still holds
+([bench-worker.md §12](doc/bench-worker.md)).
 
 **An update is finished only after `npm run finish`.** GitHub deletes the remote branch at
 merge (`delete_branch_on_merge`); the local side does not clean itself. `finish` refuses

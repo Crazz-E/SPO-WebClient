@@ -406,7 +406,7 @@ describe('main', () => {
   let calls: { method: string; url: string; body: unknown }[];
 
   function graphqlPage(items: unknown[]) {
-    return { data: { user: { projectV2: { items: { pageInfo: { hasNextPage: false }, nodes: items } } } } };
+    return { data: { organization: { projectV2: { items: { pageInfo: { hasNextPage: false }, nodes: items } } } } };
   }
 
   function node(over: Record<string, unknown> = {}) {
@@ -471,13 +471,13 @@ describe('main', () => {
   });
 
   /**
-   * The board and the repository are on two different accounts since the move to `Crazz-Org`,
-   * and a single owner constant would send both halves to a 404: the user project does not
-   * exist under the organization, and the repository no longer exists under the user. Neither
-   * failure is loud — the GraphQL one reads as "board not readable", the REST one as "branch
-   * gone" — so the split is pinned here rather than left to the next live run to discover.
+   * Both halves address the organization since the board moved there too, and the board read
+   * is an `organization(login:)` query — a `user(login:)` one returns `data.user = null` for
+   * an org login, which this script reports as "board not readable" rather than as an error
+   * naming the wrong query. Pinning the login and the REST paths together is what makes that
+   * silent shape a test failure instead of a quiet empty run.
    */
-  it('reads the board from the user and the repository from the organization', async () => {
+  it('reads the board and the repository from the organization', async () => {
     (globalThis as { fetch?: unknown }).fetch = fakeFetch({
       '/graphql': graphqlPage([node()]),
       '/branches/': null,
@@ -489,7 +489,9 @@ describe('main', () => {
     ).resolves.toBe(0);
 
     const graphqlCall = calls.find(c => c.url.includes('/graphql'));
-    expect((graphqlCall?.body as { variables: { login: string } }).variables.login).toBe('Crazz-E');
+    const body = graphqlCall?.body as { query: string; variables: { login: string } };
+    expect(body.variables.login).toBe('Crazz-Org');
+    expect(body.query).toContain('organization(login: $login)');
 
     const restCalls = calls.filter(c => !c.url.includes('/graphql'));
     expect(restCalls.length).toBeGreaterThan(0);
@@ -564,7 +566,7 @@ describe('main', () => {
   });
 
   it('surfaces an unreadable project rather than treating it as zero cards', async () => {
-    (globalThis as { fetch?: unknown }).fetch = fakeFetch({ '/graphql': { data: { user: null } } });
+    (globalThis as { fetch?: unknown }).fetch = fakeFetch({ '/graphql': { data: { organization: null } } });
     await expect(watch.main({ env: { PROJECTS_TOKEN: 'p' }, argv: [], out })).rejects.toThrow(/not readable/);
   });
 
@@ -581,7 +583,7 @@ describe('main', () => {
             text: async () => '',
             json: async () => ({
               data: {
-                user: {
+                organization: {
                   projectV2: {
                     items: {
                       pageInfo: { hasNextPage: page === 1, endCursor: 'c1' },

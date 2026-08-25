@@ -286,7 +286,7 @@ npm test -- --testNamePattern="Performance"
 - Chunk optimization commit: `ca4b034` (ground layer cache + frame-budget chunks)
 - Rendering pipeline: [doc/texture-rendering-architecture.md](../../doc/texture-rendering-architecture.md)
 - Rendering architecture: [CLAUDE.md](../../CLAUDE.md) - Architecture section
-- Backlog performance tasks: [the kanban board](https://github.com/users/Crazz-E/projects/2)
+- Backlog performance tasks: [the kanban board](https://github.com/orgs/Crazz-Org/projects/1)
 
 ## Important Constraints
 
