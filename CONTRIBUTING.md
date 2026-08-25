@@ -78,8 +78,10 @@ A third job, **`claude review`**, posts a review comment on every PR
 reader with none of the authoring session's context, looking for what the two required checks
 cannot see: a hand-built RDO string, an `any`, a UI element whose action is not wired, a test
 edited to make it pass, an abstraction built for a need nobody has. It is **not** a required
-check and cannot fail your PR — read it, answer it, merge anyway if it is wrong. It stays
-silent until `ANTHROPIC_API_KEY` exists on the repository.
+check and cannot fail your PR — read it, answer it, merge anyway if it is wrong. It runs on
+the maintainer's Claude subscription, not on an API key: it stays silent until
+`CLAUDE_CODE_OAUTH_TOKEN` exists on the repository, and silent again once that token expires
+(`claude setup-token` regenerates it).
 
 **Merge with squash**, and make the PR title a conventional commit (`type: summary`) — it
 becomes the one squash commit, and that commit is the changelog line. GitHub deletes the

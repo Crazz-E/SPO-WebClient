@@ -6,13 +6,19 @@
  *
  * Two of them are security invariants rather than preferences:
  *
- *   - `pull_request_target` would hand a live API key to a job that checks out the head of
- *     an untrusted branch. A fork could then read the key out by editing any file the run
+ *   - `pull_request_target` would hand a live credential to a job that checks out the head
+ *     of an untrusted branch. A fork could then read it out by editing any file the run
  *     touches. `pull_request` gives a fork a read-only token, so the review fails to post
  *     rather than failing open.
  *   - A floating tag on a third-party action is a supply-chain hole: the tag moves, the
  *     code that reads the secret changes, nobody sees a diff. Every action in this
- *     repository is pinned to a commit sha, and this one holds the key.
+ *     repository is pinned to a commit sha, and this one holds the credential.
+ *
+ * The credential is `CLAUDE_CODE_OAUTH_TOKEN`, not `ANTHROPIC_API_KEY`: this repository has
+ * no API key, and the reviewer runs on the maintainer's Claude Max subscription. The two are
+ * alternative inputs to the same action; pinning which one is in use is what stops a later
+ * edit from silently reintroducing a key nobody holds — the job would go green-and-skipped
+ * and nothing would say why.
  *
  * The rest pin the shape #122 specified: the five CLAUDE.md prohibitions actually named in
  * the prompt, and the informational-first posture. Making the check blocking is a
@@ -80,6 +86,18 @@ describe('claude-review workflow', () => {
     });
   });
 
+  describe('authentication', () => {
+    it('authenticates with the subscription token, never an API key', () => {
+      // No ANTHROPIC_API_KEY exists for this repository. Reintroducing it would not fail —
+      // it would skip, quietly, on every pull request.
+      expect(yaml).toMatch(
+        /claude_code_oauth_token: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN \}\}/,
+      );
+      expect(yaml).not.toMatch(/anthropic_api_key:/);
+      expect(yaml).not.toMatch(/secrets\.ANTHROPIC_API_KEY/);
+    });
+  });
+
   describe('an unprovisioned repository stays green', () => {
     it('reads the secret only where GitHub allows it', () => {
       // `secrets` is available in neither a job-level nor a step-level `if`. Using it there
@@ -91,27 +109,30 @@ describe('claude-review workflow', () => {
       for (const condition of ifLines) {
         expect(condition).not.toMatch(/secrets\./);
       }
-      expect(yaml).toMatch(/^\s+HAS_ANTHROPIC_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY != '' \}\}$/m);
+      expect(yaml).toMatch(
+        /^\s+HAS_CLAUDE_TOKEN: \$\{\{ secrets\.CLAUDE_CODE_OAUTH_TOKEN != '' \}\}$/m,
+      );
     });
 
     it('guards every step that needs the key on the key being present', () => {
       // Job-level `env` is evaluated once, but each step carries its own guard; a step that
-      // forgets it fails the run on a repository with no secret.
+      // forgets it fails the run on a repository with no secret — or, later, one whose
+      // subscription token has expired, which reads identically.
       const checkout = yaml.indexOf('name: Checkout');
       const review = yaml.indexOf('name: Review the diff');
       expect(checkout).toBeGreaterThan(-1);
       expect(review).toBeGreaterThan(-1);
       for (const start of [checkout, review]) {
-        expect(yaml.slice(start, start + 400)).toMatch(/if: env\.HAS_ANTHROPIC_KEY == 'true'/);
+        expect(yaml.slice(start, start + 400)).toMatch(/if: env\.HAS_CLAUDE_TOKEN == 'true'/);
       }
     });
 
     it('says why nothing was reviewed instead of failing silently', () => {
-      expect(yaml).toMatch(/if: env\.HAS_ANTHROPIC_KEY != 'true'/);
+      expect(yaml).toMatch(/if: env\.HAS_CLAUDE_TOKEN != 'true'/);
       expect(yaml).toMatch(/::notice title=Claude Review skipped::/);
     });
 
-    it('skips Dependabot, which cannot read the key and has no design to review', () => {
+    it('skips Dependabot, which cannot read the token and has no design to review', () => {
       expect(yaml).toMatch(/if: github\.actor != 'dependabot\[bot\]'/);
     });
   });

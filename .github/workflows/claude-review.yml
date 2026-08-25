@@ -21,16 +21,28 @@
 #
 # The opposite choice from labeler.yml, for the opposite reason. That job checks out nothing
 # and runs no repository code, so the elevated token is safe there. This one checks out the
-# PR head and hands a live API key to a process reading it — under `pull_request_target`
+# PR head and hands a live credential to a process reading it — under `pull_request_target`
 # that pair is a credential-exfiltration hole, and a fork PR could open it by editing a file.
 # `pull_request` gives a fork a read-only token instead: the review simply cannot post, which
 # is the correct failure. Same-repo branches (every session PR) get the write token they need.
 #
+# ## The credential is a subscription token, not an API key
+#
+# This repository has no Anthropic API key and does not want one: the maintainer holds a
+# Claude Max subscription, and the action authenticates against it with a long-lived OAuth
+# token instead — `claude setup-token` locally, stored as `CLAUDE_CODE_OAUTH_TOKEN` under
+# Settings → Secrets and variables → Actions. `anthropic_api_key` is the other half of the
+# same input pair (claude-code-action docs/setup.md:9-10); only one is set, and setting both
+# is meaningless here.
+#
+# The token EXPIRES, unlike an API key. When it does, the guard below turns the job back
+# into a green notice rather than a red X, which is the same failure mode as never having
+# provisioned it: re-run `claude setup-token` and replace the secret.
+#
 # ## Until the secret exists
 #
-# `ANTHROPIC_API_KEY` is not provisioned yet; provision it under Settings → Secrets and
-# variables → Actions. Every step is guarded on it, so an unprovisioned repository gets a
-# green, skipped job with a notice — not a red X on every pull request.
+# Every step is guarded on it, so an unprovisioned repository gets a green, skipped job with
+# a notice — not a red X on every pull request.
 name: Claude Review
 
 on:
@@ -49,7 +61,7 @@ jobs:
     name: claude review
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Dependabot runs with its own secret store and cannot read ANTHROPIC_API_KEY, so the
+    # Dependabot runs with its own secret store and cannot read CLAUDE_CODE_OAUTH_TOKEN, so the
     # guard below would skip it anyway. Stated here because a lockfile bump is the one diff
     # a design reviewer has nothing to say about, and silence should be intended, not lucky.
     if: github.actor != 'dependabot[bot]'
@@ -60,30 +72,31 @@ jobs:
     # the whole file at validation, which shows up as a run named after the path with no
     # jobs and no annotation, and leaves every other check green. `jobs.<id>.env` IS one of
     # the places `secrets` may be read, and `env` IS one of the contexts a step `if` may
-    # read, so the presence of the key is turned into a boolean here and tested downstream.
-    # Only the boolean crosses; the key itself never lands in the environment.
+    # read, so the presence of the token is turned into a boolean here and tested downstream.
+    # Only the boolean crosses; the token itself never lands in the environment.
     env:
-      HAS_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      HAS_CLAUDE_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
     steps:
-      # Unconditional by design: it is how a human learns why nothing was reviewed.
-      - name: Announce a missing key
-        if: env.HAS_ANTHROPIC_KEY != 'true'
+      # Unconditional by design: it is how a human learns why nothing was reviewed. An
+      # expired token reads exactly like an absent one here, so the remedy covers both.
+      - name: Announce a missing token
+        if: env.HAS_CLAUDE_TOKEN != 'true'
         run: |
-          echo "::notice title=Claude Review skipped::ANTHROPIC_API_KEY is not set on this repository — no review was produced. Add it under Settings > Secrets and variables > Actions."
+          echo "::notice title=Claude Review skipped::CLAUDE_CODE_OAUTH_TOKEN is not set on this repository — no review was produced. Generate one with 'claude setup-token' (Claude Pro/Max) and add it under Settings > Secrets and variables > Actions."
 
       - name: Checkout
-        if: env.HAS_ANTHROPIC_KEY == 'true'
+        if: env.HAS_CLAUDE_TOKEN == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The reviewer reads the PR head and the files around the diff, not the history.
           fetch-depth: 1
 
       - name: Review the diff
-        if: env.HAS_ANTHROPIC_KEY == 'true'
+        if: env.HAS_CLAUDE_TOKEN == 'true'
         continue-on-error: true
         uses: anthropics/claude-code-action@c81e3bc69d1b18badbb63ba39581218f02421678 # v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # CLAUDE.md § Model routing: analysis goes to Fable 5, execution to Opus 5. A
           # review is analysis. One line to change if calibration says otherwise.
           claude_args: |
