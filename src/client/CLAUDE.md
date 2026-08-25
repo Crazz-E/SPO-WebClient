@@ -55,6 +55,20 @@ Modals (e.g., `CompanyCreationModal`) and research inventory tabs load on demand
 
 Global shortcuts registered in `hooks/useKeyboardShortcuts.ts` (B, E, M, R, D, Escape, Cmd+K). Canvas-specific input in the renderer's touch handler.
 
+## Bug Reporting (dev-only)
+
+`report/` holds the in-app capture: `SPO_BUG_REPORT=true` mounts `BugReportRoot` lazily from
+`main.tsx`, and nothing in the directory runs without it. Desktop arms on **F8** — its own
+listener, deliberately outside the `SHORTCUTS` table above; mobile arms on a floating button.
+
+The rolling journal is a module singleton armed at mount and running continuously, tapped from
+`client.ts` at `:568`, `:592` (ws-out) and `:980` (ws-in). The taps are no-ops when it is not
+armed, so leave them where they are rather than guarding them at the call site.
+
+Reports POST to `/api/bug-report` and queue outside the worktree; a `/triage-report` session
+turns them into kanban cards. Full picture: [doc/bug-reporting.md](../../doc/bug-reporting.md).
+Schema: `src/shared/bug-report-schema.ts`.
+
 ## App Entry Point
 
 `App.tsx` routes between `LoginScreen` and `GameScreen` based on `useGameStore.status`. Shows `ServerStartupScreen` until backend is ready.
