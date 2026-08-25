@@ -1148,7 +1148,7 @@ export interface WsEventNewMail extends WsMessage {
   unreadCount: number;
 }
 
-/** Not emitted yet — the compose view has no "save draft" control. See #120, blocked on #108. */
+/** Emitted by the compose view's "Save draft" button (#120). */
 export interface WsReqMailSaveDraft extends WsMessage {
   type: WsMessageType.REQ_MAIL_SAVE_DRAFT;
   to: string;
