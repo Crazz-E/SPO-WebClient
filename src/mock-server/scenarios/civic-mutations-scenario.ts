@@ -413,25 +413,12 @@ function campaignPage(): string {
 // SCENARIO FACTORY
 // =============================================================================
 
-/**
- * The frame as an exchange states it: built by the real emitter, minus the
- * terminator.
- *
- * Every scenario in this directory stores its `request` without the trailing
- * `;`, and that is not cosmetic — `RdoProtocol.parse` folds the terminator into
- * the last argument (`"%15";` instead of `%15`), so an exchange that kept it
- * would never match its own request through `RdoMock`.
- */
-function frameOf(frame: { toFrame(): string }): string {
-  return frame.toFrame().replace(/;$/, '');
-}
-
 function buildRdoExchanges(): RdoExchange[] {
   const mutations: RdoExchange[] = CIVIC_MUTATIONS.map(m => {
     const frame = rdoCall(m.member, m.targetId, ...m.args);
     return {
       id: `civic-rdo-${m.slug}`,
-      request: frameOf(frame),
+      request: frame.toFrame(),
       // A `procedure` answers nothing. Not "we did not capture it" — there is
       // no reply to capture, which is the whole of OB-28.
       response: '',
@@ -449,9 +436,9 @@ function buildRdoExchanges(): RdoExchange[] {
     const query = `${l.property}\t`;
     return {
       id: `civic-rdo-${l.slug}`,
-      request: frameOf(rdoCall(
+      request: rdoCall(
         'GetPropertyList', CIVIC_TARGETS.townHallBlock, RdoValue.string(query),
-      )),
+      ).toFrame(),
       response: `A0 res="%${l.value}"`,
       matchKeys: {
         verb: 'sel',

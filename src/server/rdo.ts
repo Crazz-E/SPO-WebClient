@@ -114,16 +114,43 @@ export class RdoFramer {
 
 export class RdoProtocol {
   /**
+   * Drops the frame terminator, if the string still carries one.
+   *
+   * `RdoCommand.build()` always appends `;` — it is part of the frame that goes
+   * on the wire — while `RdoFramer` consumes it when it cuts the stream. So
+   * `parse()` sees a terminated frame only when it is handed a complete frame
+   * directly, and it used to fold that `;` into the last token: the closing
+   * quote was no longer final, so `"%15";` came back instead of `%15` and an
+   * emitted frame could not match itself when re-parsed.
+   *
+   * Only an UNQUOTED trailing `;` is a terminator — the same rule
+   * `RdoFramer.findDelimiter()` applies when it splits the stream. A `;` that
+   * closes an unbalanced quote is payload, and is left alone.
+   */
+  private static stripTerminator(trimmed: string): string {
+    if (!trimmed.endsWith(RDO_CONSTANTS.PACKET_DELIMITER)) return trimmed;
+
+    let inQuotes = false;
+    for (let i = 0; i < trimmed.length - 1; i++) {
+      if (trimmed[i] === '"') inQuotes = !inQuotes;
+    }
+    if (inQuotes) return trimmed;
+
+    return trimmed.slice(0, -1).trimEnd();
+  }
+
+  /**
    * Parses a raw protocol string into a structured RdoPacket.
    */
   public static parse(raw: string): RdoPacket {
-    const trimmed = raw.trim();
+    const trimmed = this.stripTerminator(raw.trim());
 
-    // 1. Detect Packet Type
+    // 1. Detect Packet Type. `raw` stays the caller's string: the sub-parsers
+    // work on the normalised form, but the packet reports what came in.
     if (trimmed.startsWith(RDO_CONSTANTS.CMD_PREFIX_ANSWER)) {
-      return this.parseResponse(trimmed);
+      return { ...this.parseResponse(trimmed), raw };
     } else if (trimmed.startsWith(RDO_CONSTANTS.CMD_PREFIX_CLIENT)) {
-      return this.parseCommand(trimmed);
+      return { ...this.parseCommand(trimmed), raw };
     }
 
     return {
