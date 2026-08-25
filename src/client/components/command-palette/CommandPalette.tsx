@@ -62,12 +62,6 @@ export function CommandPalette() {
         execute: () => toggleRightPanel('search'),
       },
       {
-        id: 'transport',
-        label: 'Open Transport',
-        category: 'navigation',
-        execute: () => toggleRightPanel('transport'),
-      },
-      {
         id: 'politics',
         label: 'Open Government (Capitol, towns)',
         shortcut: 'P',

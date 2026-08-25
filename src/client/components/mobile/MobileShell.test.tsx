@@ -10,7 +10,7 @@ jest.mock('../../hooks/useResponsive', () => ({
 }));
 jest.mock('../sheet', () => ({
   SurfaceContent: ({ kind }: { kind: string }) => <div>SURFACE:{kind}</div>,
-  SURFACE_TITLES: { building: 'Building Inspector', mail: 'Mail', search: 'Search', transport: 'Transport', politics: 'Government', empire: 'Profile', facilities: 'My Facilities', overlays: 'Map Overlays' },
+  SURFACE_TITLES: { building: 'Building Inspector', mail: 'Mail', search: 'Search', politics: 'Government', empire: 'Profile', facilities: 'My Facilities', overlays: 'Map Overlays' },
 }));
 jest.mock('./MobileInfoBar', () => ({ MobileInfoBar: () => null }));
 jest.mock('./ChatBanner', () => ({ ChatBanner: () => null }));

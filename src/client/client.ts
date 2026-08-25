@@ -1184,7 +1184,6 @@ export class StarpeaceClient implements ClientHandlerContext {
       profile: uiState.leftPanel === 'empire',
       politics: uiState.rightPanel === 'politics',
       settings: uiState.modal === 'settings',
-      transport: uiState.rightPanel === 'transport',
       minimap: this.minimapUI?.isVisible() ?? false,
       buildMenu: uiState.modal === 'buildMenu',
       buildingDetails: uiState.rightPanel === 'building',

@@ -361,10 +361,6 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
       ClientBridge.handleTycoonRoleResponse(msg);
       break;
 
-    case WsMessageType.RESP_TRANSPORT_DATA:
-      ClientBridge.handleTransportResponse(msg);
-      break;
-
     case WsMessageType.RESP_EMPIRE_FACILITIES:
       ClientBridge.handleEmpireResponse(msg);
       // The tree is now known, so the places this browser still holds can be

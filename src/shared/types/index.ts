@@ -98,17 +98,13 @@ export type {
   NewspaperArticle,
   NewspaperBoard,
   PoliticalRoleInfo,
-  // Transport types
-  TrainInfo,
-  TrainRouteStop,
-  TransportData,
   // Cluster / company creation types
   ClusterInfo,
   ClusterCategory,
   ClusterFacilityPreview,
 } from './domain-types';
 
-export type { MailFolder, BankActionType, AutoConnectionActionType, CurriculumActionType, TrainStatus } from './domain-types';
+export type { MailFolder, BankActionType, AutoConnectionActionType, CurriculumActionType } from './domain-types';
 
 // Message types (WebSocket protocol)
 export {
@@ -296,9 +292,6 @@ export type {
   WsRespClusterFacilities,
   // GM Chat
   WsReqGmChatSend,
-  // Transport
-  WsReqTransportData,
-  WsRespTransportData,
   // Empire (Owned Facilities)
   WsReqEmpireFacilities,
   WsRespEmpireFacilities,

@@ -25,7 +25,6 @@ export type { SearchPage } from './search-store';
 
 export { usePoliticsStore } from './politics-store';
 
-export { useTransportStore } from './transport-store';
 
 export { useLogStore } from './log-store';
 export type { LogEntry } from './log-store';

@@ -43,7 +43,6 @@ import type {
   PoliticsData,
   NewspaperBoard,
   PoliticalRoleInfo,
-  TransportData,
   ClusterInfo,
   ClusterFacilityPreview,
 } from './domain-types';
@@ -277,10 +276,6 @@ export enum WsMessageType {
   RESP_CLUSTER_INFO = 'RESP_CLUSTER_INFO',
   REQ_CLUSTER_FACILITIES = 'REQ_CLUSTER_FACILITIES',
   RESP_CLUSTER_FACILITIES = 'RESP_CLUSTER_FACILITIES',
-
-  // Transport (Railroad/Train)
-  REQ_TRANSPORT_DATA = 'REQ_TRANSPORT_DATA',
-  RESP_TRANSPORT_DATA = 'RESP_TRANSPORT_DATA',
 
   // Empire (Owned Facilities via Favorites)
   REQ_EMPIRE_FACILITIES = 'REQ_EMPIRE_FACILITIES',
@@ -1559,20 +1554,6 @@ export interface WsReqClusterFacilities extends WsMessage {
 export interface WsRespClusterFacilities extends WsMessage {
   type: WsMessageType.RESP_CLUSTER_FACILITIES;
   facilities: ClusterFacilityPreview[];
-}
-
-// =============================================================================
-// TRANSPORT MESSAGES
-// =============================================================================
-
-/** Half-built feature: no gateway handler and no emitter. See #114. */
-export interface WsReqTransportData extends WsMessage {
-  type: WsMessageType.REQ_TRANSPORT_DATA;
-}
-
-export interface WsRespTransportData extends WsMessage {
-  type: WsMessageType.RESP_TRANSPORT_DATA;
-  data: TransportData;
 }
 
 // =============================================================================

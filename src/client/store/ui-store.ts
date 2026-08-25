@@ -25,7 +25,7 @@ export interface ConfirmOptions {
   dontAskAgainKey?: string;
 }
 
-export type RightPanelType = 'building' | 'mail' | 'politics' | 'search' | 'transport';
+export type RightPanelType = 'building' | 'mail' | 'politics' | 'search';
 export type LeftPanelType = 'empire' | 'facilities' | 'overlays';
 
 /**
@@ -54,7 +54,7 @@ export interface Surface {
   params?: Record<string, unknown>;
 }
 
-const RIGHT_KINDS: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['building', 'mail', 'politics', 'search', 'transport']);
+const RIGHT_KINDS: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['building', 'mail', 'politics', 'search']);
 const LEFT_KINDS: ReadonlySet<SurfaceKind> = new Set<SurfaceKind>(['empire', 'facilities', 'overlays']);
 // 'build' is neither a legacy right nor left panel; it only lives in the stack.
 

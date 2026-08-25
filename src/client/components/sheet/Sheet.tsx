@@ -12,14 +12,13 @@
  */
 
 import { Suspense, type ReactNode } from 'react';
-import { ChevronRight, Pin, PinOff, X, Building2, Mail, Search, Truck, Landmark, User, Heart, Layers, Hammer, Map } from 'lucide-react';
+import { ChevronRight, Pin, PinOff, X, Building2, Mail, Search, Landmark, User, Heart, Layers, Hammer, Map } from 'lucide-react';
 import { useUiStore, type SurfaceKind } from '../../store/ui-store';
 import { usePanel } from '../../hooks/usePanel';
 import { Chip, IconButton, ErrorBoundary } from '../common';
 import { BuildingSurface } from './BuildingSurface';
 import { MailPanel } from '../mail';
 import { SearchPanel } from '../search';
-import { TransportPanel } from '../transport';
 import { ProfilePanel, EmpireOverview } from '../empire';
 import { OverlayMenu } from '../hud/OverlayMenu';
 import { PoliticsHome } from '../politics/PoliticsHome';
@@ -33,7 +32,6 @@ export const SURFACE_TITLES: Record<SurfaceKind, string> = {
   building: 'Building Inspector',
   mail: 'Mail',
   search: 'Search',
-  transport: 'Transport',
   politics: 'Government',
   empire: 'Profile',
   facilities: 'My Facilities',
@@ -47,7 +45,6 @@ const SURFACE_ICONS: Record<SurfaceKind, ReactNode> = {
   building: <Building2 size={16} />,
   mail: <Mail size={16} />,
   search: <Search size={16} />,
-  transport: <Truck size={16} />,
   politics: <Landmark size={16} />,
   empire: <User size={16} />,
   facilities: <Heart size={16} />,
@@ -75,8 +72,6 @@ export function SurfaceContent({ kind }: { kind: SurfaceKind }) {
       return <MailPanel />;
     case 'search':
       return <SearchPanel />;
-    case 'transport':
-      return <TransportPanel />;
     case 'politics':
       return <PoliticsHome />;
     case 'empire':

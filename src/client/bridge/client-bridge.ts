@@ -14,7 +14,6 @@ import { useProfileStore } from '../store/profile-store';
 import { useSearchStore } from '../store/search-store';
 import { usePoliticsStore } from '../store/politics-store';
 import { useNewspaperStore } from '../store/newspaper-store';
-import { useTransportStore } from '../store/transport-store';
 import { useUiStore } from '../store/ui-store';
 import { useEmpireStore } from '../store/empire-store';
 import { useLogStore } from '../store/log-store';
@@ -72,7 +71,6 @@ import {
   type WsRespNewspaperBoard,
   type WsRespNewspaperPost,
   type WsRespTycoonRole,
-  type WsRespTransportData,
   type WsRespEmpireFacilities,
 } from '@/shared/types';
 
@@ -897,14 +895,6 @@ export const ClientBridge = {
     showToast(resp.message, resp.success ? 'success' : 'error');
   },
 
-  // ---- Transport response handling ----
-
-  handleTransportResponse(msg: WsMessage): void {
-    if (msg.type === WsMessageType.RESP_TRANSPORT_DATA) {
-      useTransportStore.getState().setData((msg as WsRespTransportData).data);
-    }
-  },
-
   // ---- Empire ----
 
   handleEmpireResponse(msg: WsMessage): void {
@@ -978,7 +968,6 @@ export const ClientBridge = {
     useBuildingStore.getState().clearFocus();
     useSearchStore.getState().reset();
     usePoliticsStore.getState().reset();
-    useTransportStore.getState().reset();
     useProfileStore.getState().reset();
     useEmpireStore.getState().reset();
   },

@@ -88,13 +88,7 @@ const rel = (file: string): string => path.relative(SRC, file).replace(/\\/g, '/
  * vocabulary the gateway cannot answer.
  * Gap family F-1.
  */
-const UNROUTED: ReadonlyArray<{ type: string; reason: string }> = [
-  {
-    type: 'REQ_TRANSPORT_DATA',
-    reason: 'No handler and no emitter. Feeding it requires the ActorPoolModified push ' +
-      '(family B), which is not implemented — TransportPanel is dead. Issue #114.',
-  },
-];
+const UNROUTED: ReadonlyArray<{ type: string; reason: string }> = [];
 
 /**
  * `REQ_*` types no `src/client/` source ever emits. Each has a working server
@@ -102,10 +96,6 @@ const UNROUTED: ReadonlyArray<{ type: string; reason: string }> = [
  * Gap family F-2.
  */
 const UNWIRED: ReadonlyArray<{ type: string; reason: string }> = [
-  {
-    type: 'REQ_TRANSPORT_DATA',
-    reason: 'Same gap as UNROUTED: neither side exists. Issue #114.',
-  },
   {
     type: 'REQ_CHAT_GET_CHANNEL_INFO',
     reason: 'handleChatGetChannelInfo exists and the RDO read works, but GetChannelInfo ' +

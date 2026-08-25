@@ -8,7 +8,6 @@ import { Sheet } from './Sheet';
 jest.mock('./BuildingSurface', () => ({ BuildingSurface: () => <div>BUILDING CONTENT</div> }));
 jest.mock('../mail', () => ({ MailPanel: () => <div>MAIL CONTENT</div> }));
 jest.mock('../search', () => ({ SearchPanel: () => <div>SEARCH CONTENT</div> }));
-jest.mock('../transport', () => ({ TransportPanel: () => <div>TRANSPORT CONTENT</div> }));
 jest.mock('../empire', () => ({ ProfilePanel: () => <div>PROFILE CONTENT</div>, EmpireOverview: () => <div>FACILITIES CONTENT</div> }));
 jest.mock('../hud/OverlayMenu', () => ({ OverlayMenu: () => <div>OVERLAYS CONTENT</div> }));
 jest.mock('../politics/PoliticsHome', () => ({ PoliticsHome: () => <div>POLITICS CONTENT</div> }));
@@ -71,7 +70,7 @@ describe('Sheet', () => {
       useUiStore.getState().setRootSurface({ kind: 'empire' });
       useUiStore.getState().pushSurface({ kind: 'building' });
       useUiStore.getState().pushSurface({ kind: 'search' });
-      useUiStore.getState().pushSurface({ kind: 'transport' });
+      useUiStore.getState().pushSurface({ kind: 'politics' });
     });
     renderWithProviders(<Sheet />);
     const dots = screen.getAllByRole('button', { name: /…/ });
@@ -96,7 +95,6 @@ describe('Sheet', () => {
       ['empire', 'PROFILE CONTENT'],
       ['facilities', 'FACILITIES CONTENT'],
       ['overlays', 'OVERLAYS CONTENT'],
-      ['transport', 'TRANSPORT CONTENT'],
       ['build', 'BUILD CONTENT embedded'],
     ] as const) {
       act(() => useUiStore.getState().setRootSurface({ kind }));
