@@ -25,7 +25,7 @@ analysis to Fable 5. That is the same reasoning `claude-review.yml` records for 
 ## What you receive
 
 The **draft card, verbatim, as the session intends to file it**: title, body, `Category`,
-`Size`. Nothing else — no rationale, no chat history. If the title or body is not in
+`Size`, `Area`. Nothing else — no rationale, no chat history. If the title or body is not in
 English, say so in the verdict: `doc/kanban-workflow.md` § "The board is written in English"
 makes translation the finder's job, not the claimer's.
 
@@ -61,13 +61,26 @@ The claimer must be able to start without redoing the investigation. Require:
 - what is wrong or missing, stated as behaviour and not as a conclusion;
 - what **done** looks like — the card's own acceptance criterion.
 
-### 4 · Is the weight right?
+### 4 · Is the weight right, and the ground named?
 
 `Category` (🔴 Defect · 🟠 Latent trap · 🟡 Feature/Gap · ⚪ Observation · 📚 Doc/Infra) and
 `Size` (S · M · L) — the vocabulary is the table in `doc/kanban-workflow.md` § Feeding rule.
 Both feed the priority order the human maintains by hand, so an `L` filed as `S` distorts
 that order for every session that reads the board afterwards. Say which value you would use
 and why; do not haggle over one notch when the card is otherwise sound.
+
+`Area` is not weight. It is the **ground reservation**, and it is the one field on a card
+that another session's claim depends on: `/next-task` skips a Todo card whose area a live
+card already holds, and a card with an **empty** `Area` blocks nothing — it is claimable by
+anyone, so two sessions can stand on the same tree with the board showing no collision.
+Nothing repairs it later for free either: the claimer determines the area *after* writing
+`Session`, and has to back the claim out again when what it determines turns out busy.
+
+So an `Area` that is **missing**, or that is not one of the rows of
+`doc/kanban-workflow.md` § The areas, is a correction like any other — name the row you
+would use, and why the *majority* of the change lands there. That table is a total partition
+since #160: every reachable path has a row, and `ci` is the catch-all, so "none of them
+fits" is never the answer. A card that genuinely spans two blocking areas is two cards.
 
 ## Your verdict — one of three
 
@@ -98,7 +111,7 @@ comment:
 - **Holds against the code** — <what you opened, and what it showed>
 - **Not already covered** — <what you searched, and what you found>
 - **Actionable** — <the missing piece, or "yes">
-- **Weight** — <`Category` / `Size`, kept or corrected, with the reason>
+- **Weight and ground** — <`Category` / `Size` / `Area`, kept or corrected, with the reason>
 
 <For FILE AMENDED: the corrections, one per line. For DO NOT FILE: the reference that
 makes the finding moot.>

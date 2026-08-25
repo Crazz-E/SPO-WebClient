@@ -94,7 +94,7 @@ describe('card-reviewer agent', () => {
       ['the claim holds against the code', /Does the claim hold against the code\?/],
       ['it is not already covered', /Is it already covered\?/],
       ['it is actionable as written', /Is it actionable as written\?/],
-      ['the weight is right', /Is the weight right\?/],
+      ['the weight is right and the ground is named', /Is the weight right, and the ground named\?/],
     ];
 
     it.each(checks)('names the check that %s', (_label, pattern) => {
@@ -112,6 +112,39 @@ describe('card-reviewer agent', () => {
     it('names both weight fields, which feed the human priority order', () => {
       expect(agent).toMatch(/`Category`/);
       expect(agent).toMatch(/`Size`/);
+    });
+
+    // #236: Area is the one field on a card that another session's claim depends on, and
+    // nothing else checks it — no workflow sets it, and /next-task only fills it after the
+    // claim. A card filed without one reserves no ground while looking like any other.
+    it('receives Area alongside the two weight fields', () => {
+      expect(collapse(agent)).toMatch(
+        /as the session intends to file it\*\*: title, body, `Category`, `Size`, `Area`/
+      );
+    });
+
+    it('treats a missing Area as a correction, not as a detail', () => {
+      const text = collapse(agent);
+      expect(text).toMatch(/an `Area` that is \*\*missing\*\*/);
+      expect(text).toMatch(/is a correction like any other/);
+    });
+
+    it('says why an empty Area costs something — it reserves no ground', () => {
+      const text = collapse(agent);
+      expect(text).toMatch(/\*\*empty\*\* `Area` blocks nothing/);
+      expect(text).toMatch(/two sessions can stand on the same tree/);
+    });
+
+    it('sends the reviewer to the partition, and forbids "none of them fits"', () => {
+      const text = collapse(agent);
+      expect(text).toMatch(/rows of `doc\/kanban-workflow\.md` § The areas/);
+      expect(text).toMatch(/"none of them fits" is never the answer/);
+    });
+
+    it('carries Area into the report block, so the verdict states it', () => {
+      expect(agent).toMatch(
+        /- \*\*Weight and ground\*\* — <`Category` \/ `Size` \/ `Area`, kept or corrected/
+      );
     });
 
     it('sends an RDO claim to the server declaration, not to the finding aid', () => {
@@ -191,5 +224,21 @@ describe('the mechanism is named on all four surfaces', () => {
 
   it('is in the CLAUDE.md feeding rule', () => {
     expect(collapse(claudeMd)).toMatch(/Every draft card is read first by the `card-reviewer` sub-agent/);
+  });
+
+  it('says in CLAUDE.md that the review covers Area, where the filer reads its job', () => {
+    // The three fields no workflow sets are named two sentences earlier; the sentence that
+    // sends the draft to the reviewer has to reach them, or the check is invisible to the filer.
+    const text = collapse(claudeMd);
+    expect(text).toMatch(/`Category`, `Size` and `Area`; those stay the filer's job/);
+    expect(text).toMatch(/which checks those three fields too, `Area` included/);
+  });
+
+  it('says in the rulebook why Area is checked at filing time and not later', () => {
+    const feeding = rulebook.indexOf('## Feeding rule');
+    const next = rulebook.indexOf('## Context discipline');
+    const section = collapse(rulebook.slice(feeding, next));
+    expect(section).toMatch(/\*\*`Area` is checked here because nothing else checks it\.\*\*/);
+    expect(section).toMatch(/`\/next-task` only fills it \*after\* a claim/);
   });
 });

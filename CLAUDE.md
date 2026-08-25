@@ -188,7 +188,9 @@ workflow sets is `Category`, `Size` and `Area`; those stay the filer's job, and 
 transition after the claim is still a board write its owner makes.
 [kanban-workflow.md](doc/kanban-workflow.md) lists the board workflows that are on, the four
 deliberately off, and why three of those four could never fire here.
-**Every draft card is read first by the `card-reviewer` sub-agent**, whose dated verdict
+**Every draft card is read first by the `card-reviewer` sub-agent** — which checks those
+three fields too, `Area` included, because the claim rule reads it and a card filed without
+one reserves no ground — whose dated verdict
 becomes the card's first comment; on `DO NOT FILE` no issue is created and the session's
 report says why.
 **The board is written in English — all of it**, whatever language the session, the source
