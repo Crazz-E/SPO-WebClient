@@ -524,12 +524,23 @@ and escalate a step by delegating it to a sub-agent**, never the other way round
 | § 0–2 nightly check, pick, claim, rename | scripted `gh`/`jq`, one right answer | **Haiku 4.5** | low |
 | § 3 understand the card, plan the change | analysis | **Fable 5** | per Size (below) |
 | § 3 implement + tests | execution | **Opus 5** — but see the escalation rule | per Size |
-| § 3 typecheck / lint / coverage fixes | mechanical, the compiler names the fix | **Sonnet 5** | low |
+| § 3 typecheck / lint / coverage fixes | mechanical, the compiler names the fix | **Sonnet 5 or 4.6** | low |
 | § 3 deposit the gate, wait, read the exit code | a wait and a number | **Haiku 4.5** | low |
 | § 3/4 a gate or CI failure | diagnosis, the hardest reading in the loop | **Fable 5** | high |
 | § 3 PR body, merge, `finish`, board writes | mechanical, template-shaped | **Haiku 4.5** | low |
-| § 4 the Needs-triage comment | plain-English writing | **Sonnet 5** | low |
+| § 4 the Needs-triage comment | plain-English writing | **Sonnet 5 or 4.6** | low |
 | § 5 a finding → draft card → `card-reviewer` | analysis | **Fable 5** | medium |
+
+**The two Sonnet rows accept 4.6.** Both are mechanical: the compiler names the fix, and the
+triage comment is template-shaped prose. Neither needs a capability 4.6 lacks — Sonnet 5 is
+named there as *the cheapest model that is not Haiku*, not for a judgement only it can make.
+So a session already driving on Sonnet 4.6 (or on Haiku, between two scripted steps)
+**absorbs these two steps itself** instead of spending a sub-agent spawn on them. That is the
+whole point of the substitution; it buys nothing on a session already running Sonnet 5.
+
+It stops there. The `Sonnet 5` in the escalation rule below is real **execution** — writing
+code — and is not covered by this: route that one by the rule, not by what the session
+happens to be running.
 
 ### Escalation — what actually earns Opus 5
 
