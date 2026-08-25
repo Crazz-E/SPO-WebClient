@@ -492,9 +492,9 @@ sudo systemctl restart nginx  # Restart nginx
 | `PORT` | `8080` | Internal HTTP/WebSocket port |
 | `RDO_DIR_HOST` | `www.starpeaceonline.com` | Game directory server |
 | `CHUNK_CDN_URL` | `https://spo.zz.works` | Terrain/object asset CDN |
-| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
-| `TRUST_PROXY` | `false` | Set `true` behind nginx (required for rate limiting) |
-| `ENABLE_HSTS` | `false` | Set `true` when serving over HTTPS |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. With `NODE_ENV=production` the gateway **refuses to start** on `debug` — session IDs leak at that level (SEC-L-2) |
+| `TRUST_PROXY` | `false` | Set `true` behind nginx (required for rate limiting). Unset in production logs a startup warning |
+| `ENABLE_HSTS` | `false` | Set `true` when serving over HTTPS. Unset in production logs a startup warning |
 | `SPO_GM_USERS` | — | Comma-separated GM usernames (optional) |
 
 ---

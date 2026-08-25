@@ -152,8 +152,23 @@ export class Logger {
     this.log(LogLevel.ERROR, message, meta);
   }
 
-  private log(level: LogLevel, message: string, meta?: unknown) {
-    if (level < currentLogLevel) {
+  /**
+   * Write a line whatever `LOG_LEVEL` says.
+   *
+   * Reserved for the boot-time compliance record (policy SEC-R-2): the effective security
+   * configuration must be readable in the log of *any* production deployment, and `warn`
+   * and `error` are both compliant levels (SEC-L-2 asks for "info or stricter"). A plain
+   * `info` line would therefore be filtered away on exactly the deployments that are most
+   * locked down. `level` still tags the entry, so a warning still reads and routes as one.
+   *
+   * Nothing else should use this — an unfiltered line defeats the point of LOG_LEVEL.
+   */
+  always(level: LogLevel, message: string, meta?: unknown) {
+    this.log(level, message, meta, true);
+  }
+
+  private log(level: LogLevel, message: string, meta?: unknown, force = false) {
+    if (!force && level < currentLogLevel) {
       return;
     }
 

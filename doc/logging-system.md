@@ -68,7 +68,7 @@ Requires [jq](https://jqlang.github.io/jq/).
 
 | Env Variable           | Default               | Description                                            |
 |------------------------|-----------------------|--------------------------------------------------------|
-| `LOG_LEVEL`            | `debug`               | Minimum level: `debug`, `info`, `warn`, `error`        |
+| `LOG_LEVEL`            | `info`                | Minimum level: `debug`, `info`, `warn`, `error`        |
 | `LOG_JSON`             | `false`               | NDJSON output on console (file is always NDJSON)        |
 | `LOG_FILE`             | *(empty = disabled)*  | File path for all NDJSON output                         |
 | `LOG_ERROR_FILE`       | *(empty = disabled)*  | Separate file for ERROR entries (with recent context)   |
@@ -78,7 +78,7 @@ Requires [jq](https://jqlang.github.io/jq/).
 
 **Rotation:** When a log file exceeds `LOG_MAX_SIZE`, it is renamed to `.1`, previous `.1` becomes `.2`, etc. Files beyond `LOG_MAX_FILES` are deleted. Both `LOG_FILE` and `LOG_ERROR_FILE` rotate independently.
 
-**Production warning:** `LOG_LEVEL=debug` may log session IDs. Use `info` in production.
+**Production:** `LOG_LEVEL=debug` may log session IDs, so `info` is the default and the policy floor (SEC-L-2). With `NODE_ENV=production` the gateway **refuses to start** on an explicit `LOG_LEVEL=debug` (`src/server/production-config.ts`). Ask for `debug` explicitly when developing.
 
 ## Log Files
 

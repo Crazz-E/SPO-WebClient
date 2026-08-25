@@ -171,7 +171,11 @@ export const config = {
    */
   logging: {
     // Niveaux: 'debug' | 'info' | 'warn' | 'error'
-    level: getEnv('LOG_LEVEL') || 'debug',
+    // `info` is the floor the security policy sets (SEC-L-2): session identifiers appear in
+    // debug lines, so a deployment that forgets to set LOG_LEVEL must not leak them. Ask for
+    // `debug` explicitly when developing — and `NODE_ENV=production` refuses that combination
+    // at startup (src/server/production-config.ts).
+    level: getEnv('LOG_LEVEL') || 'info',
     colorize: getEnv('NODE_ENV') !== 'production',
     /** NDJSON structured output (LOG_JSON=true) */
     jsonMode: getEnv('LOG_JSON') === 'true',

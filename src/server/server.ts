@@ -5,7 +5,7 @@ import * as path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { StarpeaceSession } from './spo_session';
 import { config } from '../shared/config';
-import { createLogger, getFileTransport, getErrorFileTransport } from '../shared/logger';
+import { createLogger, getFileTransport, getErrorFileTransport, LogLevel } from '../shared/logger';
 import { UPDATE_SERVER } from '../shared/constants';
 import { fileToProxyUrl, PROXY_IMAGE_ENDPOINT } from '../shared/proxy-utils';
 import * as ErrorCodes from '../shared/error-codes';
@@ -33,6 +33,7 @@ import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '.
 import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 import { buildRuntimeConfigScript } from './runtime-config';
 import { handleBugReportRequest, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
+import { enforceProductionConfig } from './production-config';
 
 /**
  * Starpeace Gateway Server
@@ -1080,10 +1081,11 @@ const wsConnectionsPerIp = new Map<string, number>();
 // 1000 since 2026-08-22 (developer decision, test phase — see the rate-limit note above).
 // Exception SEC-X-1; the SEC-W-3 floor is 5 per IP. Restore it before any public deployment.
 const WS_MAX_CONNECTIONS_PER_IP = 1000;
+const WS_MAX_PAYLOAD_BYTES = 64 * 1024; // 64KB max message size (policy SEC-W-2)
 
 const wss = new WebSocketServer({
   server,
-  maxPayload: 64 * 1024, // 64KB max message size
+  maxPayload: WS_MAX_PAYLOAD_BYTES,
   verifyClient: (info, callback) => {
     // Validate Origin header to prevent Cross-Site WebSocket Hijacking
     const origin = info.origin || info.req.headers.origin || '';
@@ -1398,6 +1400,30 @@ export async function startGateway(options?: GatewayOptions): Promise<GatewayIns
   if (options?.host !== undefined) HOST = options.host;
   if (options?.port !== undefined) PORT = options.port;
   if (options?.singleUserMode !== undefined) SINGLE_USER_MODE = options.singleUserMode;
+
+  // Validate the production configuration and report it BEFORE anything binds a port
+  // (policy SEC-R-2). A forbidden combination throws, main() logs it and exits 1.
+  enforceProductionConfig(
+    process.env,
+    config.logging.level,
+    {
+      trustProxy: TRUST_PROXY,
+      hstsEnabled: process.env.ENABLE_HSTS === 'true',
+      rateLimitWindowMs: RATE_LIMIT_WINDOW_MS,
+      rateLimitMaxAuth: RATE_LIMIT_MAX_AUTH,
+      rateLimitMaxProxy: RATE_LIMIT_MAX_PROXY,
+      wsMaxConnectionsPerIp: WS_MAX_CONNECTIONS_PER_IP,
+      wsMaxPayloadBytes: WS_MAX_PAYLOAD_BYTES,
+      singleUserMode: SINGLE_USER_MODE,
+    },
+    // The SEC-R-2 record bypasses LOG_LEVEL: `warn` and `error` are compliant production
+    // levels, and a readout the policy says MUST appear cannot be one the verbosity hides.
+    {
+      info: (message: string) => logger.always(LogLevel.INFO, message),
+      warn: (message: string) => logger.always(LogLevel.WARN, message),
+      error: (message: string) => logger.always(LogLevel.ERROR, message),
+    }
+  );
 
   // Load Vite manifest for content-hashed asset resolution
   loadViteManifest();

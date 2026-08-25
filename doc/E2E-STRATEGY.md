@@ -172,8 +172,8 @@ Run over the captured wire traffic of **every** L1/L2 execution: RID monotonicit
 
 ## 6. Production-Behavior Verification
 
-Covered by L4 (§3) executing the policy. One code change is **required by policy** and tracked as implementation work, not just tests:
-1. **Startup production-env validation** (policy SEC-R-2): in `NODE_ENV=production`, refuse to start when `LOG_LEVEL=debug`, warn loudly when `TRUST_PROXY`/`ENABLE_HSTS` are unset; log the effective security configuration once at boot.
+Covered by L4 (§3) executing the policy. The one code change **required by policy** has since landed:
+1. ~~**Startup production-env validation** (policy SEC-R-2)~~ — **done 2026-08-25**, `src/server/production-config.ts`: in `NODE_ENV=production` the gateway refuses to start on `LOG_LEVEL=debug`, warns when `TRUST_PROXY`/`ENABLE_HSTS` are unset, and logs the effective security configuration once at boot.
 Optional hardening queued behind it: global session cap (SEC-W-3), DNS-resolution SSRF check (SEC-H-6 note).
 
 ---
