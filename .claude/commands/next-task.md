@@ -175,7 +175,9 @@ The repo process applies unchanged — this command adds nothing to it:
   result verbatim. Ask for the shortest reply that carries the answer — a verdict, a
   `file:line`, a number — and say so in the prompt: **no preamble, no restatement of the
   task, no summary of what was read, no closing offer.**
-- Gate deposited (`npm run gate`, background) → Status → **Gate** → title `#<issue> · Gate`.
+- Gate deposited (`npm run gate`, with the tool's `run_in_background` — **never a trailing
+  `&`**, which makes the shell report the fork and returns 0 whatever the gate found) →
+  Status → **Gate** → title `#<issue> · Gate`.
 - Gate PASS → push, PR with **`Closes #<issue>`** in the body → Status → **PR** → title
   `#<issue> · PR`.
 - Checks green → merge, `npm run finish` → Status → **Done** + one final comment

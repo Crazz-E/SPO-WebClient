@@ -107,6 +107,51 @@ describe('the four loops that were actually proposed', () => {
   });
 });
 
+describe('shell-backgrounding a verdict command', () => {
+  /**
+   * `cmd &` makes the shell report the fork rather than the run, so the exit code is 0
+   * whatever happened. It is upstream of the loops above: with the verdict destroyed, the
+   * only ways left are the report text (forbidden) and a poll on the done/ file (refused).
+   */
+  it.each([
+    ['npm run gate > /tmp/scratch/gate.log 2>&1 &'],
+    ['npm run test:live > /tmp/scratch/live.log 2>&1 &'],
+    ['npm test > /tmp/scratch/test.log 2>&1 &'],
+    ['npx jest src/foo.test.ts > /tmp/scratch/jest.log 2>&1 &'],
+    ['npm run gate &'],
+    ['npm run typecheck &'],
+  ])('refuses %s', command => {
+    expect(guard(command)).toBe(2);
+  });
+
+  it('sends the caller to the tool flag, not to another shell construct', () => {
+    const { stderr } = invoke('npm run gate > /tmp/scratch/gate.log 2>&1 &');
+    expect(stderr).toContain('run_in_background');
+  });
+
+  it('says the redirect is not the problem, so nobody drops it too', () => {
+    const { stderr } = invoke('npm run gate > /tmp/scratch/gate.log 2>&1 &');
+    expect(stderr).toContain('The redirect is fine');
+  });
+
+  it('offers a form that still captures the exit code', () => {
+    expect(invoke('npm run gate &').stderr).toContain('EXIT=$?');
+  });
+
+  it.each([
+    // The sanctioned form: same redirect, no ampersand.
+    ['npm run gate > /tmp/scratch/gate.log 2>&1; echo "EXIT=$?"'],
+    ['npm run gate'],
+    ['npm run dev'],
+    // `&&` is a separator, not a fork.
+    ['npm run bench:status && echo ok'],
+    // A command that merely mentions the shape.
+    ['grep -n "npm run gate &" doc/bench-worker.md'],
+  ])('allows %s', command => {
+    expect(guard(command)).toBe(0);
+  });
+});
+
 describe('a wait on the verdict directory is the same wait', () => {
   it.each([
     'while true; do sleep 30; cat ~/.spo-bench/verdicts/abc.json && break; done',
