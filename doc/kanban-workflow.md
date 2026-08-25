@@ -203,11 +203,11 @@ board's behaviour proves it points at the right column. Project → ⋯ → Work
 | Workflow | Configured as | Why it matters |
 |---|---|---|
 | **Auto-add to project** | repository **picker** → `Crazz-Org/SPO-WebClient`; filter box → `is:issue is:open` | **The feeding rule rests on this one.** Without it a new issue belongs to no board, so a finding filed by a session is invisible |
-| **Item added to project** | set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status — on the board and outside the pool at the same time, since `/next-task` selects on `Status = Todo` |
+| **Item added to project** | trigger `issue, pull request`; set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status — on the board and outside the pool at the same time, since `/next-task` selects on `Status = Todo` |
 | **Pull request linked to issue** | set `Status` = **PR** | The column the ownership law defines as "pull request open", reached from the `Closes #N` the PR body already carries |
-| **Item reopened** | set `Status` = **Needs triage** | Without it, reopening a closed issue leaves its card in Done, where it misrepresents the work. **Not Todo:** `Session` still holds the old owner and only the human may clear it — Needs triage is the human's column |
-| **Item closed** | set `Status` = **Done** | The Done cards with an empty `Session` are the trace of this firing on its own |
-| **Auto-close issue** | on `Status` Done | Closes the issue when a session moves the card |
+| **Item reopened** | trigger `issue, pull request`; set `Status` = **Needs triage** | Without it, reopening a closed issue leaves its card in Done, where it misrepresents the work. **Not Todo:** `Session` still holds the old owner and only the human may clear it — Needs triage is the human's column |
+| **Item closed** | trigger `issue, pull request`; set `Status` = **Done** | The Done cards with an empty `Session` are the trace of this firing on its own |
+| **Auto-close issue** | trigger *when the status is updated* → `Status: Done` | Closes the issue when a session moves the card |
 | **Auto-add sub-issues to project** | — | Inherited, no value to set |
 
 **Every `Set value` step needs its value, and the value is not optional** — a workflow whose
@@ -232,6 +232,12 @@ here and none of the three could fire whatever value it held.
 ⚠ **Never widen the auto-add filter to pull requests to "unlock" those three.** Combined with
 `Item added to project` → Todo, every open PR would drop into the pool and a `/next-task`
 session would claim a pull request as work.
+
+That is not a theoretical risk, and the reason is in the trigger rows above: `Item added to
+project`, `Item closed` and `Item reopened` are all typed **`issue, pull request`** — none of
+them excludes a pull request by itself. **The auto-add filter is the only thing keeping pull
+requests off this board**, and therefore the only thing that makes those three safe. It is a
+single UI field, and changing it changes the meaning of every column.
 
 ⚠ **Two traps in the auto-add row, and the first is a hard error.** The repository is chosen
 from a *separate picker*; the filter box beside it accepts only `is:`, `label:`, `reason:`,
@@ -258,7 +264,7 @@ Every write is very short.
 |---|---|
 | Claim | `Session` field + Status → In progress |
 | Gate deposited | Status → Gate |
-| PR opened | Status → PR (the PR link appears on the card automatically via `Closes #N`, and `Pull request linked to issue` normally sets the column from the same link — the owner sets it anyway and reads it back, since no API can prove that workflow's value) |
+| PR opened | Status → PR (the PR link appears on the card automatically via `Closes #N`, and `Pull request linked to issue` is configured to set the column from the same link — the owner sets it anyway and reads it back: the workflow has not yet been *observed* firing, and the owner's write is what the law relies on) |
 | Merged + finished | Status → Done + **one final comment, 2–4 lines**: what changed, PR number, anything the human should know |
 | Released | Status → Needs triage + the non-technical explanation comment |
 | Gate attempt failed | Nothing on the board (Status stays Gate or returns to In progress); the detail lives in the PR/commits |
