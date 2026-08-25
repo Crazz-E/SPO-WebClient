@@ -124,8 +124,12 @@ reason to stop working.
 The repo process applies unchanged — this command adds nothing to it:
 
 - Branch, implement, tests (≥ 93 % on new/modified lines), typecheck, lint.
-- **Model routing** (kanban-workflow § Model routing): plan/analysis on **Fable 5**,
-  execution on **Opus 5** — via sub-agents if the session cannot switch itself.
+- **Model routing** (kanban-workflow § Model routing — read the step table, it covers
+  every § of this command, not just the two glamorous ones): drive the board steps, the
+  gate wait and the PR/merge/`finish` steps on **Haiku 4.5**, plan and diagnose on
+  **Fable 5**, execute on **Sonnet 5**, and escalate to **Opus 5** only for the wire
+  (`rdo-*`), an `L` card, or a defect whose reproduction is not yet understood. Effort
+  follows the card's `Size`. Via sub-agents if the session cannot switch itself.
 - **Context discipline**: stay under ~250k, delegate heavy reads to sub-agents, compact
   after exploration.
 - Gate deposited (`npm run gate`, background) → Status → **Gate** → title `#<issue> · Gate`.

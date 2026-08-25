@@ -400,6 +400,14 @@ export class StarpeaceClient implements ClientHandlerContext {
         type: WsMessageType.REQ_MAIL_COMPOSE,
         to, subject, body: [body],
       }),
+      onMailSaveDraft: (to, subject, body, headers, existingDraftId) => this.sendMessage({
+        type: WsMessageType.REQ_MAIL_SAVE_DRAFT,
+        to, subject, body: [body],
+        // Both fields are optional on the wire — omitted rather than sent empty, so
+        // the gateway never asks the server to delete a draft called ''.
+        ...(headers ? { headers } : {}),
+        ...(existingDraftId ? { existingDraftId } : {}),
+      }),
       onMailDelete: (messageId) => this.sendMessage({
         type: WsMessageType.REQ_MAIL_DELETE,
         folder: useMailStore.getState().currentFolder,

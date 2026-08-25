@@ -489,13 +489,65 @@ finder's own turn, and it is paid by the finder rather than by the claimer.
 
 ## Model routing
 
-- **Planning and analysis** (implementation plans, bug diagnosis, feature analysis) →
-  **Fable 5**, with effort adapted to the difficulty.
-- **Execution** (implementation, tests, mechanical sweeps, refactors) → **Opus 5**, with
-  effort adapted.
-- Whatever model the session was started with, it is entitled to switch to comply. If the
-  harness cannot switch the session's own model, apply the routing to its **sub-agents**
-  (`model: fable` / `model: opus` on the Agent tool or workflow `agent()` calls).
+**The driver is the expensive part.** A session's main loop re-reads its whole context on
+every turn, so the model it *runs on* costs far more than the models its sub-agents run on.
+Routing only the two glamorous steps (plan, implement) and leaving everything else on
+whatever the session started with is how a board of S-sized cards ends up billed as Opus:
+picking a card, waiting on the gate, writing the PR body, moving the column and running
+`finish` are the majority of a session's turns and none of them is execution.
+
+So the rule is inverted from the obvious one: **drive on the cheapest model the step needs,
+and escalate a step by delegating it to a sub-agent**, never the other way round.
+
+### The steps of a session, and what each one is worth
+
+| Step (`/next-task` §) | What it actually is | Model | Effort |
+|---|---|---|---|
+| § 0–2 nightly check, pick, claim, rename | scripted `gh`/`jq`, one right answer | **Haiku 4.5** | low |
+| § 3 understand the card, plan the change | analysis | **Fable 5** | per Size (below) |
+| § 3 implement + tests | execution | **Opus 5** — but see the escalation rule | per Size |
+| § 3 typecheck / lint / coverage fixes | mechanical, the compiler names the fix | **Sonnet 5** | low |
+| § 3 deposit the gate, wait, read the exit code | a wait and a number | **Haiku 4.5** | low |
+| § 3/4 a gate or CI failure | diagnosis, the hardest reading in the loop | **Fable 5** | high |
+| § 3 PR body, merge, `finish`, board writes | mechanical, template-shaped | **Haiku 4.5** | low |
+| § 4 the Needs-triage comment | plain-English writing | **Sonnet 5** | low |
+| § 5 a finding → draft card → `card-reviewer` | analysis | **Fable 5** | medium |
+
+### Escalation — what actually earns Opus 5
+
+Opus is for execution whose **cost of being wrong is not caught by a test**:
+
+- anything touching the RDO wire — `src/shared/rdo-*`, `src/server/rdo.ts`,
+  `rdo-members.ts`, the session phases (CLAUDE.md: *a wire divergence is not replaceable*);
+- an `L`-sized card, or one whose change spans more than ~5 files;
+- a 🔴 Defect or 🟠 Latent trap whose reproduction is not yet understood.
+
+Everything else — `S`/`M` cards in `client`, `docs`, tests, mechanical sweeps, renames,
+a change the failing test already describes — is **Sonnet 5** execution. Reach for Opus when
+the first Sonnet attempt is wrong in a way that is about judgement rather than about a
+missing fact; do not pre-emptively route to it because the card looks important.
+
+### Effort follows `Size`, not the model
+
+| `Size` | plan effort | execution effort |
+|---|---|---|
+| S | low | low |
+| M | medium | medium |
+| L | high | medium, raised to high only after a first attempt fails |
+
+Two adjustments: a card whose `Category` is 🔴 Defect or 🟠 Latent trap gets **one notch
+more** on the plan step (the diagnosis is the work); a gate retry gets one notch more than
+the attempt that failed, never the same effort twice.
+
+### Applying it
+
+Whatever model the session was started with, it is entitled to switch to comply. If the
+harness cannot switch the session's own model, apply the routing to its **sub-agents**
+(`model: haiku` / `model: sonnet` / `model: fable` / `model: opus` on the Agent tool or on
+workflow `agent()` calls). A `.claude/commands/*.md` file may also pin a whole command with
+`model:` frontmatter — `coverage-check` and `release-notes` do, because they are single-step
+and read-only. `next-task` deliberately does **not**: it spans every row of the table above,
+so pinning it to one model is exactly the mistake this section exists to prevent.
 
 ## gh CLI recipes
 

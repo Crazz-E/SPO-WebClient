@@ -8,6 +8,7 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { IsometricMapRenderer } from './isometric-map-renderer';
+import type { RoadTileFacts } from '../../shared/road-cost';
 
 type ProbeHost = {
   roadTilesMap: Map<string, boolean>;
@@ -15,6 +16,8 @@ type ProbeHost = {
   terrainRenderer: { getTerrainLoader: () => { getLandId: (x: number, y: number) => number } | null };
   hasRoadAt: (x: number, y: number) => boolean;
   isAdjacentToRoad: (x: number, y: number) => boolean;
+  hasConcrete: (x: number, y: number) => boolean;
+  getRoadTileFacts: (x: number, y: number) => RoadTileFacts;
 };
 
 const proto = IsometricMapRenderer.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
@@ -23,19 +26,24 @@ function makeHost(opts: {
   roads?: Array<[number, number]>;
   concrete?: Array<[number, number]>;
   landId?: number;
+  landAt?: (x: number, y: number) => number;
   noLoader?: boolean;
 }): ProbeHost {
   const host: ProbeHost = {
     roadTilesMap: new Map((opts.roads ?? []).map(([x, y]) => [`${x},${y}`, true])),
     concreteTilesSet: new Set((opts.concrete ?? []).map(([x, y]) => `${x},${y}`)),
     terrainRenderer: {
-      getTerrainLoader: () => (opts.noLoader ? null : { getLandId: () => opts.landId ?? 0 }),
+      getTerrainLoader: () => (opts.noLoader ? null : { getLandId: (x: number, y: number) => opts.landAt?.(x, y) ?? opts.landId ?? 0 }),
     },
     hasRoadAt: null as unknown as ProbeHost['hasRoadAt'],
     isAdjacentToRoad: null as unknown as ProbeHost['isAdjacentToRoad'],
+    hasConcrete: null as unknown as ProbeHost['hasConcrete'],
+    getRoadTileFacts: null as unknown as ProbeHost['getRoadTileFacts'],
   };
   host.hasRoadAt = (x, y) => (proto.hasRoadAt as (this: ProbeHost, x: number, y: number) => boolean).call(host, x, y);
   host.isAdjacentToRoad = (x, y) => (proto.isAdjacentToRoad as (this: ProbeHost, x: number, y: number) => boolean).call(host, x, y);
+  host.hasConcrete = (x, y) => (proto.hasConcrete as (this: ProbeHost, x: number, y: number) => boolean).call(host, x, y);
+  host.getRoadTileFacts = (x, y) => (proto.getRoadTileFacts as (this: ProbeHost, x: number, y: number) => RoadTileFacts).call(host, x, y);
   return host;
 }
 
@@ -213,5 +221,55 @@ describe('getCanvasAnchorAt', () => {
       buildings: [{ visualClass: 'FarmClass', x: 2, y: 1 }],
     });
     expect(anchorAt(host)).not.toHaveProperty('buildingId');
+  });
+});
+
+// ===========================================================================
+// getRoadTileFacts / getRoadPathFacts — what a road drag is priced from (#99)
+// ===========================================================================
+
+const WATER = 0xC0;  // LandClass.ZoneD in bits 7-6
+const GRASS = 0x00;
+
+const getRoadPathFacts = (host: ProbeHost, x1: number, y1: number, x2: number, y2: number) =>
+  (proto.getRoadPathFacts as (this: ProbeHost, x1: number, y1: number, x2: number, y2: number) => RoadTileFacts[])
+    .call(host, x1, y1, x2, y2);
+
+describe('getRoadTileFacts', () => {
+  it('reports plain land as neither paved nor a bridge', () => {
+    expect(makeHost({ landId: GRASS }).getRoadTileFacts(3, 4))
+      .toEqual({ hasRoad: false, isBridge: false, isVoid: false });
+  });
+
+  it('reports a tile that already carries a road', () => {
+    expect(makeHost({ landId: GRASS, roads: [[3, 4]] }).getRoadTileFacts(3, 4).hasRoad).toBe(true);
+  });
+
+  it('calls water with no concrete a bridge, and water with concrete not one', () => {
+    expect(makeHost({ landId: WATER }).getRoadTileFacts(3, 4).isBridge).toBe(true);
+    expect(makeHost({ landId: WATER, concrete: [[3, 4]] }).getRoadTileFacts(3, 4).isBridge).toBe(false);
+  });
+
+  it('never claims a void square — the WebClient models no reserved-plot layer', () => {
+    expect(makeHost({ landId: WATER, roads: [[3, 4]] }).getRoadTileFacts(3, 4).isVoid).toBe(false);
+  });
+
+  it('treats the ground as dry when no terrain is loaded', () => {
+    expect(makeHost({ noLoader: true }).getRoadTileFacts(3, 4).isBridge).toBe(false);
+  });
+});
+
+describe('getRoadPathFacts', () => {
+  it('returns one entry per staircase tile, start tile included, in path order', () => {
+    // (0,0) → (1,1) walks (0,0) → (1,0) → (1,1). Only (1,0) is water.
+    const host = makeHost({
+      roads: [[0, 0]],
+      landAt: (x, y) => (x === 1 && y === 0 ? WATER : GRASS),
+    });
+    expect(getRoadPathFacts(host, 0, 0, 1, 1)).toEqual([
+      { hasRoad: true, isBridge: false, isVoid: false },
+      { hasRoad: false, isBridge: true, isVoid: false },
+      { hasRoad: false, isBridge: false, isVoid: false },
+    ]);
   });
 });

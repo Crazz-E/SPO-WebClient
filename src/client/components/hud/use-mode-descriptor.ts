@@ -12,7 +12,7 @@ import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
 import { overlayModeNote } from '../../handlers/overlay-mode';
-import { ROAD_COST_PER_TILE } from '../../../shared/road-cost';
+import { BRIDGE_COST_PER_TILE, ROAD_COST_PER_TILE } from '../../../shared/road-cost';
 import { formatMoney } from '../../format-utils';
 
 export interface ModeDescriptor {
@@ -77,7 +77,10 @@ export function useModeDescriptor(): ModeDescriptor | null {
   const base = { invalid: false, cost: null, cashAfter: null, cashAfterNegative: false, overlayNote, isPlacing: false, doneLabel: 'Done' } as const;
 
   if (isRoadBuild) {
-    return { ...base, kind: 'Road', title: 'Build', hint: `Drag on the map — ${formatMoney(ROAD_COST_PER_TILE)} per tile`, onDone: () => client.onBuildRoad() };
+    // H7 (#99): the flat "per tile" was never the price — water without concrete costs the
+    // bridge rate and a tile that already carries a road is free.
+    const roadHint = `Drag on the map — ${formatMoney(ROAD_COST_PER_TILE)} per tile, ${formatMoney(BRIDGE_COST_PER_TILE)} over water; existing road is free`;
+    return { ...base, kind: 'Road', title: 'Build', hint: roadHint, onDone: () => client.onBuildRoad() };
   }
   if (isRoadDemolish) {
     return { ...base, kind: 'Road', title: 'Demolish', hint: 'Drag on the map', onDone: () => client.onDemolishRoad() };

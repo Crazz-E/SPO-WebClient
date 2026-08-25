@@ -35,10 +35,6 @@ id lookups that precede a tax or budget write, and the five Politics ASP pages
 `getPoliticsData` fetches. Its mutation exchanges carry an **empty response** on
 purpose: a `procedure` answers nothing, so no reply can ever say the write landed.
 
-One convention it makes explicit: an exchange's `request` is stored **without the
-trailing `;`**. `RdoProtocol.parse` folds the terminator into the last argument, so a
-request that kept it would not match itself.
-
 ### Scenario Structure
 
 Each `RdoScenario` has a `name`, `description`, and array of `RdoExchange` objects:

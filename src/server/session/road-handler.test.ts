@@ -24,6 +24,7 @@
  */
 
 import { buildRoad, getRoadCostEstimate, demolishRoad, wipeCircuit, ROAD_COST_PER_TILE } from './road-handler';
+import { BRIDGE_COST_PER_TILE } from '../../shared/road-cost';
 import { makeSessionCtx, FAKE_CONTEXT_IDS } from '../__tests__/session/fake-session-context';
 import type { FakeSessionCtx, SentRequest } from '../__tests__/session/fake-session-context';
 import { RdoValue, RdoParser } from '../../shared/rdo-types';
@@ -83,10 +84,12 @@ describe('buildRoad — CreateCircuitSeg frame', () => {
       member: 'CreateCircuitSeg',
       separator: '"^"',
     });
-    expect(decoded(req.packet.args)).toEqual(ints(1, TYCOON_PROXY, 955, 1000, 955, 1001, ROAD_COST_PER_TILE));
+    // Two tiles are priced — the start tile and the one stepped onto — and the single
+    // segment carries the lot (cost div 1).
+    expect(decoded(req.packet.args)).toEqual(ints(1, TYCOON_PROXY, 955, 1000, 955, 1001, 2 * ROAD_COST_PER_TILE));
     // fire-and-forget channel untouched
     expect(fake.frames.world).toHaveLength(0);
-    expect(result).toEqual({ success: true, partial: false, cost: ROAD_COST_PER_TILE, tileCount: 1, message: 'Road built successfully: 1 tiles' });
+    expect(result).toEqual({ success: true, partial: false, cost: 2 * ROAD_COST_PER_TILE, tileCount: 1, message: 'Road built successfully: 1 tiles' });
   });
 
   it('never uses interfaceServerId or tycoonId as target or owner', async () => {
@@ -104,15 +107,15 @@ describe('buildRoad — CreateCircuitSeg frame', () => {
 // ===========================================================================
 
 describe('buildRoad — segment generation', () => {
-  it('a horizontal path is one segment with the full length and cost = tiles × ROAD_COST_PER_TILE', async () => {
+  it('a horizontal path is one segment carrying the whole path — 5 priced tiles for 4 steps', async () => {
     const fake = makeRoadCtx();
     fake.respond(() => OK);
 
     const result = await buildRoad(fake.ctx, 10, 20, 14, 20);
 
     expect(segmentsOf(fake.sent)).toEqual([[10, 20, 14, 20]]);
-    expect(RdoParser.asInt(fake.sent[0].packet.args![6])).toBe(4 * ROAD_COST_PER_TILE);
-    expect(result).toMatchObject({ success: true, cost: 4 * ROAD_COST_PER_TILE, tileCount: 4 });
+    expect(RdoParser.asInt(fake.sent[0].packet.args![6])).toBe(5 * ROAD_COST_PER_TILE);
+    expect(result).toMatchObject({ success: true, cost: 5 * ROAD_COST_PER_TILE, tileCount: 4 });
   });
 
   it('a vertical path is one segment', async () => {
@@ -122,10 +125,10 @@ describe('buildRoad — segment generation', () => {
     const result = await buildRoad(fake.ctx, 10, 20, 10, 17);
 
     expect(segmentsOf(fake.sent)).toEqual([[10, 20, 10, 17]]);
-    expect(result).toMatchObject({ success: true, cost: 3 * ROAD_COST_PER_TILE, tileCount: 3 });
+    expect(result).toMatchObject({ success: true, cost: 4 * ROAD_COST_PER_TILE, tileCount: 3 });
   });
 
-  it('a pure diagonal is a staircase of 1-tile segments starting on X, each costing one tile', async () => {
+  it('a pure diagonal is a staircase of 1-tile segments starting on X, each carrying cost div SegmentCount', async () => {
     const fake = makeRoadCtx();
     fake.respond(() => OK);
 
@@ -134,10 +137,11 @@ describe('buildRoad — segment generation', () => {
     expect(segmentsOf(fake.sent)).toEqual([
       [0, 0, 1, 0], [1, 0, 1, 1], [1, 1, 2, 1], [2, 1, 2, 2],
     ]);
+    // 5 priced tiles (10 M) split across 4 segments — MapIsoHandler.pas:1100.
     for (const req of fake.sent) {
-      expect(RdoParser.asInt(req.packet.args![6])).toBe(ROAD_COST_PER_TILE);
+      expect(RdoParser.asInt(req.packet.args![6])).toBe(2_500_000);
     }
-    expect(result).toMatchObject({ success: true, cost: 4 * ROAD_COST_PER_TILE, tileCount: 4 });
+    expect(result).toMatchObject({ success: true, cost: 5 * ROAD_COST_PER_TILE, tileCount: 4 });
   });
 
   it('an L-shaped path favours the axis with more distance remaining', async () => {
@@ -181,6 +185,64 @@ describe('buildRoad — segment generation', () => {
 
     expect(fake.sent).toHaveLength(0);
     expect(result).toEqual({ success: false, cost: 0, tileCount: 0, message: 'Start and end points must be different.', errorCode: 2 });
+  });
+});
+
+// ===========================================================================
+// buildRoad — the price on the wire (issue #99)
+// ===========================================================================
+
+describe('buildRoad — attested tile facts', () => {
+  const land = { hasRoad: false, isBridge: false, isVoid: false };
+
+  it('charges nothing for the tiles that already carry a road', async () => {
+    const fake = makeRoadCtx();
+    fake.respond(() => OK);
+
+    // (0,20) → (3,20): 4 priced tiles, the first two already paved.
+    const result = await buildRoad(fake.ctx, 0, 20, 3, 20, [
+      { ...land, hasRoad: true }, { ...land, hasRoad: true }, land, land,
+    ]);
+
+    expect(RdoParser.asInt(fake.sent[0].packet.args![6])).toBe(2 * ROAD_COST_PER_TILE);
+    expect(result).toMatchObject({ success: true, cost: 2 * ROAD_COST_PER_TILE });
+  });
+
+  it('charges the bridge rate for water with no concrete under it', async () => {
+    const fake = makeRoadCtx();
+    fake.respond(() => OK);
+
+    const result = await buildRoad(fake.ctx, 0, 20, 2, 20, [
+      { ...land, hasRoad: true }, { ...land, isBridge: true }, { ...land, isBridge: true },
+    ]);
+
+    expect(result).toMatchObject({ success: true, cost: 2 * BRIDGE_COST_PER_TILE });
+  });
+
+  it('splits the priced total across the staircase, not the other way round', async () => {
+    const fake = makeRoadCtx();
+    fake.respond(() => OK);
+
+    // (0,0) → (1,1): 3 priced tiles — paved, land, bridge = 6 M — over 2 segments.
+    const result = await buildRoad(fake.ctx, 0, 0, 1, 1, [
+      { ...land, hasRoad: true }, land, { ...land, isBridge: true },
+    ]);
+
+    expect(fake.sent).toHaveLength(2);
+    for (const req of fake.sent) {
+      expect(RdoParser.asInt(req.packet.args![6])).toBe(3_000_000);
+    }
+    expect(result).toMatchObject({ success: true, cost: 6_000_000 });
+  });
+
+  it('ignores facts that do not describe this path, warns, and prices it as plain land', async () => {
+    const fake = makeRoadCtx();
+    fake.respond(() => OK);
+
+    const result = await buildRoad(fake.ctx, 10, 20, 14, 20, [{ ...land, hasRoad: true }]);
+
+    expect(result).toMatchObject({ success: true, cost: 5 * ROAD_COST_PER_TILE });
+    expect(fake.ctx.log.warn).toHaveBeenCalledWith(expect.stringContaining('Ignoring 1 attested tile fact(s)'));
   });
 });
 
@@ -245,7 +307,7 @@ describe('buildRoad — server answers', () => {
     expect(result).toEqual({
       success: true,
       partial: true,
-      cost: 3 * ROAD_COST_PER_TILE,
+      cost: 3 * 2_500_000,
       tileCount: 3,
       message: 'Road partially built (3 tiles). Some segments failed: Cannot build a road at this location — area may be occupied or restricted',
     });
@@ -317,9 +379,26 @@ describe('buildRoad — preconditions', () => {
 // ===========================================================================
 
 describe('getRoadCostEstimate', () => {
-  it('uses the Chebyshev distance × ROAD_COST_PER_TILE', () => {
-    expect(getRoadCostEstimate(0, 0, 3, 5)).toEqual({ cost: 5 * ROAD_COST_PER_TILE, tileCount: 5, costPerTile: ROAD_COST_PER_TILE, valid: true });
-    expect(getRoadCostEstimate(10, 10, 4, 10)).toEqual({ cost: 6 * ROAD_COST_PER_TILE, tileCount: 6, costPerTile: ROAD_COST_PER_TILE, valid: true });
+  it('counts the tiles the drag actually paves, start tile included', () => {
+    // (0,0) → (3,5): 8 steps, so 9 priced tiles. The Chebyshev distance this used to
+    // return (5) undercounted every diagonal drag.
+    expect(getRoadCostEstimate(0, 0, 3, 5)).toEqual({ cost: 9 * ROAD_COST_PER_TILE, tileCount: 9, costPerTile: ROAD_COST_PER_TILE, valid: true });
+    expect(getRoadCostEstimate(10, 10, 4, 10)).toEqual({ cost: 7 * ROAD_COST_PER_TILE, tileCount: 7, costPerTile: ROAD_COST_PER_TILE, valid: true });
+  });
+
+  it('prices attested bridges and free re-use of paved tiles', () => {
+    // (0,0) → (2,0): start already paved, then land, then water with no concrete.
+    const facts = [
+      { hasRoad: true, isBridge: false, isVoid: false },
+      { hasRoad: false, isBridge: false, isVoid: false },
+      { hasRoad: false, isBridge: true, isVoid: false },
+    ];
+    expect(getRoadCostEstimate(0, 0, 2, 0, facts)).toEqual({
+      cost: ROAD_COST_PER_TILE + BRIDGE_COST_PER_TILE,
+      tileCount: 3,
+      costPerTile: ROAD_COST_PER_TILE,
+      valid: true,
+    });
   });
 
   it('is invalid for identical points', () => {

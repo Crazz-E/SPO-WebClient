@@ -11,9 +11,19 @@ import { RdoValue } from '../../shared/rdo-types';
 import { rdoCall } from '../../shared/rdo-frame';
 import { toErrorMessage } from '../../shared/error-utils';
 import { parseResultCode } from '../rdo-helpers';
+import {
+  ROAD_COST_PER_TILE,
+  estimateRoadCost,
+  roadPathTiles,
+  roadSegmentCost,
+  type RoadTileFacts,
+} from '../../shared/road-cost';
 
-/** Cost per road tile in game currency units. */
-export const ROAD_COST_PER_TILE = 2000000;
+/**
+ * Re-exported so the gateway keeps one name for it; the rule itself lives in
+ * `@/shared/road-cost`, which prices bridges and already-paved tiles too (issue #99).
+ */
+export { ROAD_COST_PER_TILE };
 
 /**
  * Generate individual road segments for a path from (x1,y1) to (x2,y2)
@@ -102,6 +112,10 @@ function generateRoadSegments(
  * @param y1 Start Y coordinate
  * @param x2 End X coordinate
  * @param y2 End Y coordinate
+ * @param facts What the world says about each path tile, in path order (issue #99). The
+ *   client is the only half that holds terrain, roads and concrete, so it attests them;
+ *   anything that is not one entry per path tile is ignored and the path is priced as plain
+ *   land, which is what the gateway did before.
  * @returns Result with success status, total cost, and tile count
  */
 export async function buildRoad(
@@ -109,7 +123,8 @@ export async function buildRoad(
   x1: number,
   y1: number,
   x2: number,
-  y2: number
+  y2: number,
+  facts?: readonly RoadTileFacts[]
 ): Promise<{ success: boolean; cost: number; tileCount: number; message?: string; errorCode?: number; partial?: boolean }> {
   try {
     ctx.log.debug(`[RoadBuilding] Building road from (${x1}, ${y1}) to (${x2}, ${y2})`);
@@ -154,6 +169,15 @@ export async function buildRoad(
     const segments = generateRoadSegments(x1, y1, x2, y2);
     ctx.log.debug(`[RoadBuilding] Generated ${segments.length} segment(s)`);
 
+    // Price the whole path once, then split it the way Voyager did: every CreateCircuitSeg
+    // carries `cost div SegmentCount` (MapIsoHandler.pas:1100), remainder dropped.
+    const pathCost = estimateRoadCost(x1, y1, x2, y2, facts);
+    if (facts && facts.length !== roadPathTiles(x1, y1, x2, y2).length) {
+      ctx.log.warn(`[RoadBuilding] Ignoring ${facts.length} attested tile fact(s) — the path has ${pathCost.tileCount}; pricing as plain land`);
+    }
+    const perSegmentCost = roadSegmentCost(pathCost.cost, segments.length);
+    ctx.log.debug(`[RoadBuilding] Path costs ${pathCost.cost} over ${pathCost.tileCount} tile(s) → ${perSegmentCost} per segment`);
+
     // Get owner and circuit IDs
     if (!ctx.fTycoonProxyId) {
       return {
@@ -172,11 +196,12 @@ export async function buildRoad(
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
 
-      // Calculate segment cost (each segment is 1 tile for diagonal, or full length for H/V)
+      // Every segment carries the same share of the path's cost, whatever its length;
+      // segTiles only says how much ground this one paves, for the partial-build report.
       const segDx = Math.abs(seg.ex - seg.sx);
       const segDy = Math.abs(seg.ey - seg.sy);
       const segTiles = Math.max(segDx, segDy);
-      const segCost = segTiles * ROAD_COST_PER_TILE;
+      const segCost = perSegmentCost;
 
       ctx.log.debug(`[RoadBuilding] Segment ${i + 1}/${segments.length}: (${seg.sx},${seg.sy}) to (${seg.ex},${seg.ey}), tiles=${segTiles}, cost=${segCost}`);
 
@@ -255,18 +280,25 @@ export async function buildRoad(
 }
 
 /**
- * Get road building cost estimate without actually building
+ * Get road building cost estimate without actually building.
+ *
+ * The tiles counted are the ones the drag actually paves — the staircase path, start tile
+ * included, exactly what `buildRoad` prices. The Chebyshev distance this used to return
+ * undercounted every diagonal drag.
+ *
  * @param x1 Start X coordinate
  * @param y1 Start Y coordinate
  * @param x2 End X coordinate
  * @param y2 End Y coordinate
+ * @param facts What the world says about each path tile, in path order (issue #99)
  * @returns Cost estimate with tile count
  */
 export function getRoadCostEstimate(
   x1: number,
   y1: number,
   x2: number,
-  y2: number
+  y2: number,
+  facts?: readonly RoadTileFacts[]
 ): { cost: number; tileCount: number; costPerTile: number; valid: boolean; error?: string } {
   // Validate start and end points are different
   if (x1 === x2 && y1 === y2) {
@@ -279,11 +311,7 @@ export function getRoadCostEstimate(
     };
   }
 
-  // Calculate tile count using Chebyshev distance (max of dx, dy) for diagonal support
-  const dx = Math.abs(x2 - x1);
-  const dy = Math.abs(y2 - y1);
-  const tileCount = Math.max(dx, dy);
-  const cost = tileCount * ROAD_COST_PER_TILE;
+  const { tileCount, cost } = estimateRoadCost(x1, y1, x2, y2, facts);
 
   return {
     cost,

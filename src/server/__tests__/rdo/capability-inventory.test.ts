@@ -117,11 +117,6 @@ const UNWIRED: ReadonlyArray<{ type: string; reason: string }> = [
     reason: 'handleGetRoadCost exists; the client prices the road itself with ' +
       'estimateRoadCost. This is the gateway-side door bridge pricing needs. Issue #99.',
   },
-  {
-    type: 'REQ_MAIL_SAVE_DRAFT',
-    reason: 'handleMailSaveDraft exists; MailPanel shows a Drafts tab with no way to write ' +
-      'into it. Issue #120, blocked on #108.',
-  },
 ];
 
 function declaredRequestTypes(): string[] {

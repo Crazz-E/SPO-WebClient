@@ -61,11 +61,11 @@ qui a été livré, pour que le code et les canevas restent lisibles côte à c�
   servent le placement **et** le zonage ; ce qui était affiché avant (rien, Zones, ou un autre
   overlay) est mémorisé (`game-store.overlayBeforeMode`) et revient à la sortie. La barre de
   mode le dit (« Zones overlay shown — Crime comes back when done »).
-- **Route** : la barre de mode affiche le tarif (`$2,000,000 per tile`, constante partagée
-  `src/shared/road-cost.ts`, égale à celle de la passerelle — test croisé) ; à la relâche,
-  Dialog de dépense (Tiles / Cost / Cash after, `dontAskAgainKey: 'road'`) **puis** la
-  requête ; l'infobulle canvas du renderer (tuiles + coût) reste. Coût = longueur Manhattan,
-  parce que la passerelle envoie une requête par tuile d'escalier.
+- **Route** : la barre de mode affiche le tarif (`$2,000,000 per tile, $4,000,000 over water;
+  existing road is free`, constantes partagées `src/shared/road-cost.ts`) ; à la relâche,
+  Dialog de dépense (Tiles / Bridge tiles / Already paved / Cost / Cash after,
+  `dontAskAgainKey: 'road'`) **puis** la requête ; l'infobulle canvas du renderer
+  (tuiles + coût) reste. Le coût suit **la formule de Voyager** (#99) : chaque tuile du
+  chemin en escalier, tuile de départ comprise, gratuite si elle porte déjà une route,
+  4 M sur l'eau sans béton, 2 M sinon (`Map.pas:6607-6632`).
 - **Démolition de route** : Dialog destructif, clic ou zone, `dontAskAgainKey: 'roadDemolish'`.
-- Hors lot (question serveur) : tarif des ponts et gratuité des tuiles déjà routées, que
-  Voyager appliquait (`Map.pas:55-59`) et que la passerelle ignore.

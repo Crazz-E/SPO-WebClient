@@ -201,7 +201,7 @@ describe('ClientBridge mail responses (T6)', () => {
   const { showToast } = jest.requireMock('../components/common/Toast') as { showToast: jest.Mock };
 
   beforeEach(() => {
-    useMailStore.setState({ currentView: 'compose', composeTo: 'bob', composeSubject: 's', composeBody: 'b', isSending: true, pendingDeleteId: null, messages: [] });
+    useMailStore.setState({ currentFolder: 'Inbox', currentView: 'compose', composeTo: 'bob', composeSubject: 's', composeBody: 'b', isSending: true, isSavingDraft: false, pendingDeleteId: null, messages: [] });
     showToast.mockClear();
   });
 
@@ -227,6 +227,35 @@ describe('ClientBridge mail responses (T6)', () => {
     const before = useMailStore.getState().folderRefreshToken;
     ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_SENT, success: false } as never);
     expect(useMailStore.getState().folderRefreshToken).toBe(before);
+  });
+
+  // #120 / #108 — the Drafts listing must show the draft that was just saved, and the
+  // panel re-reads a folder only when one of its effect deps moves.
+  it('a saved draft clears the form, opens Drafts and asks for it to be read again', () => {
+    useMailStore.setState({ currentFolder: 'Draft', isSavingDraft: true });
+    const before = useMailStore.getState().folderRefreshToken;
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_DRAFT_SAVED, success: true } as never);
+    const s = useMailStore.getState();
+    expect(s.currentView).toBe('list');
+    expect(s.composeTo).toBe('');
+    expect(s.currentFolder).toBe('Draft');
+    expect(s.isSavingDraft).toBe(false);
+    // Draft was ALREADY the open folder, so setFolder changed no dep: without this bump
+    // the panel sat on the loading skeleton forever (#108).
+    expect(s.folderRefreshToken).toBe(before + 1);
+    expect(showToast).toHaveBeenCalledWith('Draft saved.', 'info', { title: 'Draft' });
+  });
+
+  it('a failed save keeps the text on screen and releases the button', () => {
+    useMailStore.setState({ isSavingDraft: true });
+    const before = useMailStore.getState().folderRefreshToken;
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_DRAFT_SAVED, success: false } as never);
+    const s = useMailStore.getState();
+    expect(s.currentView).toBe('compose');
+    expect(s.composeTo).toBe('bob');
+    expect(s.isSavingDraft).toBe(false);
+    expect(s.folderRefreshToken).toBe(before);
+    expect(showToast).toHaveBeenCalledWith('Draft not saved. Your text is kept.', 'error');
   });
 
   it('a confirmed delete removes the pending row locally; a failed one keeps it', () => {

@@ -10,11 +10,20 @@ import { buildRoadSegment, demolishRoadAt, demolishRoadArea, toggleRoadBuildingM
 import { useUiStore } from '../store/ui-store';
 import { useGameStore } from '../store/game-store';
 import type { ClientHandlerContext } from './client-context';
+import { roadPathTiles, type RoadTileFacts } from '@/shared/road-cost';
 
-function makeCtx(validation: { valid: boolean; error?: string } = { valid: true }) {
+/** Plain land everywhere — what the renderer reports over untouched ground. */
+function plainLand(x1: number, y1: number, x2: number, y2: number): RoadTileFacts[] {
+  return roadPathTiles(x1, y1, x2, y2).map(() => ({ hasRoad: false, isBridge: false, isVoid: false }));
+}
+
+function makeCtx(
+  validation: { valid: boolean; error?: string } = { valid: true },
+  facts: (x1: number, y1: number, x2: number, y2: number) => RoadTileFacts[] = plainLand,
+) {
   return {
     isBuildingRoad: false,
-    getRenderer: () => ({ validateRoadPath: () => validation }),
+    getRenderer: () => ({ validateRoadPath: () => validation, getRoadPathFacts: facts }),
     sendRequest: jest.fn().mockResolvedValue({ success: true, tileCount: 4, cost: 8_000_000 }),
     showNotification: jest.fn(),
     loadAlignedMapArea: jest.fn(),
@@ -36,27 +45,48 @@ describe('buildRoadSegment asks before spending', () => {
     expect(s.modal).toBe('confirm');
     expect(s.confirmPayload?.title).toBe('Build this road?');
     expect(s.confirmPayload?.options?.kind).toBe('spend');
+    // 4 steps = 5 priced tiles, start tile included (#99).
     expect(s.confirmPayload?.options?.rows).toEqual([
-      { label: 'Tiles', value: '4' },
-      { label: 'Cost', value: '$8,000,000', tone: 'gold' },
-      { label: 'Cash after', value: '$2,000,000', tone: 'positive' },
+      { label: 'Tiles', value: '5' },
+      { label: 'Cost', value: '$10,000,000', tone: 'gold' },
+      { label: 'Cash after', value: '$0', tone: 'positive' },
     ]);
     expect(ctx.sendRequest).not.toHaveBeenCalled();
     s.confirmPayload?.onConfirm();
     await done;
     expect(ctx.sendRequest).toHaveBeenCalledTimes(1);
     expect(ctx.sendRequest.mock.calls[0][0]).toMatchObject({ x1: 10, y1: 5, x2: 14, y2: 5 });
+    // The facts the price was made of ride with the request, so the gateway charges the
+    // very amount that was confirmed here.
+    expect(ctx.sendRequest.mock.calls[0][0].tileFacts).toHaveLength(5);
     expect(ctx.showNotification).toHaveBeenCalledWith('Road built: 4 tiles', 'success');
   });
 
   it('cash after goes negative when the drag costs more than the tycoon holds; no cash row without stats', () => {
     const ctx = makeCtx();
     void buildRoadSegment(ctx, 0, 0, 0, 6);
-    expect(useUiStore.getState().confirmPayload?.options?.rows?.[2]).toEqual({ label: 'Cash after', value: '-$2,000,000', tone: 'negative' });
+    expect(useUiStore.getState().confirmPayload?.options?.rows?.[2]).toEqual({ label: 'Cash after', value: '-$4,000,000', tone: 'negative' });
     useUiStore.setState({ modal: null, confirmPayload: null });
     useGameStore.setState({ tycoonStats: null });
     void buildRoadSegment(ctx, 0, 0, 0, 6);
     expect(useUiStore.getState().confirmPayload?.options?.rows).toHaveLength(2);
+  });
+
+  it('names the bridge tiles and the free re-use of paved ones, and prices them (#99)', () => {
+    // (0,0) → (2,0): start already paved, then land, then water with no concrete.
+    const ctx = makeCtx({ valid: true }, () => [
+      { hasRoad: true, isBridge: false, isVoid: false },
+      { hasRoad: false, isBridge: false, isVoid: false },
+      { hasRoad: false, isBridge: true, isVoid: false },
+    ]);
+    void buildRoadSegment(ctx, 0, 0, 2, 0);
+    expect(useUiStore.getState().confirmPayload?.options?.rows).toEqual([
+      { label: 'Tiles', value: '3' },
+      { label: 'Bridge tiles', value: '1' },
+      { label: 'Already paved', value: '1 (free)' },
+      { label: 'Cost', value: '$6,000,000', tone: 'gold' },
+      { label: 'Cash after', value: '$4,000,000', tone: 'positive' },
+    ]);
   });
 
   it('an invalid path is refused before any dialog', async () => {
@@ -143,6 +173,7 @@ describe('the renderer callbacks route through the asking versions', () => {
       setRoadDemolishAreaCompleteCallback: jest.fn(),
       setCancelRoadDemolishCallback: jest.fn(),
       validateRoadPath: () => ({ valid: true }),
+      getRoadPathFacts: plainLand,
     };
     const ctx = {
       ...makeCtx(),
