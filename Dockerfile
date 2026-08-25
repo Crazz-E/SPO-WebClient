@@ -51,8 +51,14 @@ USER spo
 
 EXPOSE 8080
 
-# Health check: with external cache-sync, gateway starts in seconds; inline mode may take longer
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD node -e "const http=require('http');const r=http.get('http://localhost:8080/api/startup-status',{timeout:4000},s=>{process.exit(s.statusCode===200?0:1)});r.on('error',()=>process.exit(1))"
+# Readiness probe. /api/startup-status is a Server-Sent Events stream that writes its 200
+# header BEFORE initialisation finishes, so "did it answer 200?" is green for a gateway
+# that is listening but hung. This consumes the stream instead and succeeds only on a
+# `ready` event; a hung start produces no such event and the probe fails.
+# start-period covers the 120 s the deploy health gate allows (policy SEC-R-3): a slow
+# start is never marked unhealthy, a hung one never turns healthy. deploy/deploy.sh reads
+# this status and rolls the deployment back when it never becomes `healthy`.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=120s --retries=3 \
+    CMD node -e 'const http=require("http");const t=setTimeout(()=>process.exit(1),4000);const r=http.get("http://localhost:8080/api/startup-status",s=>{if(s.statusCode!==200)process.exit(1);let b="";s.setEncoding("utf8");s.on("data",c=>{b+=c;if(b.includes(`"phase":"ready"`)){clearTimeout(t);process.exit(0)}});s.on("end",()=>process.exit(1))});r.on("error",()=>process.exit(1))'
 
 CMD ["node", "--disable-warning=DEP0040", "dist/server/server.js"]

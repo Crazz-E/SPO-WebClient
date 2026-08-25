@@ -49,7 +49,7 @@ Browser Client ──WebSocket──> Node.js Gateway ──RDO/TCP──> Game 
 - **Mobile-responsive** — Bottom navigation, bottom sheets, touch handling, responsive breakpoints
 - **Road and concrete systems** — Road building/demolition with topology-based texture selection, concrete tile rendering around buildings
 - **Surface overlays** — Environment, population, and market data visualizations on the map
-- **Mock server** — Capture-based replay engine with 8+ scenarios for offline development without a live game server
+- **Mock server** — L1 protocol substrate (`src/mock-server/`): an RDO mock, a strict wire validator and per-feature scenarios, used for protocol-conformance tests. Not a mock backend for end-to-end runs — those go live against the real servers (`src/e2e/`)
 - **Service registry** — Managed service lifecycle with dependency ordering, health checks, and graceful shutdown
 - **In-app changelog** — Version badge with changelog modal for tracking updates
 - **Docker deployment** — Production-ready containerization with nginx reverse proxy and HTTPS via Let's Encrypt
@@ -59,8 +59,8 @@ Browser Client ──WebSocket──> Node.js Gateway ──RDO/TCP──> Game 
 
 ### Prerequisites
 
-- Node.js >= 18
-- npm >= 9
+- Node.js >= 22 (`engines` in package.json; the Dockerfiles and CI both use Node 22)
+- npm >= 10
 
 ### Install & Run
 
@@ -69,7 +69,9 @@ npm install
 npm run dev:local  # Build all + start the server (first free port from 8081 up)
 ```
 
-Then open `http://localhost:8080` in your browser.
+`dev:local` prints the port it chose — open that URL. It is **never 8080**: on the shared
+test machine the bench worker owns 8080, and a hook refuses any other way of taking it.
+Pass `PORT=<n>` to pick one yourself.
 
 ## Production Deployment
 
@@ -330,17 +332,49 @@ npm run release:preview    # the notes the next merge to main would publish
 ## Testing
 
 - **Framework:** Jest 30 with ts-jest, two projects: `unit` (Node.js env) and `component` (jsdom env)
-- **Stats:** ~145 test suites, all passing
 - **Convention:** `module.ts` -> `module.test.ts` in the same directory
-- **Coverage thresholds:** 35% global, 50% for `shared/`, 90% for `shared/building-details/`
-- **Custom matchers:** `toContainRdoCommand()`, `toMatchRdoCallFormat()`, `toMatchRdoSetFormat()`, `toHaveRdoTypePrefix()`
+- **Custom matchers:** seven, all in `src/server/__tests__/matchers/rdo-matchers.ts` —
+  `toContainRdoCommand()`, `toMatchRdoFormat()`, `toMatchRdoCallFormat()`, `toMatchRdoSetFormat()`,
+  `toHaveRdoTypePrefix()`, `toMatchRdoResponse()`, `toPassStrictRdoValidation()`
+
+### The four layers, and what decides a merge
+
+| | Layer | Runs |
+|---|---|---|
+| **L0** | Unit + component (Jest node/jsdom, coverage ratchet) | CI, every PR |
+| **L1** | Protocol conformance (Jest + `src/mock-server/`) | CI, every PR |
+| **L2** | **Live WebSocket drive** (`src/e2e/`, gateway -> real game servers) | **the gate**, pre-merge |
+| **L3** | Live browser smoke (Playwright) | manual, pre-release |
+
+**The gate is the merge condition.** CI alone cannot merge: `main` requires both the
+`typecheck + tests` check and a `bench/gate` commit status, and only the bench worker can
+publish the latter — it fetches the pushed commit, builds it and drives the L2 flows live.
+The order is **commit -> push -> open the PR -> `npm run gate`**. See
+[doc/E2E-POLICY.md](doc/E2E-POLICY.md) for the rules and
+[doc/bench-worker.md](doc/bench-worker.md) for the mechanics.
+
+### Coverage — two numbers, not one
+
+- **New or modified lines must reach >= 93 %**, enforced by `npm run coverage:changed`
+  (CI runs it on every PR).
+- **`jest.config.js` holds a separate machine floor** per directory. Thresholds only ever go
+  UP, so read them from the file rather than from here:
+
+```bash
+node -e "console.log(require('./jest.config.js').coverageThreshold)"   # the floors in force
+find src \( -name '*.test.ts' -o -name '*.test.tsx' \) | wc -l       # how many test files
+```
+
+### Running tests
 
 ```bash
 npm test                           # All tests
 npm test -- rdo-types              # Specific file
 npm test -- --testNamePattern="X"  # Specific test name
-npm run test:coverage              # Coverage report with thresholds
+npm run test:coverage              # Coverage report against the jest.config.js floors
+npm run coverage:changed           # The >= 93 % rule on this branch's changed lines
 npm run test:smoke                 # Component smoke tests only
+npm run gate                       # The gate: a bench job for the PUSHED sha (commit + push + PR first)
 ```
 
 ## Documentation
@@ -365,17 +399,26 @@ Detailed technical docs live in the [doc/](doc/) directory:
 **Voyager (Inspector)**
 - [Voyager Inspector Architecture](doc/voyager-inspector-architecture.md) — Container lifecycle and data binding
 
+**Game Model**
+- [Civic Roles Reference](doc/civic-roles-reference.md) — Mayor, President and Minister powers, Voyager parity, server rules
+
+**UX**
+- [Ergonomics Redesign Plan](doc/ergonomics-redesign-plan.md) — Scoping for the new interface via the `/design` skill (in French)
+- [UX notes](doc/ux/) — Audit, brief, designs and handoff, plus the missing-features list
+
 **Testing & Development**
+- [E2E Policy](doc/E2E-POLICY.md) — The gate's own specification: what must be driven live, and the rules of a run
+- [Bench Worker](doc/bench-worker.md) — The single owner of the live bench; job life, the push chain, attestations
 - [E2E Testing](doc/E2E-TESTING.md) — Canonical live procedure and locked credentials
-- [E2E Scenario](doc/E2E-SCENARIO.md) — The 8-phase L3 live smoke script
-- [E2E Strategy](doc/E2E-STRATEGY.md) — Test layers L0–L4 and target architecture
-- [Mock Server](src/mock-server/CLAUDE.md) — Mock server API, scenarios and strict validator
+- [E2E Strategy](doc/E2E-STRATEGY.md) — Test layers L0–L4 and target architecture (superseded by E2E-POLICY.md)
+- [Mock Server](src/mock-server/CLAUDE.md) — L1 substrate: RDO mock, scenarios and strict validator
 - [CAB Asset Extraction](doc/CAB-EXTRACTION.md) — Extracting textures from game archives
+- [In-app Bug Reporting](doc/bug-reporting.md) — Capturing a finding from inside a running session
 
 **Project & Operations**
 - [Kanban board](https://github.com/orgs/Crazz-Org/projects/1) — All open work, tracked as issues
 - [Kanban workflow](doc/kanban-workflow.md) — Columns, ownership rules, session lifecycle
-- [Production Security Policy](doc/production-security-policy.md) — Normative SEC-* requirements
+- [Production Security Policy](doc/production-security-policy.md) — Normative SEC-* requirements and recorded exceptions
 - [Deployment Guide](deploy/DEPLOY.md) — VPS deployment procedure
 
 ## License
