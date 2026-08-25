@@ -123,6 +123,11 @@ reason to stop working.
 
 The repo process applies unchanged — this command adds nothing to it:
 
+- **Never state another card's status from memory** (kanban-workflow § GitHub API
+  discipline, rule 6). Your own claim-time snapshot goes stale within minutes — other
+  sessions move cards while you work. Before you write anything durable that names another
+  card — an issue comment, a PR body, this session's final report — re-read it first with
+  `scripts/board-status.sh <n>…` (~1 point for any number of issues, never the pool).
 - Branch, implement, tests (≥ 93 % on new/modified lines), typecheck, lint.
 - **Model routing** (kanban-workflow § Model routing — read the step table, it covers
   every § of this command, not just the two glamorous ones): drive the board steps, the

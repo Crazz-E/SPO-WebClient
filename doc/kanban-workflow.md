@@ -415,6 +415,18 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
    its final report — that report is what lets the human read the board instead of discovering
    a locked card. Ownership law 3 — every owner closes its ownership — binds the rate-limited
    case too.
+6. **Never assert another card's state from memory.** Rule 1 forbids re-reading the *pool*
+   between claim and Done, but a session's own claim-time snapshot of *other* cards goes
+   stale within minutes — a PR merges, a card moves — and several sessions run at once
+   precisely on that pool. A session may cache what it owns (nobody else writes its own
+   card); anything it is about to *state* about another card — in an issue comment, a PR
+   body, or its final report — it re-reads first, with `scripts/board-status.sh <n>…`
+   (`npm run board:status -- <n>…`): one call, ~1 GraphQL point regardless of how many
+   issue numbers are passed, because it reads each named issue's own project item and
+   linked pull requests, never the pool. This is the single-item shape of rule 1's
+   handshake re-read, generalised to any card a session is about to talk about — not a
+   second listing, and not covered by rule 2's "no local surface" exemption, because the
+   board has none.
 
 ## Feeding rule (replaces the BACKLOG-OPEN feeding rule)
 
@@ -607,6 +619,11 @@ gh api graphql -f query='{
 # exceeds 100 open issues or the board 100 items.
 # There is no standalone `jq` on this machine — only `gh --jq`. That is why the whole claim
 # read is one program over one response, and not a saved file filtered twice.
+
+# Re-read before stating another card's status anywhere durable — a comment, a PR body, the
+# final report (§ GitHub API discipline, rule 6). ~1 point for any number of issues.
+bash scripts/board-status.sh 144 106
+# npm run board:status -- 144 106   # same thing, via package.json
 
 # The handshake re-read — ONE item, 1 point, after writing `Session`. Never a second listing.
 gh api graphql -f query='{ rateLimit { cost remaining resetAt }
