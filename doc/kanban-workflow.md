@@ -200,11 +200,20 @@ What to turn on there, and what each one buys:
 
 | Workflow | Configure as | Why it matters |
 |---|---|---|
-| **Auto-add to project** | filter `is:issue is:open repo:Crazz-Org/SPO-WebClient`, set `Status` = Todo | **The feeding rule rests on this one.** Without it a new issue is created and belongs to no board, so a finding filed by a session is invisible unless that session also ran `item-add` by hand |
+| **Auto-add to project** | repository **picker** → `Crazz-Org/SPO-WebClient`; filter box → `is:issue is:open` | **The feeding rule rests on this one.** Without it a new issue is created and belongs to no board, so a finding filed by a session is invisible unless that session also ran `item-add` by hand |
+| **Item added to project** | set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status and sits outside every column — added to the board and still invisible |
 | Item closed · Pull request merged | → `Status` Done | The Done cards with an empty `Session` are the trace of these firing on their own |
 | Auto-close issue | on `Status` Done | Closes the issue when a session moves the card |
-| Item added to project · Pull request linked to issue | default | Sets Todo on arrival, links the PR to the card |
+| Pull request linked to issue | default | Links the PR to the card |
 | Auto-add sub-issues to project | already enabled | — |
+
+⚠ **Two traps in the first row, and the first one is a hard error.** The repository is chosen
+from a *separate picker*; the filter box beside it accepts only `is:`, `label:`, `reason:`,
+`assignee:` and `no:` (all but `no:` negatable). Writing the repository into the filter is
+rejected outright — `Invalid filter: Unknown field name "repo"`. And **auto-add sets no field
+value**: `Status` = Todo is the separate `Item added to project` workflow, so turning on only
+the first of the two leaves every new card statusless.
+([GitHub docs](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/adding-items-automatically))
 
 **Until `Auto-add to project` is on, a session that files a card MUST follow it with
 `gh project item-add 1 --owner Crazz-Org --url <ISSUE_URL>` and verify the item exists.** That
