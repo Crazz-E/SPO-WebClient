@@ -54,6 +54,17 @@ export const ROUTES: RouteRule[] = [
     why: 'generated output — not source',
   },
   {
+    // The container image and the production deploy path. No L2 flow can observe either:
+    // the bench builds the worktree and runs `dist/server/server.js` directly — it never
+    // builds the image and never deploys. Both are proven by their own suites instead
+    // (`container-healthcheck` runs the shipped HEALTHCHECK snippet, `deploy-health-gate`
+    // runs `deploy/deploy.sh` against shimmed tooling). Without this rule the gate failed
+    // closed on any change to them (#215).
+    test: /^Dockerfile(\.[\w-]+)?$|^\.dockerignore$|^deploy\//,
+    flows: [],
+    why: 'container image and deploy machinery — the live drive runs the built tree, not the image',
+  },
+  {
     test: /^src\/client\/renderer\/|\.module\.css$|^src\/client\/layouts\/|^src\/client\/mobile\/|\.css$/,
     flows: [],
     needsL3: true,
