@@ -10,14 +10,18 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useClient } from '../context';
+import { useResponsive } from '../hooks/useResponsive';
 import { useUiStore } from '../store/ui-store';
 import { showToast } from '../components/common/Toast';
-import type { ReportAnchor } from '../../shared/bug-report-schema';
+import type { GeometryCapture, ReportAnchor } from '../../shared/bug-report-schema';
 import { reportJournal } from './journal';
 import { resolveDomAnchor } from './dom-anchor';
-import { submitReport } from './report-submit';
+import { collectGeometry } from './geometry-collect';
+import { submitReport, type ReportDraft } from './report-submit';
 import { ReportModeOverlay } from './ReportModeOverlay';
 import { ReportModal, type ReportModalSubmission } from './ReportModal';
+import { ReportFab } from './ReportFab';
+import { QuickPickGrid, type QuickPickSubmission } from './QuickPickGrid';
 
 /** The map canvas, the one element the DOM walk cannot describe. */
 const CANVAS_ID = 'game-canvas';
@@ -25,10 +29,15 @@ const CANVAS_ID = 'game-canvas';
 interface Captured {
   anchor: ReportAnchor;
   observedDefault: string;
+  /** Mobile only: the measurements taken at the moment of the tap. */
+  geometry?: GeometryCapture;
 }
 
 export function BugReportRoot() {
   const client = useClient();
+  // Mobile is the ergonomics profile: a phone has no F8 and no devtools, so the same capture
+  // core is driven by a draggable button and answered with taps instead of typing.
+  const { isMobile } = useResponsive();
   const [armed, setArmed] = useState(false);
   const [captured, setCaptured] = useState<Captured | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -44,6 +53,7 @@ export function BugReportRoot() {
   }, []);
 
   useEffect(() => {
+    if (isMobile) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'F8') return;
       event.preventDefault();
@@ -51,7 +61,7 @@ export function BugReportRoot() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [isMobile]);
 
   const onCapture = useCallback((element: Element, clientX: number, clientY: number) => {
     setArmed(false);
@@ -69,38 +79,70 @@ export function BugReportRoot() {
       return;
     }
     const anchor = resolveDomAnchor(element);
-    setCaptured({ anchor, observedDefault: anchor.text });
-  }, [client]);
+    setCaptured({
+      anchor,
+      observedDefault: anchor.text,
+      // Numbers, not a screenshot: a rect and a threshold are actionable, an impression is not.
+      ...(isMobile ? { geometry: collectGeometry(element) } : {}),
+    });
+  }, [client, isMobile]);
 
-  const onSubmit = useCallback(async (submission: ReportModalSubmission) => {
+  const send = useCallback(async (partial: Omit<ReportDraft, 'anchor' | 'username' | 'world' | 'profile'>) => {
     if (!captured) return;
     setSubmitting(true);
     const outcome = await submitReport({
-      profile: 'desktop',
-      kind: submission.kind,
+      profile: isMobile ? 'mobile' : 'desktop',
       anchor: captured.anchor,
       username: client.onGetUsername?.() ?? '',
       world: client.onGetWorld?.() ?? '',
-      observed: submission.observed,
-      expected: submission.expected,
-      freeText: submission.freeText,
+      ...partial,
     });
     setSubmitting(false);
     setCaptured(null);
     if (outcome.ok) showToast(`Report queued: ${outcome.detail}`, 'success', { title: 'Reported' });
     else showToast(`Report not sent: ${outcome.detail}`, 'error');
-  }, [captured, client]);
+  }, [captured, client, isMobile]);
+
+  const onSubmitDesktop = useCallback((submission: ReportModalSubmission) => {
+    void send({
+      kind: submission.kind,
+      observed: submission.observed,
+      expected: submission.expected,
+      freeText: submission.freeText,
+    });
+  }, [send]);
+
+  const onSubmitMobile = useCallback((submission: QuickPickSubmission) => {
+    void send({
+      kind: submission.kind,
+      quickPicks: submission.quickPicks,
+      freeText: submission.freeText,
+      geometry: captured?.geometry,
+    });
+  }, [send, captured]);
 
   return (
     <>
+      {isMobile && !captured && (
+        <ReportFab armed={armed} onToggleArmed={() => setArmed(current => !current)} />
+      )}
       {armed && !captured && (
         <ReportModeOverlay onCapture={onCapture} onCancel={() => setArmed(false)} />
       )}
-      {captured && (
+      {captured && isMobile && (
+        <QuickPickGrid
+          anchor={captured.anchor}
+          geometry={captured.geometry}
+          onSubmit={onSubmitMobile}
+          onCancel={() => setCaptured(null)}
+          submitting={submitting}
+        />
+      )}
+      {captured && !isMobile && (
         <ReportModal
           anchor={captured.anchor}
           observedDefault={captured.observedDefault}
-          onSubmit={onSubmit}
+          onSubmit={onSubmitDesktop}
           onCancel={() => setCaptured(null)}
           submitting={submitting}
         />
