@@ -78,7 +78,7 @@ function card(over: Partial<Item> = {}): Item {
   return {
     number: 124,
     title: 'Nothing detects an orphan card',
-    url: 'https://github.com/Crazz-E/SPO-WebClient/issues/124',
+    url: 'https://github.com/Crazz-Org/SPO-WebClient/issues/124',
     state: 'OPEN',
     status: 'In progress',
     session: SESSION,
@@ -327,7 +327,7 @@ describe('renderDigest', () => {
     );
     expect(digest).toContain('Orphan watch — 2026-08-24 12:00 UTC');
     expect(digest).toContain('1 card claimed and quiet');
-    expect(digest).toContain('[#124](https://github.com/Crazz-E/SPO-WebClient/issues/124)');
+    expect(digest).toContain('[#124](https://github.com/Crazz-Org/SPO-WebClient/issues/124)');
     expect(digest).toContain('`claude-crazz/next-task-79cc73`');
     expect(digest).toContain('40 h');
     expect(digest).toContain('| posted |');
@@ -468,6 +468,32 @@ describe('main', () => {
     expect((commentsPosted()[0].body as { body: string }).body).toContain(
       'branch gone from origin · PR #42 closed'
     );
+  });
+
+  /**
+   * The board and the repository are on two different accounts since the move to `Crazz-Org`,
+   * and a single owner constant would send both halves to a 404: the user project does not
+   * exist under the organization, and the repository no longer exists under the user. Neither
+   * failure is loud — the GraphQL one reads as "board not readable", the REST one as "branch
+   * gone" — so the split is pinned here rather than left to the next live run to discover.
+   */
+  it('reads the board from the user and the repository from the organization', async () => {
+    (globalThis as { fetch?: unknown }).fetch = fakeFetch({
+      '/graphql': graphqlPage([node()]),
+      '/branches/': null,
+      '/pulls?': [],
+      '/issues/124/comments': [],
+    });
+    await expect(
+      watch.main({ env: { PROJECTS_TOKEN: 'p', GITHUB_TOKEN: 'g' }, argv: [], out })
+    ).resolves.toBe(0);
+
+    const graphqlCall = calls.find(c => c.url.includes('/graphql'));
+    expect((graphqlCall?.body as { variables: { login: string } }).variables.login).toBe('Crazz-E');
+
+    const restCalls = calls.filter(c => !c.url.includes('/graphql'));
+    expect(restCalls.length).toBeGreaterThan(0);
+    for (const c of restCalls) expect(c.url).toContain('/repos/Crazz-Org/SPO-WebClient/');
   });
 
   it('reads a merged PR as merged, not as closed', async () => {

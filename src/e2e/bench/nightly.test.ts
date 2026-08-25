@@ -56,7 +56,7 @@ function harness(): Harness {
     git: (worktree, args) => {
       h.gitCalls.push({ worktree, args });
       if (h.gitThrows) throw new Error('no origin remote');
-      return 'git@github.com:Crazz-E/SPO-WebClient.git\n';
+      return 'git@github.com:Crazz-Org/SPO-WebClient.git\n';
     },
     deps: {
       paths,
@@ -160,7 +160,7 @@ describe('prepareCheckout', () => {
     expect(h.gitCalls).toEqual([{ worktree: '/repo', args: ['remote', 'get-url', 'origin'] }]);
     expect(h.commands[0]).toMatchObject({
       cmd: 'git',
-      args: ['clone', 'git@github.com:Crazz-E/SPO-WebClient.git', nightlyCheckout(h.paths)],
+      args: ['clone', 'git@github.com:Crazz-Org/SPO-WebClient.git', nightlyCheckout(h.paths)],
     });
     expect(ranSteps(h)).toEqual(['git clone', 'git fetch', 'git reset', 'git clean', 'npm ci']);
   });

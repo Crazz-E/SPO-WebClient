@@ -12,7 +12,7 @@ Only the latest beta is supported. Older tags receive no fixes.
 ## Reporting a vulnerability
 
 Report privately through
-[GitHub Security Advisories](https://github.com/Crazz-E/SPO-WebClient/security/advisories/new).
+[GitHub Security Advisories](https://github.com/Crazz-Org/SPO-WebClient/security/advisories/new).
 Please do **not** open a public issue for a vulnerability.
 
 Include: what you observed, how to reproduce it, and the impact you think it has.

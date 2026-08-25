@@ -123,7 +123,7 @@ Every card this command files **embeds its key as a greppable marker in the body
 That marker is what makes dedup work *across runs*, and it is the thing to search for:
 
 ```bash
-gh issue list --repo Crazz-E/SPO-WebClient --state all --search "anchorKey: <key> in:body" --json number,title
+gh issue list --repo Crazz-Org/SPO-WebClient --state all --search "anchorKey: <key> in:body" --json number,title
 ```
 
 **A match adds a comment to the existing issue and nothing else.** Never a field edit, never a

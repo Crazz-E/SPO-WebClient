@@ -53,6 +53,13 @@ export interface JobRequest {
    * unlike every other job type the subject need not exist on this machine at all.
    */
   ref?: string;
+  /**
+   * Set when the worker deposited this itself to serve a GitHub merge-queue entry. It is
+   * the priority marker: such a job is taken before anything else waiting, because the
+   * queue ejects an entry whose checks time out and the bench is serialised. See
+   * ./merge-queue.
+   */
+  queueEntry?: boolean;
 }
 
 export interface JobReport {

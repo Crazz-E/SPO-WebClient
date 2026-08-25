@@ -55,7 +55,13 @@
 
 const fs = require('fs');
 
-const OWNER = process.env.ORPHAN_OWNER || 'Crazz-E';
+// Two owners, and they are not the same account. The board is a **user-scoped** project on
+// the personal account; the repository lives in the `Crazz-Org` organization. They were one
+// constant until the repository moved — a single `OWNER` then pointed the GraphQL `user(login:)`
+// at an org that has no user project, and the REST `/repos/` at a user that no longer has the
+// repository. Both halves 404, so keep them apart.
+const PROJECT_OWNER = process.env.ORPHAN_PROJECT_OWNER || 'Crazz-E';
+const REPO_OWNER = process.env.ORPHAN_REPO_OWNER || 'Crazz-Org';
 const REPO = process.env.ORPHAN_REPO || 'SPO-WebClient';
 const PROJECT_NUMBER = Number(process.env.ORPHAN_PROJECT || 2);
 
@@ -288,9 +294,9 @@ async function fetchItems(token) {
   const items = [];
   let cursor = null;
   for (;;) {
-    const data = await graphql(token, { login: OWNER, number: PROJECT_NUMBER, cursor });
+    const data = await graphql(token, { login: PROJECT_OWNER, number: PROJECT_NUMBER, cursor });
     const page = data?.user?.projectV2?.items;
-    if (!page) throw new Error(`project ${OWNER}/#${PROJECT_NUMBER} not readable with this token`);
+    if (!page) throw new Error(`project ${PROJECT_OWNER}/#${PROJECT_NUMBER} not readable with this token`);
     for (const node of page.nodes ?? []) items.push(readItem(node));
     if (!page.pageInfo?.hasNextPage) return items;
     cursor = page.pageInfo.endCursor;
@@ -301,8 +307,8 @@ async function fetchItems(token) {
 async function gatherEvidence(token, branch) {
   const encoded = encodeURIComponent(branch);
   const [ref, pulls] = await Promise.all([
-    rest(token, 'GET', `/repos/${OWNER}/${REPO}/branches/${encoded}`),
-    rest(token, 'GET', `/repos/${OWNER}/${REPO}/pulls?state=all&head=${OWNER}:${encoded}`),
+    rest(token, 'GET', `/repos/${REPO_OWNER}/${REPO}/branches/${encoded}`),
+    rest(token, 'GET', `/repos/${REPO_OWNER}/${REPO}/pulls?state=all&head=${REPO_OWNER}:${encoded}`),
   ]);
   const pr = Array.isArray(pulls) && pulls.length ? pulls[pulls.length - 1] : null;
   return {
@@ -312,12 +318,12 @@ async function gatherEvidence(token, branch) {
 }
 
 async function fetchComments(token, number) {
-  const comments = await rest(token, 'GET', `/repos/${OWNER}/${REPO}/issues/${number}/comments?per_page=100`);
+  const comments = await rest(token, 'GET', `/repos/${REPO_OWNER}/${REPO}/issues/${number}/comments?per_page=100`);
   return Array.isArray(comments) ? comments : [];
 }
 
 async function postReminder(token, number, body) {
-  await rest(token, 'POST', `/repos/${OWNER}/${REPO}/issues/${number}/comments`, { body });
+  await rest(token, 'POST', `/repos/${REPO_OWNER}/${REPO}/issues/${number}/comments`, { body });
 }
 
 function resolveStaleHours(env) {

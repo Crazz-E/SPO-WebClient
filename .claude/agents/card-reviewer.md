@@ -44,9 +44,9 @@ live server.
 
 ### 2 · Is it already covered?
 
-- `gh issue list --repo Crazz-E/SPO-WebClient --state open --limit 100` — a duplicate of a
+- `gh issue list --repo Crazz-Org/SPO-WebClient --state open --limit 100` — a duplicate of a
   card already in the pool.
-- `gh issue list --repo Crazz-E/SPO-WebClient --state closed --limit 60` and `git log` on
+- `gh issue list --repo Crazz-Org/SPO-WebClient --state closed --limit 60` and `git log` on
   the cited paths — a finding that was true when it was written and has since been fixed on
   `main`.
 

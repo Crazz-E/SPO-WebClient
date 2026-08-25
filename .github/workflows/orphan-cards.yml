@@ -19,6 +19,10 @@
 # repository. So the project read needs a personal access token with `read:project`,
 # provisioned as `PROJECTS_TOKEN` under Settings → Secrets and variables → Actions.
 #
+# Note the two accounts: the board stayed on the personal account when the repository moved to
+# the `Crazz-Org` organization, so `scripts/orphan-cards.js` carries `PROJECT_OWNER` and
+# `REPO_OWNER` separately. One constant would 404 on both halves.
+#
 # Until it exists, every step is guarded on it: an unprovisioned repository gets a green,
 # skipped job with a notice, not a red X in the Actions tab every morning. Same posture as
 # claude-review.yml, for the same reason.

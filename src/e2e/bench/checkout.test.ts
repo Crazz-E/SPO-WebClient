@@ -57,7 +57,7 @@ function clonedDir(): string {
   return dir;
 }
 
-const git = (): string => 'https://github.com/Crazz-E/SPO-WebClient.git';
+const git = (): string => 'https://github.com/Crazz-Org/SPO-WebClient.git';
 
 describe('the install decision', () => {
   it('installs when node_modules is not there at all', () => {
