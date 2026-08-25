@@ -228,11 +228,26 @@ value**: `Status` = Todo is the separate `Item added to project` workflow, so tu
 the first of the two leaves every new card statusless.
 ([GitHub docs](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/adding-items-automatically))
 
-**Until `Auto-add to project` is on, a session that files a card MUST follow it with
-`gh project item-add 1 --owner Crazz-Org --url <ISSUE_URL>` and verify the item exists.** That
-is not belt-and-braces; it is the only thing standing between a finding and being lost, and it
-is exactly how one was nearly lost when the repository moved and the old board's filter stopped
-matching.
+**Verified live, 2026-08-25.** A throwaway issue was filed and reached the board in under ten
+seconds — `Auto-add to project` matches, and the `gh project item-add` stopgap it needed is
+retired. It arrived **with no `Status`**, which is the half that still bites: § 1 of
+`/next-task` selects candidates on `Status = Todo`, so a statusless card is on the board and
+outside the pool at the same time — filed, visible to a human browsing, and never picked up.
+
+**Until `Item added to project` is on, a session that files a card MUST set its column
+itself** and read the card back. The ids are stable:
+
+```bash
+PROJECT=PVT_kwDOEyAVD84BhYwk       # orgs/Crazz-Org/projects/1
+gh project item-list 1 --owner Crazz-Org --limit 300 --format json \
+  --jq '.items[]|select(.content.number==<N>)|.id'        # the ITEM id
+gh project field-list 1 --owner Crazz-Org --format json \
+  --jq '.fields[]|select(.name=="Status")|{id,options:.options}'   # field id + Todo option id
+```
+
+That is not belt-and-braces: a finding that never enters the Todo pool is lost exactly as
+surely as one that was never filed, and it is how one was nearly lost when the repository moved
+and the old board's filter stopped matching.
 
 ## What a session writes on the board — and only this
 
