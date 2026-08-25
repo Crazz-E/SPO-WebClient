@@ -124,6 +124,11 @@
           },
           {
             "type": "command",
+            "command": "bash .claude/hooks/verdict-pipe-guard.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
             "command": "bash .claude/hooks/bench-port-guard.sh",
             "timeout": 10
           }
