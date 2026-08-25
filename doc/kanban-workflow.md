@@ -202,10 +202,23 @@ What to turn on there, and what each one buys:
 |---|---|---|
 | **Auto-add to project** | repository **picker** → `Crazz-Org/SPO-WebClient`; filter box → `is:issue is:open` | **The feeding rule rests on this one.** Without it a new issue is created and belongs to no board, so a finding filed by a session is invisible unless that session also ran `item-add` by hand |
 | **Item added to project** | set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status and sits outside every column — added to the board and still invisible |
-| Item closed · Pull request merged | → `Status` Done | The Done cards with an empty `Session` are the trace of these firing on their own |
+| **Pull request linked to issue** | set `Status` = **PR** | The column the ownership law defines as "pull request open" |
+| **Pull request merged** | set `Status` = **Done** | The merge is the milestone; pairs with `Auto-close issue` |
+| Item closed | set `Status` = **Done** | The Done cards with an empty `Session` are the trace of this firing on its own |
 | Auto-close issue | on `Status` Done | Closes the issue when a session moves the card |
-| Pull request linked to issue | default | Links the PR to the card |
 | Auto-add sub-issues to project | already enabled | — |
+
+**Every one of those is a `Set value` step, and the value is not optional** — a workflow whose
+value is unset shows a red **!** in the sidebar and its *Save and turn on workflow* button
+stays greyed. Expect all three of the `Set value` ones to arrive that way on a freshly built
+board: rebuilding `Status` with these six columns regenerates the option ids, so whatever
+GitHub pre-filled against its own `Todo` / `In Progress` / `Done` defaults is left pointing at
+options that no longer exist.
+
+Four more workflows exist and are deliberately **left off**, as they were on the previous
+board: `Auto-archive items`, `Code changes requested`, `Code review approved`, `Item reopened`.
+The last is the only one worth reconsidering — without it, reopening a closed issue leaves its
+card in Done, where it misrepresents the work until somebody notices.
 
 ⚠ **Two traps in the first row, and the first one is a hard error.** The repository is chosen
 from a *separate picker*; the filter box beside it accepts only `is:`, `label:`, `reason:`,
