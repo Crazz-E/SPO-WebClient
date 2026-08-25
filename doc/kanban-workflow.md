@@ -489,7 +489,8 @@ comment on this board posts as the same GitHub account, so that heading — not 
 line — is what marks the card as read by something other than its writer. A card whose first
 comment is not a verdict is visibly unreviewed; that visibility is the enforcement, and
 [src/\_\_tests\_\_/card-reviewer-agent.test.ts](../src/__tests__/card-reviewer-agent.test.ts)
-keeps the four surfaces of the mechanism from drifting apart.
+keeps the five surfaces of the mechanism — this rulebook, the agent, `/next-task`,
+`/triage-report` and CLAUDE.md — from drifting apart.
 
 **What does not change.** The claim handshake is untouched. No human step is added. No
 session ever waits on another session's review: the cost is one sub-agent inside the
