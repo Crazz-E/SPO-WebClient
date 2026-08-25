@@ -384,10 +384,15 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
    `~/.spo-bench/sessions/`. None of these is ever asked of GitHub. The only GitHub-only waits
    are **CI and the merge queue**: check once when you arrive — CI normally concluded while
    the gate was queued — and if something is genuinely pending, re-read at **≥ 30 s**
-   intervals with a hard deadline, over REST (`gh api repos/Crazz-Org/SPO-WebClient/pulls/<N>`),
-   the way `scripts/deps-gate.sh` waits for its merge. A tight retry loop on any GitHub error
-   is never correct: on failure, read the bucket's `reset` from `gh api rate_limit` (free) and
-   wait once, in the background, until then.
+   intervals, over REST (`gh api repos/Crazz-Org/SPO-WebClient/pulls/<N>`), the way
+   `scripts/deps-gate.sh` waits for its merge, and **for at most 20 polls or 10 minutes,
+   whichever comes first** — "a hard deadline" is not a number, and a wait that never states
+   one is a wait a background loop can run forever without anyone noticing. A tight retry
+   loop on any GitHub error is never correct: on failure, read the bucket's `reset` from
+   `gh api rate_limit` (free) and wait once, in the background, until then. The same rule
+   [doc/E2E-POLICY.md](E2E-POLICY.md) states for live evidence holds for a watch loop too —
+   a crash is a failure, but silence is not a pass: a watcher that has printed nothing is
+   suspect, not calm, and its own bound is what tells you which.
 3. **Ask the price inside the query.** Every hand-written GraphQL call includes
    `rateLimit { cost remaining resetAt }` — it costs nothing and turns drift into a number in
    the transcript instead of a discovery at exhaustion. The session's final report states the
