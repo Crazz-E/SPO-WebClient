@@ -100,6 +100,50 @@ describe('RdoFramer', () => {
 });
 
 describe('RdoProtocol.parse()', () => {
+  describe('Frame terminator', () => {
+    // `RdoCommand.build()` always appends `;`, so a frame handed straight to
+    // parse() carries one. It used to end up inside the last argument.
+    const TERMINATED = 'C sel 130500401 call RDOSetTaxValue "*" "#100","%15";';
+    const BARE = 'C sel 130500401 call RDOSetTaxValue "*" "#100","%15"';
+
+    it('does not swallow the terminator into the last argument', () => {
+      expect(RdoProtocol.parse(TERMINATED).args).toEqual(['#100', '%15']);
+    });
+
+    it('parses a terminated frame exactly like a bare one', () => {
+      const terminated = RdoProtocol.parse(TERMINATED);
+      const bare = RdoProtocol.parse(BARE);
+      expect(terminated.member).toBe(bare.member);
+      expect(terminated.separator).toBe(bare.separator);
+      expect(terminated.args).toEqual(bare.args);
+    });
+
+    it('strips the terminator from a member with no arguments', () => {
+      expect(RdoProtocol.parse('C sel 123 call Method;').member).toBe('Method');
+    });
+
+    it('strips a terminator separated from the frame by whitespace', () => {
+      expect(RdoProtocol.parse('C sel 123 call Method ;').member).toBe('Method');
+    });
+
+    it('strips the terminator from a response payload', () => {
+      expect(RdoProtocol.parse('A1 Name="%Test Corp";').payload).toBe('Name="%Test Corp"');
+    });
+
+    it('leaves a quoted semicolon alone', () => {
+      // Same rule as RdoFramer.findDelimiter: only an unquoted `;` terminates.
+      expect(RdoProtocol.parse('A1 Name="%Test;Corp";').payload).toBe('Name="%Test;Corp"');
+    });
+
+    it('keeps a trailing semicolon that sits inside an unclosed quote', () => {
+      expect(RdoProtocol.parse('A1 res="%oops;').payload).toBe('res="%oops;');
+    });
+
+    it('leaves a frame with no terminator untouched', () => {
+      expect(RdoProtocol.parse('A1234 OK').payload).toBe('OK');
+    });
+  });
+
   describe('Packet type detection', () => {
     it('should detect RESPONSE type (A prefix)', () => {
       const packet = RdoProtocol.parse('A1234 OK');
@@ -276,21 +320,21 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.verb).toBe(RdoVerb.SEL);
       expect(packet.targetId).toBe('123');
       expect(packet.action).toBe(RdoAction.CALL);
-      expect(packet.member).toBe('Method;');
+      expect(packet.member).toBe('Method');
     });
 
     it('should parse call with push separator (*)', () => {
       const packet = RdoProtocol.parse('C sel 100 call TestMethod "*" "#42";');
       expect(packet.member).toBe('TestMethod');
       expect(packet.separator).toBe('"*"');
-      expect(packet.args).toEqual(['"#42";']);
+      expect(packet.args).toEqual(['#42']);
     });
 
     it('should parse call with method separator (^)', () => {
       const packet = RdoProtocol.parse('C sel 200 call RequestMethod "^" "#100";');
       expect(packet.member).toBe('RequestMethod');
       expect(packet.separator).toBe('"^"');
-      expect(packet.args).toEqual(['"#100";']);
+      expect(packet.args).toEqual(['#100']);
     });
 
     it('should parse call with multiple arguments', () => {
@@ -298,7 +342,7 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.member).toBe('SetPrice');
       expect(packet.args).toHaveLength(2);
       expect(packet.args![0]).toBe('#0');
-      expect(packet.args![1]).toBe('"#220";');
+      expect(packet.args![1]).toBe('#220');
     });
 
     it('should parse call with 3 arguments (RDOSetSalaries)', () => {
@@ -307,14 +351,14 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.args).toHaveLength(3);
       expect(packet.args![0]).toBe('#100');
       expect(packet.args![1]).toBe('#120');
-      expect(packet.args![2]).toBe('"#150";');
+      expect(packet.args![2]).toBe('#150');
     });
 
     it('should parse call with string arguments', () => {
       const packet = RdoProtocol.parse('C sel 123 call Login "*" "%username","%password";');
       expect(packet.args).toHaveLength(2);
       expect(packet.args![0]).toBe('%username');
-      expect(packet.args![1]).toBe('"%password";');
+      expect(packet.args![1]).toBe('%password');
     });
 
     it('should parse call with mixed type arguments', () => {
@@ -322,13 +366,13 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.args).toHaveLength(3);
       expect(packet.args![0]).toBe('#42');
       expect(packet.args![1]).toBe('!3.14');
-      expect(packet.args![2]).toBe('"%hello";');
+      expect(packet.args![2]).toBe('%hello');
     });
 
     it('should handle call with no arguments', () => {
       const packet = RdoProtocol.parse('C sel 400 call NoArgs "*" ;');
       expect(packet.member).toBe('NoArgs');
-      expect(packet.args).toEqual([';']);
+      expect(packet.args).toEqual([]);
     });
 
     it('should handle arguments with quoted strings containing commas', () => {
@@ -337,7 +381,7 @@ describe('RdoProtocol.parse()', () => {
       // The entire string gets parsed into the member field
       expect(packet.verb).toBe(RdoVerb.SEL);
       expect(packet.action).toBe(RdoAction.CALL);
-      expect(packet.member).toBe('SetName "%Building, Inc.";');
+      expect(packet.member).toBe('SetName "%Building, Inc."');
     });
 
     it('should parse call with request ID', () => {
@@ -355,7 +399,7 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.verb).toBe(RdoVerb.SEL);
       expect(packet.targetId).toBe('456');
       expect(packet.action).toBe(RdoAction.GET);
-      expect(packet.member).toBe('PropertyName;');
+      expect(packet.member).toBe('PropertyName');
     });
 
     it('should parse get with request ID', () => {
@@ -363,7 +407,7 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.type).toBe('REQUEST');
       expect(packet.rid).toBe(1111);
       expect(packet.action).toBe(RdoAction.GET);
-      expect(packet.member).toBe('srvName;');
+      expect(packet.member).toBe('srvName');
     });
   });
 
@@ -374,7 +418,7 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.targetId).toBe('789');
       expect(packet.action).toBe(RdoAction.SET);
       expect(packet.member).toBe('Value');
-      expect(packet.args).toContain('"#100";');
+      expect(packet.args).toContain('"#100"');
     });
 
     it('should parse set with string value', () => {
@@ -387,7 +431,7 @@ describe('RdoProtocol.parse()', () => {
   describe('Quote handling and escaping', () => {
     it('should respect quotes in tokenization', () => {
       const packet = RdoProtocol.parse('C sel 100 call Test "*" "%value with spaces";');
-      expect(packet.args![0]).toBe('"%value with spaces";');
+      expect(packet.args![0]).toBe('%value with spaces');
     });
 
     it('should handle escaped quotes in arguments', () => {
@@ -400,7 +444,7 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.args).toHaveLength(3);
       expect(packet.args![0]).toBe('%arg1');
       expect(packet.args![1]).toBe('%arg2');
-      expect(packet.args![2]).toBe('"%arg3";');
+      expect(packet.args![2]).toBe('%arg3');
     });
   });
 
@@ -409,7 +453,7 @@ describe('RdoProtocol.parse()', () => {
       const packet = RdoProtocol.parse('  C   sel   123   call   Method  ;  ');
       expect(packet.verb).toBe(RdoVerb.SEL);
       expect(packet.targetId).toBe('123');
-      expect(packet.member).toBe('Method ;');
+      expect(packet.member).toBe('Method');
     });
 
     it('should preserve raw input', () => {
@@ -425,7 +469,7 @@ describe('RdoProtocol.parse()', () => {
 
     it('should handle void type arguments', () => {
       const packet = RdoProtocol.parse('C sel 100 call Test "*" "*";');
-      expect(packet.args![0]).toBe('"*";');
+      expect(packet.args![0]).toBe('*');
     });
   });
 });
@@ -675,12 +719,25 @@ describe('RdoProtocol.format()', () => {
       expect(formatted).toBe('C 1234 sel 456 get srvName');
     });
 
-    it('rejects a member name still carrying the frame terminator', () => {
-      // Regression guard for the artifact above: an unframed string must not be
-      // silently re-emitted with ';' embedded in the member name.
+    it('never lets the frame terminator reach the member name', () => {
+      // The artifact above is gone at the source: parse() drops the terminator,
+      // so an unframed string round-trips exactly like a framed one.
       const parsed = RdoProtocol.parse('C 1234 sel 456 get srvName;');
-      expect(parsed.member).toBe('srvName;');
-      expect(() => RdoProtocol.format(parsed)).toThrow(RdoIdentifierError);
+      expect(parsed.member).toBe('srvName');
+      expect(RdoProtocol.format(parsed)).toBe('C 1234 sel 456 get srvName');
+    });
+
+    it('still refuses to emit a member name that is not an identifier', () => {
+      // The guard the test above used to carry, stated on its own terms: format()
+      // rejects a non-identifier whatever put it there (P-H3).
+      expect(() => RdoProtocol.format({
+        raw: '',
+        type: 'PUSH',
+        verb: RdoVerb.SEL,
+        targetId: '456',
+        action: RdoAction.GET,
+        member: 'srvName;',
+      })).toThrow(RdoIdentifierError);
     });
   });
 

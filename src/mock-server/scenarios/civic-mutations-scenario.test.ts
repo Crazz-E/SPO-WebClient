@@ -144,6 +144,18 @@ describe('civic-mutations scenario — matching', () => {
     expect(mock.match(lookup.request)!.response).toBe('A0 res="%100"');
   });
 
+  it('stores each request as the emitter wrote it, terminator included', () => {
+    // The frame on the wire ends in `;`. An exchange used to have to strip it
+    // by hand (`frameOf`) because parse() folded it into the last argument, so
+    // the exchange could not match itself. It now stores the frame verbatim.
+    const mock = new RdoMock();
+    mock.addScenario(rdo);
+    for (const ex of rdo.exchanges) {
+      expect(ex.request.endsWith(';')).toBe(true);
+      expect(mock.match(ex.request)!.exchange.id).toBe(ex.id);
+    }
+  });
+
   it('every request parses as a well-formed sel/call frame', () => {
     for (const ex of rdo.exchanges) {
       const parsed = RdoProtocol.parse(ex.request);
