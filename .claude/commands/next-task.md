@@ -7,7 +7,7 @@ argument-hint: "[issue number or OB-N to take a specific item]"
 
 **The rulebook is [doc/kanban-workflow.md](../../doc/kanban-workflow.md)** — columns,
 ownership law, board writes, model routing. Do not restate or reinvent it; follow it.
-Board: [github.com/users/Crazz-E/projects/2](https://github.com/users/Crazz-E/projects/2).
+Board: [github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/projects/1).
 
 ## 0 · Is `main` red?
 
@@ -36,7 +36,7 @@ already moved past — is **not** red. Proceed to § 1.
 
 ## 1 · Pick — the first Todo card whose ground is free
 
-List the board (`gh project item-list 2 --owner Crazz-E --format json`): `status`, `session`
+List the board (`gh project item-list 1 --owner Crazz-Org --format json`): `status`, `session`
 and `area` come back on every item. Candidates: Status = **Todo** and `Session` **empty**.
 
 1. **Compute the busy set** (kanban-workflow § One session per area): every `Area` held by a

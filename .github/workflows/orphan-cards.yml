@@ -8,20 +8,17 @@
 # ## What it writes
 #
 # One comment on the quiet card itself, once per ownership episode, plus a table in the run's
-# job summary. It deliberately never OPENS an issue: "Auto-add to project" is enabled on the
-# board, so a digest issue would land in the Todo pool as a card and a `/next-task` session
+# job summary. It deliberately never OPENS an issue: once "Auto-add to project" is configured
+# on the board, a digest issue would land in the Todo pool as a card and a `/next-task` session
 # would eventually claim the machine's own bookkeeping as work.
 #
 # ## Why a PAT and not GITHUB_TOKEN
 #
-# The board is a **user-scoped** project (`users/Crazz-E/projects/2`). The repository's
-# `GITHUB_TOKEN` cannot read one at any permission level — the resource is not the
-# repository. So the project read needs a personal access token with `read:project`,
-# provisioned as `PROJECTS_TOKEN` under Settings → Secrets and variables → Actions.
-#
-# Note the two accounts: the board stayed on the personal account when the repository moved to
-# the `Crazz-Org` organization, so `scripts/orphan-cards.js` carries `PROJECT_OWNER` and
-# `REPO_OWNER` separately. One constant would 404 on both halves.
+# The board is a Projects v2 board (`orgs/Crazz-Org/projects/1`). The repository's
+# `GITHUB_TOKEN` cannot read one at any permission level — the resource is the project, not
+# the repository, and moving the board into the organization changed nothing there. So the
+# project read needs a personal access token with `read:project`, provisioned as
+# `PROJECTS_TOKEN` under Settings → Secrets and variables → Actions.
 #
 # Until it exists, every step is guarded on it: an unprovisioned repository gets a green,
 # skipped job with a notice, not a red X in the Actions tab every morning. Same posture as

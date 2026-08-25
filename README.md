@@ -373,7 +373,7 @@ Detailed technical docs live in the [doc/](doc/) directory:
 - [CAB Asset Extraction](doc/CAB-EXTRACTION.md) — Extracting textures from game archives
 
 **Project & Operations**
-- [Kanban board](https://github.com/users/Crazz-E/projects/2) — All open work, tracked as issues
+- [Kanban board](https://github.com/orgs/Crazz-Org/projects/1) — All open work, tracked as issues
 - [Kanban workflow](doc/kanban-workflow.md) — Columns, ownership rules, session lifecycle
 - [Production Security Policy](doc/production-security-policy.md) — Normative SEC-* requirements
 - [Deployment Guide](deploy/DEPLOY.md) — VPS deployment procedure

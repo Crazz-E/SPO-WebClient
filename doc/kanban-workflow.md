@@ -1,8 +1,9 @@
 # Kanban workflow — GitHub Projects is the backlog
 
 **Single source of truth for all open work:**
-[github.com/users/Crazz-E/projects/2](https://github.com/users/Crazz-E/projects/2)
-(user project #2, Kanban). Every task is a **GitHub issue** on `Crazz-Org/SPO-WebClient`,
+[github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/projects/1)
+(organization project #1, Kanban — **public**). Every task is a **GitHub issue** on
+`Crazz-Org/SPO-WebClient`,
 added to the project. Draft items are not used.
 
 The former documentary backlog (`doc/BACKLOG.md`, `doc/BACKLOG-OPEN.md`) is **retired and
@@ -172,27 +173,44 @@ moves a card — rule 1 is untouched, and the job holds no token that could brea
 | Shape of the reminder | **One comment on the quiet card**, once per ownership episode, plus a table in the run's job summary | A digest issue would be auto-added to the board (see below) and a `/next-task` session would eventually claim the machine's own bookkeeping as work. A comment creates no card and lands where the decision is made. |
 | Repeat | Never, for the same owner | Each comment carries a hidden `<!-- orphan-watch:<Session> -->` marker. Keyed on the `Session` text, not a timestamp: posting the comment can itself bump `updatedAt`, and a timestamp key would make the job re-fire on the trace of its own last run every day. A freed and re-claimed card gets a new `Session` and re-arms. |
 
-**One human step, once.** The board is a *user-scoped* project, which the repository's
-`GITHUB_TOKEN` cannot read at any permission level. Provision a PAT with `read:project` as
+**One human step, once.** The board is a Projects v2 board, which the repository's
+`GITHUB_TOKEN` cannot read at any permission level — moving it into the organization changed
+nothing there, because the resource is the project and not the repository. Provision a PAT with `read:project` as
 the `PROJECTS_TOKEN` secret (Settings → Secrets and variables → Actions). Until it exists the
 job is inert: green, skipped, one notice — never a red X every morning. `--dry-run` and
 `workflow_dispatch` give a manual check without commenting on anything.
 
-### The built-in Projects workflows are on
+### The built-in Projects workflows — one of them is a standing human step
 
-The other half of #124 — the mechanical transitions nobody should have to remember — needs no
-code and is already configured. All seven built-in workflows on the project report enabled:
+The other half of #124 — the mechanical transitions nobody should have to remember — is
+configuration, not code, and **it did not survive the move to the organization.** A project's
+`Auto-add to project` workflow is bound to a repository filter that belongs to *that* project;
+the board that now serves this repository is a different project, so the filter has to be
+created again. Read the current state rather than assuming it:
 
 ```bash
-gh api graphql -f query='query{user(login:"Crazz-E"){projectV2(number:2){workflows(first:20){nodes{name enabled}}}}}'
+gh api graphql -f query='query{organization(login:"Crazz-Org"){projectV2(number:1){workflows(first:20){nodes{name enabled}}}}}'
 ```
 
-`Auto-add to project` (a new issue becomes a Todo card without an `item-add`), `Item closed`
-and `Pull request merged` (→ Done), `Auto-close issue`, `Item added to project`, `Pull request
-linked to issue`, `Auto-add sub-issues`. The Done cards with an empty `Session` field are the
-trace of `Item closed` firing on its own. A session should still write its milestones — the
-built-ins cover creation and closure, not the columns in between — but a forgotten `item-add`
-no longer loses a finding.
+⚠ **There is no mutation for this.** The public GraphQL API can *delete* a project workflow
+(`deleteProjectV2Workflow`) and can read them, but it can neither create nor enable one. A
+session cannot fix this for you; only the UI can — Project → ⋯ → Workflows.
+
+What to turn on there, and what each one buys:
+
+| Workflow | Configure as | Why it matters |
+|---|---|---|
+| **Auto-add to project** | filter `is:issue is:open repo:Crazz-Org/SPO-WebClient`, set `Status` = Todo | **The feeding rule rests on this one.** Without it a new issue is created and belongs to no board, so a finding filed by a session is invisible unless that session also ran `item-add` by hand |
+| Item closed · Pull request merged | → `Status` Done | The Done cards with an empty `Session` are the trace of these firing on their own |
+| Auto-close issue | on `Status` Done | Closes the issue when a session moves the card |
+| Item added to project · Pull request linked to issue | default | Sets Todo on arrival, links the PR to the card |
+| Auto-add sub-issues to project | already enabled | — |
+
+**Until `Auto-add to project` is on, a session that files a card MUST follow it with
+`gh project item-add 1 --owner Crazz-Org --url <ISSUE_URL>` and verify the item exists.** That
+is not belt-and-braces; it is the only thing standing between a finding and being lost, and it
+is exactly how one was nearly lost when the repository moved and the old board's filter stopped
+matching.
 
 ## What a session writes on the board — and only this
 
@@ -294,17 +312,17 @@ The project scope is required once per machine: `gh auth refresh -s project` (ru
 
 ```bash
 # List cards with status + session + area (topmost Todo first = priority order)
-gh project item-list 2 --owner Crazz-E --format json \
+gh project item-list 1 --owner Crazz-Org --format json \
   --jq '.items[] | {id, title: .content.title, number: .content.number, status, session, area}'
 
 # The busy set — areas held by a live card (docs excluded: it never blocks)
-gh project item-list 2 --owner Crazz-E --limit 100 --format json \
+gh project item-list 1 --owner Crazz-Org --limit 100 --format json \
   --jq '[.items[] | select(.status == "In progress" or .status == "Gate" or .status == "PR")
         | select(.area != null and .area != "docs") | .area] | unique'
 
 # Resolve project and field ids (needed for item-edit)
-gh project view 2 --owner Crazz-E --format json --jq .id
-gh project field-list 2 --owner Crazz-E --format json
+gh project view 1 --owner Crazz-Org --format json --jq .id
+gh project field-list 1 --owner Crazz-Org --format json
 
 # Move a card (single-select field, e.g. Status)
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
@@ -323,7 +341,7 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 gh issue create --repo Crazz-Org/SPO-WebClient --title "…" --body "…" \
   --label "cat:latent-trap" --label "size:M"
 gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body "<the verdict, verbatim>"
-gh project item-add 2 --owner Crazz-E --url <ISSUE_URL>
+gh project item-add 1 --owner Crazz-Org --url <ISSUE_URL>
 
 # Final comment
 gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body "…"
