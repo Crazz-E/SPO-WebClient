@@ -134,21 +134,53 @@ describe('shell-backgrounding a verdict command', () => {
     expect(stderr).toContain('The redirect is fine');
   });
 
-  it('offers a form that still captures the exit code', () => {
-    expect(invoke('npm run gate &').stderr).toContain('EXIT=$?');
+  it('offers the bare form, not a compound that would lose the exit code again', () => {
+    const { stderr } = invoke('npm run gate &');
+    expect(stderr).toContain('npm run gate > <scratchpad>/gate.log 2>&1');
+    expect(stderr).not.toContain('echo "EXIT=$?"');
   });
 
   it.each([
-    // The sanctioned form: same redirect, no ampersand.
-    ['npm run gate > /tmp/scratch/gate.log 2>&1; echo "EXIT=$?"'],
     ['npm run gate'],
     ['npm run dev'],
-    // `&&` is a separator, not a fork.
+    // The sanctioned form: same redirect, no ampersand, nothing chained after it.
+    ['npm run gate > /tmp/scratch/gate.log 2>&1'],
+    ['npm run test:live > /tmp/scratch/live.log 2>&1'],
+    // `&&` on a command that isn't a verdict is a plain separator, not a fork.
     ['npm run bench:status && echo ok'],
     // A command that merely mentions the shape.
     ['grep -n "npm run gate &" doc/bench-worker.md'],
   ])('allows %s', command => {
     expect(guard(command)).toBe(0);
+  });
+});
+
+describe('chaining a second command after a verdict command', () => {
+  /**
+   * The same destruction as the trailing ampersand, reached without one: `cmd; echo
+   * "EXIT=$?"` reports the ECHO's status (always 0), not the verdict's, and `cmd && next`
+   * reports NEXT's. Either way the exit code CLAUDE.md says to read the verdict from is
+   * gone — refused whether or not the command is also backgrounded.
+   */
+  it.each([
+    ['npm run gate > /tmp/scratch/gate.log 2>&1; echo "EXIT=$?"'],
+    ['npm run gate && something-else'],
+    ['npm run test:live > /tmp/scratch/live.log 2>&1; echo "EXIT=$?"'],
+    ['npm test; echo "EXIT=$?"'],
+  ])('refuses %s', command => {
+    expect(guard(command)).toBe(2);
+  });
+
+  it('names the bare form as the fix, not the old compound suggestion', () => {
+    const { stderr } = invoke('npm run gate > /tmp/scratch/gate.log 2>&1; echo "EXIT=$?"');
+    expect(stderr).toContain('npm run gate > <scratchpad>/gate.log 2>&1');
+    // The message may explain the bad pattern, but must not recommend it: the fixed line
+    // itself has nothing chained after the redirect.
+    expect(stderr).not.toContain('npm run gate > <scratchpad>/gate.log 2>&1; echo');
+  });
+
+  it('still allows the bare redirect form with nothing chained after it', () => {
+    expect(guard('npm run gate > /tmp/scratch/gate.log 2>&1')).toBe(0);
   });
 });
 

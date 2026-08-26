@@ -257,7 +257,9 @@ The repo process applies unchanged — this command adds nothing to it:
 - Gate deposited (`npm run gate`, with the tool's `run_in_background` — **never a trailing
   `&`**, which makes the shell report the fork and returns 0 whatever the gate found) →
   `npm run board:move -- <issue> Gate` (`MOVED #<issue> -> Gate`, same exit codes as § 2) →
-  title `#<issue> · Gate`.
+  title `#<issue> · Gate`. A backgrounded verdict command must stand alone — no `;` or `&&`
+  chained after it either. A backgrounded compound command's exit code is from the LAST
+  command, so `cmd; echo $?` reports the echo, not the verdict.
 - Gate PASS → push, PR with **`Closes #<issue>`** in the body → `npm run board:move --
   <issue> PR` → title `#<issue> · PR`.
 - Checks green → merge, `npm run finish` → `npm run board:move -- <issue> Done` + one final

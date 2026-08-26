@@ -73,6 +73,18 @@ verdict="$(printf '%s' "$payload" | node -e "
     const backgrounded = /(^|[;\n&|])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*(npm\s+(?:run\s+)?(?:gate|test|test:live|typecheck|lint|build)|npx\s+jest|node\s+[^\s]*(?:verify-gate|run)\.js)\b[^\n;]*&\s*(?:$|[\n;])/;
     if (backgrounded.test(text)) { process.stdout.write('amp'); return; }
 
+    // The same destruction reached without an ampersand at all: chaining a second command
+    // after the verdict with \`;\` or \`&&\`. \`cmd; echo \"EXIT=\$?\"\` reports the ECHO's
+    // status (always 0), not the verdict's — the printed text becomes the only place the
+    // number survives, which is exactly what CLAUDE.md forbids reading. \`cmd && next\`
+    // reports NEXT's status. Either shape is refused whether or not it is also backgrounded,
+    // because foreground doesn't save it: the harness still reports the compound's own last
+    // stage, not the run's. \`2>&1\` is a redirect, not this separator — stripped first so it
+    // is never mistaken for one.
+    const stripRedirects = text.replace(/\d*>&\d+/g, '');
+    const compound = /(^|[;\n&|])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*(npm\s+(?:run\s+)?(?:gate|test|test:live|typecheck|lint|build)|npx\s+jest|node\s+[^\s]*(?:verify-gate|run)\.js)\b[^\n;&]*(;|&&)\s*\S/;
+    if (compound.test(stripRedirects)) { process.stdout.write('compound'); return; }
+
     // There is a third route by which an exit code is lost — capturing the OUTPUT in a
     // command substitution, which keeps the text and discards the number. It is NOT guarded
     // here on purpose: the pattern matches any command that merely quotes the shape (a test,
@@ -110,10 +122,31 @@ case "${verdict:-ok}" in
     echo "the Bash call and drop the \`&\`. The harness then keeps the process, notifies you" >&2
     echo "when it exits, and preserves its exit code." >&2
     echo "" >&2
-    echo '  npm run gate > <scratchpad>/gate.log 2>&1; echo "EXIT=$?"' >&2
+    echo '  npm run gate > <scratchpad>/gate.log 2>&1' >&2
     echo "" >&2
     echo "with run_in_background: true. The redirect is fine and needs no permission — only" >&2
-    echo "the ampersand does." >&2
+    echo "the ampersand does. Keep the command BARE: do not append \`; echo \$?\` or anything" >&2
+    echo "else after it — see the compound refusal below for why that destroys the same" >&2
+    echo "exit code from the other side." >&2
+    exit 2
+    ;;
+  compound)
+    echo "BLOCKED: that chains a second command after one whose exit code IS the verdict." >&2
+    echo "" >&2
+    echo "\`cmd; echo \"EXIT=\$?\"\` reports the ECHO's status — always 0 — not the verdict's;" >&2
+    echo "\`cmd && next\` reports NEXT's status. Either way the number CLAUDE.md says to read" >&2
+    echo "the verdict from is gone, and the printed text becomes the only place it survives —" >&2
+    echo "which is the read CLAUDE.md forbids. This holds whether or not the command is also" >&2
+    echo "backgrounded: foregrounding it does not bring the exit code back, because the shell" >&2
+    echo "still reports the compound's own last stage, not the run's." >&2
+    echo "" >&2
+    echo "Run the verdict command alone — nothing chained after it, foreground or with the" >&2
+    echo "tool's run_in_background: true:" >&2
+    echo "" >&2
+    echo '  npm run gate > <scratchpad>/gate.log 2>&1' >&2
+    echo "" >&2
+    echo "The redirect is fine; it is only what comes AFTER the redirected command — a" >&2
+    echo "\`;\` or \`&&\` — that is refused." >&2
     exit 2
     ;;
   bench)
