@@ -6,6 +6,8 @@ import {
   ghStatusPublisher,
   listVerdicts,
   publishPendingStatuses,
+  STATUS_DESCRIPTION_MAX,
+  statusDescription,
   statusState,
   writeVerdict,
   type BenchVerdict,
@@ -151,5 +153,112 @@ describe('publishPendingStatuses — the retry-until-pushed loop', () => {
     const descriptions: string[] = [];
     publishPendingStatuses(paths, (_wt, _head, _state, description) => descriptions.push(description), () => {});
     expect(descriptions[0]).toMatch(/STALE \(tree moved\)/);
+  });
+
+  it('never publishes a description over the 140-char limit even with a very long jobId', () => {
+    const paths = tempBench();
+    writeVerdict(
+      paths,
+      verdictFor('abc123', {
+        baseMain: 'f'.repeat(40),
+        reusedFrom: 'e'.repeat(40),
+        exceptions: 3,
+        jobId: 'job-'.repeat(60),
+      }),
+    );
+    const descriptions: string[] = [];
+    publishPendingStatuses(paths, (_wt, _head, _state, description) => descriptions.push(description), () => {});
+    expect(descriptions[0].length).toBeLessThanOrEqual(STATUS_DESCRIPTION_MAX);
+    expect(descriptions[0]).toContain('PASS');
+    expect(descriptions[0]).toContain('base ffffffff');
+  });
+});
+
+describe('statusDescription', () => {
+  it('reproduces the short-input format byte-for-byte', () => {
+    expect(statusDescription(verdictFor('c1', { baseMain: 'abcdef1234567890' }))).toBe(
+      'PASS — base abcdef12 — job job-1',
+    );
+  });
+
+  it('appends the reused-from sha8 when the verdict is a reuse', () => {
+    const description = statusDescription(verdictFor('c1', { reusedFrom: 'e'.repeat(40) }));
+    expect(description).toBe('PASS — reused eeeeeeee — job job-1');
+  });
+
+  it('composes tree-moved, exceptions, base and reused together, always within the limit', () => {
+    const description = statusDescription(
+      verdictFor('c1', {
+        verdict: 'STALE',
+        fingerprintStable: false,
+        exceptions: 5,
+        baseMain: 'b'.repeat(40),
+        reusedFrom: 'e'.repeat(40),
+      }),
+    );
+    expect(description).toBe(
+      'STALE (tree moved) — 5 capability exception(s) — base bbbbbbbb — reused eeeeeeee — job job-1',
+    );
+    expect(description.length).toBeLessThanOrEqual(STATUS_DESCRIPTION_MAX);
+  });
+
+  it('truncates the jobId when the protected tail leaves little room', () => {
+    const description = statusDescription(
+      verdictFor('c1', {
+        exceptions: 9,
+        baseMain: 'b'.repeat(40),
+        reusedFrom: 'e'.repeat(40),
+        jobId: 'x'.repeat(200),
+      }),
+    );
+    expect(description.length).toBe(STATUS_DESCRIPTION_MAX);
+    expect(description.startsWith('PASS — 9 capability exception(s) — base bbbbbbbb — reused eeeeeeee — job x')).toBe(
+      true,
+    );
+  });
+});
+
+describe('publishPendingStatuses — failure-streak logging', () => {
+  it('stays quiet for the first two consecutive failures, logs once on the third, quiet again after', () => {
+    const paths = tempBench();
+    writeVerdict(paths, verdictFor('abc123'));
+    const logs: string[] = [];
+    const failures = new Map<string, number>();
+    const alwaysThrows = () => {
+      throw new Error('HTTP 422: no commit found for SHA');
+    };
+
+    publishPendingStatuses(paths, alwaysThrows, line => logs.push(line), Date.now(), paths.verdicts, failures);
+    expect(logs).toEqual([]);
+
+    publishPendingStatuses(paths, alwaysThrows, line => logs.push(line), Date.now(), paths.verdicts, failures);
+    expect(logs).toEqual([]);
+
+    publishPendingStatuses(paths, alwaysThrows, line => logs.push(line), Date.now(), paths.verdicts, failures);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('HTTP 422: no commit found for SHA');
+    expect(logs[0]).toContain('abc123'.slice(0, 8));
+
+    publishPendingStatuses(paths, alwaysThrows, line => logs.push(line), Date.now(), paths.verdicts, failures);
+    expect(logs).toHaveLength(1);
+  });
+
+  it('clears the streak on a success, so a later failure run starts counting from zero', () => {
+    const paths = tempBench();
+    writeVerdict(paths, verdictFor('abc123'));
+    const logs: string[] = [];
+    const failures = new Map<string, number>();
+    const alwaysThrows = () => {
+      throw new Error('boom');
+    };
+
+    publishPendingStatuses(paths, alwaysThrows, line => logs.push(line), Date.now(), paths.verdicts, failures);
+    publishPendingStatuses(paths, alwaysThrows, line => logs.push(line), Date.now(), paths.verdicts, failures);
+    expect(failures.get('abc123')).toBe(2);
+
+    // A success in between (e.g. the sha finally landed) clears the counter.
+    writeVerdict(paths, verdictFor('def456'));
+    publishPendingStatuses(paths, () => {}, () => {}, Date.now(), paths.verdicts, failures);
+    expect(failures.has('def456')).toBe(false);
   });
 });

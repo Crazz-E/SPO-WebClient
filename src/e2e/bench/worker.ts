@@ -546,13 +546,17 @@ export async function workerLoop(
   nightly: (deps: WorkerDeps) => Promise<boolean> = maybeRunNightly,
 ): Promise<void> {
   let lastPublish = 0;
+  // Consecutive publish-failure counts per sha, kept across passes for the life of the
+  // worker process — so a sha stuck failing logs once (on the third pass) instead of
+  // once per 30-second tick forever.
+  const publishFailures = new Map<string, number>();
   for (let tick = 0; tick < maxTicks; tick++) {
     try {
       const worked = await processOldest(deps);
       deps.spool.purgeDone(DONE_RETENTION_MS, deps.now());
       if (deps.now() - lastPublish > 30_000) {
         lastPublish = deps.now();
-        publishPendingStatuses(deps.paths, deps.publishStatus, deps.log, deps.now());
+        publishPendingStatuses(deps.paths, deps.publishStatus, deps.log, deps.now(), deps.paths.verdicts, publishFailures);
       }
       if (!worked) {
         // Only when the queue came back empty: these take the bench like any job, so they
@@ -622,7 +626,7 @@ export function mergeQueueDeps(paths: BenchPaths, log: (line: string) => void): 
         fingerprintStable: verdict.fingerprintStable,
       })),
     pendingFor: sha => [...spool.queued(), ...spool.running()].some(e => e.request.ref === sha),
-    reuse: (fromSha, toSha, why) => {
+    reuse: (fromSha, toSha, _why) => {
       const source = listVerdicts(paths).find(v => v.verdict.head === fromSha);
       // The source can vanish between the decision and here (the 24 h purge). Doing
       // nothing leaves the entry unanswered, and the next tick gates it properly — which
@@ -631,9 +635,12 @@ export function mergeQueueDeps(paths: BenchPaths, log: (line: string) => void): 
       writeVerdictIn(paths.verdicts, {
         ...source.verdict,
         head: toSha,
-        // The reuse is recorded in the job id, so a human reading the status on the PR can
-        // see this entry was not driven live and why it did not need to be.
-        jobId: `${source.verdict.jobId} (reused: ${why})`,
+        // jobId always names the ORIGINAL live drive, byte-identical no matter how many
+        // reuse hops led here — nothing is appended to it. `reusedFrom` carries the
+        // provenance instead: `??` means a reuse-of-a-reuse still points at the original
+        // sha, never at the intermediate copy, so the chain collapses to one hop for any N.
+        jobId: source.verdict.jobId,
+        reusedFrom: source.verdict.reusedFrom ?? fromSha,
         createdAt: new Date().toISOString(),
         published: false,
       });
