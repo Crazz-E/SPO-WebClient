@@ -202,7 +202,8 @@ The repo process applies unchanged — this command adds nothing to it:
   one-sentence criterion and an understood reproduction, and rewrote a whole script — it had
   a card and a criterion, and neither told it to stop. "Am I about to edit a tracked file" is
   answerable without either.
-- **Question (i) is now enforced, not asked.** `.claude/hooks/driver-scope-guard.sh` refuses
+- **Question (i) is now enforced as well as asked** — keep asking it, because answering it
+  costs nothing and being refused costs a turn. `.claude/hooks/driver-scope-guard.sh` refuses
   the driver's own writes to tracked files — both doors: `Edit`/`Write`, and the Bash verbs
   that reach the tree without them (`sed -i`, a `>` redirection, `rm`, `mv`, `chmod`,
   `git rm`, `git restore`, `npm run format`). It arms on a **verified claim** — `board:take`
