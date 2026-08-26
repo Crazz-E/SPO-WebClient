@@ -467,8 +467,18 @@ instant the entry is created, destroying it and leaving the PR CLOSED and unmerg
 **`gh pr edit` does not work on this repository.** Every invocation fails with `GraphQL:
 Projects (classic) is being deprecated …`, exit 1, **and applies nothing** — on stderr, so a
 piped or backgrounded call reads as success while the PR is unchanged. Use REST: `gh api -X
-PATCH repos/Crazz-Org/SPO-WebClient/pulls/<N> --input <json>`. `gh pr create`, `gh pr view` and
-`gh pr merge` are unaffected.
+PATCH repos/Crazz-Org/SPO-WebClient/pulls/<N> --input <json>`.
+
+**The same deprecation kills the _bare_ `gh pr view` and `gh issue view`.** Both ask for
+`projectCards`, so `gh pr view <N>` and `gh issue view <N>` exit 1 on
+`(repository.pullRequest.projectCards)` / `(repository.issue.projectCards)` and print nothing
+usable — the error is on stderr, so a piped or backgrounded call reads as success again.
+**`--json` never touches that field and works**: `gh pr view <N> --json state`,
+`gh issue view <N> --json state,title`. That is why nothing in the tree is broken — every
+caller already passes it (`scripts/finish.sh:188,208,215`, `scripts/deps-gate.sh:61`). Read a
+PR or an issue with `--json`, or with REST (`gh api repos/Crazz-Org/SPO-WebClient/issues/<N>`).
+⚠ `.github/workflows/claude-review.yml:123` allowlists the bare `gh pr view`, so the review
+agent meets the same wall. `gh pr create`, `gh pr merge` and `gh issue list` are unaffected.
 
 **An update is finished only after `npm run finish`.** It refuses unless the PR is MERGED, then
 fast-forwards `~/SPO-WebClient`, prunes stale refs, reinstalls the bench worker if the merge
