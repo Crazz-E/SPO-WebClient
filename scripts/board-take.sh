@@ -15,9 +15,32 @@
 #   4  the write request itself failed — nothing landed, the card is untouched
 #   5  the write landed but the confirmation re-read failed — state is UNKNOWN, re-check later
 #
-# `--release` clears Session and sets Status back to Todo, but ONLY if Session is already
-# ours — this is the back-off step 5 of the normal path asks for when the re-read shows the
+# `--release` clears Session and sets Status back to Todo. Normally this requires Session to
+# already be ours — the back-off step 5 of the normal path asks for when the re-read shows the
 # claim was lost to another session, so nothing is ever released out from under its owner.
+#
+# One exception (#299): a card whose issue got REOPENED after its owning session correctly
+# closed it. `Session` still names that session, but the session ended cleanly — closing it
+# by hand is the only way forward, and until now that meant a human editing the field in the
+# Projects UI. The trouble is that a card released on FAILURE lands in the exact same column
+# (Needs triage) with `Session` deliberately still filled, as the trace ownership law 4 asks
+# for — so Status and "issue open" alone cannot tell a genuine reopen from a failure trace a
+# session has no business clearing. GitHub reports the difference: a reopened-and-still-open
+# issue's `stateReason` is `REOPENED`; a failure trace's issue was never closed, so its
+# `stateReason` is null. All three conditions below are load-bearing together — drop any one
+# and a failure trace becomes clearable by any session that asks:
+#
+#   a. current Status is `Done` or `Needs triage` — the two columns a closed-then-reopened
+#      card can be sitting in; a live column (Todo/In progress/Gate/PR) means the owner may
+#      still be working and only expiry or the human should move it.
+#   b. the issue's `state` is OPEN — a closed issue is terminal, not reopened work.
+#   c. the issue's `stateReason` is REOPENED — the actual distinguisher between "this was
+#      reopened" and "this was never closed" (a failure release, or Done reached without a
+#      close, e.g. before the auto-close workflow ran).
+#
+# Meeting all three still refuses nothing about the ordinary case: a live owner in an active
+# column, or a failure trace with a null `stateReason`, both keep exiting 3 — only the human
+# clears those, per ownership law 3/4 (doc/kanban-workflow.md:121-125).
 #
 #   bash scripts/board-take.sh 285
 #   bash scripts/board-take.sh 285 --area client
@@ -110,7 +133,7 @@ query($owner: String!, $repo: String!, $projNum: Int!, $issue: Int!) {
       ... on ProjectV2FieldCommon { id name }
       ... on ProjectV2SingleSelectField { options { id name } } } } } }
   repository(owner: $owner, name: $repo) {
-    issue(number: $issue) { number
+    issue(number: $issue) { number state stateReason
       projectItems(first: 10) { nodes { id project { number }
         fieldValues(first: 12) { nodes {
           ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { name } } }
@@ -135,6 +158,15 @@ fi
 current_session=$(jq -r --argjson n "$PROJECT_NUMBER" '
   [.data.repository.issue.projectItems.nodes[]? | select(.project.number == $n)][0] as $it
   | ([$it.fieldValues.nodes[]? | select(.field != null) | {(.field.name): (.text // .name)}] | add // {}).Session // ""' <<< "$raw")
+
+# current_status/issue_state/issue_state_reason feed the --release cross-session rule below:
+# a reopened-and-still-open issue reports stateReason REOPENED, which a failure release (issue
+# never closed, stateReason null) cannot forge — see the --release branch and the header comment.
+current_status=$(jq -r --argjson n "$PROJECT_NUMBER" '
+  [.data.repository.issue.projectItems.nodes[]? | select(.project.number == $n)][0] as $it
+  | ([$it.fieldValues.nodes[]? | select(.field != null) | {(.field.name): (.text // .name)}] | add // {}).Status // ""' <<< "$raw")
+issue_state=$(jq -r '.data.repository.issue.state // ""' <<< "$raw")
+issue_state_reason=$(jq -r '.data.repository.issue.stateReason // ""' <<< "$raw")
 
 session_field_id=$(jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Session") | .id' <<< "$raw")
 status_field_id=$(jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Status") | .id' <<< "$raw")
@@ -172,9 +204,38 @@ reread_session() {
 
 # ============================================================================================
 if [ "$release" -eq 1 ]; then
+  reopened_release=0
+
   if [ "$current_session" != "$session" ]; then
-    echo "NOT YOURS: held by ${current_session:--}"
-    exit 3
+    # Cross-session release is allowed for exactly one case: the card is the trace of an
+    # issue that got REOPENED after the owning session correctly closed it (see header
+    # comment for why all three conditions are required together). Anything short of that —
+    # a live owner, a failure trace, a closed issue, or a field this read could not read —
+    # falls straight through to the refusal below.
+    case "$current_status" in
+      Done | "Needs triage")
+        if [ "$issue_state" = "OPEN" ] && [ "$issue_state_reason" = "REOPENED" ]; then
+          reopened_release=1
+        fi
+        ;;
+    esac
+
+    if [ "$reopened_release" -ne 1 ]; then
+      echo "NOT YOURS: held by ${current_session:--}"
+      case "$current_status" in
+        Todo | "In progress" | Gate | PR)
+          echo "the owner is live — ask them, or wait for the reservation to expire; only the human may free it."
+          ;;
+        *)
+          if [ "$issue_state" = "CLOSED" ]; then
+            echo "a terminal card whose issue is closed is not reopened work."
+          else
+            echo "Session is deliberately the trace of a failed attempt — only the human reclassifies from Needs triage (doc/kanban-workflow.md:26, :121-125)."
+          fi
+          ;;
+      esac
+      exit 3
+    fi
   fi
 
   mutation='
@@ -199,7 +260,11 @@ if [ "$release" -eq 1 ]; then
     exit 5
   fi
 
-  echo "RELEASED #$issue"
+  if [ "$reopened_release" -eq 1 ]; then
+    echo "RELEASED #$issue (reopened — cleared claim of $current_session)"
+  else
+    echo "RELEASED #$issue"
+  fi
   exit 0
 fi
 
