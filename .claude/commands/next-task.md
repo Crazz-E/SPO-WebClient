@@ -237,18 +237,23 @@ The repo process applies unchanged — this command adds nothing to it:
   **single-line verbatim quote** plus the `file:line` carrying it. Single-line is a hard
   requirement — the check is `grep -F`. The driver copies the block unmodified into every
   execution spawn, and the sub-agent returns one row per invariant: the byte-identical quote
-  plus `HELD` or `CHANGED`.
-- **Driver's check, all mechanical**: every payload invariant appears in the reply
-  byte-identical; for each HELD row, `git diff -U0 -- <file>` filtered to changed lines must
-  be empty for the quoted text — plain `git diff` carries three lines of context on each
-  side of a hunk, so an invariant sitting near an unrelated edit reads as touched when it is
-  not; `-U0` and a filter to added/removed lines only avoid that false positive. The working
-  form: `git diff -U0 -- <file> | grep -E '^[+-]' | grep -v '^[+-][+-]'`, then `grep -F` the
-  quote against that. A hunk touching the invariant's own line while the row says HELD is an
-  auto-reject. **Any CHANGED row halts the attempt** — a delegated implementation may not
-  amend an invariant; only the human may. On 2026-08-26 a driver rewrote the comment carrying
-  an invariant so it agreed with the new code — under this check that reads as a failed row,
-  not as agreement. A check that cries wolf gets ignored, so it reads changed lines only —
+  plus `HELD` or `CHANGED`, plus a final row listing the files it changed as `git status --porcelain`
+  output (the driver compares this to what it asked for).
+- **Driver's check, all mechanical**: (1) **Before the invariant check**, verify expected files
+  actually changed: `git status --porcelain` must name each file the spawn was told to edit.
+  Empty output where edits were expected is a **failed attempt**, not a clean one — the
+  sub-agent either did not run in the worktree or did nothing. (2) Verify the main checkout is
+  untouched: `git -C <main checkout> status --porcelain` must be empty. A worktree session that
+  dirties `main` has done something nobody asked for. (3) For each HELD row, `git diff -U0 -- <file>`
+  filtered to changed lines must be empty for the quoted text — plain `git diff` carries three
+  lines of context on each side of a hunk, so an invariant sitting near an unrelated edit reads
+  as touched when it is not; `-U0` and a filter to added/removed lines only avoid that false
+  positive. The working form: `git diff -U0 -- <file> | grep -E '^[+-]' | grep -v '^[+-][+-]'`,
+  then `grep -F` the quote against that. A hunk touching the invariant's own line while the row
+  says HELD is an auto-reject. **Any CHANGED row halts the attempt** — a delegated implementation
+  may not amend an invariant; only the human may. On 2026-08-26 a driver rewrote the comment
+  carrying an invariant so it agreed with the new code — under this check that reads as a failed
+  row, not as agreement. A check that cries wolf gets ignored, so it reads changed lines only —
   over-matching is a defect in the check, not a safe default.
 - **`main` moved past your `baseMain`** — the push hook's `NOTE:` is informational, not a
   judgement call: run `git diff --name-only <baseMain>..origin/main` and intersect it with
@@ -274,7 +279,11 @@ The repo process applies unchanged — this command adds nothing to it:
   `key: value` block, one field per line, and keep prose only where a human reads the
   result verbatim. Ask for the shortest reply that carries the answer — a verdict, a
   `file:line`, a number — and say so in the prompt: **no preamble, no restatement of the
-  task, no summary of what was read, no closing offer.**
+  task, no summary of what was read, no closing offer.** A working directory cannot be set
+  by the payload: the `Agent` tool has no such parameter. A spawn that must run in a specific
+  directory carries it as an **instruction with verification the agent performs and reports**:
+  `cd <path> && pwd && git branch --show-current` — so the returned reply shows where it
+  actually ran, and the driver can verify it landed in the right place.
 - Gate deposited (`npm run gate`, with the tool's `run_in_background` — **never a trailing
   `&`**, which makes the shell report the fork and returns 0 whatever the gate found) →
   `npm run board:move -- <issue> Gate` (`MOVED #<issue> -> Gate`, same exit codes as § 2) →
