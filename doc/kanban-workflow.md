@@ -125,6 +125,16 @@ English. Conversation with the maintainer is not board content and is not affect
    non-technical English** why the task failed — what was attempted, what blocked it, in
    words a non-programmer follows. The human reclassifies from there.
 
+**One narrow exception to "only the human may free it" (#299):** `npm run board:take --
+<n> --release` may clear a *different* session's stale claim when the card is the trace of
+an issue that got **reopened** after its owner correctly closed it — not a failure trace, and
+not a live owner. It checks all three at once: Status is `Done` or `Needs triage`, the issue
+is **open**, and the issue's `stateReason` is **REOPENED**. A failure release never sets
+`stateReason` (the issue was never closed), so law 4's trace stays exactly as human-only as
+it was — this exception can never fire on it. Anything short of all three — a live owner in
+Todo/In progress/Gate/PR, a failure trace, or a closed issue — still exits refused, and the
+tool says which.
+
 ### One session per area — the ground reservation
 
 Git only refuses a merge when both sides changed the **same lines**. Two changes on different
@@ -279,7 +289,7 @@ board's behaviour proves it points at the right column. Project → ⋯ → Work
 | **Auto-add to project** | repository **picker** → `Crazz-Org/SPO-WebClient`; filter box → `is:issue is:open` | **The feeding rule rests on this one.** Without it a new issue belongs to no board, so a finding filed by a session is invisible |
 | **Item added to project** | trigger `issue, pull request`; set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status — on the board and outside the pool at the same time, since `/next-task` selects on `Status = Todo` |
 | **Pull request linked to issue** | set `Status` = **PR** | The column the ownership law defines as "pull request open", reached from the `Closes #N` the PR body already carries |
-| **Item reopened** | trigger `issue, pull request`; set `Status` = **Needs triage** | Without it, reopening a closed issue leaves its card in Done, where it misrepresents the work. **Not Todo:** `Session` still holds the old owner and only the human may clear it — Needs triage is the human's column |
+| **Item reopened** | trigger `issue, pull request`; set `Status` = **Needs triage** | Without it, reopening a closed issue leaves its card in Done, where it misrepresents the work. **Not Todo:** `Session` still holds the old owner and Needs triage is the human's column — though `board:take --release` (#299) can now clear that stale claim itself, since a reopened issue's `stateReason` is the one thing a failure trace can never forge |
 | **Item closed** | trigger `issue, pull request`; set `Status` = **Done** | The Done cards with an empty `Session` are the trace of this firing on its own |
 | **Auto-close issue** | trigger *when the status is updated* → `Status: Done` | Closes the issue when a session moves the card |
 | **Auto-add sub-issues to project** | — | Inherited, no value to set |
