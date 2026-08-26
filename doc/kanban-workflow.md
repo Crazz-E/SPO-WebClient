@@ -335,9 +335,9 @@ the first of the two leaves every new card statusless.
 its own (auto-add verified live 2026-08-25: a throwaway issue reached the board in under ten
 seconds). But no workflow sets `Category`, `Size` or `Area`, and every transition after the
 claim is still a board write its owner makes (§ *What a session writes on the board*). A
-finding that never enters the Todo pool is lost exactly as surely as one that was never filed —
-which is how one was nearly lost when the repository moved and the old board's filter stopped
-matching.
+card that reaches Todo without them is on the board but outside the pool the claim rule reads
+— `Area` above all, since a card carrying none reserves no ground — which is how one was
+nearly lost when the repository moved and the old board's filter stopped matching.
 
 ## What a session writes on the board — and only this
 
@@ -449,7 +449,11 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
 
 **A card is filed deliberately, never in passing.** The board is fed by the surfaces whose job
 is to feed it — `/triage-report` draining the queued bug reports, a maintainer asking for a card
-by name, a claimed task that turned out to be two — and by nothing else. A session driving a
+by name, a claimed task that turned out to be two, and `/next-task` § 0 filing the
+`Nightly: main is red` repair when the nightly proof says `main` is broken — and by nothing
+else. That last one is on the list because it is not a finding met on the way: it is the only
+admissible work while `main` is red, so the session that reads the verdict is the surface whose
+job it is to file it. A session driving a
 card solves and implements *that* card: what it met on the way is neither filed nor written
 into its final report, because a test session or a requested audit finds it again at a moment
 where someone asked for it. Widening a session's scope is the maintainer's call.
@@ -599,7 +603,7 @@ has to be deliberate instead of merely easy.
 | § 3/4 a gate or CI failure | diagnosis, the hardest reading in the loop | **Fable 5** | high |
 | § 3 PR body, merge, `finish`, board writes | mechanical, template-shaped | **Haiku 4.5** | low |
 | § 4 the Needs-triage comment | plain-English writing | **Sonnet 5 or 4.6** | low |
-| § 5 a finding → draft card → `card-reviewer` | analysis | **Fable 5** | medium |
+| § 5 a split, or a card asked for by name → draft → `card-reviewer` | analysis | **Fable 5** | medium |
 
 **The two Sonnet rows accept 4.6.** Both are mechanical: the compiler names the fix, and the
 triage comment is template-shaped prose. Neither needs a capability 4.6 lacks — Sonnet 5 is
@@ -710,7 +714,11 @@ gh api graphql -f query='{repository(owner:"Crazz-Org",name:"SPO-WebClient"){iss
 gh api graphql -f query='mutation { addBlockedBy(input:{
   issueId:"<BLOCKED_NODE_ID>", blockingIssueId:"<BLOCKER_NODE_ID>"}) { issue { number } } }'
 
-# New finding → card review → issue → board (label = the queryable mirror of Category/Size)
+# A SANCTIONED filing → card review → issue → board (label = the queryable mirror of
+# Category/Size). "Sanctioned" is the whole point: § Feeding rule lists the surfaces that may
+# file — /triage-report, a split, a card asked for by name, § 0's nightly repair — and a
+# finding met while driving a card is NOT one of them. This recipe is how those surfaces file,
+# never a licence to file what you noticed on the way.
 # The draft goes to the `card-reviewer` sub-agent FIRST; on DO NOT FILE, nothing below runs.
 gh issue create --repo Crazz-Org/SPO-WebClient --title "…" --body "…" \
   --label "cat:latent-trap" --label "size:M"
