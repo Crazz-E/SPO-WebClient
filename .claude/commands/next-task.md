@@ -191,12 +191,17 @@ The repo process applies unchanged — this command adds nothing to it:
   execution spawn, and the sub-agent returns one row per invariant: the byte-identical quote
   plus `HELD` or `CHANGED`.
 - **Driver's check, all mechanical**: every payload invariant appears in the reply
-  byte-identical; for each HELD row, `git diff -- <file>` filtered for the quoted text must
-  be empty. A hunk touching the invariant's own line while the row says HELD is an
+  byte-identical; for each HELD row, `git diff -U0 -- <file>` filtered to changed lines must
+  be empty for the quoted text — plain `git diff` carries three lines of context on each
+  side of a hunk, so an invariant sitting near an unrelated edit reads as touched when it is
+  not; `-U0` and a filter to added/removed lines only avoid that false positive. The working
+  form: `git diff -U0 -- <file> | grep -E '^[+-]' | grep -v '^[+-][+-]'`, then `grep -F` the
+  quote against that. A hunk touching the invariant's own line while the row says HELD is an
   auto-reject. **Any CHANGED row halts the attempt** — a delegated implementation may not
   amend an invariant; only the human may. On 2026-08-26 a driver rewrote the comment carrying
   an invariant so it agreed with the new code — under this check that reads as a failed row,
-  not as agreement.
+  not as agreement. A check that cries wolf gets ignored, so it reads changed lines only —
+  over-matching is a defect in the check, not a safe default.
 - **`main` moved past your `baseMain`** — the push hook's `NOTE:` is informational, not a
   judgement call: run `git diff --name-only <baseMain>..origin/main` and intersect it with
   the changed paths on your branch (Haiku, low effort — two commands and an emptiness test,

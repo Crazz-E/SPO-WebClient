@@ -373,7 +373,8 @@ describe('the /next-task command implements the claim algorithm', () => {
 
   it('fills a missing Area before the card moves to In progress', () => {
     const text = pick();
-    expect(text).toMatch(/^4\. \*\*If `Area` was empty, determine it now\*\*/m);
+    expect(text).toMatch(/^4\. \*\*If `Area` was empty\*\*/m);
+    expect(collapse(text)).toMatch(/do not classify it yourself.*sub-agent/);
     expect(collapse(text)).toMatch(/\*\*write it before\*\* moving the card to In progress/);
   });
 
