@@ -91,9 +91,11 @@ closed blocker frees the card, so anything it prints is blocked right now (kanba
    With `$ARGUMENTS`, take the item named there instead; if it is owned, or if it is blocked by
    an open issue, **stop and say so** — ownership is sacred, and so is the order.
 3. **Claim it** (§ 2 below).
-4. **If `Area` was empty, determine it now** from the partition in kanban-workflow § The areas
-   (one area per card: where the majority of the change lands), and **write it before** moving
-   the card to In progress.
+4. **If `Area` was empty**, do not classify it yourself: spawn a Sonnet 5 sub-agent, effort
+   low, payload = card title/body + the partition in kanban-workflow § The areas. It
+   returns one word — **write it before** moving the card to In progress. `card-reviewer`
+   already checks `Area` at filing, so an empty one means a legacy card. Do NOT route it to
+   Needs triage — the existing pool holds such cards and they are claimable.
 5. **If the area you just determined turns out to be busy**: clear `Session`, leave the card in
    Todo with `Area` now filled, and go back to step 2 **reusing the first claim read** — the
    pool is never re-read for a back-off. The card never reached In progress, so
@@ -159,13 +161,63 @@ The repo process applies unchanged — this command adds nothing to it:
   sessions move cards while you work. Before you write anything durable that names another
   card — an issue comment, a PR body, this session's final report — re-read it first with
   `npm run board:status -- <n>…` (~1 point for any number of issues, never the pool).
-- Branch, implement, tests (≥ 93 % on new/modified lines), typecheck, lint.
+- Two yes/no questions, asked before every action in § 3: (i) "Will this action create,
+  edit or delete a git-tracked file?" Yes → this is implementation: spawn the execution
+  sub-agent. The driver never edits a tracked file itself. (ii) "Is the exact command I am
+  about to run written verbatim in this file, or is it one of the listed npm aliases?" No →
+  stop and delegate; never compose one.
+- Why (i) is the one that matters: on 2026-08-26 a Haiku driver met an S-sized card with a
+  one-sentence criterion and an understood reproduction, and rewrote a whole script — it had
+  a card and a criterion, and neither told it to stop. "Am I about to edit a tracked file" is
+  answerable without either.
+- **Implementation is never driven by the session on Haiku** — kanban-workflow § Model
+  routing routes execution to Sonnet 5, or Opus under the escalation rule; Haiku appears on
+  no execution row.
+  An attempt is ONE spawn: the execution sub-agent branches, writes, tests (≥ 93 % on
+  new/modified lines), typechecks and lints, and self-checks, then returns a diff and the
+  invariant report (below). It STOPS BEFORE the gate — only the depositing worktree can gate,
+  so the driver deposits `npm run gate` itself.
+- The driver keeps an attempt **ledger**: one line per attempt, `attempt N | root cause |
+  outcome`. The three-attempts-max rule (§ 4) becomes a string comparison over that ledger —
+  two attempts naming the same root cause is a stop, and Haiku can check that.
+- On gate FAIL the driver spawns a Fable 5 diagnosis sub-agent (effort high), payload = the
+  diff + the gate log path + the ledger; its one-line root cause is appended to the ledger.
+- The driver does not "review" the returned diff. The gate and the mechanical invariant check
+  ARE the review — pretending a Haiku driver reviews a diff is the fiction that produced the
+  incident.
+- **The invariant report.** The plan step (Fable) emits an invariant block: each invariant a
+  **single-line verbatim quote** plus the `file:line` carrying it. Single-line is a hard
+  requirement — the check is `grep -F`. The driver copies the block unmodified into every
+  execution spawn, and the sub-agent returns one row per invariant: the byte-identical quote
+  plus `HELD` or `CHANGED`.
+- **Driver's check, all mechanical**: every payload invariant appears in the reply
+  byte-identical; for each HELD row, `git diff -U0 -- <file>` filtered to changed lines must
+  be empty for the quoted text — plain `git diff` carries three lines of context on each
+  side of a hunk, so an invariant sitting near an unrelated edit reads as touched when it is
+  not; `-U0` and a filter to added/removed lines only avoid that false positive. The working
+  form: `git diff -U0 -- <file> | grep -E '^[+-]' | grep -v '^[+-][+-]'`, then `grep -F` the
+  quote against that. A hunk touching the invariant's own line while the row says HELD is an
+  auto-reject. **Any CHANGED row halts the attempt** — a delegated implementation may not
+  amend an invariant; only the human may. On 2026-08-26 a driver rewrote the comment carrying
+  an invariant so it agreed with the new code — under this check that reads as a failed row,
+  not as agreement. A check that cries wolf gets ignored, so it reads changed lines only —
+  over-matching is a defect in the check, not a safe default.
+- **`main` moved past your `baseMain`** — the push hook's `NOTE:` is informational, not a
+  judgement call: run `git diff --name-only <baseMain>..origin/main` and intersect it with
+  the changed paths on your branch (Haiku, low effort — two commands and an emptiness test,
+  not a judgement). Non-empty → same ground: merge `origin/main` in and re-gate. Empty → the
+  note is informational, proceed.
+- **A merge conflict** (from the `main`-moved merge above, or any other): route it to a
+  sub-agent, Sonnet 5, effort per Size — Opus 5 if any conflicted path matches the escalation
+  rule (`src/shared/rdo-*`, `src/server/rdo.ts`, `rdo-members.ts`, session phases). It returns
+  the resolved files plus the same invariant report (above); the driver's check is identical.
 - **Model routing** (kanban-workflow § Model routing — read the step table, it covers
   every § of this command, not just the two glamorous ones): drive the board steps, the
   gate wait and the PR/merge/`finish` steps on **Haiku 4.5**, plan and diagnose on
   **Fable 5**, execute on **Sonnet 5**, and escalate to **Opus 5** only for the wire
   (`rdo-*`), an `L` card, or a defect whose reproduction is not yet understood. Effort
-  follows the card's `Size`. Via sub-agents if the session cannot switch itself.
+  follows the card's `Size`. Via sub-agents if the session cannot switch itself. Each attempt
+  above is that one spawn, on the model this table names — never the driver's own model.
 - **Context discipline**: stay under ~250k, delegate heavy reads to sub-agents, compact
   after exploration.
 - **Handoff discipline** (kanban-workflow § Sub-agent handoffs): a spawn costs a fixed

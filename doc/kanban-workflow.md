@@ -553,13 +553,20 @@ picking a card, waiting on the gate, writing the PR body, moving the column and 
 So the rule is inverted from the obvious one: **drive on the cheapest model the step needs,
 and escalate a step by delegating it to a sub-agent**, never the other way round.
 
+A *decision* delegates in one round trip; a *phase* does not. An implementation phase becomes
+one spawn per attempt with a driver-held ledger, and the gate stays with the driver because
+only the depositing worktree can reach it.
+
 ### The steps of a session, and what each one is worth
 
 | Step (`/next-task` §) | What it actually is | Model | Effort |
 |---|---|---|---|
 | § 0–2 nightly check, pick, claim, rename | scripted `gh`/`jq`, one right answer | **Haiku 4.5** | low |
+| § 1.4 `Area` on a legacy card | first match on a path table | **Sonnet 5** sub-agent | low |
 | § 3 understand the card, plan the change | analysis | **Fable 5** | per Size (below) |
 | § 3 implement + tests | execution | **Opus 5** — but see the escalation rule | per Size |
+| § 3 a merge conflict | judgement over two intents | **Sonnet 5** sub-agent (Opus 5 on an `rdo-*` path) | per Size |
+| § 3 `main` moved — same ground? | a file-set intersection, not a judgement | **Haiku 4.5** driver | low |
 | § 3 typecheck / lint / coverage fixes | mechanical, the compiler names the fix | **Sonnet 5 or 4.6** | low |
 | § 3 deposit the gate, wait, read the exit code | a wait and a number | **Haiku 4.5** | low |
 | § 3/4 a gate or CI failure | diagnosis, the hardest reading in the loop | **Fable 5** | high |
