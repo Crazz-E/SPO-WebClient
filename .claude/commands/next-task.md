@@ -66,14 +66,15 @@ already moved past — is **not** red. Proceed to § 1.
 ## 1 · Pick — the first Todo card whose ground is free
 
 **One read for the whole claim.** Run **the claim read** — `npm run board:claim`, the
-composite query kept in `scripts/claim-read.sh` (~2 GraphQL points; never
-`gh project item-list`, which costs ~103 and is why the board went unreadable on
-2026-08-25). It returns, in a single call: `status`, `session` and `area` come back on every item, in board order (topmost Todo =
+composite query kept in `scripts/claim-read.sh` (~2 GraphQL points per page, 4 on today's
+116-item board; never `gh project item-list`, which costs ~103 and is why the board went
+unreadable on 2026-08-25). It returns, in a single call: `status`, `session` and `area` come back on every item, in board order (topmost Todo =
 the human's priority), with the project, field and option ids § 2's writes take; the blocked
 set; and
 `rateLimit { cost remaining resetAt }` — state the last `remaining` you saw in your final
-report (kanban-workflow § GitHub API discipline). Candidates: Status = **Todo** and
-`Session` **empty**.
+report (kanban-workflow § GitHub API discipline). The read also prints an `items: N/M` line;
+N = M proves the pool came back whole, so a driver should treat a mismatch as a failed read,
+never as a short board. Candidates: Status = **Todo** and `Session` **empty**.
 
 A card's **blockers are not on the card** — the relation lives on the issue, so no project field
 carries it. Read the whole blocked set in **one** call, before walking — it rides in the claim
