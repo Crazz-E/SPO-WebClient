@@ -319,6 +319,24 @@ The repo process applies unchanged — this command adds nothing to it:
   `git rev-parse --show-toplevel` — its prefix is allowlisted, so it costs no permission
   prompt — and the returned reply shows where it actually ran, so the driver can verify
   it landed in the right place.
+- **Post-spawn checklist** — before depositing the gate, run these five checks. Each one is
+  **emitted by the plan step as a runnable command or text**, not a prose instruction; the
+  driver only runs them and reads an exit code. Steps 3 and 4 are required only when the
+  card replaces existing behaviour (the plan says whether it is a rewrite). Step 1 is a rule:
+  if a spawn fails because a tool does not exist here, that attempt returns to the plan step
+  and **does not** consume one of the three gate attempts.
+  1. **Is the plan executable?** Run the plan's first command once, before spawning. If it
+     fails (e.g. `jq` not found), the design is not executable here — return to the plan step
+     for a revised design.
+  2. **Prototype before delegating** — policy, not a driver behavior. The plan provides runnable
+     text, prototyped where feasible.
+  3. **Output equivalence** (rewrites only) — run the `comm` command emitted by the plan,
+     comparing old sorted output to new sorted output. No output means the rewrite is faithful.
+  4. **Exercise failure paths** (rewrites only) — run each degenerate-input command emitted by
+     the plan. All must fail loudly (exit non-zero with a legible error).
+  5. **Sweep for falsified statements** — run each `grep` command emitted by the plan against
+     `doc/`, `.claude/`, and `CLAUDE.md` to check whether the change falsifies documented
+     claims. No matches means no falsifications.
 - Gate deposited (`npm run gate`, with the tool's `run_in_background` — **never a trailing
   `&`**, which makes the shell report the fork and returns 0 whatever the gate found) →
   `npm run board:move -- <issue> Gate` (`MOVED #<issue> -> Gate`, same exit codes as § 2) →
