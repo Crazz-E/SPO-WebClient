@@ -42,14 +42,17 @@ a file, never in the command line.
 
 The bench proves branches; one nightly run proves `main` itself
 ([bench-worker.md § The nightly proof of `main`](../../doc/bench-worker.md)). Read its
-result before claiming anything:
+result before claiming anything — run the alias and branch on its **exit code**, never on
+the printed text:
 
 ```bash
 npm run bench:nightly
 ```
 
-**`main` is red** when that file's `verdict` is `FAIL` **and** its `sha` is still the sha
-`origin/main` points at. While it is red:
+Exit **0** — not red. Proceed to § 1.
+
+Exit **1** — **RED**, and the one printed line already carries the `sha`, the `detail` and
+the `logFile` verbatim. While it is red:
 
 - claim **no ordinary card** — the only admissible work is the repair;
 - **merge `origin/main` into no branch**, in this session or any other: updating from `main`
@@ -57,88 +60,111 @@ npm run bench:nightly
 
 Take the open issue titled `Nightly: main is red` if one exists; otherwise file it (Category
 🔴 Defect, `cat:defect`, area from where the failure lands) quoting the `sha`, the `detail`
-and the `logFile` from that file, then claim it and drive it like any other card.
+and the `logFile` straight off that line, then claim it and drive it like any other card.
 
-Anything else — the file is missing, the verdict is `PASS`, the verdict is `ENVIRONMENT` or
-`INTERRUPTED` (the run never learned anything about `main`), or the `sha` is one `main` has
-already moved past — is **not** red. Proceed to § 1.
+Exit **2** — **UNKNOWN**: the run never learned anything about `main`. Stop and say so —
+UNKNOWN is never treated as green.
 
 ## 1 · Pick — the first Todo card whose ground is free
 
 **One read for the whole claim.** Run **the claim read** — `npm run board:claim`, the
 composite query kept in `scripts/claim-read.sh` (~2 GraphQL points per page, 4 on today's
 116-item board; never `gh project item-list`, which costs ~103 and is why the board went
-unreadable on 2026-08-25). It returns, in a single call: `status`, `session` and `area` come back on every item, in board order (topmost Todo =
-the human's priority), with the project, field and option ids § 2's writes take; the blocked
-set; and
-`rateLimit { cost remaining resetAt }` — state the last `remaining` you saw in your final
-report (kanban-workflow § GitHub API discipline). The read also prints an `items: N/M` line;
-N = M proves the pool came back whole, so a driver should treat a mismatch as a failed read,
-never as a short board. Candidates: Status = **Todo** and `Session` **empty**.
+unreadable on 2026-08-25). `status`, `session` and `area` come back on every item, and the
+script has already done the walk: it prints, in order, `rateLimit { cost remaining resetAt }`
+— state the last `remaining` you saw in your final report (kanban-workflow § GitHub API
+discipline); an `items: N/M` line (N = M proves the pool came back whole; a mismatch is a
+failed read, never a short board); `hidden: …`; `busy areas:`; a `walk:` block; then
+`candidates: N` (or `candidates: none`), the candidate `item …` lines themselves (Status =
+**Todo**, `Session` empty, in priority order), and finally the `#n blocked by …` lines for
+whatever it skipped as blocked.
 
-A card's **blockers are not on the card** — the relation lives on the issue, so no project field
-carries it. Read the whole blocked set in **one** call, before walking — it rides in the claim
-read, whose `issueDependenciesSummary { blockedBy }` tail counts **open** blockers only: a
-closed blocker frees the card, so anything it prints is blocked right now (kanban-workflow
-§ Blocking order).
+The `walk:` block carries a `skip #n: <reason>` line for every card the script ruled out —
+already the named skip your final report must repeat verbatim (`#120 skipped: blocked by
+#108`), never silently — followed by the `<rank> #n area=<a> <title>` lines it kept, still in
+the human's priority order. A card's blockers are not on the card — the relation lives on the
+issue — so this `skip` reasoning, and the `#n blocked by …` tail, are what the claim read
+resolved for you in that one call (kanban-workflow § Blocking order).
 
-1. **Compute the busy set** (kanban-workflow § One session per area): every `Area` held by a
-   card in **In progress**, **Gate** or **PR** whose reservation is still live (below).
-   `docs` never enters the busy set — it does not block.
-2. **Walk Todo top-down** — list order is the human's priority — and take the first card whose
-   `Area` is **not** busy **and** which the query above did not print. A card with an **empty**
-   `Area` is claimable and blocks nothing. A card with an open blocker is **skipped, and the
-   skip is named in your final report** (`#120 skipped: blocked by #108`) — never silently.
-   With `$ARGUMENTS`, take the item named there instead; if it is owned, or if it is blocked by
-   an open issue, **stop and say so** — ownership is sacred, and so is the order.
-3. **Claim it** (§ 2 below).
+1. **Compute the busy set** (kanban-workflow § One session per area) — already done: it is
+   the `busy areas:` line above. `docs` never enters the busy set — it does not block.
+2. **Walk Todo top-down** — already done too: read `candidates: N` (or `candidates: none`,
+   in which case skip straight to step 6). Candidate `1` is the card to take — list order is
+   the human's priority, and an **empty** `Area` is claimable and blocks nothing. With
+   `$ARGUMENTS`, take the item named there instead: if it appears as a `skip` line in the
+   walk, **stop and say so**, quoting that line — ownership is sacred, and so is the order.
+3. **Claim it** (§ 2 below) — pass `--area <a>` once step 4 has filled one.
 4. **If `Area` was empty**, do not classify it yourself: spawn a Sonnet 5 sub-agent, effort
-   low, payload = card title/body + the partition in kanban-workflow § The areas. It
-   returns one word — **write it before** moving the card to In progress. `card-reviewer`
-   already checks `Area` at filing, so an empty one means a legacy card. Do NOT route it to
-   Needs triage — the existing pool holds such cards and they are claimable.
-5. **If the area you just determined turns out to be busy**: clear `Session`, leave the card in
-   Todo with `Area` now filled, and go back to step 2 **reusing the first claim read** — the
-   pool is never re-read for a back-off. The card never reached In progress, so
-   this is the same back-off as a lost claim race — ownership law 3 is not violated. The
-   session title follows: it names the card you end up holding, so a back-off leaves it to be
-   rewritten by the next claim, never pointing at a card you released.
+   low, payload = card title/body + the partition below (kanban-workflow § The areas is the
+   authority for *why*). It returns one word — **write it before** moving the card to In
+   progress, as `npm run board:take -- <issue> --area <that-word>`. `card-reviewer` already
+   checks `Area` at filing, so an empty one means a legacy card. Do NOT route it to Needs
+   triage — the existing pool holds such cards and they are claimable.
+
+   | `Area` | Paths |
+   |---|---|
+   | `docs` | `**/*.md`, `doc/**` |
+   | `rdo` | `src/shared/rdo-*.ts`, `src/server/rdo*.ts`, `src/server/session/rdo-*.ts`, `src/mock-server/**` |
+   | `bench` | `src/e2e/bench/**`, `scripts/bench-*.sh`, `scripts/verify-gate.js`, `.claude/hooks/**` |
+   | `renderer` | `src/client/renderer/**`, `src/client/**/*.module.css` |
+   | `gateway` | `src/server/**` |
+   | `client` | `src/client/**`, `public/**` |
+   | `e2e` | `src/e2e/**` |
+   | `shared` | `src/shared/**`, `src/*.d.ts` |
+   | `ci` | `.github/**`, `scripts/**`, `.claude/**`, `src/__tests__/**`, `src/__mocks__/**`, `jest.config.js`, `eslint.config.js`, `tsconfig*.json`, `vite.config.ts`, `Dockerfile*`, `docker-compose.yml`, `deploy/**` |
+
+   `docs` comes first so a Markdown file is documentation wherever it lives; `ci` is the last
+   row and the catch-all; where two rows could match, the earlier row wins. Full rule and
+   rationale: [kanban-workflow.md § The areas](../../doc/kanban-workflow.md).
+5. **If the area you just determined turns out to be busy**: run `npm run board:take --
+   <issue> --release`, which will clear `Session`, leave the card in Todo with `Area` now
+   filled. Then go back to step 2 **reusing the first claim read** — the pool is never
+   re-read for a back-off. The card never reached In progress, so this is the same back-off
+   as a lost claim race — ownership law 3 is not violated. The session title follows: it
+   names the card you end up holding, so a back-off leaves it to be rewritten by the next
+   claim, never pointing at a card you released.
 6. **If no Todo card is claimable, stop and say so.** Do not take a busy card, do not take a
    blocked one, and do not invent work outside the board.
 
 **A blocked card is never written to.** `Session` stays empty, Status stays **Todo**, no
 comment: nothing failed and nobody owned it. It is not Needs triage.
 
-**Is a reservation live?** Not from the board clock — from the session heartbeat, which moves
-while a session works even when it has no reason to touch its card for hours:
-
-```bash
-npm run board:sessions
-```
-
-A card's reservation is live while the heartbeat of the worktree standing on the branch its
-`Session` field names is younger than `SPO_WORKTREE_IDLE_MIN` (default **120** minutes). No
-heartbeat for that branch → fall back to that branch's last commit date on `origin`, same
-window. Neither signal → the area is free, and the card's `Session` field is still left
-untouched: what expired is the ground reservation, never the ownership.
+**Is a reservation live?** `npm run board:claim` already answers this inside `busy areas:` —
+it folds in the heartbeat scan and the no-heartbeat fallback, so there is nothing left here to
+compute by hand. The rule it applies: a card's reservation is live while the heartbeat of the
+worktree standing on the branch its `Session` field names is younger than
+`SPO_WORKTREE_IDLE_MIN` (default **120** minutes); no heartbeat for that branch → it falls
+back to that branch's last commit date on `origin`, same window. Neither signal → the area is
+free, and the card's `Session` field is still left untouched: what expired is the ground
+reservation, never the ownership. `npm run board:sessions` remains the human-facing view of
+the same heartbeats, for a look by eye.
 
 ## 2 · Claim (handshake)
 
-Write `Session` = `<branch> @ <YYYY-MM-DD>`, move Status → **In progress**, then **re-read**
-`Session` — with `npm run board:verify -- <ITEM_ID>` (1 point), never by listing the pool
-again. It prints the three fields the claim writes, `Session`, `Status` and `Area`, so one
-call proves all three landed. Not your identity → you lost the race: take the next candidate,
-from the claim read you already hold. One card at a time.
+The whole handshake is one call — write, re-read and verify, never by listing the pool
+again:
 
-**If GitHub answers `RATE_LIMITED` mid-handshake, the write half decides** (kanban-workflow
-§ GitHub API discipline, rule 5). The write failed → nothing landed: the card is untouched,
-you own nothing — claim nothing else, then wait for the bucket once with `npm run board:wait`
-and start the handshake over. That alias reads the `reset` from `gh api rate_limit` itself
-(free, and it still answers when the bucket is empty) and returns immediately when the bucket
-was never exhausted, so there is nothing to compute and no `sleep` loop to hand-roll. The write succeeded and the re-read failed → the card is
-provisionally yours: do not walk away half-claimed — wait for `reset`, finish the re-read,
-and if this session must end first, name the card and the unverified write in your final
-report so the human can read the board.
+```bash
+npm run board:take -- <issue>
+```
+
+Branch on its **exit code**, never on the printed text:
+
+- **0 CLAIMED** — `Session`, Status → **In progress** and, if you passed it, `Area` all
+  landed and were verified inside the same call. Continue to the rename below.
+- **2 not on board / usage** — the issue is not a Todo candidate, or the arguments are wrong.
+  Stop and say so.
+- **3 LOST** — someone else's identity was already in `Session`: you lost the race. Take the
+  next candidate from the claim read you already hold and try again. One card at a time.
+- **4 RATE_LIMITED, write failed** — nothing landed, the card is untouched, you own nothing
+  (**the write half decides**, kanban-workflow § GitHub API discipline, rule 5). Claim
+  nothing else: wait for the bucket once with `npm run board:wait` — it reads the `reset`
+  from `gh api rate_limit` itself and returns immediately when the bucket was never exhausted
+  — then run `board:take` again.
+- **5 RATE_LIMITED, write landed, re-read pending** — the card is provisionally yours: **do
+  not walk away half-claimed**. Wait for `reset` with `npm run board:wait`, then run
+  `board:take` again to finish the re-read; if this session must end first, name the card and
+  the unverified write in your final report so the human can read the board.
 
 **Then rename this session** — `mcp__ccd_session_mgmt__set_session_title` with
 `session_id: "self"` and `title: "#<issue> · <Status>"`, e.g. `#212 · In progress`. Issue
@@ -230,11 +256,12 @@ The repo process applies unchanged — this command adds nothing to it:
   task, no summary of what was read, no closing offer.**
 - Gate deposited (`npm run gate`, with the tool's `run_in_background` — **never a trailing
   `&`**, which makes the shell report the fork and returns 0 whatever the gate found) →
-  Status → **Gate** → title `#<issue> · Gate`.
-- Gate PASS → push, PR with **`Closes #<issue>`** in the body → Status → **PR** → title
-  `#<issue> · PR`.
-- Checks green → merge, `npm run finish` → Status → **Done** + one final comment
-  (2–4 lines: what changed, PR number, anything the human should know) → title
+  `npm run board:move -- <issue> Gate` (`MOVED #<issue> -> Gate`, same exit codes as § 2) →
+  title `#<issue> · Gate`.
+- Gate PASS → push, PR with **`Closes #<issue>`** in the body → `npm run board:move --
+  <issue> PR` → title `#<issue> · PR`.
+- Checks green → merge, `npm run finish` → `npm run board:move -- <issue> Done` + one final
+  comment (2–4 lines: what changed, PR number, anything the human should know) → title
   `#<issue> · Done`. **Checking is one read, not a vigil**: your gate PASS *is* the
   `bench/gate` status, and CI normally concluded while the gate was queued —
   `gh pr checks <n>` once. Genuinely pending → `gh pr checks <n> --watch --interval 20`,
@@ -250,10 +277,10 @@ The repo process applies unchanged — this command adds nothing to it:
 ## 4 · If it fails
 
 Three gate attempts max, each naming a different root cause — as ever. If the task cannot
-land (blocked, out of reach, wrongly scoped): Status → **Needs triage**, title
-`#<issue> · Needs triage`, keep `Session` filled, post one comment **in simple, non-technical English** explaining what was attempted
-and what blocked it. Never leave the card in In progress/Gate/PR at session end — close your
-ownership, one way or the other.
+land (blocked, out of reach, wrongly scoped): `npm run board:move -- <issue> "Needs triage"`,
+title `#<issue> · Needs triage`, keep `Session` filled, post one comment **in simple,
+non-technical English** explaining what was attempted and what blocked it. Never leave the
+card in In progress/Gate/PR at session end — close your ownership, one way or the other.
 
 ## 5 · Findings along the way
 
@@ -261,6 +288,16 @@ Anything discovered out of scope: new issue, added to the board in Todo (bottom)
 **and the matching `cat:` / `size:` labels** set (kanban-workflow § Feeding rule — the project
 field is not queryable, the label is), synthetic body — then back to the task. Never expand
 your own scope with it.
+
+| `Category` | label | | `Size` | label |
+|---|---|---|---|---|
+| 🔴 Defect | `cat:defect` | | S | `size:S` |
+| 🟠 Latent trap | `cat:latent-trap` | | M | `size:M` |
+| 🟡 Feature/Gap | `cat:feature` | | L | `size:L` |
+| ⚪ Observation | `cat:observation` | | | |
+| 📚 Doc/Infra | `cat:doc-infra` | | | |
+
+Authority for *why*: [kanban-workflow.md § Feeding rule](../../doc/kanban-workflow.md).
 
 Run the draft past the **`card-reviewer`** sub-agent before filing (kanban-workflow § The
 card review): its verdict becomes the new issue's first comment, and on `DO NOT FILE` no

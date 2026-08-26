@@ -31,10 +31,12 @@ const ROOT = process.cwd();
 const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
 const COMMAND = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const CLAUDE_MD = path.join(ROOT, 'CLAUDE.md');
+const CLAIM_READ = path.join(ROOT, 'scripts', 'claim-read.sh');
 
 let rulebook: string;
 let command: string;
 let claudeMd: string;
+let claimRead: string;
 
 /** Same reason as in `card-reviewer-agent.test.ts`: prose here is hard-wrapped at ~95 columns,
  * so a sentence assertion written against the reading order breaks the day a word crosses the
@@ -45,6 +47,7 @@ beforeAll(() => {
   rulebook = fs.readFileSync(RULEBOOK, 'utf8');
   command = fs.readFileSync(COMMAND, 'utf8');
   claudeMd = fs.readFileSync(CLAUDE_MD, 'utf8');
+  claimRead = fs.readFileSync(CLAIM_READ, 'utf8');
 });
 
 describe('the rulebook carries the blocking order', () => {
@@ -149,21 +152,32 @@ describe('the /next-task command reads it at claim time', () => {
   });
 
   it('reads the blocked set before walking Todo, in a single query', () => {
-    expect(pick).toMatch(/issueDependenciesSummary \{ blockedBy \}/);
-    expect(collapse(pick)).toMatch(/Read the whole blocked set in \*\*one\*\* call, before walking/);
+    // The driver no longer reads the blocked set itself — npm run board:claim
+    // (scripts/claim-read.sh) computes it in the one claim-read query. The GraphQL-shape
+    // assertion follows the query into the script, so the pin stays on the code that could
+    // actually drift; the command only needs to state the guarantee it hands back.
+    expect(claimRead).toMatch(/blockedBy\(first: 10\) \{ nodes \{ number state \} \}/);
+    expect(collapse(pick)).toMatch(/resolved for you in that one call/);
   });
 
   it('states that open blockers are the ones that count', () => {
-    expect(collapse(pick)).toMatch(/counts \*\*open\*\* blockers only/);
+    // Same move: the OPEN-only filter is bound once inside claim-read.sh and both the
+    // `#N blocked by …` line and the walk's skip line render from that one set.
+    expect(claimRead).toMatch(/select\(\.state == "OPEN"\)/);
+    expect(claimRead).toMatch(/one OPEN-only set/);
   });
 
   it('excludes a blocked card from the walk, and names the skip', () => {
-    expect(collapse(pick)).toMatch(/skipped, and the skip is named in your final report/);
+    expect(collapse(pick)).toMatch(
+      /already the named skip your final report must repeat verbatim/
+    );
     expect(collapse(pick)).toMatch(/never silently/);
   });
 
   it('refuses out loud when the blocked card is the one it was handed', () => {
-    expect(collapse(pick)).toMatch(/if it is owned, or if it is blocked by an open issue, \*\*stop and say so\*\*/);
+    expect(collapse(pick)).toMatch(
+      /if it appears as a `skip` line in the walk, \*\*stop and say so\*\*, quoting that line/
+    );
   });
 
   it('writes nothing to the card it skipped', () => {

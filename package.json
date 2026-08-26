@@ -40,6 +40,8 @@
     "pr:wait": "bash scripts/pr-wait.sh",
     "bench:nightly": "bash scripts/nightly-check.sh",
     "board:status": "bash scripts/board-status.sh",
+    "board:take": "bash scripts/board-take.sh",
+    "board:move": "bash scripts/board-move.sh",
     "board:claim": "bash scripts/claim-read.sh",
     "board:verify": "bash scripts/claim-verify.sh",
     "board:sessions": "bash scripts/heartbeat-scan.sh",
