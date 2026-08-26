@@ -260,8 +260,14 @@ The repo process applies unchanged — this command adds nothing to it:
   title `#<issue> · Gate`. A backgrounded verdict command must stand alone — no `;` or `&&`
   chained after it either. A backgrounded compound command's exit code is from the LAST
   command, so `cmd; echo $?` reports the echo, not the verdict.
-- Gate PASS → push, PR with **`Closes #<issue>`** in the body → `npm run board:move --
-  <issue> PR` → title `#<issue> · PR`.
+- **The gate's verdict is its exit code, never the printed report** — same rule as § 0's
+  `bench:nightly` read: `0` PASS · `1` verdict not passing · `2` refused at deposit (dirty
+  tree) · `3` worker down · `4` wait timed out. The report's `=== bench job … — PASS` banner
+  is NOT the verdict — it prints first, largest, and reads as authoritative whatever the
+  exit code actually says. The other machine-readable surface is
+  `~/.spo-bench/verdicts/<sha>.json`.
+- Gate PASS (exit 0) → push, PR with **`Closes #<issue>`** in the body → `npm run board:move
+  -- <issue> PR` → title `#<issue> · PR`.
 - Checks green → merge, `npm run finish` → `npm run board:move -- <issue> Done` + one final
   comment (2–4 lines: what changed, PR number, anything the human should know) → title
   `#<issue> · Done`. **Checking is one read, not a vigil**: your gate PASS *is* the
