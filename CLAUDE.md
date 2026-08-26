@@ -204,6 +204,8 @@ Node.js 22 / npm 10 in WSL (`/usr/bin/node`). Everything the project needs runs 
 - Processes: `ps` / `kill` inside WSL; `tasklist` / `taskkill` only for host-side processes
 - Line endings: LF only (`.gitattributes` and `.editorconfig`) — never introduce CRLF
 - Minimum supported runtime is Node 22 (`engines`, the Dockerfile's `node:22`, CI)
+- `jq` (1.7+) is required by `npm run board:claim`, which slurps gh's paginated pages into one
+  program; `apt install jq`
 
 ## Commands
 

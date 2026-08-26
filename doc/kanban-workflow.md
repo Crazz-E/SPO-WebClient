@@ -634,9 +634,10 @@ still prompts. That asymmetry is the point — **the query belongs in the script
 prompt**. Change a query by editing its script; do not paste one back into this file.
 
 ```bash
-# THE CLAIM READ — one query, ~2 GraphQL points, everything a claim needs: every card with
-# Status/Session/Area in board order (topmost Todo first = priority order), the blocked set,
-# the project/field/option ids item-edit takes, and the price of asking. Run it ONCE per claim.
+# THE CLAIM READ — one query, ~2 GraphQL points per page (4 on today's 116-item board),
+# everything a claim needs: every card with Status/Session/Area in board order (topmost
+# Todo first = priority order), the blocked set, the project/field/option ids item-edit
+# takes, and the price of asking. Run it ONCE per claim.
 # Never read the pool with `gh project item-list` in a session: same data, ~103 points
 # (§ GitHub API discipline). The busy set is computed inside this call, never by a second one.
 npm run board:claim                        # the query lives in scripts/claim-read.sh
@@ -645,10 +646,12 @@ npm run board:claim                        # the query lives in scripts/claim-re
 # blocks. It is computed rather than eyeballed off the item lines so the rule stays executable;
 # `$cards` is bound once and both outputs read it.
 # The blocked lines: `issueDependenciesSummary { blockedBy }` counts OPEN blockers only, so a
-# closed blocker frees the card by itself. Raise `first:` (or paginate) if the repository ever
-# exceeds 100 open issues or the board 100 items.
-# There is no standalone `jq` on this machine — only `gh --jq`. That is why the whole claim
-# read is one program over one response, and not a saved file filtered twice.
+# closed blocker frees the card by itself. The board side paginates itself now; only
+# `issues(first: 100)` remains a raise-when-exceeded number (41 open today).
+# jq is available, but gh's own `--jq` runs once per page under `--paginate`, so it cannot
+# sum rateLimit.cost, dedupe the metadata, or compute a busy set across pages — hence `jq -s`
+# over the whole stream: the whole claim read is one program over one response, and not a
+# saved file filtered twice.
 
 # Re-read before stating another card's status anywhere durable — a comment, a PR body, the
 # final report (§ GitHub API discipline, rule 6). ~1 point for any number of issues.
