@@ -13,6 +13,7 @@
 const { execFileSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const { stripHeredocs, bashCandidates: bashCandidatesGeneric } = require("./bash-command-parse");
 
 const TOP = process.env.SPO_TOP || "";
 const DRIVER_SID = process.env.SPO_DRIVER_SID || "";
@@ -59,30 +60,6 @@ const MAX_CANDIDATES = 40;
 function say(v) {
   process.stdout.write(v + "\n");
   process.exit(0);
-}
-
-function unquote(t) {
-  if (t.length > 1 && ((t[0] === '"' && t.endsWith('"')) || (t[0] === "'" && t.endsWith("'")))) {
-    return t.slice(1, -1);
-  }
-  return t;
-}
-
-// A heredoc body is text, not commands — a PR body that happens to contain the word `rm` is
-// not a deletion. Same reasoning, and the same shape, as bench-port-guard.sh.
-function stripHeredocs(command) {
-  const kept = [];
-  let terminator = null;
-  for (const line of command.split("\n")) {
-    if (terminator !== null) {
-      if (line.trim() === terminator) terminator = null;
-      continue;
-    }
-    kept.push(line);
-    const h = line.match(/<<-?\s*["']?([A-Za-z_][A-Za-z0-9_]*)["']?/);
-    if (h) terminator = h[1];
-  }
-  return kept.join("\n");
 }
 
 function gitOk(args) {
@@ -149,26 +126,11 @@ function classify(raw, cwd, allowCreate) {
   return null;
 }
 
+// Thin wrapper: the token-extraction algorithm itself lives in bash-command-parse.js, shared
+// with worktree-scope-guard.js. This guard's contribution is its own PATH_VERBS list and the
+// MAX_CANDIDATES it has always used — the parsing behaviour is unchanged from before the split.
 function bashCandidates(command) {
-  const text = stripHeredocs(command);
-  const out = [];
-
-  for (const m of text.matchAll(/(?<!&)>>?\s*(?!&)("[^"]+"|'[^']+'|[^\s;&|<>()]+)/g)) {
-    out.push(unquote(m[1]));
-  }
-
-  for (const verb of PATH_VERBS) {
-    verb.lastIndex = 0;
-    for (const m of text.matchAll(verb)) {
-      const rest = text.slice(m.index + m[0].length).split(/[;|&\n]/)[0];
-      for (const tok of rest.match(/("[^"]+"|'[^']+'|[^\s]+)/g) || []) {
-        const t = unquote(tok);
-        if (t.startsWith("-")) continue;
-        out.push(t);
-      }
-    }
-  }
-  return out.slice(0, MAX_CANDIDATES);
+  return bashCandidatesGeneric(command, PATH_VERBS, MAX_CANDIDATES);
 }
 
 let raw = "";
