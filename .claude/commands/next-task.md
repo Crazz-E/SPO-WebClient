@@ -281,13 +281,13 @@ The repo process applies unchanged — this command adds nothing to it:
   `file:line`, a number — and say so in the prompt: **no preamble, no restatement of the
   task, no summary of what was read, no closing offer.** **Every file a spawn names must be an
   absolute path rooted in this session's worktree** — a relative path resolves against whatever
-  the sub-agent believes the repository root is, and nothing in words ever tells it that root is
-  the worktree rather than the main checkout CLAUDE.md's own text points at (`repo at
-  /home/<user>/SPO-WebClient`). A spawn that must run in a specific directory carries it as an
-  **instruction with verification the agent performs and reports**: `git rev-parse
-  --show-toplevel` — its prefix is allowlisted, so it costs no permission prompt — and the
-  returned reply shows where it actually ran, so the driver can verify it landed in the right
-  place.
+  the sub-agent believes the repository root is, and nothing in words ever tells it that
+  root is the worktree rather than the main checkout CLAUDE.md's own text points at
+  (`repo at /home/<user>/SPO-WebClient`). A spawn that must run in a specific directory
+  carries it as an **instruction with verification the agent performs and reports**:
+  `git rev-parse --show-toplevel` — its prefix is allowlisted, so it costs no permission
+  prompt — and the returned reply shows where it actually ran, so the driver can verify
+  it landed in the right place.
 - Gate deposited (`npm run gate`, with the tool's `run_in_background` — **never a trailing
   `&`**, which makes the shell report the fork and returns 0 whatever the gate found) →
   `npm run board:move -- <issue> Gate` (`MOVED #<issue> -> Gate`, same exit codes as § 2) →
