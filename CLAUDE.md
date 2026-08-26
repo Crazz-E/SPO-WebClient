@@ -277,6 +277,7 @@ own. So does `out=$(npm test)`, which keeps the text and drops the number. Full 
 | `bench-port-guard.sh` | PreToolUse (Bash) | Blocks anything that would take the bench port (8080) or drive the live world outside the worker; names the sanctioned form |
 | `verdict-pipe-guard.sh` | PreToolUse (Bash) | Blocks piping a command whose exit code **is** the verdict (`npm test\|tail` reports tail, not Jest). Escape: `set -o pipefail` or a `PIPESTATUS` read |
 | `poll-loop-guard.sh` | PreToolUse (Bash) | Blocks the two ways a verdict gets lost while waiting: a trailing `&` on a verdict command (the shell reports the fork — always 0), and a hand-rolled wait loop (`until`/`while`/`for` + `sleep`) on a bench job or a GitHub read. Names `run_in_background`, `npm run bench:wait` or `npm run pr:wait` |
+| `driver-scope-guard.sh` | PreToolUse (Bash\|Edit\|Write) | Refuses the **driver of a claimed card** writing to a tracked file itself — `Edit`/`Write`, and the Bash verbs that reach the tree without them (`sed -i`, `>`, `rm`, `chmod`, `git rm`, `npm run format`). Armed by a verified `board:take`, inert otherwise; the execution sub-agent passes (`agent_id`) |
 | `session-heartbeat.sh` | *sourced by the others* | Stamps `~/.spo-bench/sessions/<key>.alive` so `finish` never reaps a worktree a session is working in |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.

@@ -197,6 +197,21 @@ The repo process applies unchanged — this command adds nothing to it:
   one-sentence criterion and an understood reproduction, and rewrote a whole script — it had
   a card and a criterion, and neither told it to stop. "Am I about to edit a tracked file" is
   answerable without either.
+- **Question (i) is now enforced, not asked.** `.claude/hooks/driver-scope-guard.sh` refuses
+  the driver's own writes to tracked files — both doors: `Edit`/`Write`, and the Bash verbs
+  that reach the tree without them (`sed -i`, a `>` redirection, `rm`, `mv`, `chmod`,
+  `git rm`, `git restore`, `npm run format`). It arms on a **verified claim** — `board:take`
+  writes the marker — and tells the driver from its own sub-agent by the `agent_id` the
+  PreToolUse payload carries only inside a Task worker; the sub-agent's writes pass
+  untouched. A BLOCKED reply is answered by **spawning the execution sub-agent**, never by
+  retrying the edit and never by reaching for another shell verb: they are all refused the
+  same way. It is a guardrail, not a sandbox — but the guard, `settings.json` and this file
+  are themselves tracked, so a driver drifting toward disabling it is stopped by it.
+  **Nothing to release by hand**: every way ownership closes releases it — `--release`,
+  `board:move … Done`, `board:move … "Needs triage"`, and `finish` (including the retire path,
+  where the session keeps working). The driver's own git moves are untouched: the `main`-moved
+  merge, `git checkout -b`, `git add`, `git commit`, `git push`. What is refused is the driver
+  *authoring* a change, never git moving the branch under it.
 - **Implementation is never driven by the session on Haiku** — kanban-workflow § Model
   routing routes execution to Sonnet 5, or Opus under the escalation rule; Haiku appears on
   no execution row.
