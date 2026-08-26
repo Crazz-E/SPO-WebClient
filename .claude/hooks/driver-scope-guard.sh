@@ -8,7 +8,7 @@
 # That rule was prose the driver asked ITSELF — which is the weakest possible enforcement,
 # because the model that has already drifted is the one being asked whether it is drifting.
 # On 2026-08-26 a Haiku driver met an S-sized card with a one-sentence criterion and rewrote
-# a whole script (next-task.md:196-199). It had a card and a criterion, and neither told it
+# a whole script (next-task.md § 3). It had a card and a criterion, and neither told it
 # to stop. Every other hard rule in this repo is enforced by a hook that does not care what
 # the model believes; this one now is too.
 #
@@ -67,10 +67,27 @@ verdict="$(printf '%s' "$payload" | SPO_TOP="$top" SPO_DRIVER_SID="$driver_sid" 
 [ -n "$verdict" ] || exit 0
 [ "$verdict" = "ALLOW" ] && exit 0
 
+# A CREATION and an EDIT have different right answers, and naming only one of them is how a
+# guard sends a driver down the wrong path. Editing a tracked file is implementation -> the
+# sub-agent. Creating a new file is usually the driver writing its OWN text — a commit message,
+# a PR body — which is not implementation at all: it just belongs outside the tree.
+remedy=""
+case "$verdict" in
+  "would create"*)
+    remedy="If this is text the driver itself writes — a commit message, a PR body, a board comment —
+it is NOT implementation, and the answer is not a sub-agent: put the file in this session's
+SCRATCHPAD, outside the worktree. \`git commit -F\`, \`gh pr create --body-file\` and
+\`gh issue comment --body-file\` read it from there. A file written inside the worktree
+dirties the tree, and the gate refuses a dirty tree (exit 2) whoever wrote it.
+
+"
+    ;;
+esac
+
 cat >&2 <<MSG
 BLOCKED — this session is DRIVING card #${issue}, and this action ${verdict}.
 
-next-task.md § 3 (i): the driver never creates, edits or deletes a tracked file itself.
+${remedy}next-task.md § 3 (i): the driver never creates, edits or deletes a tracked file itself.
 An implementation is a phase, not a decision: it is ONE spawn of the execution sub-agent
 (kanban-workflow § Model routing), carrying the card, the invariant block and the file list.
 Its writes pass this guard unblocked — it is only the driver's own hand that is refused.

@@ -37,7 +37,7 @@ const ALWAYS = [
 
 // Verbs whose operands ARE paths. Resolved and tested individually, so `sed -i` on a
 // scratchpad file outside the tree passes untouched — over-matching is the cry-wolf defect
-// next-task.md:231 warns about, not a safe default.
+// next-task.md § 3 warns about, not a safe default.
 const PATH_VERBS = [
   /\bsed\s+(?=[^\n;|&]*-[a-zA-Z]*i)/g,
   /\bperl\s+(?=[^\n;|&]*-[a-zA-Z]*i)/g,

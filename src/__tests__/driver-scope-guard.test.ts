@@ -278,3 +278,90 @@ describe('driver-scope marker — every path that closes ownership releases it',
     expect(finish).toContain('"$SESSIONS_DIR/$key.driving"');
   });
 });
+
+/**
+ * THE REFUSAL ITSELF. A guard is read by a model that must then do the right thing, so naming
+ * the WRONG remedy is a defect of the same family as blocking the wrong action — the driver
+ * obeys, does something useless, and learns the guard is noise.
+ *
+ * A creation and an edit have different right answers. Editing a tracked file is implementation
+ * and the answer is the sub-agent. Creating a file is usually the driver writing its OWN text —
+ * a commit message, a PR body, which § 3 explicitly tells it to write — and the answer there is
+ * the scratchpad, not a sub-agent. The first version named the sub-agent for both, which sent a
+ * driver following § 3's own flow to spawn an agent for a PR body.
+ */
+describe('driver-scope-guard — the refusal names the right remedy', () => {
+  const WRAPPER = path.join(ROOT, '.claude', 'hooks', 'driver-scope-guard.sh');
+
+  /** Run the wrapper for real, in a throwaway repo with a marker armed for session `sid`. */
+  function refuse(toolInput: Record<string, unknown>, toolName = 'Write'): { code: number; err: string } {
+    const tmp = fs.mkdtempSync('/tmp/claude-1000/dsg-');
+    const store = path.join(tmp, 'store');
+    execFileSync('bash', ['-c', `cd "${tmp}" && git init -q . && git commit -q --allow-empty -m x`], {
+      env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@x' },
+    });
+    const key = execFileSync('bash', ['-c', `printf '%s' "$(readlink -f "${tmp}")" | sha1sum | cut -c1-16`], {
+      encoding: 'utf8',
+    }).trim();
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, `${key}.driving`), `${SID}\n212\n`);
+    try {
+      execFileSync('bash', [WRAPPER], {
+        cwd: tmp,
+        input: JSON.stringify({ session_id: SID, cwd: tmp, tool_name: toolName, tool_input: toolInput }),
+        encoding: 'utf8',
+        env: { ...process.env, SPO_SESSION_DIR: store },
+      });
+      return { code: 0, err: '' };
+    } catch (e) {
+      const err = e as { status?: number; stderr?: string };
+      return { code: err.status ?? -1, err: err.stderr ?? '' };
+    }
+  }
+
+  it('blocks with exit 2 and names the card', () => {
+    const { code, err } = refuse({ file_path: 'pr-body.md' });
+    expect(code).toBe(2);
+    expect(err).toContain('DRIVING card #212');
+  });
+
+  it('sends a CREATION to the scratchpad, not to a sub-agent', () => {
+    // § 3 tells the driver to write a PR body to a file. If the guard answers that with
+    // "spawn the execution sub-agent", it has sent the driver down a path that cannot work.
+    const { err } = refuse({ file_path: 'pr-body.md' });
+    expect(err).toMatch(/SCRATCHPAD, outside the worktree/);
+    expect(err).toContain('--body-file');
+  });
+
+  it('sends an EDIT of a tracked file to the sub-agent, with no scratchpad detour', () => {
+    const tracked = 'tracked.txt';
+    const tmpRun = refuseTracked(tracked);
+    expect(tmpRun.err).toContain('execution sub-agent');
+    expect(tmpRun.err).not.toMatch(/SCRATCHPAD/);
+  });
+
+  /** Same harness, but the file is committed first so it is genuinely tracked. */
+  function refuseTracked(name: string): { code: number; err: string } {
+    const tmp = fs.mkdtempSync('/tmp/claude-1000/dsg-');
+    const store = path.join(tmp, 'store');
+    const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@x' };
+    execFileSync('bash', ['-c', `cd "${tmp}" && git init -q . && echo hi > ${name} && git add ${name} && git commit -q -m x`], { env });
+    const key = execFileSync('bash', ['-c', `printf '%s' "$(readlink -f "${tmp}")" | sha1sum | cut -c1-16`], {
+      encoding: 'utf8',
+    }).trim();
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, `${key}.driving`), `${SID}\n212\n`);
+    try {
+      execFileSync('bash', [WRAPPER], {
+        cwd: tmp,
+        input: JSON.stringify({ session_id: SID, cwd: tmp, tool_name: 'Edit', tool_input: { file_path: name } }),
+        encoding: 'utf8',
+        env: { ...process.env, SPO_SESSION_DIR: store },
+      });
+      return { code: 0, err: '' };
+    } catch (e) {
+      const err = e as { status?: number; stderr?: string };
+      return { code: err.status ?? -1, err: err.stderr ?? '' };
+    }
+  }
+});

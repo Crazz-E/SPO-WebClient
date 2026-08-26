@@ -38,6 +38,11 @@ stops to ask. Write the text to a file, then `git commit -F <file>`,
 plain prefix-matched calls that pass. Same reasoning as the aliases: the content belongs in
 a file, never in the command line.
 
+**And that file goes in the scratchpad, OUTSIDE the worktree** — never beside the code. A
+commit message or a PR body written inside the tree dirties it, and a dirty tree is refused
+at gate deposit (exit 2) whoever wrote it; `driver-scope-guard.sh` refuses it earlier and
+says so. All three flags read the file happily from anywhere.
+
 ## 0 · Is `main` red?
 
 The bench proves branches; one nightly run proves `main` itself
