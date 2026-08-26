@@ -447,10 +447,16 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
 
 ## Feeding rule (replaces the BACKLOG-OPEN feeding rule)
 
-Every live-journey finding, investigation result, or defect discovered in passing **lands as
-a new issue on the board**, in Todo (bottom — the human prioritises), with `Category` set and a
-synthetic body: what is wrong or missing, key `file:line` references, source (journey/date).
-A finding that only lives in a session report is lost.
+**A card is filed deliberately, never in passing.** The board is fed by the surfaces whose job
+is to feed it — `/triage-report` draining the queued bug reports, a maintainer asking for a card
+by name, a claimed task that turned out to be two — and by nothing else. A session driving a
+card solves and implements *that* card: what it met on the way is neither filed nor written
+into its final report, because a test session or a requested audit finds it again at a moment
+where someone asked for it. Widening a session's scope is the maintainer's call.
+
+What is filed lands **as a new issue on the board**, in Todo (bottom — the human prioritises),
+with `Category` set and a synthetic body: what is wrong or missing, key `file:line` references,
+source (journey/date).
 
 **Set the matching label too**, not only the project field. The field is the board's truth;
 the label is the only projection a workflow or `gh issue list --label` can read — GitHub
@@ -494,7 +500,7 @@ Three verdicts, and what each does to the flow:
 |---|---|
 | `FILE` | Files the card as written. |
 | `FILE AMENDED` | Applies the named corrections — body, `Category`, `Size`, `Area` — then files. |
-| `DO NOT FILE` | Files nothing. Its final report says what was found and why no card exists. |
+| `DO NOT FILE` | Files nothing, and says nothing of it in its final report. |
 
 `DO NOT FILE` names the code, the issue number or the commit that makes the finding moot. It
 is never about priority: **priority is the human's**, and a real but low-value finding is

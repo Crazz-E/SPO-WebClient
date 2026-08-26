@@ -179,15 +179,21 @@ all under `~/.spo-bench/`); it asks `rateLimit { cost remaining resetAt }` in ev
 hand-written GraphQL call; and on `RATE_LIMITED` mid-claim the **write half decides** — a
 half-made claim is never walked away from, because it leaves a card only a human can free.
 
-**Feeding rule:** every finding lands as a new issue in Todo — a finding that only lives in a
-session report is lost. Filing the issue is all it takes on the way in: `Auto-add to project`
-puts it on the board and sets `Status` to Todo, so it lands straight in the pool `/next-task`
-reads — no `item-add`, no column set by hand. What no workflow sets is `Category`, `Size` and `Area`; those stay the filer's job,
-along with the matching `cat:` / `size:` labels.
+**Stay on the claimed card.** A session solves and implements the task it took, and reports on
+that task only. What it met in passing — an unrelated snag noticed while reading, a smell in a
+file it did not change, a "valuable but out of scope" remark — is neither filed nor narrated:
+no new issue, no closing section of the end report. A test session or a requested audit finds
+it again, at a moment where someone asked for it. Only the maintainer widens a session's scope.
+
+**Filing a card is a deliberate act** — `/triage-report`, a maintainer's request, or the split
+of a claimed task that turned out to be two. `Auto-add to project` then puts the issue on the
+board and sets `Status` to Todo, so it lands straight in the pool `/next-task` reads — no
+`item-add`, no column set by hand. What no workflow sets is `Category`, `Size` and `Area`; those
+stay the filer's job, along with the matching `cat:` / `size:` labels.
 **Every draft card is read first by the `card-reviewer` sub-agent** — which checks those three
 fields too, `Area` included, because the claim rule reads it and a card filed without one
 reserves no ground — whose dated verdict becomes the card's first comment; on `DO NOT FILE` no
-issue is created and the session's report says why.
+issue is created.
 
 **The board is written in English — all of it**, whatever language the session, the source or
 the conversation was in: titles, bodies, every comment, columns, fields, labels. Translate on
