@@ -720,15 +720,15 @@ gh api graphql -f query='mutation { addBlockedBy(input:{
 # finding met while driving a card is NOT one of them. This recipe is how those surfaces file,
 # never a licence to file what you noticed on the way.
 # The draft goes to the `card-reviewer` sub-agent FIRST; on DO NOT FILE, nothing below runs.
-gh issue create --repo Crazz-Org/SPO-WebClient --title "…" --body "…" \
+gh issue create --repo Crazz-Org/SPO-WebClient --title "…" --body-file <file> \
   --label "cat:latent-trap" --label "size:M"
-gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body "<the verdict, verbatim>"
+gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body-file <file>  # <the verdict, verbatim>
 # `Auto-add to project` + `Item added to project` put the card in Todo on their own.
 # Only if a card has not appeared after ~30 s (a workflow was turned off):
 gh project item-add 1 --owner Crazz-Org --url <ISSUE_URL>
 
 # Final comment
-gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body "…"
+gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body-file <file>
 ```
 
 The entry point for a working session is the **`/next-task`** command
