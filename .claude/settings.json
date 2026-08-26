@@ -157,6 +157,11 @@
             "type": "command",
             "command": "bash .claude/hooks/poll-loop-guard.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/main-commit-guard.sh",
+            "timeout": 10
           }
         ]
       }
