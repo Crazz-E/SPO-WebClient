@@ -48,6 +48,8 @@ export interface BenchVerdict {
    */
   tree?: string;
   jobId: string;
+  /** The sha whose live drive this attestation copies; absent = not a reuse. */
+  reusedFrom?: string;
   createdAt: string;
   /** Capability exceptions the gate recorded (doc/E2E-POLICY.md §7) — shown on GitHub. */
   exceptions?: number;
@@ -132,10 +134,41 @@ export function ghStatusPublisher(
 /** Don't retry a sha forever — after this age the commit was evidently never pushed. */
 const PUBLISH_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/** GitHub's commit-status `description` field is truncated/rejected past this many characters. */
+export const STATUS_DESCRIPTION_MAX = 140;
+
+/**
+ * Build the GitHub commit-status description for a verdict, never exceeding
+ * {@link STATUS_DESCRIPTION_MAX} characters.
+ *
+ * The verdict word, "(tree moved)", the exception count and the base sha form a
+ * protected tail — always included in full. The job id is appended last, into whatever
+ * budget remains; when a long `reusedFrom`/`jobId`/`baseMain` chain would blow the
+ * budget, the job id is truncated, or dropped entirely if there is no room for it at all.
+ */
+export function statusDescription(verdict: BenchVerdict): string {
+  const tail =
+    `${verdict.verdict}${verdict.fingerprintStable ? '' : ' (tree moved)'}` +
+    `${verdict.exceptions ? ` — ${verdict.exceptions} capability exception(s)` : ''}` +
+    `${verdict.baseMain ? ` — base ${verdict.baseMain.slice(0, 8)}` : ''}` +
+    `${verdict.reusedFrom ? ` — reused ${verdict.reusedFrom.slice(0, 8)}` : ''}`;
+
+  const jobSuffix = ` — job ${verdict.jobId}`;
+  if (tail.length + jobSuffix.length <= STATUS_DESCRIPTION_MAX) return tail + jobSuffix;
+
+  // Not enough room for the full job id — truncate it to whatever fits.
+  const prefix = ' — job ';
+  const budget = STATUS_DESCRIPTION_MAX - tail.length - prefix.length;
+  if (budget <= 0) return tail.slice(0, STATUS_DESCRIPTION_MAX);
+  return tail + prefix + verdict.jobId.slice(0, budget);
+}
+
 /**
  * One publishing pass: try every fresh, unpublished attestation. A failure (typically
  * 422 — the sha is not on GitHub yet because the session has not pushed) leaves the
- * file untouched for the next pass; success stamps `published: true`.
+ * file untouched for the next pass; success stamps `published: true`. `failures` counts
+ * consecutive publish failures per sha across passes — logged once, on the third — and
+ * defaults to a fresh map so callers that don't care about the streak see prior behaviour.
  */
 export function publishPendingStatuses(
   paths: BenchPaths,
@@ -143,24 +176,22 @@ export function publishPendingStatuses(
   log: (line: string) => void,
   nowMs: number = Date.now(),
   dir: string = paths.verdicts,
+  failures: Map<string, number> = new Map(),
 ): void {
   for (const { verdict } of listVerdictsIn(dir)) {
     if (verdict.published) continue;
     if (nowMs - Date.parse(verdict.createdAt) > PUBLISH_WINDOW_MS) continue;
     try {
-      publish(
-        verdict.worktree,
-        verdict.head,
-        statusState(verdict.verdict),
-        `${verdict.verdict}${verdict.fingerprintStable ? '' : ' (tree moved)'}` +
-          `${verdict.exceptions ? ` — ${verdict.exceptions} capability exception(s)` : ''}` +
-          `${verdict.baseMain ? ` — base ${verdict.baseMain.slice(0, 8)}` : ''} — job ${verdict.jobId}`,
-      );
+      publish(verdict.worktree, verdict.head, statusState(verdict.verdict), statusDescription(verdict));
       writeVerdictIn(dir, { ...verdict, published: true });
       log(`published ${statusState(verdict.verdict)} for ${verdict.head.slice(0, 8)}`);
+      failures.delete(verdict.head);
     } catch (err: unknown) {
-      // Expected until the commit is pushed; keep quiet unless it never resolves.
-      void toErrorMessage(err);
+      const count = (failures.get(verdict.head) ?? 0) + 1;
+      failures.set(verdict.head, count);
+      if (count === 3) {
+        log(`publish failed 3x for ${verdict.head.slice(0, 8)}: ${toErrorMessage(err)}`);
+      }
     }
   }
 }

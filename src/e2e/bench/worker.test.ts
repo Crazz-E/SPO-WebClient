@@ -1129,9 +1129,42 @@ describe('mergeQueueDeps — what the queue service is given', () => {
     const copy = listVerdicts(paths).find(v => v.verdict.head === 'f'.repeat(40))!.verdict;
     expect(copy.verdict).toBe('PASS');
     expect(copy.tree).toBe('tree-9');
-    // Unpublished, so the loop posts it to GitHub; and the id says plainly it was reused.
+    // Unpublished, so the loop posts it to GitHub; the job id stays byte-identical to the
+    // original live drive, and `reusedFrom` carries the provenance instead.
     expect(copy.published).toBe(false);
-    expect(copy.jobId).toMatch(/job-src \(reused: identical tree\)/);
+    expect(copy.jobId).toBe('job-src');
+    expect(copy.reusedFrom).toBe('e'.repeat(40));
+  });
+
+  it('keeps the jobId byte-identical and reusedFrom pinned to the original across a reuse chain', () => {
+    // A->B, B->C, C->D — each hop reads the verdict the previous hop just wrote. Before
+    // this card, jobId grew a "(reused: ...)" suffix on every hop, so a long enough chain
+    // pushed the status description past GitHub's 140-char limit and stopped publishing.
+    const paths = bench();
+    const shaA = 'a'.repeat(40);
+    const shaB = 'b'.repeat(40);
+    const shaC = 'c'.repeat(40);
+    const shaD = 'd'.repeat(40);
+    writeVerdictIn(paths.verdicts, {
+      head: shaA,
+      branch: 'x',
+      worktree: paths.refCheckout,
+      verdict: 'PASS',
+      fingerprintStable: true,
+      tree: 'tree-chain',
+      jobId: 'job-original',
+      createdAt: new Date().toISOString(),
+      published: true,
+    });
+
+    const deps = mergeQueueDeps(paths, () => {});
+    deps.reuse(shaA, shaB, 'identical tree');
+    deps.reuse(shaB, shaC, 'identical tree');
+    deps.reuse(shaC, shaD, 'identical tree');
+
+    const final = listVerdicts(paths).find(v => v.verdict.head === shaD)!.verdict;
+    expect(final.jobId).toBe('job-original');
+    expect(final.reusedFrom).toBe(shaA);
   });
 
   it('does nothing when the source verdict has vanished — the next tick gates it', () => {
