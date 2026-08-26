@@ -234,27 +234,58 @@ The repo process applies unchanged — this command adds nothing to it:
   ARE the review — pretending a Haiku driver reviews a diff is the fiction that produced the
   incident.
 - **The invariant report.** The plan step (Fable) emits an invariant block: each invariant a
-  **single-line verbatim quote** plus the `file:line` carrying it. Single-line is a hard
-  requirement — the check is `grep -F`. The driver copies the block unmodified into every
-  execution spawn, and the sub-agent returns one row per invariant: the byte-identical quote
-  plus `HELD` or `CHANGED`, plus a final row listing the files it changed as `git status --porcelain`
-  output (the driver compares this to what it asked for).
+  **verbatim quote** — of any length, not restricted to a single line — plus the `file:line`
+  (or `file:start-end` for a quote spanning several lines) carrying it. The driver copies the
+  block unmodified into every execution spawn, and the sub-agent returns one row per invariant:
+  the quote plus `HELD` or `CHANGED`, plus a final row listing the files it changed as
+  `git status --porcelain` output (the driver compares this to what it asked for). The driver's
+  check below reads the quote against the file as it now stands — never a diff, never `grep`
+  over added/removed lines.
 - **Driver's check, all mechanical**: (1) **Before the invariant check**, verify expected files
   actually changed: `git status --porcelain` must name each file the spawn was told to edit.
   Empty output where edits were expected is a **failed attempt**, not a clean one — the
   sub-agent either did not run in the worktree or did nothing. (2) Verify the main checkout is
   untouched: `git -C <main checkout> status --porcelain` must be empty. A worktree session that
-  dirties `main` has done something nobody asked for. (3) For each HELD row, `git diff -U0 -- <file>`
-  filtered to changed lines must be empty for the quoted text — plain `git diff` carries three
-  lines of context on each side of a hunk, so an invariant sitting near an unrelated edit reads
-  as touched when it is not; `-U0` and a filter to added/removed lines only avoid that false
-  positive. The working form: `git diff -U0 -- <file> | grep -E '^[+-]' | grep -v '^[+-][+-]'`,
-  then `grep -F` the quote against that. A hunk touching the invariant's own line while the row
-  says HELD is an auto-reject. **Any CHANGED row halts the attempt** — a delegated implementation
-  may not amend an invariant; only the human may. On 2026-08-26 a driver rewrote the comment
-  carrying an invariant so it agreed with the new code — under this check that reads as a failed
-  row, not as agreement. A check that cries wolf gets ignored, so it reads changed lines only —
-  over-matching is a defect in the check, not a safe default.
+  dirties `main` has done something nobody asked for. (3) For each HELD row, extract the quoted
+  text from the invariant and normalize it — strip comment markers (`#`, `**`, a leading `-` or
+  `*`), collapse all whitespace, line breaks included, to single spaces — then check whether
+  that normalized text is a substring of the same normalization applied to the actual file at
+  the invariant's `file:line`/`file:start-end`. The check is over the resulting file, not over
+  the patch: `git diff` never enters it, so re-wrapping an invariant (the same words, laid out
+  on different lines) still reads as present, and rewording it (different words, whatever the
+  layout) reads as absent. The working form:
+  `sed -n '<start>,<end>p' <file> | sed 's/^[#*-]*\s*//' | tr '\n' ' ' | tr -s ' '`, then a plain
+  substring test of the normalized quote against that output. Absent → the row is a lie and the
+  attempt fails; a hunk that touched the invariant's own words is caught the same way, because
+  its normalized text is now gone or altered. **Any CHANGED row halts the attempt** — a
+  delegated implementation may not amend an invariant; only the human may. On 2026-08-26 a
+  driver rewrote the comment carrying an invariant so it agreed with the new code — under this
+  check that reads as a failed row, not as agreement.
+- **Worked example**, using a real invariant from `scripts/claim-read.sh:16-18`:
+  ```
+  # Never read the pool with `gh project item-list` in a session: same data, ~103 points
+  # (kanban-workflow § GitHub API discipline). That is how the board went unreadable on
+  # 2026-08-25.
+  ```
+  **Re-wrapped** — same words, different line breaks, e.g. after an unrelated edit above it
+  shifted the hunk:
+  ```
+  # Never read the pool with `gh project item-list` in a session: same data,
+  # ~103 points (kanban-workflow § GitHub API discipline). That is how the
+  # board went unreadable on 2026-08-25.
+  ```
+  Both normalize to the same string (`Never read the pool with ... went unreadable on
+  2026-08-25.`) — the substring test finds it → **HELD**, correctly, even though every line in
+  the file changed.
+
+  **Reworded** — same idea, different words:
+  ```
+  # Do not use `gh project item-list` to read the pool during a session: it costs about 103
+  # points for the same data (kanban-workflow § GitHub API discipline), which broke the board
+  # on 2026-08-25.
+  ```
+  The normalized quote is no longer a substring of the normalized file text — the substring
+  test fails → **CHANGED**, and the attempt halts.
 - **`main` moved past your `baseMain`** — the push hook's `NOTE:` is informational, not a
   judgement call: run `git diff --name-only <baseMain>..origin/main` and intersect it with
   the changed paths on your branch (Haiku, low effort — two commands and an emptiness test,
