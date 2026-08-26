@@ -305,12 +305,20 @@ title `#<issue> · Needs triage`, keep `Session` filled, post one comment **in s
 non-technical English** explaining what was attempted and what blocked it. Never leave the
 card in In progress/Gate/PR at session end — close your ownership, one way or the other.
 
-## 5 · Findings along the way
+## 5 · Stay on the card
 
-Anything discovered out of scope: new issue, added to the board in Todo (bottom), `Category`
-**and the matching `cat:` / `size:` labels** set (kanban-workflow § Feeding rule — the project
-field is not queryable, the label is), synthetic body — then back to the task. Never expand
-your own scope with it.
+A session solves and implements the card it claimed, and its final report covers that card
+only. What it met on the way — an unrelated snag noticed while reading, a smell in a file it
+did not change, a "valuable but out of scope" remark — is neither filed nor narrated: no new
+issue, no closing section of the report. A test session or a requested audit finds it again,
+at a moment where someone asked for it. Never expand your own scope with it, and never widen
+the report to make the detour visible.
+
+The one card a session still files is the **split** — the claimed task turned out to be two
+and the half you are not doing needs a home — or a card the maintainer asked for by name. Then:
+new issue, board Todo (bottom), `Category`, `Size` and `Area` set **and the matching `cat:` /
+`size:` labels** too (kanban-workflow § Feeding rule — the project field is not queryable, the
+label is), synthetic body — then back to the task.
 
 | `Category` | label | | `Size` | label |
 |---|---|---|---|---|
@@ -324,4 +332,4 @@ Authority for *why*: [kanban-workflow.md § Feeding rule](../../doc/kanban-workf
 
 Run the draft past the **`card-reviewer`** sub-agent before filing (kanban-workflow § The
 card review): its verdict becomes the new issue's first comment, and on `DO NOT FILE` no
-issue is created — your final report says what was found and why no card exists.
+issue is created and nothing is said of it.
