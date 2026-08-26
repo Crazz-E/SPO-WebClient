@@ -88,6 +88,12 @@ done
 branch="$(git rev-parse --abbrev-ref HEAD)"
 session="${branch} @ $(date +%F)"
 
+# The driver-scope marker: a verified claim is the moment a session BECOMES the driver of a
+# card, and `.claude/hooks/driver-scope-guard.sh` arms on it. Lifecycle and rationale live in
+# the sourced file — one derivation of the key, not one per caller.
+. "$(dirname "${BASH_SOURCE[0]}")/driver-scope.sh"
+
+
 # --- rate-limit reporting -----------------------------------------------------------------
 # `rateLimit { cost remaining resetAt }` is a field on the Query root type only — GitHub's
 # schema does not expose it on Mutation (confirmed: a mutation asking for it fails with
@@ -260,6 +266,7 @@ if [ "$release" -eq 1 ]; then
     exit 5
   fi
 
+  disarm_driver_scope
   if [ "$reopened_release" -eq 1 ]; then
     echo "RELEASED #$issue (reopened — cleared claim of $current_session)"
   else
@@ -314,6 +321,7 @@ if [ "$after" != "$session" ]; then
   exit 3
 fi
 
+arm_driver_scope "$issue"
 if [ "$already_ours" -eq 1 ]; then
   echo "CLAIMED #$issue (already held)"
 else

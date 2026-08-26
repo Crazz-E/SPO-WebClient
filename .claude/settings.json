@@ -162,6 +162,21 @@
             "type": "command",
             "command": "bash .claude/hooks/main-commit-guard.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/driver-scope-guard.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/driver-scope-guard.sh",
+            "timeout": 10
           }
         ]
       }

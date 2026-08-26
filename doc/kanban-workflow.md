@@ -573,6 +573,17 @@ A *decision* delegates in one round trip; a *phase* does not. An implementation 
 one spawn per attempt with a driver-held ledger, and the gate stays with the driver because
 only the depositing worktree can reach it.
 
+**And that boundary is now enforced, not asked.** "The driver never edits a tracked file
+itself" was prose the driver put to itself, which is the weakest enforcement there is: the
+model that has already drifted is the one being asked whether it is drifting. On 2026-08-26 a
+Haiku driver rewrote a whole script with a card and a criterion in hand, neither of which told
+it to stop. `.claude/hooks/driver-scope-guard.sh` now refuses the driver's own writes —
+`Edit`/`Write`, and the Bash verbs that reach the tree without them — arming on a verified
+`board:take` claim and releasing on every path that closes ownership. It tells the driver from
+its own sub-agent by the `agent_id` the PreToolUse payload carries only inside a Task worker,
+so the delegate writes unblocked. A guardrail, not a sandbox: what it buys is that drift now
+has to be deliberate instead of merely easy.
+
 ### The steps of a session, and what each one is worth
 
 | Step (`/next-task` §) | What it actually is | Model | Effort |

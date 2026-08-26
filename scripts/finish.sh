@@ -128,7 +128,10 @@ heartbeat_age_min() {
 forget_session_files() {
   local key
   key="$(session_key "$1")"
-  rm -f "$SESSIONS_DIR/$key.alive" "$SESSIONS_DIR/$key.finished" 2>/dev/null || true
+  # `.driving` is the driver-scope marker armed by a verified `board:take` claim
+  # (.claude/hooks/driver-scope-guard.sh). A finished session is no longer driving anything.
+  rm -f "$SESSIONS_DIR/$key.alive" "$SESSIONS_DIR/$key.finished" \
+        "$SESSIONS_DIR/$key.driving" 2>/dev/null || true
 }
 
 # Session worktrees nobody is using any more. Three kinds, all clean, with no process
@@ -248,6 +251,9 @@ if [ "$branch_only" = 0 ] && [ "$here" != "$MAIN_REPO" ]; then
     # the directory is still there and the session can keep working in it.
     mkdir -p "$SESSIONS_DIR"
     printf '%s\t%s\t%s\n' "$here" "$branch" "$(git -C "$here" rev-parse HEAD)" > "$SESSIONS_DIR/$(session_key "$here").finished"
+    # The session may keep working here, so `.alive` stays. `.driving` must NOT: its card is
+    # finished, and an armed marker would lock this session out of every tracked file.
+    rm -f "$SESSIONS_DIR/$(session_key "$here").driving" 2>/dev/null || true
     retired_here=1
     echo "== retiring worktree $here — kept while this session is in it"
   fi

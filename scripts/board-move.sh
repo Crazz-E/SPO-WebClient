@@ -18,6 +18,11 @@
 #   bash scripts/board-move.sh 285 needstriage
 set -euo pipefail
 
+# Two of this script's columns CLOSE a session's ownership, and the driver-scope marker must
+# not outlive it: a session that keeps working while still armed is refused every write to a
+# tracked file in the name of a card it no longer holds.
+. "$(dirname "${BASH_SOURCE[0]}")/driver-scope.sh"
+
 OWNER="Crazz-Org"
 REPO="SPO-WebClient"
 PROJECT_NUMBER=1
@@ -142,6 +147,10 @@ if [ "$after" != "$option_name" ]; then
   echo "RATE_LIMITED: write landed, re-read pending"
   exit 5
 fi
+
+case "$option_name" in
+  Done|"Needs triage") disarm_driver_scope ;;
+esac
 
 echo "MOVED #$issue -> $option_name"
 exit 0
