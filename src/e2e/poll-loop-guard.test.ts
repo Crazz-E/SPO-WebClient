@@ -23,16 +23,19 @@ import * as os from 'os';
 import * as path from 'path';
 
 const HOOK = path.join(process.cwd(), '.claude', 'hooks', 'poll-loop-guard.sh');
+const PIPE_HOOK = path.join(process.cwd(), '.claude', 'hooks', 'verdict-pipe-guard.sh');
 
 interface HookRun {
   code: number;
   stderr: string;
 }
 
-function invoke(command: string): HookRun {
+function invokeHook(hook: string, command: string, background = false): HookRun {
   try {
-    execFileSync('bash', [HOOK], {
-      input: JSON.stringify({ tool_input: { command } }),
+    execFileSync('bash', [hook], {
+      input: JSON.stringify({
+        tool_input: background ? { command, run_in_background: true } : { command },
+      }),
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, SPO_SESSION_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'spo-poll-')) },
     });
@@ -43,9 +46,19 @@ function invoke(command: string): HookRun {
   }
 }
 
+/** Invokes poll-loop-guard.sh. `background` puts `run_in_background: true` in tool_input. */
+function invoke(command: string, background = false): HookRun {
+  return invokeHook(HOOK, command, background);
+}
+
 /** 0 = allowed through, 2 = blocked. */
-function guard(command: string): number {
-  return invoke(command).code;
+function guard(command: string, background = false): number {
+  return invoke(command, background).code;
+}
+
+/** Invokes verdict-pipe-guard.sh the same way `invoke` invokes poll-loop-guard.sh. */
+function invokePipeGuard(command: string, background = false): HookRun {
+  return invokeHook(PIPE_HOOK, command, background);
 }
 
 /** The four commands a session actually proposed, verbatim. */
@@ -157,30 +170,79 @@ describe('shell-backgrounding a verdict command', () => {
 
 describe('chaining a second command after a verdict command', () => {
   /**
-   * The same destruction as the trailing ampersand, reached without one: `cmd; echo
-   * "EXIT=$?"` reports the ECHO's status (always 0), not the verdict's, and `cmd && next`
-   * reports NEXT's. Either way the exit code CLAUDE.md says to read the verdict from is
-   * gone — refused whether or not the command is also backgrounded.
+   * The same destruction as the trailing ampersand, reached without one — but ONLY when the
+   * Bash call is also backgrounded (run_in_background: true): `cmd; echo "EXIT=$?"` makes
+   * the harness's completion notification report the ECHO's status (always 0), not the
+   * verdict's, and `cmd && next` reports NEXT's.
+   *
+   * In the FOREGROUND the same chain stays legal — reading (a) on issue #289, for three
+   * reasons: (1) the card that raised the incident rules the foreground compound safe;
+   * (2) shell state does not persist between Bash tool calls, so `; echo "EXIT=$?"` is the
+   * only way a foreground caller learns WHICH of the bench's several non-zero codes came
+   * back; (3) in the foreground `&&` still propagates a genuine failure code from `cmd` —
+   * only the backgrounded completion notification is destroyed, which is what this guard
+   * exists to catch.
    */
   it.each([
     ['npm run gate > /tmp/scratch/gate.log 2>&1; echo "EXIT=$?"'],
     ['npm run gate && something-else'],
     ['npm run test:live > /tmp/scratch/live.log 2>&1; echo "EXIT=$?"'],
     ['npm test; echo "EXIT=$?"'],
-  ])('refuses %s', command => {
-    expect(guard(command)).toBe(2);
+  ])('refuses %s when backgrounded', command => {
+    expect(guard(command, true)).toBe(2);
   });
 
-  it('names the bare form as the fix, not the old compound suggestion', () => {
-    const { stderr } = invoke('npm run gate > /tmp/scratch/gate.log 2>&1; echo "EXIT=$?"');
+  it.each([
+    ['npm run gate > /tmp/scratch/gate.log 2>&1; echo "EXIT=$?"'],
+    ['npm run gate && something-else'],
+    ['npm run test:live > /tmp/scratch/live.log 2>&1; echo "EXIT=$?"'],
+    ['npm test; echo "EXIT=$?"'],
+  ])('allows %s in the foreground', command => {
+    expect(guard(command, false)).toBe(0);
+  });
+
+  it('names the bare form as the backgrounding fix, and labels the chained form foreground-only', () => {
+    const { stderr } = invoke('npm run gate > /tmp/scratch/gate.log 2>&1; echo "EXIT=$?"', true);
     expect(stderr).toContain('npm run gate > <scratchpad>/gate.log 2>&1');
-    // The message may explain the bad pattern, but must not recommend it: the fixed line
-    // itself has nothing chained after the redirect.
-    expect(stderr).not.toContain('npm run gate > <scratchpad>/gate.log 2>&1; echo');
+    expect(stderr).toContain('FOREGROUND');
+    // The foreground alternative it names is exactly verdict-pipe-guard.sh's sanctioned form.
+    expect(stderr).toContain('npm run gate > <scratchpad>/gate.log 2>&1; echo "EXIT=$?"');
   });
 
-  it('still allows the bare redirect form with nothing chained after it', () => {
-    expect(guard('npm run gate > /tmp/scratch/gate.log 2>&1')).toBe(0);
+  it('still allows the bare redirect form with nothing chained after it, either way', () => {
+    expect(guard('npm run gate > /tmp/scratch/gate.log 2>&1', false)).toBe(0);
+    expect(guard('npm run gate > /tmp/scratch/gate.log 2>&1', true)).toBe(0);
+  });
+});
+
+describe("the two guards agree on each other's sanctioned form", () => {
+  /**
+   * poll-loop-guard.sh and verdict-pipe-guard.sh each prescribe a remedy for the other's
+   * refusal shape. Neither hook is worth anything if its own advice trips the other one —
+   * so this proves both directions, and pins that backgrounding the pipe-guard's foreground
+   * remedy is still refused, by design (that combination is exactly what poll-loop-guard.sh
+   * exists to catch).
+   */
+  const pipeGuardRemedy =
+    'npm test > /tmp/scratch/t.log 2>&1; echo "EXIT=$?"; tail -40 /tmp/scratch/t.log';
+  const pollGuardRemedy = 'npm run gate > /tmp/scratch/gate.log 2>&1';
+  const pipefailForm = 'set -o pipefail; npm test 2>&1 | tail -40';
+
+  it("verdict-pipe-guard's foreground remedy passes poll-loop-guard in the foreground", () => {
+    expect(guard(pipeGuardRemedy, false)).toBe(0);
+  });
+
+  it('the same remedy backgrounded is still refused by poll-loop-guard, by design', () => {
+    expect(guard(pipeGuardRemedy, true)).toBe(2);
+  });
+
+  it("poll-loop-guard's backgrounding remedy passes verdict-pipe-guard", () => {
+    expect(invokePipeGuard(pollGuardRemedy).code).toBe(0);
+  });
+
+  it('the pipefail form passes both guards', () => {
+    expect(guard(pipefailForm)).toBe(0);
+    expect(invokePipeGuard(pipefailForm).code).toBe(0);
   });
 });
 

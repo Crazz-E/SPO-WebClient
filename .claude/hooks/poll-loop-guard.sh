@@ -29,11 +29,15 @@
 # used to stand in for them is refused with their name in the message.
 #
 # Scope, kept narrow on purpose — a false positive costs a session a turn:
-#   refused  a trailing `&` on a command whose exit code IS the verdict; and a loop
-#            (`until` / `while` / `for`) whose body sleeps AND which mentions a bench job
-#            file, a verdict file, or a `gh` read
+#   refused  a trailing `&` on a command whose exit code IS the verdict, in EITHER mode; a
+#            `;`/`&&` chained after one, but ONLY when the Bash call also sets
+#            run_in_background: true — the harness then notifies on the chained call's LAST
+#            stage, not the verdict's; and a loop (`until` / `while` / `for`) whose body
+#            sleeps AND which mentions a bench job file, a verdict file, or a `gh` read
 #   allowed  everything else, heredoc bodies included (a doc quoting a loop is not a run).
-#            The redirect to a log file is explicitly fine — only the ampersand is not.
+#            The redirect to a log file is explicitly fine — only the ampersand is not. A
+#            `;`/`&&` chain run in the FOREGROUND is what verdict-pipe-guard.sh prescribes
+#            (`cmd > log 2>&1; echo "EXIT=$?"`) and stays legal here.
 #
 # Exit 0 = allow, exit 2 = block with the reason fed back to the model.
 #
@@ -49,7 +53,12 @@ verdict="$(printf '%s' "$payload" | node -e "
   process.stdin.on('data', c => (raw += c));
   process.stdin.on('end', () => {
     let command = '';
-    try { command = JSON.parse(raw)?.tool_input?.command ?? ''; } catch { command = ''; }
+    let background = false;
+    try {
+      const parsed = JSON.parse(raw);
+      command = parsed?.tool_input?.command ?? '';
+      background = parsed?.tool_input?.run_in_background === true;
+    } catch { command = ''; }
 
     // A heredoc body is text, not commands — same skeleton as verdict-pipe-guard.sh.
     const lines = command.split('\n');
@@ -73,17 +82,26 @@ verdict="$(printf '%s' "$payload" | node -e "
     const backgrounded = /(^|[;\n&|])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*(npm\s+(?:run\s+)?(?:gate|test|test:live|typecheck|lint|build)|npx\s+jest|node\s+[^\s]*(?:verify-gate|run)\.js)\b[^\n;]*&\s*(?:$|[\n;])/;
     if (backgrounded.test(text)) { process.stdout.write('amp'); return; }
 
-    // The same destruction reached without an ampersand at all: chaining a second command
-    // after the verdict with \`;\` or \`&&\`. \`cmd; echo \"EXIT=\$?\"\` reports the ECHO's
-    // status (always 0), not the verdict's — the printed text becomes the only place the
-    // number survives, which is exactly what CLAUDE.md forbids reading. \`cmd && next\`
-    // reports NEXT's status. Either shape is refused whether or not it is also backgrounded,
-    // because foreground doesn't save it: the harness still reports the compound's own last
-    // stage, not the run's. \`2>&1\` is a redirect, not this separator — stripped first so it
-    // is never mistaken for one.
+    // The same destruction reached without an ampersand at all, but ONLY when the Bash call
+    // is also going to be BACKGROUNDED (run_in_background: true): chaining a second command
+    // after the verdict with \`;\` or \`&&\`. With the call backgrounded, the harness's
+    // completion notification reports the LAST stage of what it ran — \`cmd; echo
+    // \"EXIT=\$?\"\` notifies on the ECHO's status (always 0), \`cmd && next\` on NEXT's —
+    // never the verdict command's, which is the number CLAUDE.md says to read.
+    //
+    // In the FOREGROUND the same chain stays legal — reading (a) on issue #289, for three
+    // reasons: (1) the card that raised the incident rules the foreground compound safe;
+    // (2) shell state does not persist between Bash tool calls, so \`; echo \"EXIT=\$?\"\` is
+    // the ONLY way a foreground caller learns WHICH of the bench's several non-zero codes
+    // came back — the tool call returns synchronously with the real exit code regardless,
+    // and the echo only mirrors it into the printed text; (3) in the foreground \`&&\`
+    // propagates a genuine failure code from \`cmd\` — only the backgrounded completion
+    // notification is destroyed, which is the incident this branch exists for.
+    // \`2>&1\` is a redirect, not this separator — stripped first so it is never mistaken
+    // for one.
     const stripRedirects = text.replace(/\d*>&\d+/g, '');
     const compound = /(^|[;\n&|])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*(npm\s+(?:run\s+)?(?:gate|test|test:live|typecheck|lint|build)|npx\s+jest|node\s+[^\s]*(?:verify-gate|run)\.js)\b[^\n;&]*(;|&&)\s*\S/;
-    if (compound.test(stripRedirects)) { process.stdout.write('compound'); return; }
+    if (background && compound.test(stripRedirects)) { process.stdout.write('compound'); return; }
 
     // There is a third route by which an exit code is lost — capturing the OUTPUT in a
     // command substitution, which keeps the text and discards the number. It is NOT guarded
@@ -125,28 +143,35 @@ case "${verdict:-ok}" in
     echo '  npm run gate > <scratchpad>/gate.log 2>&1' >&2
     echo "" >&2
     echo "with run_in_background: true. The redirect is fine and needs no permission — only" >&2
-    echo "the ampersand does. Keep the command BARE: do not append \`; echo \$?\` or anything" >&2
-    echo "else after it — see the compound refusal below for why that destroys the same" >&2
-    echo "exit code from the other side." >&2
+    echo "the ampersand does. Keep the BACKGROUNDED command bare: do not append \`; echo \$?\`" >&2
+    echo "or anything else after it when you pass run_in_background: true — see the compound" >&2
+    echo "refusal below for why that destroys the same exit code from the other side. In the" >&2
+    echo "FOREGROUND that chain is fine; it just is not what backgrounding needs." >&2
     exit 2
     ;;
   compound)
-    echo "BLOCKED: that chains a second command after one whose exit code IS the verdict." >&2
+    echo "BLOCKED: that chains a second command after a verdict command AND backgrounds it." >&2
     echo "" >&2
-    echo "\`cmd; echo \"EXIT=\$?\"\` reports the ECHO's status — always 0 — not the verdict's;" >&2
-    echo "\`cmd && next\` reports NEXT's status. Either way the number CLAUDE.md says to read" >&2
-    echo "the verdict from is gone, and the printed text becomes the only place it survives —" >&2
-    echo "which is the read CLAUDE.md forbids. This holds whether or not the command is also" >&2
-    echo "backgrounded: foregrounding it does not bring the exit code back, because the shell" >&2
-    echo "still reports the compound's own last stage, not the run's." >&2
+    echo "With run_in_background: true, the harness's completion notification reports the" >&2
+    echo "LAST stage of what it ran — the echo's, or the next command's — never the verdict" >&2
+    echo "command's. \`cmd; echo \"EXIT=\$?\"\` notifies on the ECHO's status (always 0);" >&2
+    echo "\`cmd && next\` notifies on NEXT's. Either way the number CLAUDE.md says to read the" >&2
+    echo "verdict from never reaches you." >&2
     echo "" >&2
-    echo "Run the verdict command alone — nothing chained after it, foreground or with the" >&2
-    echo "tool's run_in_background: true:" >&2
+    echo "Background the BARE command instead — nothing chained after it:" >&2
     echo "" >&2
     echo '  npm run gate > <scratchpad>/gate.log 2>&1' >&2
     echo "" >&2
-    echo "The redirect is fine; it is only what comes AFTER the redirected command — a" >&2
-    echo "\`;\` or \`&&\` — that is refused." >&2
+    echo "with run_in_background: true." >&2
+    echo "" >&2
+    echo "In the FOREGROUND this same chain is fine, and is what verdict-pipe-guard.sh" >&2
+    echo "recommends as the sanctioned form: the tool call returns synchronously with the" >&2
+    echo "real exit code regardless of what follows it, so \`; echo \"EXIT=\$?\"\` only mirrors" >&2
+    echo "that code into the printed text — which is how a foreground caller tells apart the" >&2
+    echo "bench's several non-zero verdicts, since shell state does not persist between Bash" >&2
+    echo "tool calls:" >&2
+    echo "" >&2
+    echo '  npm run gate > <scratchpad>/gate.log 2>&1; echo "EXIT=$?"' >&2
     exit 2
     ;;
   bench)

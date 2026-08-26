@@ -23,9 +23,14 @@
 # itself. Either says the author knows where the status comes from, which is the whole
 # subject; there is nothing left to protect them from.
 #
-# The sanctioned form separates the two questions instead of nesting them:
+# The sanctioned form separates the two questions instead of nesting them — a FOREGROUND
+# form:
 #
 #   npm test > /tmp/<scratchpad>/test.log 2>&1; echo "EXIT=$?"; tail -40 <same file>
+#
+# Never with run_in_background: true — poll-loop-guard.sh refuses that combination, because
+# the harness's completion notification would then report the ECHO's exit status (always
+# 0), not the suite's; a backgrounded run must stay the bare command, nothing chained after it.
 #
 # The status comes from the run, the text from the file. No filter stands between the
 # suite and the exit code, and no stream is dropped on the way.
@@ -126,6 +131,9 @@ case "${verdict:-ok}" in
     echo "" >&2
     echo "(use your scratchpad directory for the log). The status comes from the run, the" >&2
     echo "text from the file — no filter in between, no stream dropped." >&2
+    echo "" >&2
+    echo "That is a FOREGROUND form. Backgrounded (run_in_background: true), the command" >&2
+    echo "must stay bare — nothing chained after it — or poll-loop-guard.sh refuses it." >&2
     echo "" >&2
     echo "If you want the pipeline anyway, make the shell carry the real status:" >&2
     echo "" >&2
