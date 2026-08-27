@@ -10,14 +10,21 @@ import type { FavoritesItem, ResearchInventionItem } from '../../shared/types';
 // Favorites protocol constants (from Delphi FavProtocol.pas)
 const FAV_PROP_SEP = '\x01';  // chrPropSeparator = char(1)
 const FAV_ITEM_SEP = '\x02';  // chrItemSeparator = char(2)
-const FAV_KIND_LINK = 1;      // fvkLink — a bookmark with coordinates
+
+/** `fvkFolder` — a folder, holding no coordinates of its own (`Kernel/FavProtocol.pas:6`). */
+export const FAV_KIND_FOLDER = 0 as const;
+/** `fvkLink` — a bookmark with coordinates (`Kernel/FavProtocol.pas:7`). */
+export const FAV_KIND_LINK = 1 as const;
 
 /**
  * Parse the RDOFavoritesGetSubItems response string.
  *
  * Wire format per item: id \x01 kind \x01 name \x01 info \x01 subFolderCount \x01
  * Items separated by \x02.
- * For links (kind=1): info = "displayName,x,y,select"
+ * For links (kind=1): info = "displayName,x,y,select".
+ * For folders (kind=0): info = '' — Voyager creates folders with an empty Info
+ * cookie (`Voyager/FavView.pas:546,752`), and a folder has no coordinates to
+ * carry, so no cookie is parsed for it.
  *
  * `parentPath` is the Location that was asked for — '' for the root. Each item
  * carries the Location that addresses it, because delete and rename take a
@@ -37,10 +44,19 @@ export function parseFavoritesResponse(raw: string, parentPath = ''): FavoritesI
     if (fields.length < 4) continue;
 
     const kind = parseInt(fields[1], 10);
-    if (kind !== FAV_KIND_LINK) continue; // skip folders
+    if (kind !== FAV_KIND_FOLDER && kind !== FAV_KIND_LINK) continue; // unrecognised kind
 
     const id = parseInt(fields[0], 10);
     const name = fields[2];
+    if (isNaN(id)) continue;
+
+    const path = parentPath ? `${parentPath}/${id}` : String(id);
+
+    if (kind === FAV_KIND_FOLDER) {
+      items.push({ id, name, path, kind: FAV_KIND_FOLDER });
+      continue;
+    }
+
     const info = fields[3]; // "displayName,x,y,select"
 
     // Parse info cookie: last 3 comma-separated values are x, y, select
@@ -54,9 +70,9 @@ export function parseFavoritesResponse(raw: string, parentPath = ''): FavoritesI
     const x = parseInt(info.substring(beforeXY + 1, beforeLast), 10);
     const y = parseInt(info.substring(beforeLast + 1, lastComma), 10);
 
-    if (isNaN(id) || isNaN(x) || isNaN(y)) continue;
+    if (isNaN(x) || isNaN(y)) continue;
 
-    items.push({ id, name, x, y, path: parentPath ? `${parentPath}/${id}` : String(id) });
+    items.push({ id, name, x, y, path, kind: FAV_KIND_LINK });
   }
 
   return items;

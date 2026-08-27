@@ -5,11 +5,13 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { classifyFacilities } from './facility-status';
-import type { FavoritesItem, MapBuilding } from '@/shared/types';
+import type { FavoritesLinkItem, MapBuilding } from '@/shared/types';
 
 let nextId = 1;
-const fav = (id: string, name: string, x: number, y: number): FavoritesItem =>
-  ({ id: nextId++, name, x, y } as FavoritesItem);
+const fav = (id: string, name: string, x: number, y: number): FavoritesLinkItem => {
+  const assignedId = nextId++;
+  return { id: assignedId, name, x, y, path: String(assignedId), kind: 1 };
+};
 const bld = (x: number, y: number, alert: boolean): MapBuilding =>
   ({ visualClass: '100', tycoonId: 1, options: alert ? 1 : 0, x, y, level: 0, alert, attack: 0 } as unknown as MapBuilding);
 

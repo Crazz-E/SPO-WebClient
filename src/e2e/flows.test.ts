@@ -44,7 +44,7 @@ describe('the catalogue', () => {
 
   it('marks exactly the writing flows as mutating', () => {
     const mutating = FLOWS.filter(f => f.mutates).map(f => f.name).sort();
-    expect(mutating).toEqual(['favorites-roundtrip', 'mail-roundtrip', 'politics-write']);
+    expect(mutating).toEqual(['favorites-roundtrip', 'favorites-tree-descend', 'mail-roundtrip', 'politics-write']);
   });
 
   it('names the known flows when asked for one that does not exist', () => {
@@ -554,5 +554,123 @@ describe('favorites-roundtrip', () => {
 
     expect(result.status).toBe('FAIL');
     expect(result.assertions.find(a => !a.ok)?.what).toMatch(/serves the new name/);
+  });
+});
+
+describe('favorites-tree-descend', () => {
+  interface TreeItem { id: number; name: string; path: string; kind: 0 | 1; x?: number; y?: number }
+
+  /**
+   * A stub tree, same idea as `favSession` above but hierarchical: a folder's
+   * children are whatever items name it as their immediate parent path, and
+   * an add computes its own path from the parent it was given — nothing here
+   * assumes the flow asked for the right path, so a flow that read from the
+   * wrong Location would show up as a missing item, not a green run.
+   */
+  function favTreeSession(
+    seed: TreeItem[] = [],
+    opts: { refuseAddFolder?: boolean; refuseAddLink?: boolean } = {},
+  ) {
+    const tree: TreeItem[] = [...seed];
+    let nextId = 100;
+    const sent: WsMessage[] = [];
+
+    const parentOf = (path: string): string => {
+      const idx = path.lastIndexOf('/');
+      return idx < 0 ? '' : path.slice(0, idx);
+    };
+    const childrenOf = (parentPath: string): TreeItem[] => tree.filter(i => parentOf(i.path) === parentPath);
+
+    const s = stubSession(msg => {
+      sent.push(msg);
+      const m = msg as unknown as {
+        name?: string; x?: number; y?: number; path?: string; parentPath?: string;
+      };
+      switch (msg.type) {
+        case WsMessageType.REQ_FAVORITES_FOLDER:
+          return { type: WsMessageType.RESP_FAVORITES_FOLDER, path: m.path, items: childrenOf(m.path ?? '') };
+        case WsMessageType.REQ_FAVORITE_ADD_FOLDER: {
+          if (opts.refuseAddFolder) return { type: WsMessageType.RESP_FAVORITE_ADD_FOLDER, success: false };
+          const id = nextId++;
+          const parent = m.parentPath ?? '';
+          const path = parent ? `${parent}/${id}` : String(id);
+          tree.push({ id, name: m.name!, path, kind: 0 });
+          return { type: WsMessageType.RESP_FAVORITE_ADD_FOLDER, success: true, id };
+        }
+        case WsMessageType.REQ_FAVORITE_ADD: {
+          if (opts.refuseAddLink) return { type: WsMessageType.RESP_FAVORITE_ADD, success: false };
+          const id = nextId++;
+          const parent = m.parentPath ?? '';
+          const path = parent ? `${parent}/${id}` : String(id);
+          tree.push({ id, name: m.name!, path, kind: 1, x: m.x, y: m.y });
+          return { type: WsMessageType.RESP_FAVORITE_ADD, success: true, id };
+        }
+        default: {
+          const i = tree.findIndex(f => f.path === m.path);
+          if (i >= 0) tree.splice(i, 1);
+          return { type: WsMessageType.RESP_FAVORITE_DELETE, success: true };
+        }
+      }
+    });
+    return { session: s, tree, sent };
+  }
+
+  function install(fav: ReturnType<typeof favTreeSession>): void {
+    jest.spyOn(session, 'login').mockResolvedValue(fav.session);
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+  }
+
+  it('adds a folder, descends into it, adds a link, then removes both — leaving the tree exactly as it found it', async () => {
+    const fav = favTreeSession();
+    install(fav);
+
+    const result = await flowByName('favorites-tree-descend').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(fav.tree).toEqual([]);
+  });
+
+  it('sweeps a marker folder and its child left by an earlier run that died mid-flow', async () => {
+    const fav = favTreeSession([
+      { id: 9, name: 'e2e-favtree folder 2026-01-01', path: '9', kind: 0 },
+      { id: 10, name: 'e2e-favtree link', path: '9/10', kind: 1, x: 1, y: 2 },
+    ]);
+    install(fav);
+
+    const result = await flowByName('favorites-tree-descend').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(fav.tree).toEqual([]);
+    expect(fav.sent.filter(m => m.type === WsMessageType.REQ_FAVORITE_DELETE)).toHaveLength(4);
+  });
+
+  it('leaves a folder that is not its own alone', async () => {
+    const mine: TreeItem = { id: 3, name: 'My Farms', path: '3', kind: 0 };
+    const fav = favTreeSession([mine]);
+    install(fav);
+
+    await flowByName('favorites-tree-descend').run(ctx);
+
+    expect(fav.tree).toEqual([mine]);
+  });
+
+  it('fails when the folder add is refused — a refusal is never read as a success', async () => {
+    const fav = favTreeSession([], { refuseAddFolder: true });
+    install(fav);
+
+    const result = await flowByName('favorites-tree-descend').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/folder was accepted/);
+  });
+
+  it('fails when the nested link add is refused', async () => {
+    const fav = favTreeSession([], { refuseAddLink: true });
+    install(fav);
+
+    const result = await flowByName('favorites-tree-descend').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/nested link was accepted/);
   });
 });

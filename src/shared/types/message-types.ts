@@ -286,6 +286,10 @@ export enum WsMessageType {
   RESP_FAVORITE_DELETE = 'RESP_FAVORITE_DELETE',
   REQ_FAVORITE_RENAME = 'REQ_FAVORITE_RENAME',
   RESP_FAVORITE_RENAME = 'RESP_FAVORITE_RENAME',
+  REQ_FAVORITES_FOLDER = 'REQ_FAVORITES_FOLDER',
+  RESP_FAVORITES_FOLDER = 'RESP_FAVORITES_FOLDER',
+  REQ_FAVORITE_ADD_FOLDER = 'REQ_FAVORITE_ADD_FOLDER',
+  RESP_FAVORITE_ADD_FOLDER = 'RESP_FAVORITE_ADD_FOLDER',
 
   // Research / Inventions
   REQ_RESEARCH_INVENTORY = 'REQ_RESEARCH_INVENTORY',
@@ -1560,12 +1564,19 @@ export interface WsRespClusterFacilities extends WsMessage {
 // EMPIRE (OWNED FACILITIES) MESSAGES
 // =============================================================================
 
-/** A bookmarked facility from the Favorites tree. */
-export interface FavoritesItem {
+/**
+ * One entry of the Favorites tree — a folder (`fvkFolder = 0`) or a bookmarked
+ * facility (`fvkLink = 1`, `Kernel/FavProtocol.pas:6-7`).
+ *
+ * A discriminated union on `kind` rather than optional `x`/`y` on a flat shape:
+ * a folder has no coordinates (Voyager creates one with `Info = ''`,
+ * `Voyager/FavView.pas:546,752`), and letting the type say so means a caller
+ * that reads `.x` off an item can only do it after narrowing on `kind`.
+ */
+export interface FavoritesFolderItem {
   id: number;
   name: string;
-  x: number;
-  y: number;
+  kind: 0;
   /**
    * The item's Location — the '/'-separated path of ids the server resolves
    * (`TFavorites.LocateItem`, `Kernel/Favorites.pas:312-334`). Delete and
@@ -1574,13 +1585,60 @@ export interface FavoritesItem {
   path: string;
 }
 
+export interface FavoritesLinkItem {
+  id: number;
+  name: string;
+  kind: 1;
+  x: number;
+  y: number;
+  path: string;
+}
+
+/** A bookmarked facility OR a folder from the Favorites tree. */
+export type FavoritesItem = FavoritesFolderItem | FavoritesLinkItem;
+
 export interface WsReqEmpireFacilities extends WsMessage {
   type: WsMessageType.REQ_EMPIRE_FACILITIES;
 }
 
+/**
+ * The root of the tree, links only — what the flat "My facilities" list shows.
+ * Folders exist in the tree (see `WsRespFavoritesFolder`) but carry no
+ * coordinates, so they have no place in a list keyed on navigating to a spot.
+ */
 export interface WsRespEmpireFacilities extends WsMessage {
   type: WsMessageType.RESP_EMPIRE_FACILITIES;
-  facilities: FavoritesItem[];
+  facilities: FavoritesLinkItem[];
+}
+
+/** Read one level of the Favorites tree — `''` for the root. */
+export interface WsReqFavoritesFolder extends WsMessage {
+  type: WsMessageType.REQ_FAVORITES_FOLDER;
+  path: string;
+}
+
+export interface WsRespFavoritesFolder extends WsMessage {
+  type: WsMessageType.RESP_FAVORITES_FOLDER;
+  path: string;
+  items: FavoritesItem[];
+}
+
+/**
+ * Create a folder in the tree — `RDOFavoritesNewItem` with `Kind = fvkFolder`.
+ * `parentPath` is the Location to create it under, `''` for the root.
+ */
+export interface WsReqFavoriteAddFolder extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_ADD_FOLDER;
+  parentPath: string;
+  name: string;
+}
+
+export interface WsRespFavoriteAddFolder extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_ADD_FOLDER;
+  success: boolean;
+  /** The id the server assigned, present only on success. */
+  id?: number;
+  message?: string;
 }
 
 /**
@@ -1592,6 +1650,8 @@ export interface WsReqFavoriteAdd extends WsMessage {
   name: string;
   x: number;
   y: number;
+  /** The folder to add it under — root (`''`) when omitted. */
+  parentPath?: string;
 }
 
 export interface WsRespFavoriteAdd extends WsMessage {

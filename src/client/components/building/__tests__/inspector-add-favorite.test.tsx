@@ -13,7 +13,7 @@ import { renderWithProviders, resetStores, createSpiedCallbacks } from '../../..
 import { useBuildingStore } from '../../../store/building-store';
 import { useEmpireStore } from '../../../store/empire-store';
 import { BuildingInspector } from '../BuildingInspector';
-import type { BuildingFocusInfo, BuildingDetailsResponse, FavoritesItem } from '@/shared/types';
+import type { BuildingFocusInfo, BuildingDetailsResponse, FavoritesLinkItem } from '@/shared/types';
 
 const focus: BuildingFocusInfo = {
   buildingId: 'bld-1',
@@ -41,7 +41,7 @@ const details: BuildingDetailsResponse = {
   timestamp: 0,
 } as unknown as BuildingDetailsResponse;
 
-function seed(isOwner: boolean, favorites: FavoritesItem[] = []): void {
+function seed(isOwner: boolean, favorites: FavoritesLinkItem[] = []): void {
   useBuildingStore.getState().setFocus(focus);
   useBuildingStore.setState({ details, isLoading: false, isOwner });
   useEmpireStore.getState().setFacilities(favorites);
@@ -75,7 +75,7 @@ describe('BuildingInspector — add to Empire list', () => {
     const onAddFavorite = jest.fn();
     // Matched on coordinates: the favourite keeps the name it was given, and a
     // building rename never updates it.
-    seed(true, [{ id: 7, name: 'An older name', x: 100, y: 200, path: '7' }]);
+    seed(true, [{ id: 7, name: 'An older name', x: 100, y: 200, path: '7', kind: 1 }]);
 
     renderWithProviders(<BuildingInspector />, {
       clientCallbacks: createSpiedCallbacks({ onAddFavorite }),
@@ -88,7 +88,7 @@ describe('BuildingInspector — add to Empire list', () => {
   });
 
   it('a favourite at other coordinates does not disable it', () => {
-    seed(true, [{ id: 7, name: 'Elsewhere', x: 1, y: 2, path: '7' }]);
+    seed(true, [{ id: 7, name: 'Elsewhere', x: 1, y: 2, path: '7', kind: 1 }]);
     renderWithProviders(<BuildingInspector />, { clientCallbacks: createSpiedCallbacks({}) });
     expect(screen.getByRole('button', { name: 'Add to Empire list' })).toBeTruthy();
   });

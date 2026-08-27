@@ -75,8 +75,8 @@ export const ROUTES: RouteRule[] = [
     // `session/favorites-handler.ts` and drive the politics flows instead of
     // the one flow that actually exercises the Favorites tree.
     test: /favorites-handler\.ts$|^src\/client\/components\/empire\//,
-    flows: ['favorites-roundtrip'],
-    why: 'the Favorites tree — the only flow that writes to it',
+    flows: ['favorites-roundtrip', 'favorites-tree-descend'],
+    why: 'the Favorites tree — the two flows that write to it, flat and folders',
   },
   {
     test: /^src\/shared\/rdo-|^src\/server\/rdo\.ts$|^src\/server\/session\//,

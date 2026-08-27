@@ -18,6 +18,10 @@ import {
   type WsRespFavoriteDelete,
   type WsReqFavoriteRename,
   type WsRespFavoriteRename,
+  type WsReqFavoritesFolder,
+  type WsRespFavoritesFolder,
+  type WsReqFavoriteAddFolder,
+  type WsRespFavoriteAddFolder,
   type WsReqResearchInventory,
   type WsRespResearchInventory,
   type WsReqResearchDetails,
@@ -136,7 +140,7 @@ export const handleFavoriteAdd: WsHandler = async (ctx: WsHandlerContext, msg: W
   await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_Unknown, async () => {
     const req = msg as WsReqFavoriteAdd;
     console.log(`[Gateway] Adding favorite "${req.name}" at (${req.x}, ${req.y})`);
-    const result = await ctx.session.addFavorite(req.name, req.x, req.y);
+    const result = await ctx.session.addFavorite(req.name, req.x, req.y, req.parentPath ?? '');
     const response: WsRespFavoriteAdd = {
       type: WsMessageType.RESP_FAVORITE_ADD,
       wsRequestId: msg.wsRequestId,
@@ -172,6 +176,41 @@ export const handleFavoriteRename: WsHandler = async (ctx: WsHandlerContext, msg
       type: WsMessageType.RESP_FAVORITE_RENAME,
       wsRequestId: msg.wsRequestId,
       success: result.success,
+      message: result.message,
+    };
+    sendResponse(ctx.ws, response);
+  });
+};
+
+/**
+ * Read one level of the Favorites tree, folders and links alike — what the
+ * new tree UI descends with. `''` reads the root.
+ */
+export const handleFavoritesFolder: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_Unknown, async () => {
+    const req = msg as WsReqFavoritesFolder;
+    console.log(`[Gateway] Reading favorites folder "${req.path}"`);
+    const items = await ctx.session.fetchFolderContents(req.path);
+    const response: WsRespFavoritesFolder = {
+      type: WsMessageType.RESP_FAVORITES_FOLDER,
+      wsRequestId: msg.wsRequestId,
+      path: req.path,
+      items,
+    };
+    sendResponse(ctx.ws, response);
+  });
+};
+
+export const handleFavoriteAddFolder: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_Unknown, async () => {
+    const req = msg as WsReqFavoriteAddFolder;
+    console.log(`[Gateway] Adding favorites folder "${req.name}" under "${req.parentPath}"`);
+    const result = await ctx.session.addFavoriteFolder(req.parentPath, req.name);
+    const response: WsRespFavoriteAddFolder = {
+      type: WsMessageType.RESP_FAVORITE_ADD_FOLDER,
+      wsRequestId: msg.wsRequestId,
+      success: result.success,
+      id: result.id,
       message: result.message,
     };
     sendResponse(ctx.ws, response);

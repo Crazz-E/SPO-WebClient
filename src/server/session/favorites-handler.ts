@@ -16,15 +16,12 @@
  */
 
 import type { SessionContext } from './session-context';
-import type { FavoritesItem } from '../../shared/types';
+import type { FavoritesItem, FavoritesLinkItem } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
 import { rdoCall } from '../../shared/rdo-frame';
 import { parsePropertyResponse, isTrueOrdinal } from '../rdo-helpers';
-import { parseFavoritesResponse } from './session-utils';
-
-/** `fvkLink` — a bookmark with coordinates (`Kernel/FavProtocol.pas:7`). */
-const FAV_KIND_LINK = 1;
+import { parseFavoritesResponse, FAV_KIND_FOLDER, FAV_KIND_LINK } from './session-utils';
 
 /**
  * `TFavorites.RDORenameItem` truncates past 50 characters (`Favorites.pas:283`).
@@ -74,21 +71,40 @@ function composeLinkCookie(name: string, x: number, y: number): string {
 // PUBLIC FUNCTIONS
 // =========================================================================
 
-/** List the root of the tree — the facilities the Empire panel shows. */
-export async function fetchOwnedFacilities(ctx: SessionContext): Promise<FavoritesItem[]> {
+/**
+ * List the root of the tree — the facilities the flat "My facilities" list
+ * shows. Links only: a folder carries no coordinates, so it has no place in a
+ * list built for navigating to a spot. `fetchFolderContents` below is the
+ * one that also sees folders — it is what the tree UI descends with.
+ */
+export async function fetchOwnedFacilities(ctx: SessionContext): Promise<FavoritesLinkItem[]> {
+  const items = await fetchFolderContents(ctx, '');
+  return items.filter((item): item is FavoritesLinkItem => item.kind === FAV_KIND_LINK);
+}
+
+/**
+ * List one level of the tree — folders and links alike, at `parentPath`
+ * (`''` for the root). What the Favorites tree UI descends with: a folder row
+ * that expands calls this again with its own path.
+ */
+export async function fetchFolderContents(
+  ctx: SessionContext, parentPath: string,
+): Promise<FavoritesItem[]> {
   const targetId = requireWorldContext(ctx);
 
   const packet = await ctx.sendRdoRequest('world', rdoCall(
     'RDOFavoritesGetSubItems', targetId,
-    RdoValue.string(''),
+    RdoValue.string(parentPath),
   ).packet, undefined, TimeoutCategory.NORMAL);
 
   const raw = parsePropertyResponse(packet.payload!, 'res');
-  return parseFavoritesResponse(raw);
+  return parseFavoritesResponse(raw, parentPath);
 }
 
 /**
- * Add a link at the root of the tree.
+ * Add a link under `parentPath` — the root (`''`) when omitted, which is
+ * every call site the UI reaches today; a non-root path exists for the tree
+ * itself and for the L2 flow that proves a nested delete.
  *
  * `RDOFavoritesNewItem` answers the id it assigned, `-1` when the parent
  * Location does not resolve (`Favorites.pas:205`), and `0` when the view holds
@@ -97,14 +113,14 @@ export async function fetchOwnedFacilities(ctx: SessionContext): Promise<Favorit
  * `-1` failure as true.
  */
 export async function addFavorite(
-  ctx: SessionContext, name: string, x: number, y: number,
+  ctx: SessionContext, name: string, x: number, y: number, parentPath = '',
 ): Promise<FavoriteMutationResult> {
   const targetId = requireWorldContext(ctx);
   const trimmed = name.slice(0, FAV_NAME_MAX);
 
   const packet = await ctx.sendRdoRequest('world', rdoCall(
     'RDOFavoritesNewItem', targetId,
-    RdoValue.string(''),
+    RdoValue.string(parentPath),
     RdoValue.int(FAV_KIND_LINK),
     RdoValue.string(trimmed),
     RdoValue.string(composeLinkCookie(trimmed, x, y)),
@@ -117,6 +133,37 @@ export async function addFavorite(
   }
   ctx.log.warn(`[Favorites] RDOFavoritesNewItem refused "${trimmed}" (res="${res}")`);
   return { success: false, message: 'The server refused to add this favourite.' };
+}
+
+/**
+ * Create a folder under `parentPath` (`''` for the root).
+ *
+ * Same member, same result contract as `addFavorite` — only `Kind` and `Info`
+ * differ: a folder is `fvkFolder` with an empty Info cookie, matching how
+ * Voyager creates one (`Voyager/FavView.pas:546,752`, `FavNewItem(location,
+ * fvkFolder, 'New Folder', '')`) rather than the link's `name,x,y,select`.
+ */
+export async function addFolder(
+  ctx: SessionContext, parentPath: string, name: string,
+): Promise<FavoriteMutationResult> {
+  const targetId = requireWorldContext(ctx);
+  const trimmed = name.slice(0, FAV_NAME_MAX);
+
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'RDOFavoritesNewItem', targetId,
+    RdoValue.string(parentPath),
+    RdoValue.int(FAV_KIND_FOLDER),
+    RdoValue.string(trimmed),
+    RdoValue.string(''),
+  ).packet, undefined, TimeoutCategory.NORMAL);
+
+  const res = readResult(packet.payload);
+  const id = parseInt(res, 10);
+  if (Number.isFinite(id) && id > 0) {
+    return { success: true, id };
+  }
+  ctx.log.warn(`[Favorites] RDOFavoritesNewItem (folder) refused "${trimmed}" (res="${res}")`);
+  return { success: false, message: 'The server refused to add this folder.' };
 }
 
 /**

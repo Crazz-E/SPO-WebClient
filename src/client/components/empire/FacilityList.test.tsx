@@ -9,13 +9,13 @@ import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup
 import { useUiStore } from '../../store/ui-store';
 import { useMapStore } from '../../store/map-store';
 import { FacilityList } from './FacilityList';
-import type { FavoritesItem, MapBuilding } from '@/shared/types';
+import type { FavoritesLinkItem, MapBuilding } from '@/shared/types';
 import type { MinimapRendererAPI } from '../../ui/minimap-colormap';
 
 // At the root of the tree the Location IS the id — that is what a delete or a
 // rename addresses (`TFavorites.LocateItem`, `Kernel/Favorites.pas:312-334`).
-const fav = (id: number, name: string, x: number, y: number): FavoritesItem =>
-  ({ id, name, x, y, path: String(id) } as FavoritesItem);
+const fav = (id: number, name: string, x: number, y: number): FavoritesLinkItem =>
+  ({ id, name, x, y, path: String(id), kind: 1 });
 const bld = (x: number, y: number, alert: boolean): MapBuilding =>
   ({ visualClass: '100', tycoonId: 1, options: 0, x, y, level: 0, alert, attack: 0 } as unknown as MapBuilding);
 

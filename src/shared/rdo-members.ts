@@ -163,6 +163,11 @@ export const RDO_MEMBERS = {
   RDOEndSession:             { kind: 'procedure', arity: 0 },                // src/server/session/login-handler.ts:219
   RDOFavoritesDelItem:       { kind: 'function',  arity: 1 },                // src/server/session/favorites-handler.ts
   RDOFavoritesGetSubItems:   { kind: 'function',  arity: 1 },                // src/server/session/politics-handler.ts:369
+  // Not yet emitted — catalogued ahead of its first call site (see the
+  // exception above): with no folders yet, Dest can only be '', so the move
+  // would have no observable effect. Same TClientView as the other four
+  // Favorites members, one line below RDOFavoritesRenameItem's declaration.
+  RDOFavoritesMoveItem:      { kind: 'function',  arity: 2 },                // Interface Server/InterfaceServer.pas:202
   RDOFavoritesNewItem:       { kind: 'function',  arity: 4 },                // src/server/session/favorites-handler.ts
   RDOFavoritesRenameItem:    { kind: 'function',  arity: 2 },                // src/server/session/favorites-handler.ts
   RDOGetInvDescEx:           { kind: 'function',  arity: 2 },                // src/server/session/research-handler.ts:131

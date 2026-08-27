@@ -196,7 +196,7 @@ describe('MapSurface', () => {
 
     // Nothing appears until the server answers — the list is the tree, not a local guess.
     expect(screen.getByText(/No bookmarks yet/)).toBeTruthy();
-    act(() => useEmpireStore.getState().setFacilities([{ id: 4211, name: 'Home', x: 20, y: 20, path: '4211' }]));
+    act(() => useEmpireStore.getState().setFacilities([{ id: 4211, name: 'Home', x: 20, y: 20, path: '4211', kind: 1 }]));
 
     fireEvent.click(screen.getByRole('button', { name: /Go to Home/ }));
     expect(src.centerOn).toHaveBeenLastCalledWith(20, 20);
@@ -215,7 +215,7 @@ describe('MapSurface', () => {
     const onAddFavorite = jest.fn();
     const onRenameFavorite = jest.fn();
     renderWithProviders(<MapSurface />, { clientCallbacks: createSpiedCallbacks({ onAddFavorite, onRenameFavorite }) });
-    act(() => useEmpireStore.getState().setFacilities([{ id: 4211, name: 'Home', x: 20, y: 20, path: '4211' }]));
+    act(() => useEmpireStore.getState().setFacilities([{ id: 4211, name: 'Home', x: 20, y: 20, path: '4211', kind: 1 }]));
 
     fireEvent.click(screen.getByRole('button', { name: /Bookmark this place/ }));
     act(() => useUiStore.getState().promptPayload?.onSubmit('   '));

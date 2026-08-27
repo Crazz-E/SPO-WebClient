@@ -12,6 +12,8 @@ import type {
   WsRespFavoriteAdd,
   WsRespFavoriteDelete,
   WsRespFavoriteRename,
+  WsRespFavoritesFolder,
+  WsRespFavoriteAddFolder,
   WsRespMailFolder,
   WsRespMailSent,
   WsRespPoliticsData,
@@ -417,6 +419,106 @@ const favoritesRoundTrip: Flow = {
   },
 };
 
+/**
+ * Descends one level of the Favorites tree — issue #129. Creates a folder,
+ * reads it back at the root, adds a link inside it, reads the folder's own
+ * children, deletes that nested link, then removes the folder itself.
+ *
+ * EVIDENCE. Same reasoning as `favoritesRoundTrip`: `RDOFavoritesGetSubItems`
+ * walks the same in-memory `TFavorites` object the writes just touched, so
+ * the read-back is the proof, at both the root and inside the folder.
+ *
+ * BLAST RADIUS. Per-tycoon and self-cleaning, the same tree as
+ * `favoritesRoundTrip` — a distinct marker keeps the two flows' sweeps from
+ * colliding with each other's leftovers.
+ */
+const FAVORITES_TREE_MARKER = 'e2e-favtree';
+
+const favoritesTreeDescend: Flow = {
+  name: 'favorites-tree-descend',
+  what: 'favorites tree: add folder -> read root -> add nested link -> read children -> delete nested link -> delete folder',
+  mutates: true,
+  run: async () => {
+    const assertions = new Assertions();
+    const folderName = `${FAVORITES_TREE_MARKER} folder ${new Date().toISOString()}`;
+    const linkName = `${FAVORITES_TREE_MARKER} link`;
+
+    const session = await login(PRIMARY_ACCOUNT);
+    const readFolder = async (path: string): Promise<WsRespFavoritesFolder> =>
+      session.driver.request<WsRespFavoritesFolder>(
+        { type: WsMessageType.REQ_FAVORITES_FOLDER, path },
+        WsMessageType.RESP_FAVORITES_FOLDER,
+      );
+    const deletePath = async (path: string): Promise<WsRespFavoriteDelete> =>
+      session.driver.request<WsRespFavoriteDelete>(
+        { type: WsMessageType.REQ_FAVORITE_DELETE, path },
+        WsMessageType.RESP_FAVORITE_DELETE,
+      );
+
+    try {
+      // Sweep first: an earlier run killed mid-flow would otherwise leave its
+      // marker — and whatever it holds — behind for good.
+      const before = await readFolder('');
+      for (const stale of before.items.filter(i => i.name.startsWith(FAVORITES_TREE_MARKER))) {
+        if (stale.kind === 0) {
+          const leftoverChildren = await readFolder(stale.path);
+          for (const child of leftoverChildren.items) await deletePath(child.path);
+        }
+        await deletePath(stale.path);
+      }
+
+      const addedFolder = await session.driver.request<WsRespFavoriteAddFolder>(
+        { type: WsMessageType.REQ_FAVORITE_ADD_FOLDER, parentPath: '', name: folderName },
+        WsMessageType.RESP_FAVORITE_ADD_FOLDER,
+      );
+      assertions.check('the folder was accepted and answered an id',
+        addedFolder.success && (addedFolder.id ?? 0) > 0, `id=${addedFolder.id ?? 'none'}`);
+
+      const afterAddFolder = await readFolder('');
+      const folder = afterAddFolder.items.find(i => i.name === folderName);
+      assertions.check('the folder is in the root the server serves', Boolean(folder), folderName);
+      assertions.check('the root lists it as a folder, not a link', folder?.kind === 0, String(folder?.kind));
+
+      if (folder) {
+        const addedLink = await session.driver.request<WsRespFavoriteAdd>(
+          { type: WsMessageType.REQ_FAVORITE_ADD, name: linkName, x: 641, y: 66, parentPath: folder.path },
+          WsMessageType.RESP_FAVORITE_ADD,
+        );
+        assertions.check('the nested link was accepted and answered an id',
+          addedLink.success && (addedLink.id ?? 0) > 0, `id=${addedLink.id ?? 'none'}`);
+
+        const children = await readFolder(folder.path);
+        const link = children.items.find(i => i.path === `${folder.path}/${addedLink.id}`);
+        assertions.check('the folder serves the link it was just given', Boolean(link),
+          children.items.map(i => i.path).join(','));
+        assertions.check('it kept the coordinates it was given',
+          link?.kind === 1 && link.x === 641 && link.y === 66,
+          link?.kind === 1 ? `${link.x},${link.y}` : 'not a link');
+
+        if (link) {
+          const deletedLink = await deletePath(link.path);
+          assertions.check('the nested delete was accepted', deletedLink.success);
+
+          const afterDeleteLink = await readFolder(folder.path);
+          assertions.check('the link is gone from the folder — the world is restored',
+            !afterDeleteLink.items.some(i => i.path === link.path));
+        }
+
+        const deletedFolder = await deletePath(folder.path);
+        assertions.check('the folder delete was accepted', deletedFolder.success);
+
+        const afterDeleteFolder = await readFolder('');
+        assertions.check('the folder is gone from the root — the world is restored',
+          !afterDeleteFolder.items.some(i => i.path === folder.path));
+      }
+
+      return report('favorites-tree-descend', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
 export const FLOWS: Flow[] = [
   loginSpine,
   politicsRead,
@@ -425,6 +527,7 @@ export const FLOWS: Flow[] = [
   permissionNegative,
   mailRoundTrip,
   favoritesRoundTrip,
+  favoritesTreeDescend,
 ];
 
 export function flowByName(name: string): Flow {

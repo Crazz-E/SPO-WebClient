@@ -8,19 +8,19 @@
  * silently counted as healthy.
  */
 
-import type { FavoritesItem, MapBuilding } from '@/shared/types';
+import type { FavoritesLinkItem, MapBuilding } from '@/shared/types';
 
 export interface ClassifiedFacilities {
   /** Confirmed losing money (alert bit set on a loaded building). */
-  losing: FavoritesItem[];
+  losing: FavoritesLinkItem[];
   /** In a zone not loaded yet — state honestly unknown. */
-  unknown: FavoritesItem[];
+  unknown: FavoritesLinkItem[];
   /** Loaded and not alerting. */
-  operating: FavoritesItem[];
+  operating: FavoritesLinkItem[];
 }
 
 export function classifyFacilities(
-  favorites: readonly FavoritesItem[],
+  favorites: readonly FavoritesLinkItem[],
   loadedBuildings: readonly MapBuilding[],
 ): ClassifiedFacilities {
   const byPos = new Map<string, MapBuilding>();
@@ -33,7 +33,7 @@ export function classifyFacilities(
     else if (b.alert) out.losing.push(f);
     else out.operating.push(f);
   }
-  const byName = (a: FavoritesItem, b: FavoritesItem) => a.name.localeCompare(b.name);
+  const byName = (a: FavoritesLinkItem, b: FavoritesLinkItem) => a.name.localeCompare(b.name);
   out.losing.sort(byName);
   out.unknown.sort(byName);
   out.operating.sort(byName);

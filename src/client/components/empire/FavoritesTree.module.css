@@ -1,0 +1,122 @@
+/* FavoritesTree — single-level tree view: folders expand, links are leaves */
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--surface-border);
+  flex-shrink: 0;
+}
+
+.addFolderBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.addFolderBtn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.list,
+.children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-border) transparent;
+}
+
+.row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.folderRow,
+.linkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+button.folderRow:hover,
+button.linkRow:hover {
+  background: var(--bg-tertiary);
+}
+
+/* A non-expandable child folder is a plain row, not a button. */
+span.folderRow {
+  cursor: default;
+}
+
+.folderIcon {
+  color: var(--accent-gold);
+  flex-shrink: 0;
+}
+
+.linkIcon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coords {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.children {
+  padding-left: var(--space-6);
+}
+
+.hint {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  color: var(--text-placeholder);
+  font-size: var(--text-sm);
+}
