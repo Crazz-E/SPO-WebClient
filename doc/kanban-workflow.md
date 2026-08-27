@@ -133,7 +133,7 @@ not a live owner. It checks all three at once: Status is `Done` or `Needs triage
 is **open**, and the issue's `stateReason` is **REOPENED**. A failure release never sets
 `stateReason` (the issue was never closed), so law 4's trace stays exactly as human-only as
 it was — this exception can never fire on it. Anything short of all three — a live owner in
-Todo/In progress/Gate/PR, a failure trace, or a closed issue — still exits refused, and the
+Todo/In progress/Gate/Validation/PR, a failure trace, or a closed issue — still exits refused, and the
 tool says which.
 
 ### One session per area — the ground reservation
@@ -144,9 +144,9 @@ Measured on 2026-08-24: **19** forced `Merge remote-tracking branch 'origin/main
 single day, one branch re-syncing **six times** before it landed. Ownership of a *card* is
 therefore joined by a reservation on its *ground*.
 
-**The busy set.** An area is **busy** when a card holds it in **In progress**, **Gate** or
-**PR**, and that card's reservation is still live (below). `Todo`, `Done` and `Needs triage`
-never make an area busy. `Gate` and `PR` do: the branch exists and is about to land.
+**The busy set.** An area is **busy** when a card holds it in **In progress**, **Gate**,
+**Validation** or **PR**, and that card's reservation is still live (below). `Todo`, `Done` and `Needs triage`
+never make an area busy. `Gate`, `Validation` and `PR` do: the branch exists and is about to land.
 
 **`docs` never blocks.** Two or more cards may hold `docs` at the same time. A documentation
 change cannot break the build, and a same-line collision is caught by Git; blocking on it would
@@ -253,7 +253,7 @@ moves a card — rule 1 is untouched, and the job holds no token that could brea
 
 | Decision | Answer | Why |
 |---|---|---|
-| What is a suspect | `Session` non-empty **and** column ∈ {In progress, Gate, PR} **and** the card's `updatedAt` is ≥ N old | `updatedAt` is the one clock that ticks on every milestone a live session must write. A missing branch or a missing PR is **evidence printed next to the card**, never the trigger — a card in In progress legitimately has neither. |
+| What is a suspect | `Session` non-empty **and** column ∈ {In progress, Gate, Validation, PR} **and** the card's `updatedAt` is ≥ N old | `updatedAt` is the one clock that ticks on every milestone a live session must write. A missing branch or a missing PR is **evidence printed next to the card**, never the trigger — a card in In progress legitimately has neither. |
 | N | **24 h** (`ORPHAN_STALE_HOURS`) | The bench serialises every session's gate on one machine, so an L-sized task behind a queue can honestly be quiet for most of a working day. 12 h fires on a card claimed in the evening and worked next morning; every card that has landed so far was claimed and finished the same day. |
 | Shape of the reminder | **One comment on the quiet card**, once per ownership episode, plus a table in the run's job summary | A digest issue would be auto-added to the board (see below) and a `/next-task` session would eventually claim the machine's own bookkeeping as work. A comment creates no card and lands where the decision is made. |
 | Repeat | Never, for the same owner | Each comment carries a hidden `<!-- orphan-watch:<Session> -->` marker. Keyed on the `Session` text, not a timestamp: posting the comment can itself bump `updatedAt`, and a timestamp key would make the job re-fire on the trace of its own last run every day. A freed and re-claimed card gets a new `Session` and re-arms. |
@@ -309,7 +309,7 @@ exist.
 
 **`board:move` needs no change** — `board-move.sh` resolves a column by name against the
 `Status` field's own options, so it works the moment the option exists. Say so; do not edit
-`scripts/board-move.sh`. Adding the one new option in the UI leaves the existing six ids untouched.
+`scripts/board-move.sh`. Adding the one new option in the UI leaves the existing seven ids untouched.
 
 **Off, and staying off.** Three of the four are **pull-request workflows on an issue-only
 board** — GitHub's wording for the merge one is *"when pull requests in your project are

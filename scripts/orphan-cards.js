@@ -64,7 +64,7 @@ const REPO = process.env.ORPHAN_REPO || 'SPO-WebClient';
 const PROJECT_NUMBER = Number(process.env.ORPHAN_PROJECT || 1);
 
 /** Columns where a card is owned and expected to be moving. Todo is unowned, Done and Needs triage are terminal. */
-const WORKING_STATUSES = ['In progress', 'Gate', 'PR'];
+const WORKING_STATUSES = ['In progress', 'Gate', 'Validation', 'PR'];
 
 const DEFAULT_STALE_HOURS = 24;
 

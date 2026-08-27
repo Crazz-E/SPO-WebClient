@@ -95,10 +95,10 @@ heartbeats_json=$(bash scripts/heartbeat-scan.sh 2>/dev/null | jq -R -s '
   split("\n") | map(select(test("\t"))) | map(split("\t")) | map({(.[0]): .[2]}) | add // {}
 ')
 
-# Busy-status branches (In progress/Gate/PR, area != docs) with NO heartbeat entry at all —
+# Busy-status branches (In progress/Gate/Validation/PR, area != docs) with NO heartbeat entry at all —
 # these are the only ones that need the ref-date sidecar (rule F).
 busy_branches_json=$(jq -c --argjson heartbeats "$heartbeats_json" '
-  [.[] | select(.Status == "In progress" or .Status == "Gate" or .Status == "PR")
+  [.[] | select(.Status == "In progress" or .Status == "Gate" or .Status == "Validation" or .Status == "PR")
     | select(.Area != null and .Area != "docs")
     | (.Session // "") | split(" @ ")[0] | select(length > 0)]
   | unique
@@ -168,7 +168,7 @@ jq -n -r \
       | select(.openBy | length > 0)]) as $blockedIssues
   | ($blockedIssues | map({(.number | tostring): .openBy}) | add // {}) as $blockedMap
   | ([$cards[]
-      | select(.Status == "In progress" or .Status == "Gate" or .Status == "PR")
+      | select(.Status == "In progress" or .Status == "Gate" or .Status == "Validation" or .Status == "PR")
       | select(.Area != null and .Area != "docs")
       | select((($heartbeats[((.Session // "") | split(" @ ")[0])]) // "EXPIRED") == "LIVE")
       | .Area] | unique) as $busy
@@ -189,7 +189,7 @@ jq -n -r \
     ) as $walk
   | ("rateLimit: cost \($rl.cost), remaining \($rl.remaining), resets \($rl.resetAt)"),
     ("items: \($cards | length)/\($total)"),
-    ("hidden: \([$cards[] | select(.Status != "In progress" and .Status != "Gate" and .Status != "PR" and .Status != "Needs triage")] | length) (Done \([$cards[] | select(.Status == "Done")] | length), Todo \([$cards[] | select(.Status == "Todo")] | length) — Todo cards are in the walk)"),
+    ("hidden: \([$cards[] | select(.Status != "In progress" and .Status != "Gate" and .Status != "Validation" and .Status != "PR" and .Status != "Needs triage")] | length) (Done \([$cards[] | select(.Status == "Done")] | length), Todo \([$cards[] | select(.Status == "Todo")] | length) — Todo cards are in the walk)"),
     ("busy areas: \($busy | join(" "))"),
     (if ($ref_note | length) > 0 then $ref_note else empty end),
     "walk:",
@@ -200,7 +200,7 @@ jq -n -r \
       | select(.name == "Status" or .name == "Session" or .name == "Area")
       | "field \(.name): \(.id)\(if .options then " " + ([.options[] | "\(.name)=\(.id)"] | join(" ")) else "" end)"),
     ($cards[]
-      | select(.Status == "In progress" or .Status == "Gate" or .Status == "PR" or .Status == "Needs triage")
+      | select(.Status == "In progress" or .Status == "Gate" or .Status == "Validation" or .Status == "PR" or .Status == "Needs triage")
       | "item \(.id) #\(.number) [\(.Status // "-")] area=\(.Area // "-") session=\(.Session // "-") \(.title)"),
     ($blockedIssues[]
       | "#\(.number) blocked by \([.openBy[] | "#\(.)"] | join(", "))")
