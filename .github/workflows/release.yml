@@ -87,7 +87,7 @@ jobs:
         run: npm run build
 
       - name: Verify CI check passed
-        if: steps.next.outputs.skip != 'true'
+        if: github.event_name == 'workflow_dispatch' && steps.next.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
