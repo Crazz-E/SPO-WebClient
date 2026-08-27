@@ -23,7 +23,6 @@ import {
 } from './building-details-scenario';
 import { createCivicMutationsScenario } from './civic-mutations-scenario';
 import { HANDLER_TO_GROUP } from '@/shared/building-details/template-groups';
-import { PropertyType } from '@/shared/building-details/property-definitions';
 import type { BuildingTemplate, PropertyGroup } from '@/shared/building-details/property-definitions';
 import { collectTemplatePropertyNamesStructured } from '@/shared/building-details/property-templates';
 import { loadScenario, loadAll, SCENARIO_NAMES } from './scenario-registry';
@@ -512,14 +511,9 @@ describe('building-details scenario', () => {
       keys.add(countProp);
       const count = parseInt(served.get(countProp) ?? '0', 10);
       for (const info of collected.indexedByCount.get(countProp) ?? []) {
-        const columns = group.properties
-          .find(p => p.rdoName === info.rdoName)?.columns ?? [];
         for (let i = 0; i < count; i++) {
           if (info.columns) {
             for (const col of info.columns) {
-              const isButton = columns
-                .find(c => c.rdoSuffix === col.rdoSuffix)?.type === PropertyType.ACTION_BUTTON;
-              if (isButton) continue;
               const suffix = col.indexSuffix !== undefined ? col.indexSuffix : (info.indexSuffix ?? '');
               keys.add(`${col.rdoSuffix}${i}${col.columnSuffix ?? ''}${suffix}`);
             }

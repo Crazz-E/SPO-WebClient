@@ -322,21 +322,39 @@ The repo process applies unchanged — this command adds nothing to it:
   prompt — and the returned reply shows where it actually ran, so the driver can verify
   it landed in the right place.
 - Implementation and the driver's mechanical checks done → **commit → push → open the PR
-  with `Closes #<issue>` in the body → deposit `npm run gate`** (with the tool's
-  `run_in_background` — **never a trailing `&`**, which makes the shell report the fork and
-  returns 0 whatever the gate found) → `npm run board:move -- <issue> Gate` (`MOVED #<issue>
-  -> Gate`, same exit codes as § 2) → title `#<issue> · Gate`. The PR precedes the gate, not
-  the reverse: the worker refuses a sha that is not on `origin`
-  (`scripts/bench-gate.sh:45-50` — "NOT PUSHED: … is not on origin, so the worker cannot
-  fetch it"), and `ci.yml` triggers on `pull_request`, so a branch with no PR has no CI run
-  for its sha and the worker replays the whole Jest suite on the exclusive bench — the
-  slowest path, which has already killed a gateway mid-job (CLAUDE.md § The gate already says
-  this — keep the two consistent). ⚠ Note the wrinkle so a driver is not surprised: the
-  `Pull request linked to issue` project workflow sets `Status` = PR the moment the PR is
-  opened, so the `board:move … Gate` above is correcting that automatic move, not fighting
-  it. A backgrounded verdict command must stand alone — no `;` or `&&` chained after it
-  either. A backgrounded compound command's exit code is from the LAST command, so
-  `cmd; echo $?` reports the echo, not the verdict.
+  with `Closes #<issue>` in the body**. The PR precedes the gate, not the reverse: the worker
+  refuses a sha that is not on `origin` (`scripts/bench-gate.sh:45-50` — "NOT PUSHED: … is not
+  on origin, so the worker cannot fetch it"), and `ci.yml` triggers on `pull_request`, so a
+  branch with no PR has no CI run for its sha and the worker replays the whole Jest suite on
+  the exclusive bench — the slowest path, which has already killed a gateway mid-job
+  (CLAUDE.md § The gate already says this — keep the two consistent). ⚠ Note the wrinkle so a
+  driver is not surprised: the `Pull request linked to issue` project workflow sets `Status` =
+  PR the moment the PR is opened, so the `board:move … Gate` below is correcting that automatic
+  move, not fighting it.
+- **Post-spawn checklist** — before depositing the gate, run these five checks. Each one is
+  **emitted by the plan step as a runnable command or text**, not a prose instruction; the
+  driver only runs them and reads an exit code. Steps 3 and 4 are required only when the
+  card replaces existing behaviour (the plan says whether it is a rewrite). Step 1 is a rule:
+  if a spawn fails because a tool does not exist here, that attempt returns to the plan step
+  and **does not** consume one of the three gate attempts.
+  1. **Is the plan executable?** Run the plan's first command once, before spawning. If it
+     fails (e.g. `jq` not found), the design is not executable here — return to the plan step
+     for a revised design.
+  2. **Prototype before delegating** — policy, not a driver behavior. The plan provides runnable
+     text, prototyped where feasible.
+  3. **Output equivalence** (rewrites only) — run the `comm` command emitted by the plan,
+     comparing old sorted output to new sorted output. No output means the rewrite is faithful.
+  4. **Exercise failure paths** (rewrites only) — run each degenerate-input command emitted by
+     the plan. All must fail loudly (exit non-zero with a legible error).
+  5. **Sweep for falsified statements** — run each `grep` command emitted by the plan against
+     `doc/`, `.claude/`, and `CLAUDE.md` to check whether the change falsifies documented
+     claims. No matches means no falsifications.
+- Gate deposited (`npm run gate`, with the tool's `run_in_background` — **never a trailing
+  `&`**, which makes the shell report the fork and returns 0 whatever the gate found) →
+  `npm run board:move -- <issue> Gate` (`MOVED #<issue> -> Gate`, same exit codes as § 2) →
+  title `#<issue> · Gate`. A backgrounded verdict command must stand alone — no `;` or `&&`
+  chained after it either. A backgrounded compound command's exit code is from the LAST
+  command, so `cmd; echo $?` reports the echo, not the verdict.
 - **The gate's verdict is its exit code, never the printed report** — same rule as § 0's
   `bench:nightly` read: `0` PASS · `1` verdict not passing · `2` refused at deposit (dirty
   tree) · `3` worker down · `4` wait timed out. The report's `=== bench job … — PASS` banner

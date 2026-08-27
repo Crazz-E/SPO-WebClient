@@ -6,7 +6,7 @@
  * by BuildingDataService via registerInspectorTabs().
  */
 
-import { BuildingTemplate, PropertyGroup } from './property-definitions';
+import { BuildingTemplate, PropertyGroup, PropertyType } from './property-definitions';
 import {
   GENERIC_GROUP,
   WORKFORCE_GROUP,
@@ -298,7 +298,9 @@ function collectGroupPropertyNamesStructured(
       indexedByCount.get(prop.countProperty)!.push({
         rdoName: prop.rdoName,
         maxProperty: prop.maxProperty,
-        columns: prop.columns?.map(c => ({ rdoSuffix: c.rdoSuffix, columnSuffix: c.columnSuffix, indexSuffix: c.indexSuffix })),
+        columns: prop.columns
+          ?.filter(c => c.type !== PropertyType.ACTION_BUTTON)
+          .map(c => ({ rdoSuffix: c.rdoSuffix, columnSuffix: c.columnSuffix, indexSuffix: c.indexSuffix })),
         indexSuffix: suffix,
       });
     } else if (prop.indexed && prop.indexMax !== undefined) {
@@ -321,6 +323,7 @@ function collectGroupPropertyNamesStructured(
     if (prop.columns && !prop.countProperty) {
       for (let i = 0; i < 10; i++) {
         for (const col of prop.columns) {
+          if (col.type === PropertyType.ACTION_BUTTON) continue;
           const colSuffix = col.indexSuffix !== undefined ? col.indexSuffix : suffix;
           regularProperties.add(`${col.rdoSuffix}${i}${col.columnSuffix || ''}${colSuffix}`);
         }
