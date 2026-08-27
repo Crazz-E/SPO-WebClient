@@ -53,28 +53,47 @@ relative to the repo root — but **not** from a session worktree, where `..` re
 
 ### Output Format
 
+Emit only sections the question needs — omit sections with no findings. Always include Evidence Chain.
+
 ```
 ## Finding: [Topic]
 
-### Architecture
+### Architecture (if tracing service/unit structure)
 [High-level description with service/unit relationships]
 
-### Key Types
+### Key Types (if types are relevant)
 | Type | Unit | Line | Purpose |
 |------|------|------|---------|
+| [only cited types] | | | |
 
-### Key Methods
+### Key Methods (if methods are relevant)
 | Method | Unit:Line | Signature | Behavior |
 |--------|-----------|-----------|----------|
+| [only cited methods] | | | |
 
-### RDO Surface (if applicable)
+### RDO Surface (if reverse-engineering RDO members)
 | Member | Kind | Verb | Params | Return | Notes |
 |--------|------|------|--------|--------|-------|
+| [only cited members] | | | | | |
 
-### Evidence Chain
+### Evidence Chain (always present)
 - [FileName.pas:Line] — [what was observed]
 - [INFERRED] — [reasoning]
 - [UNKNOWN] — [what could not be determined]
+```
+
+**Example — kind/arity lookup (minimal format):**
+```
+## Finding: RDOObjectAt member type
+
+### RDO Surface
+| Member | Kind | Verb | Params | Return | Notes |
+|--------|------|------|--------|--------|-------|
+| ObjectAt | function | ^ | 2 (x: int, y: int) | object | returns world object at coords |
+
+### Evidence Chain
+- RDOObjectServer.pas:145 — `function ObjectAt(x, y: Integer): TRDOObject;` declaration (2 params, returns object)
+- Voyager/RDOBrowser.pas:28 — client emits `^` for this function
 ```
 
 ## Mode: Document
@@ -86,9 +105,9 @@ relative to the repo root — but **not** from a session worktree, where `..` re
 1. **Scope** — Define the subsystem boundary using `resources/service-map.md`.
 2. **Explore first** — Run Explore mode internally to gather evidence.
 3. **Template** — Load `resources/documentation-templates.md` and select the appropriate template.
-4. **Draft** — Fill template with findings. Every section must have evidence or `[NEEDS INVESTIGATION]`.
+4. **Draft** — Fill template with findings. Sections are only included if they have evidence.
 5. **Cross-reference** — Check existing docs in `SPO-WebClient/doc/` for overlap or conflicts.
-6. **User checkpoint** — Present draft for review before writing to disk.
+6. **User checkpoint** — Present ≤10-line outline (section list + one line each) plus file path; full text written once to disk.
 
 ### Output Location
 
