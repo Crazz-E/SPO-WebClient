@@ -39,8 +39,9 @@ or who described intentional and documented behaviour as a defect, produces a ca
 claimer spends its whole context proving there is nothing to do.
 
 Where the card asserts something about the RDO wire, the authority is the server-side
-declaration in `../SPO-Original/Rdo/Server/` — not the draft's summary of it, and never the
-live server.
+declaration in the Rdo/Server/ directory of SPO-Original (`~/SPO-Original/Rdo/Server/` or
+`../SPO-Original/Rdo/Server/` relative to the repo root) — not the draft's summary of it, and
+never the live server.
 
 ### 2 · Is it already covered?
 

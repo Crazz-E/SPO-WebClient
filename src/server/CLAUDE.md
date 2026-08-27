@@ -19,7 +19,8 @@
 - `session/rdo-request-guards.ts` still guards what the catalogue does not describe: forbidden
   members, session-lifecycle members, connection-bound members, buffer depth.
 - Session/timer work (login, logoff, reconnect, KeepAlive, ServerBusy): verify the sequence
-  against `../SPO-Original` before changing it.
+  against `~/SPO-Original` (or `../SPO-Original` relative to the repo root — not from a session
+  worktree, where `..` resolves to `.claude/worktrees/`, not the repo root) before changing it.
 
 ## Session Lifecycle
 

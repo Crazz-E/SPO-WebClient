@@ -1,6 +1,8 @@
 # SPO-Original Service Map
 
-> **Root:** `../SPO-Original` (sibling folder of SPO-WebClient)
+> **Root:** `~/SPO-Original` (sibling folder of SPO-WebClient; `../SPO-Original` relative to
+> the repo root — but NOT from a session worktree, where `..` resolves to
+> `.claude/worktrees/`, not the repo root)
 > **Generated:** 2026-02-24 from verified directory survey
 > **Total:** 67 directories, ~1751 .pas, ~256 .dpr, ~380 .dfm (recursive)
 
