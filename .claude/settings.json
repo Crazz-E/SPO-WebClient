@@ -121,6 +121,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|Bash|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/journal-writes.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [
