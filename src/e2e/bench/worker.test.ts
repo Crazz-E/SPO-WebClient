@@ -51,6 +51,10 @@ interface Harness {
   trees: Record<string, string | undefined>;
   /** The step name prepareRef reports as failed; null = the fetch worked. */
   prepareRefFails: string | null;
+  /** Set to make prepareRef report a merge conflict instead of an ordinary failure. */
+  prepareRefConflictBase: string | undefined;
+  /** What prepareRef reports for `merged` on success. */
+  prepareRefMerged: boolean;
   prepareRefCalls: string[];
   leaseRenewals: number;
   clock: { nowMs: number };
@@ -84,6 +88,8 @@ function harness(): Harness {
     queueServed: 0,
     trees: {},
     prepareRefFails: null,
+    prepareRefConflictBase: undefined,
+    prepareRefMerged: false,
     prepareRefCalls: [],
     leaseRenewals: 0,
     clock: { nowMs: 1_000_000 },
@@ -117,7 +123,10 @@ function harness(): Harness {
         // The real one resets a checkout on disk; the harness just makes the directory
         // exist, since everything downstream only asks whether it does.
         fs.mkdirSync(h.worktree, { recursive: true });
-        return h.prepareRefFails;
+        if (h.prepareRefConflictBase) {
+          return { failed: 'merge', conflictBase: h.prepareRefConflictBase };
+        }
+        return { failed: h.prepareRefFails, merged: h.prepareRefMerged };
       },
       mayDriveLive: () => h.leaseDecision,
       renewLease: async () => {
@@ -430,7 +439,7 @@ describe('runJob — gate', () => {
         h => {
           h.deps.prepareRef = async () => {
             fs.rmSync(h.worktree, { recursive: true, force: true });
-            return null;
+            return { failed: null };
           };
         },
       ],
@@ -742,6 +751,93 @@ describe('runJob — ref: gating a commit the worker fetched', () => {
     expect(h.commands).toHaveLength(0);
     // Nothing was learned about the commit, so nothing is attested about it either.
     expect(listVerdicts(h.paths)).toHaveLength(0);
+  });
+
+  describe('gating the merged tree, not the branch (#183)', () => {
+    it('a merge conflict is FAIL, not ENVIRONMENT — it is a fact about the code', async () => {
+      const h = harness();
+      h.prepareRefConflictBase = 'deadbeef'.repeat(5);
+      const job = depositRef(h);
+
+      await processOldest(h.deps);
+
+      const report = h.spool.readReport(job.id);
+      expect(report?.verdict).toBe('FAIL');
+      expect(report?.detail).toContain('deadbeef'.repeat(5).slice(0, 8));
+      // Nothing was built — the conflict is caught before any of that.
+      expect(h.commands).toHaveLength(0);
+      // FAIL is a real judgement, so it attests exactly like any other FAIL.
+      const verdicts = listVerdicts(h.paths);
+      expect(verdicts).toHaveLength(1);
+      expect(verdicts[0].verdict.verdict).toBe('FAIL');
+    });
+
+    it('a real merge marks the verdict merged, with the base it merged in', async () => {
+      const h = harness();
+      h.prepareRefMerged = true;
+      depositRef(h);
+
+      await processOldest(h.deps);
+
+      const verdict = listVerdicts(h.paths)[0].verdict;
+      expect(verdict.merged).toBe(true);
+      expect(verdict.mergedBase).toBe(h.baseMain);
+    });
+
+    it('the fast path (ref already contains mergeRef) leaves merged unset', async () => {
+      const h = harness();
+      depositRef(h); // prepareRefMerged defaults to false
+
+      await processOldest(h.deps);
+
+      const verdict = listVerdicts(h.paths)[0].verdict;
+      expect(verdict.merged).toBeUndefined();
+      expect(verdict.mergedBase).toBeUndefined();
+    });
+
+    it('forces the static stage to replay after a merge, even though CI proved the pre-merge sha', async () => {
+      const h = harness();
+      h.ciProof = { proven: true };
+      h.prepareRefMerged = true;
+      const job = depositRef(h);
+
+      await processOldest(h.deps);
+
+      const verify = h.commands.find(c => c.args[0] === 'scripts/verify-gate.js');
+      expect(verify?.args).not.toContain('--skip-static');
+      expect(h.spool.readReport(job.id)?.staticProof).toEqual({
+        used: false,
+        why: expect.stringContaining('merged origin/main'),
+      });
+    });
+
+    it('the fast path still trusts a CI record — merging changed nothing', async () => {
+      const h = harness();
+      h.ciProof = { proven: true };
+      const job = depositRef(h); // no merge: prepareRefMerged stays false
+
+      await processOldest(h.deps);
+
+      const verify = h.commands.find(c => c.args[0] === 'scripts/verify-gate.js');
+      expect(verify?.args).toContain('--skip-static');
+      expect(h.spool.readReport(job.id)?.staticProof).toEqual({ used: true });
+    });
+
+    it('attests the DEPOSITED sha, never the merge commit — even when a merge really ran', async () => {
+      // fingerprintTree() would report `head-of-<worktree-basename>` for HEAD after the
+      // merge — a sha nobody ever pushed. The attestation key must stay
+      // request.fingerprint.head, fixed at deposit time.
+      const h = harness();
+      h.prepareRefMerged = true;
+      const ref = 'a'.repeat(40);
+      depositRef(h, ref);
+
+      await processOldest(h.deps);
+
+      const verdict = listVerdicts(h.paths)[0].verdict;
+      expect(verdict.head).toBe(ref);
+      expect(verdict.head).not.toBe(`head-of-${path.basename(h.worktree)}`);
+    });
   });
 });
 

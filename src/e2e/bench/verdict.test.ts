@@ -117,6 +117,17 @@ describe('publishPendingStatuses — the retry-until-pushed loop', () => {
     expect(descriptions[0]).toBe('PASS — job job-1');
   });
 
+  it('renders "merged base" instead of the plain base — the gate merged origin/main in', () => {
+    const paths = tempBench();
+    writeVerdict(
+      paths,
+      verdictFor('c3', { baseMain: 'abcdef1234567890', merged: true, mergedBase: 'abcdef1234567890' }),
+    );
+    const descriptions: string[] = [];
+    publishPendingStatuses(paths, (_wt, _head, _state, description) => descriptions.push(description), () => {});
+    expect(descriptions[0]).toBe('PASS — merged base abcdef12 — job job-1');
+  });
+
   it('does not republish', () => {
     const paths = tempBench();
     writeVerdict(paths, verdictFor('abc123', { published: true }));
@@ -178,6 +189,18 @@ describe('statusDescription', () => {
   it('reproduces the short-input format byte-for-byte', () => {
     expect(statusDescription(verdictFor('c1', { baseMain: 'abcdef1234567890' }))).toBe(
       'PASS — base abcdef12 — job job-1',
+    );
+  });
+
+  it('renders merged base instead of base when merged is true', () => {
+    expect(statusDescription(verdictFor('c1', { merged: true, mergedBase: 'f'.repeat(40) }))).toBe(
+      'PASS — merged base ffffffff — job job-1',
+    );
+  });
+
+  it('falls back to the plain base when merged is true but mergedBase is missing', () => {
+    expect(statusDescription(verdictFor('c1', { merged: true, baseMain: 'a'.repeat(40) }))).toBe(
+      'PASS — base aaaaaaaa — job job-1',
     );
   });
 

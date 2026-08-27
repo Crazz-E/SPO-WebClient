@@ -169,7 +169,10 @@ export async function prepareCheckout(
   workerRepo: string,
   git: GitRunner,
 ): Promise<string | null> {
-  return sharedPrepareCheckout(
+  // The nightly already targets `origin/main` as `ref` — there is nothing to merge it
+  // with, so it never passes `mergeRef` and stays on the shape this module's own callers
+  // and tests have always used.
+  const result = await sharedPrepareCheckout(
     deps,
     {
       dir: nightlyCheckout(deps.paths),
@@ -179,6 +182,7 @@ export async function prepareCheckout(
     },
     git,
   );
+  return result.failed;
 }
 
 /**

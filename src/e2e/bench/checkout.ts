@@ -61,6 +61,31 @@ export interface PrepareRequest {
   /** A repo that already has the origin remote, to read the clone URL from. */
   workerRepo: string;
   logFile: string;
+  /**
+   * When set, gate the tree GitHub will actually land, not the branch alone: after the
+   * reset, this ref is merged in — unless `ref` already contains it, the common case,
+   * answered by one `git merge-base --is-ancestor` (~35 s all told, no merge). See
+   * doc/bench-worker.md § The gate base.
+   */
+  mergeRef?: string;
+}
+
+/** What preparing a checkout concluded. */
+export interface PrepareResult {
+  /** Name of the failed step, or null on success. */
+  failed: string | null;
+  /**
+   * Set only when `failed === 'merge'`: the sha `mergeRef` resolved to, that the checkout
+   * could not be merged with. `git merge --abort` has already run by the time this comes
+   * back — the checkout is at `ref` again, clean, ready for the next job.
+   */
+  conflictBase?: string;
+  /**
+   * True when an actual merge commit was created — `ref` did not already contain
+   * `mergeRef`. A caller that skips work on a CI record for the pre-merge sha must not do
+   * so when this is true: CI never saw the merged tree. See worker.ts.
+   */
+  merged?: boolean;
 }
 
 /** Where the hash of the lockfile that the current `node_modules` was built from lives. */
@@ -119,8 +144,8 @@ export async function prepareCheckout(
   deps: CheckoutDeps,
   request: PrepareRequest,
   git: GitRunner,
-): Promise<string | null> {
-  const { dir, ref, workerRepo, logFile } = request;
+): Promise<PrepareResult> {
+  const { dir, ref, workerRepo, logFile, mergeRef } = request;
   fs.mkdirSync(path.dirname(dir), { recursive: true });
   // One preparation per log: a red result points here, and yesterday's noise would bury it.
   fs.writeFileSync(logFile, `=== prepare ${dir} at ${ref} — ${new Date(deps.now()).toISOString()} ===\n`, 'utf8');
@@ -131,13 +156,13 @@ export async function prepareCheckout(
       url = git(workerRepo, ['remote', 'get-url', 'origin']).trim();
     } catch (err: unknown) {
       fs.appendFileSync(logFile, `${toErrorMessage(err)}\n`, 'utf8');
-      return 'git remote get-url origin';
+      return { failed: 'git remote get-url origin' };
     }
     const cloned = await deps.runCommand('git', ['clone', url, dir], {
       cwd: path.dirname(dir),
       logFile,
     });
-    if (cloned !== 0) return 'git clone';
+    if (cloned !== 0) return { failed: 'git clone' };
   }
 
   // Every branch, not just the one asked for: a bare sha cannot always be fetched
@@ -150,13 +175,50 @@ export async function prepareCheckout(
   ];
   for (const step of steps) {
     const code = await deps.runCommand(step.cmd, step.args, { cwd: dir, logFile });
-    if (code !== 0) return step.name;
+    if (code !== 0) return { failed: step.name };
+  }
+
+  let merged = false;
+  if (mergeRef) {
+    // The common case: the branch already contains everything on `mergeRef`, because
+    // nothing landed on it since the branch forked (or the branch is itself
+    // `origin/main`). One plumbing call answers that without ever invoking `merge` —
+    // no merge commit, no risk of a conflict, the fast path the ~35 s figure describes.
+    const aheadCode = await deps.runCommand(
+      'git',
+      ['merge-base', '--is-ancestor', mergeRef, 'HEAD'],
+      { cwd: dir, logFile },
+    );
+    if (aheadCode === 0) {
+      deps.log(`checkout ${dir}: ${mergeRef} is already an ancestor of ${ref} — no merge needed`);
+    } else {
+      deps.log(`checkout ${dir}: merging ${mergeRef} into ${ref} — gating the tree it would land`);
+      const mergeCode = await deps.runCommand(
+        'git',
+        ['-c', 'user.name=SPO Bench', '-c', 'user.email=bench@local', 'merge', '--no-edit', mergeRef],
+        { cwd: dir, logFile },
+      );
+      if (mergeCode !== 0) {
+        let conflictBase = mergeRef;
+        try {
+          conflictBase = git(dir, ['rev-parse', mergeRef]).trim();
+        } catch {
+          // Keep the ref name; a sha is nicer but the name still identifies the base.
+        }
+        // Leave the checkout exactly as prepareCheckout found it, not mid-merge — the
+        // next job to use this shared checkout must not inherit somebody else's conflict.
+        await deps.runCommand('git', ['merge', '--abort'], { cwd: dir, logFile });
+        deps.log(`checkout ${dir}: merge conflict with ${mergeRef} (${conflictBase}) — aborted`);
+        return { failed: 'merge', conflictBase };
+      }
+      merged = true;
+    }
   }
 
   if (needsInstall(dir)) {
     deps.log(`checkout ${dir}: lockfile moved (or no node_modules) — npm ci`);
     const code = await deps.runCommand('npm', ['ci'], { cwd: dir, logFile });
-    if (code !== 0) return 'npm ci';
+    if (code !== 0) return { failed: 'npm ci' };
     const hash = lockHash(dir);
     // Only a hash we actually read gets recorded: stamping a guess would make the next
     // job skip an install it needed.
@@ -165,5 +227,5 @@ export async function prepareCheckout(
     deps.log(`checkout ${dir}: node_modules already matches the lockfile — no install`);
   }
 
-  return null;
+  return { failed: null, merged };
 }

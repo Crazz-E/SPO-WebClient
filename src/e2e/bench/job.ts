@@ -83,6 +83,12 @@ export interface JobReport {
    * resolved (offline, no remote).
    */
   baseMain?: string;
+  /**
+   * `ref` only: true when `prepareRef` had to merge `origin/main` into the checkout —
+   * `ref` was not already an ancestor of it, so the tree the gate judged is not simply
+   * the branch's own HEAD. See doc/bench-worker.md § The gate base.
+   */
+  merged?: boolean;
   startedAt: string;
   finishedAt?: string;
   /** Human-readable summary or error. */
