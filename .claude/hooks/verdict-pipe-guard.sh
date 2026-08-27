@@ -48,7 +48,7 @@ HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
   const path = require('path');
-  const { statements: statementsOf, splitOutsideQuotes } = require(path.join(process.env.HOOKS_DIR, 'bash-command-parse'));
+  const { statements: statementsOf, splitOutsideQuotes, stripHeredocs } = require(path.join(process.env.HOOKS_DIR, 'bash-command-parse'));
 
   let raw = '';
   process.stdin.on('data', c => (raw += c));
@@ -56,9 +56,14 @@ verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
     let command = '';
     try { command = JSON.parse(raw)?.tool_input?.command ?? ''; } catch { command = ''; }
 
+    // A heredoc body is text, not commands — a doc that merely quotes \`PIPESTATUS\` inside
+    // one must not disarm the check for a real verdict pipe outside it. Strip heredocs BEFORE
+    // the escape check, not just before the statement split below.
+    const text = stripHeredocs(command);
+
     // The two ways of asking the shell for the pipeline's real status. Either one and the
     // exit code is no longer the last stage's, which is the only thing being guarded.
-    if (/set\s+-[A-Za-z]*o\s+pipefail|PIPESTATUS/.test(command)) {
+    if (/set\s+-[A-Za-z]*o\s+pipefail|PIPESTATUS/.test(text)) {
       process.stdout.write('ok');
       return;
     }

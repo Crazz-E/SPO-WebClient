@@ -84,16 +84,28 @@ function bashCandidates(command, verbs, maxCandidates = 40) {
 function splitOutsideQuotes(text, pattern) {
   let mask = "";
   let quote = null;
-  for (const ch of text) {
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (quote) {
       mask += ch === quote ? ch : "\0";
       if (ch === quote) quote = null;
-    } else if (ch === '"' || ch === "'") {
+      continue;
+    }
+    // A backslash-escaped paren (\( \)) is a literal character to the shell — `find \( -name
+    // "*.pas" -o -name "*.dfm" \)` — not a subshell opener/closer. Mask both characters so
+    // STATEMENT_SPLIT's bare `\(` alternative does not fire on it and split what is really one
+    // statement into fragments that individually dodge a read-verb check.
+    if (ch === "\\" && (text[i + 1] === "(" || text[i + 1] === ")")) {
+      mask += "\0\0";
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
       quote = ch;
       mask += ch;
-    } else {
-      mask += ch;
+      continue;
     }
+    mask += ch;
   }
   if (quote !== null) return text.split(pattern);
 

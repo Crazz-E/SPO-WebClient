@@ -105,6 +105,24 @@ describe('investigation-form-guard.js — the three refused shapes', () => {
     expect(out).toContain('/legacy/SPO-Original/Kernel');
   });
 
+  it('find \\( -name ... -o -name ... \\) | xargs grep — escaped-paren evasion refused', () => {
+    // The statement split used to treat the bare `(` inside `find`'s backslash-escaped
+    // `\( ... \)` as a subshell opener and cut the statement there — the `find` head fragment
+    // then carried no violation and the `xargs grep` tail had no read-verb head, so the whole
+    // pipeline passed untouched. Masking `\(`/`\)` before the split keeps it one statement.
+    const command = `find ${LEGACY_ORIGINAL} \\( -name "*.pas" -o -name "*.dfm" \\) 2>/dev/null | xargs grep -l X`;
+    const out = verdict(command);
+    expect(out).not.toBe('ALLOW');
+
+    // All three corrections fire, same as the measured case — the escaped parens did not
+    // shield any of the three causes from detection.
+    const corrected = correctedLine(out);
+    expect(corrected).toContain('-print0');
+    expect(corrected).toContain('xargs -0');
+    expect(corrected).toContain('grep -a');
+    expect(corrected).not.toContain('2>/dev/null');
+  });
+
   it('redirect-only refusal on a non-grep read verb (cat)', () => {
     const command = `cat "${LEGACY_ASP}/Five/0/Visual/Voyager/main.asp" 2>/dev/null`;
     const out = verdict(command);
@@ -238,5 +256,33 @@ describe('verdict-pipe-guard.sh — smoke test after the shared-helper refactor'
       env: process.env,
     });
     expect(out).toBe('');
+  });
+
+  it('a heredoc body quoting PIPESTATUS must not disarm a real verdict pipe outside it', () => {
+    // The escape check used to run on the raw command, so a heredoc that merely mentions
+    // PIPESTATUS as text disarmed the guard for a real `npm test | tail` sitting right after
+    // it — previously blocked, wrongly allowed. It must stay heredoc-stripped before the check.
+    const command = [
+      'cat > /tmp/notes.md <<EOF',
+      'mentions PIPESTATUS here, just text',
+      'EOF',
+      'npm test | tail -20',
+    ].join('\n');
+    let code = 0;
+    let err = '';
+    try {
+      execFileSync('bash', [PIPE_WRAPPER], {
+        cwd: ROOT,
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
+        encoding: 'utf8',
+        env: process.env,
+      });
+    } catch (e) {
+      const failure = e as { status?: number; stderr?: string };
+      code = failure.status ?? -1;
+      err = failure.stderr ?? '';
+    }
+    expect(code).toBe(2);
+    expect(err).toContain('BLOCKED');
   });
 });
