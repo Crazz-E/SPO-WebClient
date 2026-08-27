@@ -44,28 +44,22 @@ set -uo pipefail
 
 payload="$(cat)"
 
-verdict="$(printf '%s' "$payload" | node -e "
+HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
+  const path = require('path');
+  const { statements: statementsOf, splitOutsideQuotes, stripHeredocs } = require(path.join(process.env.HOOKS_DIR, 'bash-command-parse'));
+
   let raw = '';
   process.stdin.on('data', c => (raw += c));
   process.stdin.on('end', () => {
     let command = '';
     try { command = JSON.parse(raw)?.tool_input?.command ?? ''; } catch { command = ''; }
 
-    // A heredoc body is text, not commands — a doc that quotes \`npm test | tail\` is not
-    // a run. Same skeleton as bench-port-guard.sh.
-    const lines = command.split('\n');
-    const kept = [];
-    let terminator = null;
-    for (const line of lines) {
-      if (terminator !== null) {
-        if (line.trim() === terminator) terminator = null;
-        continue;
-      }
-      kept.push(line);
-      const heredoc = line.match(/<<-?\s*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?/);
-      if (heredoc) terminator = heredoc[1];
-    }
-    const text = kept.join('\n');
+    // A heredoc body is text, not commands — a doc that merely quotes \`PIPESTATUS\` inside
+    // one must not disarm the check for a real verdict pipe outside it. Strip heredocs BEFORE
+    // the escape check, not just before the statement split below.
+    const text = stripHeredocs(command);
 
     // The two ways of asking the shell for the pipeline's real status. Either one and the
     // exit code is no longer the last stage's, which is the only thing being guarded.
@@ -76,8 +70,10 @@ verdict="$(printf '%s' "$payload" | node -e "
 
     // '||' is a statement separator, not a pipe — split it out first, so every '|' left
     // inside a statement is a real pipe. The openers of a subshell and of a command
-    // substitution go too, so \\\$(npm test | tail) is seen as the pipeline it is.
-    const statements = text.split(/\n|;|&&|\|\||\`|\\\$\(|\(/);
+    // substitution go too, so \\\$(npm test | tail) is seen as the pipeline it is. Heredoc
+    // stripping and quote-aware splitting both come from bash-command-parse.js now, shared
+    // with investigation-form-guard.js instead of duplicated here.
+    const statements = statementsOf(command);
 
     // A command that only READS a line of script — grep, cat, sed -n — mentions the verb
     // without invoking it. Only an invocation at the head of a stage counts.
@@ -98,7 +94,7 @@ verdict="$(printf '%s' "$payload" | node -e "
     let reason = 'ok';
     let culprit = '';
     for (const statement of statements) {
-      const stages = statement.split('|');
+      const stages = splitOutsideQuotes(statement, /\|/);
       if (stages.length >= 2 && isVerdict(stages[0])) {
         reason = 'pipe';
         // The suggested form appends its own redirections — carrying the stage's along
