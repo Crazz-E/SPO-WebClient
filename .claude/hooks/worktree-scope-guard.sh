@@ -71,8 +71,15 @@ verdict="$(printf '%s' "$payload" | SPO_TOP="$top" SPO_FAMILY="$family" \
 [ -n "$verdict" ] || exit 0
 [ "$verdict" = "ALLOW" ] && exit 0
 
+# Parse verdict as: "reason\tcorrected" (no tab = corrected is empty)
+reason="${verdict%%$'\t'*}"
+corrected="${verdict#*$'\t'}"
+if [ "$verdict" = "$reason" ]; then
+  corrected=""
+fi
+
 cat >&2 <<MSG
-BLOCKED — this write ${verdict}.
+BLOCKED — this write ${reason}.
 
 This session's worktree is:
   ${top}
@@ -82,7 +89,24 @@ either the main checkout itself, or another session's worktree nested beside thi
 almost always a relative path resolved against the wrong repository root (CLAUDE.md § Environment
 names the main checkout, not any one worktree), or a hand-typed absolute path that drifted.
 
+MSG
+
+if [ -n "$corrected" ]; then
+  cat >&2 <<MSG
+The writable copy of that file in THIS worktree is:
+
+  ${corrected}
+
+Retry the SAME change against that exact path. If the Edit's old_string no longer
+matches there, Read that path first — what you read before came from the other tree.
+If a sub-agent payload named the blocked path, the corrected path above is what the
+payload should have carried (next-task.md § Handoff discipline: absolute, worktree-rooted).
+MSG
+else
+  cat >&2 <<MSG
 Re-target the same file inside THIS worktree instead. If a payload named this file, the payload
 carried a relative path or the wrong root — fix the path there, not here.
 MSG
+fi
+
 exit 2

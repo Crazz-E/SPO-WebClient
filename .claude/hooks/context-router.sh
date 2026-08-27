@@ -26,6 +26,16 @@ PROMPT=$(node -e "
 OUT=""
 add() { OUT="${OUT}$1"$'\n'; }
 
+# Add worktree banner early if this session is running in a worktree
+top="$(git rev-parse --show-toplevel 2>/dev/null)"
+common="$(git rev-parse --git-common-dir 2>/dev/null)"
+if [ -n "$top" ] && [ -n "$common" ]; then
+  topr="$(readlink -f "$top" 2>/dev/null)"
+  family="$(dirname "$(readlink -f "$common" 2>/dev/null)")"
+  if [ -n "$topr" ] && [ -n "$family" ] && [ "$topr" != "$family" ]; then
+    add "WORKTREE — this session's writable tree is ${topr}. CLAUDE.md, .claude/* and skills you read under ${family}/ are ANOTHER COPY of the repo: every Edit/Write goes to ${topr}/<same relative path>, and a write to the ${family} copy is refused by a hook."
+  fi
+fi
 
 case "$PROMPT" in
   *session*|*reconnect*|*reconnexion*|*timeout*|*keepalive*|*keep-alive*|*serverbusy*|*logon*|*login*|*logoff*)

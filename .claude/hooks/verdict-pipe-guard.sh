@@ -74,7 +74,7 @@ verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
 
     // Commands whose exit code is the answer, not a side effect.
     const VERDICT = [
-      /^npm\s+(?:run\s+)?(?:test|typecheck|lint|build|gate|e2e)\b/,
+      /^npm\s+(?:run\s+)?(?:test|typecheck|lint|build|gate|e2e|verdict)\b/,
       /^npm\s+run\s+(?:coverage|deps:gate)\b/,
       /^(?:npx\s+)?(?:jest|tsc|eslint)\b/,
       /^(?:npx\s+)?node\s+(?:--[^\s]+\s+)*(?:dist\/e2e\/run\.js|scripts\/(?:verify-gate|coverage-changed|check-pr-rules)\.js)\b/,
@@ -122,7 +122,19 @@ verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
     }
 
     if (reason === 'pipe') {
-      process.stdout.write('pipe\t' + culprit);
+      // Derive alias from culprit for the npm run verdict -- <alias> suggestion
+      let alias = '';
+      if (/^npm\s+test\b/.test(culprit)) alias = 'test';
+      else if (/^npm\s+run\s+([a-zA-Z0-9:_-]+)/.test(culprit)) {
+        const m = culprit.match(/^npm\s+run\s+([a-zA-Z0-9:_-]+)/);
+        if (m) alias = m[1];
+      }
+      else if (/^(?:npx\s+)?jest\b/.test(culprit)) alias = 'test';
+      else if (/^npx\s+jest\b/.test(culprit)) alias = 'test';
+      else if (/^tsc\b/.test(culprit)) alias = 'typecheck';
+      else if (/^eslint\b/.test(culprit)) alias = 'lint';
+
+      process.stdout.write('pipe\t' + culprit + '\t' + alias);
     } else if (reason === 'nonfinal') {
       process.stdout.write('nonfinal\t' + culprit + '\t' + position);
     } else {
@@ -133,7 +145,14 @@ verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
 
 case "${verdict:-ok}" in
   pipe*)
-    culprit="${verdict#pipe$'\t'}"
+    # Parse verdict as: "pipe\t<culprit>\t<alias>"
+    rest="${verdict#pipe$'\t'}"
+    culprit="${rest%%$'\t'*}"
+    alias="${rest#*$'\t'}"
+    if [ "$rest" = "$culprit" ]; then
+      alias=""
+    fi
+
     echo "BLOCKED: that pipes a command whose exit code IS the verdict." >&2
     echo "" >&2
     echo "Bash reports the LAST stage of a pipeline, so the status you would read is the" >&2
@@ -142,6 +161,17 @@ case "${verdict:-ok}" in
     echo "filtered text goes quiet at the same moment. That pair has already produced a" >&2
     echo "false \"suite green\" in this repo." >&2
     echo "" >&2
+
+    if [ -n "$alias" ]; then
+      echo "Run it through the allowlisted wrapper instead — one call, real exit code, short tail:" >&2
+      echo "" >&2
+      echo "  npm run verdict -- ${alias} [--tail=40]" >&2
+      echo "" >&2
+      echo "(full log lands under ~/.spo-bench/logs/, EXIT=<code> is the last line, and the" >&2
+      echo "command's exit code is preserved.)" >&2
+      echo "" >&2
+    fi
+
     echo "Separate the two questions instead of nesting them:" >&2
     echo "" >&2
     echo "  ${culprit} > /tmp/run.log 2>&1; echo \"EXIT=\$?\"; tail -40 /tmp/run.log" >&2

@@ -1,7 +1,9 @@
 // The decision half of .claude/hooks/worktree-scope-guard.sh — see that file for WHY.
 //
-// Reads a PreToolUse payload on stdin, prints one line: "ALLOW", or the reason half of a
-// refusal ("targets `...`, which is under the main checkout but outside this worktree").
+// Reads a PreToolUse payload on stdin, prints one line: "ALLOW", or a tab-separated pair:
+// the reason half of a refusal ("targets `...`, which is under the main checkout but outside
+// this worktree") TAB the corrected absolute path (the same file inside THIS worktree, computed
+// by stripping the worktree prefix and rebuilding under TOP).
 // Lives in its own file for the same reason driver-scope-guard.js does: a hook is a program
 // with an exit-code contract, so it can be tested directly —
 // src/__tests__/worktree-scope-guard.test.ts drives this file with crafted payloads.
@@ -38,6 +40,8 @@ function say(v) {
 }
 
 // null = this path is none of the guard's business. A string = the reason it is refused.
+// A string returned here is the REASON only; classify does not emit the corrected path.
+// The caller appends the corrected path as a tab-separated field.
 //
 // Three regions, in order: outside FAMILY entirely (the scratchpad, /tmp, ~/.claude) is
 // always free — this guard only knows about the tree rooted at FAMILY. Inside TOP is the
@@ -58,6 +62,25 @@ function classify(raw, cwd) {
   if (abs === TOP || abs.startsWith(TOP + path.sep)) return null;
   const rel = path.relative(FAMILY, abs) || ".";
   return "targets `" + rel + "`, which is under the main checkout but outside this session's worktree";
+}
+
+// Given an absolute path that was refused, compute the corrected path inside TOP.
+// If the path is under TOP/.claude/worktrees/, strip that prefix and rebuild under TOP.
+// Otherwise, rebuild the same relative path under TOP.
+function correctPath(abs) {
+  if (!TOP || !FAMILY) return "";
+  const rel = path.relative(FAMILY, abs);
+  const parts = rel.split(path.sep);
+
+  // Check if path starts with `.claude/worktrees/<name>/...`
+  if (parts.length >= 4 && parts[0] === ".claude" && parts[1] === "worktrees") {
+    // Skip `.claude/worktrees/<name>`, keep the rest
+    const repoRel = parts.slice(3).join(path.sep);
+    return path.join(TOP, repoRel);
+  }
+
+  // Otherwise, just rebuild under TOP with the same relative path
+  return path.join(TOP, rel);
 }
 
 let raw = "";
@@ -82,7 +105,17 @@ process.stdin.on("end", () => {
   // because that same sub-agent, handed a relative path, can resolve it against the wrong
   // repository root; agent vs. driver says nothing about which tree the write lands in.
   if (tool === "Edit" || tool === "Write" || tool === "NotebookEdit") {
-    return say(classify(ti.file_path || ti.notebook_path || "", cwd) || "ALLOW");
+    const raw = ti.file_path || ti.notebook_path || "";
+    const why = classify(raw, cwd);
+    if (!why) return say("ALLOW");
+    let abs;
+    try {
+      abs = path.resolve(cwd || TOP, raw);
+    } catch {
+      return say("ALLOW");
+    }
+    const corrected = correctPath(abs);
+    return say(why + "\t" + corrected);
   }
 
   if (tool === "Bash") {
@@ -90,7 +123,15 @@ process.stdin.on("end", () => {
     if (!command) return say("ALLOW");
     for (const cand of bashCandidates(command, VERBS)) {
       const why = classify(cand, cwd);
-      if (why) return say(why);
+      if (!why) continue;
+      let abs;
+      try {
+        abs = path.resolve(cwd || TOP, cand);
+      } catch {
+        continue;
+      }
+      const corrected = correctPath(abs);
+      return say(why + "\t" + corrected);
     }
   }
 
