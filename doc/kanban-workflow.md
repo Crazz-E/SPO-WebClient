@@ -735,12 +735,8 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 # The blocked set — Todo cards that cannot be claimed — is the tail of the claim read above:
 # ONE call for the whole pool, never one per card, and never a separate query beside the claim.
 
-# Record a blocking order (§ Blocking order). The mutation takes node ids, not numbers:
-# issueId = the card that waits, blockingIssueId = the card it waits on.
-gh api graphql -f query='{repository(owner:"Crazz-Org",name:"SPO-WebClient"){issue(number:<N>){id}}}' \
-  --jq '.data.repository.issue.id'
-gh api graphql -f query='mutation { addBlockedBy(input:{
-  issueId:"<BLOCKED_NODE_ID>", blockingIssueId:"<BLOCKER_NODE_ID>"}) { issue { number } } }'
+# Record a blocking order (§ Blocking order)
+npm run board:block -- <blocked-issue> <blocker-issue>  # scripts/board-block.sh
 
 # A SANCTIONED filing → card review → issue → board (label = the queryable mirror of
 # Category/Size). "Sanctioned" is the whole point: § Feeding rule lists the surfaces that may
