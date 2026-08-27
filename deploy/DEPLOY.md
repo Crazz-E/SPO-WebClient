@@ -232,7 +232,7 @@ First startup downloads game assets (30–90 seconds). Watch the logs:
 docker compose logs -f --tail=100
 ```
 
-Wait for: `[Gateway] Server ready at http://localhost:8080`
+Wait for: `Server ready at http://0.0.0.0:8080` (or the HOST/PORT you configured)
 
 The startup-status endpoint below streams Server-Sent Events, not a single JSON body — expect
 `event: status` / `data: {...json...}` lines rather than a bare JSON object.
@@ -476,6 +476,13 @@ docker compose up -d
 A manual rollback has no health gate of its own — watch `docker compose logs -f` and
 confirm the container comes up healthy before walking away.
 
+> **WARNING**: If `deploy/deploy.sh` is installed as a cron job (see "Update" above), a manually
+> rolled-back commit that had previously passed its health gate will be redeployed on the next
+> cron run. The script tracks gate *failures* in `logs/deploy-failed-sha`, not manual rollbacks.
+> To prevent auto-redeployment, either (a) clear the failed-sha file after manual rollback,
+> (b) push a fix to clear the record, or (c) temporarily disable the cron job while
+> investigating the rollback reason.
+
 ### Container Debugging
 
 ```bash
@@ -515,6 +522,7 @@ sudo systemctl restart nginx  # Restart nginx
 |----------|---------|-------------|
 | `NODE_ENV` | — | Set `production` for production |
 | `PORT` | `8080` | Internal HTTP/WebSocket port |
+| `SINGLE_USER_MODE` | `false` | Security kill switch (dev/test only): disables origin validation, rate limits, auth rate limiting, and per-IP WS caps. Never set `true` in production. |
 | `RDO_DIR_HOST` | `www.starpeaceonline.com` | Game directory server |
 | `CHUNK_CDN_URL` | `https://spo.zz.works` | Terrain/object asset CDN |
 | `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. With `NODE_ENV=production` the gateway **refuses to start** on `debug` — session IDs leak at that level (SEC-L-2) |
