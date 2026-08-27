@@ -32,7 +32,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 
 | ID | Requirement | Status | Enforcement |
 |---|---|---|---|
-| SEC-W-1 | WS upgrades MUST validate `Origin` against the allow-list; missing or foreign origins → 403 (except `SINGLE_USER_MODE`). | Met (`server.ts:1089-1112`) | L4 |
+| SEC-W-1 | WS upgrades MUST validate `Origin` against the allow-list; missing or foreign origins → 403 (except `SINGLE_USER_MODE`). SINGLE_USER_MODE is a security kill switch (dev/test only) that disables: origin validation, per-IP rate limiting, auth rate limiting, and per-IP WS connection caps. Set only for development or isolated testing. | Met (`server.ts:1089-1112`) | L4 |
 | SEC-W-2 | WS frames MUST be capped at 64 KB (`maxPayload`). | Met | L4 |
 | SEC-W-3 | Per-IP concurrent WS connections MUST be capped → 429. **Public-deployment floor: 5.** A **global** session cap SHOULD be added to bound aggregate gateway→Delphi load (risk B4). | Partial (per-IP only), **exception [SEC-X-1](#sec-x-1--raised-per-ip-ceilings-for-the-automated-test-phase)** — the per-IP cap stands at **1000** since 2026-08-22 (`server.ts:1081-1083`), not 5; no global cap. | L4 (per-IP now; global when implemented) |
 | SEC-W-4 | Messages MUST be gated by session phase (`PHASE_ALLOWED_MESSAGES`): gameplay messages before auth → `ERROR_AccessDenied`; unknown message types MUST be rejected. | Met (`server.ts:1335-1348`) | L4 |
