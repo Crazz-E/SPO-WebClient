@@ -5,7 +5,7 @@ user-invokable: true
 disable-model-invocation: false
 metadata:
   version: 1.0.0
-  codebase-path: ../SPO-Original
+  codebase-path: ~/SPO-Original  # ../SPO-Original relative to the repo root; NOT from a session worktree
   file-count: 2383
   generation-date: 2026-02-24
 ---
@@ -16,7 +16,9 @@ Reverse-engineer the SPO-Original Delphi 5 codebase efficiently. Two modes: **Ex
 
 ## Codebase Root
 
-`../SPO-Original` — 67 directories, ~1747 .pas, ~256 .dpr, ~380 .dfm
+`~/SPO-Original` — 67 directories, ~1747 .pas, ~256 .dpr, ~380 .dfm. (`../SPO-Original`
+relative to the repo root — but **not** from a session worktree, where `..` resolves to
+`.claude/worktrees/`, not the repo root.)
 
 ## Triggers
 
@@ -118,7 +120,7 @@ All docs go to `SPO-WebClient/doc/` following existing naming: `kebab-case.md`.
 |--------------|-------------|
 | `doc/spo-original-reference.md` | Primary RDO member index — new member discoveries go here |
 | `doc/facility-tabs-reference.md` | Inspector tab handlers — cross-reference Voyager source |
-| `../SPO-Original/BUILDING_VISUALCLASS_REFERENCE.md` | Visual class catalog (lives in the SPO-Original root, NOT in `doc/`) |
+| `~/SPO-Original/BUILDING_VISUALCLASS_REFERENCE.md` | Visual class catalog (lives in the SPO-Original root, NOT in `doc/`) |
 
 ## Sub-Agent Delegation
 
@@ -127,8 +129,8 @@ For investigations spanning 5+ files, delegate to a sub-agent:
 ```
 Task(subagent_type: "general-purpose",
   prompt: "Read these SPO-Original Delphi files and extract [specific info]:
-  1. C:\...\SPO-Original\Kernel\World.pas — interface section only
-  2. C:\...\SPO-Original\Kernel\Population.pas — lines 1-80
+  1. /home/crazz/SPO-Original/Kernel/World.pas — interface section only
+  2. /home/crazz/SPO-Original/Kernel/Population.pas — lines 1-80
   Return: type names, published methods, class hierarchy.
   Mark anything uncertain as [INFERRED].")
 ```

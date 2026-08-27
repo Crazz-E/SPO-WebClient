@@ -43,6 +43,14 @@ commit message or a PR body written inside the tree dirties it, and a dirty tree
 at gate deposit (exit 2) whoever wrote it; `driver-scope-guard.sh` refuses it earlier and
 says so. All three flags read the file happily from anywhere.
 
+**If `Grep`, `Read` or `Glob` are deferred, load them first.** When native tools are unavailable
+in this harness, the risk is silent truncation — a shell `grep`, `find` or `cat` returns an
+incomplete result and appears to succeed. If you detect a deferred tool, load its schema with
+`ToolSearch select:Grep,Read,Glob`. If that load fails, delegate the read to a sub-agent
+(which has native tools) or stop and say so. Never fall back to shell equivalents — they
+bury the problem, just as `.claude/hooks/poll-loop-guard.sh:25-29` refuses the form but names
+the alternative: a rule that names no workaround is a rule a model routes around.
+
 ## 0 · Is `main` red?
 
 The bench proves branches; one nightly run proves `main` itself

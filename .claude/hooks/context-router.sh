@@ -29,14 +29,14 @@ add() { OUT="${OUT}$1"$'\n'; }
 
 case "$PROMPT" in
   *session*|*reconnect*|*reconnexion*|*timeout*|*keepalive*|*keep-alive*|*serverbusy*|*logon*|*login*|*logoff*)
-    add "SESSION / LIFECYCLE — verify any sequence change against ../SPO-Original before editing."
+    add "SESSION / LIFECYCLE — verify any sequence change against ~/SPO-Original (../SPO-Original resolves to .claude/worktrees/ from inside a session worktree, not the repo root) before editing."
     ;;
 esac
 
 # --- Legacy source -----------------------------------------------------------
 case "$PROMPT" in
   *delphi*|*legacy*|*spo-original*|*original\ client*|*original\ server*|*\.pas*|*voyager*)
-    add "LEGACY SOURCE — ../SPO-Original (Delphi 5). Use the delphi-archaeologist skill; cite File.pas:Line or mark [INFERRED]/[UNKNOWN]. Index: doc/spo-original-reference.md."
+    add "LEGACY SOURCE — ~/SPO-Original (Delphi 5); from the repo root that's ../SPO-Original, but NOT from a session worktree, where .. resolves to .claude/worktrees/. Use the delphi-archaeologist skill; cite File.pas:Line or mark [INFERRED]/[UNKNOWN]. Index: doc/spo-original-reference.md."
     ;;
 esac
 

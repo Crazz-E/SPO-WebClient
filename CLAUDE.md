@@ -63,7 +63,8 @@ rdoSet('Stopped', targetId, RdoValue.int(-1))
 
 The catalogue is a census of what the client emits, not a copy of the Pascal. To add an entry
 you need the member's **kind** and **arity**, and the only authority for those is the server-side
-declaration in `../SPO-Original/Rdo/Server/` — read it with **`delphi-archaeologist`**,
+declaration in the Rdo/Server/ directory of SPO-Original (at `~/SPO-Original/Rdo/Server/` or
+`../SPO-Original/Rdo/Server/` relative to the repo root) — read it with **`delphi-archaeologist`**,
 cite `File.pas:Line`, and never probe the live server. Get it wrong and the server has no
 self-recovery: `"^"` on a `procedure` leaves a result pointer nobody pops (**freeze**); `"*"` on
 a `function` writes through a register nobody set (**arbitrary memory write**); `"^"` with no rid
@@ -93,13 +94,15 @@ match it — directly, or via one of the two rules above, stated and explained. 
 bare declaration — does not block, flagged for a human to confirm). It is read-only and never
 probes the live server, same as everything else in this section.
 
-## Legacy Delphi source — `../SPO-Original`
+## Legacy Delphi source — SPO-Original
 
 Sibling of this repo, Delphi 5, ~1750 `.pas` — **both halves of the original system**, the
 Delphi servers *and* the Voyager client. Its own git repo (`Crazz-E/SPO-Original`), a
 **read-only historical artifact**: never write into it, never probe the live server instead.
 Every claim from it cites `File.pas:Line`, or is marked `[INFERRED]` / `[UNKNOWN]`. Read the WSL copy — the Windows
 mount (`/mnt/c/Users/Crazz/Documents/SPO/SPO-Original`) is the same commit with CRLF.
+Path: `~/SPO-Original`, or `../SPO-Original` relative to the repo root — **not** from a session
+worktree, where `..` resolves to `.claude/worktrees/`, not the repo root.
 
 | Path | Holds |
 |------|-------|
@@ -117,15 +120,18 @@ a name is absent on an unqualified `grep`. Never re-encode a file to work around
 ⚠ [spo-original-reference.md](doc/spo-original-reference.md) indexes the tree but is
 hand-maintained and **has misclassified a member's kind before**. For kind or arity, open the
 `.pas` and read the declaration; the index is a finding aid, not an authority.
-## Legacy web source — `../SPO-ASP`
+## Legacy web source — SPO-ASP
 
 The other half of the original client: the **ASP pages IIS serves**, where the Politics, News
 and campaign screens actually live. A separate tree from `SPO-Original`.
+Path: `~/SPO-ASP`, or `../SPO-ASP` relative to the repo root — **not** from a session
+worktree, where `..` resolves to `.claude/worktrees/`, not the repo root.
 
 ```
-../SPO-ASP/Five/<n>/Visual/Voyager/...   the per-world instances, 0..5
-../SPO-ASP/Five/<n>/language/*.lng       the UI strings the pages interpolate
-../SPO-ASP/Five/Visual/...               the template the instances were cut from — DIFFERENT
+# paths below are relative to ~/SPO-ASP
+~/SPO-ASP/Five/<n>/Visual/Voyager/...   the per-world instances, 0..5
+~/SPO-ASP/Five/<n>/language/*.lng       the UI strings the pages interpolate
+~/SPO-ASP/Five/Visual/...               the template the instances were cut from — DIFFERENT
 ```
 
 **Cite `Five/0`.** The six instances are byte-identical to each other and `Five/0` is the path
@@ -355,7 +361,7 @@ with `node .claude/generate-skills-manifest.js` (`--check` in CI fails if stale)
 
 | Skill | For |
 |-------|-----|
-| `delphi-archaeologist` | Reverse-engineering `../SPO-Original`, tracing RDO handlers |
+| `delphi-archaeologist` | Reverse-engineering SPO-Original (`~/SPO-Original`), tracing RDO handlers |
 | `spo-testing` | Tests, coverage, fixtures, L1 substrate, RDO matchers |
 | `dependencies` | Vulnerability audit, licences, package updates |
 | `e2e-test` | L3 live browser smoke (user-invoked only) |
@@ -399,8 +405,6 @@ Slash **commands** live in `.claude/commands/`: `/next-task`, `/gate`, `/commit-
 | Server | For |
 |--------|-----|
 | Playwright | Browser automation, E2E |
-| GitHub | PRs, issues, code search — same account quota as `gh`; kanban-workflow.md § GitHub API discipline binds it too |
-| Context7 | Live library docs (TS, Jest, Node) |
 
 ## E2E credentials — LOCKED
 
@@ -430,7 +434,8 @@ Procedure and selectors: `/e2e-test` skill and [E2E-TESTING.md](doc/E2E-TESTING.
 
 An open IIS directory listing, no auth — this is how a live run is proved rather than assumed.
 **Reading a log is not probing the server.** It is also not a substitute for the Pascal: a log
-proves what *happened*, the declaration in `../SPO-Original/Rdo/Server/` defines a member's
+proves what *happened*, the declaration in the Rdo/Server/ directory of SPO-Original
+(`~/SPO-Original/Rdo/Server/`) defines a member's
 kind and arity. Download and grep; the Survival log runs 2–3 MB/day, too big for context.
 
 | Path | Carries |

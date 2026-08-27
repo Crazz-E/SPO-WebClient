@@ -1,7 +1,8 @@
 {
   "permissions": {
     "additionalDirectories": [
-      "../SPO-Original"
+      "~/SPO-Original",
+      "~/SPO-ASP"
     ],
     "allow": [
       "Read",
@@ -118,6 +119,16 @@
           {
             "type": "command",
             "command": "bash .claude/hooks/typecheck-guard.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|Bash|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/journal-writes.sh",
             "timeout": 5
           }
         ]
