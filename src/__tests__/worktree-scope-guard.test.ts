@@ -30,6 +30,13 @@ const WRAPPER = path.join(ROOT, '.claude', 'hooks', 'worktree-scope-guard.sh');
 
 const readScript = (p: string): string => fs.readFileSync(p, 'utf8');
 
+// Use scratchpad to avoid /tmp disk space issues
+const getTempDir = (): string => {
+  const scratchpad = process.env.SCRATCHPAD_DIR || path.join(os.tmpdir(), '.wsg-test');
+  fs.mkdirSync(scratchpad, { recursive: true });
+  return scratchpad;
+};
+
 interface Payload {
   cwd?: string;
   tool_name: string;
@@ -44,7 +51,8 @@ interface Roots {
 
 /** A throwaway `family` tree holding `top` and a sibling `other` worktree, both real dirs. */
 function makeRoots(): Roots {
-  const family = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wsg-family-')));
+  const tempDir = getTempDir();
+  const family = fs.realpathSync(fs.mkdtempSync(path.join(tempDir, 'wsg-family-')));
   const top = path.join(family, '.claude', 'worktrees', 'this-session');
   const other = path.join(family, '.claude', 'worktrees', 'other-session');
   fs.mkdirSync(top, { recursive: true });
@@ -189,6 +197,35 @@ describe('worktree-scope-guard — shares parsing with driver-scope-guard, not a
   });
 });
 
+describe('worktree-scope-guard — verdict includes corrected path', () => {
+  it('refusal verdict contains tab and corrected path', () => {
+    const roots = makeRoots();
+    const outside = path.join(roots.family, 'CLAUDE.md');
+    const out = verdict({ tool_name: 'Edit', tool_input: { file_path: outside } }, roots);
+    expect(out).toContain('\t');
+    const parts = out.split('\t');
+    expect(parts.length).toBe(2);
+    expect(parts[0]).toContain('CLAUDE.md');
+    expect(parts[1]).toBe(path.join(roots.top, 'CLAUDE.md'));
+  });
+
+  it('refusal from another worktree corrects to this worktree root', () => {
+    const roots = makeRoots();
+    const outside = path.join(roots.other, 'foo.ts');
+    const out = verdict({ tool_name: 'Edit', tool_input: { file_path: outside } }, roots);
+    const parts = out.split('\t');
+    expect(parts[1]).toBe(path.join(roots.top, 'foo.ts'));
+  });
+
+  it('allow verdict has no tab', () => {
+    const roots = makeRoots();
+    const inside = path.join(roots.top, 'note.txt');
+    const out = verdict({ tool_name: 'Edit', tool_input: { file_path: inside } }, roots);
+    expect(out).toBe('ALLOW');
+    expect(out).not.toContain('\t');
+  });
+});
+
 describe('worktree-scope-guard.sh — end to end with real git worktrees', () => {
   const gitEnv = {
     ...process.env,
@@ -206,7 +243,8 @@ describe('worktree-scope-guard.sh — end to end with real git worktrees', () =>
   }
 
   function makeRepoWithWorktrees(): RealRoots {
-    const main = fs.mkdtempSync(path.join(os.tmpdir(), 'wsg-repo-'));
+    const tempDir = getTempDir();
+    const main = fs.mkdtempSync(path.join(tempDir, 'wsg-repo-'));
     execFileSync('git', ['init', '-q', main], { env: gitEnv });
     execFileSync('git', ['-C', main, 'commit', '-q', '--allow-empty', '-m', 'x'], { env: gitEnv });
     const wt = path.join(main, '.claude', 'worktrees', 'session-a');
@@ -288,6 +326,19 @@ describe('worktree-scope-guard.sh — end to end with real git worktrees', () =>
       const { code, err } = run(roots.wt, 'Bash', { command: `rm ${target}` });
       expect(code).toBe(2);
       expect(err).toContain('leaked.txt');
+    } finally {
+      roots.cleanup();
+    }
+  });
+
+  it('stderr contains the corrected path when blocking', () => {
+    const roots = makeRepoWithWorktrees();
+    try {
+      const target = path.join(roots.main, 'foo.ts');
+      const { code, err } = run(roots.wt, 'Edit', { file_path: target });
+      expect(code).toBe(2);
+      expect(err).toContain('The writable copy of that file in THIS worktree is:');
+      expect(err).toContain(path.join(roots.wt, 'foo.ts'));
     } finally {
       roots.cleanup();
     }

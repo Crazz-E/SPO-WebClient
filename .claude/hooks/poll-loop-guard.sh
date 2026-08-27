@@ -79,7 +79,7 @@ verdict="$(printf '%s' "$payload" | node -e "
     // shell report the FORK, not the run — always 0 — so the verdict is destroyed before
     // anyone reads it, and the only ways left are the report text (forbidden) or a poll on
     // the done/ file (the loop refused below). The ampersand is upstream of that loop.
-    const backgrounded = /(^|[;\n&|])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*(npm\s+(?:run\s+)?(?:gate|test|test:live|typecheck|lint|build)|npx\s+jest|node\s+[^\s]*(?:verify-gate|run)\.js)\b[^\n;]*&\s*(?:$|[\n;])/;
+    const backgrounded = /(^|[;\n&|])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*(npm\s+(?:run\s+)?(?:gate|test|test:live|typecheck|lint|build|verdict)|npx\s+jest|node\s+[^\s]*(?:verify-gate|run)\.js)\b[^\n;]*&\s*(?:$|[\n;])/;
     if (backgrounded.test(text)) { process.stdout.write('amp'); return; }
 
     // The same destruction reached without an ampersand at all, but ONLY when the Bash call
@@ -100,7 +100,7 @@ verdict="$(printf '%s' "$payload" | node -e "
     // \`2>&1\` is a redirect, not this separator — stripped first so it is never mistaken
     // for one.
     const stripRedirects = text.replace(/\d*>&\d+/g, '');
-    const compound = /(^|[;\n&|])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*(npm\s+(?:run\s+)?(?:gate|test|test:live|typecheck|lint|build)|npx\s+jest|node\s+[^\s]*(?:verify-gate|run)\.js)\b[^\n;&]*(;|&&)\s*\S/;
+    const compound = /(^|[;\n&|])\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*(npm\s+(?:run\s+)?(?:gate|test|test:live|typecheck|lint|build|verdict)|npx\s+jest|node\s+[^\s]*(?:verify-gate|run)\.js)\b[^\n;&]*(;|&&)\s*\S/;
     if (background && compound.test(stripRedirects)) {
       process.stdout.write('compound');
       return;
@@ -121,11 +121,28 @@ verdict="$(printf '%s' "$payload" | node -e "
     const sleeps = /(^|[^A-Za-z0-9_.\/-])sleep\s+[0-9$]/.test(text);
     if (!isLoop || !sleeps) { process.stdout.write('ok'); return; }
 
-    // What is being waited FOR decides which alias the message names.
-    const bench = /\.spo-bench\/(done|jobs|verdicts)\b|job-[0-9a-f]{6,}/.test(text);
-    const pr    = /\bgh\s+(pr|api)\b/.test(text) || /mergedAt|mergeStateStatus/.test(text);
+    // What is being waited FOR decides which alias the message names, and extract IDs.
+    const isBench = /\.spo-bench\/(done|jobs|verdicts)\b|job-[0-9a-f]{6,}/.test(text);
+    const isPr    = /\bgh\s+(pr|api)\b/.test(text) || /mergedAt|mergeStateStatus/.test(text);
 
-    process.stdout.write(bench ? 'bench' : pr ? 'pr' : 'ok');
+    let jobId = '';
+    let prNum = '';
+
+    if (isBench) {
+      // Extract first job-[hex] id from text
+      const m = text.match(/job-[0-9a-f]{6,}/);
+      if (m) jobId = m[0];
+      process.stdout.write('bench\t' + jobId);
+    } else if (isPr) {
+      // Extract PR number from gh pr ... <N> or /pulls/(<N>)
+      const m1 = text.match(/\bgh\s+pr\s+\w+\s+(\d+)/);
+      const m2 = text.match(/pulls\/(\d+)/);
+      if (m1) prNum = m1[1];
+      else if (m2) prNum = m2[1];
+      process.stdout.write('pr\t' + prNum);
+    } else {
+      process.stdout.write('ok');
+    }
   });
 " 2>/dev/null)"
 
@@ -178,12 +195,21 @@ case "${verdict:-ok}" in
     echo '  npm run gate > <scratchpad>/gate.log 2>&1; echo "EXIT=$?"' >&2
     exit 2
     ;;
-  bench)
+  bench*)
+    # Parse verdict as: "bench\t<job-id>"
+    jobId="${verdict#bench$'\t'}"
+
     echo "BLOCKED: that hand-rolls the wait for a bench job." >&2
     echo "" >&2
     echo "There is an alias for it, and it is allowlisted — so it never stops to ask:" >&2
     echo "" >&2
-    echo "  npm run bench:wait -- <job-id> [--timeout-min=N]" >&2
+
+    if [ -n "$jobId" ]; then
+      echo "  npm run bench:wait -- $jobId" >&2
+    else
+      echo "  npm run bench:wait -- <job-id> [--timeout-min=N]" >&2
+    fi
+
     echo "" >&2
     echo "Read the verdict from its EXIT CODE, never from the report text:" >&2
     echo "  0 PASS/LEASED · 1 verdict not passing · 3 worker down · 4 wait timed out" >&2
@@ -193,12 +219,21 @@ case "${verdict:-ok}" in
     echo "for a job whose wait was interrupted. doc/bench-worker.md." >&2
     exit 2
     ;;
-  pr)
+  pr*)
+    # Parse verdict as: "pr\t<pr-number>"
+    prNum="${verdict#pr$'\t'}"
+
     echo "BLOCKED: that polls GitHub in a loop." >&2
     echo "" >&2
     echo "Two problems, and the alias fixes both:" >&2
     echo "" >&2
-    echo "  npm run pr:wait -- <pr-number> [--interval-sec=N] [--timeout-min=N]" >&2
+
+    if [ -n "$prNum" ]; then
+      echo "  npm run pr:wait -- $prNum" >&2
+    else
+      echo "  npm run pr:wait -- <pr-number> [--interval-sec=N] [--timeout-min=N]" >&2
+    fi
+
     echo "" >&2
     echo "1. The interval. doc/kanban-workflow.md § GitHub API discipline sets a 30 s" >&2
     echo "   floor: one account, 5000 points an hour, shared by every session and" >&2
