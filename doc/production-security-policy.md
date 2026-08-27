@@ -23,7 +23,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 | SEC-H-1 | Every HTTP response MUST carry: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`. | Met (`server.ts:setSecurityHeaders`) | L4 |
 | SEC-H-2 | A CSP of at least `default-src 'self'; script-src 'self'` (+ declared CDN/ws origins) MUST be emitted, and each security header MUST appear **exactly once** end-to-end (the Node app owns headers; nginx adds none). | Met | L4 (duplication check through the proxy path) |
 | SEC-H-3 | Request bodies MUST be capped: 1 MB at nginx, 512 KB on `/api/debug-log` (413 beyond). | Met | L4 (app cap); manual (nginx) |
-| SEC-H-4 | Per-IP rate limits MUST be enforced on auth, `/proxy-image` and `/api/debug-log`, and limiter state MUST be bounded (eviction). **Public-deployment floor:** auth 10/min, `/proxy-image` 60/min. `/api/debug-log` 2 per 60 s (`server.ts:547,836`) and nginx 30 r/s burst 60 (`deploy/nginx/spo-webclient.conf:10,57`) apply at all times. | **Exception [SEC-X-1](#sec-x-1--raised-per-ip-ceilings-for-the-automated-test-phase)** — enforced and bounded (`server.ts:546-584`), but auth and `/proxy-image` stand at **1000/min** since 2026-08-22 (`server.ts:548-555`), not the floor. | L4 (429 probes) |
+| SEC-H-4 | Per-IP rate limits MUST be enforced on auth, `/proxy-image` and `/api/debug-log`, and limiter state MUST be bounded (eviction). **Public-deployment floor:** auth 10/min, `/proxy-image` 60/min. `/api/debug-log` 2 per 60 s (`server.ts:checkRateLimit`) and nginx 30 r/s burst 60 (`deploy/nginx/spo-webclient.conf:10,57`) apply at all times. | **Exception [SEC-X-1](#sec-x-1--raised-per-ip-ceilings-for-the-automated-test-phase)** — enforced and bounded (`server.ts:checkRateLimit`), but auth and `/proxy-image` stand at **1000/min** since 2026-08-22 (`server.ts:RATE_LIMIT_MAX_AUTH, RATE_LIMIT_MAX_PROXY`), not the floor. | L4 (429 probes) |
 | SEC-H-5 | All filesystem-derived routes (`/api/map-data`, `/cache/*`, `/cdn/*`, terrain/classes) MUST reject path traversal (`..`, `/`, `\`, `%00`, encoded variants) and MUST verify the resolved path stays inside the base directory. | Met | L4 (probe set) + L0 predicate tests |
 | SEC-H-6 | `/proxy-image` MUST reject non-http(s) schemes and private/link-local targets (127/8, 10/8, 172.16-31, 192.168/16, 169.254/16, IPv6 loopback/link-local/ULA). *Known limitation:* the check is string-based; DNS-resolution checking is queued hardening. | Met (string-based) | L4 (probe set) |
 | SEC-H-7 | Client IP MUST be derived from `X-Forwarded-For` **only** when `TRUST_PROXY=true`. | Met (`server.ts:TRUST_PROXY, getClientIp`) | L4 |
@@ -34,7 +34,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 |---|---|---|---|
 | SEC-W-1 | WS upgrades MUST validate `Origin` against the allow-list; missing or foreign origins → 403 (except `SINGLE_USER_MODE`). | Met (`server.ts:verifyClient`) | L4 |
 | SEC-W-2 | WS frames MUST be capped at 64 KB (`maxPayload`). | Met | L4 |
-| SEC-W-3 | Per-IP concurrent WS connections MUST be capped → 429. **Public-deployment floor: 5.** A **global** session cap SHOULD be added to bound aggregate gateway→Delphi load (risk B4). | Partial (per-IP only), **exception [SEC-X-1](#sec-x-1--raised-per-ip-ceilings-for-the-automated-test-phase)** — the per-IP cap stands at **1000** since 2026-08-22 (`server.ts:1081-1083`), not 5; no global cap. | L4 (per-IP now; global when implemented) |
+| SEC-W-3 | Per-IP concurrent WS connections MUST be capped → 429. **Public-deployment floor: 5.** A **global** session cap SHOULD be added to bound aggregate gateway→Delphi load (risk B4). | Partial (per-IP only), **exception [SEC-X-1](#sec-x-1--raised-per-ip-ceilings-for-the-automated-test-phase)** — the per-IP cap stands at **1000** since 2026-08-22 (`server.ts:WS_MAX_CONNECTIONS_PER_IP`), not 5; no global cap. | L4 (per-IP now; global when implemented) |
 | SEC-W-4 | Messages MUST be gated by session phase (`PHASE_ALLOWED_MESSAGES`): gameplay messages before auth → `ERROR_AccessDenied`; unknown message types MUST be rejected. | Met (`server.ts:PHASE_ALLOWED_MESSAGES`) | L4 |
 | SEC-W-5 | Auth-bearing messages (`REQ_AUTH_CHECK`, `REQ_CONNECT_DIRECTORY`, `REQ_LOGIN_WORLD`) MUST be rate-limited per IP. | Met | L4 |
 
@@ -42,7 +42,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 
 | ID | Requirement | Status | Enforcement |
 |---|---|---|---|
-| SEC-G-2 | RDO lanes MUST stay serialized per session (prevents concurrent access to Delphi temp objects). | Met (`server.ts:RdoQueue`) | L1 harness |
+| SEC-G-2 | RDO lanes MUST stay serialized per session (prevents concurrent access to Delphi temp objects). | Met (`server.ts:rdoQueue`) | L1 harness |
 | SEC-G-3 | Reconnection MUST remain bounded (3 fast + 20 slow) with jitter, close-triggered only; ServerBusy polling MUST never trigger reconnect; timeouts MUST never close sockets. (Protects the Delphi login lock — risk B1.) | Met (Tier 4) | L1 (`world-reconnect`, `server-busy-reconnect`, `timeout-state-machine`) |
 | SEC-G-4 | Outbound HTTP calls to legacy ASP endpoints MUST have timeouts (risk C8). | **Missing — required work** | L0/L1 (with fix) |
 
@@ -93,10 +93,10 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 |---|---|
 | **Rows** | SEC-H-4 (auth, `/proxy-image`), SEC-W-3 (per-IP WS connections) |
 | **Raised** | 2026-08-22, developer decision |
-| **In force** | auth **1000/min**, `/proxy-image` **1000/min** (`server.ts:548-555`); per-IP WS connections **1000** (`server.ts:1081-1083`). nginx is unchanged at 30 r/s burst 60 — 1800/min (`deploy/nginx/spo-webclient.conf:10,57`), so the app ceiling is the tighter of the two. The limits were **raised, not removed**. |
+| **In force** | auth **1000/min**, `/proxy-image` **1000/min** (`server.ts:RATE_LIMIT_MAX_AUTH, RATE_LIMIT_MAX_PROXY`); per-IP WS connections **1000** (`server.ts:WS_MAX_CONNECTIONS_PER_IP`). nginx is unchanged at 30 r/s burst 60 — 1800/min (`deploy/nginx/spo-webclient.conf:10,57`), so the app ceiling is the tighter of the two. The limits were **raised, not removed**. |
 | **Rationale** | the bench worker drives real live traffic from a single IP and the gate serializes it; at the policy floor the project's own gate runs would 429 themselves. The Delphi servers hold this load without trouble. |
 | **Owner** | the maintainer |
 | **Expiry** | **the first public deployment** — a condition, not a date. Before the gateway serves any traffic that is not the bench, the ceilings MUST be restored to the SEC-H-4 / SEC-W-3 floors: auth 10/min, `/proxy-image` 60/min, WS 5 per IP. |
-| **Raised at the right moment by** | [`deploy/DEPLOY.md` — *Before the first public deployment*](../deploy/DEPLOY.md), a required deploy-time check. The source comments at `server.ts:548-553` and `:1081-1082` point back here; a comment alone is not a mechanism. SEC-R-2's boot log of the effective security configuration is the second, automatic reminder: it prints both ceilings at every boot (#212, landed 2026-08-25). |
+| **Raised at the right moment by** | [`deploy/DEPLOY.md` — *Before the first public deployment*](../deploy/DEPLOY.md), a required deploy-time check. The source comments at `server.ts:RATE_LIMIT_MAX_AUTH` and `server.ts:WS_MAX_CONNECTIONS_PER_IP` point back here; a comment alone is not a mechanism. SEC-R-2's boot log of the effective security configuration is the second, automatic reminder: it prints both ceilings at every boot (#212, landed 2026-08-25). |
 
 **Not an invitation to revert.** The raise is dated, reasoned and owned. What this entry fixes is that the policy previously recorded the *floor* as **Met** while the code enforced something a hundred times looser, so the document could not answer "what is enforced right now".
