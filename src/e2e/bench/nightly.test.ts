@@ -12,6 +12,7 @@ import {
   nightlyResultFile,
   nightlyResultFromReport,
   NIGHTLY_MIN_GAP_MS,
+  NIGHTLY_MOVE_RATE_LIMIT_MS,
   prepareCheckout,
   readNightlyResult,
   writeNightlyResult,
@@ -36,6 +37,9 @@ interface Harness {
   fingerprintThrows: boolean;
   clock: { nowMs: number };
   git: GitRunner;
+  /** What `resolveRef(workerRepo, 'origin/main')` reports — undefined until a test sets it,
+   *  so every existing test keeps taking the time-window-only path. */
+  mainSha: string | undefined;
 }
 
 function harness(): Harness {
@@ -53,6 +57,7 @@ function harness(): Harness {
     gitThrows: false,
     fingerprintThrows: false,
     clock: { nowMs: IN_WINDOW },
+    mainSha: undefined,
     git: (worktree, args) => {
       h.gitCalls.push({ worktree, args });
       if (h.gitThrows) throw new Error('no origin remote');
@@ -65,6 +70,7 @@ function harness(): Harness {
         if (h.fingerprintThrows) throw new Error('tree vanished');
         return { head: 'main-sha-abc', hash: 'nightly-hash', clean: true };
       },
+      resolveRef: (): string | undefined => h.mainSha,
       runCommand: async (cmd, args, options) => {
         h.commands.push({ cmd, args, cwd: options.cwd });
         return h.exitCodes.shift() ?? 0;
@@ -118,6 +124,104 @@ describe('nightlyDue', () => {
 
   it('treats an unparseable stamp as due — a corrupt file must not wedge it off forever', () => {
     expect(nightlyDue(result({ submittedAt: 'not a date' }), false, IN_WINDOW)).toBe(true);
+  });
+
+  describe('backward compatibility — currentMainSha omitted', () => {
+    it('stays on the window-only schedule when currentMainSha is not given at all', () => {
+      // Same shape a "main moved" case would have (a different lastProvenSha, long past
+      // the move rate limit) but with no currentMainSha — nothing new here, so outside
+      // the window is still not due.
+      const last = result({
+        sha: 'old-sha',
+        submittedAt: new Date(OUTSIDE - NIGHTLY_MOVE_RATE_LIMIT_MS).toISOString(),
+      });
+      expect(nightlyDue(last, false, OUTSIDE, undefined, 'other-sha')).toBe(false);
+    });
+  });
+
+  describe('the main-moved trigger', () => {
+    it('does not fire off-window on the very first check — nothing proven yet is "unknown", not "moved"', () => {
+      // No lastProvenSha to compare against: falls through to the window schedule, same
+      // as an omitted currentMainSha would, so the first-ever check does not bypass it.
+      expect(nightlyDue(null, false, OUTSIDE, 'new-sha')).toBe(false);
+      expect(nightlyDue(null, false, IN_WINDOW, 'new-sha')).toBe(true);
+    });
+
+    it('is due outside the window when main has moved past the last proven sha', () => {
+      const last = result({
+        sha: 'old-sha',
+        submittedAt: new Date(OUTSIDE - NIGHTLY_MOVE_RATE_LIMIT_MS - 1).toISOString(),
+      });
+      expect(nightlyDue(last, false, OUTSIDE, 'new-sha', 'old-sha')).toBe(true);
+    });
+
+    it('is not due yet when main moved but the 15-minute move rate limit has not elapsed', () => {
+      const last = result({
+        sha: 'old-sha',
+        submittedAt: new Date(OUTSIDE - 60_000).toISOString(),
+      });
+      expect(nightlyDue(last, false, OUTSIDE, 'new-sha', 'old-sha')).toBe(false);
+    });
+
+    it('holds the move rate-limit boundary — one ms short is not due, exactly on it is', () => {
+      const justUnder = result({
+        sha: 'old-sha',
+        submittedAt: new Date(OUTSIDE - NIGHTLY_MOVE_RATE_LIMIT_MS + 1).toISOString(),
+      });
+      expect(nightlyDue(justUnder, false, OUTSIDE, 'new-sha', 'old-sha')).toBe(false);
+
+      const exactly = result({
+        sha: 'old-sha',
+        submittedAt: new Date(OUTSIDE - NIGHTLY_MOVE_RATE_LIMIT_MS).toISOString(),
+      });
+      expect(nightlyDue(exactly, false, OUTSIDE, 'new-sha', 'old-sha')).toBe(true);
+    });
+
+    it('accepts an explicit lastRunAtMs instead of deriving it from the last result', () => {
+      // last is null (nothing on disk), but the caller knows a run happened recently.
+      expect(nightlyDue(null, false, OUTSIDE, 'new-sha', 'old-sha', OUTSIDE - 60_000)).toBe(false);
+      expect(
+        nightlyDue(null, false, OUTSIDE, 'new-sha', 'old-sha', OUTSIDE - NIGHTLY_MOVE_RATE_LIMIT_MS),
+      ).toBe(true);
+    });
+
+    it('treats an unparseable explicit lastRunAtMs as no prior run — not a reason to withhold the move trigger', () => {
+      expect(nightlyDue(null, false, OUTSIDE, 'new-sha', 'old-sha', NaN)).toBe(true);
+    });
+
+    it('does not fire inside the window either while the move rate limit is still open', () => {
+      const last = result({
+        sha: 'old-sha',
+        submittedAt: new Date(IN_WINDOW - 60_000).toISOString(),
+      });
+      // Would be blocked by NIGHTLY_MIN_GAP_MS on the window path too, but this confirms
+      // the main-moved path itself respects its own limit rather than falling through.
+      expect(nightlyDue(last, false, IN_WINDOW, 'new-sha', 'old-sha')).toBe(false);
+    });
+
+    it('is not due while a nightly is already queued or running, even when main moved', () => {
+      expect(nightlyDue(null, true, OUTSIDE, 'new-sha', 'old-sha')).toBe(false);
+    });
+  });
+
+  describe('the already-proven check', () => {
+    it('is not due when the current main sha exactly matches what was already proven', () => {
+      const last = result({
+        sha: 'same-sha',
+        submittedAt: new Date(IN_WINDOW - NIGHTLY_MIN_GAP_MS).toISOString(),
+      });
+      // Inside the window and past the 20h gap — would be due on the window schedule
+      // alone, but the sha is unchanged, so there is nothing new to prove.
+      expect(nightlyDue(last, false, IN_WINDOW, 'same-sha', 'same-sha')).toBe(false);
+    });
+
+    it('takes precedence over a main-moved-shaped rate limit that has elapsed', () => {
+      const last = result({
+        sha: 'same-sha',
+        submittedAt: new Date(OUTSIDE - NIGHTLY_MOVE_RATE_LIMIT_MS).toISOString(),
+      });
+      expect(nightlyDue(last, false, OUTSIDE, 'same-sha', 'same-sha')).toBe(false);
+    });
   });
 });
 
@@ -323,6 +427,93 @@ describe('maybeRunNightly', () => {
 
     // Not due, so nothing runs — this only pins the default down as reachable.
     await expect(maybeRunNightly(h.deps)).resolves.toBe(false);
+  });
+
+  describe('the main-moved trigger', () => {
+    it('deposits a nightly when main has moved, even outside the window', async () => {
+      const h = harness();
+      h.clock.nowMs = OUTSIDE;
+      writeNightlyResult(
+        h.paths,
+        result({
+          sha: 'old-sha',
+          submittedAt: new Date(OUTSIDE - NIGHTLY_MOVE_RATE_LIMIT_MS - 1).toISOString(),
+        }),
+      );
+      h.mainSha = 'new-sha';
+
+      expect(await maybeRunNightly(h.deps, '/repo', h.git)).toBe(true);
+      expect(h.spool.queued()).toHaveLength(1);
+    });
+
+    it('does not deposit for a main move still inside the 15-minute rate limit', async () => {
+      const h = harness();
+      h.clock.nowMs = OUTSIDE;
+      writeNightlyResult(
+        h.paths,
+        result({ sha: 'old-sha', submittedAt: new Date(OUTSIDE - 60_000).toISOString() }),
+      );
+      h.mainSha = 'new-sha';
+
+      expect(await maybeRunNightly(h.deps, '/repo', h.git)).toBe(false);
+      expect(h.spool.queued()).toEqual([]);
+      expect(h.commands).toEqual([]);
+    });
+
+    it('does not deposit a second one while a main-moved nightly is already queued', async () => {
+      const h = harness();
+      h.clock.nowMs = OUTSIDE;
+      writeNightlyResult(
+        h.paths,
+        result({
+          sha: 'old-sha',
+          submittedAt: new Date(OUTSIDE - NIGHTLY_MOVE_RATE_LIMIT_MS - 1).toISOString(),
+        }),
+      );
+      h.mainSha = 'new-sha';
+      await maybeRunNightly(h.deps, '/repo', h.git);
+
+      expect(await maybeRunNightly(h.deps, '/repo', h.git)).toBe(false);
+      expect(h.spool.queued()).toHaveLength(1);
+    });
+  });
+
+  it('does not re-run when the current main sha was already proven, even inside the window past the gap', async () => {
+    const h = harness();
+    h.clock.nowMs = IN_WINDOW;
+    writeNightlyResult(
+      h.paths,
+      result({ sha: 'same-sha', submittedAt: new Date(IN_WINDOW - NIGHTLY_MIN_GAP_MS).toISOString() }),
+    );
+    h.mainSha = 'same-sha';
+
+    expect(await maybeRunNightly(h.deps, '/repo', h.git)).toBe(false);
+    expect(h.spool.queued()).toEqual([]);
+    expect(h.commands).toEqual([]);
+  });
+
+  it('the window trigger still deposits unchanged when origin/main cannot be resolved', async () => {
+    // resolveRef returning undefined (offline, or nothing fetched yet) is exactly the
+    // pre-feature shape: currentMainSha absent, so only the window/20h-gap schedule
+    // applies — proven by the untouched default harness (mainSha undefined).
+    const h = harness();
+
+    expect(await maybeRunNightly(h.deps, '/repo', h.git)).toBe(true);
+    expect(h.spool.queued()).toHaveLength(1);
+  });
+
+  it('the window trigger no longer re-fires for an unchanged, already-proven main, even past the 20h gap', async () => {
+    const h = harness();
+    h.clock.nowMs = IN_WINDOW;
+    writeNightlyResult(
+      h.paths,
+      result({ sha: 'main-sha-abc', submittedAt: new Date(IN_WINDOW - NIGHTLY_MIN_GAP_MS).toISOString() }),
+    );
+    // resolveRef reports the same sha the last nightly proved: nothing changed.
+    h.mainSha = 'main-sha-abc';
+
+    expect(await maybeRunNightly(h.deps, '/repo', h.git)).toBe(false);
+    expect(h.spool.queued()).toEqual([]);
   });
 });
 

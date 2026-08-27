@@ -55,6 +55,16 @@ export const NIGHTLY_WINDOW_END_HOUR_UTC = 5;
  */
 export const NIGHTLY_MIN_GAP_MS = 20 * 60 * 60 * 1000;
 
+/**
+ * How long after one "main moved" deposit the next may be considered.
+ *
+ * Deliberately much tighter than {@link NIGHTLY_MIN_GAP_MS}: a run triggered because
+ * `main` advanced is proving a specific new sha, not filling the night's one slot, so a
+ * burst of merges should not have to wait 20 hours between checks — but it still must not
+ * queue one nightly per commit when several land within the same few minutes.
+ */
+export const NIGHTLY_MOVE_RATE_LIMIT_MS = 15 * 60 * 1000;
+
 /** What `<bench>/nightly/latest.json` holds — the surface `/next-task` reads. */
 export interface NightlyResult {
   /** The spool job that produced this, when one ran. */
@@ -85,6 +95,9 @@ export interface NightlyDeps {
   paths: BenchPaths;
   spool: Spool;
   fingerprint: (worktree: string) => TreeFingerprint;
+  /** The sha a ref points at, or undefined when it does not exist. Used to read the
+   *  worker repo's local knowledge of `origin/main` — never a fresh network fetch. */
+  resolveRef: (worktree: string, ref: string) => string | undefined;
   runCommand: (cmd: string, args: string[], options: NightlyCommandOptions) => Promise<number>;
   now: () => number;
   log: (line: string) => void;
@@ -133,27 +146,88 @@ export function writeNightlyResult(paths: BenchPaths, result: NightlyResult): vo
   fs.renameSync(tmp, target);
 }
 
+/** Is `nowMs` inside the 02:00–05:00 UTC window? */
+function isTimeWindowDue(nowMs: number): boolean {
+  const hour = new Date(nowMs).getUTCHours();
+  return hour >= NIGHTLY_WINDOW_START_HOUR_UTC && hour <= NIGHTLY_WINDOW_END_HOUR_UTC;
+}
+
+/**
+ * Has `origin/main` advanced past the last sha a nightly actually proved?
+ *
+ * Requires an actual prior sha to compare against — a `lastProvenSha` of undefined means
+ * "unknown", not "moved". Nothing having run yet must not read as a move: that would fire
+ * this trigger off-window and off-gap the very first time `currentMainSha` becomes
+ * resolvable, which is exactly the case the window schedule below already covers.
+ */
+function isMainMoved(currentMainSha: string | undefined, lastProvenSha: string | undefined): boolean {
+  return (
+    currentMainSha !== undefined && lastProvenSha !== undefined && currentMainSha !== lastProvenSha
+  );
+}
+
+/** Is the current `main` sha exactly the one already covered by the last result? */
+function isAlreadyProven(currentMainSha: string | undefined, lastProvenSha: string | undefined): boolean {
+  return currentMainSha !== undefined && currentMainSha === lastProvenSha;
+}
+
+/** Has enough time passed since `lastRunAtMs` to clear a rate limit of `gapMs`? */
+function isRateLimitExceeded(lastRunAtMs: number | undefined, nowMs: number, gapMs: number): boolean {
+  if (lastRunAtMs === undefined || !Number.isFinite(lastRunAtMs)) return true;
+  return nowMs - lastRunAtMs >= gapMs;
+}
+
 /**
  * Is a nightly due right now?
  *
  * Pure, so the whole schedule is testable without a filesystem or a real clock.
+ *
+ * Two independent paths, either of which is enough:
+ *
+ * - **The window.** The original schedule: once inside 02:00–05:00 UTC, and not again
+ *   within {@link NIGHTLY_MIN_GAP_MS} of the last deposit. Unchanged, and the only path
+ *   taken when `currentMainSha` is not given — every existing caller keeps this behaviour.
+ * - **Main moved.** When `currentMainSha` is known, a sha was previously proven
+ *   (`lastProvenSha` is set), and they differ — a run is due immediately, independent of
+ *   the window, so a break is caught close to the push that caused it rather than at the
+ *   next 02:00. Rate-limited on its own, much tighter, gap
+ *   ({@link NIGHTLY_MOVE_RATE_LIMIT_MS}) so a burst of merges deposits one run, not one per
+ *   push. Nothing having run yet (`lastProvenSha` absent) is "unknown", not "moved" — that
+ *   case falls through to the window schedule below, same as an omitted `currentMainSha`.
+ *
+ * Ahead of both: `currentMainSha` already matching `lastProvenSha` means this exact commit
+ * was already run — main is immutable at a sha, so a second run would teach nothing new,
+ * and neither path fires.
  */
 export function nightlyDue(
   last: NightlyResult | null,
   nightlyPending: boolean,
   nowMs: number,
+  currentMainSha?: string,
+  lastProvenSha?: string,
+  lastRunAtMs?: number,
 ): boolean {
   // One at a time: a job already queued or running IS this night's nightly.
   if (nightlyPending) return false;
 
-  const hour = new Date(nowMs).getUTCHours();
-  if (hour < NIGHTLY_WINDOW_START_HOUR_UTC || hour > NIGHTLY_WINDOW_END_HOUR_UTC) return false;
+  // This exact sha was already run — re-running teaches nothing new about main.
+  if (isAlreadyProven(currentMainSha, lastProvenSha)) return false;
 
+  const submittedAtMs = last ? Date.parse(last.submittedAt) : NaN;
+  const effectiveLastRunAtMs = lastRunAtMs ?? (Number.isFinite(submittedAtMs) ? submittedAtMs : undefined);
+
+  if (
+    isMainMoved(currentMainSha, lastProvenSha) &&
+    isRateLimitExceeded(effectiveLastRunAtMs, nowMs, NIGHTLY_MOVE_RATE_LIMIT_MS)
+  ) {
+    return true;
+  }
+
+  if (!isTimeWindowDue(nowMs)) return false;
   if (!last) return true;
-  const since = Date.parse(last.submittedAt);
   // An unparseable stamp is not a reason to never run again.
-  if (!Number.isFinite(since)) return true;
-  return nowMs - since >= NIGHTLY_MIN_GAP_MS;
+  if (!Number.isFinite(submittedAtMs)) return true;
+  return nowMs - submittedAtMs >= NIGHTLY_MIN_GAP_MS;
 }
 
 /**
@@ -202,7 +276,12 @@ export async function maybeRunNightly(
     entry => entry.request.type === 'nightly',
   );
   const nowMs = deps.now();
-  if (!nightlyDue(readNightlyResult(deps.paths), pending, nowMs)) return false;
+  const last = readNightlyResult(deps.paths);
+  // Local knowledge only — never a fresh fetch on every idle tick. Ordinary job traffic
+  // (each fetches `origin/main` into its own worktree of this same repo, sharing the ref)
+  // keeps it current in practice.
+  const currentMainSha = deps.resolveRef(workerRepo, 'origin/main');
+  if (!nightlyDue(last, pending, nowMs, currentMainSha, last?.sha)) return false;
 
   const submittedAt = new Date(nowMs).toISOString();
   deps.log('nightly: refreshing the main checkout');
