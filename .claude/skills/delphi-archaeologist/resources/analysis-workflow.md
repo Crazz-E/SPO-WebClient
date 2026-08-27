@@ -226,9 +226,9 @@ Task(subagent_type: "general-purpose",
   **Target:** [What we're looking for]
 
   **Files to read (priority order):**
-  1. ../SPO-Original/[Path1] — Read interface section only
-  2. ../SPO-Original/[Path2] — Read lines [M]-[N] (specific method)
-  3. ../SPO-Original/[Path3] — Grep for '[pattern]'
+  1. ~/SPO-Original/[Path1] — Read interface section only
+  2. ~/SPO-Original/[Path2] — Read lines [M]-[N] (specific method)
+  3. ~/SPO-Original/[Path3] — Grep for '[pattern]'
 
   **Extract:**
   - Class names and parent classes
