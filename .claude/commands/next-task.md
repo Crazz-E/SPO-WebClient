@@ -249,22 +249,24 @@ The repo process applies unchanged — this command adds nothing to it:
   whether the change is safe; the semantic question — whether the change actually meets the
   card's criterion and sits coherently in the code — is answered by the delegated
   `change-validator` sub-agent (below), never by the driver reading the diff itself.
-- **The invariant report.** The plan step (Fable) emits an invariant block: each invariant a
-  **verbatim quote** — of any length, not restricted to a single line — plus the `file:line`
-  (or `file:start-end` for a quote spanning several lines) carrying it. The driver copies the
-  block unmodified into every execution spawn, and the sub-agent returns one row per invariant:
-  the quote plus `HELD` or `CHANGED`, plus a final row listing the files it changed as
-  `git status --porcelain` output (the driver compares this to what it asked for). The driver's
-  check below reads the quote against the file as it now stands — never a diff, never `grep`
-  over added/removed lines.
+- **The invariant report.** The plan step (Fable) writes an invariant file to the scratchpad,
+  `invariants-<issue>.md`: each invariant an id (`INV-1`, `INV-2`, …), a **verbatim quote** — of
+  any length, not restricted to a single line — plus the `file:line` (or `file:start-end` for a
+  quote spanning several lines) carrying it. The driver passes the file's absolute path plus
+  the list of ids into every execution spawn — never the quotes themselves — and the sub-agent
+  returns one row per id: `INV-n: HELD` or `INV-n: CHANGED`, plus a final row listing the files
+  it changed as `git status --porcelain` output (the driver compares this to what it asked
+  for). The driver's check below reads the quote for each id from the invariant file and checks
+  it against the file as it now stands — never a diff, never `grep` over added/removed lines.
 - **Driver's check, all mechanical**: (1) **Before the invariant check**, verify expected files
   actually changed: `git status --porcelain` must name each file the spawn was told to edit.
   Empty output where edits were expected is a **failed attempt**, not a clean one — the
   sub-agent either did not run in the worktree or did nothing. (2) Verify the main checkout is
   untouched: `git -C <main checkout> status --porcelain` must be empty. A worktree session that
-  dirties `main` has done something nobody asked for. (3) For each HELD row, extract the quoted
-  text from the invariant and normalize it — strip comment markers (`#`, `**`, a leading `-` or
-  `*`), collapse all whitespace, line breaks included, to single spaces — then check whether
+  dirties `main` has done something nobody asked for. (3) For each `INV-n: HELD` row, read the
+  quote for that id from `invariants-<issue>.md` and normalize it — strip comment markers (`#`,
+  `**`, a leading `-` or `*`), collapse all whitespace, line breaks included, to single spaces —
+  then check whether
   that normalized text is a substring of the same normalization applied to the actual file at
   the invariant's `file:line`/`file:start-end`. The check is over the resulting file, not over
   the patch: `git diff` never enters it, so re-wrapping an invariant (the same words, laid out
@@ -277,12 +279,18 @@ The repo process applies unchanged — this command adds nothing to it:
   delegated implementation may not amend an invariant; only the human may. On 2026-08-26 a
   driver rewrote the comment carrying an invariant so it agreed with the new code — under this
   check that reads as a failed row, not as agreement.
-- **Worked example**, using a real invariant from `scripts/claim-read.sh:16-18`:
+- **Worked example**, using a real invariant from `scripts/claim-read.sh:16-18`. The invariant
+  file carries the entry:
   ```
+  INV-1 · scripts/claim-read.sh:16-18
   # Never read the pool with `gh project item-list` in a session: same data, ~103 points
   # (kanban-workflow § GitHub API discipline). That is how the board went unreadable on
   # 2026-08-25.
   ```
+  The spawn payload carries only the path and the id, never the quote:
+  `invariants: /abs/path/invariants-359.md` / `ids: INV-1`. The sub-agent's reply is a bare
+  row: `INV-1: HELD`.
+
   **Re-wrapped** — same words, different line breaks, e.g. after an unrelated edit above it
   shifted the hunk:
   ```
@@ -291,8 +299,8 @@ The repo process applies unchanged — this command adds nothing to it:
   # board went unreadable on 2026-08-25.
   ```
   Both normalize to the same string (`Never read the pool with ... went unreadable on
-  2026-08-25.`) — the substring test finds it → **HELD**, correctly, even though every line in
-  the file changed.
+  2026-08-25.`) — the substring test finds it → the driver reads `INV-1: HELD` as correct, even
+  though every line in the file changed.
 
   **Reworded** — same idea, different words:
   ```
@@ -300,8 +308,8 @@ The repo process applies unchanged — this command adds nothing to it:
   # points for the same data (kanban-workflow § GitHub API discipline), which broke the board
   # on 2026-08-25.
   ```
-  The normalized quote is no longer a substring of the normalized file text — the substring
-  test fails → **CHANGED**, and the attempt halts.
+  The normalized quote is no longer a substring of the normalized file text — the driver reads
+  `INV-1: CHANGED` and the attempt halts.
 - **`main` moved past your `baseMain`** — the push hook's `NOTE:` is informational, not a
   judgement call: run `git diff --name-only <baseMain>..origin/main` and intersect it with
   the changed paths on your branch (Haiku, low effort — two commands and an emptiness test,
@@ -310,7 +318,9 @@ The repo process applies unchanged — this command adds nothing to it:
 - **A merge conflict** (from the `main`-moved merge above, or any other): route it to a
   sub-agent, Sonnet 5, effort per Size — Opus 5 if any conflicted path matches the escalation
   rule (`src/shared/rdo-*`, `src/server/rdo.ts`, `rdo-members.ts`, session phases). It returns
-  the resolved files plus the same invariant report (above); the driver's check is identical.
+  the resolved files plus the same invariant report (above) — the spawn carries the same file
+  path and id list, and the reply the same `INV-n` rows, never quotes; the driver's check is
+  identical.
 - **Model routing** (kanban-workflow § Model routing — read the step table, it covers
   every § of this command, not just the two glamorous ones): drive the board steps, the
   gate wait and the PR/merge/`finish` steps on **Haiku 4.5**, plan and diagnose on
@@ -383,8 +393,9 @@ The repo process applies unchanged — this command adds nothing to it:
   escalated to Opus 5 under the existing wire rule (`src/shared/rdo-*`, `src/server/rdo.ts`,
   `rdo-members.ts`, the session phases) and also as the fallback when Fable is unavailable;
   **never Sonnet 5** — it is the executor, and a same-model judge ratifies the author's own
-  blind spots. Payload: the diff, the card's criterion, the invariant block, the gate report
-  path. It judges two things only — adequacy to the goal and coherence of integration — and
+  blind spots. Payload: the diff, the card's criterion, the absolute path to
+  `invariants-<issue>.md` plus its id list, the gate report path. It judges two things only —
+  adequacy to the goal and coherence of integration — and
   returns one of three verdicts:
   - `PASS` → `npm run board:move -- <issue> PR` → title `#<issue> · PR`, then the merge step
     below.
