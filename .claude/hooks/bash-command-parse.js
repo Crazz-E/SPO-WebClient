@@ -71,4 +71,56 @@ function bashCandidates(command, verbs, maxCandidates = 40) {
   return out.slice(0, maxCandidates);
 }
 
-module.exports = { unquote, stripHeredocs, bashCandidates };
+// Quote-aware split: masks every quoted span ('...' or "...") before applying `pattern`, then
+// slices the ORIGINAL text at the boundaries found in the masked copy — so a delimiter INSIDE
+// a quoted span (the `|` in `grep "foo|bar"`, the `(` in `grep -rn "= class("`) is invisible to
+// the split, while the same delimiter between quotes still splits, and the quoted text itself
+// reaches the caller untouched (sliced from the original, not rebuilt from the mask).
+//
+// Falls back to a plain, non-quote-aware `text.split(pattern)` on unbalanced quotes — safety
+// first: that is exactly what verdict-pipe-guard.sh's split did before this helper existed, so
+// a command whose quoting this function cannot make sense of is read no worse than before, only
+// better once the quotes balance.
+function splitOutsideQuotes(text, pattern) {
+  let mask = "";
+  let quote = null;
+  for (const ch of text) {
+    if (quote) {
+      mask += ch === quote ? ch : "\0";
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      mask += ch;
+    } else {
+      mask += ch;
+    }
+  }
+  if (quote !== null) return text.split(pattern);
+
+  const flags = pattern.flags.includes("g") ? pattern.flags : pattern.flags + "g";
+  const re = new RegExp(pattern.source, flags);
+  const parts = [];
+  let last = 0;
+  let m;
+  while ((m = re.exec(mask)) !== null) {
+    parts.push(text.slice(last, m.index));
+    last = m.index + m[0].length;
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  parts.push(text.slice(last));
+  return parts;
+}
+
+// The statement boundary verdict-pipe-guard.sh has used since it existed: a newline, `;`,
+// `&&`, `||`, a backtick or `$(` opening a substitution, or a bare `(` opening a subshell.
+// Heredoc-stripped first (a heredoc body is text, not commands) and quote-aware (a `(` or `;`
+// quoted inside a pattern argument no longer looks like it opens a subshell or ends a
+// statement) — the fix investigation-form-guard.js needs for `grep -rn "= class("` and the fix
+// verdict-pipe-guard.sh gets for free by depending on this instead of its own inline copy.
+const STATEMENT_SPLIT = /\n|;|&&|\|\||`|\$\(|\(/;
+
+function statements(command) {
+  return splitOutsideQuotes(stripHeredocs(command), STATEMENT_SPLIT);
+}
+
+module.exports = { unquote, stripHeredocs, bashCandidates, splitOutsideQuotes, statements };
