@@ -48,8 +48,13 @@ function truncate(text: string, max = MAX_TEXT_LENGTH): string {
  * the entry — the message type alone still tells the triage session what crossed the wire.
  *
  * When truncating, re-measure with JSON.stringify to account for escaping: stored as a string,
- * re-serialization adds quotes and escapes every quote/backslash, inflating the size. Shrink
- * until JSON.stringify(truncated).length fits the cap.
+ * re-serialization adds quotes and escapes every quote/backslash, inflating the size. A payload
+ * that is mostly quotes and backslashes (e.g. embedded JSON) can be off by thousands of
+ * characters, so shrinking one character at a time and re-stringifying to check is O(overshoot)
+ * `JSON.stringify` calls — a measurable stall by itself. Compute the overshoot directly instead:
+ * `JSON.stringify` of a string is the string plus two quote characters plus one extra character
+ * per quote/backslash it contains (each becomes a two-character escape). That gives the exact
+ * escaped length without calling `JSON.stringify` at all, so one slice fixes the common case.
  */
 function boundPayload(payload: unknown): { payload: unknown; truncated?: true } {
   let serialized: string;
@@ -61,10 +66,23 @@ function boundPayload(payload: unknown): { payload: unknown; truncated?: true } 
   if (serialized === undefined) return { payload: null };
   if (serialized.length <= MAX_WS_PAYLOAD_BYTES) return { payload };
 
-  // Cut to a conservative length, then re-measure with escaping.
+  // Cut to a conservative length, then correct in one shot for the escaping the eventual
+  // re-serialization adds.
   let truncated = `${serialized.slice(0, MAX_WS_PAYLOAD_BYTES - 32)}…[cut]`;
-  while (JSON.stringify(truncated).length > MAX_WS_PAYLOAD_BYTES) {
-    truncated = truncated.slice(0, -1);
+  const escapes = (truncated.match(/["\\]/g) ?? []).length;
+  const overshoot = truncated.length + 2 + escapes - MAX_WS_PAYLOAD_BYTES;
+  if (overshoot > 0) truncated = truncated.slice(0, -overshoot);
+
+  // Safety net for anything the quote/backslash model doesn't price in. The one real case:
+  // the cut above can land between the two halves of a surrogate pair (an astral character,
+  // e.g. an emoji), stranding a lone surrogate — JSON.stringify escapes an unpaired surrogate
+  // into a 6-character `\udXXX` sequence instead of passing it through as one. Each pass
+  // measures the real overshoot and removes exactly that many characters, so it still
+  // converges in a handful of calls rather than one `JSON.stringify` per removed character.
+  for (let i = 0; i < 5; i++) {
+    const over = JSON.stringify(truncated).length - MAX_WS_PAYLOAD_BYTES;
+    if (over <= 0) break;
+    truncated = truncated.slice(0, -over);
   }
   return { payload: truncated, truncated: true };
 }
