@@ -230,9 +230,11 @@ The repo process applies unchanged — this command adds nothing to it:
   two attempts naming the same root cause is a stop, and Haiku can check that.
 - On gate FAIL the driver spawns a Fable 5 diagnosis sub-agent (effort high), payload = the
   diff + the gate log path + the ledger; its one-line root cause is appended to the ledger.
-- The driver does not "review" the returned diff. The gate and the mechanical invariant check
-  ARE the review — pretending a Haiku driver reviews a diff is the fiction that produced the
-  incident.
+- The driver does not "review" the returned diff — pretending a Haiku driver reviews a diff is
+  the fiction that produced the incident. The gate and the mechanical invariant check answer
+  whether the change is safe; the semantic question — whether the change actually meets the
+  card's criterion and sits coherently in the code — is answered by the delegated
+  `change-validator` sub-agent (below), never by the driver reading the diff itself.
 - **The invariant report.** The plan step (Fable) emits an invariant block: each invariant a
   **verbatim quote** — of any length, not restricted to a single line — plus the `file:line`
   (or `file:start-end` for a quote spanning several lines) carrying it. The driver copies the
@@ -319,6 +321,16 @@ The repo process applies unchanged — this command adds nothing to it:
   `git rev-parse --show-toplevel` — its prefix is allowlisted, so it costs no permission
   prompt — and the returned reply shows where it actually ran, so the driver can verify
   it landed in the right place.
+- Implementation and the driver's mechanical checks done → **commit → push → open the PR
+  with `Closes #<issue>` in the body**. The PR precedes the gate, not the reverse: the worker
+  refuses a sha that is not on `origin` (`scripts/bench-gate.sh:45-50` — "NOT PUSHED: … is not
+  on origin, so the worker cannot fetch it"), and `ci.yml` triggers on `pull_request`, so a
+  branch with no PR has no CI run for its sha and the worker replays the whole Jest suite on
+  the exclusive bench — the slowest path, which has already killed a gateway mid-job
+  (CLAUDE.md § The gate already says this — keep the two consistent). ⚠ Note the wrinkle so a
+  driver is not surprised: the `Pull request linked to issue` project workflow sets `Status` =
+  PR the moment the PR is opened, so the `board:move … Gate` below is correcting that automatic
+  move, not fighting it.
 - **Post-spawn checklist** — before depositing the gate, run these five checks. Each one is
   **emitted by the plan step as a runnable command or text**, not a prose instruction; the
   driver only runs them and reads an exit code. Steps 3 and 4 are required only when the
@@ -349,8 +361,29 @@ The repo process applies unchanged — this command adds nothing to it:
   is NOT the verdict — it prints first, largest, and reads as authoritative whatever the
   exit code actually says. The other machine-readable surface is
   `~/.spo-bench/verdicts/<sha>.json`.
-- Gate PASS (exit 0) → push, PR with **`Closes #<issue>`** in the body → `npm run board:move
-  -- <issue> PR` → title `#<issue> · PR`.
+- Gate PASS (exit 0) → `npm run board:move -- <issue> Validation` → title
+  `#<issue> · Validation`.
+- **Spawn the `change-validator` sub-agent**
+  ([.claude/agents/change-validator.md](../agents/change-validator.md)) — Fable 5, effort high
+  regardless of the card's `Size`,
+  escalated to Opus 5 under the existing wire rule (`src/shared/rdo-*`, `src/server/rdo.ts`,
+  `rdo-members.ts`, the session phases) and also as the fallback when Fable is unavailable;
+  **never Sonnet 5** — it is the executor, and a same-model judge ratifies the author's own
+  blind spots. Payload: the diff, the card's criterion, the invariant block, the gate report
+  path. It judges two things only — adequacy to the goal and coherence of integration — and
+  returns one of three verdicts:
+  - `PASS` → `npm run board:move -- <issue> PR` → title `#<issue> · PR`, then the merge step
+    below.
+  - `PASS WITH FINDINGS` → same as `PASS`; each finding is routed to the `card-reviewer`
+    sub-agent exactly as every other draft (§ Feeding rule) — the validator files nothing
+    itself, and a `card-reviewer` verdict of `DO NOT FILE` creates nothing. **Findings never
+    block the merge.**
+  - `REJECT` → a **failed attempt**: append the one-line root cause to the ledger
+    (`validation N | root cause | REJECT`), move
+    `npm run board:move -- <issue> "In progress"`, re-execute the fix, then **re-commit,
+    re-push and re-gate** — the worker only judges a pushed sha, so a corrected attempt must
+    be pushed again before it can be gated again. `REJECT` carries its own budget of **3**, separate from the implementation-attempt budget (§ 4) — three `REJECT`s ends the task at
+    Needs triage the same way three failed gate attempts do.
 - Checks green → merge, `npm run finish` → `npm run board:move -- <issue> Done` + one final
   comment (2–4 lines: what changed, PR number, anything the human should know) → title
   `#<issue> · Done`. **Checking is one read, not a vigil**: your gate PASS *is* the
@@ -363,7 +396,10 @@ The repo process applies unchanged — this command adds nothing to it:
   in its exit code (0 merged · 1 closed unmerged · 4 still open). Never hand-roll either
   poll, and **never a tight loop**: a `while`/`sleep` loop is compound shell, so it stops to
   ask for permission, and it re-reads GitHub far harder than the sanctioned forms do
-  (kanban-workflow § GitHub API discipline).
+  (kanban-workflow § GitHub API discipline). **No merge without a `change-validator` verdict
+  for the sha being merged** — this is prose today, not an enforced rule: unlike
+  `.claude/hooks/driver-scope-guard.sh`, nothing in the tree checks it, so do not promise an
+  enforcement that does not exist.
 
 ## 4 · If it fails
 
