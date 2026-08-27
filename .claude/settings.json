@@ -1,7 +1,8 @@
 {
   "permissions": {
     "additionalDirectories": [
-      "../SPO-Original"
+      "~/SPO-Original",
+      "~/SPO-ASP"
     ],
     "allow": [
       "Read",
