@@ -1295,7 +1295,7 @@ describe('gate enumeration', () => {
     setActiveInspectorForTest(fake.ctx, makeInspector({ hasSupplies: true }));
     cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
     fake.respond((packet) => {
-      if (packet.member === 'GetInputNames') return 'res="%Seg0::\nBooks  junk"';
+      if (packet.member === 'GetInputNames') return `res="%Seg0::\nBooks${String.fromCharCode(0)}${String.fromCharCode(0)}junk"`;
       if (packet.member === 'SetPath') return 'res="#-1"';
       return '';
     });
@@ -1328,7 +1328,7 @@ describe('gate enumeration', () => {
     setActiveInspectorForTest(fake.ctx, makeInspector({ hasProducts: true }));
     cacheValues(fake, { MetaFluid: 'X', cnxCount: '0' });
     fake.respond((packet) => {
-      if (packet.member === 'GetOutputNames') return 'res="%broken\r\nGate1::\nCars tail"';
+      if (packet.member === 'GetOutputNames') return `res="%broken\r\nGate1::\nCars${String.fromCharCode(0)}tail"`;
       if (packet.member === 'SetPath') return 'res="#-1"';
       return '';
     });
