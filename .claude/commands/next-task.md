@@ -49,7 +49,10 @@ incomplete result and appears to succeed. If you detect a deferred tool, load it
 `ToolSearch select:Grep,Read,Glob`. If that load fails, delegate the read to a sub-agent
 (which has native tools) or stop and say so. Never fall back to shell equivalents — they
 bury the problem, just as `.claude/hooks/poll-loop-guard.sh:25-29` refuses the form but names
-the alternative: a rule that names no workaround is a rule a model routes around.
+the alternative: a rule that names no workaround is a rule a model routes around. When a
+verdict command's output would be long, the sanctioned abbreviation is
+`npm run verdict -- <alias>` — allowlisted, exit code preserved; never a pipe, never a bare
+`tail`.
 
 ## 0 · Is `main` red?
 
