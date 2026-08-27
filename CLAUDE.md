@@ -389,8 +389,6 @@ Slash **commands** live in `.claude/commands/`: `/next-task`, `/gate`, `/commit-
 | Server | For |
 |--------|-----|
 | Playwright | Browser automation, E2E |
-| GitHub | PRs, issues, code search — same account quota as `gh`; kanban-workflow.md § GitHub API discipline binds it too |
-| Context7 | Live library docs (TS, Jest, Node) |
 
 ## E2E credentials — LOCKED
 
