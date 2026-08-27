@@ -144,6 +144,31 @@ describe('websocket entries', () => {
     const reserializedLength = JSON.stringify(entry.payload ?? null).length;
     expect(reserializedLength).toBeLessThanOrEqual(MAX_WS_PAYLOAD_BYTES);
   });
+
+  it('corrects a cut that lands mid-surrogate-pair, which the quote/backslash model alone misses', () => {
+    reportJournal.arm();
+    // JSON.stringify escapes an *unpaired* UTF-16 surrogate into a 6-character `\udXXX`
+    // sequence, even though an ordinary character costs 1. The escape-count model only prices
+    // in quotes and backslashes, so a cut that happens to land between the two halves of an
+    // astral character (an emoji is a surrogate pair) stray one, undercounting the true cost —
+    // exactly the case the bounded correction pass exists to catch.
+    //
+    // Compute where the first cut falls and plant an emoji straddling that exact boundary,
+    // with just enough quote/backslash padding beforehand that the model's own conservative
+    // margin is too thin to absorb the surprise.
+    const cut = MAX_WS_PAYLOAD_BYTES - 32;
+    const prefixLen = JSON.stringify({ data: 'X' }).indexOf('X');
+    const qbCount = 5;
+    const escapedQbLen = 4 * qbCount; // each `"` or `\` becomes a 2-char escape once serialized
+    const padLen = cut - 1 - prefixLen - escapedQbLen;
+    const data = `${'"\\'.repeat(qbCount)}${'A'.repeat(padLen)}😀${'y'.repeat(2000)}`;
+
+    reportJournal.record('ws-out', { data });
+
+    const entry = reportJournal.snapshot()[0] as { payload: unknown; truncated?: boolean };
+    expect(entry.truncated).toBe(true);
+    expect(JSON.stringify(entry.payload ?? null).length).toBeLessThanOrEqual(MAX_WS_PAYLOAD_BYTES);
+  });
 });
 
 describe('the console wrap', () => {
