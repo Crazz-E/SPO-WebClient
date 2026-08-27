@@ -15,4 +15,6 @@ deploy/
 public/assets/
 public/.vite/
 public/app.js
+public/app.js.map
+public/app*.css
 public/terrain-test.js
