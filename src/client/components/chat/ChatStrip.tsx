@@ -47,6 +47,7 @@ interface ChatStripProps {
 export function ChatStrip({ mode = 'desktop' }: ChatStripProps) {
   const currentChannel = useChatStore((s) => s.currentChannel);
   const channels = useChatStore((s) => s.channels);
+  const channelInfo = useChatStore((s) => s.channelInfo);
   const messages = useChatStore((s) => s.messages);
   const users = useChatStore((s) => s.users);
   const typingUsers = useChatStore((s) => s.typingUsers);
@@ -181,6 +182,7 @@ export function ChatStrip({ mode = 'desktop' }: ChatStripProps) {
                       setChannelDropdownOpen(false);
                       // Tell server to join this channel ("Lobby" maps to "" for the server)
                       client.onJoinChannel(ch === 'Lobby' ? '' : ch);
+                      client.onGetChannelInfo(ch);
                     }}
                   >
                     {ch}
@@ -190,8 +192,15 @@ export function ChatStrip({ mode = 'desktop' }: ChatStripProps) {
             )}
           </div>
 
-          {/* Title */}
-          <span className={styles.headerTitle}>Chat</span>
+          {/* Title + channel info subtitle */}
+          <div className={styles.headerTitleGroup}>
+            <span className={styles.headerTitle}>Chat</span>
+            {currentChannel && channelInfo[currentChannel] && (
+              <span className={styles.channelInfoText} title={channelInfo[currentChannel]}>
+                {channelInfo[currentChannel]}
+              </span>
+            )}
+          </div>
 
           {/* Collapse (hidden in embedded mode) */}
           {!isEmbedded && (

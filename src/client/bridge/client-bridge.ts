@@ -163,6 +163,7 @@ export interface ClientCallbacks {
   onSendChatMessage: (message: string) => void;
   onJoinChannel: (channelName: string) => void;
   onChatTypingChange: (isTyping: boolean) => void;
+  onGetChannelInfo: (channelName: string) => void;
 
   // Build menu
   onRequestBuildingCategories: () => void;
@@ -618,6 +619,10 @@ export const ClientBridge = {
 
   setCurrentChannel(channel: string): void {
     useChatStore.getState().setCurrentChannel(channel);
+  },
+
+  setChannelInfo(channel: string, info: string): void {
+    useChatStore.getState().setChannelInfo(channel, info);
   },
 
   // ---- Mail ----

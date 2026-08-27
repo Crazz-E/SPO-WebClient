@@ -7,6 +7,7 @@ import { useGameStore } from '../store/game-store';
 import { useUiStore } from '../store/ui-store';
 import { useBuildingStore } from '../store/building-store';
 import { useLogStore } from '../store/log-store';
+import { useChatStore } from '../store/chat-store';
 
 // Mock showToast to prevent import issues in test environment
 jest.mock('../components/common/Toast', () => ({
@@ -143,6 +144,13 @@ describe('ClientBridge existing methods', () => {
     const info = { x: 10, y: 20, buildingId: 'B1' };
     ClientBridge.setFocusedBuilding(info as never);
     expect(useBuildingStore.getState().focusedBuilding).toEqual(info);
+  });
+});
+
+describe('ClientBridge chat (GetChannelInfo)', () => {
+  it('setChannelInfo writes the description into chat-store, keyed by channel', () => {
+    ClientBridge.setChannelInfo('Lobby', 'Lobby (Creator: Admin). 5 users.');
+    expect(useChatStore.getState().channelInfo['Lobby']).toBe('Lobby (Creator: Admin). 5 users.');
   });
 });
 

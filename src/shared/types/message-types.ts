@@ -483,7 +483,7 @@ export interface WsReqChatGetChannels extends WsMessage {
   type: WsMessageType.REQ_CHAT_GET_CHANNELS;
 }
 
-/** Not emitted yet — the payload format is unknown. See #117. */
+/** Requests the human-readable channel description (creator, member roster, password status). */
 export interface WsReqChatGetChannelInfo extends WsMessage {
   type: WsMessageType.REQ_CHAT_GET_CHANNEL_INFO;
   channelName: string;

@@ -97,12 +97,6 @@ const UNROUTED: ReadonlyArray<{ type: string; reason: string }> = [];
  */
 const UNWIRED: ReadonlyArray<{ type: string; reason: string }> = [
   {
-    type: 'REQ_CHAT_GET_CHANNEL_INFO',
-    reason: 'handleChatGetChannelInfo exists and the RDO read works, but GetChannelInfo ' +
-      'returns a raw string of unknown shape — nothing can be drawn from it until a live ' +
-      'capture says what is inside. Issue #117.',
-  },
-  {
     type: 'REQ_GET_ROAD_COST',
     reason: 'handleGetRoadCost exists; the client prices the road itself with ' +
       'estimateRoadCost. This is the gateway-side door bridge pricing needs. Issue #99.',
