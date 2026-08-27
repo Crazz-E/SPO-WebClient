@@ -20,29 +20,29 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 
 | ID | Requirement | Status | Enforcement |
 |---|---|---|---|
-| SEC-H-1 | Every HTTP response MUST carry: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`. | Met (`server.ts:532-543`) | L4 |
+| SEC-H-1 | Every HTTP response MUST carry: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`. | Met (`server.ts:setSecurityHeaders`) | L4 |
 | SEC-H-2 | A CSP of at least `default-src 'self'; script-src 'self'` (+ declared CDN/ws origins) MUST be emitted, and each security header MUST appear **exactly once** end-to-end (the Node app owns headers; nginx adds none). | Met | L4 (duplication check through the proxy path) |
 | SEC-H-3 | Request bodies MUST be capped: 1 MB at nginx, 512 KB on `/api/debug-log` (413 beyond). | Met | L4 (app cap); manual (nginx) |
 | SEC-H-4 | Per-IP rate limits MUST be enforced on auth, `/proxy-image` and `/api/debug-log`, and limiter state MUST be bounded (eviction). **Public-deployment floor:** auth 10/min, `/proxy-image` 60/min. `/api/debug-log` 2 per 60 s (`server.ts:547,836`) and nginx 30 r/s burst 60 (`deploy/nginx/spo-webclient.conf:10,57`) apply at all times. | **Exception [SEC-X-1](#sec-x-1--raised-per-ip-ceilings-for-the-automated-test-phase)** — enforced and bounded (`server.ts:546-584`), but auth and `/proxy-image` stand at **1000/min** since 2026-08-22 (`server.ts:548-555`), not the floor. | L4 (429 probes) |
 | SEC-H-5 | All filesystem-derived routes (`/api/map-data`, `/cache/*`, `/cdn/*`, terrain/classes) MUST reject path traversal (`..`, `/`, `\`, `%00`, encoded variants) and MUST verify the resolved path stays inside the base directory. | Met | L4 (probe set) + L0 predicate tests |
 | SEC-H-6 | `/proxy-image` MUST reject non-http(s) schemes and private/link-local targets (127/8, 10/8, 172.16-31, 192.168/16, 169.254/16, IPv6 loopback/link-local/ULA). *Known limitation:* the check is string-based; DNS-resolution checking is queued hardening. | Met (string-based) | L4 (probe set) |
-| SEC-H-7 | Client IP MUST be derived from `X-Forwarded-For` **only** when `TRUST_PROXY=true`. | Met (`server.ts:505-517`) | L4 |
+| SEC-H-7 | Client IP MUST be derived from `X-Forwarded-For` **only** when `TRUST_PROXY=true`. | Met (`server.ts:TRUST_PROXY, getClientIp`) | L4 |
 
 ## 3. WebSocket Layer (SEC-W)
 
 | ID | Requirement | Status | Enforcement |
 |---|---|---|---|
-| SEC-W-1 | WS upgrades MUST validate `Origin` against the allow-list; missing or foreign origins → 403 (except `SINGLE_USER_MODE`). | Met (`server.ts:1089-1112`) | L4 |
+| SEC-W-1 | WS upgrades MUST validate `Origin` against the allow-list; missing or foreign origins → 403 (except `SINGLE_USER_MODE`). | Met (`server.ts:verifyClient`) | L4 |
 | SEC-W-2 | WS frames MUST be capped at 64 KB (`maxPayload`). | Met | L4 |
 | SEC-W-3 | Per-IP concurrent WS connections MUST be capped → 429. **Public-deployment floor: 5.** A **global** session cap SHOULD be added to bound aggregate gateway→Delphi load (risk B4). | Partial (per-IP only), **exception [SEC-X-1](#sec-x-1--raised-per-ip-ceilings-for-the-automated-test-phase)** — the per-IP cap stands at **1000** since 2026-08-22 (`server.ts:1081-1083`), not 5; no global cap. | L4 (per-IP now; global when implemented) |
-| SEC-W-4 | Messages MUST be gated by session phase (`PHASE_ALLOWED_MESSAGES`): gameplay messages before auth → `ERROR_AccessDenied`; unknown message types MUST be rejected. | Met (`server.ts:1335-1348`) | L4 |
+| SEC-W-4 | Messages MUST be gated by session phase (`PHASE_ALLOWED_MESSAGES`): gameplay messages before auth → `ERROR_AccessDenied`; unknown message types MUST be rejected. | Met (`server.ts:PHASE_ALLOWED_MESSAGES`) | L4 |
 | SEC-W-5 | Auth-bearing messages (`REQ_AUTH_CHECK`, `REQ_CONNECT_DIRECTORY`, `REQ_LOGIN_WORLD`) MUST be rate-limited per IP. | Met | L4 |
 
 ## 4. Gateway → Game-Server Conduct (SEC-G)
 
 | ID | Requirement | Status | Enforcement |
 |---|---|---|---|
-| SEC-G-2 | RDO lanes MUST stay serialized per session (prevents concurrent access to Delphi temp objects). | Met (`server.ts:1280-1285`) | L1 harness |
+| SEC-G-2 | RDO lanes MUST stay serialized per session (prevents concurrent access to Delphi temp objects). | Met (`server.ts:RdoQueue`) | L1 harness |
 | SEC-G-3 | Reconnection MUST remain bounded (3 fast + 20 slow) with jitter, close-triggered only; ServerBusy polling MUST never trigger reconnect; timeouts MUST never close sockets. (Protects the Delphi login lock — risk B1.) | Met (Tier 4) | L1 (`world-reconnect`, `server-busy-reconnect`, `timeout-state-machine`) |
 | SEC-G-4 | Outbound HTTP calls to legacy ASP endpoints MUST have timeouts (risk C8). | **Missing — required work** | L0/L1 (with fix) |
 
