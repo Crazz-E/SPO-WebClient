@@ -78,7 +78,7 @@ describe('poll-loop-guard.sh — loop detection and suggestions', () => {
     const command = `npm run verdict -- test &`;
     const result = run(command);
     expect(result.code).toBe(2);
-    expect(result.err).toContain('trailing \`&\` destroys the verdict');
+    expect(result.err).toContain('trailing `&` destroys the verdict');
   });
 
   it('blocks compound (backgrounded) after verdict', () => {
