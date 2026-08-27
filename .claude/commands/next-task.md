@@ -11,7 +11,7 @@ Board: [github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/
 
 **Run the scripted steps verbatim.** Every board and bench read below is a named script,
 reached through an npm alias: `bench:nightly`, `board:claim`, `board:verify`,
-`board:sessions`, `board:status`, `board:wait`, `bench:wait`, `pr:wait`. Call each in
+`board:status`, `board:move`, `board:block`, `board:sessions`, `board:wait`, `bench:wait`, `pr:wait`. Call each in
 exactly the form written here —
 `npm run <alias>`, arguments after `--` — from the worktree you are in, with **no `cd`
 prefix and no shell composition around it**. None of them needs a working directory other

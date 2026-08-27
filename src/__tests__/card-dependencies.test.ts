@@ -134,9 +134,9 @@ describe('the rulebook carries the blocking order', () => {
     expect(recipes).toBeGreaterThan(-1);
     const tail = rulebook.slice(recipes);
     expect(tail).toMatch(/issueDependenciesSummary \{ blockedBy \}/);
-    expect(tail).toMatch(/addBlockedBy\(input:\{/);
-    // The mutation takes node ids: a recipe that passed numbers would fail at the first use.
-    expect(collapse(tail)).toMatch(/takes node ids, not numbers/);
+    expect(tail).toMatch(/npm run board:block --/);
+    // The script resolves node ids from issue numbers, so the driver never has to.
+    expect(collapse(tail)).toMatch(/scripts\/board-block\.sh/);
   });
 });
 
