@@ -21,10 +21,21 @@ The `Status` field is single-select: a task is in exactly one column.
 | 📥 **Todo** | Unowned pool | Issue created and added to the project. **Vertical order = priority**, maintained by the human — a session always takes the topmost unowned item. | A session claims it. |
 | 🔨 **In progress** | Owned, in development | Session wrote its identity into `Session` and moved the card. Branch, implementation, tests. | Gate deposited, or released. |
 | 🧪 **Gate** | `npm run gate` deposited on the bench worker | Implementation + tests done, committed, pushed, PR opened with `Closes #N`, gate queued (the PR precedes the gate — the worker only fetches a pushed sha, and `ci.yml` needs an open PR to run CI on it. The `Pull request linked to issue` workflow sets `Status` → PR the instant the PR opens; the driver moves it back to Gate, correcting that automatic jump rather than fighting it). | Gate PASS → Validation. Gate failure loops back to In progress (3 attempts max, then release). |
-| 🔍 **Validation** | `change-validator` sub-agent reviewing the diff against the card's criterion and the code it landed in | Gate returned PASS. | `PASS` / `PASS WITH FINDINGS` → PR. `REJECT` → back to In progress (own budget of 3, separate from gate attempts; a corrected attempt is re-committed, re-pushed and re-gated, then release after 3). |
+| 🔍 **Validation** | `citation-verifier` sub-agent — only when the diff touches `rdo-members.ts` — verifying each new/changed catalogue entry's citation, then `change-validator` reviewing the diff against the card's criterion and the code it landed in | Gate returned PASS. | `citation-verifier` `REJECT` → back to In progress, same as a `change-validator` `REJECT` (own budget of 3, separate from gate attempts). `citation-verifier` `DIVERGES` does not block — it flags the entry and validation proceeds to `change-validator`. `change-validator` `PASS` / `PASS WITH FINDINGS` → PR. `change-validator` `REJECT` → back to In progress (own budget of 3, separate from gate attempts; a corrected attempt is re-committed, re-pushed and re-gated, then release after 3). |
 | 🔀 **PR** | Pull request open (opened back in the Gate step; this column is entered on a `change-validator` verdict, not a fresh PR) | `change-validator` returned `PASS` or `PASS WITH FINDINGS`. CI + `bench/gate` statuses already green, merge. | Merge (issue auto-closes). |
 | ✅ **Done** | Merged, released, finished | PR merged, release published, `npm run finish` run. Final synthetic comment posted. | Terminal. |
 | 🚨 **Needs triage** | Ownership released on failure/abandon | Owner released the task with a **simple, non-technical explanation** as an issue comment. | **Human only**: reprioritises, clears `Session`, moves back to Todo (or closes). |
+
+**`citation-verifier` runs first in Validation, and only when the diff changed
+`src/shared/rdo-members.ts`.** It checks that every `File.pas:Line` cited for a new or changed
+catalogue entry is genuine and that the entry's kind and arity match the Pascal declaration —
+directly, or via a documented divergence under one of the two RDO rules (CLAUDE.md § *RDO —
+one catalogue, one emitter*). `REJECT` (a false citation, or an unjustified kind/arity
+mismatch) blocks the merge exactly like a `change-validator` `REJECT` — back to In progress,
+same shared budget of 3. `DIVERGES` (citation genuine, entry correct, but a real,
+rule-justified divergence from the bare declaration) does not block: it is flagged for a human
+to confirm the intent, and validation still proceeds to `change-validator`. A diff that does
+not touch `rdo-members.ts` skips `citation-verifier` entirely.
 
 ## Fields on each card
 

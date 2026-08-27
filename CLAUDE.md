@@ -84,6 +84,16 @@ compile, a wrong argument count throws, the separator cannot be hand-written.
 
 `src/server/session/rdo-request-guards.ts` still guards what the catalogue says nothing about:
 forbidden members, session-lifecycle members, connection-bound members, buffer depth.
+
+**A PR touching `rdo-members.ts` gets a second, automated reader before `change-validator`:**
+the `citation-verifier` sub-agent (`.claude/agents/citation-verifier.md`) opens every cited
+`File.pas:Line` itself and confirms the citation is genuine and the entry's kind and arity
+match it — directly, or via one of the two rules above, stated and explained. It returns
+`PASS`, `REJECT` (a false citation, or a mismatch neither rule excuses — blocks the merge), or
+`DIVERGES` (citation genuine, entry correct, but a real, rule-justified divergence from the
+bare declaration — does not block, flagged for a human to confirm). It is read-only and never
+probes the live server, same as everything else in this section.
+
 ## Legacy Delphi source — SPO-Original
 
 Sibling of this repo, Delphi 5, ~1750 `.pas` — **both halves of the original system**, the
