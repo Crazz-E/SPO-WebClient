@@ -7,7 +7,7 @@
 #      MERGED in — Dependabot rebases only on conflict and never again once a human has
 #      pushed, so "branch up to date" is ours to satisfy. A merge, never a rebase: history
 #      is not rewritten, so the push needs no force (this repo forbids force pushes; the
-#      squash merge flattens the PR anyway). A merge conflict is not ours to
+#      merge queue will enforce MERGE). A merge conflict is not ours to
 #      solve: comment `@dependabot recreate`, drop the worktree, move on (SKIPPED-conflict);
 #   2. `npm ci` IN THAT WORKTREE. This is the whole point of the script: a session worktree has no
 #      node_modules of its own, so npm and Node resolution walk up to ~/SPO-WebClient/
@@ -20,7 +20,7 @@
 #   3. `git push`, then `npm run gate` — the same command a session runs. The bench gates a
 #      waited on. The worker attests the merged sha;
 #   4. ONLY on gate exit 0: `gh pr merge
-#      --squash --auto`, wait for MERGED, then `scripts/finish.sh` from the worktree (ff
+#      --merge --auto`, wait for MERGED, then `scripts/finish.sh` from the worktree (ff
 #      main, refresh main's node_modules, remove worktree + branch).
 #      Gate exit != 0: the worktree stays for inspection (GATE-FAIL), next PR.
 #
