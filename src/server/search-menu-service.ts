@@ -16,7 +16,6 @@ import {
   parseHomePage,
   parseTownsPage,
   parseTycoonProfile,
-  parsePeopleSearchResults,
   parseRankingsPage,
   parseRankingDetail
 } from './search-menu-parser';
@@ -162,16 +161,6 @@ export class SearchMenuService {
       ...profile,
       photoUrl: this.convertImageToProxy(profile.photoUrl)
     };
-  }
-
-  /**
-   * Search for tycoons/people
-   */
-  async searchPeople(searchStr: string): Promise<string[]> {
-    const path = `/five/0/visual/voyager/new%20directory/foundtycoons.asp?WorldName=${encodeURIComponent(this.worldName)}&SearchStr=${encodeURIComponent(searchStr)}`;
-
-    const html = await this.fetchPage(path);
-    return parsePeopleSearchResults(html);
   }
 
   /**

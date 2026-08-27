@@ -45,12 +45,8 @@ export async function handleSearchMenuTowns(ctx: WsHandlerContext, msg: WsMessag
 }
 
 export async function handleSearchMenuPeopleSearch(ctx: WsHandlerContext, msg: WsMessage): Promise<void> {
-  if (!ctx.searchMenuService) {
-    sendError(ctx.ws, msg.wsRequestId, 'Search menu not available. Please log in first.', ErrorCodes.ERROR_AccessDenied);
-    return;
-  }
   const req = msg as WsReqSearchMenuPeopleSearch;
-  const results = await ctx.searchMenuService.searchPeople(req.searchStr);
+  const results = await ctx.session.searchPeople(req.searchStr);
   const response: WsRespSearchMenuPeopleSearch = {
     type: WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH,
     wsRequestId: msg.wsRequestId,

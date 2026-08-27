@@ -613,9 +613,8 @@ export class StarpeaceSession extends EventEmitter {
   }
 
   /**
-   * The RDO people search. Currently unreachable: REQ_SEARCH_MENU_PEOPLE_SEARCH is
-   * served by SearchMenuService.searchPeople, an HTML scrape of the ASP pages.
-   * Which of the two survives is #118.
+   * The RDO people search. Active RDO implementation: REQ_SEARCH_MENU_PEOPLE_SEARCH is
+   * served by this method (#118).
    */
   public async searchPeople(searchStr: string): Promise<string[]> {
     return loginHandler.searchPeople(this, searchStr, this.cachedZonePath);

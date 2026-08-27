@@ -1,8 +1,8 @@
 /**
- * Tests for search-menu-parser — parseHomePage, parseTycoonProfile, parsePeopleSearchResults.
+ * Tests for search-menu-parser — parseHomePage, parseTycoonProfile.
  */
 
-import { parseHomePage, parseTycoonProfile, parsePeopleSearchResults } from '../search-menu-parser';
+import { parseHomePage, parseTycoonProfile } from '../search-menu-parser';
 
 const BASE_URL = 'http://142.4.193.58/five/0/visual/voyager/new%20directory';
 
@@ -148,50 +148,5 @@ describe('parseTycoonProfile', () => {
     expect(profile.ntaRanking).toBe('N/A');
     expect(profile.level).toBe('Unknown');
     expect(profile.prestige).toBe(0);
-  });
-});
-
-describe('parsePeopleSearchResults', () => {
-  it('should extract tycoon names from foundtycoons.asp HTML', () => {
-    const html = `<html><body>
-      <table cellspacing="0">
-        <tr onMouseOver="onItemMouseOver()" dirHref="RenderTycoon.asp?WorldName=Shamba&Tycoon=SPO_test3&RIWS=" textId="text_1">
-          <td><div class="listItem">SPO_test3&nbsp;</div></td>
-        </tr>
-        <tr><td height="2" background="images/itemgradient.jpg"></td></tr>
-      </table>
-    </body></html>`;
-
-    const results = parsePeopleSearchResults(html);
-
-    expect(results).toHaveLength(1);
-    expect(results[0]).toBe('SPO_test3');
-  });
-
-  it('should return multiple results', () => {
-    const html = `<html><body>
-      <table>
-        <tr dirHref="RenderTycoon.asp?Tycoon=Alice" textId="t1">
-          <td><div class="listItem">Alice&nbsp;</div></td>
-        </tr>
-        <tr dirHref="RenderTycoon.asp?Tycoon=Bob" textId="t2">
-          <td><div class="listItem">Bob&nbsp;</div></td>
-        </tr>
-      </table>
-    </body></html>`;
-
-    const results = parsePeopleSearchResults(html);
-
-    expect(results).toHaveLength(2);
-    expect(results).toContain('Alice');
-    expect(results).toContain('Bob');
-  });
-
-  it('should return empty array when no results found', () => {
-    const html = `<html><body><div class="header2">People</div></body></html>`;
-
-    const results = parsePeopleSearchResults(html);
-
-    expect(results).toHaveLength(0);
   });
 });
