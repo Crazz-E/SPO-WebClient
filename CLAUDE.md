@@ -264,6 +264,7 @@ npm run dev:local    # build + start yourself, on the first free port from 8081 
                      # The CONSCIOUS EXCEPTION (see below); PORT=<n> to choose. A hook refuses any
                      # other way of taking the bench port.
 npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push
+npm run verdict -- <alias> [--tail=N]  # run test/typecheck/lint/... with the full log in ~/.spo-bench/logs/, print the tail + EXIT=<code>, preserve the exit code — the sanctioned way to keep a verdict's transcript short
 ```
 
 **The live bench has one owner: the bench worker.** Many sessions run on this machine, but
