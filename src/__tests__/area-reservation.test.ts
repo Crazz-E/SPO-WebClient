@@ -265,9 +265,9 @@ describe('the busy set', () => {
     expect(rulebook.indexOf('### One session per area')).toBeLessThan(orphan);
   });
 
-  it('is exactly In progress, Gate and PR', () => {
+  it('is exactly In progress, Gate, Validation and PR', () => {
     expect(collapse(section())).toMatch(
-      /busy\*\* when a card holds it in \*\*In progress\*\*, \*\*Gate\*\* or \*\*PR\*\*/
+      /busy\*\* when a card holds it in \*\*In progress\*\*, \*\*Gate\*\*, \*\*Validation\*\* or \*\*PR\*\*/
     );
   });
 
@@ -434,9 +434,9 @@ describe('the gh recipes a session copies from', () => {
     expect(claimRead).toMatch(/\[\\\(\.Status \/\/ "-"\)\]/);
     expect(claimRead).toMatch(/area=\\\(\.Area \/\/ "-"\)/);
     expect(claimRead).toMatch(/session=\\\(\.Session \/\/ "-"\)/);
-    // The busy set itself — the same three statuses, with docs still exempt.
+    // The busy set itself — the same four statuses, with docs still exempt.
     expect(claimRead).toMatch(/"busy areas: /);
-    expect(claimRead).toMatch(/\.Status == "In progress" or \.Status == "Gate" or \.Status == "PR"/);
+    expect(claimRead).toMatch(/\.Status == "In progress" or \.Status == "Gate" or \.Status == "Validation" or \.Status == "PR"/);
     expect(claimRead).toMatch(/\.Area != "docs"/);
     expect(recipes).toMatch(/# Fill Area before the card moves to In progress/);
   });

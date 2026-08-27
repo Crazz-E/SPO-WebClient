@@ -229,7 +229,7 @@ if [ "$release" -eq 1 ]; then
     if [ "$reopened_release" -ne 1 ]; then
       echo "NOT YOURS: held by ${current_session:--}"
       case "$current_status" in
-        Todo | "In progress" | Gate | PR)
+        Todo | "In progress" | Gate | Validation | PR)
           echo "the owner is live — ask them, or wait for the reservation to expire; only the human may free it."
           ;;
         *)

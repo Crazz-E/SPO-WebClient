@@ -407,7 +407,7 @@ Three gate attempts max, each naming a different root cause — as ever. If the 
 land (blocked, out of reach, wrongly scoped): `npm run board:move -- <issue> "Needs triage"`,
 title `#<issue> · Needs triage`, keep `Session` filled, post one comment **in simple,
 non-technical English** explaining what was attempted and what blocked it. Never leave the
-card in In progress/Gate/PR at session end — close your ownership, one way or the other.
+card in In progress/Gate/Validation/PR at session end — close your ownership, one way or the other.
 
 ## 5 · Stay on the card
 
