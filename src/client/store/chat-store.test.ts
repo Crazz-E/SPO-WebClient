@@ -20,6 +20,7 @@ function resetStore() {
     typingUsers: new Set(),
     isExpanded: true,
     activeTab: 'chat' as ChatTab,
+    channelInfo: {},
   });
 }
 
@@ -97,6 +98,29 @@ describe('Chat Store — Channels', () => {
     const state = useChatStore.getState();
     expect(state.channels).toEqual(['Lobby', 'Trade']);
     expect(state.currentChannel).toBe('Lobby');
+  });
+});
+
+describe('Chat Store — Channel info (GetChannelInfo)', () => {
+  beforeEach(resetStore);
+
+  it('setChannelInfo records the description under the channel name', () => {
+    useChatStore.getState().setChannelInfo('Lobby', 'Lobby (Creator: Admin). 5 users.');
+    expect(useChatStore.getState().channelInfo['Lobby']).toBe('Lobby (Creator: Admin). 5 users.');
+  });
+
+  it('keeps each channel under its own key', () => {
+    useChatStore.getState().setChannelInfo('Lobby', 'Lobby info');
+    useChatStore.getState().setChannelInfo('Trade', 'Trade info');
+    const { channelInfo } = useChatStore.getState();
+    expect(channelInfo['Lobby']).toBe('Lobby info');
+    expect(channelInfo['Trade']).toBe('Trade info');
+  });
+
+  it('overwrites a previous description for the same channel', () => {
+    useChatStore.getState().setChannelInfo('Lobby', 'Loading...');
+    useChatStore.getState().setChannelInfo('Lobby', 'Lobby (Creator: Admin). 5 users.');
+    expect(useChatStore.getState().channelInfo['Lobby']).toBe('Lobby (Creator: Admin). 5 users.');
   });
 });
 

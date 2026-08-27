@@ -290,6 +290,7 @@ export class StarpeaceClient implements ClientHandlerContext {
       onSendChatMessage: (message: string) => chatHandler.sendChatMessage(this, message),
       onJoinChannel: (channelName: string) => chatHandler.joinChannel(this, channelName),
       onChatTypingChange: (isTyping: boolean) => chatHandler.setTypingStatus(this, isTyping),
+      onGetChannelInfo: (channelName: string) => chatHandler.requestChannelInfo(this, channelName),
       onAuthCheck: (username: string, password: string) => authHandler.performAuthCheck(this, username, password),
       onDirectoryConnect: (username: string, password: string, zonePath?: string) =>
         authHandler.performDirectoryLogin(this, username, password, zonePath),

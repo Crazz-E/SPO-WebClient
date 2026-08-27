@@ -31,10 +31,13 @@ interface ChatState {
   activeTab: ChatTab;
   /** Unread message count for mobile chat tab badge */
   unreadChatCount: number;
+  /** Channel name -> description returned by GetChannelInfo (creator, member count, password status). */
+  channelInfo: Record<string, string>;
 
   // Actions
   setCurrentChannel: (channel: string) => void;
   setChannels: (channels: string[]) => void;
+  setChannelInfo: (channel: string, info: string) => void;
   addMessage: (channel: string, message: ChatMessage) => void;
   setUsers: (users: ChatUser[]) => void;
   addUser: (user: ChatUser) => void;
@@ -55,6 +58,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isExpanded: true,
   activeTab: 'chat' as ChatTab,
   unreadChatCount: 0,
+  channelInfo: {},
 
   setCurrentChannel: (channel) => set({ currentChannel: channel }),
 
@@ -62,6 +66,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     channels,
     currentChannel: state.currentChannel || (channels.length > 0 ? channels[0] : ''),
   })),
+
+  setChannelInfo: (channel, info) =>
+    set((state) => ({
+      channelInfo: { ...state.channelInfo, [channel]: info },
+    })),
 
   addMessage: (channel, message) =>
     set((state) => {

@@ -12,6 +12,8 @@ import {
   WsRespChatUserList,
   WsReqChatGetChannels,
   WsRespChatChannelList,
+  WsReqChatGetChannelInfo,
+  WsRespChatChannelInfo,
   WsReqChatJoinChannel,
   WsReqChatTypingStatus
 } from '../../shared/types';
@@ -96,6 +98,28 @@ async function requestChannelList(ctx: ClientHandlerContext): Promise<void> {
     ClientBridge.setChatChannels(resp.channels);
   } catch (err: unknown) {
     ClientBridge.log('Error', `Failed to get channel list: ${toErrorMessage(err)}`);
+  }
+}
+
+/**
+ * Fetch the channel's description (creator, member roster, password status) and
+ * store it under the display name the caller used (`'Lobby'` for the default
+ * channel), matching the keys `channels`/`currentChannel` already use in the
+ * store. The server itself expects the wire name -- `''` for Lobby, same as
+ * `joinChannel` -- so that translation happens here rather than at the call site.
+ */
+export async function requestChannelInfo(ctx: ClientHandlerContext, channelName: string): Promise<void> {
+  ClientBridge.setChannelInfo(channelName, 'Loading...');
+  try {
+    const req: WsReqChatGetChannelInfo = {
+      type: WsMessageType.REQ_CHAT_GET_CHANNEL_INFO,
+      channelName: channelName === 'Lobby' ? '' : channelName,
+    };
+    const resp = (await ctx.sendRequest(req)) as WsRespChatChannelInfo;
+    ClientBridge.setChannelInfo(channelName, resp.info);
+  } catch (err: unknown) {
+    ClientBridge.log('Error', `Failed to get channel info: ${toErrorMessage(err)}`);
+    ClientBridge.setChannelInfo(channelName, '');
   }
 }
 
