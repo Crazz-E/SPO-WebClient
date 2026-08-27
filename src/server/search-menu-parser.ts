@@ -186,27 +186,6 @@ export function parseTycoonProfile(html: string, baseUrl: string): TycoonProfile
 }
 
 /**
- * Parse foundtycoons.asp - People search results
- */
-export function parsePeopleSearchResults(html: string): string[] {
-  const $ = cheerio.load(html);
-  const results: string[] = [];
-
-  // Find tycoon names from the results list
-  // Use dirHref attribute selector (case-insensitive and reliable)
-  $('tr[dirhref]').each((_, el) => {
-    const $row = $(el);
-    // Try both .ItemHeader (used in towns/people) and .listItem (used in rankings)
-    const name = $row.find('.ItemHeader, .listItem').text().trim();
-    if (name) {
-      results.push(name);
-    }
-  });
-
-  return results;
-}
-
-/**
  * Parse Rankings.asp - Ranking categories tree
  */
 export function parseRankingsPage(html: string): RankingCategory[] {
