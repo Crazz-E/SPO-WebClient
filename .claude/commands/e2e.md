@@ -21,8 +21,8 @@ what a socket cannot observe: rendering, layout, input, mobile, or a pre-release
 - The gate that decides when this is required: **[doc/E2E-POLICY.md](../../doc/E2E-POLICY.md)**.
 
 Execute the scenario phases in order, assert programmatically via
-`window.__spoDebug.getState()` (no screenshots for state verification), continue to the
-next phase on failure, and finish with the per-phase PASS/FAIL table.
+`window.__spoDebug.getState()` (no screenshots for state verification), and continue to the
+next phase on failure. Report: on green, one summary line; on failure, which phases failed with brief reason.
 
 Rules that always apply: credentials are LOCKED; this browser pass stays **read-only**
 (mutations belong to L2's round-trip probe, which restores what it writes); the gateway is

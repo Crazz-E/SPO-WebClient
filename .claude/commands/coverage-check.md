@@ -38,20 +38,9 @@ Parse the coverage output and for each directory in the threshold config, extrac
 
 ### 4. Report
 
-Print a per-directory report:
+On green: one summary line stating all checks passed and listing any directories with ratchet-up opportunities.
 
-```
-| Directory                       | Metric     | Actual | Threshold | Delta  | Status         |
-|---------------------------------|------------|--------|-----------|--------|----------------|
-| Global                          | lines      | 42.1%  | 38%       | +4.1%  | CAN_RATCHET_UP |
-| Global                          | functions  | 40.2%  | 39%       | +1.2%  | PASS           |
-| Global                          | branches   | 30.5%  | 29%       | +1.5%  | PASS           |
-| Global                          | statements | 42.0%  | 38%       | +4.0%  | CAN_RATCHET_UP |
-| ./src/shared/                   | lines      | 55.0%  | 54%       | +1.0%  | PASS           |
-| ...                             | ...        | ...    | ...       | ...    | ...            |
-```
-
-Status logic:
+On red: show the per-directory table with failed rows highlighted, and status logic:
 - **FAIL** — actual < threshold
 - **PASS** — actual >= threshold AND delta <= 2%
 - **CAN_RATCHET_UP** — actual exceeds threshold by > 2%

@@ -131,11 +131,4 @@ directory immediately instead.
 
 ### 8. Report
 
-Print a summary:
-- Branch name
-- Commit hash (short)
-- Files changed (list)
-- Gate verdict, the flows that ran, and each probe's log-line / restore result
-- Push status (success/failure), PR number, merge commit
-- `npm run finish` result: main at <sha>, worktree and branch gone
-- Whether an L3 browser pass is still owed (the gate says so when the diff touches pixels)
+Print the gate verdict and attestation path (`~/.spo-bench/verdicts/<sha>.json`). On failure, add the job log path.
