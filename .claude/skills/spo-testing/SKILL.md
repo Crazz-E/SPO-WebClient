@@ -90,12 +90,12 @@ mock.addScenario(createAuthScenario());
 expect(mock.match('C 0 idof "DirectoryServer"')).not.toBeNull();
 ```
 
-## Fixtures
+## Protocol substrate — real payloads, not invented strings
 
-`src/__fixtures__/` is a **protected directory** — it holds real server responses. Do not
-edit or regenerate without discussion. Parsing tests must run against these, not against
-simplified mock HTML: the classic silent-truncation bug (`[A-Za-z0-9]` clipping
-`PGISRVCOMMON_AlienParkA` to `PGISRVCOMMON`) only reproduces on real payloads.
+Tests must run against real captured server responses, not simplified mock HTML. The classic
+silent-truncation bug (`[A-Za-z0-9]` clipping `PGISRVCOMMON_AlienParkA` to `PGISRVCOMMON`)
+only reproduces on real payloads. Use `src/mock-server/` to capture and replay them —
+the strict validator checks conformance against the schema before a test even runs.
 
 ## Traps that produce green-but-wrong suites
 
@@ -103,7 +103,7 @@ simplified mock HTML: the classic silent-truncation bug (`[A-Za-z0-9]` clipping
 |------|-----|
 | `ClientFacilityDimensionsCache` is a singleton | `clear()` then `initialize()` in `beforeEach`, or tests contaminate each other |
 | Regex asserted only on shape | Also assert result **length/format** — silent truncation passes a shape check |
-| Mock HTML that is too clean | Use `__fixtures__/` captures |
+| Mock HTML that is too clean | Use `src/mock-server/` substrate — real server payloads validated |
 | Testing only level 1 of property resolution | Cover all three: direct → indexed (`Price0`) → columnSuffix (`Tax0Percent`) |
 | Async RDO test without timeout category | `testTimeout` is 10 s; a VERY_SLOW category call will hang the suite |
 

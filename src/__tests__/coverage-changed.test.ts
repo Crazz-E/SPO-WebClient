@@ -110,7 +110,6 @@ describe('isEligible', () => {
   it.each([
     'src/shared/rdo-frame.test.ts',
     'src/client/components/Foo.test.tsx',
-    'src/__fixtures__/frames.ts',
     'src/mock-server/rdo-mock.ts',
     'src/server/__tests__/matchers/rdo-matchers.d.ts',
     'scripts/coverage-changed.js',
@@ -287,9 +286,7 @@ describe('collectChangedLines on a scratch repo', () => {
       'import x from "y";\n\nconst a = 1;\nconst b = 3;\nexport { a, b };\n',
       'utf8'
     );
-    // Untracked: a whole new module, and a fixture that must be ignored.
-    fs.mkdirSync(path.join(dir, 'src', '__fixtures__'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'src', '__fixtures__', 'f.ts'), 'x\n', 'utf8');
+    // Untracked: a whole new module.
     fs.writeFileSync(path.join(dir, 'src', 'shared', 'new.ts'), 'one\ntwo\nthree', 'utf8');
 
     const { base, changed } = script.collectChangedLines(dir);

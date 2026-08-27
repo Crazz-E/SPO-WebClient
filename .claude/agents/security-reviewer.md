@@ -424,7 +424,6 @@ describe('Security: RDO Injection', () => {
 **Protected files (require confirmation before edit):**
 - `src/shared/rdo-types.ts` - RDO type system (security-critical)
 - `src/server/rdo.ts` - RDO parser (security-critical)
-- `src/__fixtures__/*` - Test fixtures (don't tamper)
 
 **Mandatory patterns:**
 - Always use `RdoValue`/`RdoCommand` (never manual strings)
