@@ -135,4 +135,40 @@ function statements(command) {
   return splitOutsideQuotes(stripHeredocs(command), STATEMENT_SPLIT);
 }
 
-module.exports = { unquote, stripHeredocs, bashCandidates, splitOutsideQuotes, statements };
+/**
+ * Detects a verdict command in a non-final position within a statement.
+ * Verdict commands in non-final positions (before semicolons) lose their exit code.
+ *
+ * Returns null if no verdict command found in non-final position, otherwise returns
+ * an object { command: string, position: 'first' | 'middle' }.
+ *
+ * `verdictRegexes` is an array of regexes matching verdict commands (e.g., /^npm\s+test/).
+ * `statement` is a single shell statement (already heredoc-stripped).
+ */
+function verdictInNonFinalPosition(statement, verdictRegexes) {
+  // Split by semicolons that are not inside quotes
+  const commands = splitOutsideQuotes(statement, /;/);
+  if (commands.length < 2) return null;
+
+  // Helper to strip leading whitespace, variable assignments, and shell metacharacters
+  const strip = s => s.replace(/^\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*[\s({`]*/, '').trim();
+
+  // Check if a command looks like a query (--version, --help)
+  const isQuery = s => /(?:^|\s)(?:--version|--help)(?:\s|$)/.test(s);
+
+  // Check each command except the last one
+  for (let i = 0; i < commands.length - 1; i++) {
+    const cmd = strip(commands[i]);
+    if (!cmd) continue; // skip empty commands
+
+    const isVerdict = !isQuery(cmd) && verdictRegexes.some(re => re.test(cmd));
+    if (isVerdict) {
+      const position = i === 0 ? 'first' : 'middle';
+      return { command: cmd.slice(0, 120), position, index: i };
+    }
+  }
+
+  return null;
+}
+
+module.exports = { unquote, stripHeredocs, bashCandidates, splitOutsideQuotes, statements, verdictInNonFinalPosition };

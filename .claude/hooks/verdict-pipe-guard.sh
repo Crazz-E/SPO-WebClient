@@ -48,7 +48,7 @@ HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
   const path = require('path');
-  const { statements: statementsOf, splitOutsideQuotes, stripHeredocs } = require(path.join(process.env.HOOKS_DIR, 'bash-command-parse'));
+  const { statements: statementsOf, splitOutsideQuotes, stripHeredocs, verdictInNonFinalPosition } = require(path.join(process.env.HOOKS_DIR, 'bash-command-parse'));
 
   let raw = '';
   process.stdin.on('data', c => (raw += c));
@@ -68,13 +68,6 @@ verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
       return;
     }
 
-    // '||' is a statement separator, not a pipe — split it out first, so every '|' left
-    // inside a statement is a real pipe. The openers of a subshell and of a command
-    // substitution go too, so \\\$(npm test | tail) is seen as the pipeline it is. Heredoc
-    // stripping and quote-aware splitting both come from bash-command-parse.js now, shared
-    // with investigation-form-guard.js instead of duplicated here.
-    const statements = statementsOf(command);
-
     // A command that only READS a line of script — grep, cat, sed -n — mentions the verb
     // without invoking it. Only an invocation at the head of a stage counts.
     const strip = s => s.replace(/^\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*/, '').trim();
@@ -93,20 +86,48 @@ verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
 
     let reason = 'ok';
     let culprit = '';
-    for (const statement of statements) {
-      const stages = splitOutsideQuotes(statement, /\|/);
-      if (stages.length >= 2 && isVerdict(stages[0])) {
-        reason = 'pipe';
-        // The suggested form appends its own redirections — carrying the stage's along
-        // would print \`npm test 2>&1 > log 2>&1\`, which is advice nobody can follow.
-        culprit = strip(stages[0])
-          .replace(/\s*(?:\d?>&\d|\d?>>?\s*&?\s*[^\s|]+)/g, '')
-          .trim()
-          .slice(0, 120);
-        break;
+    let position = '';
+
+    // First, check for verdict commands in non-final positions (before semicolons).
+    // This must be done on the original command before splitting by other separators,
+    // because statementsOf() splits by semicolons too, losing the semicolon boundaries.
+    const nonFinal = verdictInNonFinalPosition(text, VERDICT);
+    if (nonFinal) {
+      reason = 'nonfinal';
+      culprit = nonFinal.command;
+      position = nonFinal.position;
+    } else {
+      // If no non-final position found, check for verdict commands in pipes.
+      // '||' is a statement separator, not a pipe — split it out first, so every '|' left
+      // inside a statement is a real pipe. The openers of a subshell and of a command
+      // substitution go too, so \\\$(npm test | tail) is seen as the pipeline it is. Heredoc
+      // stripping and quote-aware splitting both come from bash-command-parse.js now, shared
+      // with investigation-form-guard.js instead of duplicated here.
+      const statements = statementsOf(command);
+
+      for (const statement of statements) {
+        // Check for verdict command at the start of a pipe
+        const stages = splitOutsideQuotes(statement, /\|/);
+        if (stages.length >= 2 && isVerdict(stages[0])) {
+          reason = 'pipe';
+          // The suggested form appends its own redirections — carrying the stage's along
+          // would print \`npm test 2>&1 > log 2>&1\`, which is advice nobody can follow.
+          culprit = strip(stages[0])
+            .replace(/\s*(?:\d?>&\d|\d?>>?\s*&?\s*[^\s|]+)/g, '')
+            .trim()
+            .slice(0, 120);
+          break;
+        }
       }
     }
-    process.stdout.write(reason === 'pipe' ? 'pipe\t' + culprit : 'ok');
+
+    if (reason === 'pipe') {
+      process.stdout.write('pipe\t' + culprit);
+    } else if (reason === 'nonfinal') {
+      process.stdout.write('nonfinal\t' + culprit + '\t' + position);
+    } else {
+      process.stdout.write('ok');
+    }
   });
 " 2>/dev/null)"
 
@@ -134,6 +155,30 @@ case "${verdict:-ok}" in
     echo "If you want the pipeline anyway, make the shell carry the real status:" >&2
     echo "" >&2
     echo "  set -o pipefail; ${culprit} 2>&1 | tail -40" >&2
+    exit 2
+    ;;
+  nonfinal*)
+    rest="${verdict#nonfinal$'\t'}"
+    culprit="${rest%%$'\t'*}"
+    # Extract the position (first or middle) from the remainder
+    position="${rest#*$'\t'}"
+    echo "BLOCKED: that puts a command whose exit code IS the verdict in a non-final position." >&2
+    echo "" >&2
+    echo "In statements separated by semicolons, Bash drops the exit code of all but the" >&2
+    echo "LAST command. The status you would read after \`${culprit}\` is the next command's," >&2
+    echo "not \`${culprit}\`'s — and that next command likely succeeds regardless of the" >&2
+    echo "verdict." >&2
+    echo "" >&2
+    echo "Separate the two questions instead of nesting them:" >&2
+    echo "" >&2
+    echo "  ${culprit} > /tmp/run.log 2>&1; echo \"EXIT=\$?\"; tail -40 /tmp/run.log" >&2
+    echo "" >&2
+    echo "(use your scratchpad directory for the log). The status comes from the run, the" >&2
+    echo "text from the file — no filter in between, no stream dropped." >&2
+    echo "" >&2
+    echo "If you want to check the verdict without separating, read PIPESTATUS:" >&2
+    echo "" >&2
+    echo "  ${culprit}; echo \"EXIT=\${PIPESTATUS[0]}\"" >&2
     exit 2
     ;;
   *)

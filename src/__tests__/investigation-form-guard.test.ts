@@ -286,3 +286,161 @@ describe('verdict-pipe-guard.sh — smoke test after the shared-helper refactor'
     expect(err).toContain('BLOCKED');
   });
 });
+
+describe('verdict-pipe-guard.sh — non-final positions (exit code lost before semicolon)', () => {
+  it('blocks verdict command in non-final position: `npm test; echo x`', () => {
+    let code = 0;
+    let err = '';
+    try {
+      execFileSync('bash', [PIPE_WRAPPER], {
+        cwd: ROOT,
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'npm test; echo x' } }),
+        encoding: 'utf8',
+        env: process.env,
+      });
+    } catch (e) {
+      const failure = e as { status?: number; stderr?: string };
+      code = failure.status ?? -1;
+      err = failure.stderr ?? '';
+    }
+    expect(code).toBe(2);
+    expect(err).toContain('BLOCKED');
+    expect(err).toContain('non-final position');
+  });
+
+  it('blocks verdict command in non-final position: `npm test; true`', () => {
+    let code = 0;
+    let err = '';
+    try {
+      execFileSync('bash', [PIPE_WRAPPER], {
+        cwd: ROOT,
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'npm test; true' } }),
+        encoding: 'utf8',
+        env: process.env,
+      });
+    } catch (e) {
+      const failure = e as { status?: number; stderr?: string };
+      code = failure.status ?? -1;
+      err = failure.stderr ?? '';
+    }
+    expect(code).toBe(2);
+    expect(err).toContain('BLOCKED');
+    expect(err).toContain('non-final position');
+  });
+
+  it('blocks verdict command in non-final position within subshell: `(npm test; echo x)`', () => {
+    let code = 0;
+    let err = '';
+    try {
+      execFileSync('bash', [PIPE_WRAPPER], {
+        cwd: ROOT,
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: '(npm test; echo x)' } }),
+        encoding: 'utf8',
+        env: process.env,
+      });
+    } catch (e) {
+      const failure = e as { status?: number; stderr?: string };
+      code = failure.status ?? -1;
+      err = failure.stderr ?? '';
+    }
+    expect(code).toBe(2);
+    expect(err).toContain('BLOCKED');
+    expect(err).toContain('non-final position');
+  });
+
+  it('blocks verdict command in non-final position within braces: `{npm test; echo x}`', () => {
+    let code = 0;
+    let err = '';
+    try {
+      execFileSync('bash', [PIPE_WRAPPER], {
+        cwd: ROOT,
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: '{npm test; echo x;}' } }),
+        encoding: 'utf8',
+        env: process.env,
+      });
+    } catch (e) {
+      const failure = e as { status?: number; stderr?: string };
+      code = failure.status ?? -1;
+      err = failure.stderr ?? '';
+    }
+    expect(code).toBe(2);
+    expect(err).toContain('BLOCKED');
+    expect(err).toContain('non-final position');
+  });
+
+  it('allows verdict command in final position: `echo x; npm test`', () => {
+    const out = execFileSync('bash', [PIPE_WRAPPER], {
+      cwd: ROOT,
+      input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'echo x; npm test' } }),
+      encoding: 'utf8',
+      env: process.env,
+    });
+    expect(out).toBe('');
+  });
+
+  it('allows verdict command in final position of subshell: `(echo x; npm test)`', () => {
+    const out = execFileSync('bash', [PIPE_WRAPPER], {
+      cwd: ROOT,
+      input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: '(echo x; npm test)' } }),
+      encoding: 'utf8',
+      env: process.env,
+    });
+    expect(out).toBe('');
+  });
+
+  it('allows verdict command with no filter: `npm test > log`', () => {
+    const out = execFileSync('bash', [PIPE_WRAPPER], {
+      cwd: ROOT,
+      input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'npm test > log' } }),
+      encoding: 'utf8',
+      env: process.env,
+    });
+    expect(out).toBe('');
+  });
+
+  it('allows verdict with PIPESTATUS check: `npm test; echo \"EXIT=${PIPESTATUS[0]}\"`', () => {
+    const out = execFileSync('bash', [PIPE_WRAPPER], {
+      cwd: ROOT,
+      input: JSON.stringify({
+        tool_name: 'Bash',
+        tool_input: { command: 'npm test; echo "EXIT=${PIPESTATUS[0]}"' },
+      }),
+      encoding: 'utf8',
+      env: process.env,
+    });
+    expect(out).toBe('');
+  });
+
+  it('allows query command in non-final position: `npm test --version; echo x`', () => {
+    const out = execFileSync('bash', [PIPE_WRAPPER], {
+      cwd: ROOT,
+      input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'npm test --version; echo x' } }),
+      encoding: 'utf8',
+      env: process.env,
+    });
+    expect(out).toBe('');
+  });
+
+  it('blocks `npx tsc` in non-final position but suggests typecheck alternative', () => {
+    let code = 0;
+    let err = '';
+    try {
+      execFileSync('bash', [PIPE_WRAPPER], {
+        cwd: ROOT,
+        input: JSON.stringify({
+          tool_name: 'Bash',
+          tool_input: { command: '(npx tsc --noEmit; npx tsc --noEmit -p tsconfig.e2e.json) > log' },
+        }),
+        encoding: 'utf8',
+        env: process.env,
+      });
+    } catch (e) {
+      const failure = e as { status?: number; stderr?: string };
+      code = failure.status ?? -1;
+      err = failure.stderr ?? '';
+    }
+    expect(code).toBe(2);
+    expect(err).toContain('BLOCKED');
+    expect(err).toContain('non-final position');
+  });
+});
