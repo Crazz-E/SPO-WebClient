@@ -58,7 +58,6 @@ ssh root@YOUR_VPS_IP
 
 ```bash
 apt update && apt upgrade -y
-sudo 
 apt install -y curl wget git ufw fail2ban unattended-upgrades \
   apt-transport-https ca-certificates gnupg lsb-release
 ```
@@ -208,7 +207,7 @@ dig +short spo.yourdomain.com
 sudo mkdir -p /opt/spo-webclient
 sudo chown spo:spo /opt/spo-webclient
 cd /opt/spo-webclient
-git clone https://github.com/crazz-e/SPO-WebClient.git .
+git clone https://github.com/Crazz-Org/SPO-WebClient.git .
 ```
 
 ### 5.2 Create Environment File
@@ -233,7 +232,10 @@ First startup downloads game assets (30–90 seconds). Watch the logs:
 docker compose logs -f --tail=100
 ```
 
-Wait for: `[Gateway] Server ready at http://localhost:8080`
+Wait for: `Server ready at http://0.0.0.0:8080` (or the HOST/PORT you configured)
+
+The startup-status endpoint below streams Server-Sent Events, not a single JSON body — expect
+`event: status` / `data: {...json...}` lines rather than a bare JSON object.
 
 ### 5.4 Verify Container
 
@@ -243,7 +245,9 @@ docker compose ps
 
 # Local HTTP works?
 curl -s http://localhost:8080/api/startup-status
-# Expected: {"phase":"ready","progress":1,...}
+# Expected: Server-Sent Events output, e.g.:
+#   event: status
+#   data: {"phase":"ready","progress":1,...}
 
 # Can reach game servers?
 docker compose exec spo-webclient node -e "
@@ -300,10 +304,10 @@ sudo apt install -y certbot
 
 sudo certbot certonly --webroot \
     -w /var/www/certbot \
-    -d starpeace.zz.works \
+    -d spo.yourdomain.com \
     --non-interactive \
     --agree-tos \
-    --email cr@zz.works
+    --email your-email@example.com
 ```
 
 ---
@@ -364,7 +368,7 @@ curl -sI http://spo.yourdomain.com/ | head -5
 
 # API endpoint?
 curl -s https://spo.yourdomain.com/api/startup-status
-# Expected: {"phase":"ready",...}
+# Expected: Server-Sent Events output (event: status / data: {"phase":"ready",...}), not plain JSON
 ```
 
 ### Browser Test
@@ -411,6 +415,34 @@ sudo tail -f /var/log/nginx/error.log
 
 ### Update (Deploy New Code)
 
+A manual `git pull` + `docker compose build/up` has no health gate and no rollback — if
+the new build comes up broken, it just stays broken. **Prefer `deploy/deploy.sh`**, which
+wraps the same steps with a built-in health gate and automatic rollback: it polls the
+container's own healthcheck for up to 120 s, and on failure rewinds the checkout, restores
+the previous image and recreates the container, so a bad deploy self-heals instead of
+staying up broken.
+
+Install it as a cron job so new commits on `main` deploy themselves:
+
+```bash
+crontab -e
+# Add:
+*/30 * * * * /opt/spo-webclient/deploy/deploy.sh >> /opt/spo-webclient/logs/deploy.log 2>&1
+```
+
+Each run fetches `origin/main`, and does nothing if there is nothing new to deploy. Options:
+
+```bash
+deploy/deploy.sh --force      # deploy even with no new commits, or redeploy a commit that failed before
+deploy/deploy.sh --no-prune   # skip pruning dangling images after a successful deploy
+```
+
+A commit whose health gate fails is recorded in `logs/deploy-failed-sha` — deploy.sh will
+not retry it on the next cron tick. Push a fix (a new commit clears the record), or rerun
+with `--force` once you've confirmed it's safe.
+
+To deploy by hand instead:
+
 ```bash
 cd /opt/spo-webclient
 git pull origin main
@@ -421,19 +453,17 @@ docker compose logs -f --tail=50
 
 Asset cache persists in Docker volumes — no re-download on update.
 
-Those commands have no health gate and no rollback. The cron path
-(`deploy/deploy.sh`) has both — prefer it, with `--force` when there is nothing new to
-pull.
-
 ### Rollback
 
 `deploy/deploy.sh` rolls back on its own when the health gate fails: it tags the running
 image `spo-webclient:rollback` before building, and on a failed gate it rewinds the
 checkout, restores that tag and recreates the container. It then writes the bad commit to
 `logs/deploy-failed-sha` and refuses to redeploy it until a fix is pushed (or `--force` is
-passed), so cron does not retry a broken build every 30 minutes.
+passed), so cron does not retry a broken build every 30 minutes. This is the safe path —
+prefer it over rolling back by hand.
 
-To roll back by hand — to an older commit, or after a manual deploy:
+If you deployed manually (or need to go back further than the one image deploy.sh keeps),
+roll back by hand — **this always rebuilds**, so there is no stale-image risk:
 
 ```bash
 cd /opt/spo-webclient
@@ -443,13 +473,15 @@ docker compose build
 docker compose up -d
 ```
 
-To undo just the last automatic deploy, without rebuilding:
+A manual rollback has no health gate of its own — watch `docker compose logs -f` and
+confirm the container comes up healthy before walking away.
 
-```bash
-cd /opt/spo-webclient
-docker tag spo-webclient:rollback spo-webclient-spo-webclient
-docker compose up -d --force-recreate --no-build spo-webclient
-```
+> **WARNING**: If `deploy/deploy.sh` is installed as a cron job (see "Update" above), a manually
+> rolled-back commit that had previously passed its health gate will be redeployed on the next
+> cron run. The script tracks gate *failures* in `logs/deploy-failed-sha`, not manual rollbacks.
+> To prevent auto-redeployment, either (a) write origin/main's sha to the failed-sha file
+> (e.g. `git rev-parse origin/main > logs/deploy-failed-sha`), (b) push a fix to clear the
+> record, or (c) temporarily disable the cron job while investigating the rollback reason.
 
 ### Container Debugging
 
@@ -490,6 +522,7 @@ sudo systemctl restart nginx  # Restart nginx
 |----------|---------|-------------|
 | `NODE_ENV` | — | Set `production` for production |
 | `PORT` | `8080` | Internal HTTP/WebSocket port |
+| `SINGLE_USER_MODE` | `false` | Security kill switch (dev/test only): disables origin validation, rate limits, auth rate limiting, and per-IP WS caps. Never set `true` in production. |
 | `RDO_DIR_HOST` | `www.starpeaceonline.com` | Game directory server |
 | `CHUNK_CDN_URL` | `https://spo.zz.works` | Terrain/object asset CDN |
 | `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error`. With `NODE_ENV=production` the gateway **refuses to start** on `debug` — session IDs leak at that level (SEC-L-2) |
