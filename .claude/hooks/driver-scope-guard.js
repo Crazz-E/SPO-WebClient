@@ -234,6 +234,8 @@ function expandHome(p) {
   if (p.startsWith("~/")) return path.join(process.env.HOME || "", p.slice(2));
   if (p === "$HOME") return process.env.HOME || p;
   if (p.startsWith("$HOME/")) return path.join(process.env.HOME || "", p.slice("$HOME/".length));
+  if (p === "${HOME}") return process.env.HOME || p;
+  if (p.startsWith("${HOME}/")) return path.join(process.env.HOME || "", p.slice("${HOME}/".length));
   return p;
 }
 
