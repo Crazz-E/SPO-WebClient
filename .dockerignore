@@ -12,3 +12,7 @@ screenshots/
 *.md
 !package.json
 deploy/
+public/assets/
+public/.vite/
+public/app.js
+public/terrain-test.js
