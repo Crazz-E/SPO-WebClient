@@ -22,15 +22,24 @@
 # finish.sh both derive `sha1(realpath(toplevel))[0:16]`; a fourth and fifth copy of that
 # derivation, drifting apart, would arm a marker no hook ever reads.
 
-# Absolute path of this worktree's marker, or non-zero if there is no worktree here.
-driving_marker() {
+# Absolute path of one of this worktree's session markers, or non-zero if there is no
+# worktree here. The suffix names which marker, and there are three around this key:
+#   driving   this file's own — the session is the driver of a claimed card
+#   finished  `finish` ran here (finish.sh), which board-take.sh reads to refuse a second
+#             claim in a worktree whose work is already on main
+#   alive     the heartbeat (.claude/hooks/session-heartbeat.sh)
+session_marker() {
   local dir store key
   dir="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1
   [ -n "$dir" ] || return 1
   dir="$(readlink -f "$dir" 2>/dev/null)" || return 1
   store="${SPO_SESSION_DIR:-$HOME/.spo-bench/sessions}"
   key="$(printf '%s' "$dir" | sha1sum | cut -c1-16)"
-  printf '%s/%s.driving' "$store" "$key"
+  printf '%s/%s.%s' "$store" "$key" "${1:?session_marker needs a suffix}"
+}
+
+driving_marker() {
+  session_marker driving
 }
 
 # Arm. Records the session id the guard compares against, and the issue it names in refusals.

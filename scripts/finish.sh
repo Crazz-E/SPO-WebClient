@@ -4,8 +4,9 @@
 # The chain (gate -> push -> PR -> bench/gate + CI -> squash merge) guarantees what lands on
 # main was tested. This script guarantees what is left behind afterwards: nothing.
 #
-#   1. refuses unless the PR for the current branch is MERGED — it deletes nothing that is
-#      not on main;
+#   1. refuses unless the PR for the current branch is MERGED **and** the branch's commits
+#      are actually on main — it deletes nothing that is not on main, and a MERGED verdict
+#      alone does not prove that (see work_is_on_main);
 #   2. fast-forwards the main checkout (~/SPO-WebClient) to origin/main;
 #   3. prunes stale origin/* refs (GitHub already deleted the remote branch at merge —
 #      delete_branch_on_merge);
@@ -80,6 +81,30 @@ sync_main() {
   git -C "$MAIN_REPO" fetch --prune --quiet origin
   git -C "$MAIN_REPO" pull --ff-only --quiet origin main
   git -C "$MAIN_REPO" log --oneline -1
+}
+
+# Are the commits on branch $1 ACTUALLY on main? A MERGED verdict from `gh pr view` cannot
+# answer that on its own, because that lookup finds a PR by branch NAME — and a name outlives
+# the card it was cut for. A session that keeps working in a worktree `finish` already retired
+# reuses the branch, so the lookup goes on answering with the PREVIOUS card's PR, MERGED,
+# while the branch carries commits nobody has landed (sessions #324 and #328, 2026-08-27).
+# Every deletion in this script hangs off that verdict, so the verdict alone is not enough.
+#
+# Two shapes count as landed, one per merge method:
+#   - the tip is an ancestor of origin/main — what the merge queue (method MERGE) leaves,
+#     and the normal case here;
+#   - the tip is exactly the head sha that PR recorded — what a SQUASH merge leaves, where
+#     the tip never enters main's history at all and no git question can find it.
+# Anything else means the branch MOVED after that PR. Costs nothing in the normal case: the
+# second question is only asked when the first has said no.
+work_is_on_main() {
+  local ref head pr_head
+  ref="$1"
+  head="$(git -C "$MAIN_REPO" rev-parse --verify -q "$ref" 2>/dev/null)" || return 1
+  [ -n "$head" ] || return 1
+  git -C "$MAIN_REPO" merge-base --is-ancestor "$head" origin/main 2>/dev/null && return 0
+  pr_head="$(gh pr view "$ref" --json headRefOid -q .headRefOid 2>/dev/null || true)"
+  [ -n "$pr_head" ] && [ "$pr_head" = "$head" ]
 }
 
 # The key of a worktree in SESSIONS_DIR — the path itself would not make a filename.
@@ -190,6 +215,13 @@ prune_worktrees() {
       [ "$wt_branch" != "HEAD" ] && [ "$wt_branch" != "main" ] || continue
       state="$(gh pr view "$wt_branch" --json state -q .state 2>/dev/null || echo NONE)"
       [ "$state" = "MERGED" ] || continue
+      # Here the trap is lethal: three lines down is `worktree remove --force` and `branch
+      # -D`. `ahead` > 0 has already proved this HEAD is not on origin/main, so only the
+      # PR's own head sha can vouch for it — a squash merge, whose tip never enters main.
+      if ! work_is_on_main "$wt_branch"; then
+        echo "== keeping $dir — $wt_branch reports a MERGED PR, but its HEAD is not that PR's (branch reused?)"
+        continue
+      fi
       echo "== finishing worktree $dir — its PR is MERGED and nobody ran finish"
     fi
     git -C "$MAIN_REPO" worktree remove --force "$dir"
@@ -218,6 +250,16 @@ fi
 merge_sha="$(gh pr view "$branch" --json mergeCommit -q .mergeCommit.oid)"
 
 sync_main
+
+# MERGED is a claim about a PR; this is the claim about the commits. It comes after
+# sync_main because it is asked against origin/main, and before everything that deletes.
+if ! work_is_on_main "$branch"; then
+  echo "REFUSED: the PR for '$branch' is MERGED, but the branch's commits are not on main." >&2
+  echo "A branch REUSED for a second card looks exactly like this: the PR is found by branch" >&2
+  echo "name, so the previous card's merged PR answers for work nobody has landed. Push this" >&2
+  echo "branch, open its own PR and merge that before finishing." >&2
+  exit 1
+fi
 
 if git -C "$MAIN_REPO" diff --name-only "${merge_sha}^" "$merge_sha" | grep -qE '^src/e2e/bench/|^scripts/bench-'; then
   echo "== the merge touched the bench worker — reinstalling it from main"
