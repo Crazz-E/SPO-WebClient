@@ -73,6 +73,7 @@ verdict="$(printf '%s' "$payload" | SPO_TOP="$top" SPO_DRIVER_SID="$driver_sid" 
 # sub-agent. Creating a new file is usually the driver writing its OWN text — a commit message,
 # a PR body — which is not implementation at all: it just belongs outside the tree.
 remedy=""
+escalation=""
 case "$verdict" in
   "would create"*)
     remedy="If this is text the driver itself writes — a commit message, a PR body, a board comment —
@@ -94,12 +95,40 @@ driver to paste back into its own reasoning.
 
 "
     ;;
+  *"git stash"*)
+    # `git stash` (and `git stash pop`) rewrites the whole working tree, not one path — there
+    # is no file to hand a sub-agent, and the sub-agent would meet the identical problem this
+    # refusal exists to avoid: the stash stack is shared across every worktree on this machine.
+    # The worktree-safe continuation is a WIP commit instead (CLAUDE.md § Git: "Commit freely
+    # on a branch").
+    escalation="This session's own worktree-safe alternative to \`git stash\` — the stash stack is shared
+across every worktree on this machine, which is the thing being avoided. Commit the work in
+progress instead, and continue:
+
+  git add -A && git commit -m \"wip: <why>\"
+
+"
+    ;;
+  *)
+    # For all other refusals (edits, deletes, modifies), show the spawn form
+    escalation="Spawn an Agent sub-agent to perform this action (kanban-workflow § Model routing):
+
+\`\`\`
+Agent({
+  description: 'brief description of what to change and why',
+  prompt: 'requirements block…'
+})
+\`\`\`
+
+The sub-agent runs with agent_id set, so this guard lets it through.
+"
+    ;;
 esac
 
 cat >&2 <<MSG
 BLOCKED — this session is DRIVING card #${issue}, and this action ${verdict}.
 
-${remedy}next-task.md § 3 (i): the driver never creates, edits or deletes a tracked file itself.
+${remedy}${escalation}next-task.md § 3 (i): the driver never creates, edits or deletes a tracked file itself.
 An implementation is a phase, not a decision: it is ONE spawn of the execution sub-agent
 (kanban-workflow § Model routing), carrying the card, the invariant block and the file list.
 Its writes pass this guard unblocked — it is only the driver's own hand that is refused.

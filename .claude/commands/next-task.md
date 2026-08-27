@@ -347,7 +347,8 @@ The repo process applies unchanged — this command adds nothing to it:
   carries it as an **instruction with verification the agent performs and reports**:
   `git rev-parse --show-toplevel` — its prefix is allowlisted, so it costs no permission
   prompt — and the returned reply shows where it actually ran, so the driver can verify
-  it landed in the right place.
+  it landed in the right place. If a spawn prompt references a path outside the worktree,
+  `spawn-path-guard.sh` will block it and show the corrected worktree-rooted path.
 - Implementation and the driver's mechanical checks done → **commit → push → open the PR
   with `Closes #<issue>` in the body**. The PR precedes the gate, not the reverse: the worker
   refuses a sha that is not on `origin` (`scripts/bench-gate.sh:45-50` — "NOT PUSHED: … is not
