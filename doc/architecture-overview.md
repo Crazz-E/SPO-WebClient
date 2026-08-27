@@ -72,4 +72,4 @@ Service files live flat in `src/server/` (no subdirectory).
 ## SkillsMP
 
 Search SkillsMP API before creating custom skills. Prefer skills with 1,000+ stars.
-- Installed: [.claude/skills/](../.claude/skills/) | Metadata: [manifest.json](../.claude/skills/manifest.json) (20 total)
+- Installed: [.claude/skills/](../.claude/skills/) | Metadata: [manifest.json](../.claude/skills/manifest.json) (`jq '.counts.total' .claude/skills/manifest.json` total)
