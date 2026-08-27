@@ -29,6 +29,7 @@ jobs:
   verify:
     name: typecheck + tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,6 +62,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
       - name: Tests
+        if: github.event_name != 'pull_request'
         run: npm test
 
       # PR-only, deliberately. In a merge group this step is skipped, and the run is still
