@@ -221,9 +221,45 @@ function computeRepoRoot(worktreeRoot) {
   }
 }
 
-// The two legacy trees are siblings of the repo root (CLAUDE.md § Legacy Delphi/web source):
-// `${repoRoot}/../SPO-Original`, `${repoRoot}/../SPO-ASP`.
+// Card #325. `~/SPO-Original` (CLAUDE.md's canonical spelling for the legacy trees) and the
+// literal `$HOME/SPO-Original` both pass through `path.resolve()` untouched — neither `~` nor
+// `$HOME` means anything to it, so the resolved path lands under `<cwd>/~/SPO-Original` (or
+// `<cwd>/$HOME/SPO-Original`), never under the real tree, and the read-verb loop below falls
+// through as ALLOW. A hook never shell-expands its input — it reads the command's literal text
+// off the PreToolUse payload before any shell touches it — so this has to be done by hand, the
+// same shape investigation-form-guard.js (card #324) already uses for `~`, extended here to
+// also cover the literal `$HOME` spelling since that is how the bypass was demonstrated.
+function expandHome(p) {
+  if (p === "~") return process.env.HOME || p;
+  if (p.startsWith("~/")) return path.join(process.env.HOME || "", p.slice(2));
+  if (p === "$HOME") return process.env.HOME || p;
+  if (p.startsWith("$HOME/")) return path.join(process.env.HOME || "", p.slice("$HOME/".length));
+  return p;
+}
+
+// The two legacy trees. `SPO_LEGACY_TREES` (colon-separated, `~`/`$HOME` expanded — the
+// investigation-form-guard.js/card #324 shape) overrides when set, so an operator or a test can
+// point this guard at the same roots that guard uses. Unset is the common case: each tree then
+// resolves dynamically as a sibling of the REAL repo root (CLAUDE.md § Legacy Delphi/web
+// source) — `${repoRoot}/../SPO-Original`, `${repoRoot}/../SPO-ASP` — which is what lets a
+// session worktree's own relative `../SPO-Original` resolve correctly with no configuration.
 function legacyTreeRoots(repoRoot) {
+  const envRaw = process.env.SPO_LEGACY_TREES;
+  if (envRaw) {
+    return envRaw
+      .split(":")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => {
+        try {
+          return path.resolve(expandHome(t));
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .map((dir) => ({ name: path.basename(dir), dir }));
+  }
   if (!repoRoot) return [];
   const parent = path.dirname(repoRoot);
   return LEGACY_TREE_NAMES.map((name) => ({ name, dir: path.resolve(parent, name) }));
@@ -279,7 +315,7 @@ process.stdin.on("end", () => {
         if (!tok || tok.startsWith("-")) continue;
         let abs;
         try {
-          abs = path.resolve(cwd || TOP, tok);
+          abs = path.resolve(cwd || TOP, expandHome(tok));
         } catch {
           continue;
         }

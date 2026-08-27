@@ -350,6 +350,66 @@ describe('driver-scope-guard — legacy tree reads', () => {
     });
     expect(out).toBe('');
   });
+
+  /**
+   * Card #325 (a REJECT on the first attempt). `path.resolve()` does not expand `~` or a
+   * literal `$HOME` — neither means anything special to it — so a command spelled with either
+   * (CLAUDE.md's own canonical spelling is `~/SPO-Original`) resolved to a path like
+   * `<cwd>/~/SPO-Original/secret.pas`, which is never under the real legacy root, and the guard
+   * fell through as ALLOW. `HOME` is pinned to the fake `tmp` root here — not because root
+   * discovery depends on it (that still walks up from `worktree`'s fake `.git` file to
+   * `tmp/main-repo` and takes `tmp/SPO-Original` as its sibling, same as the tests above) — but
+   * because `expandHome()` on the token itself resolves `~`/`$HOME` via `process.env.HOME`, and
+   * it must land back on that same `tmp/SPO-Original` for the two paths to meet.
+   */
+  it('refuses tilde-spelled legacy path: ~/SPO-Original', () => {
+    const { tmp, worktree } = makeFakeWorktree();
+    const out = execFileSync('node', [GUARD], {
+      input: JSON.stringify({
+        session_id: SID,
+        cwd: worktree,
+        tool_name: 'Bash',
+        tool_input: { command: 'grep -a foo ~/SPO-Original/secret.pas' },
+      }),
+      encoding: 'utf8',
+      env: { ...process.env, SPO_TOP: worktree, SPO_DRIVER_SID: SID, HOME: tmp },
+    }).trim();
+    expect(out).toContain('delphi-archaeologist');
+    expect(out).toContain('SPO-Original');
+  });
+
+  it('refuses $HOME-spelled legacy path: $HOME/SPO-Original', () => {
+    const { tmp, worktree } = makeFakeWorktree();
+    const out = execFileSync('node', [GUARD], {
+      input: JSON.stringify({
+        session_id: SID,
+        cwd: worktree,
+        tool_name: 'Bash',
+        tool_input: { command: 'grep -a foo $HOME/SPO-Original/secret.pas' },
+      }),
+      encoding: 'utf8',
+      env: { ...process.env, SPO_TOP: worktree, SPO_DRIVER_SID: SID, HOME: tmp },
+    }).trim();
+    expect(out).toContain('delphi-archaeologist');
+    expect(out).toContain('SPO-Original');
+  });
+
+  it('refuses mixed absolute + tilde in same command', () => {
+    const { tmp, worktree } = makeFakeWorktree();
+    fs.writeFileSync(path.join(tmp, 'a.txt'), 'hi\n');
+    const out = execFileSync('node', [GUARD], {
+      input: JSON.stringify({
+        session_id: SID,
+        cwd: worktree,
+        tool_name: 'Bash',
+        tool_input: { command: `grep foo ${path.join(tmp, 'a.txt')} ~/SPO-Original/b.pas` },
+      }),
+      encoding: 'utf8',
+      env: { ...process.env, SPO_TOP: worktree, SPO_DRIVER_SID: SID, HOME: tmp },
+    }).trim();
+    expect(out).toContain('delphi-archaeologist');
+    expect(out).toContain('SPO-Original');
+  });
 });
 
 describe('driver-scope marker — every path that closes ownership releases it', () => {
