@@ -61,7 +61,8 @@ issue="$(sed -n 2p "$marker" 2>/dev/null)"
 [ -n "$driver_sid" ] || exit 0
 [ -n "$issue" ] || issue="?"
 
-verdict="$(printf '%s' "$payload" | SPO_TOP="$top" SPO_DRIVER_SID="$driver_sid" \
+LEGACY_TREES="${SPO_LEGACY_TREES:-$HOME/SPO-Original:$HOME/SPO-ASP}"
+verdict="$(printf '%s' "$payload" | SPO_TOP="$top" SPO_DRIVER_SID="$driver_sid" SPO_LEGACY_TREES="$LEGACY_TREES" \
   node "$(dirname "$0")/driver-scope-guard.js" 2>/dev/null)" || exit 0
 
 [ -n "$verdict" ] || exit 0

@@ -394,6 +394,22 @@ describe('driver-scope-guard — legacy tree reads', () => {
     expect(out).toContain('SPO-Original');
   });
 
+  it('refuses ${HOME}-spelled legacy path: ${HOME}/SPO-Original', () => {
+    const { tmp, worktree } = makeFakeWorktree();
+    const out = execFileSync('node', [GUARD], {
+      input: JSON.stringify({
+        session_id: SID,
+        cwd: worktree,
+        tool_name: 'Bash',
+        tool_input: { command: 'grep -a foo ${HOME}/SPO-Original/secret.pas' },
+      }),
+      encoding: 'utf8',
+      env: { ...process.env, SPO_TOP: worktree, SPO_DRIVER_SID: SID, HOME: tmp },
+    }).trim();
+    expect(out).toContain('delphi-archaeologist');
+    expect(out).toContain('SPO-Original');
+  });
+
   it('refuses mixed absolute + tilde in same command', () => {
     const { tmp, worktree } = makeFakeWorktree();
     fs.writeFileSync(path.join(tmp, 'a.txt'), 'hi\n');
