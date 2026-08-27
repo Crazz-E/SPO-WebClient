@@ -210,6 +210,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/spawn-path-guard.sh",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }

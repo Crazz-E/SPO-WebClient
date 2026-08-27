@@ -83,57 +83,67 @@ function correctPath(abs) {
   return path.join(TOP, rel);
 }
 
-let raw = "";
-process.stdin.setEncoding("utf8");
-process.stdin.on("data", (c) => (raw += c));
-process.stdin.on("end", () => {
-  let p;
-  try {
-    p = JSON.parse(raw);
-  } catch {
-    return say("ALLOW"); // unparseable payload is never a reason to block work
-  }
+// Card #370: spawn-path-guard.js needs the identical family-vs-worktree containment rule for
+// paths named in an Agent tool's PROMPT TEXT, before any Edit/Write ever names them. "Reuse
+// its classification, do not fork it" (the card's own words) — so `classify`/`correctPath`
+// are exported here, and spawn-path-guard.js requires this file rather than carrying a second
+// copy. This export is additive: nothing below reads it, and the CLI still runs this file as a
+// script (guarded by `require.main === module` below) exactly as it did before the split.
+module.exports = { classify, correctPath };
 
-  if (!TOP || !FAMILY) return say("ALLOW"); // missing env — fail open, never block on our own defect
-
-  const tool = p.tool_name || "";
-  const ti = p.tool_input || {};
-  const cwd = p.cwd || TOP;
-
-  // Deliberately NOT exempted by `agent_id`. driver-scope-guard.js lets the execution
-  // sub-agent through on purpose — implementation is its job. This guard exists precisely
-  // because that same sub-agent, handed a relative path, can resolve it against the wrong
-  // repository root; agent vs. driver says nothing about which tree the write lands in.
-  if (tool === "Edit" || tool === "Write" || tool === "NotebookEdit") {
-    const raw = ti.file_path || ti.notebook_path || "";
-    const why = classify(raw, cwd);
-    if (!why) return say("ALLOW");
-    let abs;
+if (require.main === module) {
+  let raw = "";
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (c) => (raw += c));
+  process.stdin.on("end", () => {
+    let p;
     try {
-      abs = path.resolve(cwd || TOP, raw);
+      p = JSON.parse(raw);
     } catch {
-      return say("ALLOW");
+      return say("ALLOW"); // unparseable payload is never a reason to block work
     }
-    const corrected = correctPath(abs);
-    return say(why + "\t" + corrected);
-  }
 
-  if (tool === "Bash") {
-    const command = typeof ti.command === "string" ? ti.command : "";
-    if (!command) return say("ALLOW");
-    for (const cand of bashCandidates(command, VERBS)) {
-      const why = classify(cand, cwd);
-      if (!why) continue;
+    if (!TOP || !FAMILY) return say("ALLOW"); // missing env — fail open, never block on our own defect
+
+    const tool = p.tool_name || "";
+    const ti = p.tool_input || {};
+    const cwd = p.cwd || TOP;
+
+    // Deliberately NOT exempted by `agent_id`. driver-scope-guard.js lets the execution
+    // sub-agent through on purpose — implementation is its job. This guard exists precisely
+    // because that same sub-agent, handed a relative path, can resolve it against the wrong
+    // repository root; agent vs. driver says nothing about which tree the write lands in.
+    if (tool === "Edit" || tool === "Write" || tool === "NotebookEdit") {
+      const raw = ti.file_path || ti.notebook_path || "";
+      const why = classify(raw, cwd);
+      if (!why) return say("ALLOW");
       let abs;
       try {
-        abs = path.resolve(cwd || TOP, cand);
+        abs = path.resolve(cwd || TOP, raw);
       } catch {
-        continue;
+        return say("ALLOW");
       }
       const corrected = correctPath(abs);
       return say(why + "\t" + corrected);
     }
-  }
 
-  return say("ALLOW");
-});
+    if (tool === "Bash") {
+      const command = typeof ti.command === "string" ? ti.command : "";
+      if (!command) return say("ALLOW");
+      for (const cand of bashCandidates(command, VERBS)) {
+        const why = classify(cand, cwd);
+        if (!why) continue;
+        let abs;
+        try {
+          abs = path.resolve(cwd || TOP, cand);
+        } catch {
+          continue;
+        }
+        const corrected = correctPath(abs);
+        return say(why + "\t" + corrected);
+      }
+    }
+
+    return say("ALLOW");
+  });
+}

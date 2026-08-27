@@ -538,3 +538,92 @@ describe('driver-scope-guard — the refusal names the right remedy', () => {
     }
   }
 });
+
+describe('driver-scope-guard — continuation text for escalation', () => {
+  const WRAPPER = path.join(ROOT, '.claude', 'hooks', 'driver-scope-guard.sh');
+
+  /** Run the wrapper for real, in a throwaway repo with a marker armed for session `sid`. */
+  function refuse(toolInput: Record<string, unknown>, toolName = 'Write'): { code: number; err: string } {
+    const tmp = fs.mkdtempSync('/tmp/claude-1000/dsg-cont-');
+    const store = path.join(tmp, 'store');
+    const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@x' };
+    execFileSync('bash', ['-c', `cd "${tmp}" && git init -q . && echo hi > tracked.txt && git add tracked.txt && git commit -q -m x`], { env });
+    const key = execFileSync('bash', ['-c', `printf '%s' "$(readlink -f "${tmp}")" | sha1sum | cut -c1-16`], {
+      encoding: 'utf8',
+    }).trim();
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, `${key}.driving`), `${SID}\n212\n`);
+    try {
+      execFileSync('bash', [WRAPPER], {
+        cwd: tmp,
+        input: JSON.stringify({ session_id: SID, cwd: tmp, tool_name: toolName, tool_input: toolInput }),
+        encoding: 'utf8',
+        env: { ...process.env, SPO_SESSION_DIR: store },
+      });
+      return { code: 0, err: '' };
+    } catch (e) {
+      const err = e as { status?: number; stderr?: string };
+      return { code: err.status ?? -1, err: err.stderr ?? '' };
+    }
+  }
+
+  it('includes spawn skeleton form in refusal for Edit of tracked file', () => {
+    const { err } = refuse({ file_path: 'tracked.txt' }, 'Edit');
+    expect(err).toContain('Agent({');
+    expect(err).toContain('description:');
+    expect(err).toContain('prompt:');
+    expect(err).toContain('agent_id');
+  });
+
+  it('includes spawn skeleton form in refusal for Write to tracked file', () => {
+    const { err } = refuse({ file_path: 'tracked.txt' }, 'Write');
+    expect(err).toContain('Agent({');
+    expect(err).toContain('agent_id');
+  });
+
+  it('includes spawn skeleton form in refusal for Bash write verbs', () => {
+    const { err } = refuse({ command: 'sed -i s/a/b/ tracked.txt' }, 'Bash');
+    expect(err).toContain('Agent({');
+    expect(err).toContain('agent_id');
+  });
+
+  it('includes spawn skeleton form in refusal for rm', () => {
+    const { err } = refuse({ command: 'rm tracked.txt' }, 'Bash');
+    expect(err).toContain('Agent({');
+    expect(err).toContain('agent_id');
+  });
+
+  it('includes spawn skeleton form in refusal for chmod', () => {
+    const { err } = refuse({ command: 'chmod +x tracked.txt' }, 'Bash');
+    expect(err).toContain('Agent({');
+    expect(err).toContain('agent_id');
+  });
+
+  it('does NOT include spawn skeleton for creation (file creation uses scratchpad)', () => {
+    const { err } = refuse({ file_path: 'new-file.txt' }, 'Write');
+    expect(err).toContain('SCRATCHPAD');
+    expect(err).not.toContain('Agent({');
+  });
+
+  it('does NOT include spawn skeleton for legacy tree reads (uses delphi-archaeologist)', () => {
+    const { err } = refuse({ command: 'grep foo ~/SPO-Original/secret.pas' }, 'Bash');
+    expect(err).toContain('delphi-archaeologist');
+    expect(err).not.toContain('Agent({');
+  });
+
+  // Card #370's own words: "git stash / git stash pop: the WIP-commit form ... this card's
+  // sanctioned worktree-safe alternative". `git stash` rewrites the whole tree, not one path —
+  // a sub-agent spawn is not a coherent answer for it (the stash stack it would hit is shared
+  // across every worktree, the exact problem the WIP-commit form avoids).
+  it('offers the WIP-commit form for git stash, not the sub-agent spawn', () => {
+    const { err } = refuse({ command: 'git stash' }, 'Bash');
+    expect(err).toContain('git add -A && git commit -m');
+    expect(err).not.toContain('Agent({');
+  });
+
+  it('offers the WIP-commit form for git stash pop too', () => {
+    const { err } = refuse({ command: 'git stash pop' }, 'Bash');
+    expect(err).toContain('git add -A && git commit -m');
+    expect(err).not.toContain('Agent({');
+  });
+});
