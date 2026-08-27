@@ -27,7 +27,7 @@ import {
   type BenchPaths,
 } from './paths';
 import { fingerprintTree, resolveRef, runGit, type TreeFingerprint } from './fingerprint';
-import { prepareCheckout } from './checkout';
+import { prepareCheckout, type PrepareResult } from './checkout';
 import { ciStaticProof, type CiProof } from './ci-proof';
 import { serveMergeQueue, type MergeQueueDeps } from './merge-queue';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
@@ -85,10 +85,10 @@ export interface WorkerDeps {
   };
   publishStatus: StatusPublisher;
   /**
-   * Bring the worker's own checkout to `ref`, ready to build. Resolves to the name of the
-   * step that failed, or null. See ./checkout.
+   * Bring the worker's own checkout to `ref`, merged with `origin/main` unless `ref`
+   * already contains it, ready to build. See ./checkout.
    */
-  prepareRef: (ref: string, logFile: string) => Promise<string | null>;
+  prepareRef: (ref: string, logFile: string) => Promise<PrepareResult>;
   /** Has CI already proved this sha's static half? See ./ci-proof. */
   ciStaticProof: (sha: string) => CiProof;
   /** One pass over GitHub's merge queue; returns how many entries it acted on. ./merge-queue */
@@ -295,8 +295,11 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
   // PASS on 514bc4e3, `verdicts/` untouched) and the split has done its job. A ref job is
   // now THE gate, so it attests where the merge rule reads.
   if (request.type === 'ref' && !NON_ATTESTING.has(report.verdict)) {
-    const head =
-      report.fingerprints.atEnd?.head ?? report.fingerprints.atStart?.head ?? request.fingerprint.head;
+    // The DEPOSITED sha, never the merge commit: prepareRef may have merged origin/main
+    // into the checkout, which moves HEAD to a commit that names nothing anyone pushed.
+    // The attestation key must stay the sha the push hook and the GitHub commit status
+    // actually look up — request.fingerprint.head, fixed at deposit time.
+    const head = request.fingerprint.head;
     // The tree, not just the sha: a merge-queue entry is a fresh merge commit even when
     // nothing landed since this was gated, so only the tree can say "identical code".
     const tree =
@@ -308,6 +311,7 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
       verdict: report.verdict,
       fingerprintStable: !report.targetMoved,
       baseMain: report.baseMain,
+      ...(report.merged ? { merged: true, mergedBase: report.baseMain } : {}),
       ...(tree ? { tree } : {}),
       jobId: request.id,
       createdAt: new Date(deps.now()).toISOString(),
@@ -362,13 +366,23 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
   // whole point of the type. Everything below then treats the checkout exactly as it
   // treats a session's worktree, because by this line it IS one.
   if (request.type === 'ref') {
-    const failedStep = await deps.prepareRef(request.ref ?? 'origin/main', logFile);
-    if (failedStep) {
+    const prep = await deps.prepareRef(request.ref ?? 'origin/main', logFile);
+    if (prep.conflictBase) {
+      // FAIL, not ENVIRONMENT: this IS a fact about the code — the tree GitHub would
+      // actually land cannot even be formed. `prepareRef` has already run `merge --abort`,
+      // so the shared checkout is clean for whatever job comes next.
+      return finish(
+        'FAIL',
+        `${request.ref} does not merge cleanly with origin/main (base ${prep.conflictBase.slice(0, 8)}) — see ${logFile}`,
+      );
+    }
+    if (prep.failed) {
       // ENVIRONMENT, not FAIL: nothing was learned about the commit. A ref that does not
       // exist lands here too — which is right, since "I could not fetch it" is a
       // statement about this worker, not about the code.
-      return finish('ENVIRONMENT', `${failedStep} failed while fetching ${request.ref} — see ${logFile}`);
+      return finish('ENVIRONMENT', `${prep.failed} failed while fetching ${request.ref} — see ${logFile}`);
     }
+    report.merged = prep.merged;
   }
 
   if (!fs.existsSync(request.worktree)) {
@@ -451,7 +465,13 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
       // replaying ~113 s of everyone else's queue — but only on a recorded success:
       // **skip on positive evidence, never on assumption**. Anything else replays it and
       // says why, because a gate can run before the pull request exists. See ./ci-proof.
-      const proof = deps.ciStaticProof(report.fingerprints.atStart.head);
+      // A merge changes what CI's record even means: any success it holds for
+      // report.fingerprints.atStart.head answers for the pre-merge sha, not for the tree
+      // this run actually judges. That must not silently pass as proof — force the replay
+      // instead of asking a question whose true answer nobody has recorded yet.
+      const proof = report.merged
+        ? { proven: false, why: 'the checkout merged origin/main — CI proved only the pre-merge tree' }
+        : deps.ciStaticProof(report.fingerprints.atStart.head);
       report.staticProof = { used: proof.proven, ...(proof.proven ? {} : { why: proof.why }) };
       deps.log(
         proof.proven
@@ -701,7 +721,7 @@ export function realWorkerDeps(
     prepareRef: (ref, logFile) =>
       prepareCheckout(
         { runCommand: realRunCommand, now: () => Date.now(), log },
-        { dir: paths.refCheckout, ref, workerRepo: process.cwd(), logFile },
+        { dir: paths.refCheckout, ref, workerRepo: process.cwd(), logFile, mergeRef: 'origin/main' },
         runGit,
       ),
     mayDriveLive: nowMs => mayDriveLive(lease, nowMs),

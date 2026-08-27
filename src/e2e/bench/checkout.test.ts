@@ -114,13 +114,13 @@ describe('prepareCheckout', () => {
     const dir = path.join(tempDir(), 'fresh');
     const logFile = path.join(tempDir(), 'prepare.log');
 
-    const failed = await prepareCheckout(
+    const result = await prepareCheckout(
       h.deps,
       { dir, ref: 'origin/main', workerRepo: '/repo', logFile },
       git,
     );
 
-    expect(failed).toBeNull();
+    expect(result.failed).toBeNull();
     expect(h.commands.map(c => `${c.cmd} ${c.args[0]}`)).toEqual([
       'git clone',
       'git fetch',
@@ -193,13 +193,13 @@ describe('prepareCheckout', () => {
     fs.writeFileSync(path.join(dir, 'package-lock.json'), '{"v":9}');
     h.exitCodes = [0, 0, 0, 1]; // fetch, reset, clean ok; npm ci fails
 
-    const failed = await prepareCheckout(
+    const result = await prepareCheckout(
       h.deps,
       { dir, ref: 'origin/main', workerRepo: '/repo', logFile: path.join(tempDir(), 'p.log') },
       git,
     );
 
-    expect(failed).toBe('npm ci');
+    expect(result.failed).toBe('npm ci');
     expect(installedLockHash(dir)).toBeNull();
   });
 
@@ -219,13 +219,13 @@ describe('prepareCheckout', () => {
         { dir, ref: 'origin/main', workerRepo: '/repo', logFile: path.join(tempDir(), 'p.log') },
         git,
       ),
-    ).resolves.toBe(name);
+    ).resolves.toMatchObject({ failed: name });
   });
 
   it('names the clone when it fails, and never touches the ref afterwards', async () => {
     const h = harness();
     h.exitCodes = [1];
-    const failed = await prepareCheckout(
+    const result = await prepareCheckout(
       h.deps,
       {
         dir: path.join(tempDir(), 'fresh'),
@@ -235,21 +235,21 @@ describe('prepareCheckout', () => {
       },
       git,
     );
-    expect(failed).toBe('git clone');
+    expect(result.failed).toBe('git clone');
     expect(h.commands).toHaveLength(1);
   });
 
   it('reports the origin lookup rather than cloning from a guess', async () => {
     const h = harness();
     const logFile = path.join(tempDir(), 'p.log');
-    const failed = await prepareCheckout(
+    const result = await prepareCheckout(
       h.deps,
       { dir: path.join(tempDir(), 'fresh'), ref: 'origin/main', workerRepo: '/repo', logFile },
       () => {
         throw new Error('not a git repository');
       },
     );
-    expect(failed).toBe('git remote get-url origin');
+    expect(result.failed).toBe('git remote get-url origin');
     expect(h.commands).toHaveLength(0);
     expect(fs.readFileSync(logFile, 'utf8')).toMatch(/not a git repository/);
   });
@@ -263,5 +263,105 @@ describe('prepareCheckout', () => {
     await prepareCheckout(h.deps, { dir, ref: 'origin/main', workerRepo: '/repo', logFile }, git);
 
     expect(fs.readFileSync(logFile, 'utf8')).not.toMatch(/STALE/);
+  });
+});
+
+describe('mergeRef — gating the tree the branch would actually land, not the branch alone', () => {
+  /** A checkout already installed, so every scenario's command list is just the git steps. */
+  function installedDir(): string {
+    const dir = clonedDir();
+    fs.mkdirSync(path.join(dir, 'node_modules'));
+    fs.writeFileSync(path.join(dir, 'package-lock.json'), '{"v":1}');
+    recordInstalled(dir, lockHash(dir) as string);
+    return dir;
+  }
+
+  it('takes the fast path when ref already contains mergeRef — one plumbing call, no merge', async () => {
+    const h = harness();
+    const dir = installedDir();
+
+    const result = await prepareCheckout(
+      h.deps,
+      { dir, ref: 'abc', workerRepo: '/repo', logFile: path.join(tempDir(), 'p.log'), mergeRef: 'origin/main' },
+      git,
+    );
+
+    expect(result).toEqual({ failed: null, merged: false });
+    expect(h.commands.map(c => c.args[0])).toEqual(['fetch', 'reset', 'clean', 'merge-base']);
+    expect(h.commands.find(c => c.args[0] === 'merge-base')?.args).toEqual([
+      'merge-base', '--is-ancestor', 'origin/main', 'HEAD',
+    ]);
+  });
+
+  it('merges mergeRef in with the SPO Bench identity when ref does not already contain it', async () => {
+    const h = harness();
+    const dir = installedDir();
+    h.exitCodes = [0, 0, 0, 1, 0]; // fetch, reset, clean ok; merge-base: not an ancestor; merge: ok
+
+    const result = await prepareCheckout(
+      h.deps,
+      { dir, ref: 'abc', workerRepo: '/repo', logFile: path.join(tempDir(), 'p.log'), mergeRef: 'origin/main' },
+      git,
+    );
+
+    expect(result).toEqual({ failed: null, merged: true });
+    const merge = h.commands.find(c => c.args.includes('--no-edit'));
+    expect(merge?.args).toEqual([
+      '-c', 'user.name=SPO Bench', '-c', 'user.email=bench@local', 'merge', '--no-edit', 'origin/main',
+    ]);
+  });
+
+  it('aborts explicitly on a conflict and names the base sha it could not merge with', async () => {
+    const h = harness();
+    const dir = clonedDir();
+    fs.writeFileSync(path.join(dir, 'package-lock.json'), '{"v":1}');
+    h.exitCodes = [0, 0, 0, 1, 1]; // fetch, reset, clean ok; not an ancestor; merge: conflict
+    const baseSha = 'deadbeef'.repeat(5);
+    const gitWithRevParse = (_worktree: string, args: string[]): string =>
+      args[0] === 'rev-parse' ? baseSha : git();
+
+    const result = await prepareCheckout(
+      h.deps,
+      { dir, ref: 'abc', workerRepo: '/repo', logFile: path.join(tempDir(), 'p.log'), mergeRef: 'origin/main' },
+      gitWithRevParse,
+    );
+
+    expect(result).toEqual({ failed: 'merge', conflictBase: baseSha });
+    // Abort ran, and nothing after it (no install attempted on a checkout mid-merge).
+    expect(h.commands.some(c => c.args[0] === 'merge' && c.args[1] === '--abort')).toBe(true);
+    expect(h.commands.some(c => c.cmd === 'npm')).toBe(false);
+    // The log ends clean: no half-merged state left for the log to describe.
+    expect(h.logs.join('\n')).toMatch(/merge conflict with origin\/main.*aborted/);
+  });
+
+  it('installs only after a successful merge — the merged tree is what node_modules must match', async () => {
+    const h = harness();
+    const dir = clonedDir();
+    fs.writeFileSync(path.join(dir, 'package-lock.json'), '{"v":9}'); // no node_modules: needsInstall
+    h.exitCodes = [0, 0, 0, 1, 0]; // fetch, reset, clean ok; not an ancestor; merge: ok
+
+    await prepareCheckout(
+      h.deps,
+      { dir, ref: 'abc', workerRepo: '/repo', logFile: path.join(tempDir(), 'p.log'), mergeRef: 'origin/main' },
+      git,
+    );
+
+    const order = h.commands.map(c => (c.args.includes('--no-edit') ? 'merge' : c.args[0]));
+    expect(order.indexOf('merge')).toBeGreaterThan(-1);
+    expect(order.indexOf('ci')).toBeGreaterThan(order.indexOf('merge'));
+  });
+
+  it('never calls merge-base at all when no mergeRef is requested — unchanged behaviour', async () => {
+    const h = harness();
+    const dir = installedDir();
+
+    const result = await prepareCheckout(
+      h.deps,
+      { dir, ref: 'origin/main', workerRepo: '/repo', logFile: path.join(tempDir(), 'p.log') },
+      git,
+    );
+
+    expect(result).toEqual({ failed: null, merged: false });
+    expect(h.commands.some(c => c.args.includes('merge-base'))).toBe(false);
   });
 });

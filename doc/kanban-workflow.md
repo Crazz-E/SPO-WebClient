@@ -781,6 +781,17 @@ board's priority order stops being the human's to set, and that is a rule about 
 the thing this document governs. A hook refusing merges would also have to be sure which
 `main` a branch is being updated *from*, and would refuse the repair itself.
 
+**This does not conflict with merged-tree gating** (bench-worker.md § The gate base,
+"Gating the merged tree, not the branch"). When a branch is behind `main`, every gate —
+red `main` or green — merges `origin/main` into the worker's own throwaway checkout before
+judging it, so it tests the tree that would actually land. That merge is ephemeral: it
+happens in `<bench>/ref/checkout`, never touches the branch's own history, and nothing is
+pushed. Rule 2 above is about a session running `git merge origin/main` **on its branch** —
+a real commit a session would otherwise be tempted to add to sync with a red `main`. If a
+gate on a branch behind a red `main` fails because the worker's merge exercised main's own
+defect, that is the gate doing exactly what it is for; it is not the session having synced,
+and it is not grounds to treat the branch's own code as at fault.
+
 **The misattribution this prevents** is the whole point. Without it, a later session claims a
 card, gates it, and burns its three attempts ([E2E-POLICY.md](E2E-POLICY.md) §8) on a
 regression it did not write, on ground it does not own. The failure is cheap; being unable to

@@ -39,6 +39,15 @@ export interface BenchVerdict {
    */
   baseMain?: string;
   /**
+   * True when the checkout this attestation drove was merged with `baseMain` before the
+   * gate ran — `ref` was not already an ancestor of it. Absent (or false) means the gate
+   * ran on the branch's own tree, unchanged: the common case, taken whenever the branch
+   * already contains everything on `main`. See doc/bench-worker.md § The gate base.
+   */
+  merged?: boolean;
+  /** The `origin/main` sha that was merged in, when {@link merged} is true. */
+  mergedBase?: string;
+  /**
    * The TREE this attestation drove, when it is known.
    *
    * A merge-queue entry is a fresh merge commit even when nothing landed since the pull
@@ -145,12 +154,22 @@ export const STATUS_DESCRIPTION_MAX = 140;
  * protected tail — always included in full. The job id is appended last, into whatever
  * budget remains; when a long `reusedFrom`/`jobId`/`baseMain` chain would blow the
  * budget, the job id is truncated, or dropped entirely if there is no room for it at all.
+ *
+ * `merged` renders as "merged base <sha8>" in place of the plain "base <sha8>" — the
+ * distinction a reader needs is not just which `main` the gate stood on, but whether the
+ * tree it judged was the branch alone or a merge with that `main`.
  */
 export function statusDescription(verdict: BenchVerdict): string {
+  const base =
+    verdict.merged && verdict.mergedBase
+      ? ` — merged base ${verdict.mergedBase.slice(0, 8)}`
+      : verdict.baseMain
+        ? ` — base ${verdict.baseMain.slice(0, 8)}`
+        : '';
   const tail =
     `${verdict.verdict}${verdict.fingerprintStable ? '' : ' (tree moved)'}` +
     `${verdict.exceptions ? ` — ${verdict.exceptions} capability exception(s)` : ''}` +
-    `${verdict.baseMain ? ` — base ${verdict.baseMain.slice(0, 8)}` : ''}` +
+    base +
     `${verdict.reusedFrom ? ` — reused ${verdict.reusedFrom.slice(0, 8)}` : ''}`;
 
   const jobSuffix = ` — job ${verdict.jobId}`;

@@ -208,6 +208,37 @@ same ground, merge `origin/main` in and re-gate; the new sha needs its own attes
 either way. A base that cannot be resolved (offline, no remote ref) is recorded as absent,
 never as matching.
 
+**Gating the merged tree, not the branch (#183).** `prepareCheckout` (`src/e2e/bench/
+checkout.ts`) narrows that gap itself, for every `ref` job — not only a merge-queue entry.
+After resetting the shared checkout to the deposited ref, the worker checks one thing:
+`git merge-base --is-ancestor origin/main HEAD`. That is the **fast path** — the branch
+already contains everything on `main`, so nothing more happens: no merge commit, no risk
+of a conflict, ~35 s of git plumbing on top of the reset. It is the common case, because it
+is true whenever nothing has landed on `main` since the branch forked.
+
+When it is *not* an ancestor, the worker merges `origin/main` into the checkout itself —
+`git -c user.name="SPO Bench" -c user.email="bench@local" merge --no-edit origin/main` —
+before anything is built. What the gate then judges is the tree the branch would actually
+produce on landing, not the branch read in isolation. Three things follow from a real
+merge having happened:
+
+- **The static stage cannot trust a CI record for the pre-merge sha.** CI proved the
+  branch alone; it never saw the merged tree. The worker forces stage 1 to replay rather
+  than ask a question whose answer nobody has recorded yet — `staticProof.why` says so.
+- **A conflict is a fact about the code, not the worker.** `merge --abort` runs
+  immediately — the shared checkout is left exactly as it was found, clean, ready for the
+  next job — and the verdict is `FAIL`, never `ENVIRONMENT`, with the base sha it could not
+  merge with in the detail string.
+- **The attestation still keys on the sha that was deposited, never the merge commit.**
+  `prepareCheckout` can move `HEAD` to a commit nobody ever pushed; the push hook and the
+  GitHub commit status both look up `request.fingerprint.head`, fixed at deposit time, so
+  that is what `writeVerdictIn` uses — not whatever `git rev-parse HEAD` answers after the
+  merge.
+
+A merged attestation carries `merged: true` and `mergedBase` (the sha that was merged in);
+the `bench/gate` description renders `merged base <sha8>` in place of the plain
+`base <sha8>` so a reader can tell the two situations apart at a glance.
+
 ### What a session reads to know the verdict
 
 **The exit code is the interface. The printed report is not.**
@@ -410,9 +441,11 @@ node dist/e2e/bench/cli.js submit --type=ref --ref=<sha|branch> --wait
 ```
 
 The worker clones once into `<bench>/ref/checkout`, then per job: `fetch --prune --force`,
-`reset --hard <ref>`, `clean -fd`, and **`npm ci` only when the lockfile moved**. From there
-it is an ordinary gate — same `verify-gate.js`, same routing, same President exclusion, same
-live drive.
+`reset --hard <ref>`, `clean -fd`, a merge with `origin/main` unless `<ref>` already
+contains it (§ The gate base, "Gating the merged tree, not the branch"), and **`npm ci`
+only when the lockfile moved** — checked after the merge, since a merge can move it. From
+there it is an ordinary gate — same `verify-gate.js`, same routing, same President
+exclusion, same live drive.
 
 Three things that are not obvious:
 
@@ -684,3 +717,9 @@ believe a mechanism is in place. It was restored by reverting #178 once the repo
   objects are **fetched before its tree is read** — so an entry whose tree already carries a
   passing attestation reuses it and takes no live slot, while an unfetchable or unreadable
   tree gates. `merge-queue.test.ts`, `worker.test.ts`.
+- A `ref` job merges `origin/main` into the checkout unless the branch already contains it
+  (the fast path — no merge, no conflict risk); a conflict runs `git merge --abort`
+  explicitly and reports `FAIL` with the merge base in the detail, never `ENVIRONMENT`; a
+  real merge forces the static stage to replay regardless of any CI record for the
+  pre-merge sha; and the attestation always keys on the deposited sha, never on whatever
+  commit the merge left `HEAD` pointing at. `checkout.test.ts`, `worker.test.ts`.
