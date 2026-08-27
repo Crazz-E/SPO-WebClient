@@ -230,9 +230,11 @@ The repo process applies unchanged — this command adds nothing to it:
   two attempts naming the same root cause is a stop, and Haiku can check that.
 - On gate FAIL the driver spawns a Fable 5 diagnosis sub-agent (effort high), payload = the
   diff + the gate log path + the ledger; its one-line root cause is appended to the ledger.
-- The driver does not "review" the returned diff. The gate and the mechanical invariant check
-  ARE the review — pretending a Haiku driver reviews a diff is the fiction that produced the
-  incident.
+- The driver does not "review" the returned diff — pretending a Haiku driver reviews a diff is
+  the fiction that produced the incident. The gate and the mechanical invariant check answer
+  whether the change is safe; the semantic question — whether the change actually meets the
+  card's criterion and sits coherently in the code — is answered by the delegated
+  `change-validator` sub-agent (below), never by the driver reading the diff itself.
 - **The invariant report.** The plan step (Fable) emits an invariant block: each invariant a
   **verbatim quote** — of any length, not restricted to a single line — plus the `file:line`
   (or `file:start-end` for a quote spanning several lines) carrying it. The driver copies the
@@ -331,8 +333,28 @@ The repo process applies unchanged — this command adds nothing to it:
   is NOT the verdict — it prints first, largest, and reads as authoritative whatever the
   exit code actually says. The other machine-readable surface is
   `~/.spo-bench/verdicts/<sha>.json`.
-- Gate PASS (exit 0) → push, PR with **`Closes #<issue>`** in the body → `npm run board:move
-  -- <issue> PR` → title `#<issue> · PR`.
+- Gate PASS (exit 0) → `npm run board:move -- <issue> Validation` → title
+  `#<issue> · Validation`.
+- **Spawn the `change-validator` sub-agent**
+  ([.claude/agents/change-validator.md](../agents/change-validator.md)) — Fable 5, effort high
+  regardless of the card's `Size`,
+  escalated to Opus 5 under the existing wire rule (`src/shared/rdo-*`, `src/server/rdo.ts`,
+  `rdo-members.ts`, the session phases) and also as the fallback when Fable is unavailable;
+  **never Sonnet 5** — it is the executor, and a same-model judge ratifies the author's own
+  blind spots. Payload: the diff, the card's criterion, the invariant block, the gate report
+  path. It judges two things only — adequacy to the goal and coherence of integration — and
+  returns one of three verdicts:
+  - `PASS` → push, PR with **`Closes #<issue>`** in the body → `npm run board:move -- <issue>
+    PR` → title `#<issue> · PR`.
+  - `PASS WITH FINDINGS` → same as `PASS`; each finding is routed to the `card-reviewer`
+    sub-agent exactly as every other draft (§ Feeding rule) — the validator files nothing
+    itself, and a `card-reviewer` verdict of `DO NOT FILE` creates nothing. Findings never
+    block the push.
+  - `REJECT` → a **failed attempt**: append the one-line root cause to the ledger, move
+    `npm run board:move -- <issue> "In progress"`, re-execute and **re-gate**. `REJECT` carries
+    its own budget of **3**, separate from the implementation-attempt budget (§ 4) — three
+    `REJECT`s ends the task at Needs triage the same way three failed gate attempts do, and
+    each gets its own ledger line: `validation N | root cause | REJECT`.
 - Checks green → merge, `npm run finish` → `npm run board:move -- <issue> Done` + one final
   comment (2–4 lines: what changed, PR number, anything the human should know) → title
   `#<issue> · Done`. **Checking is one read, not a vigil**: your gate PASS *is* the

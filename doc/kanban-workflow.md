@@ -12,7 +12,7 @@ deleted**; its full text stays readable at the archive permalink:
 · [`doc/BACKLOG.md` @ `94b059a0`](https://github.com/Crazz-Org/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG.md).
 `OB-N` identifiers survive as issue titles; new tasks get plain issue numbers.
 
-## The board — six columns, one per milestone
+## The board — seven columns, one per milestone
 
 The `Status` field is single-select: a task is in exactly one column.
 
@@ -20,7 +20,8 @@ The `Status` field is single-select: a task is in exactly one column.
 |---|---|---|---|
 | 📥 **Todo** | Unowned pool | Issue created and added to the project. **Vertical order = priority**, maintained by the human — a session always takes the topmost unowned item. | A session claims it. |
 | 🔨 **In progress** | Owned, in development | Session wrote its identity into `Session` and moved the card. Branch, implementation, tests. | Gate deposited, or released. |
-| 🧪 **Gate** | `npm run gate` deposited on the bench worker | Implementation + tests done, gate queued. | Gate PASS → PR opened. Gate failure loops back to In progress (3 attempts max, then release). |
+| 🧪 **Gate** | `npm run gate` deposited on the bench worker | Implementation + tests done, gate queued. | Gate PASS → Validation. Gate failure loops back to In progress (3 attempts max, then release). |
+| 🔍 **Validation** | `change-validator` sub-agent reviewing the diff against the card's criterion and the code it landed in | Gate returned PASS. | `PASS` / `PASS WITH FINDINGS` → PR opened. `REJECT` → back to In progress (own budget of 3, separate from gate attempts, then release). |
 | 🔀 **PR** | Pull request open | PR opened with `Closes #N` in the body. CI + `bench/gate` statuses, merge. | Merge (issue auto-closes). |
 | ✅ **Done** | Merged, released, finished | PR merged, release published, `npm run finish` run. Final synthetic comment posted. | Terminal. |
 | 🚨 **Needs triage** | Ownership released on failure/abandon | Owner released the task with a **simple, non-technical explanation** as an issue comment. | **Human only**: reprioritises, clears `Session`, moves back to Todo (or closes). |
@@ -297,9 +298,18 @@ board's behaviour proves it points at the right column. Project → ⋯ → Work
 **Every `Set value` step needs its value, and the value is not optional** — a workflow whose
 value is unset shows a red **!** in the sidebar and its *Save and turn on workflow* button
 stays greyed. Expect all of them to arrive that way on a freshly rebuilt board: rebuilding
-`Status` with these six columns regenerates the option ids, so whatever GitHub pre-filled
+`Status` with these seven columns regenerates the option ids, so whatever GitHub pre-filled
 against its own `Todo` / `In Progress` / `Done` defaults is left pointing at options that no
 longer exist.
+
+⚠ **`Validation` must be appended to the `Status` field in the UI, never added by rebuilding
+the field.** Rebuilding regenerates every option id, including the six that already exist,
+which would leave all four `Set value` workflows above pointing at options that no longer
+exist.
+
+**`board:move` needs no change** — `board-move.sh` resolves a column by name against the
+`Status` field's own options, so it works the moment the option exists. Say so; do not edit
+`scripts/board-move.sh`. Adding the one new option in the UI leaves the existing six ids untouched.
 
 **Off, and staying off.** Three of the four are **pull-request workflows on an issue-only
 board** — GitHub's wording for the merge one is *"when pull requests in your project are
@@ -449,9 +459,13 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
 
 **A card is filed deliberately, never in passing.** The board is fed by the surfaces whose job
 is to feed it — `/triage-report` draining the queued bug reports, a maintainer asking for a card
-by name, a claimed task that turned out to be two, and `/next-task` § 0 filing the
-`Nightly: main is red` repair when the nightly proof says `main` is broken — and by nothing
-else. That last one is on the list because it is not a finding met on the way: it is the only
+by name, a claimed task that turned out to be two, `/next-task` § 0 filing the
+`Nightly: main is red` repair when the nightly proof says `main` is broken, and a
+`PASS WITH FINDINGS` verdict from the `change-validator` sub-agent (§ 3) — and by nothing
+else. That last one is on the list because it is not a finding met on the way: it is a
+consequence of the change the card produced, bounded to ground the diff touched, and the
+session that ran the validation is the surface whose job it is to file it. The one before it
+is on the list because it is not a finding met on the way either: it is the only
 admissible work while `main` is red, so the session that reads the verdict is the surface whose
 job it is to file it. A session driving a
 card solves and implements *that* card: what it met on the way is neither filed nor written
@@ -601,6 +615,7 @@ has to be deliberate instead of merely easy.
 | § 3 typecheck / lint / coverage fixes | mechanical, the compiler names the fix | **Sonnet 5 or 4.6** | low |
 | § 3 deposit the gate, wait, read the exit code | a wait and a number | **Haiku 4.5** | low |
 | § 3/4 a gate or CI failure | diagnosis, the hardest reading in the loop | **Fable 5** | high |
+| § 3 `change-validator` semantic review, after gate PASS | judgement — adequacy to the goal, coherence of integration | **Fable 5**, escalated to Opus 5 on the wire rule or when Fable is unavailable — never Sonnet 5 | high, regardless of `Size` |
 | § 3 PR body, merge, `finish`, board writes | mechanical, template-shaped | **Haiku 4.5** | low |
 | § 4 the Needs-triage comment | plain-English writing | **Sonnet 5 or 4.6** | low |
 | § 5 a split, or a card asked for by name → draft → `card-reviewer` | analysis | **Fable 5** | medium |

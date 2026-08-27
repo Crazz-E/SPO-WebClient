@@ -151,9 +151,10 @@ Four nested `CLAUDE.md` files load automatically in their directory and are auth
 **All open work lives on the kanban:**
 [github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/projects/1) — every
 task is a GitHub issue on the board, and a working session starts with **`/next-task`**.
-The rulebook is [doc/kanban-workflow.md](doc/kanban-workflow.md): six columns (Todo · In
-progress · Gate · PR · Done · Needs triage), the `Session` field as ownership marker, board
-writes at state transitions only, the model routing, and which board workflows are on.
+The rulebook is [doc/kanban-workflow.md](doc/kanban-workflow.md): seven columns (Todo · In
+progress · Gate · Validation · PR · Done · Needs triage), the `Session` field as ownership
+marker, board writes at state transitions only, the model routing, and which board workflows
+are on.
 
 **Ownership is sacred** — never touch a card whose `Session` is filled; every owner closes its
 ownership (Done or Needs triage). A session that dies without closing it leaves a card only the
@@ -185,8 +186,10 @@ file it did not change, a "valuable but out of scope" remark — is neither file
 no new issue, no closing section of the end report. A test session or a requested audit finds
 it again, at a moment where someone asked for it. Only the maintainer widens a session's scope.
 
-**Filing a card is a deliberate act** — `/triage-report`, a maintainer's request, or the split
-of a claimed task that turned out to be two. `Auto-add to project` then puts the issue on the
+**Filing a card is a deliberate act** — `/triage-report`, a maintainer's request, the split
+of a claimed task that turned out to be two, or a `PASS WITH FINDINGS` verdict from the
+`change-validator` sub-agent, bounded to ground the diff touched. `Auto-add to project` then
+puts the issue on the
 board and sets `Status` to Todo, so it lands straight in the pool `/next-task` reads — no
 `item-add`, no column set by hand. What no workflow sets is `Category`, `Size` and `Area`; those
 stay the filer's job, along with the matching `cat:` / `size:` labels.
@@ -360,6 +363,7 @@ Slash **commands** live in `.claude/commands/`: `/next-task`, `/gate`, `/commit-
 | `security-reviewer` | Opus | WebSocket auth, RDO parsing, session management, OWASP |
 | `performance-analyzer` | Opus | Renderer bottlenecks, chunk caching, frame budget |
 | `card-reviewer` | Fable | The neutral reader of a draft backlog card, before it is filed |
+| `change-validator` | Fable | Read-only semantic review of a finished change — adequacy to the card's criterion and coherence of integration — after a gate PASS, before the push/PR |
 
 ## Delegation strategy
 
