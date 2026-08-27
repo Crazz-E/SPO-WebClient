@@ -178,6 +178,12 @@ Branch on its **exit code**, never on the printed text:
   not walk away half-claimed**. Wait for `reset` with `npm run board:wait`, then run
   `board:take` again to finish the re-read; if this session must end first, name the card and
   the unverified write in your final report so the human can read the board.
+- **6 FINISHED WORKTREE** — `npm run finish` already ran here, so this session is over and
+  nothing was read from or written to the board. **Do not claim a second card in it.** Say so
+  and stop: a new card belongs to a new session, which gets its own worktree and its own
+  branch. Reusing a finished one puts the second card's commits on a branch whose name still
+  answers with the first card's merged PR, and every deletion `finish` makes hangs off that
+  answer (sessions #324 and #328, 2026-08-27).
 
 **Then rename this session** — `mcp__ccd_session_mgmt__set_session_title` with
 `session_id: "self"` and `title: "#<issue> · <Status>"`, e.g. `#212 · In progress`. Issue

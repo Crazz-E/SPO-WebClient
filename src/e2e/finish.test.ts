@@ -17,14 +17,22 @@ import * as path from 'path';
 const SCRIPT = path.join(process.cwd(), 'scripts', 'finish.sh');
 
 const FAKE_GH = `#!/usr/bin/env bash
-# gh pr view <branch> --json state|mergeCommit -q <query>
+# gh pr view <branch> --json state|mergeCommit|headRefOid -q <query>
 # FAKE_GH_BRANCH_STATES="a=MERGED,b=OPEN" overrides FAKE_GH_STATE per branch ($3).
+#
+# headRefOid defaults to the branch's CURRENT tip, which is what a real squash merge of that
+# branch recorded — every case here merges the tip it built. FAKE_GH_HEAD_OID overrides it,
+# to model the one shape that breaks: a branch REUSED after its PR merged, whose tip has
+# moved on to a second card the PR knows nothing about.
 state="\${FAKE_GH_STATE:-NONE}"
 for kv in \${FAKE_GH_BRANCH_STATES//,/ }; do
   [ "\${kv%%=*}" = "$3" ] && state="\${kv#*=}"
 done
 [ "$state" = "NONE" ] && { echo "no pull requests found" >&2; exit 1; }
 case "$*" in
+  *"--json headRefOid"*)
+    if [ -n "\${FAKE_GH_HEAD_OID:-}" ]; then echo "$FAKE_GH_HEAD_OID"
+    else git -C "$FAKE_GH_REPO" rev-parse "$3"; fi ;;
   *"--json state"*) echo "$state" ;;
   *"--json mergeCommit"*) echo "$FAKE_GH_MERGE_SHA" ;;
   *) echo "fake gh: unexpected args: $*" >&2; exit 1 ;;
@@ -156,6 +164,7 @@ function runFinish(bench: Bench, cwd: string, env: NodeJS.ProcessEnv = {}, args:
       ...process.env,
       PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ''}`,
       SPO_MAIN_REPO: bench.mainRepo,
+      FAKE_GH_REPO: bench.mainRepo,
       SPO_SESSION_DIR: bench.sessions,
       BENCH_INSTALL_LOG: bench.installLog,
       FAKE_GH_STATE: 'NONE',
@@ -438,6 +447,60 @@ describe('after a merge', () => {
     expect(spawnSync('git', ['-C', bench.mainRepo, 'rev-parse', '--verify', '-q', 'claude-x/merged']).status).not.toBe(0);
     expect(fs.existsSync(path.join(base, 'ahead'))).toBe(true);
     expect(fs.existsSync(path.join(base, 'dirty'))).toBe(true);
+  });
+
+  /**
+   * The chaining defect (sessions #324 and #328, 2026-08-27). `gh pr view` finds a PR by
+   * branch NAME, so a session that keeps working in a retired worktree and reuses its branch
+   * gets the PREVIOUS card's MERGED PR as the answer — while the branch carries a second
+   * card's commits nobody has landed. MERGED alone must therefore authorise no deletion.
+   */
+  it('refuses when the PR is MERGED but the branch has moved past it', () => {
+    const bench = scratchBench();
+    const mergeSha = mergeOnOrigin(bench, 'doc/merged.md');
+    // The branch was reused: its tip is a second card's work, not the head that PR merged.
+    commitFile(bench.worktree, 'src/second.ts', 'export const b = 2;\n', 'feat: second card');
+    const run = runFinish(bench, bench.worktree, {
+      FAKE_GH_STATE: 'MERGED',
+      FAKE_GH_MERGE_SHA: mergeSha,
+      FAKE_GH_HEAD_OID: mergeSha, // any sha that is not this branch's tip
+    });
+    expect(run.code).toBe(1);
+    expect(run.stderr).toMatch(/REFUSED: the PR for 'feature\/x' is MERGED, but the branch's commits are not on main/);
+    expect(run.stderr).toMatch(/REUSED for a second card/);
+    // Nothing was given up: the directory, the branch and the second card's commit all stay.
+    expect(fs.existsSync(bench.worktree)).toBe(true);
+    expect(branchExists(bench)).toBe(true);
+    expect(isRetired(bench, bench.worktree)).toBe(false);
+    expect(fs.existsSync(path.join(bench.worktree, 'src', 'second.ts'))).toBe(true);
+    // main was still brought up to date — that half is idempotent and safe.
+    expect(headOf(bench.mainRepo)).toBe(mergeSha);
+  });
+
+  it('keeps a merged leftover whose HEAD is not the head its PR merged', () => {
+    const bench = scratchBench();
+    const base = path.join(bench.mainRepo, '.claude', 'worktrees');
+    fs.mkdirSync(base, { recursive: true });
+    const reused = path.join(base, 'reused');
+    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/reused', reused);
+    commitFile(reused, 'src/first.ts', 'export const a = 1;\n', 'feat: first card');
+    const mergedHead = git(reused, 'rev-parse', 'HEAD');
+    // Second card, same branch: the PR still says MERGED, the tip is no longer its head.
+    commitFile(reused, 'src/second.ts', 'export const b = 2;\n', 'feat: second card');
+
+    const run = runFinish(bench, bench.mainRepo, {
+      FAKE_GH_BRANCH_STATES: 'claude-x/reused=MERGED',
+      FAKE_GH_HEAD_OID: mergedHead,
+    });
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(/== keeping .*reused — claude-x\/reused reports a MERGED PR, but its HEAD is not that PR's/);
+    expect(run.stdout).not.toMatch(/== finishing worktree .*reused/);
+    expect(fs.existsSync(reused)).toBe(true);
+    expect(fs.existsSync(path.join(reused, 'src', 'second.ts'))).toBe(true);
+    expect(
+      spawnSync('git', ['-C', bench.mainRepo, 'rev-parse', '--verify', '-q', 'claude-x/reused'])
+        .status,
+    ).toBe(0);
   });
 
   it('refuses to finish a named branch that is still checked out in a worktree', () => {

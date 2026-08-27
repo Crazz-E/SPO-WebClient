@@ -14,6 +14,8 @@
 #      card this branch does not hold
 #   4  the write request itself failed — nothing landed, the card is untouched
 #   5  the write landed but the confirmation re-read failed — state is UNKNOWN, re-check later
+#   6  this worktree is FINISHED — `npm run finish` already ran here, so a new card belongs to
+#      a new session; nothing was read from or written to the board
 #
 # `--release` clears Session and sets Status back to Todo. Normally this requires Session to
 # already be ours — the back-off step 5 of the normal path asks for when the re-read shows the
@@ -92,6 +94,26 @@ session="${branch} @ $(date +%F)"
 # card, and `.claude/hooks/driver-scope-guard.sh` arms on it. Lifecycle and rationale live in
 # the sourced file — one derivation of the key, not one per caller.
 . "$(dirname "${BASH_SOURCE[0]}")/driver-scope.sh"
+
+# A worktree `finish` has already retired is over: its branch is merged, its card closed.
+# Claiming a SECOND card here is how a session chains tasks onto a dead branch — and the
+# branch is what carries the damage, not the board. The new work rides a branch named for the
+# previous card, so `gh pr view <branch>` keeps answering with that card's MERGED PR, and
+# finish.sh is then one stale verdict away from `worktree remove --force` + `branch -D` over
+# commits nobody has landed (sessions #324 and #328, 2026-08-27). A new card gets a new
+# session, which gets its own worktree and its own branch.
+#
+# `--release` is exempt on purpose: closing ownership must be possible from anywhere, and it
+# writes nothing that a branch can carry.
+if [ "$release" -eq 0 ]; then
+  finished_marker="$(session_marker finished 2>/dev/null || true)"
+  if [ -n "$finished_marker" ] && [ -f "$finished_marker" ]; then
+    echo "FINISHED WORKTREE: npm run finish already ran here — this session is over." >&2
+    echo "Claim #$issue from a NEW session, which gets its own worktree and branch." >&2
+    echo "Nothing was read from or written to the board." >&2
+    exit 6
+  fi
+fi
 
 
 # --- rate-limit reporting -----------------------------------------------------------------
