@@ -399,11 +399,11 @@ export class StarpeaceClient implements ClientHandlerContext {
       }),
       onMailSend: (to, subject, body) => this.sendMessage({
         type: WsMessageType.REQ_MAIL_COMPOSE,
-        to, subject, body: [body],
+        to, subject, body: body.split('\n'),
       }),
       onMailSaveDraft: (to, subject, body, headers, existingDraftId) => this.sendMessage({
         type: WsMessageType.REQ_MAIL_SAVE_DRAFT,
-        to, subject, body: [body],
+        to, subject, body: body.split('\n'),
         // Both fields are optional on the wire — omitted rather than sent empty, so
         // the gateway never asks the server to delete a draft called ''.
         ...(headers ? { headers } : {}),
