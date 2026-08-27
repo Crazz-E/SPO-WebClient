@@ -479,9 +479,9 @@ confirm the container comes up healthy before walking away.
 > **WARNING**: If `deploy/deploy.sh` is installed as a cron job (see "Update" above), a manually
 > rolled-back commit that had previously passed its health gate will be redeployed on the next
 > cron run. The script tracks gate *failures* in `logs/deploy-failed-sha`, not manual rollbacks.
-> To prevent auto-redeployment, either (a) clear the failed-sha file after manual rollback,
-> (b) push a fix to clear the record, or (c) temporarily disable the cron job while
-> investigating the rollback reason.
+> To prevent auto-redeployment, either (a) write origin/main's sha to the failed-sha file
+> (e.g. `git rev-parse origin/main > logs/deploy-failed-sha`), (b) push a fix to clear the
+> record, or (c) temporarily disable the cron job while investigating the rollback reason.
 
 ### Container Debugging
 
