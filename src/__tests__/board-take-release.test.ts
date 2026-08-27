@@ -110,8 +110,8 @@ describe('the read query and release guard require all three conditions together
 });
 
 describe('the refusal message names what to do for each refused case', () => {
-  it('names the active-owner case (Todo/In progress/Gate/PR)', () => {
-    expect(releaseBranch).toMatch(/Todo \| "In progress" \| Gate \| PR\)/);
+  it('names the active-owner case (Todo/In progress/Gate/Validation/PR)', () => {
+    expect(releaseBranch).toMatch(/Todo \| "In progress" \| Gate \| Validation \| PR\)/);
     expect(releaseBranch).toMatch(/the owner is live.*only the human may free it/);
   });
 
