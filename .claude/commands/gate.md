@@ -40,5 +40,4 @@ What matters when reading the result:
 - If the world is left dirty, say so loudly: every later live run on this machine is
   blocked until a human restores the values and runs `npm run e2e:unlock`.
 
-Report the verdict, the job id, the flows that ran, each probe's log-line and restore
-result, and whether an L3 browser pass is still owed.
+Report the verdict, job id, and attestation path (`~/.spo-bench/verdicts/<sha>.json`). On failure, add the job log path.

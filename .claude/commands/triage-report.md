@@ -194,7 +194,4 @@ thin is noise; the same gap three times is a defect in what the capture asks for
 
 ## Report at the end
 
-- how many reports were read, and how many are left in the queue (should be zero);
-- one line per report: filename → disposition, with the issue number where there is one;
-- every `DO NOT FILE`, with the reviewer's reason;
-- the **capture gaps** noticed across the batch, and whether one became a card.
+Summary: how many filed, how many duplicates, how many skipped. Then detail only the `DO NOT FILE` cases with the reviewer's reason.

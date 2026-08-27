@@ -527,4 +527,4 @@ Commits: `type: short summary` — `feat`, `fix`, `refactor`, `perf`, `docs`, `t
 
 ## Transparency
 
-When posting a change summary, an end report, or a plan, list the skills used to produce it.
+When posting a change summary, an end report, or a plan, list the skills used to produce it, on one line.
