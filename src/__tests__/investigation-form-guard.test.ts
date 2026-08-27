@@ -398,7 +398,7 @@ describe('verdict-pipe-guard.sh — non-final positions (exit code lost before s
     expect(out).toBe('');
   });
 
-  it('allows verdict with PIPESTATUS check: `npm test; echo \"EXIT=${PIPESTATUS[0]}\"`', () => {
+  it('allows verdict with PIPESTATUS check: `npm test; echo "EXIT=${PIPESTATUS[0]}"`', () => {
     const out = execFileSync('bash', [PIPE_WRAPPER], {
       cwd: ROOT,
       input: JSON.stringify({
