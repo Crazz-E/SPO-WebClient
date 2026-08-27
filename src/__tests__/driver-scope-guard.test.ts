@@ -255,6 +255,103 @@ describe('driver-scope marker — the lifecycle', () => {
   });
 });
 
+/**
+ * LEGACY TREE READS (card #325). The write half above answers "who edits the tree"; this half
+ * answers "who reads SPO-Original / SPO-ASP" — CLAUDE.md's answer is `delphi-archaeologist`,
+ * never the driver's own hand, because that skill knows the traps a bare grep/cat/head walks
+ * into on that tree (ISO-8859 encoding, xargs word-splitting on spaced directory names) that
+ * investigation-form-guard.js already guards the SHAPE of. This guard is about WHO reads.
+ *
+ * The legacy trees are resolved from the REAL repo root, not the worktree: `findRepoRoot` walks
+ * up from `SPO_TOP` past a worktree's `.git` FILE ("gitdir: <repo>/.git/worktrees/<name>") to
+ * the real `.git`, because `../SPO-Original` from inside `.claude/worktrees/<name>` lands back
+ * inside `.claude/worktrees/`, never the repo root (CLAUDE.md § Legacy Delphi source). Each test
+ * below fabricates that shape in a throwaway directory so the assertion does not depend on this
+ * machine's real `~/SPO-Original` / `~/SPO-ASP` existing at all.
+ */
+describe('driver-scope-guard — legacy tree reads', () => {
+  /** A fake `<tmp>/worktree` whose `.git` FILE points at a fake `<tmp>/main-repo/.git/worktrees/x`
+   *  — so `findRepoRoot` resolves repoRoot to `<tmp>/main-repo`, and the legacy trees it derives
+   *  are `<tmp>/SPO-Original` and `<tmp>/SPO-ASP`, siblings of that fake repo root. Nothing here
+   *  needs to be a real git repo: findRepoRoot only reads the `.git` file's text. */
+  function makeFakeWorktree(): { tmp: string; worktree: string } {
+    const tmp = fs.mkdtempSync('/tmp/claude-1000/dsg-legacy-');
+    const worktree = path.join(tmp, 'worktree');
+    fs.mkdirSync(worktree, { recursive: true });
+    const mainRepoGitDir = path.join(tmp, 'main-repo', '.git');
+    fs.writeFileSync(path.join(worktree, '.git'), `gitdir: ${mainRepoGitDir}/worktrees/fake-wt\n`);
+    fs.mkdirSync(path.join(tmp, 'SPO-Original'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'SPO-Original', 'secret.pas'), 'unit Secret;\n');
+    fs.mkdirSync(path.join(tmp, 'SPO-ASP'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'SPO-ASP', 'page.asp'), '<% %>\n');
+    return { tmp, worktree };
+  }
+
+  function verdictAt(top: string, payload: Partial<Payload>): string {
+    const body: Payload = {
+      session_id: SID,
+      cwd: top,
+      tool_name: 'Bash',
+      tool_input: {},
+      ...payload,
+    } as Payload;
+    return execFileSync('node', [GUARD], {
+      input: JSON.stringify(body),
+      encoding: 'utf8',
+      env: { ...process.env, SPO_TOP: top, SPO_DRIVER_SID: SID },
+    }).trim();
+  }
+
+  it('refuses the driver reading SPO-Original', () => {
+    const { tmp, worktree } = makeFakeWorktree();
+    const target = path.join(tmp, 'SPO-Original', 'secret.pas');
+    const out = verdictAt(worktree, { tool_input: { command: `grep -a foo ${target}` } });
+    expect(out).toContain('delphi-archaeologist');
+    expect(out).toContain('SPO-Original');
+  });
+
+  it('lets the execution sub-agent read the very same path', () => {
+    const { tmp, worktree } = makeFakeWorktree();
+    const target = path.join(tmp, 'SPO-Original', 'secret.pas');
+    const out = verdictAt(worktree, {
+      agent_id: 'sub-1',
+      tool_input: { command: `grep -a foo ${target}` },
+    });
+    expect(out).toBe('ALLOW');
+  });
+
+  it('refuses the driver reading SPO-ASP', () => {
+    const { tmp, worktree } = makeFakeWorktree();
+    const target = path.join(tmp, 'SPO-ASP', 'page.asp');
+    const out = verdictAt(worktree, { tool_input: { command: `cat ${target}` } });
+    expect(out).toContain('delphi-archaeologist');
+    expect(out).toContain('SPO-ASP');
+  });
+
+  it('leaves the driver reading worktree files alone', () => {
+    const { worktree } = makeFakeWorktree();
+    fs.writeFileSync(path.join(worktree, 'note.txt'), 'hi\n');
+    const out = verdictAt(worktree, { tool_input: { command: 'cat note.txt' } });
+    expect(out).toBe('ALLOW');
+  });
+
+  it('stays asleep when nobody is driving — the wrapper never spawns node', () => {
+    const { tmp, worktree } = makeFakeWorktree();
+    const target = path.join(tmp, 'SPO-Original', 'secret.pas');
+    const out = execFileSync('bash', [path.join(ROOT, '.claude', 'hooks', 'driver-scope-guard.sh')], {
+      input: JSON.stringify({
+        session_id: SID,
+        cwd: worktree,
+        tool_name: 'Bash',
+        tool_input: { command: `grep -a foo ${target}` },
+      }),
+      encoding: 'utf8',
+      env: { ...process.env, SPO_SESSION_DIR: '/tmp/claude-1000/no-such-sessions-dir' },
+    });
+    expect(out).toBe('');
+  });
+});
+
 describe('driver-scope marker — every path that closes ownership releases it', () => {
   it('board:take arms on a verified claim and releases on --release', () => {
     const take = readScript(path.join(ROOT, 'scripts', 'board-take.sh'));

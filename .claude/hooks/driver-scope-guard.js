@@ -57,6 +57,33 @@ const PATH_VERBS = [
 
 const MAX_CANDIDATES = 40;
 
+// Card #325. The driver never reads the legacy Delphi trees itself — that read belongs to
+// `delphi-archaeologist` (CLAUDE.md § Legacy Delphi source, § Legacy web source), which cites
+// `File.pas:Line` and knows the ISO-8859 / xargs-null traps investigation-form-guard.js already
+// guards the SHAPE of. This guard is about WHO reads, not how: any of these verbs, pointed at
+// either legacy tree, is refused for the driver's own hand — same two-doors, same `agent_id`
+// discriminator as the write half above. `sed` is read-only here on purpose: `sed -i` is
+// already a write, caught by PATH_VERBS above, so the negative lookahead below excludes it to
+// avoid a doubled reason on the same command.
+const READ_VERBS = [
+  ["grep", /\bgrep\s+/g],
+  ["cat", /\bcat\s+/g],
+  ["head", /\bhead\s+/g],
+  ["tail", /\btail\s+/g],
+  ["file", /\bfile\s+/g],
+  ["wc", /\bwc\s+/g],
+  ["strings", /\bstrings\s+/g],
+  ["awk", /\bawk\s+/g],
+  ["sed", /\bsed\s+(?![^\n;|&]*-[a-zA-Z]*i)/g],
+  ["cut", /\bcut\s+/g],
+  ["sort", /\bsort\s+/g],
+  ["uniq", /\buniq\s+/g],
+  ["less", /\bless\s+/g],
+  ["more", /\bmore\s+/g],
+];
+
+const LEGACY_TREE_NAMES = ["SPO-Original", "SPO-ASP"];
+
 function say(v) {
   process.stdout.write(v + "\n");
   process.exit(0);
@@ -133,6 +160,84 @@ function bashCandidates(command) {
   return bashCandidatesGeneric(command, PATH_VERBS, MAX_CANDIDATES);
 }
 
+// Memoized on the last worktreeRoot seen — the guard runs as a fresh process per hook call, so
+// this saves nothing across invocations, but it does mean a single invocation that checks
+// several candidates against the same worktree walks the filesystem once, not once per token.
+let _repoRootCacheKey;
+let _repoRootCacheVal;
+
+// Walks up from worktreeRoot looking for `.git`. In a session worktree that entry is a FILE —
+// "gitdir: <repo>/.git/worktrees/<name>" — not a directory, because the worktree shares the
+// main repo's object store (verified against this repo's own `.claude/worktrees/*/.git`). The
+// repo root a relative `../SPO-Original` means (CLAUDE.md § Legacy Delphi source) is the parent
+// of THAT real `.git`, never the worktree's own parent — `..` from inside
+// `.claude/worktrees/<name>` lands back inside `.claude/worktrees/`, not the repo root.
+function findRepoRoot(worktreeRoot) {
+  if (_repoRootCacheKey === worktreeRoot) return _repoRootCacheVal;
+  _repoRootCacheKey = worktreeRoot;
+  _repoRootCacheVal = computeRepoRoot(worktreeRoot);
+  return _repoRootCacheVal;
+}
+
+function computeRepoRoot(worktreeRoot) {
+  if (!worktreeRoot) return null;
+  let dir;
+  try {
+    dir = path.resolve(worktreeRoot);
+  } catch {
+    return null;
+  }
+  for (;;) {
+    const gitPath = path.join(dir, ".git");
+    let st = null;
+    try {
+      st = fs.statSync(gitPath);
+    } catch {
+      st = null;
+    }
+    if (st) {
+      if (st.isDirectory()) return path.dirname(gitPath);
+      let content = "";
+      try {
+        content = fs.readFileSync(gitPath, "utf8");
+      } catch {
+        content = "";
+      }
+      const m = content.match(/gitdir:\s*(\S.*)\s*$/m);
+      if (!m) return null;
+      let gitdir = m[1].trim();
+      if (!path.isAbsolute(gitdir)) gitdir = path.resolve(dir, gitdir);
+      // A SESSION worktree's gitdir is `<repo>/.git/worktrees/<name>` — cut back to the `.git`
+      // that precedes `worktrees/` to get the real repo `.git`, then its parent is repoRoot.
+      const marker = path.sep + ".git" + path.sep + "worktrees" + path.sep;
+      const idx = gitdir.indexOf(marker);
+      if (idx === -1) return path.dirname(gitdir);
+      const realGitDir = gitdir.slice(0, idx + (path.sep + ".git").length);
+      return path.dirname(realGitDir);
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null; // reached the filesystem root, never found a .git
+    dir = parent;
+  }
+}
+
+// The two legacy trees are siblings of the repo root (CLAUDE.md § Legacy Delphi/web source):
+// `${repoRoot}/../SPO-Original`, `${repoRoot}/../SPO-ASP`.
+function legacyTreeRoots(repoRoot) {
+  if (!repoRoot) return [];
+  const parent = path.dirname(repoRoot);
+  return LEGACY_TREE_NAMES.map((name) => ({ name, dir: path.resolve(parent, name) }));
+}
+
+function isLegacyTreePath(absPath, repoRoot) {
+  return legacyTreeRoots(repoRoot).some(({ dir }) => absPath === dir || absPath.startsWith(dir + path.sep));
+}
+
+function legacyTreeName(absPath, repoRoot) {
+  const hit = legacyTreeRoots(repoRoot).find(({ dir }) => absPath === dir || absPath.startsWith(dir + path.sep));
+  return hit ? hit.name : null;
+}
+
 let raw = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (c) => (raw += c));
@@ -166,6 +271,28 @@ process.stdin.on("end", () => {
     for (const cand of bashCandidates(command)) {
       const why = classify(cand, cwd, false);
       if (why) return say(why);
+    }
+
+    const repoRoot = findRepoRoot(TOP);
+    for (const [verb, re] of READ_VERBS) {
+      for (const tok of bashCandidatesGeneric(text, [re], MAX_CANDIDATES)) {
+        if (!tok || tok.startsWith("-")) continue;
+        let abs;
+        try {
+          abs = path.resolve(cwd || TOP, tok);
+        } catch {
+          continue;
+        }
+        if (!isLegacyTreePath(abs, repoRoot)) continue;
+        const legacyName = legacyTreeName(abs, repoRoot);
+        return say(
+          "reads the legacy tree " +
+            legacyName +
+            " via " +
+            verb +
+            ", which the driver delegates to delphi-archaeologist"
+        );
+      }
     }
   }
 
