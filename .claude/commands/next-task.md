@@ -321,12 +321,22 @@ The repo process applies unchanged — this command adds nothing to it:
   `git rev-parse --show-toplevel` — its prefix is allowlisted, so it costs no permission
   prompt — and the returned reply shows where it actually ran, so the driver can verify
   it landed in the right place.
-- Gate deposited (`npm run gate`, with the tool's `run_in_background` — **never a trailing
-  `&`**, which makes the shell report the fork and returns 0 whatever the gate found) →
-  `npm run board:move -- <issue> Gate` (`MOVED #<issue> -> Gate`, same exit codes as § 2) →
-  title `#<issue> · Gate`. A backgrounded verdict command must stand alone — no `;` or `&&`
-  chained after it either. A backgrounded compound command's exit code is from the LAST
-  command, so `cmd; echo $?` reports the echo, not the verdict.
+- Implementation and the driver's mechanical checks done → **commit → push → open the PR
+  with `Closes #<issue>` in the body → deposit `npm run gate`** (with the tool's
+  `run_in_background` — **never a trailing `&`**, which makes the shell report the fork and
+  returns 0 whatever the gate found) → `npm run board:move -- <issue> Gate` (`MOVED #<issue>
+  -> Gate`, same exit codes as § 2) → title `#<issue> · Gate`. The PR precedes the gate, not
+  the reverse: the worker refuses a sha that is not on `origin`
+  (`scripts/bench-gate.sh:45-50` — "NOT PUSHED: … is not on origin, so the worker cannot
+  fetch it"), and `ci.yml` triggers on `pull_request`, so a branch with no PR has no CI run
+  for its sha and the worker replays the whole Jest suite on the exclusive bench — the
+  slowest path, which has already killed a gateway mid-job (CLAUDE.md § The gate already says
+  this — keep the two consistent). ⚠ Note the wrinkle so a driver is not surprised: the
+  `Pull request linked to issue` project workflow sets `Status` = PR the moment the PR is
+  opened, so the `board:move … Gate` above is correcting that automatic move, not fighting
+  it. A backgrounded verdict command must stand alone — no `;` or `&&` chained after it
+  either. A backgrounded compound command's exit code is from the LAST command, so
+  `cmd; echo $?` reports the echo, not the verdict.
 - **The gate's verdict is its exit code, never the printed report** — same rule as § 0's
   `bench:nightly` read: `0` PASS · `1` verdict not passing · `2` refused at deposit (dirty
   tree) · `3` worker down · `4` wait timed out. The report's `=== bench job … — PASS` banner
@@ -344,17 +354,18 @@ The repo process applies unchanged — this command adds nothing to it:
   blind spots. Payload: the diff, the card's criterion, the invariant block, the gate report
   path. It judges two things only — adequacy to the goal and coherence of integration — and
   returns one of three verdicts:
-  - `PASS` → push, PR with **`Closes #<issue>`** in the body → `npm run board:move -- <issue>
-    PR` → title `#<issue> · PR`.
+  - `PASS` → `npm run board:move -- <issue> PR` → title `#<issue> · PR`, then the merge step
+    below.
   - `PASS WITH FINDINGS` → same as `PASS`; each finding is routed to the `card-reviewer`
     sub-agent exactly as every other draft (§ Feeding rule) — the validator files nothing
-    itself, and a `card-reviewer` verdict of `DO NOT FILE` creates nothing. Findings never
-    block the push.
-  - `REJECT` → a **failed attempt**: append the one-line root cause to the ledger, move
-    `npm run board:move -- <issue> "In progress"`, re-execute and **re-gate**. `REJECT` carries
-    its own budget of **3**, separate from the implementation-attempt budget (§ 4) — three
-    `REJECT`s ends the task at Needs triage the same way three failed gate attempts do, and
-    each gets its own ledger line: `validation N | root cause | REJECT`.
+    itself, and a `card-reviewer` verdict of `DO NOT FILE` creates nothing. **Findings never
+    block the merge.**
+  - `REJECT` → a **failed attempt**: append the one-line root cause to the ledger
+    (`validation N | root cause | REJECT`), move
+    `npm run board:move -- <issue> "In progress"`, re-execute the fix, then **re-commit,
+    re-push and re-gate** — the worker only judges a pushed sha, so a corrected attempt must
+    be pushed again before it can be gated again. `REJECT` carries its own budget of **3**, separate from the implementation-attempt budget (§ 4) — three `REJECT`s ends the task at
+    Needs triage the same way three failed gate attempts do.
 - Checks green → merge, `npm run finish` → `npm run board:move -- <issue> Done` + one final
   comment (2–4 lines: what changed, PR number, anything the human should know) → title
   `#<issue> · Done`. **Checking is one read, not a vigil**: your gate PASS *is* the
@@ -367,7 +378,10 @@ The repo process applies unchanged — this command adds nothing to it:
   in its exit code (0 merged · 1 closed unmerged · 4 still open). Never hand-roll either
   poll, and **never a tight loop**: a `while`/`sleep` loop is compound shell, so it stops to
   ask for permission, and it re-reads GitHub far harder than the sanctioned forms do
-  (kanban-workflow § GitHub API discipline).
+  (kanban-workflow § GitHub API discipline). **No merge without a `change-validator` verdict
+  for the sha being merged** — this is prose today, not an enforced rule: unlike
+  `.claude/hooks/driver-scope-guard.sh`, nothing in the tree checks it, so do not promise an
+  enforcement that does not exist.
 
 ## 4 · If it fails
 

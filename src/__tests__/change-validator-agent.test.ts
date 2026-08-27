@@ -1,7 +1,7 @@
 /**
  * The delegated semantic reviewer of a finished change (#314) is a prompt, not a program:
  * nothing in the Jest suite executes it, and no workflow can observe whether a live session
- * actually spawned it before pushing — that moment happens on a developer machine, the way
+ * actually spawned it before merging — that moment happens on a developer machine, the way
  * `card-reviewer-agent.test.ts` already pins for the card reviewer.
  *
  * What CAN be held is everything else: the read-only tool set, the three verdicts, the two
@@ -230,7 +230,7 @@ describe('the mechanism is named on all four surfaces', () => {
     );
   });
 
-  it('is in the /next-task command, between the gate-PASS line and the push\\/PR line', () => {
+  it('is in the /next-task command, between the gate-PASS line and the merge line', () => {
     const section = command.slice(command.indexOf('## 3 ·'), command.indexOf('## 4 ·'));
     expect(section).toMatch(/`npm run board:move -- <issue> Validation`/);
     expect(section).toMatch(/change-validator/);

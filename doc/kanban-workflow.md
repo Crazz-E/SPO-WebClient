@@ -20,9 +20,9 @@ The `Status` field is single-select: a task is in exactly one column.
 |---|---|---|---|
 | 📥 **Todo** | Unowned pool | Issue created and added to the project. **Vertical order = priority**, maintained by the human — a session always takes the topmost unowned item. | A session claims it. |
 | 🔨 **In progress** | Owned, in development | Session wrote its identity into `Session` and moved the card. Branch, implementation, tests. | Gate deposited, or released. |
-| 🧪 **Gate** | `npm run gate` deposited on the bench worker | Implementation + tests done, gate queued. | Gate PASS → Validation. Gate failure loops back to In progress (3 attempts max, then release). |
-| 🔍 **Validation** | `change-validator` sub-agent reviewing the diff against the card's criterion and the code it landed in | Gate returned PASS. | `PASS` / `PASS WITH FINDINGS` → PR opened. `REJECT` → back to In progress (own budget of 3, separate from gate attempts, then release). |
-| 🔀 **PR** | Pull request open | PR opened with `Closes #N` in the body. CI + `bench/gate` statuses, merge. | Merge (issue auto-closes). |
+| 🧪 **Gate** | `npm run gate` deposited on the bench worker | Implementation + tests done, committed, pushed, PR opened with `Closes #N`, gate queued (the PR precedes the gate — the worker only fetches a pushed sha, and `ci.yml` needs an open PR to run CI on it. The `Pull request linked to issue` workflow sets `Status` → PR the instant the PR opens; the driver moves it back to Gate, correcting that automatic jump rather than fighting it). | Gate PASS → Validation. Gate failure loops back to In progress (3 attempts max, then release). |
+| 🔍 **Validation** | `change-validator` sub-agent reviewing the diff against the card's criterion and the code it landed in | Gate returned PASS. | `PASS` / `PASS WITH FINDINGS` → PR. `REJECT` → back to In progress (own budget of 3, separate from gate attempts; a corrected attempt is re-committed, re-pushed and re-gated, then release after 3). |
+| 🔀 **PR** | Pull request open (opened back in the Gate step; this column is entered on a `change-validator` verdict, not a fresh PR) | `change-validator` returned `PASS` or `PASS WITH FINDINGS`. CI + `bench/gate` statuses already green, merge. | Merge (issue auto-closes). |
 | ✅ **Done** | Merged, released, finished | PR merged, release published, `npm run finish` run. Final synthetic comment posted. | Terminal. |
 | 🚨 **Needs triage** | Ownership released on failure/abandon | Owner released the task with a **simple, non-technical explanation** as an issue comment. | **Human only**: reprioritises, clears `Session`, moves back to Todo (or closes). |
 
@@ -357,11 +357,13 @@ Every write is very short.
 | Moment | Writes |
 |---|---|
 | Claim | `Session` field + Status → In progress |
-| Gate deposited | Status → Gate |
-| PR opened | Status → PR (the PR link appears on the card automatically via `Closes #N`, and `Pull request linked to issue` is configured to set the column from the same link — the owner sets it anyway and reads it back: the workflow has not yet been *observed* firing, and the owner's write is what the law relies on) |
+| PR opened, gate deposited | Status → Gate (the PR link appears on the card automatically via `Closes #N`, and `Pull request linked to issue` is configured to set the column from the same link — so Status jumps to PR the instant the PR opens, before the gate has even run; the owner writes Status → Gate right after, correcting that automatic jump rather than fighting it: the workflow has not yet been *observed* firing, and the owner's write is what the law relies on) |
+| Gate PASS | Status → Validation |
+| `change-validator` PASS / PASS WITH FINDINGS | Status → PR |
 | Merged + finished | Status → Done + **one final comment, 2–4 lines**: what changed, PR number, anything the human should know |
 | Released | Status → Needs triage + the non-technical explanation comment |
 | Gate attempt failed | Nothing on the board (Status stays Gate or returns to In progress); the detail lives in the PR/commits |
+| `change-validator` REJECT | Status → In progress + ledger line (the failed attempt's detail lives in the PR/commits, not the board) |
 
 ## GitHub API discipline — reads are budgeted like writes
 

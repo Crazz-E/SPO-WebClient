@@ -363,7 +363,7 @@ Slash **commands** live in `.claude/commands/`: `/next-task`, `/gate`, `/commit-
 | `security-reviewer` | Opus | WebSocket auth, RDO parsing, session management, OWASP |
 | `performance-analyzer` | Opus | Renderer bottlenecks, chunk caching, frame budget |
 | `card-reviewer` | Fable | The neutral reader of a draft backlog card, before it is filed |
-| `change-validator` | Fable | Read-only semantic review of a finished change — adequacy to the card's criterion and coherence of integration — after a gate PASS, before the push/PR |
+| `change-validator` | Fable | Read-only semantic review of a finished change — adequacy to the card's criterion and coherence of integration — after a gate PASS, before the merge |
 
 ## Delegation strategy
 
