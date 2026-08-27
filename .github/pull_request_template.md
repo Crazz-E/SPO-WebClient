@@ -12,8 +12,8 @@
      word, so read those twice. -->
 
 - [ ] Tests pass (`npm test`) *(CI)*
-- [ ] Coverage >= 93% on new/modified lines (`npm run test:coverage`) *(CI)*
-- [ ] TypeScript compiles cleanly (`npx tsc --noEmit`) *(CI)*
+- [ ] Coverage >= 93% on new/modified lines (`npm run coverage:changed`) *(CI)*
+- [ ] TypeScript compiles cleanly (`npm run typecheck`) *(CI)*
 - [ ] Conventional commit format (`type: summary`) — the PR title is the squash commit and the changelog line
 - [ ] **Bench attestation**: `npm run gate` PASS for the pushed HEAD (job id: `…`); `bench/gate` status will turn green once the worker sees the push
 - [ ] **`main` moved after the gate?** — not required to be up to date; if it touches the

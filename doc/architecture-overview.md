@@ -51,8 +51,13 @@ src/
 | `GET /api/concrete-block-classes` | Concrete block class definitions |
 | `GET /api/car-classes` | Car class definitions |
 | `GET /api/terrain-info/:terrainType` | Terrain type metadata (seasons) |
+| `GET /api/startup-status` | Server startup status and build info |
+| `GET /api/debug-log` | Debug log output (dev mode only) |
 | `GET /cache/:category/:filename` | Object texture (BuildingImages served locally) |
+| `GET /cdn/*` | Static asset delivery (CSS, JS, images) |
 | `GET /proxy-image?url=<url>` | Image proxy for remote assets |
+| `GET /spo-runtime-config.js` | Client runtime configuration |
+| `WS /ws` | WebSocket connection for game protocol |
 
 ## Services (ServiceRegistry)
 
@@ -67,5 +72,4 @@ Service files live flat in `src/server/` (no subdirectory).
 ## SkillsMP
 
 Search SkillsMP API before creating custom skills. Prefer skills with 1,000+ stars.
-- Installer: [.claude/skillsmp-installer.js](../.claude/skillsmp-installer.js) | Ad-hoc: [.claude/install-new-skills.js](../.claude/install-new-skills.js)
-- Installed: [.claude/skills/](../.claude/skills/) (30+ skills) | Metadata: [manifest.json](../.claude/skills/manifest.json)
+- Installed: [.claude/skills/](../.claude/skills/) | Metadata: [manifest.json](../.claude/skills/manifest.json) (20 total)

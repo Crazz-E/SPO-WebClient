@@ -70,8 +70,7 @@ attestation the bench worker publishes as a commit status once your branch is pu
 The branch is **not** required to be up to date with `main` — every attestation records the
 `baseMain` it was judged against instead, so `main` moving is *announced*, not refused: the
 `bench/gate` status description, the gate report and the push hook's `NOTE:` all say so.
-`git push` itself is blocked locally until the worker has attested HEAD (`npm run gate`, on a
-committed tree — a dirty tree is refused). If `main` moves while your PR is open, read the
+A direct push to `main` is blocked locally. If `main` moves while your PR is open, read the
 note and judge: merge `origin/main` in and gate again only when the incoming `main` touches
 the same ground your branch does; otherwise merge as is — updating unrelated ground is not a
 reason to re-gate. Fill in [the PR template](.github/pull_request_template.md), and say which
