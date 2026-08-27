@@ -29,7 +29,7 @@ This document defines how SPO-WebClient reaches and *keeps* 100% E2E coverage of
 
 | Layer | Mechanism | CI-gated? |
 |---|---|---|
-| Unit + component | Jest (2 projects: node + jsdom), per-directory coverage ratchet | No (local only — CI runs `npm test` only in the release workflow) |
+| Unit + component | Jest (2 projects: node + jsdom), per-directory coverage ratchet | Yes (CI runs `npm test` on every pull request and push to `main`; release.yml deliberately does not) |
 | Protocol harness | Real `StarpeaceSession` wired to `MockTcpSocket` + `RdoMock` (`src/server/__tests__/protocol-validation/`) — order-asserted login/logoff/keepalive/ServerBusy/reconnect/timeout suites | No |
 | Mock server | `src/mock-server/` — 9 capture-derived scenarios, `RdoStrictValidator`, WS integration tests | No |
 | E2E | **Prose playbooks** (E2E-TESTING.md script, `/e2e` command, `e2e-test` skill) driven manually by an agent via Playwright MCP against the **live** game servers with one locked account | No — not code at all |

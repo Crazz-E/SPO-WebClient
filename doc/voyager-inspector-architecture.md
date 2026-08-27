@@ -118,7 +118,7 @@ The container manages three types of RDO proxy connections:
 **ObjectInspectorHandleViewer.pas:552-597** — `GetCacheObjectProxy()`:
 
 ```
-1. Connect to Cache Server (DAAddr:DAPort)
+1. Connect to Cache Server (getCacheAddr:getCachePort)
 2. Create server proxy → call srvProxy.CreateObject(WorldName)
 3. Get object reference → create RDO proxy
 4. Call tmpProxy.SetObject(xPos, yPos)     // :569 — points at facility by map coordinates

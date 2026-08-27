@@ -82,6 +82,17 @@ dirties the tree, and the gate refuses a dirty tree (exit 2) whoever wrote it.
 
 "
     ;;
+  "reads the legacy tree"*)
+    remedy="Reading SPO-Original or SPO-ASP is not implementation either — it is research, and the
+driver delegates research the same way it delegates writes: to a sub-agent, here specifically
+the \`delphi-archaeologist\` skill (invoke it with \`/delphi-archaeologist\`, or spawn a sub-agent
+carrying the same brief). It knows the traps a bare grep/cat/head walks into on this tree — the
+ISO-8859 encoding, the xargs word-splitting on spaced directory names (CLAUDE.md § SPO-Original,
+§ Legacy web source) — and it returns citations (\`File.pas:Line\`), not a raw dump for the
+driver to paste back into its own reasoning.
+
+"
+    ;;
 esac
 
 cat >&2 <<MSG

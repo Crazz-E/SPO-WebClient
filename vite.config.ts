@@ -33,6 +33,8 @@ export default defineConfig({
         manualChunks: undefined,
       },
     },
+    // NOTE: This condition is always false under `vite build` because Vite's
+    // resolveConfigToBuild() always sets NODE_ENV='production' before evaluating user config.
     sourcemap: process.env.NODE_ENV !== 'production',
     target: 'es2020',
   },

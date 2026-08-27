@@ -355,7 +355,7 @@ Seven custom RDO matchers: `toContainRdoCommand`, `toMatchRdoFormat`, `toMatchRd
 ## Skills, commands, sub-agents
 
 20 skills installed — inventory in [manifest.json](.claude/skills/manifest.json), regenerate
-with `node .claude/generate-skills-manifest.js` (`--check` in CI fails if stale).
+with `node .claude/generate-skills-manifest.js` (`--check` in CI fails if stale). Skill count derives from `find .claude/skills -maxdepth 1 -type d | wc -l`.
 
 **Project skills, invokable via `/name`:**
 
@@ -368,7 +368,7 @@ with `node .claude/generate-skills-manifest.js` (`--check` in CI fails if stale)
 
 **Auto-load only** (not slash-invokable): `web-games` (Canvas 2D renderer, frame budget),
 `zustand-store-ts` (stores, selector stability), `mobile-ux-optimizer`
-(MobileShell/BottomNav/BottomSheet). The 13 community skills are listed in the manifest.
+(MobileShell/BottomNav/BottomSheet). The 20 installed skills are listed in the manifest.
 
 Slash **commands** live in `.claude/commands/`: `/next-task`, `/gate`, `/commit-push`,
 `/coverage-check`, `/e2e`, `/release-notes`, `/triage-report`.

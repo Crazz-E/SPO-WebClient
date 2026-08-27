@@ -21,7 +21,7 @@
  * ## One suite pass, not two
  *
  * This script IS the precheck's test pass. `--collectCoverageFrom` restricts what Jest
- * *instruments*, never what it *runs*: the run below has always executed all 310 test
+ * *instruments*, never what it *runs*: the run below has always executed all `find src -name '*.test.ts*' | wc -l` test
  * files, so `gate:precheck` calling `npm test` and then this script ran the whole suite
  * twice for one branch. It now runs once, here, and the changed lines are judged from
  * that same run. The suite therefore runs even when no eligible source file changed —
