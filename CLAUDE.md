@@ -203,9 +203,10 @@ no new issue, no closing section of the end report. A test session or a requeste
 it again, at a moment where someone asked for it. Only the maintainer widens a session's scope.
 
 **Filing a card is a deliberate act** — `/triage-report`, a maintainer's request, the split
-of a claimed task that turned out to be two, or a `PASS WITH FINDINGS` verdict from the
-`change-validator` sub-agent, bounded to ground the diff touched. `Auto-add to project` then
-puts the issue on the
+of a claimed task that turned out to be two, `/next-task` § 0.5 draining one candidate from the
+hook-LLM fallback layer's local journal ([doc/hook-llm-layer.md](doc/hook-llm-layer.md)), or a
+`PASS WITH FINDINGS` verdict from the `change-validator` sub-agent, bounded to ground the diff
+touched. `Auto-add to project` then puts the issue on the
 board and sets `Status` to Todo, so it lands straight in the pool `/next-task` reads — no
 `item-add`, no column set by hand. What no workflow sets is `Category`, `Size` and `Area`; those
 stay the filer's job, along with the matching `cat:` / `size:` labels.
@@ -265,6 +266,8 @@ npm run dev:local    # build + start yourself, on the first free port from 8081 
                      # other way of taking the bench port.
 npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push
 npm run verdict -- <alias> [--tail=N]  # run test/typecheck/lint/... with the full log in ~/.spo-bench/logs/, print the tail + EXIT=<code>, preserve the exit code — the sanctioned way to keep a verdict's transcript short
+npm run hook:harvest -- --take         # /next-task § 0.5: drain one hardening candidate from the LLM fallback hook's local journal
+npm run hook:stats                     # local read of that journal — invocation trend, top uncovered shapes — how "LLM usage → 0" is checked rather than asserted
 ```
 
 **The live bench has one owner: the bench worker.** Many sessions run on this machine, but
@@ -305,6 +308,7 @@ own. So does `out=$(npm test)`, which keeps the text and drops the number. Full 
 | `verdict-pipe-guard.sh` | PreToolUse (Bash) | Blocks piping a command whose exit code **is** the verdict (`npm test\|tail` reports tail, not Jest). Escape: `set -o pipefail` or a `PIPESTATUS` read |
 | `poll-loop-guard.sh` | PreToolUse (Bash) | Blocks the two ways a verdict gets lost while waiting: a trailing `&` on a verdict command (the shell reports the fork — always 0), and a hand-rolled wait loop (`until`/`while`/`for` + `sleep`) on a bench job or a GitHub read. Names `run_in_background`, `npm run bench:wait` or `npm run pr:wait` |
 | `driver-scope-guard.sh` | PreToolUse (Bash\|Edit\|Write\|NotebookEdit) | Refuses the **driver of a claimed card** writing to a tracked file itself — `Edit`/`Write`, and the Bash verbs that reach the tree without them (`sed -i`, `>`, `rm`, `chmod`, `git rm`, `npm run format`). Armed by a verified `board:take`, inert otherwise; the execution sub-agent passes (`agent_id`) |
+| `uncovered-command-guard.sh` | PreToolUse (Bash) | The LLM fallback layer: for a Bash command no allow/deny pattern covers (the residue that would otherwise ask a human), one tool-less, budget-capped Haiku call denies it with a corrected form and journals the case under `~/.spo-bench/hook-llm/` — never allows, never asks the human. Doc: [doc/hook-llm-layer.md](doc/hook-llm-layer.md) |
 | `session-heartbeat.sh` | *sourced by the others* | Stamps `~/.spo-bench/sessions/<key>.alive` so `finish` never reaps a worktree a session is working in |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.

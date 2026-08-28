@@ -473,14 +473,19 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
 **A card is filed deliberately, never in passing.** The board is fed by the surfaces whose job
 is to feed it — `/triage-report` draining the queued bug reports, a maintainer asking for a card
 by name, a claimed task that turned out to be two, `/next-task` § 0 filing the
-`Nightly: main is red` repair when the nightly proof says `main` is broken, and a
+`Nightly: main is red` repair when the nightly proof says `main` is broken, `/next-task` § 0.5
+draining one recurring or classifier-flagged candidate from the hook-LLM fallback layer's local
+journal (doc/hook-llm-layer.md), and a
 `PASS WITH FINDINGS` verdict from the `change-validator` sub-agent (§ 3) — and by nothing
 else. That last one is on the list because it is not a finding met on the way: it is a
 consequence of the change the card produced, bounded to ground the diff touched, and the
 session that ran the validation is the surface whose job it is to file it. The one before it
 is on the list because it is not a finding met on the way either: it is the only
 admissible work while `main` is red, so the session that reads the verdict is the surface whose
-job it is to file it. A session driving a
+job it is to file it. **§ 0.5 is on the list for the same reason** — the journal entry was
+produced by machinery whose one job is to record an uncovered command, not by a session
+noticing something while working on its own card, and the session draining the journal is the
+surface whose job it is to file what it finds. A session driving a
 card solves and implements *that* card: what it met on the way is neither filed nor written
 into its final report, because a test session or a requested audit finds it again at a moment
 where someone asked for it. Widening a session's scope is the maintainer's call.
@@ -620,6 +625,7 @@ has to be deliberate instead of merely easy.
 | Step (`/next-task` §) | What it actually is | Model | Effort |
 |---|---|---|---|
 | § 0–2 nightly check, pick, claim, rename | scripted `gh`/`jq`, one right answer | **Haiku 4.5** | low |
+| § 0.5 hook-hardening harvest | a local file read; on the rare hit, one `card-reviewer` spawn + the § 5 filing mechanics | **Haiku 4.5** | low |
 | § 1.4 `Area` on a legacy card | first match on a path table | **Sonnet 5** sub-agent | low |
 | § 3 understand the card, plan the change | analysis | **Fable 5** | per Size (below) |
 | § 3 implement + tests | execution | **Opus 5** — but see the escalation rule | per Size |

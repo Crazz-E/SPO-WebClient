@@ -80,6 +80,21 @@ describe('no leftover rationale for filing everything', () => {
   });
 });
 
+describe('the feeding rule and § 0.5 must not contradict each other', () => {
+  it('§ 0.5 still tells the session to drain the hook-LLM harvest', () => {
+    const section = command.slice(command.indexOf('## 0.5 ·'), command.indexOf('## 1 ·'));
+    expect(section).toContain('hook:harvest');
+    expect(section).toMatch(/card-reviewer/);
+  });
+
+  it('the feeding rule lists that filing among its sanctioned surfaces', () => {
+    const rule = rulebook.slice(rulebook.indexOf('## Feeding rule'));
+    const listEnd = rule.indexOf('and by nothing');
+    expect(listEnd).toBeGreaterThan(-1);
+    expect(rule.slice(0, listEnd)).toContain('§ 0.5');
+  });
+});
+
 describe('question (i) is not both "asked" and "not asked"', () => {
   it('§ 3 keeps the question and adds the hook, rather than replacing one with the other', () => {
     const section = command.slice(command.indexOf('## 3 ·'), command.indexOf('## 4 ·'));

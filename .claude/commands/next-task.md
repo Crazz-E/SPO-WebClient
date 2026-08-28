@@ -11,7 +11,7 @@ Board: [github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/
 
 **Run the scripted steps verbatim.** Every board and bench read below is a named script,
 reached through an npm alias: `bench:nightly`, `board:claim`, `board:verify`,
-`board:status`, `board:move`, `board:block`, `board:sessions`, `board:wait`, `bench:wait`, `pr:wait`. Call each in
+`board:status`, `board:move`, `board:block`, `board:sessions`, `board:wait`, `bench:wait`, `pr:wait`, `hook:harvest`. Call each in
 exactly the form written here —
 `npm run <alias>`, arguments after `--` — from the worktree you are in, with **no `cd`
 prefix and no shell composition around it**. None of them needs a working directory other
@@ -80,6 +80,40 @@ and the `logFile` straight off that line, then claim it and drive it like any ot
 
 Exit **2** — **UNKNOWN**: the run never learned anything about `main`. Stop and say so —
 UNKNOWN is never treated as green.
+
+## 0.5 · Drain one hook-hardening candidate
+
+Skip this step entirely when § 0 found `main` RED — the only admissible work then is the
+repair. Otherwise, before picking a card, drain the LLM fallback hook's own learning loop
+(`.claude/hooks/uncovered-command-guard.sh` -> `~/.spo-bench/hook-llm/journal.jsonl` ->
+this alias — doc/hook-llm-layer.md):
+
+```bash
+npm run hook:harvest -- --take
+```
+
+Exit **1** — no candidate. Proceed to § 1.
+
+Exit **0** — one candidate was drafted, at the path the last printed line named
+(`draft: <path>`). Read it, then spawn `card-reviewer` with its content verbatim — the same
+mechanics § 5 already uses to file a card: title, body, `Category`, `Size`, `Area` exactly as
+the draft states them, nothing added. On `FILE` or `FILE AMENDED`, file the issue
+(`gh issue create`, the fields and labels the draft names, the verdict posted verbatim as the
+first comment — kanban-workflow.md § The card review). On `DO NOT FILE`, file nothing and say
+nothing of it.
+
+Either way, close the loop before moving on — the signature is the value `--take` printed on
+its `candidate:` line:
+
+```bash
+npm run hook:harvest -- --resolve <signature> --verdict FILED --issue <n>
+# or, on DO NOT FILE:
+npm run hook:harvest -- --resolve <signature> --verdict DO-NOT-FILE
+```
+
+One candidate per session — this step never loops, and this is the only surface allowed to
+file this shape of card (doc/kanban-workflow.md § Feeding rule); nothing else in this command
+may.
 
 ## 1 · Pick — the first Todo card whose ground is free
 
