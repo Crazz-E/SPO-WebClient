@@ -7,9 +7,9 @@
 #   0 - GREEN: no evidence that main is broken (no nightly on file, PASS,
 #       ENVIRONMENT/INTERRUPTED, or a FAIL whose sha main has moved past)
 #   1 - RED: verdict is FAIL and it was run against the current origin/main
-#   2 - UNKNOWN: the script could not tell (missing/invalid JSON, missing
-#       verdict field, an unrecognised verdict value, or a git failure) —
-#       never mistake this for green
+#   2 - UNKNOWN: the script could not tell (jq not installed, missing/invalid
+#       JSON, missing verdict field, an unrecognised verdict value, or a git
+#       failure) — never mistake this for green
 #
 # Usage: bash scripts/nightly-check.sh
 set -euo pipefail
@@ -31,6 +31,11 @@ ORIGIN_MAIN="$(git rev-parse origin/main 2>/dev/null)" || {
   echo "MAIN: UNKNOWN git rev-parse origin/main failed"
   exit 2
 }
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "MAIN: UNKNOWN jq not installed (apt install jq)"
+  exit 2
+fi
 
 if ! jq -e . "$NIGHTLY" >/dev/null 2>&1; then
   echo "MAIN: UNKNOWN unreadable or invalid JSON in $NIGHTLY"
