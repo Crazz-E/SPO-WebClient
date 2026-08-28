@@ -41,7 +41,7 @@ Same reasoning as the aliases: the content belongs in a file, never in the comma
 **And that file goes in the scratchpad, OUTSIDE the worktree** — never beside the code. A
 commit message or a PR body written inside the tree dirties it, and a dirty tree is refused
 at gate deposit (exit 2) whoever wrote it; `driver-scope-guard.sh` refuses it earlier and
-says so. All three flags read the file happily from anywhere.
+says so. All four flags read the file happily from anywhere.
 
 **If `Grep`, `Read` or `Glob` are deferred, load them first.** When native tools are unavailable
 in this harness, the risk is silent truncation — a shell `grep`, `find` or `cat` returns an
