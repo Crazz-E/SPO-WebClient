@@ -236,7 +236,7 @@ Node.js 22 / npm 10 in WSL (`/usr/bin/node`). Everything the project needs runs 
 
 ```bash
 npm run build        # server + client + terrain-test
-npm run typecheck    # all three tsconfigs (server, client, e2e)
+npm run typecheck    # all four tsconfigs (server, client, e2e, tests)
 npm run lint         # ESLint 10, flat config — 0 errors is the CI gate
 npm run format       # Prettier over the whole tree (not enforced yet, see below)
 npm test             # full Jest suite

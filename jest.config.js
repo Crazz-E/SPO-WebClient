@@ -27,9 +27,9 @@ const sharedModuleConfig = {
         esModuleInterop: true,
         allowSyntheticDefaultImports: true,
         resolveJsonModule: true,
-        types: ['jest', 'node']
-      },
-      isolatedModules: false
+        types: ['jest', 'node'],
+        isolatedModules: true
+      }
     }]
   },
 };
