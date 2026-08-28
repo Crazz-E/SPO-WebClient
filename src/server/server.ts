@@ -34,7 +34,6 @@ import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 import { buildRuntimeConfigScript } from './runtime-config';
 import { handleBugReportRequest, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
 import { enforceProductionConfig } from './production-config';
-import { resolveCachePath, resolveBmpToPng } from './cache-path-resolver';
 import { handleCacheEndpoint } from './cache-endpoint-handler';
 
 /**
