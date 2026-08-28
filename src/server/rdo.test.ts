@@ -418,13 +418,13 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.targetId).toBe('789');
       expect(packet.action).toBe(RdoAction.SET);
       expect(packet.member).toBe('Value');
-      expect(packet.args).toContain('"#100"');
+      expect(packet.args).toEqual(['#100']);
     });
 
     it('should parse set with string value', () => {
       const packet = RdoProtocol.parse('C sel 100 set Name "%NewName";');
       expect(packet.member).toBe('Name');
-      expect(packet.args![0]).toContain('%NewName');
+      expect(packet.args).toEqual(['%NewName']);
     });
   });
 
