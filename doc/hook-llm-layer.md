@@ -60,7 +60,59 @@ never uses it, and that is a deliberate constraint, not an oversight:
 So `uncovered-command-guard.sh` can only ever exit 0 (no objection — the harness's own
 allow/deny/ask machinery still decides) or exit 2 (deny, reason on stderr, corrected form when
 one exists). `src/__tests__/uncovered-command-guard.test.ts`'s "never-allow pin" checks this
-mechanically: neither source file ever emits `"permissionDecision"` as an actual JSON key.
+mechanically: neither source file ever emits `"permissionDecision"` as an actual JSON key. In
+`async` mode (below) the alphabet narrows further, to `{exit 0}` alone — nothing is ever denied
+either, so the never-allow property holds a fortiori.
+
+## Two modes: async (learning) and sync (steady-state)
+
+`SPO_HOOK_LLM_MODE`, read once near the top of `uncovered-command-guard.sh`, values `async` |
+`sync`, **default `async`** — an unrecognised value falls back to `async` on purpose, because
+this hook must never fail *into* 40–75s of blocking over a typo in a settings file.
+
+- **`async` (the current default — the LEARNING PHASE).** The hook fires the exact same
+  classifier call, **detached**, and returns to the harness in ~150ms. The Bash command runs
+  **unexamined** — identical risk to the hook being unregistered entirely (which was live on
+  `main` for a time, "chore: temporarily disable the LLM fallback hook") — and the verdict still
+  lands in the journal 40–75s later, so `hook:harvest`/`hook:stats` keep learning without any
+  session ever waiting. What's dormant: real-time guidance — a `needs-form` verdict's
+  `corrected_command` is computed and journalled, but the command already ran, so the agent
+  never sees it.
+- **`sync` (the original behaviour).** Blocks on the classifier call and denies with the
+  corrected form, exactly as this layer worked before this mode existed.
+
+**Why async is safe, stated precisely — not a lowered bar, a strictly better one.** In async
+mode an uncovered command runs before the classifier's opinion exists — but that is bit-for-bit
+the state the temporary full-disable already put on `main`, at the maintainer's own approval:
+in both states the command runs regardless of what the classifier would have said. Async mode
+is strictly more informative than disabled (it still journals), at identical risk.
+
+**The detachment mechanism, measured, not guessed (2026-08-28, this machine):**
+
+```
+setsid --fork bash "$HOOKS_DIR/uncovered-command-guard.sh" </dev/null >/dev/null 2>&1 &
+```
+
+A plain `cmd &` does **not** make the hook return early — the child inherits the hook's
+stdout/stderr *pipes*, and the harness reads them to EOF, which only arrives when the last
+writer closes them (measured: 8031ms for a `sleep 8 &`, even though the hook *process* itself
+was already gone — the block was invisible from inside the script). `</dev/null >/dev/null
+2>&1` is what closes all three streams and lets the hook return in single-digit milliseconds;
+`disown` and `nohup` do not touch file descriptors and do not help. `setsid` is the separate
+half that lets the classifier **survive** a signal sent to the hook's original process group
+after the hook exits (measured: a plain redirect, or `nohup`+`disown`, both left the child
+killable; `setsid` moved it to its own session/group, where the hook's original group is
+already empty). `--fork` guarantees `setsid()` always succeeds rather than depending on the
+caller not already being a group leader. A `command -v setsid` check falls back to plain
+`& disown` when util-linux is unavailable — still non-blocking, but killable, and that
+degradation is explicit rather than silent.
+
+**Switching back to `sync`** is a two-line PR: `SPO_HOOK_LLM_MODE`'s default in the script, and
+the matching `.claude/settings.json` `timeout` (10 for async — the hook itself does only a
+`trigger` check, a throttle check, and the detached launch; 100 for sync — must exceed
+`SPO_HOOK_LLM_TIMEOUT`'s 75s). The exit criterion: `npm run hook:stats` showing the recurring
+`rule_slug`s absorbed by the scripted layer, so the residual the classifier still has to catch
+is genuinely rare.
 
 ## The trigger — deciding "uncovered" without an LLM call
 
@@ -130,11 +182,26 @@ runs from a neutral `cd /tmp` so it loads no project `CLAUDE.md`.
 
 **Real latency, dogfooded, not a toy spike:** 40–60s and ~$0.03–0.035 per call, on the full
 rules file and the real seven-field schema — an order of magnitude past an early toy-schema
-spike (4.5s, $0.004) that used a two-field schema and no rules file. The internal timeout
-(`SPO_HOOK_LLM_TIMEOUT`, default 75s; the `settings.json` hook timeout is 100s, always above
-it) is set from the real number. `--effort low` was tried and made it *worse* (thinking tokens
-rose, not fell) — not used. This is still trivial next to a human being asked, and the
-per-session throttle (`SPO_HOOK_LLM_MAX_PER_HOUR`, default 30) bounds the total regardless.
+spike (4.5s, $0.004) that used a two-field schema and no rules file. `--effort low` was tried
+and made it *worse* (thinking tokens rose, not fell) — not used.
+
+**Production latency, measured on the real shared journal across a full day's many concurrent
+sessions (2026-08-28, 159 real invocations, one shared account): p50 63.6s, p90 71.2s, max
+73.7s — and 43% of lines are `verdict:"error"` / `"claude exited 124"`, the 75s ceiling firing.**
+Far worse than the isolated dogfooding above; the shape (degrades under concurrent multi-session
+load on one account) points at queueing/contention, not just per-call model cost. **This is why
+`async` mode exists and is the default** (see "Two modes" above) — it makes this latency free to
+every session by never blocking on it.
+
+The internal timeout (`SPO_HOOK_LLM_TIMEOUT`, default 75s) governs how long the classifier call
+itself is allowed to run, in EITHER mode. The `settings.json` hook `timeout` is separate and
+mode-dependent: `sync` mode's hook process IS the classifier call, so its timeout (100) must
+exceed `SPO_HOOK_LLM_TIMEOUT`; `async` mode's hook process only does the cheap `trigger`/
+throttle check and the detached launch (~150-200ms measured), so its timeout is 10 — a hung
+*hook*, as opposed to a slow classifier, should not be able to stall a session in a mode whose
+whole purpose is never stalling. The per-session throttle (`SPO_HOOK_LLM_MAX_PER_HOUR`, default
+30) bounds real spend in both modes; in `async` mode it is enforced by the detached child, so a
+throttled call never even reaches the classifier (no cost, not just no wait).
 
 On any failure — nonzero exit, timeout, unparseable output, a schema violation — the wrapper
 **fails closed**: a generic, honest deny, journalled as `verdict: "error"`, never a hang, never
@@ -159,6 +226,20 @@ Every invocation appends one line to `${SPO_BENCH_DIR:-$HOME/.spo-bench}/hook-ll
 fields are the classifier's own structured answer, unmodified. This file is never read by
 anything except `scripts/hook-llm-harvest.js` and `scripts/hook-llm-stats.js` — never GitHub,
 never a notification.
+
+**In `async` mode**, the line is written by a detached child 40–75s after the command actually
+ran, so `ts` is *completion* time, not launch time — journal order is not command order.
+Neither reader cares: `hook:harvest` picks the oldest candidate group via a `Math.min` over
+parsed timestamps (order-insensitive), and `hook:stats` buckets by ISO week, where a sub-2-minute
+skew is irrelevant. Concurrent appends from several sessions' detached children stay atomic —
+`O_APPEND` plus one sub-`PIPE_BUF` `write()` per line. Two throttle properties follow from the
+same lag: a throttled line still counts toward the next hour's `runThrottle` check, so a session
+that hits the cap stays capped for an hour after its *last* uncovered command, not its first;
+and because the counter lags launches by up to 75s, a burst of uncovered commands inside one
+window can overshoot `SPO_HOOK_LLM_MAX_PER_HOUR` slightly (bounded by how many Bash calls a
+session can issue in 75s — the busiest real session-hour measured so far is 28 against a cap of
+30). Revisit only if `hook:stats` ever shows a session-hour above the cap; no in-flight
+accounting is built speculatively.
 
 ## The harvest — local dedup, then one card
 
@@ -218,3 +299,14 @@ locally, on demand.
   like any other change; this loop accelerates the proposal, never the landing.
 - No retrofit of pre-existing worktrees — they read their own copies of hooks and settings, as
   every other hook change in this repo already does.
+- No retroactive guidance in `async` mode — no `Stop`/`PostToolUse` hook that reads the journal
+  and surfaces a late `corrected_command` back to the agent. `PreToolUse` has no channel to a
+  turn that already completed; recovering this needs a different hook event, cross-process state
+  to correlate a verdict with the turn that caused it, and a policy for what to say about a
+  command that already ran successfully on its own. `sync` mode is what restores this, in full.
+- No daemon or request queue for the classifier — the shape the production latency numbers might
+  seem to argue for. `async` mode makes the latency free without one, which removes the
+  motivation; the only persistent process on this machine remains the bench worker (unchanged
+  from the bullet above).
+- No in-flight throttle accounting for the lag `async` mode introduces (see "The journal") —
+  the overshoot is bounded and self-announcing via `hook:stats`, not worth speculative machinery.
