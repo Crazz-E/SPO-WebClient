@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "_comment": [
+    "The compiled form of doc/permission-policy.md — the cases already enumerated.",
+    "",
+    "Every entry is a permission decision, so every entry is read by a human before it merges:",
+    "the promotion path is /permission-promote -> a kanban card -> card-reviewer -> gate -> PR.",
+    "Nothing writes into this file at runtime; the broker only reads it. Runtime verdicts land",
+    "in ~/.spo-perm/provisional/, which is the queue this file is fed from.",
+    "",
+    "The seed below grants NO permission that policy §6 does not already grant: every entry is",
+    "read-only, and §6 already allows a read-only call when the arbiter cannot answer. What the",
+    "seed adds is the `guidance` — the corrected form that rides back to the caller on an allow",
+    "(policy §4bis), so the lesson costs a file read instead of a model call from the very first",
+    "capture. Anything that is not read-only is deliberately absent: it belongs to the arbiter",
+    "until a human promotes it.",
+    "",
+    "Signature grammar: v1:bash:<domain>:<shapes+sorted>  |  v1:<tool>:<domain>:<where>",
+    "The domain is inside the key on purpose — see permission-broker.js, signature()."
+  ],
+  "rules": [
+    {
+      "id": "read-only-cat",
+      "signature": "v1:bash:read-only:cat",
+      "decision": "allow",
+      "reason": "Reading a file changes nothing. Allowed by policy §1 (read-only) and §6.",
+      "guidance": "The Read tool is the sanctioned form here (CLAUDE.md § Environment): it needs no permission, reports line numbers you can cite, and reads the ISO-8859 .pas files of SPO-Original correctly — where shell `cat` and `grep` silently return nothing.",
+      "source": "doc/permission-policy.md §1, CLAUDE.md § Environment"
+    },
+    {
+      "id": "read-only-grep",
+      "signature": "v1:bash:read-only:grep",
+      "decision": "allow",
+      "reason": "A search changes nothing. Allowed by policy §1 (read-only) and §6.",
+      "guidance": "Prefer the Grep tool (pattern/path/glob): no permission, no word-splitting on paths containing spaces, and correct on the ISO-8859 files. If this search touches ~/SPO-Original or ~/SPO-ASP, the shell form is refused outright by legacy-search-guard — a false negative there feeds a wrong kind/arity into rdo-members.ts.",
+      "source": "doc/permission-policy.md §4bis (case D-01)"
+    },
+    {
+      "id": "read-only-find",
+      "signature": "v1:bash:read-only:find",
+      "decision": "allow",
+      "reason": "Listing paths changes nothing. Allowed by policy §1 (read-only) and §6.",
+      "guidance": "The Glob tool is the sanctioned form (pattern + path). Shell `find` piped into `xargs` word-splits on `Interface Server/` and dies on the apostrophe in `Pastel's mp3/` — measured: 2 files reported out of 15.",
+      "source": "doc/permission-policy.md §4bis"
+    },
+    {
+      "id": "read-only-sed",
+      "signature": "v1:bash:read-only:sed",
+      "decision": "allow",
+      "reason": "A `sed` without -i only reads. Allowed by policy §1 (read-only) and §6.",
+      "guidance": "Use Read with offset/limit to read a range, and Edit to change one. `sed -i` is a write and is classified as such — it never reaches this rule.",
+      "source": "doc/permission-policy.md §1"
+    },
+    {
+      "id": "read-only-tail",
+      "signature": "v1:bash:read-only:tail",
+      "decision": "allow",
+      "reason": "Reading the end of a file changes nothing. Allowed by policy §1 and §6.",
+      "guidance": "If this is the tail of a verdict log, `npm run verdict -- <alias> [--tail=N]` is the one-call sanctioned form: it keeps the real exit code, writes the full log under ~/.spo-bench/logs/ and prints EXIT=<code> last. A pipe onto a verdict command reports the pipe's exit code, not the command's.",
+      "source": "CLAUDE.md § Commands, doc/haiku-permission-plan.md step 1"
+    },
+    {
+      "id": "read-only-head",
+      "signature": "v1:bash:read-only:head",
+      "decision": "allow",
+      "reason": "Reading the start of a file changes nothing. Allowed by policy §1 and §6.",
+      "guidance": "Same as tail: `npm run verdict -- <alias>` for a verdict, Read with limit for a file. `| head` on a search destroys the exit code — grep's exit 2 becomes the pipeline's 0, so an error reads as an empty result.",
+      "source": "doc/haiku-permission-analysis.md D-01"
+    },
+    {
+      "id": "read-only-wc",
+      "signature": "v1:bash:read-only:wc",
+      "decision": "allow",
+      "reason": "Counting changes nothing. Allowed by policy §1 (read-only) and §6.",
+      "source": "doc/permission-policy.md §1"
+    },
+    {
+      "id": "read-only-file",
+      "signature": "v1:bash:read-only:file",
+      "decision": "allow",
+      "reason": "Probing a file's type changes nothing. Allowed by policy §1 and §6.",
+      "guidance": "This is the sanctioned way to confirm the ISO-8859 encoding trap before concluding a symbol is absent from SPO-Original (CLAUDE.md ⚠).",
+      "source": "CLAUDE.md § Legacy Delphi source"
+    },
+    {
+      "id": "read-only-diff",
+      "signature": "v1:bash:read-only:diff",
+      "decision": "allow",
+      "reason": "Comparing two files changes neither. Allowed by policy §1 and §6.",
+      "source": "doc/permission-policy.md §1"
+    },
+    {
+      "id": "read-only-stat",
+      "signature": "v1:bash:read-only:stat",
+      "decision": "allow",
+      "reason": "Reading metadata changes nothing. Allowed by policy §1 and §6.",
+      "source": "doc/permission-policy.md §1"
+    }
+  ]
+}
