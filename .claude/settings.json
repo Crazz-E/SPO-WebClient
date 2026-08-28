@@ -18,7 +18,7 @@
       "Bash(npm audit*)",
       "Bash(npm outdated*)",
       "Bash(node *)",
-      "Bash(bash .claude/hooks/*.sh*)",
+      "Bash(bash .claude/hooks/*)",
       "Bash(npx tsc*)",
       "Bash(npx jest*)",
       "Bash(npx vite*)",
