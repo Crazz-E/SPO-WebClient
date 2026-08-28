@@ -103,6 +103,18 @@ verb producing it (backstopped regardless by the write-path guards, `driver-scop
 A wrong guess in any of these would either add unmeasured Haiku noise or contradict a pinned
 test — and each failure mode is self-announcing, the same way task #369 was.
 
+**Two popup classes this layer structurally cannot see, confirmed 2026-08-28.** A Bash command
+that this layer marks `COVERED` exits the hook at 0 — if the harness's *own* separate heuristics
+then still prompt (observed: a shell-expansion/injection heuristic overriding an allowlisted
+`Bash(...)` prefix, "Contains expansion", triggered by `${PIPESTATUS[0]}`), that prompt happens
+entirely outside this hook's turn and is never journalled. And any **Edit/Write** popup — the
+harness's own "sensitive file" protection on `.claude/**`, the same category
+`doc/haiku-permission-analysis.md` named "classifieur automode" — never reaches this layer at
+all, since it is wired to `PreToolUse(Bash)` only. Both are confirmed out of scope for this
+mechanism; the self-learning loop cannot self-report either, and only a human sighting can. The
+`${PIPESTATUS[0]}`-vs-`$?` half of the first case was independently worth fixing regardless
+(`verdict-pipe-guard.sh` was refusing its own recommended reporting form) — see its header.
+
 ## The classifier call
 
 One `claude -p` subprocess, `--tools ""` (it can invoke no tool, so it can never reach a Bash

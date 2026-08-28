@@ -644,4 +644,82 @@ describe('uncovered-command-guard.js — trigger, unit-level', () => {
       }
     });
   });
+
+  // Regression, 2026-08-28 (popup 2): a `for ... ; do ... ; done` compound reached a real
+  // permission popup in a worktree that predated the #392/#396 merge. Confirmed the merged
+  // isCovered() already resolves it to UNCOVERED (no code change needed there) — these pin the
+  // guarantee: `do`/`then`/`in`/keyword-headed fragments always sit behind a `;` or newline
+  // (STATEMENT_SPLIT delimiters), so they always land in their own fragment, and no current
+  // allow/deny pattern's prefix matches a bare shell keyword.
+  describe('regression: shell keywords always head their own fragment (task/popup #369-adjacent)', () => {
+    it('the reported for/do/done compound is UNCOVERED even with cd/echo/grep/wc all allowed', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, {
+          permissions: { allow: ['Bash(cd *)', 'Bash(echo *)', 'Bash(grep *)', 'Bash(wc *)'] },
+        });
+        const command =
+          'cd /tmp/scripts && for f in claim-read.sh board-take.sh; do echo "$f: $(grep -c jq "$f")"; done';
+        const out = trigger({ tool_input: { command } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('a for/do/done body that IS fully allowlisted is still UNCOVERED (the keywords themselves are not)', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(echo *)'] } });
+        const out = trigger({ tool_input: { command: 'for i in 1 2; do echo x; done' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('while/do/done is UNCOVERED the same way', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(git status*)'] } });
+        const out = trigger({ tool_input: { command: 'while true; do git status; done' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('if/then/fi is UNCOVERED', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(git status*)', 'Bash(echo *)'] } });
+        const out = trigger({ tool_input: { command: 'if git status; then echo ok; fi' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('case/esac is UNCOVERED', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(git status*)'] } });
+        const out = trigger({ tool_input: { command: 'case x in a) git status;; esac' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('control: a plain && compound with no keywords is COVERED when both sides are allowlisted', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(cd *)', 'Bash(echo *)'] } });
+        const out = trigger({ tool_input: { command: 'cd /x && echo y' } }, env);
+        expect(out).toBe('COVERED');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
 });
