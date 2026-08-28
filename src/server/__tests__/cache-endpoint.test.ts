@@ -11,9 +11,11 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import path from 'path';
 import * as fsp from 'fs/promises';
+import type { ServerResponse } from 'http';
 import { resolveCachePath, resolveBmpToPng } from '../cache-path-resolver';
+import { handleCacheEndpoint } from '../cache-endpoint-handler';
 
-// Mock fsp.access for filesystem fallback tests
+// Mock fsp.access and fsp.readFile for filesystem fallback tests
 jest.mock('fs/promises');
 
 describe('Cache endpoint path resolution', () => {
@@ -190,5 +192,161 @@ describe('BMP-to-PNG upgrade via index and filesystem fallback', () => {
       expect(result).toBe('/data/Texture.png');
       expect(fsp.access).toHaveBeenCalledWith('/data/Texture.png');
     });
+  });
+});
+
+describe('Server integration flow', () => {
+  let fileIndex: Map<string, string>;
+  const CACHE_DIR = '/app/cache';
+  const WEBCLIENT_CACHE_DIR = '/app/webclient-cache';
+
+  // Helper to create a mocked ServerResponse
+  function createMockResponse(): Partial<ServerResponse> {
+    return {
+      writeHead: jest.fn(),
+      end: jest.fn(),
+    };
+  }
+
+  beforeEach(() => {
+    fileIndex = new Map();
+    jest.clearAllMocks();
+  });
+
+  it('resolves cache path, then checks for PNG upgrade', async () => {
+    // Set up fileIndex with mixed-case BMP and PNG
+    fileIndex.set('road1.bmp', '/app/cache/RoadBlockImages/Road1.bmp');
+    fileIndex.set('road1.png', '/app/cache/RoadBlockImages/Road1.png');
+
+    // Mock fsp.readFile to return content
+    (fsp.readFile as any).mockResolvedValueOnce(Buffer.from('image data'));
+
+    const mockRes = createMockResponse();
+
+    // Call handleCacheEndpoint (server.ts lines 936-941 and 968-970)
+    await handleCacheEndpoint('/cache/RoadBlockImages/Road1.bmp', CACHE_DIR, WEBCLIENT_CACHE_DIR, fileIndex, mockRes as ServerResponse);
+
+    // Verify the handler called resolveCachePath (line 941) and resolveBmpToPng (lines 968-970)
+    // by checking that it tried to read the PNG file (not the BMP)
+    expect(fsp.readFile).toHaveBeenCalledWith('/app/cache/RoadBlockImages/Road1.png');
+
+    // Verify response was sent successfully
+    expect(mockRes.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'Content-Type': 'image/png',
+    }));
+    expect(mockRes.end).toHaveBeenCalled();
+  });
+
+  it('BMP with PNG variant uses upgraded path', async () => {
+    // Set up fileIndex with both BMP and PNG variants in different case
+    fileIndex.set('texturename.bmp', '/app/cache/ConcreteImages/TextureName.bmp');
+    fileIndex.set('texturename.png', '/app/cache/ConcreteImages/TextureName.png');
+
+    // Mock fsp.readFile to return PNG content
+    (fsp.readFile as any).mockResolvedValueOnce(Buffer.from('png data'));
+
+    const mockRes = createMockResponse();
+
+    // Call handleCacheEndpoint with lowercase request
+    await handleCacheEndpoint('/cache/ConcreteImages/texturename.bmp', CACHE_DIR, WEBCLIENT_CACHE_DIR, fileIndex, mockRes as ServerResponse);
+
+    // Verify it resolved to and served the PNG (not the BMP)
+    expect(fsp.readFile).toHaveBeenCalledWith('/app/cache/ConcreteImages/TextureName.png');
+    expect(mockRes.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'Content-Type': 'image/png',
+    }));
+  });
+
+  it('BMP with PNG on filesystem uses filesystem path', async () => {
+    // Set up fileIndex with only BMP
+    fileIndex.set('road1.bmp', '/app/cache/RoadBlockImages/Road1.bmp');
+
+    // Mock fsp.access to succeed (PNG exists on filesystem)
+    (fsp.access as any).mockResolvedValueOnce(undefined);
+    // Mock fsp.readFile to return PNG content
+    (fsp.readFile as any).mockResolvedValueOnce(Buffer.from('png data'));
+
+    const mockRes = createMockResponse();
+
+    // Call handleCacheEndpoint requesting BMP
+    await handleCacheEndpoint('/cache/RoadBlockImages/Road1.bmp', CACHE_DIR, WEBCLIENT_CACHE_DIR, fileIndex, mockRes as ServerResponse);
+
+    // Verify it found the PNG via filesystem fallback and served it
+    expect(fsp.access).toHaveBeenCalledWith('/app/cache/RoadBlockImages/Road1.png');
+    expect(fsp.readFile).toHaveBeenCalledWith('/app/cache/RoadBlockImages/Road1.png');
+    expect(mockRes.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'Content-Type': 'image/png',
+    }));
+  });
+
+  it('BMP without PNG fallback handles access error gracefully', async () => {
+    // Set up fileIndex with only BMP, no PNG variant
+    fileIndex.set('texture.bmp', '/app/cache/BuildingImages/Texture.bmp');
+
+    // Mock fsp.access to fail (PNG doesn't exist), then readFile succeeds
+    (fsp.access as any).mockRejectedValue(new Error('ENOENT'));
+    (fsp.readFile as any).mockResolvedValue(Buffer.from('bmp data'));
+
+    const mockRes = createMockResponse();
+
+    // Call handleCacheEndpoint requesting BMP (which has no PNG variant)
+    await handleCacheEndpoint('/cache/BuildingImages/Texture.bmp', CACHE_DIR, WEBCLIENT_CACHE_DIR, fileIndex, mockRes as ServerResponse);
+
+    // Verify response was successful (either BMP or PNG, but no error)
+    expect(mockRes.writeHead).toHaveBeenCalledWith(200, expect.any(Object));
+    expect(mockRes.end).toHaveBeenCalled();
+    // Verify fsp.access was called to check for PNG
+    expect(fsp.access).toHaveBeenCalled();
+  });
+
+  it('non-BMP files are served as-is without PNG check', async () => {
+    // Set up fileIndex with a GIF
+    fileIndex.set('building.gif', '/app/cache/BuildingImages/Building.gif');
+
+    // Mock fsp.readFile to return GIF content
+    (fsp.readFile as any).mockResolvedValueOnce(Buffer.from('gif data'));
+
+    const mockRes = createMockResponse();
+
+    // Call handleCacheEndpoint requesting GIF
+    await handleCacheEndpoint('/cache/BuildingImages/Building.gif', CACHE_DIR, WEBCLIENT_CACHE_DIR, fileIndex, mockRes as ServerResponse);
+
+    // Verify it served the GIF directly without checking for PNG upgrade
+    expect(fsp.readFile).toHaveBeenCalledWith('/app/cache/BuildingImages/Building.gif');
+    expect(fsp.access).not.toHaveBeenCalled();
+    expect(mockRes.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'Content-Type': 'image/gif',
+    }));
+  });
+
+  it('handles file not found error', async () => {
+    fileIndex.set('missing.bmp', '/app/cache/RoadBlockImages/Missing.bmp');
+
+    // Mock fsp.readFile to throw ENOENT
+    (fsp.readFile as any).mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+    const mockRes = createMockResponse();
+
+    // Call handleCacheEndpoint
+    await handleCacheEndpoint('/cache/RoadBlockImages/Missing.bmp', CACHE_DIR, WEBCLIENT_CACHE_DIR, fileIndex, mockRes as ServerResponse);
+
+    // Verify 404 response
+    expect(mockRes.writeHead).toHaveBeenCalledWith(404);
+    expect(mockRes.end).toHaveBeenCalledWith('File not found');
+  });
+
+  it('rejects paths that escape cache directory', async () => {
+    fileIndex.set('etc.passwd', '/etc/passwd');
+
+    const mockRes = createMockResponse();
+
+    // Try to access a path outside the cache directory
+    await handleCacheEndpoint('/cache/../etc/passwd', CACHE_DIR, WEBCLIENT_CACHE_DIR, fileIndex, mockRes as ServerResponse);
+
+    // Verify 403 response
+    expect(mockRes.writeHead).toHaveBeenCalledWith(403);
+    expect(mockRes.end).toHaveBeenCalledWith('Access Denied');
+    // Ensure we never tried to read the file
+    expect(fsp.readFile).not.toHaveBeenCalled();
   });
 });
