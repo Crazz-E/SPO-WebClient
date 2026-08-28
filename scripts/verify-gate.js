@@ -161,17 +161,17 @@ function captureStage(label, command) {
 
   const LOG = path.join(LOG_DIR, `gate-${label}-${STAMP}.log`);
 
+  // Use shell redirection to capture output reliably (like run-verdict.sh)
+  const redirectCommand = `${command} > "${LOG}" 2>&1`;
+
   try {
-    const output = execSync(command, { encoding: 'utf8', stdio: 'pipe' });
-    fs.writeFileSync(LOG, output, 'utf8');
+    execSync(redirectCommand, { shell: true, stdio: 'inherit' });
+    // On success, read and return
+    const output = fs.readFileSync(LOG, 'utf8');
     process.stdout.write(`\n=== ${label} PASS\n`);
     return { stage: label, status: 'PASS' };
   } catch (err) {
-    // Capture whatever output we got
-    const output = (err.stdout || '') + (err.stderr || '');
-    fs.writeFileSync(LOG, output, 'utf8');
-
-    // Tail the log to bounded output
+    // On failure, tail the log to bounded output
     const tail = execSync(`tail -n 40 "${LOG}"`, { encoding: 'utf8' }).trim();
     process.stdout.write(`\n=== ${label} FAIL\n`);
     if (tail) process.stdout.write(tail + '\n');
