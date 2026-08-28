@@ -1,7 +1,7 @@
 const fs=require('fs'),path=require('path');
 const SRC='/home/crazz/SPO-WebClient/src';
 const files=[];(function w(d){for(const x of fs.readdirSync(d,{withFileTypes:true})){const f=path.join(d,x.name);
- if(x.isDirectory()){if(['node_modules','__tests__','__mocks__','__fixtures__','mock-server'].includes(x.name))continue;w(f)}
+ if(x.isDirectory()){if(['node_modules','__tests__','__mocks__','mock-server'].includes(x.name))continue;w(f)}
  else if(/\.tsx?$/.test(x.name)&&!/\.test\.tsx?$/.test(x.name))files.push(f)}})(SRC);
 const hits=[];
 for(const f of files){

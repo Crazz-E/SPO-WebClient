@@ -23,7 +23,7 @@ before planning. Start from [architecture-overview.md](doc/architecture-overview
 - Modify a file without reading it first
 - Ship code without tests — new/modified lines must reach ≥ 93 % coverage
 - Modify without discussion: `src/shared/rdo-types.ts`, `src/shared/rdo-frame.ts`,
-  `src/server/rdo.ts`, `src/__fixtures__/*`, `jest.config.js` (thresholds only go UP) —
+  `src/server/rdo.ts`, `jest.config.js` (thresholds only go UP) —
   **enforced**: `scripts/check-pr-rules.js` runs inside the required CI check and fails the
   PR unless the maintainer posted the `rdo-approved` label. It also fails a change to
   `rdo-members.ts` whose PR body cites no `File.pas:Line`, and any lowered Jest threshold
@@ -236,7 +236,7 @@ Node.js 22 / npm 10 in WSL (`/usr/bin/node`). Everything the project needs runs 
 
 ```bash
 npm run build        # server + client + terrain-test
-npm run typecheck    # all three tsconfigs (server, client, e2e)
+npm run typecheck    # all four tsconfigs (server, client, e2e, tests)
 npm run lint         # ESLint 10, flat config — 0 errors is the CI gate
 npm run format       # Prettier over the whole tree (not enforced yet, see below)
 npm test             # full Jest suite

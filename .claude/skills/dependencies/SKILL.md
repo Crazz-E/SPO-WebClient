@@ -71,7 +71,7 @@ problem, not a formality.
 ## Verification gate (mandatory after any change)
 
 ```bash
-npm run typecheck    # both tsconfigs
+npm run typecheck    # all four tsconfigs (server, client, e2e, tests)
 npm test             # full suite; coverage thresholds enforced by jest.config.js
 npm run build        # tsc + vite + esbuild
 ```

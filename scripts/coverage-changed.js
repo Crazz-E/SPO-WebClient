@@ -64,7 +64,6 @@ function isEligible(file) {
   if (!/^src\/.+\.tsx?$/.test(normalised)) return false;
   if (/\.test\.tsx?$/.test(normalised)) return false;
   if (/\.d\.ts$/.test(normalised)) return false;
-  if (normalised.startsWith('src/__fixtures__/')) return false;
   if (normalised.startsWith('src/mock-server/')) return false;
   return true;
 }

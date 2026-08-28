@@ -116,9 +116,8 @@ d'un coup — le canevas republie le document entier à chaque sauvegarde et pla
 ### 3.5 Les données réelles pour les maquettes
 
 Le skill refuse le *filler* : il faut des valeurs crédibles (noms de bâtiments, montants,
-villes d'Helartia, listes de fournisseurs). Source : les fixtures du projet
-(`src/__fixtures__/*`, lecture seule) et le mock server (`src/mock-server/`) — pas de
-lorem ipsum, pas de chiffres inventés.
+villes d'Helartia, listes de fournisseurs). Source : le mock server (`src/mock-server/`,
+lecture seule) — pas de lorem ipsum, pas de chiffres inventés.
 
 ---
 
