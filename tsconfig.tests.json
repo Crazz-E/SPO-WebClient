@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.client.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["jest", "node"],
+    "lib": ["ES2021", "DOM"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "src/e2e/**/*"]
+}
