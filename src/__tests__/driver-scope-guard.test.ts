@@ -538,3 +538,182 @@ describe('driver-scope-guard — the refusal names the right remedy', () => {
     }
   }
 });
+
+/**
+ * THE CONTINUATION SUGGESTIONS (card #370). The refusal above already names the right REMEDY
+ * CLASS ("spawn the sub-agent", "commit first"); these tests check the refusal also carries a
+ * runnable SHAPE for that remedy, not just the name of it — the gap that produced 9 of the 24
+ * daily refusals the card cites: a driver reading "spawn the sub-agent" with no skeleton to
+ * fill in, or reading "never retry" for `git stash` with no worktree-safe substitute offered.
+ */
+describe('driver-scope-guard — the continuation suggestions (card #370)', () => {
+  const WRAPPER = path.join(ROOT, '.claude', 'hooks', 'driver-scope-guard.sh');
+
+  function refuseBash(command: string, trackedFile?: string): { code: number; err: string } {
+    const tmp = fs.mkdtempSync('/tmp/claude-1000/dsg-cont-');
+    const store = path.join(tmp, 'store');
+    const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@x' };
+    if (trackedFile) {
+      execFileSync(
+        'bash',
+        ['-c', `cd "${tmp}" && git init -q . && echo hi > ${trackedFile} && git add ${trackedFile} && git commit -q -m x`],
+        { env },
+      );
+    } else {
+      execFileSync('bash', ['-c', `cd "${tmp}" && git init -q . && git commit -q --allow-empty -m x`], { env });
+    }
+    const key = execFileSync('bash', ['-c', `printf '%s' "$(readlink -f "${tmp}")" | sha1sum | cut -c1-16`], {
+      encoding: 'utf8',
+    }).trim();
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, `${key}.driving`), `${SID}\n212\n`);
+    try {
+      execFileSync('bash', [WRAPPER], {
+        cwd: tmp,
+        input: JSON.stringify({ session_id: SID, cwd: tmp, tool_name: 'Bash', tool_input: { command } }),
+        encoding: 'utf8',
+        env: { ...process.env, SPO_SESSION_DIR: store },
+      });
+      return { code: 0, err: '' };
+    } catch (e) {
+      const err = e as { status?: number; stderr?: string };
+      return { code: err.status ?? -1, err: err.stderr ?? '' };
+    }
+  }
+
+  /** A file that does NOT exist yet — the "would create" branch, which keeps its own remedy. */
+  function refuseCreate(name: string): { code: number; err: string } {
+    const tmp = fs.mkdtempSync('/tmp/claude-1000/dsg-cont-');
+    const store = path.join(tmp, 'store');
+    const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@x' };
+    execFileSync('bash', ['-c', `cd "${tmp}" && git init -q . && git commit -q --allow-empty -m x`], { env });
+    const key = execFileSync('bash', ['-c', `printf '%s' "$(readlink -f "${tmp}")" | sha1sum | cut -c1-16`], {
+      encoding: 'utf8',
+    }).trim();
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, `${key}.driving`), `${SID}\n212\n`);
+    try {
+      execFileSync('bash', [WRAPPER], {
+        cwd: tmp,
+        input: JSON.stringify({ session_id: SID, cwd: tmp, tool_name: 'Write', tool_input: { file_path: name } }),
+        encoding: 'utf8',
+        env: { ...process.env, SPO_SESSION_DIR: store },
+      });
+      return { code: 0, err: '' };
+    } catch (e) {
+      const err = e as { status?: number; stderr?: string };
+      return { code: err.status ?? -1, err: err.stderr ?? '' };
+    }
+  }
+
+  function refuseTrackedFor(toolName: string, name: string): { code: number; err: string } {
+    const tmp = fs.mkdtempSync('/tmp/claude-1000/dsg-cont-');
+    const store = path.join(tmp, 'store');
+    const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@x' };
+    execFileSync('bash', ['-c', `cd "${tmp}" && git init -q . && echo hi > ${name} && git add ${name} && git commit -q -m x`], { env });
+    const key = execFileSync('bash', ['-c', `printf '%s' "$(readlink -f "${tmp}")" | sha1sum | cut -c1-16`], {
+      encoding: 'utf8',
+    }).trim();
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, `${key}.driving`), `${SID}\n212\n`);
+    try {
+      execFileSync('bash', [WRAPPER], {
+        cwd: tmp,
+        input: JSON.stringify({ session_id: SID, cwd: tmp, tool_name: toolName, tool_input: { file_path: name, notebook_path: name } }),
+        encoding: 'utf8',
+        env: { ...process.env, SPO_SESSION_DIR: store },
+      });
+      return { code: 0, err: '' };
+    } catch (e) {
+      const err = e as { status?: number; stderr?: string };
+      return { code: err.status ?? -1, err: err.stderr ?? '' };
+    }
+  }
+
+  it('Edit refusal on a tracked file includes the execution-sub-agent spawn skeleton', () => {
+    const { err } = refuseTrackedFor('Edit', 'tracked.txt');
+    expect(err).toContain('Agent({');
+    expect(err).toContain('subagent_type');
+    expect(err).toContain('ABSOLUTE PATH INSIDE THIS WORKTREE');
+  });
+
+  it('Write refusal on a tracked file includes the execution-sub-agent spawn skeleton', () => {
+    const { err } = refuseTrackedFor('Write', 'tracked.txt');
+    expect(err).toContain('Agent({');
+  });
+
+  it('NotebookEdit refusal on a tracked file includes the execution-sub-agent spawn skeleton', () => {
+    const { err } = refuseTrackedFor('NotebookEdit', 'tracked.ipynb');
+    expect(err).toContain('Agent({');
+  });
+
+  it('a CREATION (Edit/Write) still gets only the scratchpad remedy, never the spawn skeleton', () => {
+    // The scratchpad remedy already tells the driver the right thing for a new file; adding
+    // the spawn skeleton on top would send it down two contradictory paths at once.
+    const { err } = refuseCreate('pr-body.md');
+    expect(err).toContain('SCRATCHPAD');
+    expect(err).not.toContain('Agent({');
+  });
+
+  it('git stash refusal includes the worktree-safe WIP-commit alternative', () => {
+    const { err } = refuseBash('git stash');
+    expect(err).toContain('Worktree-safe alternative');
+    expect(err).toContain('git add -A && git commit -m');
+  });
+
+  it('git stash pop refusal also includes the WIP-commit alternative', () => {
+    const { err } = refuseBash('git stash pop');
+    expect(err).toContain('git add -A && git commit -m');
+  });
+
+  it('another Bash write verb on a tracked file offers both the spawn skeleton and the WIP-commit form', () => {
+    const { err } = refuseBash('rm tracked.txt', 'tracked.txt');
+    expect(err).toContain('IMPLEMENTATION');
+    expect(err).toContain('Agent(');
+    expect(err).toContain('ENVIRONMENT SETUP OR CLEANUP');
+    expect(err).toContain('git add -A && git commit -m');
+  });
+
+  it('sed -i on a tracked file also offers both continuations', () => {
+    const { err } = refuseBash('sed -i s/a/b/ tracked.txt', 'tracked.txt');
+    expect(err).toContain('IMPLEMENTATION');
+    expect(err).toContain('git add -A && git commit -m');
+  });
+
+  it('a legacy-tree read still gets only the delphi-archaeologist remedy, not the Bash continuation', () => {
+    // A REAL git worktree this time (not the bare fake-.git-file shape the legacy-tree describe
+    // block above uses) — this test drives the .sh WRAPPER, which needs `git rev-parse` to
+    // actually succeed from inside `worktree`, unlike the bare-.js tests that set SPO_TOP by hand.
+    const tmp = fs.mkdtempSync('/tmp/claude-1000/dsg-cont-legacy-');
+    const store = path.join(tmp, 'store');
+    const mainRepo = path.join(tmp, 'main-repo');
+    const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@x', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@x' };
+    execFileSync('bash', ['-c', `git init -q "${mainRepo}" && git -C "${mainRepo}" commit -q --allow-empty -m x`], { env });
+    const worktree = path.join(mainRepo, '.claude', 'worktrees', 'fake-wt');
+    execFileSync('bash', ['-c', `git -C "${mainRepo}" worktree add -q -b branch-fake "${worktree}"`], { env });
+    fs.mkdirSync(path.join(tmp, 'SPO-Original'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'SPO-Original', 'secret.pas'), 'unit Secret;\n');
+    const key = execFileSync('bash', ['-c', `printf '%s' "$(readlink -f "${worktree}")" | sha1sum | cut -c1-16`], {
+      encoding: 'utf8',
+    }).trim();
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, `${key}.driving`), `${SID}\n212\n`);
+    const target = path.join(tmp, 'SPO-Original', 'secret.pas');
+    let err = '';
+    try {
+      execFileSync('bash', [WRAPPER], {
+        cwd: worktree,
+        input: JSON.stringify({ session_id: SID, cwd: worktree, tool_name: 'Bash', tool_input: { command: `grep -a foo ${target}` } }),
+        encoding: 'utf8',
+        // The wrapper defaults SPO_LEGACY_TREES to the REAL ~/SPO-Original:~/SPO-ASP when unset
+        // (driver-scope-guard.sh's own LEGACY_TREES fallback) — point it at this fixture's own
+        // sibling instead, the same override shape the guard's own env contract already offers.
+        env: { ...process.env, SPO_SESSION_DIR: store, SPO_LEGACY_TREES: path.join(tmp, 'SPO-Original') },
+      });
+    } catch (e) {
+      err = (e as { stderr?: string }).stderr ?? '';
+    }
+    expect(err).toContain('delphi-archaeologist');
+    expect(err).not.toContain('git add -A && git commit -m');
+  });
+});
