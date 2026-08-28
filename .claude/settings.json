@@ -171,11 +171,6 @@
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/grep-guard.sh",
-            "timeout": 10
-          },
-          {
-            "type": "command",
             "command": "bash .claude/hooks/poll-loop-guard.sh",
             "timeout": 10
           },
