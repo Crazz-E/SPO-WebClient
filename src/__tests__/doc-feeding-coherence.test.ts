@@ -87,6 +87,21 @@ describe('the feeding rule and § 0.5 must not contradict each other', () => {
     expect(section).toMatch(/card-reviewer/);
   });
 
+  // Regression, 2026-08-28 (popup 3): § 0.5 said "file the issue (gh issue create...)" with no
+  // --body-file instruction, so a session reconstructed the draft's markdown body inline as
+  // `--body "..."` — multi-line quoted text the harness stops to ask about, even though
+  // `gh issue create` itself is allowlisted. The fix points § 0.5 at the file-not-substitution
+  // convention the intro already states; this pins that it stays pointed there.
+  it('§ 0.5 files through a file, never by reconstructing the body inline', () => {
+    const section = command.slice(command.indexOf('## 0.5 ·'), command.indexOf('## 1 ·'));
+    expect(section).toContain('--body-file');
+    // Distinguishes the actual instruction from the prose warning against it (which itself
+    // quotes `--body "…"` as the anti-pattern) — only the executable shape, the command name
+    // immediately followed by an inline --body, would mean the fix regressed.
+    expect(section).not.toMatch(/gh issue create[^\n]*--body "/);
+    expect(section).toContain('Hook hardening: <signature>');
+  });
+
   it('the feeding rule lists that filing among its sanctioned surfaces', () => {
     const rule = rulebook.slice(rulebook.indexOf('## Feeding rule'));
     const listEnd = rule.indexOf('and by nothing');

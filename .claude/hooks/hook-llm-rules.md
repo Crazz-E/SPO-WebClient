@@ -80,7 +80,8 @@ Output ONLY the structured JSON your caller's schema demands. No prose outside i
 `npm run board:wait`, `npm run bench:nightly`, `npm run dev`, `npm run dev:local`,
 `npm run finish`. Multi-line text (a commit message, a PR body, a long comment) goes through a
 file in the scratchpad, never shell substitution: `git commit -F <file>`,
-`gh pr create --body-file <file>`, `gh issue comment --body-file <file>`.
+`gh pr create --body-file <file>`, `gh issue create --body-file <file>`,
+`gh issue comment --body-file <file>`.
 
 ## `rule_slug` and `worth_hardening`
 

@@ -137,7 +137,18 @@ function statements(command) {
 
 /**
  * Detects a verdict command in a non-final position within a statement.
- * Verdict commands in non-final positions (before semicolons) lose their exit code.
+ * Verdict commands in non-final positions (before semicolons) lose their exit code —
+ * UNLESS the very next `;`-command reads `$?`, which is precisely the sanctioned reporting
+ * form verdict-pipe-guard.sh's own pipe-branch refusal renders
+ * (`cmd > log 2>&1; echo "EXIT=$?"; tail …`, CLAUDE.md § Commands). Before this exemption
+ * existed, the guard refused its own suggested form and funneled every session into
+ * `${PIPESTATUS[0]}` instead (the guard's only other escape hatch) — which is not needed for
+ * a `;` chain (PIPESTATUS exists to read a NON-final stage of a real pipe) and which a
+ * Claude Code harness heuristic separately stops to ask about ("Contains expansion",
+ * task/popup 2026-08-28). One command later than the exemption and `$?` is the reporter's own
+ * status, not the verdict's — still refused, correctly. A verdict at the head of a PIPE is
+ * untouched by this exemption: the caller's separate pipe check still runs when this function
+ * returns null.
  *
  * Returns null if no verdict command found in non-final position, otherwise returns
  * an object { command: string, position: 'first' | 'middle' }.
@@ -163,6 +174,7 @@ function verdictInNonFinalPosition(statement, verdictRegexes) {
 
     const isVerdict = !isQuery(cmd) && verdictRegexes.some(re => re.test(cmd));
     if (isVerdict) {
+      if (/\$\?/.test(commands[i + 1])) continue; // the very next command reads the exit code
       const position = i === 0 ? 'first' : 'middle';
       return { command: cmd.slice(0, 120), position, index: i };
     }

@@ -20,8 +20,9 @@
 # Refused: a pipeline whose FIRST stage is a command whose exit code IS the verdict —
 # npm test / typecheck / lint / build / gate, jest, tsc, eslint, the gate scripts, the E2E
 # runner. Allowed: the same pipeline under `set -o pipefail`, or one that reads PIPESTATUS
-# itself. Either says the author knows where the status comes from, which is the whole
-# subject; there is nothing left to protect them from.
+# itself; or a `;` chain whose very next command reads `$?` — bash-command-parse.js's
+# verdictInNonFinalPosition() exempts that case. Either says the author knows where the
+# status comes from, which is the whole subject; there is nothing left to protect them from.
 #
 # The sanctioned form separates the two questions instead of nesting them — a FOREGROUND
 # form:
@@ -224,9 +225,12 @@ case "${verdict:-ok}" in
     echo "(use your scratchpad directory for the log). The status comes from the run, the" >&2
     echo "text from the file — no filter in between, no stream dropped." >&2
     echo "" >&2
-    echo "If you want to check the verdict without separating, read PIPESTATUS:" >&2
+    echo "If you want the chain anyway, read the exit code in the VERY NEXT command:" >&2
     echo "" >&2
-    echo "  ${culprit}; echo \"EXIT=\${PIPESTATUS[0]}\"" >&2
+    echo "  ${culprit}; echo \"EXIT=\$?\"" >&2
+    echo "" >&2
+    echo "(plain \$? — the \${PIPESTATUS[0]} form is for reading a non-final stage of a real" >&2
+    echo "pipeline, is never needed for a ; chain, and the harness stops to ask about \${…}.)" >&2
     if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
     exit 2
     ;;

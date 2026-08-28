@@ -106,6 +106,13 @@ describe('verdict-pipe-guard.sh — pipe detection and suggestions', () => {
     expect(result.code).toBe(2);
     expect(result.err).toContain('npm run verdict -- lint');
   });
+
+  // Regression, 2026-08-28: the guard's own pipe-branch message SUGGESTS this exact form —
+  // it must pass the guard, not be refused by the (separate) non-final-position check.
+  it('allows the guard\'s own suggested foreground-separation form', () => {
+    const result = run('npm test > /tmp/x.log 2>&1; echo "EXIT=$?"; tail -40 /tmp/x.log');
+    expect(result.code).toBe(0);
+  });
 });
 
 describe('verdict-pipe-guard.sh — refusal ledger escalation (card #369)', () => {

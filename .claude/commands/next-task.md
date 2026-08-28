@@ -34,9 +34,9 @@ quota, and `npm run pr:wait -- <n>` on a pull request leaving the merge queue. C
 **Multi-line text goes through a file, never through substitution.** A commit message, a PR
 body or a long comment written as `git commit -m "$(cat <<'EOF' …)"` is compound shell and
 stops to ask. Write the text to a file, then `git commit -F <file>`,
-`gh pr create --body-file <file>` or `gh issue comment --body-file <file>` — all three are
-plain prefix-matched calls that pass. Same reasoning as the aliases: the content belongs in
-a file, never in the command line.
+`gh pr create --body-file <file>`, `gh issue create --body-file <file>` or
+`gh issue comment --body-file <file>` — all four are plain prefix-matched calls that pass.
+Same reasoning as the aliases: the content belongs in a file, never in the command line.
 
 **And that file goes in the scratchpad, OUTSIDE the worktree** — never beside the code. A
 commit message or a PR body written inside the tree dirties it, and a dirty tree is refused
@@ -97,10 +97,18 @@ Exit **1** — no candidate. Proceed to § 1.
 Exit **0** — one candidate was drafted, at the path the last printed line named
 (`draft: <path>`). Read it, then spawn `card-reviewer` with its content verbatim — the same
 mechanics § 5 already uses to file a card: title, body, `Category`, `Size`, `Area` exactly as
-the draft states them, nothing added. On `FILE` or `FILE AMENDED`, file the issue
-(`gh issue create`, the fields and labels the draft names, the verdict posted verbatim as the
-first comment — kanban-workflow.md § The card review). On `DO NOT FILE`, file nothing and say
-nothing of it.
+the draft states them, nothing added. On `FILE` or `FILE AMENDED`, file it **through files,
+never inline** — the intro's rule ("Multi-line text goes through a file") applies to this body
+like any other, and kanban-workflow.md § gh CLI recipes is the form, verbatim: write the
+reviewed body (the draft's, or the reviewer's amended one) to a scratchpad file, then
+`gh issue create --title "Hook hardening: <signature>" --body-file <that file>
+--label "cat:feature" --label "size:S"`, then the verdict verbatim as the first comment with
+`gh issue comment <n> --body-file <verdict file>` (kanban-workflow.md § The card review). The
+title is the draft's own first line; the signature is the value `--take` printed on its
+`candidate:` line — nothing is re-parsed from markdown. A body pasted inline as `--body "…"`
+is multi-line quoted text on the command line: the harness stops to ask about it even when
+the `gh issue create` prefix is allowlisted (seen live, 2026-08-28). On `DO NOT FILE`, file
+nothing and say nothing of it.
 
 Either way, close the loop before moving on — the signature is the value `--take` printed on
 its `candidate:` line:

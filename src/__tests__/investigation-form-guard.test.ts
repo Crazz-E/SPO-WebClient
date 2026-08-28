@@ -443,4 +443,111 @@ describe('verdict-pipe-guard.sh — non-final positions (exit code lost before s
     expect(err).toContain('BLOCKED');
     expect(err).toContain('non-final position');
   });
+
+  // Regression, 2026-08-28 (popup 4): the guard's own pipe-branch refusal RECOMMENDS
+  // `cmd > log 2>&1; echo "EXIT=$?"; tail …`, but the nonfinal check refused that exact form —
+  // the guard blocked its own suggestion — and funneled every session into `${PIPESTATUS[0]}`,
+  // the one other escape hatch, which a Claude Code harness heuristic ("Contains expansion")
+  // separately stops to ask a human about. Fixed by exempting a verdict whose immediately next
+  // `;`-command reads `$?`.
+  describe('regression: a verdict immediately followed by an `$?` read is not a laundering', () => {
+    it('allows the guard\'s own suggested reporting form', () => {
+      const out = execFileSync('bash', [PIPE_WRAPPER], {
+        cwd: ROOT,
+        input: JSON.stringify({
+          tool_name: 'Bash',
+          tool_input: { command: 'npm test > /tmp/x.log 2>&1; echo "EXIT=$?"; tail -40 /tmp/x.log' },
+        }),
+        encoding: 'utf8',
+        env: process.env,
+      });
+      expect(out).toBe('');
+    });
+
+    it('allows the CLAUDE.md-documented typecheck form (haiku-permission-analysis.md D-02)', () => {
+      const out = execFileSync('bash', [PIPE_WRAPPER], {
+        cwd: ROOT,
+        input: JSON.stringify({
+          tool_name: 'Bash',
+          tool_input: { command: 'npm run typecheck > /tmp/tc.log 2>&1; echo "EXIT=$?"; cat /tmp/tc.log' },
+        }),
+        encoding: 'utf8',
+        env: process.env,
+      });
+      expect(out).toBe('');
+    });
+
+    it('allows a bare verdict immediately followed by `$?`', () => {
+      const out = execFileSync('bash', [PIPE_WRAPPER], {
+        cwd: ROOT,
+        input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'npm test; echo "EXIT=$?"' } }),
+        encoding: 'utf8',
+        env: process.env,
+      });
+      expect(out).toBe('');
+    });
+
+    it('still blocks when `$?` is read one command too late', () => {
+      let code = 0;
+      let err = '';
+      try {
+        execFileSync('bash', [PIPE_WRAPPER], {
+          cwd: ROOT,
+          input: JSON.stringify({
+            tool_name: 'Bash',
+            tool_input: { command: 'npm test; echo done; echo "EXIT=$?"' },
+          }),
+          encoding: 'utf8',
+          env: process.env,
+        });
+      } catch (e) {
+        const failure = e as { status?: number; stderr?: string };
+        code = failure.status ?? -1;
+        err = failure.stderr ?? '';
+      }
+      expect(code).toBe(2);
+      expect(err).toContain('non-final position');
+    });
+
+    it('a pipe into the exemption is still blocked, with the PIPE message, not the nonfinal one', () => {
+      let code = 0;
+      let err = '';
+      try {
+        execFileSync('bash', [PIPE_WRAPPER], {
+          cwd: ROOT,
+          input: JSON.stringify({
+            tool_name: 'Bash',
+            tool_input: { command: 'npm test | tail -20; echo "EXIT=$?"' },
+          }),
+          encoding: 'utf8',
+          env: process.env,
+        });
+      } catch (e) {
+        const failure = e as { status?: number; stderr?: string };
+        code = failure.status ?? -1;
+        err = failure.stderr ?? '';
+      }
+      expect(code).toBe(2);
+      expect(err).toContain('pipes a command');
+    });
+
+    it('the nonfinal refusal now suggests plain $?, never ${PIPESTATUS[0]}', () => {
+      let err = '';
+      try {
+        execFileSync('bash', [PIPE_WRAPPER], {
+          cwd: ROOT,
+          input: JSON.stringify({ tool_name: 'Bash', tool_input: { command: 'npm test; true' } }),
+          encoding: 'utf8',
+          env: process.env,
+        });
+      } catch (e) {
+        const failure = e as { status?: number; stderr?: string };
+        err = failure.stderr ?? '';
+      }
+      expect(err).toContain('EXIT=$?');
+      // The message keeps one explanatory mention of PIPESTATUS (why it isn't needed here) —
+      // what must not survive is it being the SUGGESTED corrected form itself.
+      expect(err).not.toContain('echo "EXIT=${PIPESTATUS[0]}"');
+    });
+  });
 });
