@@ -72,6 +72,84 @@ verdict="$(printf '%s' "$payload" | SPO_TOP="$top" SPO_DRIVER_SID="$driver_sid" 
 # guard sends a driver down the wrong path. Editing a tracked file is implementation -> the
 # sub-agent. Creating a new file is usually the driver writing its OWN text — a commit message,
 # a PR body — which is not implementation at all: it just belongs outside the tree.
+tool=""
+case "$payload" in
+  *'"tool_name":"Edit"'*|*'"tool_name": "Edit"'*) tool="Edit" ;;
+  *'"tool_name":"Write"'*|*'"tool_name": "Write"'*) tool="Write" ;;
+  *'"tool_name":"NotebookEdit"'*|*'"tool_name": "NotebookEdit"'*) tool="NotebookEdit" ;;
+  *) tool="Bash" ;;
+esac
+
+# THE CONTINUATION. Card #370: 9 of the 24 daily refusals stopped here — the driver read
+# "spawn the sub-agent" and had no runnable shape for what that spawn actually looks like, or
+# read "never retry the edit" for a `git stash` and had no worktree-safe way to get the same
+# clean-tree effect. Three shapes, chosen by what was refused:
+#   - Edit/Write/NotebookEdit on an EXISTING tracked file (not a creation — that already gets
+#     its own scratchpad remedy above): the Agent-tool skeleton for the execution sub-agent.
+#   - `git stash`: stash has no cross-worktree meaning worth fighting for — a trivial WIP
+#     commit gets the same "clean tree" effect and is exactly as easy to undo.
+#   - every other Bash write verb (`sed -i`, `rm`, `mv`, `chmod`, `git rm`, `git restore`, …):
+#     both shapes, since the driver — not this guard — knows whether the command was
+#     implementation or housekeeping.
+continuation=""
+case "$tool" in
+  Edit|Write|NotebookEdit)
+    case "$verdict" in
+      "would create"*) ;; # the scratchpad remedy above already answers this one
+      *)
+        continuation="
+If the driver needs this change, spawn the execution sub-agent rather than making it here.
+Skeleton:
+
+  Agent({
+    description: \"Edit <short description>\",
+    subagent_type: \"general-purpose\",
+    prompt: \"Edit the following file:
+
+file: <ABSOLUTE PATH INSIDE THIS WORKTREE>
+change: <one-line description>
+
+No explanation, no preamble. Return the diff only.\"
+  })
+
+Fill in the real absolute path (this worktree, not the main checkout) and the one-line change —
+never paste the file's contents into the prompt; the sub-agent reads it itself.
+"
+        ;;
+    esac
+    ;;
+  Bash)
+    case "$verdict" in
+      "reads the legacy tree"*) ;; # the delphi-archaeologist remedy above already answers this one
+      *"git stash"*)
+        continuation="
+Worktree-safe alternative (CLAUDE.md § Git — each attempt is its own commit, so this costs
+nothing to undo):
+
+  git add -A && git commit -m \"wip: <why>\"
+
+Retry the stash (or whatever needed the working tree clean) on this branch once it is safe —
+there is no shared stash across worktrees to fight over, and the commit is trivial to
+soft-reset later if it should not have existed.
+"
+        ;;
+      *)
+        continuation="
+Two ways forward, depending on what this command was for:
+  - If this is IMPLEMENTATION (the command was going to change tracked source), spawn the
+    execution sub-agent instead — same Agent-tool skeleton as the Edit/Write case:
+      Agent({ description: \"...\", subagent_type: \"general-purpose\",
+              prompt: \"Edit the following file:\\n\\nfile: <ABSOLUTE PATH INSIDE THIS WORKTREE>\\nchange: <one-line description>\\n\\nNo explanation, no preamble. Return the diff only.\" })
+  - If this is ENVIRONMENT SETUP OR CLEANUP (not a content change — e.g. clearing a stale
+    lock, restoring a mode bit), commit the tree first so the change is never lost:
+      git add -A && git commit -m \"wip: <why>\"
+    then retry the same command on this branch.
+"
+        ;;
+    esac
+    ;;
+esac
+
 remedy=""
 case "$verdict" in
   "would create"*)
@@ -106,7 +184,7 @@ Its writes pass this guard unblocked — it is only the driver's own hand that i
 
 Do NOT retry the edit, and do NOT reach for another shell verb: every write-shaped one is
 refused the same way. Spawn the sub-agent.
-
+${continuation}
 Human override, on explicit instruction only:
   rm ${marker}
 (the next \`npm run board:take\` re-arms it)
