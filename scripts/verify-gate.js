@@ -143,7 +143,51 @@ function diffText() {
   return [committed, working, untracked].filter(Boolean).join('\n');
 }
 
+function captureStage(label, command) {
+  const BENCH_DIR = process.env.SPO_BENCH_DIR || `${process.env.HOME}/.spo-bench`;
+  const LOG_DIR = `${BENCH_DIR}/logs`;
+
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+
+  // ISO timestamp: YYYYMMDDTHHMMSS
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const STAMP = `${year}${month}${day}T${hours}${minutes}${seconds}`;
+
+  const LOG = path.join(LOG_DIR, `gate-${label}-${STAMP}.log`);
+
+  try {
+    const output = execSync(command, { encoding: 'utf8', stdio: 'pipe' });
+    fs.writeFileSync(LOG, output, 'utf8');
+    process.stdout.write(`\n=== ${label} PASS\n`);
+    return { stage: label, status: 'PASS' };
+  } catch (err) {
+    // Capture whatever output we got
+    const output = (err.stdout || '') + (err.stderr || '');
+    fs.writeFileSync(LOG, output, 'utf8');
+
+    // Tail the log to bounded output
+    const tail = execSync(`tail -n 40 "${LOG}"`, { encoding: 'utf8' }).trim();
+    process.stdout.write(`\n=== ${label} FAIL\n`);
+    if (tail) process.stdout.write(tail + '\n');
+    process.stdout.write(`LOG=${LOG}\n`);
+
+    return { stage: label, status: 'FAIL', detail: err.message };
+  }
+}
+
 function runStage(label, command) {
+  // Static stages get output capping to avoid injecting unbounded text
+  if (['typecheck', 'lint', 'unit + component tests'].includes(label)) {
+    return captureStage(label, command);
+  }
+
+  // build:e2e streams output (it's diagnostic, runs after static checks pass)
   process.stdout.write(`\n=== ${label}\n`);
   try {
     execSync(command, { stdio: 'inherit' });

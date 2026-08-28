@@ -30,15 +30,22 @@ if [ "$STOP_ACTIVE" = "1" ]; then
   exit 0
 fi
 
-OUTPUT=$(npm run --silent typecheck 2>&1)
+BENCH_DIR="${SPO_BENCH_DIR:-$HOME/.spo-bench}"
+LOG_DIR="$BENCH_DIR/logs"
+mkdir -p "$LOG_DIR"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+LOG="$LOG_DIR/sanctuarize-typecheck-$STAMP-$$.log"
+
+npm run --silent typecheck >"$LOG" 2>&1
 STATUS=$?
 
 rm -f "$FLAG"
 
 if [ $STATUS -ne 0 ]; then
   echo "Sanctuarization failed — typecheck errors introduced this turn:" >&2
-  echo "$OUTPUT" >&2
+  tail -n 40 "$LOG" >&2
   echo "" >&2
+  echo "LOG=$LOG" >&2
   echo "Fix these before ending the turn. Remaining manual steps: npm test, npm run build." >&2
   exit 2
 fi
