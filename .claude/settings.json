@@ -220,6 +220,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/permission-broker.sh",
+            "timeout": 30
+          }
+        ]
       }
     ]
   }

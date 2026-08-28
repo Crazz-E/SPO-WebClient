@@ -305,6 +305,7 @@ own. So does `out=$(npm test)`, which keeps the text and drops the number. Full 
 | `verdict-pipe-guard.sh` | PreToolUse (Bash) | Blocks piping a command whose exit code **is** the verdict (`npm test\|tail` reports tail, not Jest). Escape: `set -o pipefail` or a `PIPESTATUS` read |
 | `poll-loop-guard.sh` | PreToolUse (Bash) | Blocks the two ways a verdict gets lost while waiting: a trailing `&` on a verdict command (the shell reports the fork — always 0), and a hand-rolled wait loop (`until`/`while`/`for` + `sleep`) on a bench job or a GitHub read. Names `run_in_background`, `npm run bench:wait` or `npm run pr:wait` |
 | `driver-scope-guard.sh` | PreToolUse (Bash\|Edit\|Write\|NotebookEdit) | Refuses the **driver of a claimed card** writing to a tracked file itself — `Edit`/`Write`, and the Bash verbs that reach the tree without them (`sed -i`, `>`, `rm`, `chmod`, `git rm`, `npm run format`). Armed by a verified `board:take`, inert otherwise; the execution sub-agent passes (`agent_id`) |
+| `permission-broker.sh` | PreToolUse (all tools) | **Answers what the nine guards leave undecided**, so a session is never stopped waiting for a human. Catalogue (`.claude/permissions/rules.json`) → machine-local cache → the `permission-arbiter` agent (one headless Haiku call, ~7 s, no tools). Refuses in the same shape as the guards, and an allow can carry the corrected form. Cannot widen: `deny` beats it, `permissions.deny` outranks it. [doc/permission-policy.md](doc/permission-policy.md) |
 | `session-heartbeat.sh` | *sourced by the others* | Stamps `~/.spo-bench/sessions/<key>.alive` so `finish` never reaps a worktree a session is working in |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.
@@ -372,7 +373,7 @@ with `node .claude/generate-skills-manifest.js` (`--check` in CI fails if stale)
 (MobileShell/BottomNav/BottomSheet). The 20 installed skills are listed in the manifest.
 
 Slash **commands** live in `.claude/commands/`: `/next-task`, `/gate`, `/commit-push`,
-`/coverage-check`, `/e2e`, `/release-notes`, `/triage-report`.
+`/coverage-check`, `/e2e`, `/release-notes`, `/triage-report`, `/permission-promote`.
 
 **Sub-agents** (`.claude/agents/`), read-only:
 
@@ -381,6 +382,7 @@ Slash **commands** live in `.claude/commands/`: `/next-task`, `/gate`, `/commit-
 | `security-reviewer` | Opus | WebSocket auth, RDO parsing, session management, OWASP |
 | `performance-analyzer` | Opus | Renderer bottlenecks, chunk caching, frame budget |
 | `card-reviewer` | Fable | The neutral reader of a draft backlog card, before it is filed |
+| `permission-arbiter` | Haiku | Called by `permission-broker.sh`, never by hand — one tool call no rule covers, one JSON verdict, no tools |
 | `change-validator` | Fable | Read-only semantic review of a finished change — adequacy to the card's criterion and coherence of integration — after a gate PASS, before the merge |
 
 ## Delegation strategy
