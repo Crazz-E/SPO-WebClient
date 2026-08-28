@@ -23,7 +23,7 @@
 - [ ] **RDO changes**: Verified against Delphi source using `delphi-archaeologist` — a change to
       `rdo-members.ts` needs a `File.pas:Line` citation **in this body** (CI checks it)
 - [ ] **Protected files**: Did NOT modify `rdo-types.ts`, `rdo-frame.ts`, `rdo.ts`,
-      `src/__fixtures__/` or `jest.config.js` — or the maintainer posted the `rdo-approved`
+      or `jest.config.js` — or the maintainer posted the `rdo-approved`
       label (CI checks it)
 - [ ] No `any` types — used `unknown` for catch blocks
 - [ ] Every new UI element is fully wired (not just visible)

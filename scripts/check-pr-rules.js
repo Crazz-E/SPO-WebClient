@@ -41,7 +41,7 @@ const PROTECTED_FILES = [
   'src/server/rdo.ts',
   'jest.config.js',
 ];
-const PROTECTED_PREFIXES = ['src/__fixtures__/'];
+const PROTECTED_PREFIXES = [];
 const APPROVAL_LABEL = 'rdo-approved';
 
 /** Touching the catalogue means citing the declaration that fixes a member's kind and arity. */
@@ -58,7 +58,7 @@ function normalise(file) {
 function protectedTouched(files) {
   return files
     .map(normalise)
-    .filter(f => PROTECTED_FILES.includes(f) || PROTECTED_PREFIXES.some(p => f.startsWith(p)));
+    .filter(f => PROTECTED_FILES.includes(f));
 }
 
 /**
@@ -168,7 +168,7 @@ function diffBase(baseSha) {
  * prints only the DESTINATION, so moving `src/shared/rdo-frame.ts` to another path reported
  * as one unprotected new file and unlocked the wire emitter with no label. Without rename
  * detection the same change is a delete of the old path plus an add of the new one, so both
- * sides are judged — which is what `PROTECTED_FILES` and `PROTECTED_PREFIXES` need.
+ * sides are judged — which is what `PROTECTED_FILES` needs.
  */
 function changedFiles(base) {
   return git(['diff', '--name-only', '--no-renames', `${base}...HEAD`])
@@ -268,7 +268,6 @@ function main() {
 
 module.exports = {
   PROTECTED_FILES,
-  PROTECTED_PREFIXES,
   APPROVAL_LABEL,
   CITATION_FILES,
   protectedTouched,

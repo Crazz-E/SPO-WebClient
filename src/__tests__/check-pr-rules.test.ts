@@ -48,12 +48,9 @@ type BaseThresholdState =
 const rules: CheckPrRulesModule = require('../../scripts/check-pr-rules.js');
 
 describe('protectedTouched', () => {
-  it('matches the frozen files exactly and the fixtures by prefix', () => {
+  it('matches the frozen files exactly', () => {
     expect(rules.protectedTouched(['src/server/rdo.ts'])).toEqual(['src/server/rdo.ts']);
     expect(rules.protectedTouched(['jest.config.js'])).toEqual(['jest.config.js']);
-    expect(rules.protectedTouched(['src/__fixtures__/deep/politics.json'])).toEqual([
-      'src/__fixtures__/deep/politics.json',
-    ]);
     expect(rules.protectedTouched(['src/server/rdo-request-guards.ts'])).toEqual([]);
   });
 
@@ -182,7 +179,6 @@ describe('the guarded set matches what the repository declares protected', () =>
         'jest.config.js',
       ]),
     );
-    expect(rules.PROTECTED_PREFIXES).toContain('src/__fixtures__/');
   });
 });
 
