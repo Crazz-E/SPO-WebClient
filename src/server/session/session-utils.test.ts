@@ -119,13 +119,33 @@ describe('parseFavoritesResponse', () => {
     it('accepts zero coordinates', () => {
       const raw = favEntry(1, 1, 'Origin', 'Origin,0,0,0');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 1, name: 'Origin', x: 0, y: 0, path: '1' }]);
+      expect(result).toEqual([{ id: 1, kind: 1, name: 'Origin', x: 0, y: 0, path: '1' }]);
     });
 
     it('accepts negative coordinates', () => {
       const raw = favEntry(5, 1, 'Neg', 'Neg,-10,-20,0');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 5, name: 'Neg', x: -10, y: -20, path: '5' }]);
+      expect(result).toEqual([{ id: 5, kind: 1, name: 'Neg', x: -10, y: -20, path: '5' }]);
+    });
+  });
+
+  describe('nested path composition', () => {
+    it('composes path correctly for items at root', () => {
+      const raw = favEntry(5, 1, 'Item', 'Item,10,20,0');
+      const result = parseFavoritesResponse(raw, '');
+      expect(result[0].path).toBe('5');
+    });
+
+    it('composes path correctly for items in a folder', () => {
+      const raw = favEntry(5, 1, 'Item', 'Item,10,20,0');
+      const result = parseFavoritesResponse(raw, '123');
+      expect(result[0].path).toBe('123/5');
+    });
+
+    it('composes path correctly for deeply nested items', () => {
+      const raw = favEntry(5, 1, 'Item', 'Item,10,20,0');
+      const result = parseFavoritesResponse(raw, '1/2/3');
+      expect(result[0].path).toBe('1/2/3/5');
     });
   });
 

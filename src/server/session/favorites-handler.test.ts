@@ -21,6 +21,7 @@ import {
   addFavorite,
   deleteFavorite,
   renameFavorite,
+  moveFavorite,
 } from './favorites-handler';
 import { makeSessionCtx, FAKE_CONTEXT_IDS } from '../__tests__/session/fake-session-context';
 import { RdoValue } from '../../shared/rdo-types';
