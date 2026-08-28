@@ -70,18 +70,38 @@ mechanically: neither source file ever emits `"permissionDecision"` as an actual
 user's `~/.claude/settings.json` — into one flat pattern list (prefix match for a `*`-suffixed
 entry, exact match otherwise). The command is split into top-level statements with
 `bash-command-parse.js`'s `statements()` (heredoc- and quote-aware, shared with
-`verdict-pipe-guard.sh` and `investigation-form-guard.js`), each statement's leading `VAR=value`
-assignments stripped, and **every statement must match some pattern** for the command to be
-`COVERED`.
+`verdict-pipe-guard.sh` and `investigation-form-guard.js`), each statement further split into
+pipe/background stages (`|`, `|&`, a lone `&` that is not part of a `2>&1`/`&>` redirect —
+`statements()` has already consumed `&&`/`||`, so every `|` or lone `&` left inside a statement
+is real), each stage's leading `VAR=value` assignments stripped, and **every resulting stage
+must match some pattern** for the command to be `COVERED`. A quoted `$(...)` or backtick
+substitution that survives splitting is never treated as covered — it executes under bash but
+this layer has no way to vet what is inside it.
 
-The bias is deliberately asymmetric: a false `COVERED` can only happen if the local read
-under-approximates the exact files the harness itself reads — structurally excluded by
-construction, not just unlikely — and would cost a human a prompt, visibly, immediately
-fixable. A false `UNCOVERED` costs one Haiku call and, almost always, a deny whose corrected
-form is the already-sanctioned equivalent — one extra turn, never a human. `permission_mode:
-"bypassPermissions"` and the payload-borne `SPO_HOOK_LLM_OVERRIDE=` escape (same doctrine as
-`SPO_ITEM_LIST_OVERRIDE`, `SPO_BENCH_PORT_OVERRIDE`: a session must not type it) both short
--circuit to `COVERED` before any pattern matching happens.
+The bias is deliberately asymmetric, and a false `COVERED` is possible two ways, only one of
+which is excluded by construction: the local pattern *list* under-approximating what the
+harness reads (excluded — the same files, always) versus this file's own *splitting* being less
+operator-aware than the harness's real parser (not excluded — a live incident, task #369,
+2026-08-28: an early version fast-path-matched `Bash(ls *)` against the raw string
+`"ls ... | head -20"` before any splitting ran, so a real popup reached the maintainer for a
+command this layer was built to intercept; fixed by removing that fast path and adding the
+pipe/background split above). A false `UNCOVERED`, by contrast, costs one Haiku call and,
+almost always, a deny whose corrected form is the already-sanctioned equivalent — one extra
+turn, never a human. `permission_mode: "bypassPermissions"` and the payload-borne
+`SPO_HOOK_LLM_OVERRIDE=` escape (same doctrine as `SPO_ITEM_LIST_OVERRIDE`,
+`SPO_BENCH_PORT_OVERRIDE`: a session must not type it) both short-circuit to `COVERED` before
+any pattern matching happens.
+
+**Known remaining gaps, deferred rather than guessed at** — each is a claim about the harness's
+own proprietary matching semantics that only a live probe (a popup, caught by the journal) can
+settle, and none is implicated by the task #369 incident: whether the harness prefix-matches a
+leading `VAR=value` assignment the same way this layer strips and re-checks it; whether a
+trailing bare `&` (backgrounding) itself needs permission the way the reduced covered stage
+does; whether a write through a redirect target (`echo x > f`) is gated independently of the
+verb producing it (backstopped regardless by the write-path guards, `driver-scope`/
+`worktree-scope`); and whether a heredoc-carrying command is parsed identically by the harness.
+A wrong guess in any of these would either add unmeasured Haiku noise or contradict a pinned
+test — and each failure mode is self-announcing, the same way task #369 was.
 
 ## The classifier call
 

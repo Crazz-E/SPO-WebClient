@@ -287,6 +287,23 @@ describe('uncovered-command-guard.sh — the classifier fires on an uncovered co
       fs.rmSync(witness, { force: true });
     }
   });
+
+  it('regression (task #369): a pipe onto an allowlisted command still reaches the classifier', () => {
+    // git status is allowlisted (FIXTURE_SETTINGS); head is not. Before the fix, the whole
+    // command matched `Bash(git status*)` as a raw-string prefix and never fired at all.
+    const witness = path.join(getTempDir(), `witness-${process.pid}-6`);
+    fs.rmSync(witness, { force: true });
+    const repo = makeRepo(needsFormClaude(witness));
+    try {
+      const { code, stderr } = run(repo, { command: 'git status | head -20' });
+      expect(code).toBe(2);
+      expect(fs.existsSync(witness)).toBe(true); // the classifier actually fired this time
+      expect(stderr).toContain('curl is not allowlisted'); // (the fixture's canned answer)
+    } finally {
+      repo.cleanup();
+      fs.rmSync(witness, { force: true });
+    }
+  });
 });
 
 describe('uncovered-command-guard.sh — fails closed, never hangs, never allows silently', () => {
@@ -486,5 +503,145 @@ describe('uncovered-command-guard.js — trigger, unit-level', () => {
       encoding: 'utf8',
     }).trim();
     expect(out).toBe('COVERED');
+  });
+
+  // Regression cases for task #369 (2026-08-28): a "whole-command fast path" matched
+  // `Bash(ls *)` against the ENTIRE raw string "ls -la ... | head -20" before any splitting
+  // ran, so a real popup reached the maintainer for a command this guard was supposed to
+  // intercept. Fixed by removing the fast path and splitting each statement into pipe/
+  // background stages, every one of which must independently match.
+  describe('regression: pipe and background stages (task #369)', () => {
+    it('the reported incident: a covered head, uncovered pipe stage', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(ls *)'] } });
+        const out = trigger(
+          { tool_input: { command: 'ls -la ~/.spo-bench/sessions/ 2>/dev/null | head -20' } },
+          env
+        );
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('the same command is COVERED once every pipe stage is allowlisted', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(ls *)', 'Bash(head *)'] } });
+        const out = trigger(
+          { tool_input: { command: 'ls -la ~/.spo-bench/sessions/ 2>/dev/null | head -20' } },
+          env
+        );
+        expect(out).toBe('COVERED');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('fast-path isolation: an && compound is still checked statement by statement', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(ls *)'] } });
+        const out = trigger({ tool_input: { command: 'ls -la && head -1 x' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('pipe-split isolation: an env-prefixed pipe is still checked stage by stage', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(ls *)'] } });
+        const out = trigger({ tool_input: { command: 'CI=1 ls -la | head -1' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('a bare & backgrounds the command on its left, and both sides are checked', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(ls *)'] } });
+        const out = trigger({ tool_input: { command: 'ls -la & head -1 x' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('the redirect-& family (2>&1, &>) is never mistaken for backgrounding', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(ls *)'] } });
+        expect(trigger({ tool_input: { command: 'ls -la 2>&1' } }, env)).toBe('COVERED');
+        expect(trigger({ tool_input: { command: 'ls -la &> /dev/null' } }, env)).toBe('COVERED');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('a quoted $(...) substitution is uncovered — it executes but cannot be vetted', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(echo *)'] } });
+        const out = trigger({ tool_input: { command: 'echo "$(rm -rf /)"' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('an unquoted $(...) substitution is uncovered too (not just via the removed fast path)', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(ls *)'] } });
+        const out = trigger({ tool_input: { command: 'ls $(date)' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('an exact pattern is checked at pipe-stage level, not just statement level', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const uncoveredEnv = settingsEnv(dir, { permissions: { allow: ['Bash(pwd)'] } });
+        expect(trigger({ tool_input: { command: 'pwd | cat' } }, uncoveredEnv)).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+      const dir2 = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const coveredEnv = settingsEnv(dir2, { permissions: { allow: ['Bash(pwd)', 'Bash(cat*)'] } });
+        expect(trigger({ tool_input: { command: 'pwd | cat' } }, coveredEnv)).toBe('COVERED');
+      } finally {
+        fs.rmSync(dir2, { recursive: true, force: true });
+      }
+    });
+
+    it('a pipe character inside quotes is not a real pipe boundary', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(grep *)'] } });
+        const out = trigger({ tool_input: { command: 'grep "a|b" f.txt' } }, env);
+        expect(out).toBe('COVERED');
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('an operators-only degenerate command is not vacuously COVERED', () => {
+      const dir = fs.mkdtempSync(path.join(getTempDir(), 'ucg-unit-'));
+      try {
+        const env = settingsEnv(dir, { permissions: { allow: ['Bash(ls *)'] } });
+        const out = trigger({ tool_input: { command: '; ;' } }, env);
+        expect(out).toMatch(/^UNCOVERED/);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });

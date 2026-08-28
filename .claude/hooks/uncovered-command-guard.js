@@ -10,25 +10,33 @@
 // `trigger` decides "does the scripted layer already cover this?" WITHOUT ever paying for an
 // LLM call: it merges the Bash(...) prefix/exact patterns out of every settings file the
 // harness itself reads (repo settings.json, the gitignored repo settings.local.json, the
-// user's ~/.claude/settings.json), splits the command into top-level statements the same way
-// verdict-pipe-guard.sh and investigation-form-guard.js do (bash-command-parse.js, heredoc- and
-// quote-aware), and requires EVERY statement to match some pattern before calling it COVERED.
+// user's ~/.claude/settings.json), splits the command into top-level statements AND, within
+// each statement, into pipe/background stages (bash-command-parse.js, heredoc- and
+// quote-aware — see isCovered()'s own comment for why pipes need a second split), and requires
+// EVERY resulting stage to match some pattern before calling it COVERED.
 //
 // The bias is deliberately asymmetric, and that asymmetry is the whole point of this file:
-//   - a false COVERED costs a human a permission prompt (visible immediately; fix the matcher) —
-//     this can only happen if the local pattern list under-approximates what the harness itself
-//     allows, i.e. never, by construction, since it reads the exact same files;
+//   - a false COVERED costs a human a permission prompt, and can happen two ways: the local
+//     pattern list under-approximating what the harness reads (excluded by construction — same
+//     files), OR this file's own splitting being LESS operator-aware than the harness's real
+//     parser (not excluded by construction — a real incident, task #369, 2026-08-28: `ls -la
+//     ... | head -20` matched `Bash(ls *)` as a whole string before the `| head` was ever
+//     examined, see isCovered()'s history comment);
 //   - a false UNCOVERED costs one Haiku call and, usually, a deny whose corrected form IS the
 //     already-allowlisted equivalent — one extra turn, and no human is ever involved.
-// So this file is written to never claim COVERED unless a statement provably matches a pattern
-// the harness itself would have matched; anything it isn't sure about falls to the LLM.
+// So this file is written to never claim COVERED unless every actual sub-command provably
+// matches a pattern the harness itself would have matched; anything it isn't sure about falls
+// to the LLM. Four remaining paths where this guard's splitting could still be less
+// operator-aware than the harness's own parser are named in doc/hook-llm-layer.md rather than
+// guessed at here — none is implicated by the incident above, and each is self-announcing (a
+// visible popup, caught by the journal) if it is ever real.
 
 "use strict";
 
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { statements } = require("./bash-command-parse");
+const { statements, splitOutsideQuotes } = require("./bash-command-parse");
 
 const MAX_COMMAND_CHARS = 2000;
 
@@ -92,15 +100,39 @@ function stripLeadingAssignments(statement) {
   );
 }
 
+// statements() has already consumed `&&` and `||`, so every `|` left inside a statement is a
+// real pipe — the same invariant verdict-pipe-guard.sh relies on (its own comment above its
+// `splitOutsideQuotes(statement, /\|/)` call) — and every lone `&` that is not part of a
+// redirect (2>&1, >&2, &>) backgrounds the command on its left.
+const STAGE_SPLIT = /\|&|\||(?<![>&|])&(?![&>])/;
+
+// A previous version of this function had a "whole-command fast path" — matching the RAW,
+// unsplit command against the pattern list before ever calling statements(). That is unsound
+// for anything but a single bare command: `Bash(ls *)` is a prefix of the ENTIRE string
+// "ls -la ~/.spo-bench/sessions/ 2>/dev/null | head -20", so the fast path returned COVERED
+// without ever looking at `head -20` — a real popup, 2026-08-28, task #369. Removing it costs
+// nothing: a single-statement, single-stage command gets the identical check below.
 function isCovered(command, patterns) {
   const trimmed = command.trim();
   if (!trimmed) return true; // nothing to classify
-  if (matchesAny(trimmed, patterns)) return true; // whole-command fast path
 
-  const parts = statements(command)
-    .map((s) => stripLeadingAssignments(s.trim()).trim())
-    .filter((s) => s.length > 0);
-  if (parts.length === 0) return true;
+  const parts = [];
+  for (const statement of statements(command)) {
+    for (const stage of splitOutsideQuotes(statement, STAGE_SPLIT)) {
+      const p = stripLeadingAssignments(stage.trim()).trim();
+      if (p.length > 0) parts.push(p);
+    }
+  }
+  // An operators-only command (";;", "&&" with nothing either side after stripping) yields no
+  // analyzable sub-command — not provably covered, so it falls to the LLM rather than being
+  // waved through.
+  if (parts.length === 0) return false;
+
+  // A backtick or `$(` surviving INTO a split part means it was inside quotes — statements()
+  // and splitOutsideQuotes both split on an UNQUOTED substitution opener, consuming it, so one
+  // that reaches here (echo "$(rm -rf /)") was masked as quoted text, still executes under
+  // bash, and this layer has no way to vet what is inside it — not provably covered.
+  if (parts.some((s) => /`|\$\(/.test(s))) return false;
 
   return parts.every((s) => matchesAny(s, patterns));
 }
