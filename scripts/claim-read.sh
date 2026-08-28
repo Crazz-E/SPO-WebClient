@@ -170,6 +170,13 @@ jq -n -r \
   | ([$cards[]
       | select(.Status == "In progress" or .Status == "Gate" or .Status == "Validation" or .Status == "PR")
       | select(.Area != null and .Area != "docs")
+      # `split` on an EMPTY string returns [], so `[0]` is null and `$heartbeats[null]` is a
+      # hard jq error — "Cannot index object with null" — that kills the whole claim read for
+      # every session. An empty `Session` in a busy column is not a corrupt state: it is
+      # exactly what the human release of an orphaned card produces (§ The ownership law,
+      # law 3), in the window before the card is re-taken or moved back to Todo. A card
+      # nobody owns reserves no ground, so it must simply not be busy.
+      | select(((((.Session // "") | split(" @ ")[0]) // "") | length) > 0)
       | select((($heartbeats[((.Session // "") | split(" @ ")[0])]) // "EXPIRED") == "LIVE")
       | .Area] | unique) as $busy
   | (reduce ($cards[] | select(.Status == "Todo")) as $c
