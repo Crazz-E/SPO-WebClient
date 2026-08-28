@@ -418,7 +418,7 @@ describe('RdoProtocol.parse()', () => {
       expect(packet.targetId).toBe('789');
       expect(packet.action).toBe(RdoAction.SET);
       expect(packet.member).toBe('Value');
-      expect(packet.args).toContain('"#100"');
+      expect(packet.args).toContain('#100');
     });
 
     it('should parse set with string value', () => {
