@@ -126,6 +126,7 @@ export function FacilityList({ facilities }: FacilityListProps) {
   const openRightPanel = useUiStore((s) => s.openRightPanel);
   const source = useMapStore((s) => s.source);
   const client = useClient();
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
   const groups = useMemo(
     () => classifyFacilities(facilities, source?.getAllBuildings?.() ?? []),
@@ -145,6 +146,18 @@ export function FacilityList({ facilities }: FacilityListProps) {
   const handleRemove = useCallback((facility: FavoritesItem) => {
     client.onRemoveFavorite(facility.path, facility.name);
   }, [client]);
+
+  const toggleFolder = useCallback((path: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
 
   if (facilities.length === 0) {
     return (
