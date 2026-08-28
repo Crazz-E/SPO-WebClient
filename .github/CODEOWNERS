@@ -6,7 +6,6 @@
 /src/shared/rdo-members.ts      @Crazz-E
 /src/shared/rdo-frame.ts        @Crazz-E
 /src/server/rdo.ts              @Crazz-E
-/src/__fixtures__/              @Crazz-E
 
 # Build, release and automation surface.
 /.github/                       @Crazz-E
