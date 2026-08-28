@@ -347,7 +347,15 @@ The repo process applies unchanged — this command adds nothing to it:
   carries it as an **instruction with verification the agent performs and reports**:
   `git rev-parse --show-toplevel` — its prefix is allowlisted, so it costs no permission
   prompt — and the returned reply shows where it actually ran, so the driver can verify
-  it landed in the right place.
+  it landed in the right place. **The absolute-worktree-path rule is now enforced at the
+  spawn itself, not just asked** — `.claude/hooks/spawn-path-guard.sh` (PreToolUse on the
+  `Agent` tool) scans the payload's `prompt` field for absolute paths and blocks the spawn if
+  any resolves under the main checkout (or a sibling session's worktree) instead of this
+  worktree, naming the corrected path in the refusal. It catches the drift one spawn earlier
+  than `worktree-scope-guard.sh` can — before the sub-agent ever resolves the bad path itself
+  — but it only ever sees what the payload TEXT contains: a relative path still fails open
+  here exactly as it does everywhere else in this section, which is why the absolute-path
+  rule above is still the one to follow, not a fallback the guard makes optional.
 - Implementation and the driver's mechanical checks done → **commit → push → open the PR
   with `Closes #<issue>` in the body**. The PR precedes the gate, not the reverse: the worker
   refuses a sha that is not on `origin` (`scripts/bench-gate.sh:45-50` — "NOT PUSHED: … is not
