@@ -55,8 +55,18 @@ describe('fetchOwnedFacilities', () => {
     const fake = makeSessionCtx();
     // id \x01 kind \x01 name \x01 info \x01 subCount \x01 '' — kind 1 = link, 0 = folder
     const link = ['4210', '1', 'Farm 1', 'Farm 1,118,226,0', '0', ''].join('\x01');
-    const folder = ['9', '0', 'Folder', '', '2', ''].join('\x01');
-    fake.respond(() => `res="%${[folder, link].join('\x02')}"`);
+    const folder = ['9', '0', 'Folder', '', '0', ''].join('\x01'); // 0 subfolders
+    let callCount = 0;
+    fake.respond(() => {
+      callCount++;
+      if (callCount === 1) {
+        // First call: fetching root items
+        return `res="%${[folder, link].join('\x02')}"`;
+      } else {
+        // Subsequent calls: empty (folder has no children)
+        return 'res="%"';
+      }
+    });
 
     const items = await fetchOwnedFacilities(fake.ctx);
 
@@ -70,13 +80,18 @@ describe('fetchOwnedFacilities', () => {
     const fake = makeSessionCtx();
     // Root: one folder
     const rootFolder = ['9', '0', 'Folder', '', '1', ''].join('\x01');
-    fake.respond()
-      .once(() => `res="%${rootFolder}"`)
-      // When fetching folder 9's children
-      .once(() => {
-        const childLink = ['100', '1', 'Child Link', 'Child Link,50,60,0', '0', ''].join('\x01');
+    const childLink = ['100', '1', 'Child Link', 'Child Link,50,60,0', '0', ''].join('\x01');
+    let callCount = 0;
+    fake.respond(() => {
+      callCount++;
+      if (callCount === 1) {
+        // First call: fetching root items
+        return `res="%${rootFolder}"`;
+      } else {
+        // Second call: fetching folder 9's children
         return `res="%${childLink}"`;
-      });
+      }
+    });
 
     const items = await fetchOwnedFacilities(fake.ctx);
 
@@ -351,8 +366,8 @@ describe('moveFavorite', () => {
       member: 'RDOFavoritesMoveItem',
       separator: '"^"',
       args: [
-        RdoValue.widestring('4210').format(),
-        RdoValue.widestring('9').format(),
+        RdoValue.string('4210').format(),
+        RdoValue.string('9').format(),
       ],
     });
   });
@@ -364,7 +379,7 @@ describe('moveFavorite', () => {
     await moveFavorite(fake.ctx, '9/100', '');
 
     const args = fake.sent[0].packet.args as string[];
-    expect(args[1]).toBe(RdoValue.widestring('').format());
+    expect(args[1]).toBe(RdoValue.string('').format());
   });
 
   it('accepts any non-zero ordinal as true', async () => {

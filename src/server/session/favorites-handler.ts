@@ -220,8 +220,8 @@ export async function moveFavorite(
 
   const packet = await ctx.sendRdoRequest('world', rdoCall(
     'RDOFavoritesMoveItem', targetId,
-    RdoValue.widestring(itemPath),
-    RdoValue.widestring(destPath),
+    RdoValue.string(itemPath),
+    RdoValue.string(destPath),
   ).packet, undefined, TimeoutCategory.NORMAL);
 
   if (isTrueOrdinal(readResult(packet.payload))) {
