@@ -230,8 +230,11 @@ Node.js 22 / npm 10 in WSL (`/usr/bin/node`). Everything the project needs runs 
 - Processes: `ps` / `kill` inside WSL; `tasklist` / `taskkill` only for host-side processes
 - Line endings: LF only (`.gitattributes` and `.editorconfig`) — never introduce CRLF
 - Minimum supported runtime is Node 22 (`engines`, the Dockerfile's `node:22`, CI)
-- `jq` (1.7+) is required by `npm run board:claim`, which slurps gh's paginated pages into one
-  program; `apt install jq`
+- `jq` (1.7+) is required by four scripts that call the `jq` binary directly:
+  `scripts/claim-read.sh` (15 standalone `jq` calls), `scripts/board-take.sh` (14),
+  `scripts/board-move.sh` (9) and `scripts/nightly-check.sh` (6) — `apt install jq`. Seven
+  other scripts pass `--jq` to `gh` itself (its own built-in JSON filter, no separate binary
+  needed) and work with no `jq` installed.
 
 ## Commands
 
