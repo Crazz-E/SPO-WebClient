@@ -479,6 +479,46 @@ title `#<issue> · Needs triage`, keep `Session` filled, post one comment **in s
 non-technical English** explaining what was attempted and what blocked it. Never leave the
 card in In progress/Gate/Validation/PR at session end — close your ownership, one way or the other.
 
+## Refusal discipline
+
+A blocking guard (`verdict-pipe-guard.sh`, `poll-loop-guard.sh`, `worktree-scope-guard.sh`,
+`driver-scope-guard.sh`, `bench-port-guard.sh`, `item-list-guard.sh`) may refuse the same
+shape more than once in a session — a driver reads the refusal, composes a slightly different
+command that means the same thing, and gets refused again. That is workaround-hunting, and it
+is the one continuation this project forbids: the refusal already named the sanctioned form,
+and a different spelling of the blocked command is not a new idea.
+
+**Each guard now counts its own refusals for this session** (`.claude/hooks/refusal-ledger.js`,
+card #369) and, from the **third** refusal onward, appends an escalation paragraph to its
+message: `This is refusal #<n> from this guard in this session. Do not compose another variant
+… Either run the exact command above, or release …`. The count is per guard, per session — a
+worktree-scope refusal and a poll-loop refusal in the same session are tracked separately, and
+a new session (a new worktree) starts every guard back at zero.
+
+**One retry, then release — for a driver.** Read the refused message once, run the exact
+sanctioned form it names. If that second attempt is also refused, do not try a third shape:
+move the card to **Needs triage** (`npm run board:move -- <issue> "Needs triage"`), post one
+comment quoting the refusal text and what you were trying to do, and close this session's
+ownership (§ 4). The escalation paragraph at refusal #3 is the guard's own backstop for this
+rule, not a substitute for following it earlier.
+
+**A sub-agent follows the same one-retry rule**, then reports back to its driver rather than
+composing a third variant itself — the driver decides whether to retry once more with a
+corrected payload or to route the card to Needs triage; a sub-agent does not release a card's
+ownership on its own.
+
+**The ledger's lifecycle.** One file per session, `~/.spo-bench/sessions/<key>.refusals`
+(`<key>` derived the same way `session-heartbeat.sh` and `driver-scope-guard.sh` derive
+theirs — sha1sum of the worktree's absolute path, first 16 hex chars), JSON Lines, one entry
+appended per refusal: `{"guard":"<name>","count":<n>,"timestamp":<ms>}`. It is a log of counts,
+not a database — the last line for a given guard is the one that counts, a missing or corrupt
+file reads as count 0, and the ledger is never read or written outside a guard's own refusal
+path. Nothing deletes it: it is scoped to the worktree's own session directory and is cleaned
+up the same way the rest of `~/.spo-bench/sessions/` is, by the worktree's own lifecycle.
+
+See also: card #339 (the driver-scope continuation suggestions this escalation builds on —
+naming the runnable remedy, not just the rule).
+
 ## 5 · Stay on the card
 
 A session solves and implements the card it claimed, and its final report covers that card

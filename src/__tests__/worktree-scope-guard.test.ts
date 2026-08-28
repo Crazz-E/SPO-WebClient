@@ -259,13 +259,18 @@ describe('worktree-scope-guard.sh — end to end with real git worktrees', () =>
     };
   }
 
-  function run(cwd: string, toolName: string, toolInput: Record<string, unknown>): { code: number; err: string } {
+  function run(
+    cwd: string,
+    toolName: string,
+    toolInput: Record<string, unknown>,
+    sessionDir?: string,
+  ): { code: number; err: string } {
     try {
       execFileSync('bash', [WRAPPER], {
         cwd,
         input: JSON.stringify({ cwd, tool_name: toolName, tool_input: toolInput }),
         encoding: 'utf8',
-        env: gitEnv,
+        env: sessionDir ? { ...gitEnv, SPO_SESSION_DIR: sessionDir } : gitEnv,
       });
       return { code: 0, err: '' };
     } catch (e) {
@@ -342,5 +347,49 @@ describe('worktree-scope-guard.sh — end to end with real git worktrees', () =>
     } finally {
       roots.cleanup();
     }
+  });
+
+  describe('refusal ledger escalation (card #369)', () => {
+    it('does not escalate on the first two refusals', () => {
+      const roots = makeRepoWithWorktrees();
+      const store = fs.mkdtempSync(path.join(getTempDir(), 'wsg-ledger-esc-'));
+      try {
+        const target = path.join(roots.main, 'leaked.txt');
+        const first = run(roots.wt, 'Edit', { file_path: target }, store);
+        const second = run(roots.wt, 'Edit', { file_path: target }, store);
+        expect(first.err).not.toContain('This is refusal #');
+        expect(second.err).not.toContain('This is refusal #');
+      } finally {
+        roots.cleanup();
+      }
+    });
+
+    it('escalates on the third refusal', () => {
+      const roots = makeRepoWithWorktrees();
+      const store = fs.mkdtempSync(path.join(getTempDir(), 'wsg-ledger-esc-'));
+      try {
+        const target = path.join(roots.main, 'leaked.txt');
+        run(roots.wt, 'Edit', { file_path: target }, store);
+        run(roots.wt, 'Edit', { file_path: target }, store);
+        const third = run(roots.wt, 'Edit', { file_path: target }, store);
+        expect(third.code).toBe(2);
+        expect(third.err).toContain('This is refusal #3 from this guard in this session.');
+        expect(third.err).toContain('Needs triage');
+      } finally {
+        roots.cleanup();
+      }
+    });
+
+    it('a fresh store starts counting from 1 again', () => {
+      const roots = makeRepoWithWorktrees();
+      const store = fs.mkdtempSync(path.join(getTempDir(), 'wsg-ledger-fresh-'));
+      try {
+        const target = path.join(roots.main, 'leaked.txt');
+        const first = run(roots.wt, 'Edit', { file_path: target }, store);
+        expect(first.err).not.toContain('This is refusal #');
+      } finally {
+        roots.cleanup();
+      }
+    });
   });
 });

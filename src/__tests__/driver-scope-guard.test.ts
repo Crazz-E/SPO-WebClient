@@ -717,3 +717,79 @@ describe('driver-scope-guard — the continuation suggestions (card #370)', () =
     expect(err).not.toContain('git add -A && git commit -m');
   });
 });
+
+/**
+ * REFUSAL LEDGER ESCALATION (card #369). Every repeated refusal here reuses the SAME
+ * repo/store pair — refusal-ledger.js keys its count off the session's git top-level, so
+ * three calls against three DIFFERENT throwaway repos (as every helper above does) would
+ * each start their own count at 1, never reaching the escalation paragraph. These tests
+ * build one repo/store pair and drive the wrapper against it repeatedly.
+ */
+describe('driver-scope-guard — refusal ledger escalation (card #369)', () => {
+  const WRAPPER = path.join(ROOT, '.claude', 'hooks', 'driver-scope-guard.sh');
+
+  function makeArmedRepo(trackedFile: string): { tmp: string; store: string } {
+    const tmp = fs.mkdtempSync('/tmp/claude-1000/dsg-ledger-');
+    const store = path.join(tmp, 'store');
+    const env = {
+      ...process.env,
+      GIT_AUTHOR_NAME: 't',
+      GIT_AUTHOR_EMAIL: 't@x',
+      GIT_COMMITTER_NAME: 't',
+      GIT_COMMITTER_EMAIL: 't@x',
+    };
+    execFileSync(
+      'bash',
+      ['-c', `cd "${tmp}" && git init -q . && echo hi > ${trackedFile} && git add ${trackedFile} && git commit -q -m x`],
+      { env },
+    );
+    const key = execFileSync('bash', ['-c', `printf '%s' "$(readlink -f "${tmp}")" | sha1sum | cut -c1-16`], {
+      encoding: 'utf8',
+    }).trim();
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, `${key}.driving`), `${SID}\n212\n`);
+    return { tmp, store };
+  }
+
+  function refuseOnce(tmp: string, store: string, trackedFile: string): { code: number; err: string } {
+    try {
+      execFileSync('bash', [WRAPPER], {
+        cwd: tmp,
+        input: JSON.stringify({ session_id: SID, cwd: tmp, tool_name: 'Edit', tool_input: { file_path: trackedFile } }),
+        encoding: 'utf8',
+        env: { ...process.env, SPO_SESSION_DIR: store },
+      });
+      return { code: 0, err: '' };
+    } catch (e) {
+      const err = e as { status?: number; stderr?: string };
+      return { code: err.status ?? -1, err: err.stderr ?? '' };
+    }
+  }
+
+  it('does not escalate on the first two refusals', () => {
+    const tracked = 'tracked.txt';
+    const { tmp, store } = makeArmedRepo(tracked);
+    const first = refuseOnce(tmp, store, tracked);
+    const second = refuseOnce(tmp, store, tracked);
+    expect(first.err).not.toContain('This is refusal #');
+    expect(second.err).not.toContain('This is refusal #');
+  });
+
+  it('escalates on the third refusal', () => {
+    const tracked = 'tracked.txt';
+    const { tmp, store } = makeArmedRepo(tracked);
+    refuseOnce(tmp, store, tracked);
+    refuseOnce(tmp, store, tracked);
+    const third = refuseOnce(tmp, store, tracked);
+    expect(third.code).toBe(2);
+    expect(third.err).toContain('This is refusal #3 from this guard in this session.');
+    expect(third.err).toContain('Needs triage');
+  });
+
+  it('a fresh store starts counting from 1 again', () => {
+    const tracked = 'tracked.txt';
+    const { tmp, store } = makeArmedRepo(tracked);
+    const first = refuseOnce(tmp, store, tracked);
+    expect(first.err).not.toContain('This is refusal #');
+  });
+});

@@ -71,6 +71,19 @@ verdict="$(printf '%s' "$payload" | SPO_TOP="$top" SPO_FAMILY="$family" \
 [ -n "$verdict" ] || exit 0
 [ "$verdict" = "ALLOW" ] && exit 0
 
+# Refusal ledger (card #369) — count this refusal, so the message below can tell a first
+# refusal from a session still composing variants of the same blocked write.
+count="$(node "$(dirname "$0")/refusal-ledger.js" "worktree-scope" 2>/dev/null || echo 0)"
+escalation=""
+if [ "${count:-0}" -ge 3 ] 2>/dev/null; then
+  escalation="
+This is refusal #${count} from this guard in this session. Do not compose another
+variant — that is workaround-hunting, and it is the one continuation this project
+forbids. Either run the exact command above, or release: move the card to
+Needs triage with a comment quoting this refusal and what you were trying to do
+(next-task.md § Refusal discipline), and close this session's ownership."
+fi
+
 # Parse verdict as: "reason\tcorrected" (no tab = corrected is empty)
 reason="${verdict%%$'\t'*}"
 corrected="${verdict#*$'\t'}"
@@ -108,5 +121,7 @@ Re-target the same file inside THIS worktree instead. If a payload named this fi
 carried a relative path or the wrong root — fix the path there, not here.
 MSG
 fi
+
+if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
 
 exit 2

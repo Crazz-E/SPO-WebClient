@@ -146,6 +146,23 @@ verdict="$(printf '%s' "$payload" | node -e "
   });
 " 2>/dev/null)"
 
+# Refusal ledger (card #369) — count this refusal, so the message below can tell a first
+# refusal from a driver still composing variants of the same blocked command. Computed only
+# when we are actually about to block; a passing call never touches the ledger.
+count=0
+if [ "${verdict:-ok}" != "ok" ]; then
+  count="$(node "$(dirname "$0")/refusal-ledger.js" "poll-loop" 2>/dev/null || echo 0)"
+fi
+escalation=""
+if [ "${count:-0}" -ge 3 ] 2>/dev/null; then
+  escalation="
+This is refusal #${count} from this guard in this session. Do not compose another
+variant — that is workaround-hunting, and it is the one continuation this project
+forbids. Either run the exact command above, or release: move the card to
+Needs triage with a comment quoting this refusal and what you were trying to do
+(next-task.md § Refusal discipline), and close this session's ownership."
+fi
+
 case "${verdict:-ok}" in
   amp)
     echo "BLOCKED: a trailing \`&\` destroys the verdict you are running that command for." >&2
@@ -168,6 +185,7 @@ case "${verdict:-ok}" in
     echo "the compound refusal below for why that destroys the same exit code from" >&2
     echo "the other side. In the FOREGROUND that chain is fine; it just is not what" >&2
     echo "backgrounding needs." >&2
+    if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
     exit 2
     ;;
   compound)
@@ -193,6 +211,7 @@ case "${verdict:-ok}" in
     echo "does not persist between Bash tool calls:" >&2
     echo "" >&2
     echo '  npm run gate > <scratchpad>/gate.log 2>&1; echo "EXIT=$?"' >&2
+    if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
     exit 2
     ;;
   bench*)
@@ -217,6 +236,7 @@ case "${verdict:-ok}" in
     echo "Run it as one background command — the wait then costs zero tokens." >&2
     echo "\`npm run gate\` and \`npm run test:live\` already wait; you only need this one" >&2
     echo "for a job whose wait was interrupted. doc/bench-worker.md." >&2
+    if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
     exit 2
     ;;
   pr*)
@@ -247,6 +267,7 @@ case "${verdict:-ok}" in
     echo "If you only want the state ONCE — which is usually all you need, since your" >&2
     echo "gate PASS is already the bench/gate status — one REST call answers it:" >&2
     echo "  gh api repos/Crazz-Org/SPO-WebClient/pulls/<n> --jq '{state,merged}'" >&2
+    if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
     exit 2
     ;;
   *)
