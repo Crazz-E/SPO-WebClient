@@ -332,7 +332,8 @@ export class RdoProtocol {
 						const propParts = remainder.split(/\s+/);
 						packet.member = propParts[0];
 						if (packet.action === RdoAction.SET && propParts.length > 1) {
-							packet.args = [propParts.slice(1).join(' ')];
+							const rawArg = propParts.slice(1).join(' ');
+							packet.args = [this.stripTypedToken(rawArg)];
 						}
 					}
 				}
