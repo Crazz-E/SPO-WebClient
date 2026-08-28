@@ -3,7 +3,17 @@ name: CI
 on:
   push:
     branches: [main]
+  # `pull_request` with no `types:` defaults to [opened, synchronize, reopened] — a body edit
+  # fires none of them. But `check-pr-rules.js` gates on the PR BODY (`PR_BODY`, below): a PR
+  # that touches `rdo-members.ts` and adds its `File.pas:Line` citation AFTER opening fails the
+  # run that read the empty body, and no later event ever re-reads it. The required check stays
+  # red forever and the PR can never merge — #380 sat there, with a valid citation in its body
+  # and a session waiting on a re-run that no event could produce. `edited` is the only trigger
+  # that carries a body change, so it has to be here. It also fires on title edits and on the
+  # routine "live evidence in the PR body" write, i.e. a full re-run per edit; the concurrency
+  # group below coalesces bursts, and a spare 3-minute run is the cheaper half of the trade.
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   # A merge queue runs its required checks on a SPECULATIVE commit
   # (`gh-readonly-queue/main/pr-N-<sha>`), which is not a push and not a pull request.
   # Without this trigger the required `typecheck + tests` context never reports there, and
