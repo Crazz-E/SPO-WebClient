@@ -76,7 +76,6 @@ export default tseslint.config(
     files: [
       '**/*.test.ts',
       '**/*.test.tsx',
-      'src/__fixtures__/**/*.ts',
       'src/mock-server/**/*.ts',
       'src/**/__tests__/**/*.ts',
       'scripts/**/*.js',

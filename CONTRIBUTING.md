@@ -29,7 +29,7 @@ crash a live server. So:
 - never probe a live server to find out.
 
 `src/shared/rdo-types.ts`, `src/shared/rdo-frame.ts`, `src/server/rdo.ts`,
-`src/__fixtures__/` and `jest.config.js` are not modified without discussion — and this is
+and `jest.config.js` are not modified without discussion — and this is
 **checked**, not merely stated: `scripts/check-pr-rules.js` runs inside the required
 `typecheck + tests` check and fails a pull request that touches one of them without the
 **`rdo-approved`** label. Only the maintainer posts that label; the author of a diff cannot
