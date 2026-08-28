@@ -143,6 +143,23 @@ verdict="$(printf '%s' "$payload" | HOOKS_DIR="$HOOKS_DIR" node -e "
   });
 " 2>/dev/null)"
 
+# Refusal ledger (card #369) — count this refusal, so the message below can tell a first
+# refusal from a driver still composing variants of the same blocked command. Computed only
+# when we are actually about to block; a passing call never touches the ledger.
+count=0
+if [ "${verdict:-ok}" != "ok" ]; then
+  count="$(node "$(dirname "$0")/refusal-ledger.js" "verdict-pipe" 2>/dev/null || echo 0)"
+fi
+escalation=""
+if [ "${count:-0}" -ge 3 ] 2>/dev/null; then
+  escalation="
+This is refusal #${count} from this guard in this session. Do not compose another
+variant — that is workaround-hunting, and it is the one continuation this project
+forbids. Either run the exact command above, or release: move the card to
+Needs triage with a comment quoting this refusal and what you were trying to do
+(next-task.md § Refusal discipline), and close this session's ownership."
+fi
+
 case "${verdict:-ok}" in
   pipe*)
     # Parse verdict as: "pipe\t<culprit>\t<alias>"
@@ -185,6 +202,7 @@ case "${verdict:-ok}" in
     echo "If you want the pipeline anyway, make the shell carry the real status:" >&2
     echo "" >&2
     echo "  set -o pipefail; ${culprit} 2>&1 | tail -40" >&2
+    if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
     exit 2
     ;;
   nonfinal*)
@@ -209,6 +227,7 @@ case "${verdict:-ok}" in
     echo "If you want to check the verdict without separating, read PIPESTATUS:" >&2
     echo "" >&2
     echo "  ${culprit}; echo \"EXIT=\${PIPESTATUS[0]}\"" >&2
+    if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
     exit 2
     ;;
   *)

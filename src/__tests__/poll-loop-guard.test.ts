@@ -5,6 +5,8 @@
  */
 
 import { execFileSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
 const ROOT = process.cwd();
@@ -15,14 +17,19 @@ interface RunResult {
   err: string;
 }
 
-function run(command: string, runInBackground: boolean = false): RunResult {
+// Each refusal now bumps a per-session ledger (.claude/hooks/refusal-ledger.js, card #369).
+// Isolate it per test file so these runs never touch this machine's real
+// `~/.spo-bench/sessions/<key>.refusals` for this worktree.
+const SESSION_STORE = fs.mkdtempSync(path.join(os.tmpdir(), 'plg-ledger-'));
+
+function run(command: string, runInBackground: boolean = false, sessionDir: string = SESSION_STORE): RunResult {
   try {
     execFileSync('bash', [WRAPPER], {
       input: JSON.stringify({
         tool_input: { command, run_in_background: runInBackground },
       }),
       encoding: 'utf8',
-      env: process.env,
+      env: { ...process.env, SPO_SESSION_DIR: sessionDir },
     });
     return { code: 0, err: '' };
   } catch (e) {
@@ -116,5 +123,52 @@ describe('poll-loop-guard.sh — loop detection and suggestions', () => {
     const command = `while ! gh api repos/Crazz-Org/SPO-WebClient/pulls/123 --jq '.merged'; do sleep 5; done`;
     const result = run(command);
     expect(result.err).toContain('pr');
+  });
+});
+
+describe('poll-loop-guard.sh — refusal ledger escalation (card #369)', () => {
+  const benchLoop = `until [ -f ~/.spo-bench/done/job-abc123.json ]; do sleep 10; done`;
+
+  it('does not escalate on the first two refusals', () => {
+    const store = fs.mkdtempSync(path.join(os.tmpdir(), 'plg-ledger-esc-'));
+    const first = run(benchLoop, false, store);
+    const second = run(benchLoop, false, store);
+    expect(first.err).not.toContain('This is refusal #');
+    expect(second.err).not.toContain('This is refusal #');
+  });
+
+  it('escalates on the third refusal', () => {
+    const store = fs.mkdtempSync(path.join(os.tmpdir(), 'plg-ledger-esc-'));
+    run(benchLoop, false, store);
+    run(benchLoop, false, store);
+    const third = run(benchLoop, false, store);
+    expect(third.code).toBe(2);
+    expect(third.err).toContain('This is refusal #3 from this guard in this session.');
+    expect(third.err).toContain('Needs triage');
+  });
+
+  it('the amp shape (trailing &) escalates too, counted under the same guard name', () => {
+    const store = fs.mkdtempSync(path.join(os.tmpdir(), 'plg-ledger-esc-amp-'));
+    run(benchLoop, false, store);
+    run(`npm run verdict -- test &`, false, store);
+    const third = run(benchLoop, false, store);
+    expect(third.code).toBe(2);
+    expect(third.err).toContain('This is refusal #3 from this guard in this session.');
+  });
+
+  it('the pr-poll shape escalates on its own third refusal', () => {
+    const store = fs.mkdtempSync(path.join(os.tmpdir(), 'plg-ledger-esc-pr-'));
+    const prLoop = `until gh pr view 276 --json mergedAt --jq '.mergedAt' | grep -qv null; do sleep 5; done`;
+    run(prLoop, false, store);
+    run(prLoop, false, store);
+    const third = run(prLoop, false, store);
+    expect(third.code).toBe(2);
+    expect(third.err).toContain('refusal #3 from this guard');
+  });
+
+  it('a fresh store starts counting from 1 again', () => {
+    const store = fs.mkdtempSync(path.join(os.tmpdir(), 'plg-ledger-fresh-'));
+    const first = run(benchLoop, false, store);
+    expect(first.err).not.toContain('This is refusal #');
   });
 });

@@ -68,6 +68,19 @@ verdict="$(printf '%s' "$payload" | SPO_TOP="$top" SPO_DRIVER_SID="$driver_sid" 
 [ -n "$verdict" ] || exit 0
 [ "$verdict" = "ALLOW" ] && exit 0
 
+# Refusal ledger (card #369) — count this refusal, so the message below can tell a first
+# refusal from a driver still composing variants of the same blocked write.
+count="$(node "$(dirname "$0")/refusal-ledger.js" "driver-scope" 2>/dev/null || echo 0)"
+escalation=""
+if [ "${count:-0}" -ge 3 ] 2>/dev/null; then
+  escalation="
+This is refusal #${count} from this guard in this session. Do not compose another
+variant — that is workaround-hunting, and it is the one continuation this project
+forbids. Either run the exact command above, or release: move the card to
+Needs triage with a comment quoting this refusal and what you were trying to do
+(next-task.md § Refusal discipline), and close this session's ownership."
+fi
+
 # A CREATION and an EDIT have different right answers, and naming only one of them is how a
 # guard sends a driver down the wrong path. Editing a tracked file is implementation -> the
 # sub-agent. Creating a new file is usually the driver writing its OWN text — a commit message,
@@ -188,5 +201,6 @@ ${continuation}
 Human override, on explicit instruction only:
   rm ${marker}
 (the next \`npm run board:take\` re-arms it)
+${escalation}
 MSG
 exit 2
