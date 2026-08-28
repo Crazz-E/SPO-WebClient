@@ -128,6 +128,8 @@ function analyzeGrepStatement(text, tokens) {
   let pattern = null;
   let files = [];
 
+  let recursivePath = null;
+
   while (i < tokens.length) {
     const tok = tokens[i];
     if (tok === "|" || tok === ";" || tok === "&&" || tok === "||") break;
@@ -150,12 +152,12 @@ function analyzeGrepStatement(text, tokens) {
       // Non-flag token: this is the pattern (if not set) or a file/path
       if (!pattern) {
         pattern = unquote(tok);
+      } else if (isRecursive) {
+        // The trailing argument to `grep -r` is the search root, not a single file — keep it
+        // so the corrected Grep() call can carry the same path instead of defaulting to ".".
+        recursivePath = unquote(tok);
       } else {
-        // When -r is set, this is a search path; otherwise it's a file to search
-        if (!isRecursive) {
-          files.push(unquote(tok));
-        }
-        // For -r, we ignore the trailing path argument since it's implied to be recursive
+        files.push(unquote(tok));
       }
     }
     i++;
@@ -165,7 +167,7 @@ function analyzeGrepStatement(text, tokens) {
   if (!pattern) return null;
   if (files.length === 0 && !isRecursive) return null;
 
-  return { type: "grep", text, pattern, file: files[0] || null, isRecursive };
+  return { type: "grep", text, pattern, file: files[0] || null, isRecursive, recursivePath };
 }
 
 // Renders the corrected find command using Glob tool call.
@@ -175,19 +177,33 @@ function buildCorrectedFind(pattern, flag, cmd) {
 
   // For -path patterns, ensure they can match at any depth if needed
   if ((flag === "-path" || flag === "-ipath") && !globPattern.startsWith("/")) {
-    // Don't prefix if it already starts with * or is a relative path starting with ./
-    if (!globPattern.startsWith("*") && !globPattern.startsWith(".")) {
+    if (globPattern.startsWith("*/")) {
+      // In find, a bare `*` already crosses `/` boundaries, so `*/foo` matches `foo` at any
+      // depth. A glob's `*` does not cross `/` — only `**` does — so the prefix has to be
+      // promoted to keep the same depth-agnostic match.
+      globPattern = "**/" + globPattern.slice(2);
+    } else if (!globPattern.startsWith("*") && !globPattern.startsWith(".")) {
+      // Don't prefix if it already starts with * or is a relative path starting with ./
       globPattern = "**/" + globPattern;
     }
   }
 
-  return `Glob(pattern="${globPattern}", path=".")`;
+  const call = `Glob(pattern="${globPattern}", path=".")`;
+
+  // -iname/-ipath are case-insensitive in find; Glob patterns are matched case-sensitively,
+  // so that distinction has no direct equivalent — flag it rather than silently dropping it.
+  if (flag === "-iname" || flag === "-ipath") {
+    return `${call}  # note: ${flag} was case-insensitive; Glob matches case-sensitively`;
+  }
+
+  return call;
 }
 
 // Renders the corrected grep command using Grep tool call.
-function buildCorrectedGrep(pattern, file, isRecursive) {
-  if (isRecursive && !file) {
-    return `Grep(pattern="${pattern.replace(/"/g, '\\"')}", path=".", glob="*")`;
+function buildCorrectedGrep(pattern, file, isRecursive, recursivePath) {
+  if (isRecursive) {
+    const searchPath = recursivePath || ".";
+    return `Grep(pattern="${pattern.replace(/"/g, '\\"')}", path="${searchPath}", glob="*")`;
   } else if (file) {
     return `Grep(pattern="${pattern.replace(/"/g, '\\"')}", path="${file}")`;
   }
@@ -253,7 +269,7 @@ process.stdin.on("end", () => {
     // Check for grep searching files
     hit = analyzeGrepStatement(text, tokens);
     if (hit) {
-      const corrected = buildCorrectedGrep(hit.pattern, hit.file, hit.isRecursive);
+      const corrected = buildCorrectedGrep(hit.pattern, hit.file, hit.isRecursive, hit.recursivePath);
       return say(buildMessage("grep", corrected));
     }
   }

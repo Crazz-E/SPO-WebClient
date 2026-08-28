@@ -337,8 +337,10 @@ EOF`);
     });
 
     it("generates correct Glob() call for find -path", () => {
+      // find's `*` crosses `/` boundaries already, so `*/src/**` matches at any depth; a glob's
+      // `*` does not, so the leading `*/` must be promoted to `**/` to keep the same match.
       const result = testGuard("find . -path '*/src/**'");
-      expect(result.stdout).toContain('Glob(pattern="*/src/**"');
+      expect(result.stdout).toContain('Glob(pattern="**/src/**"');
     });
 
     it("generates correct Grep() call for grep single file", () => {
