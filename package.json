@@ -48,7 +48,9 @@
     "board:sessions": "bash scripts/heartbeat-scan.sh",
     "board:wait": "bash scripts/rate-wait.sh",
     "e2e:unlock": "npm run build:e2e && node dist/e2e/unlock.js",
-    "verdict": "bash scripts/run-verdict.sh"
+    "verdict": "bash scripts/run-verdict.sh",
+    "hook:harvest": "node scripts/hook-llm-harvest.js",
+    "hook:stats": "node scripts/hook-llm-stats.js"
   },
   "keywords": [
     "starpeace",
