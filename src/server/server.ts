@@ -34,6 +34,7 @@ import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 import { buildRuntimeConfigScript } from './runtime-config';
 import { handleBugReportRequest, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
 import { enforceProductionConfig } from './production-config';
+import { resolveCachePath, resolveBmpToPng } from './cache-path-resolver';
 
 /**
  * Starpeace Gateway Server
@@ -937,8 +938,7 @@ const server = http.createServer(async (req, res) => {
     // Use imageFileIndex for case-insensitive lookup (handles mixed-case filenames on Linux)
     const lastSlash = relativePath.lastIndexOf('/');
     const filename = lastSlash >= 0 ? relativePath.substring(lastSlash + 1) : relativePath;
-    const indexedPath = imageFileIndex.get(filename.toLowerCase());
-    const filePath = indexedPath ?? path.join(CACHE_DIR, relativePath);
+    const filePath = resolveCachePath(relativePath, CACHE_DIR, imageFileIndex);
 
     // Security check: ensure path doesn't escape allowed cache directories
     const normalizedPath = path.normalize(filePath);
@@ -965,18 +965,9 @@ const server = http.createServer(async (req, res) => {
     const ext = path.extname(filePath).toLowerCase();
     let servePath = filePath;
     if (ext === '.bmp') {
-      const pngFilename = filename.replace(/\.bmp$/i, '.png');
-      const indexedPng = imageFileIndex.get(pngFilename.toLowerCase());
-      if (indexedPng) {
-        servePath = indexedPng;
-      } else {
-        const pngPath = filePath.replace(/\.bmp$/i, '.png');
-        try {
-          await fsp.access(pngPath);
-          servePath = pngPath;
-        } catch {
-          // PNG doesn't exist, use original BMP path
-        }
+      const resolvedPng = await resolveBmpToPng(filename, filePath, imageFileIndex);
+      if (resolvedPng !== null) {
+        servePath = resolvedPng;
       }
     }
     const serveExt = path.extname(servePath).toLowerCase();
