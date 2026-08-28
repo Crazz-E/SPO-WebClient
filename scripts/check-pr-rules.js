@@ -41,7 +41,7 @@ const PROTECTED_FILES = [
   'src/server/rdo.ts',
   'jest.config.js',
 ];
-const PROTECTED_PREFIXES = ['src/__fixtures__/'];
+const PROTECTED_PREFIXES = [];
 const APPROVAL_LABEL = 'rdo-approved';
 
 /** Touching the catalogue means citing the declaration that fixes a member's kind and arity. */

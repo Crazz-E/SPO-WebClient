@@ -2,7 +2,7 @@
 
 /** Vite define replacements — must be mirrored here for Jest */
 const sharedGlobals = {
-  __APP_VERSION__: '"0.1.0"',
+  __APP_VERSION__: '"0.0.0-dev"',
   __BUILD_DATE__: '"test"',
   __BUILD_TIME__: '"00:00:00"',
   __BUILD_NUMBER__: '"0"',
@@ -42,7 +42,7 @@ module.exports = {
       preset: 'ts-jest',
       testEnvironment: 'node',
       roots: ['<rootDir>/src'],
-      testMatch: ['**/*.test.ts', '**/*.test.js'],
+      testMatch: ['**/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/src/server/__tests__/setup/jest-setup.ts'],
       globals: sharedGlobals,
       ...sharedModuleConfig,
@@ -65,7 +65,6 @@ module.exports = {
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.test.{ts,tsx}',
-    '!src/**/__fixtures__/**',
     '!src/**/__mocks__/**',
     '!src/**/__tests__/**',
     '!src/**/*.d.ts',

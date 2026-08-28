@@ -90,12 +90,13 @@ mock.addScenario(createAuthScenario());
 expect(mock.match('C 0 idof "DirectoryServer"')).not.toBeNull();
 ```
 
-## Fixtures
+## Mock RDO responses, not simplified mock HTML
 
-`src/__fixtures__/` is a **protected directory** — it holds real server responses. Do not
-edit or regenerate without discussion. Parsing tests must run against these, not against
-simplified mock HTML: the classic silent-truncation bug (`[A-Za-z0-9]` clipping
-`PGISRVCOMMON_AlienParkA` to `PGISRVCOMMON`) only reproduces on real payloads.
+`src/mock-server/` is the real substrate: captured, real server responses assembled into
+scenarios, not simplified mock HTML. Parsing tests must run against these — the classic
+silent-truncation bug (`[A-Za-z0-9]` clipping `PGISRVCOMMON_AlienParkA` to `PGISRVCOMMON`)
+only reproduces on real payloads. See `src/mock-server/CLAUDE.md` for the full API, the
+match hierarchy and the step-by-step for adding a scenario.
 
 ## Traps that produce green-but-wrong suites
 
@@ -103,7 +104,7 @@ simplified mock HTML: the classic silent-truncation bug (`[A-Za-z0-9]` clipping
 |------|-----|
 | `ClientFacilityDimensionsCache` is a singleton | `clear()` then `initialize()` in `beforeEach`, or tests contaminate each other |
 | Regex asserted only on shape | Also assert result **length/format** — silent truncation passes a shape check |
-| Mock HTML that is too clean | Use `__fixtures__/` captures |
+| Mock HTML that is too clean | Use `src/mock-server/` captured scenarios |
 | Testing only level 1 of property resolution | Cover all three: direct → indexed (`Price0`) → columnSuffix (`Tax0Percent`) |
 | Async RDO test without timeout category | `testTimeout` is 10 s; a VERY_SLOW category call will hang the suite |
 
