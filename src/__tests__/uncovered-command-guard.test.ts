@@ -19,7 +19,7 @@
  * worktree-scope-guard.test.ts uses for its real-git suite.
  */
 
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync, SpawnSyncOptions } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -111,6 +111,10 @@ function run(repo: Repo, opts: RunOpts): RunResult {
         PATH: `${repo.binDir}:${process.env.PATH}`,
         SPO_BENCH_DIR: repo.benchDir,
         SPO_USER_SETTINGS: path.join(repo.dir, 'nonexistent-user-settings.json'),
+        // These 14 cases were all written against the original, synchronous behaviour — pin
+        // sync mode explicitly rather than relying on the (async-by-default) fallback, so this
+        // suite proves sync mode is unchanged rather than merely happening to still pass.
+        SPO_HOOK_LLM_MODE: 'sync',
         ...opts.env,
       },
     });
@@ -134,6 +138,59 @@ function journalLines(repo: Repo): Array<Record<string, unknown>> {
 function witnessed(repo: Repo, witness: string): boolean {
   return fs.existsSync(witness);
 }
+
+/** Async mode's whole point is that the journal write lands AFTER the wrapper returned, so a
+ * test cannot assert it inline. Bounded poll, never an unbounded wait. */
+async function waitForJournal(
+  repo: Repo,
+  atLeast: number,
+  timeoutMs: number
+): Promise<Array<Record<string, unknown>>> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const lines = journalLines(repo);
+    if (lines.length >= atLeast) return lines;
+    if (Date.now() >= deadline) return lines;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+function runTimed(repo: Repo, opts: RunOpts): RunResult & { ms: number } {
+  const t0 = Date.now();
+  const r = run(repo, opts);
+  return { ...r, ms: Date.now() - t0 };
+}
+
+interface SpawnSyncOptionsDetached extends SpawnSyncOptions {
+  detached: boolean;
+}
+
+/** Runs the wrapper in its own process group, the way a harness that wants to be able to
+ * signal a runaway hook would, and returns its pid so a test can signal the group afterwards.
+ * `detached` is a real, documented libuv option `spawnSync` passes straight through — @types/node
+ * just doesn't model it on `SpawnSyncOptions`, hence the narrow, local extension above rather
+ * than an `any` cast. */
+function runInOwnProcessGroup(repo: Repo, command: string): number {
+  const payload = { tool_name: 'Bash', tool_input: { command }, cwd: repo.dir, permission_mode: 'default' };
+  const options: SpawnSyncOptionsDetached = {
+    cwd: repo.dir,
+    input: JSON.stringify(payload),
+    detached: true,
+    env: {
+      ...gitEnv,
+      PATH: `${repo.binDir}:${process.env.PATH}`,
+      SPO_BENCH_DIR: repo.benchDir,
+      SPO_USER_SETTINGS: path.join(repo.dir, 'nonexistent-user-settings.json'),
+    },
+  };
+  const r = spawnSync('bash', [WRAPPER], options);
+  return r.pid ?? -1;
+}
+
+/** touch witness, sleep, then emit the canned needs-form verdict — used to prove the wrapper
+ * returns before a slow classifier finishes, not merely before a fast one. */
+const slowNeedsFormClaude = (witness: string, sleepSeconds: string): string =>
+  `#!/usr/bin/env bash\ntouch "${witness}"\nsleep ${sleepSeconds}\ncat <<'JSON'\n{"structured_output":{"classification":"needs-form","reason":"curl is not allowlisted","explanation":"use the gh CLI instead","corrected_command":"gh api repos/x","worth_hardening":true,"rule_slug":"curl-github-api","harden_target":"allowlist"}}\nJSON\nexit 0\n`;
 
 const needsFormClaude = (witness: string): string =>
   `#!/usr/bin/env bash\ntouch "${witness}"\ncat <<'JSON'\n{"structured_output":{"classification":"needs-form","reason":"curl is not allowlisted","explanation":"use the gh CLI instead","corrected_command":"gh api repos/x","worth_hardening":true,"rule_slug":"curl-github-api","harden_target":"allowlist"}}\nJSON\nexit 0\n`;
@@ -376,6 +433,169 @@ describe('uncovered-command-guard.sh — fails closed, never hangs, never allows
   });
 });
 
+// 2026-08-28: production median latency for the classifier call was measured at 63.6s (p90
+// 71.2s, 43% timing out at the 75s ceiling) across the day's many concurrent sessions sharing
+// one account — the synchronous design was taxing every session that hit an uncovered command.
+// `SPO_HOOK_LLM_MODE=async` (the default from this point on) fires the same classifier call
+// detached and returns in ~150ms; the command runs unexamined — identical risk to the hook
+// being unregistered entirely (which was live on main, PR #405) — and the verdict still lands
+// in the journal 40-75s later, so hook:harvest keeps learning without the agent ever waiting.
+describe('uncovered-command-guard.sh — async (learning) mode', () => {
+  it('is the default: an uncovered command exits 0 in milliseconds even with a slow classifier', () => {
+    const witness = path.join(getTempDir(), `witness-${process.pid}-async-1`);
+    fs.rmSync(witness, { force: true });
+    const repo = makeRepo(slowNeedsFormClaude(witness, '5'));
+    try {
+      const { code, stderr, ms } = runTimed(repo, {
+        command: 'curl https://api.github.com/x',
+        env: { SPO_HOOK_LLM_MODE: 'async' },
+      });
+      expect(code).toBe(0);
+      expect(stderr).toBe('');
+      // Wide margin on purpose: a plain `cmd &` (no fd redirection) blocked for the fake
+      // classifier's whole 5s life in the measurements that produced this design — this bound
+      // only needs to separate "detached" from "not detached", not chase WSL startup jitter.
+      expect(ms).toBeLessThan(2500);
+    } finally {
+      repo.cleanup();
+      fs.rmSync(witness, { force: true });
+    }
+  });
+
+  it('writes nothing on the synchronous return path', () => {
+    const witness = path.join(getTempDir(), `witness-${process.pid}-async-2`);
+    fs.rmSync(witness, { force: true });
+    const repo = makeRepo(slowNeedsFormClaude(witness, '2'));
+    try {
+      run(repo, { command: 'curl https://api.github.com/x', env: { SPO_HOOK_LLM_MODE: 'async' } });
+      expect(journalLines(repo)).toHaveLength(0);
+    } finally {
+      repo.cleanup();
+      fs.rmSync(witness, { force: true });
+    }
+  });
+
+  it('the detached classifier still journals its verdict after the hook returned', async () => {
+    const witness = path.join(getTempDir(), `witness-${process.pid}-async-3`);
+    fs.rmSync(witness, { force: true });
+    const repo = makeRepo(slowNeedsFormClaude(witness, '1'));
+    try {
+      const { code } = run(repo, {
+        command: 'curl https://api.github.com/x',
+        env: { SPO_HOOK_LLM_MODE: 'async' },
+      });
+      expect(code).toBe(0);
+      expect(journalLines(repo)).toHaveLength(0);
+      const lines = await waitForJournal(repo, 1, 20000);
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatchObject({
+        verdict: 'guide',
+        classification: 'needs-form',
+        corrected_command: 'gh api repos/x',
+        rule_slug: 'curl-github-api',
+      });
+    } finally {
+      repo.cleanup();
+      fs.rmSync(witness, { force: true });
+    }
+  }, 30000);
+
+  it('the detached classifier survives a signal to the hook\'s own process group', async () => {
+    const witness = path.join(getTempDir(), `witness-${process.pid}-async-4`);
+    fs.rmSync(witness, { force: true });
+    const repo = makeRepo(slowNeedsFormClaude(witness, '2'));
+    try {
+      const pid = runInOwnProcessGroup(repo, 'curl https://api.github.com/x');
+      // A real signal to this group could only come from the harness enforcing the settings.json
+      // `timeout` (seconds, not milliseconds) — never a synchronous kill in the same instant the
+      // wrapper returns. Measured directly (2026-08-28): `setsid --fork`'s own fork() has a real
+      // but SUB-MILLISECOND window before the child calls setsid() — a kill sent with 0 delay
+      // races it (survived only 1/10 trials); the SAME kill sent 20ms later survived 10/10. This
+      // wait matches a realistic signal, not a synthetic zero-latency one no real caller sends.
+      await new Promise((r) => setTimeout(r, 50));
+      try {
+        process.kill(-pid, 'SIGTERM');
+      } catch {
+        // ESRCH: the hook's process group is already empty — itself evidence the classifier
+        // detached into its own group (setsid) before this signal could reach it.
+      }
+      const lines = await waitForJournal(repo, 1, 20000);
+      expect(lines).toHaveLength(1);
+      expect(lines[0].verdict).toBe('guide');
+    } finally {
+      repo.cleanup();
+      fs.rmSync(witness, { force: true });
+    }
+  }, 30000);
+
+  it('over the hourly cap, exits 0 without blocking and makes no classifier call', async () => {
+    const witness = path.join(getTempDir(), `witness-${process.pid}-async-5`);
+    fs.rmSync(witness, { force: true });
+    const repo = makeRepo(needsFormClaude(witness));
+    try {
+      const top = execFileSync('git', ['-C', repo.dir, 'rev-parse', '--show-toplevel'], {
+        encoding: 'utf8',
+      }).trim();
+      const sessionKey = require('crypto').createHash('sha1').update(top).digest('hex').slice(0, 16);
+      fs.mkdirSync(path.join(repo.benchDir, 'hook-llm'), { recursive: true });
+      const seedLines = Array.from({ length: 2 }, () =>
+        JSON.stringify({ ts: new Date().toISOString(), session_key: sessionKey, verdict: 'guide' })
+      );
+      fs.writeFileSync(path.join(repo.benchDir, 'hook-llm', 'journal.jsonl'), seedLines.join('\n') + '\n');
+
+      const { code, stderr, ms } = runTimed(repo, {
+        command: 'curl https://x',
+        env: { SPO_HOOK_LLM_MAX_PER_HOUR: '2', SPO_HOOK_LLM_MODE: 'async' },
+      });
+      expect(code).toBe(0);
+      expect(stderr).toBe('');
+      expect(ms).toBeLessThan(2500);
+      const lines = await waitForJournal(repo, 3, 10000);
+      expect(lines).toHaveLength(3);
+      expect(lines[2].verdict).toBe('throttled');
+      expect(fs.existsSync(witness)).toBe(false); // the classifier was never invoked
+    } finally {
+      repo.cleanup();
+      fs.rmSync(witness, { force: true });
+    }
+  }, 15000);
+
+  it('a covered command launches nothing at all', async () => {
+    const witness = path.join(getTempDir(), `witness-${process.pid}-async-6`);
+    fs.rmSync(witness, { force: true });
+    const repo = makeRepo(needsFormClaude(witness));
+    try {
+      const { code } = run(repo, { command: 'npm run build' });
+      expect(code).toBe(0);
+      const lines = await waitForJournal(repo, 1, 1500);
+      expect(lines).toHaveLength(0);
+      expect(fs.existsSync(witness)).toBe(false);
+    } finally {
+      repo.cleanup();
+      fs.rmSync(witness, { force: true });
+    }
+  });
+
+  it('an explicit SPO_HOOK_LLM_MODE=sync reproduces the blocking deny, unchanged', () => {
+    const witness = path.join(getTempDir(), `witness-${process.pid}-async-7`);
+    fs.rmSync(witness, { force: true });
+    const repo = makeRepo(needsFormClaude(witness));
+    try {
+      const { code, stderr } = run(repo, {
+        command: 'curl https://api.github.com/x',
+        env: { SPO_HOOK_LLM_MODE: 'sync' },
+      });
+      expect(code).toBe(2);
+      expect(stderr).toContain('gh api repos/x');
+      // No polling here on purpose: sync mode must journal on the SAME return, immediately.
+      expect(journalLines(repo)[0].verdict).toBe('guide');
+    } finally {
+      repo.cleanup();
+      fs.rmSync(witness, { force: true });
+    }
+  });
+});
+
 describe('the never-allow pin', () => {
   it('neither source file ever emits a permissionDecision JSON block', () => {
     // The header comments discuss the mechanism in prose (why it's deliberately unused) — that
@@ -404,6 +624,7 @@ describe('the never-allow pin', () => {
           PATH: `${repo.binDir}:${process.env.PATH}`,
           SPO_BENCH_DIR: repo.benchDir,
           SPO_USER_SETTINGS: path.join(repo.dir, 'nope.json'),
+          SPO_HOOK_LLM_MODE: 'sync',
         },
       });
       // Unreachable when the classifier denies (exit 2 throws) — assert if it ever doesn't.
@@ -412,6 +633,32 @@ describe('the never-allow pin', () => {
       const err = e as { status?: number; stdout?: string };
       expect([0, 2]).toContain(err.status);
       expect(err.stdout ?? '').toBe('');
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it('async mode (the default) exits 0 with empty stdout too', () => {
+    const repo = makeRepo(needsFormClaude(path.join(getTempDir(), `witness-${process.pid}-pin-async`)));
+    try {
+      const stdout = execFileSync('bash', [WRAPPER], {
+        cwd: repo.dir,
+        input: JSON.stringify({
+          tool_name: 'Bash',
+          tool_input: { command: 'curl https://x' },
+          cwd: repo.dir,
+          permission_mode: 'default',
+        }),
+        encoding: 'utf8',
+        env: {
+          ...gitEnv,
+          PATH: `${repo.binDir}:${process.env.PATH}`,
+          SPO_BENCH_DIR: repo.benchDir,
+          SPO_USER_SETTINGS: path.join(repo.dir, 'nope.json'),
+          // No SPO_HOOK_LLM_MODE — proves the default itself, not an explicit choice.
+        },
+      });
+      expect(stdout).toBe('');
     } finally {
       repo.cleanup();
     }
