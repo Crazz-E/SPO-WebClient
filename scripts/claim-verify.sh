@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # npm run board:verify -- <ITEM_ID> — the handshake re-read. ONE item, ~1 point.
 #
-# Run it AFTER writing `Session` and moving Status → In progress (kanban-workflow § 2 · Claim).
+# Run it AFTER writing `Session` and moving Status → Planning (kanban-workflow § 2 · Claim).
 # Never re-read the pool to check a claim: same answer, ~103 points (§ GitHub API discipline).
 #
 # It prints the three fields the handshake writes — `Session`, `Status`, `Area` — because the

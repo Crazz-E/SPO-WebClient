@@ -14,8 +14,8 @@
 #   4  the write request itself failed — nothing landed, the card is unmoved
 #   5  the write landed but the confirmation re-read failed — state is UNKNOWN, re-check later
 #
-#   bash scripts/board-move.sh 285 "In progress"
-#   bash scripts/board-move.sh 285 needstriage
+#   bash scripts/board-move.sh 285 "Planning"
+#   bash scripts/board-move.sh 285 parked
 set -euo pipefail
 
 # Two of this script's columns CLOSE a session's ownership, and the driver-scope marker must
@@ -149,7 +149,7 @@ if [ "$after" != "$option_name" ]; then
 fi
 
 case "$option_name" in
-  Done|"Needs triage") disarm_driver_scope ;;
+  Done|Parked) disarm_driver_scope ;;
 esac
 
 echo "MOVED #$issue -> $option_name"

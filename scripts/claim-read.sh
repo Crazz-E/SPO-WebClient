@@ -17,8 +17,8 @@
 # (kanban-workflow § GitHub API discipline). That is how the board went unreadable on
 # 2026-08-25. The busy set is computed INSIDE this call, never by a second one.
 #
-# `item …` lines render ONLY for In progress, Gate, PR and Needs triage — the open,
-# non-Todo columns, i.e. "who holds ground right now". Todo cards are already carried by
+# `item …` lines render ONLY for Planning, Implementing, Gate, Validation, Checks & PR,
+# Merging and Parked — the open, non-Todo columns, i.e. "who holds ground right now". Todo cards are already carried by
 # the `walk:` block with their rank, area and title, so an `item` line for them would be a
 # duplicate; and now that `board:take` resolves an item id from the issue number itself,
 # the driver never needs an item id for a Todo card either. Done cards own no ground and
@@ -26,8 +26,9 @@
 # `items: N/M` still proves the read was complete; `hidden: N (Done d, Todo t — …)`
 # immediately below it accounts for everything now missing from the `item` lines.
 #
-# The `busy areas:` line IS the busy set (§ One session per area): In progress, Gate or PR,
-# `docs` excluded because it never blocks. It is computed rather than eyeballed off the item
+# The `busy areas:` line IS the busy set (§ One session per area): Planning, Implementing,
+# Gate, Validation, Checks & PR or Merging, `docs` excluded because it never blocks. It is
+# computed rather than eyeballed off the item
 # lines so the rule stays executable; `$cards` is bound once and both outputs read it. A busy
 # card only counts while its ground reservation is LIVE: `scripts/heartbeat-scan.sh` (local
 # disk, no API call) answers that for any branch with a heartbeat file; a busy-status card
@@ -95,10 +96,10 @@ heartbeats_json=$(bash scripts/heartbeat-scan.sh 2>/dev/null | jq -R -s '
   split("\n") | map(select(test("\t"))) | map(split("\t")) | map({(.[0]): .[2]}) | add // {}
 ')
 
-# Busy-status branches (In progress/Gate/Validation/PR, area != docs) with NO heartbeat entry at all —
+# Busy-status branches (Planning/Implementing/Gate/Validation/Checks & PR/Merging, area != docs) with NO heartbeat entry at all —
 # these are the only ones that need the ref-date sidecar (rule F).
 busy_branches_json=$(jq -c --argjson heartbeats "$heartbeats_json" '
-  [.[] | select(.Status == "In progress" or .Status == "Gate" or .Status == "Validation" or .Status == "PR")
+  [.[] | select(.Status == "Planning" or .Status == "Implementing" or .Status == "Gate" or .Status == "Validation" or .Status == "Checks & PR" or .Status == "Merging")
     | select(.Area != null and .Area != "docs")
     | (.Session // "") | split(" @ ")[0] | select(length > 0)]
   | unique
@@ -168,7 +169,7 @@ jq -n -r \
       | select(.openBy | length > 0)]) as $blockedIssues
   | ($blockedIssues | map({(.number | tostring): .openBy}) | add // {}) as $blockedMap
   | ([$cards[]
-      | select(.Status == "In progress" or .Status == "Gate" or .Status == "Validation" or .Status == "PR")
+      | select(.Status == "Planning" or .Status == "Implementing" or .Status == "Gate" or .Status == "Validation" or .Status == "Checks & PR" or .Status == "Merging")
       | select(.Area != null and .Area != "docs")
       # `split` on an EMPTY string returns [], so `[0]` is null and `$heartbeats[null]` is a
       # hard jq error — "Cannot index object with null" — that kills the whole claim read for
@@ -196,7 +197,7 @@ jq -n -r \
     ) as $walk
   | ("rateLimit: cost \($rl.cost), remaining \($rl.remaining), resets \($rl.resetAt)"),
     ("items: \($cards | length)/\($total)"),
-    ("hidden: \([$cards[] | select(.Status != "In progress" and .Status != "Gate" and .Status != "Validation" and .Status != "PR" and .Status != "Needs triage")] | length) (Done \([$cards[] | select(.Status == "Done")] | length), Todo \([$cards[] | select(.Status == "Todo")] | length) — Todo cards are in the walk)"),
+    ("hidden: \([$cards[] | select(.Status != "Planning" and .Status != "Implementing" and .Status != "Gate" and .Status != "Validation" and .Status != "Checks & PR" and .Status != "Merging" and .Status != "Parked")] | length) (Done \([$cards[] | select(.Status == "Done")] | length), Todo \([$cards[] | select(.Status == "Todo")] | length) — Todo cards are in the walk)"),
     ("busy areas: \($busy | join(" "))"),
     (if ($ref_note | length) > 0 then $ref_note else empty end),
     "walk:",
@@ -207,7 +208,7 @@ jq -n -r \
       | select(.name == "Status" or .name == "Session" or .name == "Area")
       | "field \(.name): \(.id)\(if .options then " " + ([.options[] | "\(.name)=\(.id)"] | join(" ")) else "" end)"),
     ($cards[]
-      | select(.Status == "In progress" or .Status == "Gate" or .Status == "Validation" or .Status == "PR" or .Status == "Needs triage")
+      | select(.Status == "Planning" or .Status == "Implementing" or .Status == "Gate" or .Status == "Validation" or .Status == "Checks & PR" or .Status == "Merging" or .Status == "Parked")
       | "item \(.id) #\(.number) [\(.Status // "-")] area=\(.Area // "-") session=\(.Session // "-") \(.title)"),
     ($blockedIssues[]
       | "#\(.number) blocked by \([.openBy[] | "#\(.)"] | join(", "))")

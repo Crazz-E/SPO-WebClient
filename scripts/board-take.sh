@@ -25,16 +25,17 @@
 # closed it. `Session` still names that session, but the session ended cleanly — closing it
 # by hand is the only way forward, and until now that meant a human editing the field in the
 # Projects UI. The trouble is that a card released on FAILURE lands in the exact same column
-# (Needs triage) with `Session` deliberately still filled, as the trace ownership law 4 asks
+# (Parked) with `Session` deliberately still filled, as the trace ownership law 4 asks
 # for — so Status and "issue open" alone cannot tell a genuine reopen from a failure trace a
 # session has no business clearing. GitHub reports the difference: a reopened-and-still-open
 # issue's `stateReason` is `REOPENED`; a failure trace's issue was never closed, so its
 # `stateReason` is null. All three conditions below are load-bearing together — drop any one
 # and a failure trace becomes clearable by any session that asks:
 #
-#   a. current Status is `Done` or `Needs triage` — the two columns a closed-then-reopened
-#      card can be sitting in; a live column (Todo/In progress/Gate/PR) means the owner may
-#      still be working and only expiry or the human should move it.
+#   a. current Status is `Done` or `Parked` — the two columns a closed-then-reopened
+#      card can be sitting in; a live column (Todo/Planning/Implementing/Gate/Validation/
+#      Checks & PR/Merging) means the owner may still be working and only expiry or the
+#      human should move it.
 #   b. the issue's `state` is OPEN — a closed issue is terminal, not reopened work.
 #   c. the issue's `stateReason` is REOPENED — the actual distinguisher between "this was
 #      reopened" and "this was never closed" (a failure release, or Done reached without a
@@ -268,7 +269,7 @@ issue_state_reason=$(jq -r '.data.repository.issue.stateReason // ""' <<< "$raw"
 session_field_id=$(jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Session") | .id' <<< "$raw")
 status_field_id=$(jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Status") | .id' <<< "$raw")
 area_field_id=$(jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Area") | .id' <<< "$raw")
-in_progress_option_id=$(jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Status") | .options[]? | select(.name=="In progress") | .id' <<< "$raw")
+in_progress_option_id=$(jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Status") | .options[]? | select(.name=="Planning") | .id' <<< "$raw")
 todo_option_id=$(jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Status") | .options[]? | select(.name=="Todo") | .id' <<< "$raw")
 
 area_option_id=""
@@ -318,7 +319,7 @@ if [ "$release" -eq 1 ]; then
     # a live owner, a failure trace, a closed issue, or a field this read could not read —
     # falls straight through to the refusal below.
     case "$current_status" in
-      Done | "Needs triage")
+      Done | Parked)
         if [ "$issue_state" = "OPEN" ] && [ "$issue_state_reason" = "REOPENED" ]; then
           reopened_release=1
         fi
@@ -328,14 +329,14 @@ if [ "$release" -eq 1 ]; then
     if [ "$reopened_release" -ne 1 ]; then
       echo "NOT YOURS: held by ${current_session:--}"
       case "$current_status" in
-        Todo | "In progress" | Gate | Validation | PR)
+        Todo | Planning | Implementing | Gate | Validation | "Checks & PR" | Merging)
           echo "the owner is live — ask them, or wait for the reservation to expire; only the human may free it."
           ;;
         *)
           if [ "$issue_state" = "CLOSED" ]; then
             echo "a terminal card whose issue is closed is not reopened work."
           else
-            echo "Session is deliberately the trace of a failed attempt — only the human reclassifies from Needs triage (doc/kanban-workflow.md:26, :121-125)."
+            echo "Session is deliberately the trace of a failed attempt — only the human reclassifies from Parked (doc/kanban-workflow.md:26, :121-125)."
           fi
           ;;
       esac
