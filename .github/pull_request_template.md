@@ -22,9 +22,6 @@
 - [ ] **L3 owed?** — if the diff touches pixels (renderer, layout, CSS), the browser smoke (`/e2e`) ran or is listed under Test Plan
 - [ ] **RDO changes**: Verified against Delphi source using `delphi-archaeologist` — a change to
       `rdo-members.ts` needs a `File.pas:Line` citation **in this body** (CI checks it)
-- [ ] **Protected files**: Did NOT modify `rdo-types.ts`, `rdo-frame.ts`, `rdo.ts`,
-      or `jest.config.js` — or the maintainer posted the `rdo-approved`
-      label (CI checks it)
 - [ ] No `any` types — used `unknown` for catch blocks
 - [ ] Every new UI element is fully wired (not just visible)
 

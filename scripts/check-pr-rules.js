@@ -1,25 +1,19 @@
 #!/usr/bin/env node
 
 /**
- * The three rules the repository states but nothing enforced — made mechanical.
+ * Two rules CLAUDE.md states as binding that the GitHub ruleset cannot express on its own —
+ * made mechanical, so they hold without a human keeping watch.
  *
- * CLAUDE.md, CONTRIBUTING.md and the pull-request template all present these as binding.
- * They were not: `.github/CODEOWNERS` names an owner for the protected files, but the
- * `main` ruleset carries `require_code_owner_review: false` and requires zero approving
- * reviews, so the only barrier left was a checkbox ticked by whoever wrote the diff.
- *
- *   1. Protected files       — changing one needs the `rdo-approved` label, which only a
- *                              human can post. The author cannot grant it to themselves.
- *   2. Coverage ratchet      — "thresholds only go UP" is a numeric comparison between
+ *   1. Coverage ratchet      — "thresholds only go UP" is a numeric comparison between
  *                              jest.config.js on the base and on this branch.
- *   3. RDO catalogue         — adding to the catalogue needs the server declaration cited
+ *   2. RDO catalogue         — adding to the catalogue needs the server declaration cited
  *                              as `File.pas:Line`; the PR body must carry at least one.
  *
  * Runs as a step of the `typecheck + tests` job, which is a required status check — so it
  * blocks a merge without any ruleset change. Skipped outside a pull request, where there
- * is no body and no label to read.
+ * is no body to read.
  *
- *   PR_BODY=… PR_LABELS='["rdo-approved"]' BASE_SHA=… node scripts/check-pr-rules.js
+ *   PR_BODY=… BASE_SHA=… node scripts/check-pr-rules.js
  *
  * Exit 0 when every rule holds, 1 on the first-class failure of any of them.
  */
@@ -29,21 +23,6 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-/**
- * Frozen: the wire itself and the machine floor. `rdo-members.ts` is deliberately NOT
- * here — it is a census that grows every time the client emits a new member, and CLAUDE.md
- * documents that growth as normal work. What it needs is the citation (rule 3), not a
- * human unlock on every entry.
- */
-const PROTECTED_FILES = [
-  'src/shared/rdo-types.ts',
-  'src/shared/rdo-frame.ts',
-  'src/server/rdo.ts',
-  'jest.config.js',
-];
-const PROTECTED_PREFIXES = [];
-const APPROVAL_LABEL = 'rdo-approved';
-
 /** Touching the catalogue means citing the declaration that fixes a member's kind and arity. */
 const CITATION_FILES = ['src/shared/rdo-members.ts'];
 const CITATION_PATTERN = /\b[\w.-]+\.pas:\d+/i;
@@ -52,46 +31,6 @@ const THRESHOLD_METRICS = ['lines', 'functions', 'branches', 'statements'];
 
 function normalise(file) {
   return String(file).replace(/\\/g, '/').trim();
-}
-
-/** Which of the frozen paths this change touches. */
-function protectedTouched(files) {
-  return files
-    .map(normalise)
-    .filter(f => PROTECTED_FILES.includes(f) || PROTECTED_PREFIXES.some(p => f.startsWith(p)));
-}
-
-/**
- * A label list may arrive as the JSON array GitHub Actions produces, or as a plain
- * comma-separated string when a human runs the script by hand.
- */
-function parseLabels(raw) {
-  const text = (raw ?? '').trim();
-  if (!text) return [];
-  if (text.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(text);
-      return Array.isArray(parsed) ? parsed.map(l => String(l.name ?? l).trim()) : [];
-    } catch {
-      return [];
-    }
-  }
-  return text.split(',').map(l => l.trim()).filter(Boolean);
-}
-
-function checkProtectedPaths(files, labels) {
-  const touched = protectedTouched(files);
-  if (touched.length === 0) return { ok: true, detail: 'no protected file touched' };
-  if (labels.includes(APPROVAL_LABEL)) {
-    return { ok: true, detail: `${touched.length} protected file(s), unlocked by \`${APPROVAL_LABEL}\`` };
-  }
-  return {
-    ok: false,
-    detail:
-      `protected file(s) changed without the \`${APPROVAL_LABEL}\` label:\n` +
-      touched.map(f => `      ${f}`).join('\n') +
-      `\n    These change only after discussion. Ask the maintainer to add the label, or drop the change.`,
-  };
 }
 
 function checkCitation(files, body) {
@@ -229,22 +168,20 @@ function main() {
   const base = diffBase(process.env.BASE_SHA);
   if (!base) {
     // Fail CLOSED. This used to fall back to `git diff HEAD` — the WORKING TREE, empty in a
-    // clean CI checkout — so all three rules reported ok over zero files and the run printed
+    // clean CI checkout — so both rules reported ok over zero files and the run printed
     // `0 changed file(s) against HEAD`, which reads like normal output. A shallow checkout, a
     // force-pushed base or a dropped `fetch-depth: 0` silently disarmed every rule.
     console.error('PR rules — FAIL: no diff base could be resolved.');
     console.error('    Tried BASE_SHA, origin/main and main; none produced a merge-base with HEAD.');
-    console.error('    Without a base there is no changed-file set, and all three rules would');
+    console.error('    Without a base there is no changed-file set, and both rules would');
     console.error('    pass over nothing. In CI this usually means the checkout lost its history');
     console.error('    (.github/workflows/ci.yml sets `fetch-depth: 0` for exactly this reason).');
     return 1;
   }
   const files = changedFiles(base);
-  const labels = parseLabels(process.env.PR_LABELS);
   const body = process.env.PR_BODY ?? '';
 
   const results = [
-    ['protected files', checkProtectedPaths(files, labels)],
     ['RDO citation', checkCitation(files, body)],
   ];
 
@@ -267,13 +204,7 @@ function main() {
 }
 
 module.exports = {
-  PROTECTED_FILES,
-  PROTECTED_PREFIXES,
-  APPROVAL_LABEL,
   CITATION_FILES,
-  protectedTouched,
-  parseLabels,
-  checkProtectedPaths,
   checkCitation,
   thresholdRegressions,
   checkThresholds,

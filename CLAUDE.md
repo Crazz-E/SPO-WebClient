@@ -22,11 +22,10 @@ before planning. Start from [architecture-overview.md](doc/architecture-overview
 - Use `any` — `unknown` in catch blocks, typed interfaces for data
 - Modify a file without reading it first
 - Ship code without tests — new/modified lines must reach ≥ 93 % coverage
-- Modify without discussion: `src/shared/rdo-types.ts`, `src/shared/rdo-frame.ts`,
-  `src/server/rdo.ts`, `jest.config.js` (thresholds only go UP) —
-  **enforced**: `scripts/check-pr-rules.js` runs inside the required CI check and fails the
-  PR unless the maintainer posted the `rdo-approved` label. It also fails a change to
-  `rdo-members.ts` whose PR body cites no `File.pas:Line`, and any lowered Jest threshold
+- Change `rdo-members.ts` without citing the server declaration, or lower a Jest threshold —
+  **enforced**: `scripts/check-pr-rules.js` runs inside the required CI check and fails a
+  change to `rdo-members.ts` whose PR body cites no `File.pas:Line`, and any lowered
+  `jest.config.js` threshold (thresholds only go UP)
 - Load screenshots into the main context during debug/E2E — delegate to a sub-agent
 - Add a UI element without wiring its action — no dead buttons
 

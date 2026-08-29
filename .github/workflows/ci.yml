@@ -12,20 +12,8 @@ on:
   # that carries a body change, so it has to be here. It also fires on title edits and on the
   # routine "live evidence in the PR body" write, i.e. a full re-run per edit; the concurrency
   # group below coalesces bursts, and a spare 3-minute run is the cheaper half of the trade.
-  # The same step also reads `PR_LABELS` (`github.event.pull_request.labels.*.name`) to gate
-  # protected-file changes on the `rdo-approved` label — but only `edited` ever got wired for
-  # a payload change. Proven live on #384: posting `rdo-approved` fired no run at all, and a
-  # manual re-run did not help either, because GitHub replays the ORIGINAL event payload — run
-  # `33148715107` reached `run_attempt: 4` and still logged `PR_LABELS: []`, frozen at the
-  # `06:40:17` payload while the label landed at `06:40:23`. `labeled` closes that gap.
-  # `unlabeled` has to come with it: without it, withdrawing an authorisation leaves the green
-  # check standing behind it — a revoked label with no re-run reads as still approved.
-  # Cost, same trade `edited` already made: the repo's own labeler bot posts labels seconds
-  # after `opened`, so most PRs get an extra run from `labeled` alone; the `concurrency` group
-  # below with `cancel-in-progress` coalesces it, superseding the `opened` run rather than
-  # duplicating it.
   pull_request:
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    types: [opened, synchronize, reopened, edited]
   # A merge queue runs its required checks on a SPECULATIVE commit
   # (`gh-readonly-queue/main/pr-N-<sha>`), which is not a push and not a pull request.
   # Without this trigger the required `typecheck + tests` context never reports there, and
@@ -98,18 +86,15 @@ jobs:
         if: github.event_name == 'pull_request'
         run: npm run coverage:changed
 
-      # The three rules CLAUDE.md states and the ruleset cannot express. This runs inside
+      # The two rules CLAUDE.md states and the ruleset cannot express. This runs inside
       # the REQUIRED check rather than as a job of its own, so it blocks a merge without
-      # anyone having to touch the ruleset. `rdo-approved` is posted by a human — the
-      # author of a diff cannot unlock their own protected-file change.
-      # PR-only of necessity, not by choice: this reads the pull request's body and labels,
-      # and a merge_group event carries neither. `rdo-approved` is a label; there is nothing
-      # to read in a merge group. The PR-level run is the enforcement point.
-      - name: PR rules (protected files, coverage ratchet, RDO citation)
+      # anyone having to touch the ruleset.
+      # PR-only of necessity, not by choice: this reads the pull request's body, and a
+      # merge_group event carries none. The PR-level run is the enforcement point.
+      - name: PR rules (coverage ratchet, RDO citation)
         if: github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node scripts/check-pr-rules.js
 

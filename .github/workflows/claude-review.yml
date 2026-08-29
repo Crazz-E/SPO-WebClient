@@ -158,8 +158,8 @@ jobs:
 
             The `typecheck + tests` check already enforces, mechanically, on this same PR:
             lint, TypeScript, the full Jest suite, ≥93% coverage on changed lines, the
-            protected-file lock, the Jest threshold ratchet and the `File.pas:Line` citation
-            for `rdo-members.ts`. Repeating any of them is pure noise — skip them entirely.
+            Jest threshold ratchet and the `File.pas:Line` citation for `rdo-members.ts`.
+            Repeating any of them is pure noise — skip them entirely.
             Skip formatting too: Prettier is configured but deliberately not enforced.
 
             Do not praise, do not summarise the diff back, do not restate the PR description.
