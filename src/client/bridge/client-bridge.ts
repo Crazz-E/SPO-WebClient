@@ -258,6 +258,8 @@ export interface ClientCallbacks {
   onAddFavorite: (name: string, x: number, y: number) => void;
   onRemoveFavorite: (path: string, name: string) => void;
   onRenameFavorite: (path: string, name: string) => void;
+  onCreateFavoriteFolder: (name: string) => void;
+  onMoveFavorite: (path: string, destPath: string, name: string) => void;
 
   // Zone painting
   onToggleZonePainting: (zoneType: number) => void;
@@ -904,7 +906,8 @@ export const ClientBridge = {
 
   handleEmpireResponse(msg: WsMessage): void {
     if (msg.type === WsMessageType.RESP_EMPIRE_FACILITIES) {
-      useEmpireStore.getState().setFacilities((msg as WsRespEmpireFacilities).facilities);
+      const resp = msg as WsRespEmpireFacilities;
+      useEmpireStore.getState().setFacilities(resp.facilities, resp.folders);
     }
   },
 

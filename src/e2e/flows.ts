@@ -12,6 +12,8 @@ import type {
   WsRespFavoriteAdd,
   WsRespFavoriteDelete,
   WsRespFavoriteRename,
+  WsRespFavoriteFolderCreate,
+  WsRespFavoriteMove,
   WsRespMailFolder,
   WsRespMailSent,
   WsRespPoliticsData,
@@ -417,6 +419,127 @@ const favoritesRoundTrip: Flow = {
   },
 };
 
+/**
+ * Folder create / move / delete — the write-side that #129 left undone.
+ *
+ * EVIDENCE. Same reasoning as `favoritesRoundTrip`: these members print
+ * nothing to the Survival log (`Kernel/Favorites.pas` logs only the refused
+ * root-delete), so the read-back through `RDOFavoritesGetSubItems` is the
+ * proof — it walks the same in-memory `TFavorites` object the write just
+ * touched, with no model-server cache in between.
+ *
+ * BLAST RADIUS. Per-tycoon and self-cleaning, same as `favoritesRoundTrip`.
+ */
+const FAVFOLDER_MARKER = 'e2e-favfolder';
+
+const favoritesFolders: Flow = {
+  name: 'favorites-folders',
+  what: 'favorites tree: create folder -> add link -> move in -> move out -> delete link -> delete folder',
+  mutates: true,
+  run: async () => {
+    const assertions = new Assertions();
+    const folderName = `${FAVFOLDER_MARKER} ${new Date().toISOString()}`;
+    const linkName = `${FAVFOLDER_MARKER}-link`;
+
+    const session = await login(PRIMARY_ACCOUNT);
+    const listFavorites = async (): Promise<WsRespEmpireFacilities> =>
+      session.driver.request<WsRespEmpireFacilities>(
+        { type: WsMessageType.REQ_EMPIRE_FACILITIES },
+        WsMessageType.RESP_EMPIRE_FACILITIES,
+      );
+
+    try {
+      // Sweep first: an earlier run killed mid-flow would otherwise leave its
+      // marker items behind for good.
+      const before = await listFavorites();
+      for (const stale of before.facilities.filter(f => f.name.startsWith(FAVFOLDER_MARKER))) {
+        await session.driver.request<WsRespFavoriteDelete>(
+          { type: WsMessageType.REQ_FAVORITE_DELETE, path: stale.path },
+          WsMessageType.RESP_FAVORITE_DELETE,
+        );
+      }
+      for (const stale of before.folders.filter(f => f.name.startsWith(FAVFOLDER_MARKER))) {
+        await session.driver.request<WsRespFavoriteDelete>(
+          { type: WsMessageType.REQ_FAVORITE_DELETE, path: stale.path },
+          WsMessageType.RESP_FAVORITE_DELETE,
+        );
+      }
+
+      const createdFolder = await session.driver.request<WsRespFavoriteFolderCreate>(
+        { type: WsMessageType.REQ_FAVORITE_FOLDER_CREATE, name: folderName },
+        WsMessageType.RESP_FAVORITE_FOLDER_CREATE,
+      );
+      assertions.check('the folder create was accepted and answered an id',
+        createdFolder.success && (createdFolder.id ?? 0) > 0, `id=${createdFolder.id ?? 'none'}`);
+
+      const afterFolderCreate = await listFavorites();
+      const folder = afterFolderCreate.folders.find(f => f.name === folderName);
+      assertions.check('the folder is in the tree the server serves', Boolean(folder), folderName);
+
+      const addedLink = await session.driver.request<WsRespFavoriteAdd>(
+        { type: WsMessageType.REQ_FAVORITE_ADD, name: linkName, x: 641, y: 66 },
+        WsMessageType.RESP_FAVORITE_ADD,
+      );
+      assertions.check('the link add was accepted', addedLink.success && (addedLink.id ?? 0) > 0);
+
+      const afterLinkAdd = await listFavorites();
+      const link = afterLinkAdd.facilities.find(f => f.name === linkName);
+      assertions.check('the added link is in the tree the server serves', Boolean(link), linkName);
+
+      if (folder && link) {
+        const movedIn = await session.driver.request<WsRespFavoriteMove>(
+          { type: WsMessageType.REQ_FAVORITE_MOVE, path: link.path, destPath: folder.path },
+          WsMessageType.RESP_FAVORITE_MOVE,
+        );
+        assertions.check('the move into the folder was accepted', movedIn.success);
+
+        const afterMoveIn = await listFavorites();
+        const nested = afterMoveIn.facilities.find(f => f.name === linkName);
+        assertions.check('the link now lives under the folder\'s Location',
+          nested?.path === `${folder.path}/${link.id}`, nested?.path);
+        assertions.check('its coordinates did not change',
+          nested?.x === 641 && nested?.y === 66, `${nested?.x},${nested?.y}`);
+
+        if (nested) {
+          const movedOut = await session.driver.request<WsRespFavoriteMove>(
+            { type: WsMessageType.REQ_FAVORITE_MOVE, path: nested.path, destPath: '' },
+            WsMessageType.RESP_FAVORITE_MOVE,
+          );
+          assertions.check('the move back to the root was accepted', movedOut.success);
+
+          const afterMoveOut = await listFavorites();
+          const backAtRoot = afterMoveOut.facilities.find(f => f.name === linkName);
+          assertions.check('the link is back at the root Location',
+            backAtRoot?.path === String(link.id), backAtRoot?.path);
+
+          if (backAtRoot) {
+            const deletedLink = await session.driver.request<WsRespFavoriteDelete>(
+              { type: WsMessageType.REQ_FAVORITE_DELETE, path: backAtRoot.path },
+              WsMessageType.RESP_FAVORITE_DELETE,
+            );
+            assertions.check('the link delete was accepted', deletedLink.success);
+          }
+        }
+
+        const deletedFolder = await session.driver.request<WsRespFavoriteDelete>(
+          { type: WsMessageType.REQ_FAVORITE_DELETE, path: folder.path },
+          WsMessageType.RESP_FAVORITE_DELETE,
+        );
+        assertions.check('the now-empty folder delete was accepted', deletedFolder.success);
+
+        const afterDelete = await listFavorites();
+        assertions.check('neither the link nor the folder remain — the world is restored',
+          !afterDelete.facilities.some(f => f.name === linkName) &&
+          !afterDelete.folders.some(f => f.name === folderName));
+      }
+
+      return report('favorites-folders', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
 export const FLOWS: Flow[] = [
   loginSpine,
   politicsRead,
@@ -425,6 +548,7 @@ export const FLOWS: Flow[] = [
   permissionNegative,
   mailRoundTrip,
   favoritesRoundTrip,
+  favoritesFolders,
 ];
 
 export function flowByName(name: string): Flow {

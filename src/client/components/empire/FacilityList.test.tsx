@@ -9,13 +9,15 @@ import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup
 import { useUiStore } from '../../store/ui-store';
 import { useMapStore } from '../../store/map-store';
 import { FacilityList } from './FacilityList';
-import type { FavoritesItem, MapBuilding } from '@/shared/types';
+import type { FavoritesItem, FavoriteFolder, MapBuilding } from '@/shared/types';
 import type { MinimapRendererAPI } from '../../ui/minimap-colormap';
 
 // At the root of the tree the Location IS the id — that is what a delete or a
 // rename addresses (`TFavorites.LocateItem`, `Kernel/Favorites.pas:312-334`).
 const fav = (id: number, name: string, x: number, y: number): FavoritesItem =>
   ({ id, name, x, y, path: String(id) } as FavoritesItem);
+const folder = (id: number, name: string, path?: string): FavoriteFolder =>
+  ({ id, name, path: path ?? String(id) });
 const bld = (x: number, y: number, alert: boolean): MapBuilding =>
   ({ visualClass: '100', tycoonId: 1, options: 0, x, y, level: 0, alert, attack: 0 } as unknown as MapBuilding);
 
@@ -155,5 +157,100 @@ describe('FacilityList (H6)', () => {
     fireEvent.blur(input);
 
     expect(onRenameFavorite).toHaveBeenCalledWith('4210', 'Moulin');
+  });
+
+  // ── folders — creation, deletion guard, move ───────────────────────────────
+
+  it('the New Folder button prompts and fires onCreateFavoriteFolder', () => {
+    const onCreateFavoriteFolder = jest.fn();
+    renderWithProviders(<FacilityList facilities={[]} folders={[]} />, {
+      clientCallbacks: createSpiedCallbacks({ onCreateFavoriteFolder }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '+ New Folder' }));
+    useUiStore.getState().promptPayload?.onSubmit('Farms');
+
+    expect(onCreateFavoriteFolder).toHaveBeenCalledWith('Farms');
+  });
+
+  it('renders the Folders section', () => {
+    renderWithProviders(<FacilityList facilities={[]} folders={[folder(1, 'Farms')]} />);
+    expect(screen.getByText('Folders')).toBeTruthy();
+    expect(screen.getByText('📁 Farms')).toBeTruthy();
+  });
+
+  it('disables delete on a non-empty folder, and fires onRemoveFavorite on an empty one', () => {
+    const onRemoveFavorite = jest.fn();
+    renderWithProviders(
+      <FacilityList
+        facilities={[{ ...fav(4210, 'Mill', 1, 1), path: '1/4210' }]}
+        folders={[folder(1, 'Farms'), folder(2, 'Empty')]}
+      />,
+      { clientCallbacks: createSpiedCallbacks({ onRemoveFavorite }) },
+    );
+
+    const nonEmptyDelete = screen.getByRole('button', { name: 'Delete Farms' });
+    expect(nonEmptyDelete.hasAttribute('disabled')).toBe(true);
+
+    const emptyDelete = screen.getByRole('button', { name: 'Delete Empty' });
+    expect(emptyDelete.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(emptyDelete);
+    expect(onRemoveFavorite).toHaveBeenCalledWith('2', 'Empty');
+  });
+
+  it('the move select fires onMoveFavorite with the chosen destination', () => {
+    const onMoveFavorite = jest.fn();
+    renderWithProviders(
+      <FacilityList facilities={[fav(4210, 'Mill', 1, 1)]} folders={[folder(1, 'Farms')]} />,
+      { clientCallbacks: createSpiedCallbacks({ onMoveFavorite }) },
+    );
+
+    const select = screen.getByRole('combobox', { name: 'Move Mill to…' });
+    fireEvent.change(select, { target: { value: '1' } });
+
+    expect(onMoveFavorite).toHaveBeenCalledWith('4210', '1', 'Mill');
+  });
+
+  it('renames a folder on Enter, sending its Location and the new name', () => {
+    const onRenameFavorite = jest.fn();
+    renderWithProviders(<FacilityList facilities={[]} folders={[folder(1, 'Farms')]} />, {
+      clientCallbacks: createSpiedCallbacks({ onRenameFavorite }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Farms' }));
+    const input = screen.getByRole('textbox', { name: 'Rename Farms' }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Green Farms' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onRenameFavorite).toHaveBeenCalledWith('1', 'Green Farms');
+  });
+
+  it('Escape cancels a folder rename without sending anything', () => {
+    const onRenameFavorite = jest.fn();
+    renderWithProviders(<FacilityList facilities={[]} folders={[folder(1, 'Farms')]} />, {
+      clientCallbacks: createSpiedCallbacks({ onRenameFavorite }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Farms' }));
+    const input = screen.getByRole('textbox', { name: 'Rename Farms' });
+    fireEvent.change(input, { target: { value: 'Green Farms' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(onRenameFavorite).not.toHaveBeenCalled();
+    expect(screen.getByText('📁 Farms')).toBeTruthy();
+  });
+
+  it('an unchanged or emptied folder name is not a rename — no round trip is spent', () => {
+    const onRenameFavorite = jest.fn();
+    renderWithProviders(<FacilityList facilities={[]} folders={[folder(1, 'Farms')]} />, {
+      clientCallbacks: createSpiedCallbacks({ onRenameFavorite }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Farms' }));
+    const input = screen.getByRole('textbox', { name: 'Rename Farms' });
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onRenameFavorite).not.toHaveBeenCalled();
   });
 });

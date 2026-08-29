@@ -16,9 +16,9 @@ describe('route', () => {
     expect(decision.staticOnly).toBe(false);
   });
 
-  it('routes a Favorites change to its own flow, not to the governance ones', () => {
+  it('routes a Favorites change to its own flows, not to the governance ones', () => {
     const d = route(['src/server/session/favorites-handler.ts']);
-    expect(d.required).toEqual(['login-spine', 'favorites-roundtrip']);
+    expect(d.required).toEqual(['login-spine', 'favorites-roundtrip', 'favorites-folders']);
   });
 
   it('routes the Empire panel the same way — it is the surface of that tree', () => {
@@ -110,7 +110,7 @@ describe('route', () => {
 
   it('routes a removed file a rule does cover — a deleted handler still changes behaviour', () => {
     const gone = ['src/server/session/favorites-handler.ts'];
-    expect(route(gone, gone).required).toEqual([SPINE_FLOW, 'favorites-roundtrip']);
+    expect(route(gone, gone).required).toEqual([SPINE_FLOW, 'favorites-roundtrip', 'favorites-folders']);
   });
 
   it('fails closed on a path no rule covers', () => {

@@ -189,3 +189,31 @@
 .dotOperating {
   background: var(--surface-border-active);
 }
+
+.newFolderButton {
+  width: calc(100% - var(--space-4) * 2);
+  margin: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
+  border: 1px dashed var(--surface-border-active);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+
+.newFolderButton:hover {
+  background: var(--surface-border);
+}
+
+.moveSelect {
+  max-width: 84px;
+  padding: var(--space-1);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+}

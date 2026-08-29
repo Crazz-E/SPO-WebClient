@@ -286,6 +286,10 @@ export enum WsMessageType {
   RESP_FAVORITE_DELETE = 'RESP_FAVORITE_DELETE',
   REQ_FAVORITE_RENAME = 'REQ_FAVORITE_RENAME',
   RESP_FAVORITE_RENAME = 'RESP_FAVORITE_RENAME',
+  REQ_FAVORITE_FOLDER_CREATE = 'REQ_FAVORITE_FOLDER_CREATE',
+  RESP_FAVORITE_FOLDER_CREATE = 'RESP_FAVORITE_FOLDER_CREATE',
+  REQ_FAVORITE_MOVE = 'REQ_FAVORITE_MOVE',
+  RESP_FAVORITE_MOVE = 'RESP_FAVORITE_MOVE',
 
   // Research / Inventions
   REQ_RESEARCH_INVENTORY = 'REQ_RESEARCH_INVENTORY',
@@ -1581,6 +1585,45 @@ export interface WsReqEmpireFacilities extends WsMessage {
 export interface WsRespEmpireFacilities extends WsMessage {
   type: WsMessageType.RESP_EMPIRE_FACILITIES;
   facilities: FavoritesItem[];
+  folders: FavoriteFolder[];
+}
+
+/** A folder in the Favorites tree — `fvkFolder` (`Kernel/FavProtocol.pas:6`). */
+export interface FavoriteFolder {
+  id: number;
+  name: string;
+  /** Same Location addressing as `FavoritesItem.path`. */
+  path: string;
+}
+
+/**
+ * Create a folder — `RDOFavoritesNewItem` with kind `fvkFolder`
+ * (`Interface Server/InterfaceServer.pas:200`).
+ */
+export interface WsReqFavoriteFolderCreate extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_FOLDER_CREATE;
+  name: string;
+  parentPath?: string;
+}
+
+export interface WsRespFavoriteFolderCreate extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_FOLDER_CREATE;
+  success: boolean;
+  id?: number;
+  message?: string;
+}
+
+/** Move an item between folders — `RDOFavoritesMoveItem` (`InterfaceServer.pas:202`). */
+export interface WsReqFavoriteMove extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_MOVE;
+  path: string;
+  destPath: string;
+}
+
+export interface WsRespFavoriteMove extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_MOVE;
+  success: boolean;
+  message?: string;
 }
 
 /**

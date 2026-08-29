@@ -14,6 +14,7 @@ import styles from './EmpireOverview.module.css';
 
 export function EmpireOverview() {
   const facilities = useEmpireStore((s) => s.facilities);
+  const folders = useEmpireStore((s) => s.folders);
   const isLoading = useEmpireStore((s) => s.isLoading);
   const client = useClient();
 
@@ -82,7 +83,7 @@ export function EmpireOverview() {
       </div>
 
       {/* Facility list */}
-      <FacilityList facilities={filteredFacilities} />
+      <FacilityList facilities={filteredFacilities} folders={folders} />
     </div>
   );
 }

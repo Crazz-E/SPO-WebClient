@@ -44,7 +44,7 @@ describe('the catalogue', () => {
 
   it('marks exactly the writing flows as mutating', () => {
     const mutating = FLOWS.filter(f => f.mutates).map(f => f.name).sort();
-    expect(mutating).toEqual(['favorites-roundtrip', 'mail-roundtrip', 'politics-write']);
+    expect(mutating).toEqual(['favorites-folders', 'favorites-roundtrip', 'mail-roundtrip', 'politics-write']);
   });
 
   it('names the known flows when asked for one that does not exist', () => {
@@ -554,5 +554,109 @@ describe('favorites-roundtrip', () => {
 
     expect(result.status).toBe('FAIL');
     expect(result.assertions.find(a => !a.ok)?.what).toMatch(/serves the new name/);
+  });
+});
+
+describe('favorites-folders', () => {
+  interface FolderRow { id: number; name: string; path: string }
+
+  /**
+   * Same stub-tree idea as `favSession`, extended with a folder list and
+   * `RDOFavoritesMoveItem`'s effect: a move rewrites the item's Location to
+   * `${destPath}/${id}` (or bare `id` at the root), same as the server does.
+   */
+  function favFolderSession(
+    seed: { links?: FavRow[]; folders?: FolderRow[] } = {},
+    opts: { refuseFolderCreate?: boolean; refuseMove?: boolean } = {},
+  ) {
+    const links: FavRow[] = [...(seed.links ?? [])];
+    const folders: FolderRow[] = [...(seed.folders ?? [])];
+    let nextId = 100;
+    const sent: WsMessage[] = [];
+    const s = stubSession(msg => {
+      sent.push(msg);
+      const m = msg as unknown as {
+        name?: string; x?: number; y?: number; path?: string; destPath?: string;
+      };
+      switch (msg.type) {
+        case WsMessageType.REQ_EMPIRE_FACILITIES:
+          return { type: WsMessageType.RESP_EMPIRE_FACILITIES, facilities: [...links], folders: [...folders] };
+        case WsMessageType.REQ_FAVORITE_FOLDER_CREATE: {
+          if (opts.refuseFolderCreate) return { type: WsMessageType.RESP_FAVORITE_FOLDER_CREATE, success: false };
+          const id = nextId++;
+          folders.push({ id, name: m.name!, path: String(id) });
+          return { type: WsMessageType.RESP_FAVORITE_FOLDER_CREATE, success: true, id };
+        }
+        case WsMessageType.REQ_FAVORITE_ADD: {
+          const id = nextId++;
+          links.push({ id, name: m.name!, x: m.x!, y: m.y!, path: String(id) });
+          return { type: WsMessageType.RESP_FAVORITE_ADD, success: true, id };
+        }
+        case WsMessageType.REQ_FAVORITE_MOVE: {
+          if (opts.refuseMove) return { type: WsMessageType.RESP_FAVORITE_MOVE, success: false };
+          const row = links.find(f => f.path === m.path);
+          if (row) row.path = m.destPath ? `${m.destPath}/${row.id}` : String(row.id);
+          return { type: WsMessageType.RESP_FAVORITE_MOVE, success: true };
+        }
+        default: {
+          const li = links.findIndex(f => f.path === m.path);
+          if (li >= 0) links.splice(li, 1);
+          const fi = folders.findIndex(f => f.path === m.path);
+          if (fi >= 0) folders.splice(fi, 1);
+          return { type: WsMessageType.RESP_FAVORITE_DELETE, success: true };
+        }
+      }
+    });
+    return { session: s, links, folders, sent };
+  }
+
+  function install(fav: ReturnType<typeof favFolderSession>): void {
+    jest.spyOn(session, 'login').mockResolvedValue(fav.session);
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+  }
+
+  it('creates a folder, moves a link in and out, then deletes both, leaving the tree as it found it', async () => {
+    const fav = favFolderSession();
+    install(fav);
+
+    const result = await flowByName('favorites-folders').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(fav.links).toEqual([]);
+    expect(fav.folders).toEqual([]);
+  });
+
+  it('sweeps marker links and folders left by an earlier run that died mid-flow', async () => {
+    const fav = favFolderSession({
+      links: [{ id: 9, name: 'e2e-favfolder-link', x: 1, y: 2, path: '9' }],
+      folders: [{ id: 8, name: 'e2e-favfolder stale', path: '8' }],
+    });
+    install(fav);
+
+    const result = await flowByName('favorites-folders').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(fav.links).toEqual([]);
+    expect(fav.folders).toEqual([]);
+  });
+
+  it('fails when the folder create is refused', async () => {
+    const fav = favFolderSession({}, { refuseFolderCreate: true });
+    install(fav);
+
+    const result = await flowByName('favorites-folders').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/folder create was accepted/);
+  });
+
+  it('fails when the move is refused', async () => {
+    const fav = favFolderSession({}, { refuseMove: true });
+    install(fav);
+
+    const result = await flowByName('favorites-folders').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/move into the folder was accepted/);
   });
 });

@@ -4,30 +4,33 @@
  */
 
 import { create } from 'zustand';
-import type { FavoritesItem } from '@/shared/types';
+import type { FavoritesItem, FavoriteFolder } from '@/shared/types';
 
 interface EmpireState {
   // Data
   facilities: FavoritesItem[];
+  folders: FavoriteFolder[];
   isLoading: boolean;
 
   // Actions
-  setFacilities: (facilities: FavoritesItem[]) => void;
+  setFacilities: (facilities: FavoritesItem[], folders?: FavoriteFolder[]) => void;
   setLoading: (loading: boolean) => void;
   reset: () => void;
 }
 
 export const useEmpireStore = create<EmpireState>((set) => ({
   facilities: [],
+  folders: [],
   isLoading: false,
 
-  setFacilities: (facilities) => set({ facilities, isLoading: false }),
+  setFacilities: (facilities, folders = []) => set({ facilities, folders, isLoading: false }),
 
   setLoading: (loading) => set({ isLoading: loading }),
 
   reset: () =>
     set({
       facilities: [],
+      folders: [],
       isLoading: false,
     }),
 }));

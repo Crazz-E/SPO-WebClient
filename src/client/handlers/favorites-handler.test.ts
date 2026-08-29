@@ -8,7 +8,7 @@
  * if something had changed. That is the OB-1 defect, in the client half.
  */
 
-import { addFavorite, removeFavorite, renameFavorite, migrateLocalBookmarks } from './favorites-handler';
+import { addFavorite, removeFavorite, renameFavorite, createFolder, moveFavorite, migrateLocalBookmarks } from './favorites-handler';
 import { ClientBridge } from '../bridge/client-bridge';
 import { useGameStore } from '../store/game-store';
 import { useEmpireStore } from '../store/empire-store';
@@ -147,6 +147,78 @@ describe('renameFavorite', () => {
     await renameFavorite(ctx, '4210', 'Moulin');
 
     expect(showNotification).toHaveBeenCalledWith('Failed to rename favourite: socket closed', 'error');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('createFolder', () => {
+  it('sends the name, then re-reads the list the server now holds', async () => {
+    const { ctx, sendRequest, sendMessage, showNotification } = makeCtx({ success: true, id: 12 });
+
+    await createFolder(ctx, 'Farms');
+
+    expect(sendRequest).toHaveBeenCalledWith({ type: WsMessageType.REQ_FAVORITE_FOLDER_CREATE, name: 'Farms' });
+    expect(showNotification).toHaveBeenCalledWith('"Farms" folder created', 'success');
+    expect(sendMessage).toHaveBeenCalledWith({ type: WsMessageType.REQ_EMPIRE_FACILITIES });
+  });
+
+  it('a refusal is told to the player and refetches nothing', async () => {
+    const { ctx, sendMessage, showNotification } = makeCtx({ success: false, message: 'Nope.' });
+
+    await createFolder(ctx, 'Farms');
+
+    expect(showNotification).toHaveBeenCalledWith('Nope.', 'error');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('falls back to its own wording when the gateway sent no reason', async () => {
+    const { ctx, showNotification } = makeCtx({ success: false });
+    await createFolder(ctx, 'Farms');
+    expect(showNotification).toHaveBeenCalledWith('Could not create this folder.', 'error');
+  });
+
+  it('a transport failure is an error, never a silent success', async () => {
+    const { ctx, sendMessage, showNotification } = makeCtx(new Error('socket closed'));
+
+    await createFolder(ctx, 'Farms');
+
+    expect(showNotification).toHaveBeenCalledWith('Failed to create folder: socket closed', 'error');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('moveFavorite', () => {
+  it('sends the item path and destination, then refetches', async () => {
+    const { ctx, sendRequest, sendMessage, showNotification } = makeCtx({ success: true });
+
+    await moveFavorite(ctx, '4210', '9', 'Farm 1');
+
+    expect(sendRequest).toHaveBeenCalledWith({ type: WsMessageType.REQ_FAVORITE_MOVE, path: '4210', destPath: '9' });
+    expect(showNotification).toHaveBeenCalledWith('"Farm 1" moved', 'success');
+    expect(sendMessage).toHaveBeenCalledWith({ type: WsMessageType.REQ_EMPIRE_FACILITIES });
+  });
+
+  it('a refusal is told to the player and refetches nothing', async () => {
+    const { ctx, sendMessage, showNotification } = makeCtx({ success: false, message: 'Nope.' });
+
+    await moveFavorite(ctx, '9', '9/1', 'Farms');
+
+    expect(showNotification).toHaveBeenCalledWith('Nope.', 'error');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('falls back to its own wording when the gateway sent no reason', async () => {
+    const { ctx, showNotification } = makeCtx({ success: false });
+    await moveFavorite(ctx, '4210', '9', 'Farm 1');
+    expect(showNotification).toHaveBeenCalledWith('Could not move this favourite.', 'error');
+  });
+
+  it('a transport failure is an error, never a silent success', async () => {
+    const { ctx, sendMessage, showNotification } = makeCtx(new Error('socket closed'));
+
+    await moveFavorite(ctx, '4210', '9', 'Farm 1');
+
+    expect(showNotification).toHaveBeenCalledWith('Failed to move favourite: socket closed', 'error');
     expect(sendMessage).not.toHaveBeenCalled();
   });
 });

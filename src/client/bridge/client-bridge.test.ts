@@ -278,6 +278,26 @@ describe('ClientBridge mail responses (T6)', () => {
   });
 });
 
+describe('ClientBridge empire responses', () => {
+  const { useEmpireStore } = jest.requireActual('../store/empire-store') as typeof import('../store/empire-store');
+  const { WsMessageType } = jest.requireActual('../../shared/types') as typeof import('../../shared/types');
+
+  beforeEach(() => {
+    useEmpireStore.getState().reset();
+  });
+
+  it('handleEmpireResponse carries facilities and folders through to the store', () => {
+    const facilities = [{ id: 1, name: 'Mill', x: 1, y: 1, path: '1' }];
+    const folders = [{ id: 2, name: 'Farms', path: '2' }];
+    ClientBridge.handleEmpireResponse({
+      type: WsMessageType.RESP_EMPIRE_FACILITIES, facilities, folders,
+    } as never);
+
+    expect(useEmpireStore.getState().facilities).toEqual(facilities);
+    expect(useEmpireStore.getState().folders).toEqual(folders);
+  });
+});
+
 /**
  * OB-1: the bridge is where the gateway's verdict crosses into the store, and
  * it must carry it rather than flatten it — a write nothing could vouch for

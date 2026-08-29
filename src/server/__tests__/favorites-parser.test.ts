@@ -10,7 +10,7 @@
  * root, which is the only level the client reads today, that path is the id.
  */
 
-import { parseFavoritesResponse } from '../spo_session';
+import { parseFavoritesResponse, parseFavoritesEntries } from '../spo_session';
 
 // Helper to build a favorites item string in wire format
 function favItem(id: number, kind: number, name: string, info: string, subFolderCount: number): string {
@@ -140,5 +140,40 @@ describe('parseFavoritesResponse', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({ id: 7, name: 'Mart 3', x: 678, y: 159, path: '7' });
+  });
+});
+
+describe('parseFavoritesEntries', () => {
+  it('returns empty links and folders for empty string', () => {
+    expect(parseFavoritesEntries('')).toEqual({ links: [], folders: [] });
+  });
+
+  it('separates folders from links, each carrying its own Location', () => {
+    const raw = [
+      favFolder(100, 'My Folder', 2),
+      favLink(1, 'Factory', 100, 200),
+    ].join('\x02');
+
+    const { links, folders } = parseFavoritesEntries(raw);
+
+    expect(links).toEqual([{ id: 1, name: 'Factory', x: 100, y: 200, path: '1' }]);
+    expect(folders).toEqual([{ id: 100, name: 'My Folder', path: '100', subFolderCount: 2 }]);
+  });
+
+  it('nests a folder path under the parent it was asked for', () => {
+    const raw = favFolder(5, 'Nested', 0);
+    expect(parseFavoritesEntries(raw, '100').folders[0].path).toBe('100/5');
+  });
+
+  it('treats a non-numeric folder subFolderCount as zero rather than NaN', () => {
+    const raw = [7, 0, 'Odd', '', 'x', ''].join('\x01');
+    const { folders } = parseFavoritesEntries(raw);
+    expect(folders).toEqual([{ id: 7, name: 'Odd', path: '7', subFolderCount: 0 }]);
+  });
+
+  it('skips a folder entry with a non-numeric id', () => {
+    const raw = ['bad', 0, 'Odd', '', 0, ''].join('\x01');
+    const { folders } = parseFavoritesEntries(raw);
+    expect(folders).toEqual([]);
   });
 });

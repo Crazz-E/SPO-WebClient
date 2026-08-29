@@ -5,29 +5,42 @@
  * breaks the upward dependency where handlers imported from their parent class.
  */
 
-import type { FavoritesItem, ResearchInventionItem } from '../../shared/types';
+import type { FavoritesItem, FavoriteFolder, ResearchInventionItem } from '../../shared/types';
 
 // Favorites protocol constants (from Delphi FavProtocol.pas)
 const FAV_PROP_SEP = '\x01';  // chrPropSeparator = char(1)
 const FAV_ITEM_SEP = '\x02';  // chrItemSeparator = char(2)
+const FAV_KIND_FOLDER = 0;    // fvkFolder — a folder with sub-items
 const FAV_KIND_LINK = 1;      // fvkLink — a bookmark with coordinates
 
+/** A folder entry as parsed off the wire, with its raw sub-item count. */
+export interface ParsedFavoriteFolder extends FavoriteFolder {
+  subFolderCount: number;
+}
+
+export interface ParsedFavoritesEntries {
+  links: FavoritesItem[];
+  folders: ParsedFavoriteFolder[];
+}
+
 /**
- * Parse the RDOFavoritesGetSubItems response string.
+ * Parse the RDOFavoritesGetSubItems response string into links and folders.
  *
  * Wire format per item: id \x01 kind \x01 name \x01 info \x01 subFolderCount \x01
  * Items separated by \x02.
  * For links (kind=1): info = "displayName,x,y,select"
+ * For folders (kind=0): info is unused; fields[4] is the sub-item count.
  *
  * `parentPath` is the Location that was asked for — '' for the root. Each item
- * carries the Location that addresses it, because delete and rename take a
- * path, not an id (`TFavorites.LocateItem`, `Kernel/Favorites.pas:312-334`).
+ * carries the Location that addresses it, because delete, rename and move take
+ * a path, not an id (`TFavorites.LocateItem`, `Kernel/Favorites.pas:312-334`).
  * At the root that path is just the id; one level down it is `parent/id`.
  */
-export function parseFavoritesResponse(raw: string, parentPath = ''): FavoritesItem[] {
-  if (!raw) return [];
+export function parseFavoritesEntries(raw: string, parentPath = ''): ParsedFavoritesEntries {
+  const links: FavoritesItem[] = [];
+  const folders: ParsedFavoriteFolder[] = [];
+  if (!raw) return { links, folders };
 
-  const items: FavoritesItem[] = [];
   const entries = raw.split(FAV_ITEM_SEP);
 
   for (const entry of entries) {
@@ -37,10 +50,22 @@ export function parseFavoritesResponse(raw: string, parentPath = ''): FavoritesI
     if (fields.length < 4) continue;
 
     const kind = parseInt(fields[1], 10);
-    if (kind !== FAV_KIND_LINK) continue; // skip folders
-
     const id = parseInt(fields[0], 10);
     const name = fields[2];
+
+    if (kind === FAV_KIND_FOLDER) {
+      if (isNaN(id)) continue;
+      const subFolderCount = parseInt(fields[4], 10);
+      folders.push({
+        id, name,
+        path: parentPath ? `${parentPath}/${id}` : String(id),
+        subFolderCount: isNaN(subFolderCount) ? 0 : subFolderCount,
+      });
+      continue;
+    }
+
+    if (kind !== FAV_KIND_LINK) continue; // some other kind — ignore
+
     const info = fields[3]; // "displayName,x,y,select"
 
     // Parse info cookie: last 3 comma-separated values are x, y, select
@@ -56,10 +81,18 @@ export function parseFavoritesResponse(raw: string, parentPath = ''): FavoritesI
 
     if (isNaN(id) || isNaN(x) || isNaN(y)) continue;
 
-    items.push({ id, name, x, y, path: parentPath ? `${parentPath}/${id}` : String(id) });
+    links.push({ id, name, x, y, path: parentPath ? `${parentPath}/${id}` : String(id) });
   }
 
-  return items;
+  return { links, folders };
+}
+
+/**
+ * Parse the RDOFavoritesGetSubItems response string, links only.
+ * Thin wrapper over `parseFavoritesEntries` for callers that never see folders.
+ */
+export function parseFavoritesResponse(raw: string, parentPath = ''): FavoritesItem[] {
+  return parseFavoritesEntries(raw, parentPath).links;
 }
 
 /**

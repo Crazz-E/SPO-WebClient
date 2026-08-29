@@ -18,6 +18,9 @@
 
 import {
   fetchOwnedFacilities,
+  fetchFavoritesTree,
+  createFavoriteFolder,
+  moveFavorite,
   addFavorite,
   deleteFavorite,
   renameFavorite,
@@ -55,7 +58,9 @@ describe('fetchOwnedFacilities', () => {
     // id \x01 kind \x01 name \x01 info \x01 subCount \x01 '' — kind 1 = link, 0 = folder
     const link = ['4210', '1', 'Farm 1', 'Farm 1,118,226,0', '0', ''].join('\x01');
     const folder = ['9', '0', 'Folder', 'Folder,0,0,0', '2', ''].join('\x01');
-    fake.respond(() => `res="%${[folder, link].join('\x02')}"`);
+    // Only the root answers this shape; the folder's own sub-read (the recursion
+    // this wraps, see fetchFavoritesTree below) answers empty.
+    fake.respond((_p, callIndex) => callIndex === 0 ? `res="%${[folder, link].join('\x02')}"` : 'res="%"');
 
     const items = await fetchOwnedFacilities(fake.ctx);
 
@@ -297,5 +302,151 @@ describe('renameFavorite', () => {
     const fake = makeSessionCtx();
     fake.respond(() => new Error('Request timeout: RDOFavoritesRenameItem'));
     await expect(renameFavorite(fake.ctx, '4210', 'Nope')).rejects.toThrow('Request timeout: RDOFavoritesRenameItem');
+  });
+});
+
+// =============================================================================
+// fetchFavoritesTree — recursive RDOFavoritesGetSubItems walk
+// =============================================================================
+describe('fetchFavoritesTree', () => {
+  it('flattens a root folder plus a nested link into one links array, with folders listed too', async () => {
+    const fake = makeSessionCtx();
+    const rootFolder = ['9', '0', 'Folder', '', '1', ''].join('\x01');
+    const rootLink = ['1', '1', 'Root Link', 'Root Link,10,20,1', '0', ''].join('\x01');
+    const nestedLink = ['2', '1', 'Nested Link', 'Nested Link,30,40,1', '0', ''].join('\x01');
+
+    fake.respond((packet, callIndex) => {
+      if (callIndex === 0) return `res="%${[rootFolder, rootLink].join('\x02')}"`;
+      // Second call is the recursion into folder '9'.
+      expect((packet.args as string[])[0]).toBe(RdoValue.string('9').format());
+      return `res="%${nestedLink}"`;
+    });
+
+    const { links, folders } = await fetchFavoritesTree(fake.ctx);
+
+    expect(fake.sent).toHaveLength(2);
+    expect(links).toEqual([
+      { id: 1, name: 'Root Link', x: 10, y: 20, path: '1' },
+      { id: 2, name: 'Nested Link', x: 30, y: 40, path: '9/2' },
+    ]);
+    expect(folders).toEqual([{ id: 9, name: 'Folder', path: '9' }]);
+  });
+
+  it('stops recursing at the depth cap', async () => {
+    const fake = makeSessionCtx();
+    // Every level answers one more folder of the same shape — a run away
+    // response cannot recurse forever.
+    fake.respond((_p, callIndex) => `res="%${[String(callIndex), '0', 'F', '', '0', ''].join('\x01')}"`);
+
+    await fetchFavoritesTree(fake.ctx);
+
+    // depth 0..8 inclusive = 9 reads, then the cap stops the 9th folder's own recursion.
+    expect(fake.sent).toHaveLength(9);
+  });
+
+  it('returns empty links and folders for an empty tree', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="%"');
+    expect(await fetchFavoritesTree(fake.ctx)).toEqual({ links: [], folders: [] });
+  });
+});
+
+// =============================================================================
+// createFavoriteFolder — RDOFavoritesNewItem("", 0, name, "")
+// =============================================================================
+describe('createFavoriteFolder', () => {
+  it('emits kind=0 (fvkFolder) and an empty info cookie', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#12"');
+
+    const result = await createFavoriteFolder(fake.ctx, 'Farms');
+
+    expect(result).toEqual({ success: true, id: 12 });
+    expect(fake.sent[0].packet).toEqual({
+      verb: RdoVerb.SEL,
+      targetId: FAKE_CONTEXT_IDS.worldContextId,
+      action: RdoAction.CALL,
+      member: 'RDOFavoritesNewItem',
+      separator: '"^"',
+      args: [
+        RdoValue.string('').format(),
+        RdoValue.int(0).format(),
+        RdoValue.string('Farms').format(),
+        RdoValue.string('').format(),
+      ],
+    });
+  });
+
+  it('reads `-1` — parent Location not found — as a refusal, not a success id', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#-1"');
+    const result = await createFavoriteFolder(fake.ctx, 'Farms');
+    expect(result.success).toBe(false);
+    expect(result.id).toBeUndefined();
+  });
+
+  it('truncates the name to the 50 characters the server would keep', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#12"');
+    await createFavoriteFolder(fake.ctx, 'x'.repeat(60));
+    const args = fake.sent[0].packet.args as string[];
+    expect(args[2]).toBe(RdoValue.string('x'.repeat(50)).format());
+  });
+
+  it('refuses without a world context and sends nothing', async () => {
+    const fake = makeSessionCtx({ worldContextId: null });
+    await expect(createFavoriteFolder(fake.ctx, 'Farms')).rejects.toThrow('Not logged in — no worldContextId');
+    expect(fake.sent).toHaveLength(0);
+  });
+});
+
+// =============================================================================
+// moveFavorite — RDOFavoritesMoveItem(itemPath, destPath)
+// =============================================================================
+describe('moveFavorite', () => {
+  it('emits ItemLoc then Dest, and reads `#-1` as true', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#-1"');
+
+    const result = await moveFavorite(fake.ctx, '4210', '9');
+
+    expect(result).toEqual({ success: true });
+    expect(fake.sent[0].packet).toEqual({
+      verb: RdoVerb.SEL,
+      targetId: FAKE_CONTEXT_IDS.worldContextId,
+      action: RdoAction.CALL,
+      member: 'RDOFavoritesMoveItem',
+      separator: '"^"',
+      args: [
+        RdoValue.string('4210').format(),
+        RdoValue.string('9').format(),
+      ],
+    });
+  });
+
+  it("reads `#0` — the server's own refusal (empty ItemLoc, root, or own-subtree) — as a failure", async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#0"');
+    const result = await moveFavorite(fake.ctx, '9', '9/1');
+    expect(result.success).toBe(false);
+    expect(fake.log.warn).toHaveBeenCalledWith(expect.stringContaining('RDOFavoritesMoveItem refused'));
+  });
+
+  it('reads a SILENT server as a refusal (OB-1)', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => '');
+    expect((await moveFavorite(fake.ctx, '4210', '9')).success).toBe(false);
+  });
+
+  it('refuses without a world context and sends nothing', async () => {
+    const fake = makeSessionCtx({ worldContextId: null });
+    await expect(moveFavorite(fake.ctx, '4210', '9')).rejects.toThrow('Not logged in — no worldContextId');
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it('propagates a timeout instead of answering success', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => new Error('Request timeout: RDOFavoritesMoveItem'));
+    await expect(moveFavorite(fake.ctx, '4210', '9')).rejects.toThrow('Request timeout: RDOFavoritesMoveItem');
   });
 });

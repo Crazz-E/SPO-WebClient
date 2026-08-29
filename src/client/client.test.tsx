@@ -13,9 +13,11 @@
  */
 
 jest.mock('./handlers/chat-handler');
+jest.mock('./handlers/favorites-handler');
 
 import { StarpeaceClient } from './client';
 import * as chatHandler from './handlers/chat-handler';
+import * as favoritesHandler from './handlers/favorites-handler';
 
 class FakeSocket {
   onopen: (() => void) | null = null;
@@ -46,6 +48,18 @@ describe('StarpeaceClient callback wiring', () => {
     client.callbacks.onGetChannelInfo('Trade');
 
     expect(chatHandler.requestChannelInfo).toHaveBeenCalledWith(client, 'Trade');
+  });
+
+  it('onCreateFavoriteFolder forwards to favoritesHandler.createFolder with the client and the name', () => {
+    client.callbacks.onCreateFavoriteFolder('Farms');
+
+    expect(favoritesHandler.createFolder).toHaveBeenCalledWith(client, 'Farms');
+  });
+
+  it('onMoveFavorite forwards to favoritesHandler.moveFavorite with the client, path, destPath and name', () => {
+    client.callbacks.onMoveFavorite('4210', '1', 'Mill');
+
+    expect(favoritesHandler.moveFavorite).toHaveBeenCalledWith(client, '4210', '1', 'Mill');
   });
 });
 

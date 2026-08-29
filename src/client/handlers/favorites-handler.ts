@@ -17,6 +17,10 @@ import {
   type WsRespFavoriteDelete,
   type WsReqFavoriteRename,
   type WsRespFavoriteRename,
+  type WsReqFavoriteFolderCreate,
+  type WsRespFavoriteFolderCreate,
+  type WsReqFavoriteMove,
+  type WsRespFavoriteMove,
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';
@@ -78,6 +82,40 @@ export async function renameFavorite(
     refreshFacilities(ctx);
   } catch (err: unknown) {
     ctx.showNotification(`Failed to rename favourite: ${toErrorMessage(err)}`, 'error');
+  }
+}
+
+export async function createFolder(
+  ctx: ClientHandlerContext, name: string,
+): Promise<void> {
+  const req: WsReqFavoriteFolderCreate = { type: WsMessageType.REQ_FAVORITE_FOLDER_CREATE, name };
+  try {
+    const response = await ctx.sendRequest(req) as WsRespFavoriteFolderCreate;
+    if (!response.success) {
+      ctx.showNotification(response.message || 'Could not create this folder.', 'error');
+      return;
+    }
+    ctx.showNotification(`"${name}" folder created`, 'success');
+    refreshFacilities(ctx);
+  } catch (err: unknown) {
+    ctx.showNotification(`Failed to create folder: ${toErrorMessage(err)}`, 'error');
+  }
+}
+
+export async function moveFavorite(
+  ctx: ClientHandlerContext, path: string, destPath: string, name: string,
+): Promise<void> {
+  const req: WsReqFavoriteMove = { type: WsMessageType.REQ_FAVORITE_MOVE, path, destPath };
+  try {
+    const response = await ctx.sendRequest(req) as WsRespFavoriteMove;
+    if (!response.success) {
+      ctx.showNotification(response.message || 'Could not move this favourite.', 'error');
+      return;
+    }
+    ctx.showNotification(`"${name}" moved`, 'success');
+    refreshFacilities(ctx);
+  } catch (err: unknown) {
+    ctx.showNotification(`Failed to move favourite: ${toErrorMessage(err)}`, 'error');
   }
 }
 

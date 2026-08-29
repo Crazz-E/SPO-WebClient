@@ -37,6 +37,7 @@ import {
   PoliticalRoleInfo,
   ConnectionSearchResult,
   FavoritesItem,
+  FavoriteFolder,
   ResearchCategoryData,
   ResearchInventionDetails,
   ClusterInfo,
@@ -94,7 +95,7 @@ import { RdoConnectionPool, PooledConnection } from './session/rdo-connection-po
 
 
 // Pure utility functions moved to session/session-utils.ts — re-export for backward compat
-export { parseFavoritesResponse, deriveResidenceClass } from './session/session-utils';
+export { parseFavoritesResponse, parseFavoritesEntries, deriveResidenceClass } from './session/session-utils';
 
 /** Redact password arguments from sensitive RDO commands before logging. */
 const SENSITIVE_MEMBERS = new Set(['RDOLogonUser', 'Logon', 'AccountStatus', 'RDOLogonClient']);
@@ -1151,6 +1152,18 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 
   public async renameFavorite(path: string, name: string): Promise<FavoriteMutationResult> {
     return favoritesHandler.renameFavorite(this, path, name);
+  }
+
+  public async fetchFavoritesTree(): Promise<{ links: FavoritesItem[]; folders: FavoriteFolder[] }> {
+    return favoritesHandler.fetchFavoritesTree(this);
+  }
+
+  public async createFavoriteFolder(name: string): Promise<FavoriteMutationResult> {
+    return favoritesHandler.createFavoriteFolder(this, name);
+  }
+
+  public async moveFavorite(path: string, destPath: string): Promise<FavoriteMutationResult> {
+    return favoritesHandler.moveFavorite(this, path, destPath);
   }
 
   // -- POLITICS (facade -> politics-handler) --------------------------------

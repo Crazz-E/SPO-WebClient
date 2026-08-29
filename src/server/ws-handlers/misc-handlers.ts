@@ -18,6 +18,10 @@ import {
   type WsRespFavoriteDelete,
   type WsReqFavoriteRename,
   type WsRespFavoriteRename,
+  type WsReqFavoriteFolderCreate,
+  type WsRespFavoriteFolderCreate,
+  type WsReqFavoriteMove,
+  type WsRespFavoriteMove,
   type WsReqResearchInventory,
   type WsRespResearchInventory,
   type WsReqResearchDetails,
@@ -116,11 +120,12 @@ export const handleSearchConnections: WsHandler = async (ctx: WsHandlerContext, 
 
 export const handleEmpireFacilities: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
   console.log('[Gateway] Fetching owned facilities (favorites)');
-  const facilities = await ctx.session.fetchOwnedFacilities();
+  const { links: facilities, folders } = await ctx.session.fetchFavoritesTree();
   const response: WsRespEmpireFacilities = {
     type: WsMessageType.RESP_EMPIRE_FACILITIES,
     wsRequestId: msg.wsRequestId,
     facilities,
+    folders,
   };
   sendResponse(ctx.ws, response);
 };
@@ -170,6 +175,37 @@ export const handleFavoriteRename: WsHandler = async (ctx: WsHandlerContext, msg
     const result = await ctx.session.renameFavorite(req.path, req.name);
     const response: WsRespFavoriteRename = {
       type: WsMessageType.RESP_FAVORITE_RENAME,
+      wsRequestId: msg.wsRequestId,
+      success: result.success,
+      message: result.message,
+    };
+    sendResponse(ctx.ws, response);
+  });
+};
+
+export const handleFavoriteFolderCreate: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_Unknown, async () => {
+    const req = msg as WsReqFavoriteFolderCreate;
+    console.log(`[Gateway] Creating favorite folder "${req.name}"`);
+    const result = await ctx.session.createFavoriteFolder(req.name);
+    const response: WsRespFavoriteFolderCreate = {
+      type: WsMessageType.RESP_FAVORITE_FOLDER_CREATE,
+      wsRequestId: msg.wsRequestId,
+      success: result.success,
+      id: result.id,
+      message: result.message,
+    };
+    sendResponse(ctx.ws, response);
+  });
+};
+
+export const handleFavoriteMove: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
+  await withErrorHandler(ctx.ws, msg.wsRequestId, ErrorCodes.ERROR_Unknown, async () => {
+    const req = msg as WsReqFavoriteMove;
+    console.log(`[Gateway] Moving favorite "${req.path}" -> "${req.destPath}"`);
+    const result = await ctx.session.moveFavorite(req.path, req.destPath);
+    const response: WsRespFavoriteMove = {
+      type: WsMessageType.RESP_FAVORITE_MOVE,
       wsRequestId: msg.wsRequestId,
       success: result.success,
       message: result.message,
