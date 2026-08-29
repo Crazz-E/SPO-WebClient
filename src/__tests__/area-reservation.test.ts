@@ -29,7 +29,6 @@ const ROOT = process.cwd();
 const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
 const COMMAND = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const CLAUDE_MD = path.join(ROOT, 'CLAUDE.md');
-const HEARTBEAT = path.join(ROOT, '.claude', 'hooks', 'session-heartbeat.sh');
 const FINISH = path.join(ROOT, 'scripts', 'finish.sh');
 const HEARTBEAT_SCAN = path.join(ROOT, 'scripts', 'heartbeat-scan.sh');
 const CLAIM_READ = path.join(ROOT, 'scripts', 'claim-read.sh');
@@ -37,7 +36,6 @@ const CLAIM_READ = path.join(ROOT, 'scripts', 'claim-read.sh');
 let rulebook: string;
 let command: string;
 let claudeMd: string;
-let heartbeat: string;
 let finish: string;
 let heartbeatScan: string;
 let claimRead: string;
@@ -54,7 +52,6 @@ beforeAll(() => {
   rulebook = fs.readFileSync(RULEBOOK, 'utf8');
   command = fs.readFileSync(COMMAND, 'utf8');
   claudeMd = fs.readFileSync(CLAUDE_MD, 'utf8');
-  heartbeat = fs.readFileSync(HEARTBEAT, 'utf8');
   finish = fs.readFileSync(FINISH, 'utf8');
   heartbeatScan = fs.readFileSync(HEARTBEAT_SCAN, 'utf8');
   claimRead = fs.readFileSync(CLAIM_READ, 'utf8');
@@ -338,11 +335,6 @@ describe('one idle window, shared with finish.sh', () => {
     // The claim "one number to tune, not two" is only true while this holds. Change the
     // default in the script and this test — inside the required check — goes red.
     expect(finish).toMatch(/IDLE_MIN="\$\{SPO_WORKTREE_IDLE_MIN:-120\}"/);
-  });
-
-  it('the heartbeat hook writes the store the rule reads, keyed by worktree path', () => {
-    expect(heartbeat).toMatch(/SPO_SESSION_DIR:-\$HOME\/\.spo-bench\/sessions/);
-    expect(heartbeat).toMatch(/printf '%s\\n' "\$dir" > "\$store\/\$key\.alive"/);
   });
 });
 

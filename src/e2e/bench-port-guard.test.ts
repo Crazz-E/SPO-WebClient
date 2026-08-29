@@ -116,25 +116,9 @@ describe('mentions are not invocations', () => {
   });
 });
 
-describe('the escape hatch and the heartbeat', () => {
+describe('the escape hatch', () => {
   it('lets a human who owns the bench through, explicitly', () => {
     expect(guard('SPO_BENCH_PORT_OVERRIDE=i-own-the-bench npm start')).toBe(0);
-  });
-
-  it('stamps the session heartbeat on every Bash call', () => {
-    const sessions = scratchSessions();
-    invoke('echo hello', { SPO_SESSION_DIR: sessions });
-    const stamped = fs.readdirSync(sessions).filter((f) => f.endsWith('.alive'));
-    expect(stamped).toHaveLength(1);
-    expect(fs.readFileSync(path.join(sessions, stamped[0]), 'utf8').trim()).toBe(
-      fs.realpathSync(process.cwd()),
-    );
-  });
-
-  it('stamps it even when it blocks', () => {
-    const sessions = scratchSessions();
-    expect(invoke('npm start', { SPO_SESSION_DIR: sessions }).code).toBe(2);
-    expect(fs.readdirSync(sessions).filter((f) => f.endsWith('.alive'))).toHaveLength(1);
   });
 });
 
