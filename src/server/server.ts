@@ -835,7 +835,9 @@ const server = http.createServer(async (req, res) => {
     const clientIp = getClientIp(req);
     if (!checkRateLimit(clientIp, 'debug-log', 2)) {
       res.writeHead(429, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Too many debug reports. Try again in 30 seconds.' }));
+      res.end(
+        JSON.stringify({ error: `Too many debug reports. Try again in ${RATE_LIMIT_WINDOW_MS / 1000} seconds.` })
+      );
       return;
     }
 
@@ -1381,6 +1383,9 @@ async function handleClientMessage(ws: WebSocket, session: StarpeaceSession, sea
 // =============================================================================
 // Gateway startup — exportable for embedding and for the test harness
 // =============================================================================
+
+/** The module-level HTTP server — exported so tests can bind it on an ephemeral port. */
+export { server as httpServer };
 
 export interface GatewayOptions {
   host?: string;

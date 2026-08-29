@@ -261,7 +261,7 @@ Players can submit their WebSocket wire history to the server for analysis.
 
 **Constraints:**
 - Requires `LOG_FILE` to be set (returns 503 otherwise)
-- Rate limited: 1 report per IP per 30 seconds (429)
+- Rate limited: 2 reports per IP per 60 seconds (429)
 - Max payload: 512 KB (413)
 - Max entries per report: 200 (capped silently)
 
