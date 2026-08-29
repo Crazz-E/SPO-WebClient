@@ -360,7 +360,7 @@ describe('fetchTycoonProfile', () => {
 
     expect(mockFetch).toHaveBeenCalledWith(
       'http://158.69.153.134/five/0/visual/voyager/new%20directory/RenderTycoon.asp?WorldName=New%20World&Tycoon=SPO%20test3&RIWS=',
-      { redirect: 'follow' },
+      expect.objectContaining({ redirect: 'follow', signal: expect.any(AbortSignal) }),
     );
     // Regression guard for B-11. This used to resolve against the page
     // DIRECTORY, producing `…/new%20directory//fivedata/…` — a guaranteed 404,
@@ -1192,7 +1192,8 @@ describe('executeBankAction', () => {
       expect(getCache(fake)).toHaveBeenCalledWith(BANK);
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(mockFetch.mock.calls[0][0]).toBe(`${CACHED_URL}&Action=LOAN&LoanValue=250000000`);
-      expect(mockFetch.mock.calls[0][1]).toEqual({ redirect: 'follow' });
+      expect(mockFetch.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'follow' }));
+      expect((mockFetch.mock.calls[0][1] as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal);
       expect(result).toEqual({ success: true, message: 'borrow completed successfully' });
       expect(fake.log.debug).toHaveBeenCalledWith('[Bank] Using cached form action URL for borrow');
     });

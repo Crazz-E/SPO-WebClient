@@ -367,7 +367,8 @@ describe('fetchClusterInfo', () => {
     expect(fetchedUrl()).toBe(
       'http://158.69.153.134/Five/0/Visual/Voyager/NewLogon/info.asp?ClusterName=Magna%20Corp'
     );
-    expect(mockFetch.mock.calls[0][1]).toEqual({ redirect: 'follow' });
+    expect(mockFetch.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'follow' }));
+    expect((mockFetch.mock.calls[0][1] as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal);
   });
 
   // B-10. Regression guard: the display name used to read `PGI&Folder=` and that

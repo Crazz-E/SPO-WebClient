@@ -1,0 +1,194 @@
+jest.mock('node-fetch', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
+
+import * as fs from 'fs';
+import * as fsp from 'fs/promises';
+import * as path from 'path';
+import * as os from 'os';
+import type { ServerResponse } from 'http';
+import fetch from 'node-fetch';
+import { proxyImage, getImageContentType, getPlaceholderImage, type ProxyImageDeps } from './proxy-image';
+
+const mockFetch = fetch as unknown as jest.Mock;
+
+function toArrayBuffer(text: string): ArrayBuffer {
+  const buf = Buffer.from(text);
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+}
+
+interface FakeRes {
+  statusCode?: number;
+  headers?: Record<string, string>;
+  body?: Buffer | string;
+  writeHead: (status: number, headers?: Record<string, string>) => FakeRes;
+  end: (chunk?: Buffer | string) => FakeRes;
+}
+
+function fakeRes(): ServerResponse & FakeRes {
+  const res: FakeRes = {
+    writeHead: jest.fn((status: number, headers?: Record<string, string>) => {
+      res.statusCode = status;
+      res.headers = headers;
+      return res;
+    }),
+    end: jest.fn((chunk?: Buffer | string) => {
+      res.body = chunk;
+      return res;
+    }),
+  };
+  return res as unknown as ServerResponse & FakeRes;
+}
+
+describe('proxy-image', () => {
+  let cacheRoot: string;
+  let webclientCacheDir: string;
+  let deps: ProxyImageDeps;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-cache-'));
+    webclientCacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-webclient-'));
+    deps = {
+      imageFileIndex: new Map(),
+      cacheRoot,
+      webclientCacheDir,
+      updateServerCacheUrl: 'https://update.example.test/cache',
+      log: { debug: jest.fn(), warn: jest.fn() },
+    };
+  });
+
+  afterEach(() => {
+    fs.rmSync(cacheRoot, { recursive: true, force: true });
+    fs.rmSync(webclientCacheDir, { recursive: true, force: true });
+  });
+
+  describe('getImageContentType', () => {
+    it('maps known extensions', () => {
+      expect(getImageContentType('a.png')).toBe('image/png');
+      expect(getImageContentType('a.jpg')).toBe('image/jpeg');
+      expect(getImageContentType('a.jpeg')).toBe('image/jpeg');
+      expect(getImageContentType('a.gif')).toBe('image/gif');
+      expect(getImageContentType('a.bmp')).toBe('application/octet-stream');
+      expect(getImageContentType('a.unknown')).toBe('image/gif');
+    });
+  });
+
+  it('getPlaceholderImage returns a non-empty buffer', () => {
+    expect(getPlaceholderImage().length).toBeGreaterThan(0);
+  });
+
+  it('serves a file:// URL inside the cache directory', async () => {
+    const filePath = path.join(cacheRoot, 'foo.png');
+    fs.writeFileSync(filePath, Buffer.from('hi'));
+    const res = fakeRes();
+    await proxyImage(`file://${filePath}`, res, deps);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(Buffer.from('hi'));
+  });
+
+  it('rejects a file:// URL outside the cache directory (traversal)', async () => {
+    const outside = path.join(os.tmpdir(), 'outside.png');
+    const res = fakeRes();
+    await proxyImage(`file://${outside}`, res, deps);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 404 when the cached file:// path does not exist', async () => {
+    const filePath = path.join(cacheRoot, 'missing.png');
+    const res = fakeRes();
+    await proxyImage(`file://${filePath}`, res, deps);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a non-http scheme', async () => {
+    const res = fakeRes();
+    await proxyImage('ftp://example.test/a.png', res, deps);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('blocks a request to an internal host', async () => {
+    const res = fakeRes();
+    await proxyImage('http://127.0.0.1/a.png', res, deps);
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns 400 for an unparseable URL', async () => {
+    const res = fakeRes();
+    await proxyImage('http://', res, deps);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('serves from the index cache when present', async () => {
+    const cachedPath = path.join(cacheRoot, 'cached.png');
+    fs.writeFileSync(cachedPath, Buffer.from('cached'));
+    deps.imageFileIndex.set('img.png', cachedPath);
+    const res = fakeRes();
+    await proxyImage('http://example.test/dir/img.png', res, deps);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(Buffer.from('cached'));
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('downloads from the update server, caches, and updates the index', async () => {
+    const existingDir = path.join(cacheRoot, 'Buildings');
+    fs.mkdirSync(existingDir, { recursive: true });
+    const existingFile = path.join(existingDir, 'placeholder.png');
+    fs.writeFileSync(existingFile, Buffer.from('x'));
+    deps.imageFileIndex.set('placeholder.png', existingFile);
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => toArrayBuffer('downloaded'),
+    });
+
+    const res = fakeRes();
+    await proxyImage('http://example.test/dir/newimg.png', res, deps);
+
+    expect(res.statusCode).toBe(200);
+    expect(deps.imageFileIndex.get('newimg.png')).toBeDefined();
+    const target = deps.imageFileIndex.get('newimg.png') as string;
+    expect(fs.readFileSync(target)).toEqual(Buffer.from('downloaded'));
+  });
+
+  it('falls back to the game server when the update server has nothing', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      arrayBuffer: async () => toArrayBuffer('fromgame'),
+    });
+
+    const res = fakeRes();
+    await proxyImage('http://example.test/dir/gameimg.png', res, deps);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual(Buffer.from('fromgame'));
+    expect(deps.imageFileIndex.get('gameimg.png')).toBeDefined();
+  });
+
+  it('returns 504 on a timeout and does not cache a placeholder or touch the index', async () => {
+    const timeoutErr = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    mockFetch.mockRejectedValue(timeoutErr);
+
+    const res = fakeRes();
+    await proxyImage('http://example.test/dir/slow.png', res, deps);
+
+    expect(res.statusCode).toBe(504);
+    expect(deps.imageFileIndex.get('slow.png')).toBeUndefined();
+    const written = await fsp.readdir(webclientCacheDir);
+    expect(written).not.toContain('slow.png');
+  });
+
+  it('returns a cached placeholder on a non-timeout failure', async () => {
+    mockFetch.mockRejectedValue(new Error('boom'));
+
+    const res = fakeRes();
+    await proxyImage('http://example.test/dir/broken.png', res, deps);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers).toEqual({ 'Content-Type': 'image/png' });
+    expect(deps.imageFileIndex.get('broken.png')).toBeDefined();
+    const target = deps.imageFileIndex.get('broken.png') as string;
+    expect(fs.existsSync(target)).toBe(true);
+  });
+});
