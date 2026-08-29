@@ -1,5 +1,10 @@
 # Haiku driver — analyse des demandes de permission
 
+> **Note du 2026-08-29.** Ce document analyse la couche de hooks du pilote, **antérieure à
+> #425** : les gardes qu'il décrit ont été retirés à l'étape 4 de la strangler-migration, et
+> seuls `main-commit-guard.sh`, `pre-push-gate.sh` et `bench-port-guard.sh` subsistent dans
+> `.claude/hooks/`. Conservé tel quel comme trace d'analyse.
+
 > **Statut au 2026-08-27.** Collecte close. Ce journal a produit
 > [haiku-permission-plan.md](haiku-permission-plan.md), dont sont issues les cartes
 > **#337** (`npm run verdict`), **#338** (les messages de refus rendent la forme corrigée) et

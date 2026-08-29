@@ -116,6 +116,6 @@ describe('question (i) is not both "asked" and "not asked"', () => {
     // Both statements live three lines apart; they must agree.
     expect(section).toContain('Two yes/no questions, asked before every action');
     expect(section).not.toContain('is now enforced, not asked');
-    expect(section).toMatch(/enforced as well as asked/);
+    expect(section).toMatch(/nothing in the tree enforces it/);
   });
 });

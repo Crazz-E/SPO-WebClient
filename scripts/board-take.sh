@@ -91,9 +91,9 @@ done
 branch="$(git rev-parse --abbrev-ref HEAD)"
 session="${branch} @ $(date +%F)"
 
-# The driver-scope marker: a verified claim is the moment a session BECOMES the driver of a
-# card, and `.claude/hooks/driver-scope-guard.sh` arms on it. Lifecycle and rationale live in
-# the sourced file — one derivation of the key, not one per caller.
+# The `.driving` marker: a verified claim is the moment a session BECOMES the driver of a card.
+# Lifecycle, rationale and the one key derivation live in the sourced driver-scope.sh — never
+# a second copy.
 . "$(dirname "${BASH_SOURCE[0]}")/driver-scope.sh"
 
 # A worktree `finish` has already retired is over: its branch is merged, its card closed.

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # The driver-scope marker — sourced, never run.
 #
-# `.claude/hooks/driver-scope-guard.sh` refuses the DRIVER of a claimed card writing to a
-# tracked file itself (next-task.md § 3 (i)). It arms on this marker and is inert without it,
-# which makes the marker's lifecycle the whole safety of the mechanism:
+# The PreToolUse guard that once refused the DRIVER of a claimed card writing to a tracked
+# file itself (next-task.md § 3 (i)) was retired with the pilot hook layer in #425. The
+# marker remains as the shared session-state record — the moment ownership starts and every
+# way it closes:
 #
 #   ARM   a VERIFIED claim — the moment a session becomes a driver     (board-take.sh)
 #   DISARM every way ownership closes, and there are four:
@@ -14,20 +15,18 @@
 #
 # The retire path is the one that matters and the one the first version got wrong. CLAUDE.md:
 # "A session may keep working after `finish`" — the worktree is kept while a session stands in
-# it. So `finish` must drop `.driving` even when it drops nothing else: a session that keeps
-# working while still armed is locked out of tracked files in the name of a card it no longer
-# holds, and a guard that refuses work nobody asked it to refuse is a guard that gets disabled.
+# it. So `finish` must drop `.driving` even when it drops nothing else: a stale marker would
+# misrepresent a session that no longer holds the card as still driving it.
 #
-# It lives in one file because the key must be computed ONE way. session-heartbeat.sh and
-# finish.sh both derive `sha1(realpath(toplevel))[0:16]`; a fourth and fifth copy of that
-# derivation, drifting apart, would arm a marker no hook ever reads.
+# It lives in one file because the key must be computed ONE way — finish.sh derives the same
+# `sha1(realpath(toplevel))[0:16]`.
 
 # Absolute path of one of this worktree's session markers, or non-zero if there is no
 # worktree here. The suffix names which marker, and there are three around this key:
 #   driving   this file's own — the session is the driver of a claimed card
 #   finished  `finish` ran here (finish.sh), which board-take.sh reads to refuse a second
 #             claim in a worktree whose work is already on main
-#   alive     the heartbeat (.claude/hooks/session-heartbeat.sh)
+#   alive     the session heartbeat file `scripts/heartbeat-scan.sh` reads
 session_marker() {
   local dir store key
   dir="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1

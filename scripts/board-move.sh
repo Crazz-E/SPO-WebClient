@@ -18,9 +18,8 @@
 #   bash scripts/board-move.sh 285 parked
 set -euo pipefail
 
-# Two of this script's columns CLOSE a session's ownership, and the driver-scope marker must
-# not outlive it: a session that keeps working while still armed is refused every write to a
-# tracked file in the name of a card it no longer holds.
+# Two of this script's columns CLOSE a session's ownership, and the `.driving` marker
+# (driver-scope.sh) must not outlive it.
 . "$(dirname "${BASH_SOURCE[0]}")/driver-scope.sh"
 
 OWNER="Crazz-Org"

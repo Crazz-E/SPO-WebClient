@@ -29,7 +29,7 @@ their own job, `npm run bench:wait -- <job-id>` re-attaches to one whose wait wa
 interrupted, `gh pr checks <n> --watch` blocks on CI, `npm run board:wait` on an exhausted
 quota, and `npm run pr:wait -- <n>` on a pull request leaving the merge queue. Composing
 `until … do sleep … done` instead stops to ask the human **and** polls GitHub under the
-30 s floor — `.claude/hooks/poll-loop-guard.sh` refuses that shape and names the form.
+30 s floor.
 
 **Multi-line text goes through a file, never through substitution.** A commit message, a PR
 body or a long comment written as `git commit -m "$(cat <<'EOF' …)"` is compound shell and
@@ -40,16 +40,14 @@ Same reasoning as the aliases: the content belongs in a file, never in the comma
 
 **And that file goes in the scratchpad, OUTSIDE the worktree** — never beside the code. A
 commit message or a PR body written inside the tree dirties it, and a dirty tree is refused
-at gate deposit (exit 2) whoever wrote it; `driver-scope-guard.sh` refuses it earlier and
-says so. All four flags read the file happily from anywhere.
+at gate deposit (exit 2) whoever wrote it. All four flags read the file happily from anywhere.
 
 **If `Grep`, `Read` or `Glob` are deferred, load them first.** When native tools are unavailable
 in this harness, the risk is silent truncation — a shell `grep`, `find` or `cat` returns an
 incomplete result and appears to succeed. If you detect a deferred tool, load its schema with
 `ToolSearch select:Grep,Read,Glob`. If that load fails, delegate the read to a sub-agent
 (which has native tools) or stop and say so. Never fall back to shell equivalents — they
-bury the problem, just as `.claude/hooks/poll-loop-guard.sh:25-29` refuses the form but names
-the alternative: a rule that names no workaround is a rule a model routes around. When a
+bury the problem — a rule that names no workaround is a rule a model routes around. When a
 verdict command's output would be long, the sanctioned abbreviation is
 `npm run verdict -- <alias>` — allowlisted, exit code preserved; never a pipe, never a bare
 `tail`.
@@ -85,8 +83,8 @@ UNKNOWN is never treated as green.
 
 Skip this step entirely when § 0 found `main` RED — the only admissible work then is the
 repair. Otherwise, before picking a card, drain the LLM fallback hook's own learning loop
-(`.claude/hooks/uncovered-command-guard.sh` -> `~/.spo-bench/hook-llm/journal.jsonl` ->
-this alias — doc/hook-llm-layer.md):
+(the journal at `~/.spo-bench/hook-llm/journal.jsonl` -> this alias — doc/hook-llm-layer.md;
+the hook that fed the journal was retired in #425, the backlog drains on):
 
 ```bash
 npm run hook:harvest -- --take
@@ -261,22 +259,15 @@ The repo process applies unchanged — this command adds nothing to it:
   one-sentence criterion and an understood reproduction, and rewrote a whole script — it had
   a card and a criterion, and neither told it to stop. "Am I about to edit a tracked file" is
   answerable without either.
-- **Question (i) is now enforced as well as asked** — keep asking it, because answering it
-  costs nothing and being refused costs a turn. `.claude/hooks/driver-scope-guard.sh` refuses
-  the driver's own writes to tracked files — both doors: `Edit`/`Write`, and the Bash verbs
-  that reach the tree without them (`sed -i`, a `>` redirection, `rm`, `mv`, `chmod`,
-  `git rm`, `git restore`, `npm run format`). It arms on a **verified claim** — `board:take`
-  writes the marker — and tells the driver from its own sub-agent by the `agent_id` the
-  PreToolUse payload carries only inside a Task worker; the sub-agent's writes pass
-  untouched. A BLOCKED reply is answered by **spawning the execution sub-agent**, never by
-  retrying the edit and never by reaching for another shell verb: they are all refused the
-  same way. It is a guardrail, not a sandbox — but the guard, `settings.json` and this file
-  are themselves tracked, so a driver drifting toward disabling it is stopped by it.
-  **Nothing to release by hand**: every way ownership closes releases it — `--release`,
-  `board:move … Done`, `board:move … "Needs triage"`, and `finish` (including the retire path,
-  where the session keeps working). The driver's own git moves are untouched: the `main`-moved
-  merge, `git checkout -b`, `git add`, `git commit`, `git push`. What is refused is the driver
-  *authoring* a change, never git moving the branch under it.
+- **Question (i) is a rule this command states — nothing in the tree enforces it** (the
+  PreToolUse guard that once refused a driver's own writes was retired with the pilot
+  hook layer, #425). Keep asking it, because answering it costs nothing. A drift toward
+  editing a tracked file yourself is answered by **spawning the execution sub-agent**,
+  never by reaching for another shell verb. **Nothing to release by hand**: every way
+  ownership closes clears the session's `.driving` marker — `--release`,
+  `board:move … Done`, `board:move … "Needs triage"`, and `finish` (including the retire
+  path). The driver's own git moves are untouched: the `main`-moved merge,
+  `git checkout -b`, `git add`, `git commit`, `git push`.
 - **Implementation is never driven by the session on Haiku** — kanban-workflow § Model
   routing routes execution to Sonnet 5, or Opus under the escalation rule; Haiku appears on
   no execution row.
@@ -389,15 +380,8 @@ The repo process applies unchanged — this command adds nothing to it:
   carries it as an **instruction with verification the agent performs and reports**:
   `git rev-parse --show-toplevel` — its prefix is allowlisted, so it costs no permission
   prompt — and the returned reply shows where it actually ran, so the driver can verify
-  it landed in the right place. **The absolute-worktree-path rule is now enforced at the
-  spawn itself, not just asked** — `.claude/hooks/spawn-path-guard.sh` (PreToolUse on the
-  `Agent` tool) scans the payload's `prompt` field for absolute paths and blocks the spawn if
-  any resolves under the main checkout (or a sibling session's worktree) instead of this
-  worktree, naming the corrected path in the refusal. It catches the drift one spawn earlier
-  than `worktree-scope-guard.sh` can — before the sub-agent ever resolves the bad path itself
-  — but it only ever sees what the payload TEXT contains: a relative path still fails open
-  here exactly as it does everywhere else in this section, which is why the absolute-path
-  rule above is still the one to follow, not a fallback the guard makes optional.
+  it landed in the right place. The absolute-path rule is stated here only — nothing checks
+  the spawn payload, so a relative path fails silently; the rule above is the whole protection.
 - Implementation and the driver's mechanical checks done → **commit → push → open the PR
   with `Closes #<issue>` in the body**. The PR precedes the gate, not the reverse: the worker
   refuses a sha that is not on `origin` (`scripts/bench-gate.sh:45-50` — "NOT PUSHED: … is not
@@ -475,9 +459,8 @@ The repo process applies unchanged — this command adds nothing to it:
   poll, and **never a tight loop**: a `while`/`sleep` loop is compound shell, so it stops to
   ask for permission, and it re-reads GitHub far harder than the sanctioned forms do
   (kanban-workflow § GitHub API discipline). **No merge without a `change-validator` verdict
-  for the sha being merged** — this is prose today, not an enforced rule: unlike
-  `.claude/hooks/driver-scope-guard.sh`, nothing in the tree checks it, so do not promise an
-  enforcement that does not exist.
+  for the sha being merged** — this is prose today, not an enforced rule: nothing
+  in the tree checks it, so do not promise an enforcement that does not exist.
 
 ## 4 · If it fails
 
@@ -489,43 +472,22 @@ card in In progress/Gate/Validation/PR at session end — close your ownership, 
 
 ## Refusal discipline
 
-A blocking guard (`verdict-pipe-guard.sh`, `poll-loop-guard.sh`, `worktree-scope-guard.sh`,
-`driver-scope-guard.sh`, `bench-port-guard.sh`, `item-list-guard.sh`) may refuse the same
-shape more than once in a session — a driver reads the refusal, composes a slightly different
-command that means the same thing, and gets refused again. That is workaround-hunting, and it
-is the one continuation this project forbids: the refusal already named the sanctioned form,
-and a different spelling of the blocked command is not a new idea.
-
-**Each guard now counts its own refusals for this session** (`.claude/hooks/refusal-ledger.js`,
-card #369) and, from the **third** refusal onward, appends an escalation paragraph to its
-message: `This is refusal #<n> from this guard in this session. Do not compose another variant
-… Either run the exact command above, or release …`. The count is per guard, per session — a
-worktree-scope refusal and a poll-loop refusal in the same session are tracked separately, and
-a new session (a new worktree) starts every guard back at zero.
+A blocking guard (`bench-port-guard.sh`, `main-commit-guard.sh`, `pre-push-gate.sh`) may
+refuse the same shape more than once in a session — a driver reads the refusal, composes a
+slightly different command that means the same thing, and gets refused again. That is
+workaround-hunting, and it is the one continuation this project forbids: the refusal already
+named the sanctioned form, and a different spelling of the blocked command is not a new idea.
 
 **One retry, then release — for a driver.** Read the refused message once, run the exact
 sanctioned form it names. If that second attempt is also refused, do not try a third shape:
 move the card to **Needs triage** (`npm run board:move -- <issue> "Needs triage"`), post one
 comment quoting the refusal text and what you were trying to do, and close this session's
-ownership (§ 4). The escalation paragraph at refusal #3 is the guard's own backstop for this
-rule, not a substitute for following it earlier.
+ownership (§ 4).
 
 **A sub-agent follows the same one-retry rule**, then reports back to its driver rather than
 composing a third variant itself — the driver decides whether to retry once more with a
 corrected payload or to route the card to Needs triage; a sub-agent does not release a card's
 ownership on its own.
-
-**The ledger's lifecycle.** One file per session, `~/.spo-bench/sessions/<key>.refusals`
-(`<key>` derived the same way `session-heartbeat.sh` and `driver-scope-guard.sh` derive
-theirs — sha1sum of the worktree's absolute path, first 16 hex chars), JSON Lines, one entry
-appended per refusal: `{"guard":"<name>","count":<n>,"timestamp":<ms>}`. It is a log of counts,
-not a database — the last line for a given guard is the one that counts, a missing or corrupt
-file reads as count 0, and the ledger is never read or written outside a guard's own refusal
-path. Nothing deletes it: it is scoped to the worktree's own session directory and is cleaned
-up the same way the rest of `~/.spo-bench/sessions/` is, by the worktree's own lifecycle.
-
-See also: card #339 (the driver-scope continuation suggestions this escalation builds on —
-naming the runnable remedy, not just the rule).
 
 ## 5 · Stay on the card
 

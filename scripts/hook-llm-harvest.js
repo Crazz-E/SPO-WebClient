@@ -2,8 +2,8 @@
 // npm run hook:harvest -- --take
 // npm run hook:harvest -- --resolve <signature> --verdict FILED|DO-NOT-FILE|ABANDONED [--issue <n>]
 //
-// The local half of the self-learning loop `.claude/hooks/uncovered-command-guard.sh` feeds.
-// That hook journals every LLM-fallback verdict to
+// The local half of the self-learning loop the pilot's LLM-fallback hook fed (retired in #425).
+// That hook journaled every verdict to
 // ${SPO_BENCH_DIR:-$HOME/.spo-bench}/hook-llm/journal.jsonl and never touches GitHub. This
 // script reads that journal, groups it into candidate patterns, and — for one recurring or
 // classifier-flagged candidate per call — writes a draft card the calling session (normally
@@ -143,7 +143,7 @@ function draftBody(signature, entries) {
   const lines = [
     `# Hook hardening: ${signature}`,
     "",
-    "Filed by the hook-LLM self-learning loop (`.claude/hooks/uncovered-command-guard.sh` ->",
+    "Filed by the hook-LLM self-learning loop (`~/.spo-bench/hook-llm/journal.jsonl` ->",
     "`scripts/hook-llm-harvest.js`), never by a human or a claimed session noticing something",
     "in passing. Source: doc/hook-llm-layer.md.",
     "",
@@ -168,7 +168,7 @@ function draftBody(signature, entries) {
     target === "allowlist"
       ? "Add a `Bash(...)` prefix to `.claude/settings.json` for this shape, scoped as narrowly as the samples above allow — this is a permission change and needs the same care as any other."
       : target === "guard"
-        ? "Extend an existing `.claude/hooks/*.sh` guard, or add a new one, so this shape is caught by the scripted layer instead of paying for an LLM call."
+        ? "Extend the scripted permission layer — `.claude/settings.json` or a `.claude/hooks/*.sh` guard — so this shape is caught without paying for an LLM call."
         : "Add the missing sentence to CLAUDE.md or a skill so this shape has a documented sanctioned form.",
     "",
     "A durable capability change (an allowlist entry) still needs the maintainer's review, same",

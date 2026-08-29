@@ -1,5 +1,10 @@
 # Plan — réduire les demandes de permission des drivers Haiku
 
+> **Note du 2026-08-29.** Ce document analyse la couche de hooks du pilote, **antérieure à
+> #425** : les gardes qu'il décrit ont été retirés à l'étape 4 de la strangler-migration, et
+> seuls `main-commit-guard.sh`, `pre-push-gate.sh` et `bench-port-guard.sh` subsistent dans
+> `.claude/hooks/`. Conservé tel quel comme trace d'analyse.
+
 > **Statut au 2026-08-27.** Plan produit avant la revue `card-reviewer`, conservé tel quel
 > comme trace du raisonnement. **L'étape 7 (`legacy-search-guard.sh`) n'est pas à construire
 > sous cette forme** : elle doublonne la carte **#324**, déposée le même jour depuis la même
