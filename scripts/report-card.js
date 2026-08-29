@@ -62,17 +62,24 @@ function loadSchemaModule() {
     logLevel: 'silent',
   });
   const code = result.outputFiles[0].text;
-  const tmpFile = path.join(os.tmpdir(), `report-card-schema-${Date.now()}-${process.pid}.cjs`);
+  // mkdtempSync (not a predictable path.join(os.tmpdir(), ...) name) -- the random suffix and
+  // exclusive directory creation are what make this safe against a symlink/race attack on a
+  // shared temp directory; a guessable filename there is not.
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'report-card-schema-'));
+  const tmpFile = path.join(tmpDir, 'schema.cjs');
   fs.writeFileSync(tmpFile, code);
   try {
     return require(tmpFile);
   } finally {
-    fs.rmSync(tmpFile, { force: true });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
+// Backslash must be escaped BEFORE the pipe -- escaping `|` alone on a value that already
+// contains a literal backslash (e.g. a Windows-style path in a componentChain entry) would
+// produce an ambiguous sequence a markdown table reader cannot unescape correctly.
 function escapeForTable(value) {
-  return String(value).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  return String(value).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
 function renderAnchor(anchor) {
