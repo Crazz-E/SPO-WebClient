@@ -56,8 +56,8 @@ const heartbeats = { 'claude/live-one': 'LIVE', 'claude/dead-one': 'EXPIRED' };
 
 describe('the claim read survives a card the human has freed', () => {
   it('an empty Session in a busy column does not crash the read, and holds no ground', () => {
-    // The exact board shape a human release leaves behind: still in PR, owner cleared.
-    expect(busyAreas([{ Status: 'PR', Area: 'rdo', Session: '' }], heartbeats)).toEqual([]);
+    // The exact board shape a human release leaves behind: still in Checks & PR, owner cleared.
+    expect(busyAreas([{ Status: 'Checks & PR', Area: 'rdo', Session: '' }], heartbeats)).toEqual([]);
   });
 
   it('a null Session is equally survivable — the field may be absent, not just blank', () => {
@@ -70,7 +70,7 @@ describe('the claim read survives a card the human has freed', () => {
   it('a live owner still reserves its ground — the fix must not disarm the rule', () => {
     expect(
       busyAreas(
-        [{ Status: 'PR', Area: 'rdo', Session: 'claude/live-one @ 2026-08-28' }],
+        [{ Status: 'Checks & PR', Area: 'rdo', Session: 'claude/live-one @ 2026-08-28' }],
         heartbeats
       )
     ).toEqual(['rdo']);
@@ -87,11 +87,11 @@ describe('the claim read survives a card the human has freed', () => {
 
   it('freed and live cards mix without the freed one taking the read down with it', () => {
     const board = [
-      { Status: 'PR', Area: 'rdo', Session: '' },
+      { Status: 'Checks & PR', Area: 'rdo', Session: '' },
       { Status: 'Validation', Area: 'gateway', Session: null },
-      { Status: 'In progress', Area: 'client', Session: 'claude/live-one @ 2026-08-28' },
+      { Status: 'Planning', Area: 'client', Session: 'claude/live-one @ 2026-08-28' },
       { Status: 'Todo', Area: 'e2e', Session: '' },
-      { Status: 'PR', Area: 'docs', Session: 'claude/live-one @ 2026-08-28' },
+      { Status: 'Checks & PR', Area: 'docs', Session: 'claude/live-one @ 2026-08-28' },
     ];
     // Only the live non-docs card. `docs` never blocks; Todo never makes an area busy.
     expect(busyAreas(board, heartbeats)).toEqual(['client']);

@@ -9,7 +9,7 @@
 #   DISARM every way ownership closes, and there are four:
 #           `board:take --release`     the back-off, the card was never held
 #           `board:move … Done`        the card is finished
-#           `board:move … Needs triage` ownership closed the other way
+#           `board:move … Parked`      ownership closed the other way
 #           `finish`                   including the RETIRE path, see below
 #
 # The retire path is the one that matters and the one the first version got wrong. CLAUDE.md:
