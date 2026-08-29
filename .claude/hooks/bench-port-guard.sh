@@ -24,15 +24,8 @@
 #
 # Both have a sanctioned form, and the message names it. Exit 0 = allow, exit 2 = block
 # with the reason fed back to the model.
-#
-# It also stamps the session heartbeat — a Bash call is the most frequent proof that a
-# session is alive in this worktree, which is what stops another session's finish from
-# reaping it.
 
 set -uo pipefail
-
-. "$(dirname "$0")/session-heartbeat.sh"
-spo_stamp_heartbeat
 
 payload="$(cat)"
 
@@ -109,23 +102,6 @@ verdict="$(printf '%s' "$payload" | BENCH_PORT="$BENCH_PORT" DEFAULT_PORT="$DEFA
   });
 " 2>/dev/null)"
 
-# Refusal ledger (card #369) — count this refusal, so the message below can tell a first
-# refusal from a session still composing variants of the same blocked command. Computed only
-# when we are actually about to block; a passing call never touches the ledger.
-count=0
-if [ "${verdict:-ok}" != "ok" ]; then
-  count="$(node "$(dirname "$0")/refusal-ledger.js" "bench-port" 2>/dev/null || echo 0)"
-fi
-escalation=""
-if [ "${count:-0}" -ge 3 ] 2>/dev/null; then
-  escalation="
-This is refusal #${count} from this guard in this session. Do not compose another
-variant — that is workaround-hunting, and it is the one continuation this project
-forbids. Either run the exact command above, or release: move the card to
-Needs triage with a comment quoting this refusal and what you were trying to do
-(next-task.md § Refusal discipline), and close this session's ownership."
-fi
-
 case "${verdict:-ok}" in
   port)
     echo "BLOCKED: that would start a gateway on the bench port (${BENCH_PORT})." >&2
@@ -139,7 +115,6 @@ case "${verdict:-ok}" in
     echo "                               its results attest nothing" >&2
     echo "" >&2
     echo "To PROVE a change: npm run gate — only the worker attests." >&2
-    if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
     exit 2
     ;;
   live)
@@ -150,7 +125,6 @@ case "${verdict:-ok}" in
     echo "" >&2
     echo "  npm run test:live   the L2 drive as a bench job (queued, serialized, attested)" >&2
     echo "  npm run gate        the full pre-push gate" >&2
-    if [ -n "$escalation" ]; then echo "$escalation" >&2; fi
     exit 2
     ;;
   *)
