@@ -33,8 +33,11 @@ export default defineConfig({
         manualChunks: undefined,
       },
     },
-    // NOTE: This condition is always false under `vite build` because Vite's
-    // resolveConfigToBuild() always sets NODE_ENV='production' before evaluating user config.
+    // NOTE: Vite's resolveConfig defaults NODE_ENV to 'production' for `vite build` only when
+    // it is UNSET (the isNodeEnvSet guard, vite/dist/node/chunks/config.js). None of our build
+    // paths (Dockerfile, package.json scripts) export NODE_ENV, so this condition is false in
+    // every build we run — but an explicit `NODE_ENV=development vite build` would keep
+    // 'development' and emit sourcemaps.
     sourcemap: process.env.NODE_ENV !== 'production',
     target: 'es2020',
   },
