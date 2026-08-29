@@ -65,7 +65,6 @@ function loadSchemaModule() {
   const tmpFile = path.join(os.tmpdir(), `report-card-schema-${Date.now()}-${process.pid}.cjs`);
   fs.writeFileSync(tmpFile, code);
   try {
-    // eslint-disable-next-line import/no-dynamic-require, global-require
     return require(tmpFile);
   } finally {
     fs.rmSync(tmpFile, { force: true });
