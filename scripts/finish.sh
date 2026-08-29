@@ -42,9 +42,9 @@ MAIN_REPO="${SPO_MAIN_REPO:-$HOME/SPO-WebClient}"
 here="$(git rev-parse --show-toplevel)"
 branch="$(git rev-parse --abbrev-ref HEAD)"
 
-# Where sessions leave their heartbeat (.claude/hooks/session-heartbeat.sh) and where this
-# script marks a worktree retired. Outside every worktree, on purpose: a file inside one
-# would make it dirty, which blocks both the gate and finish itself.
+# Where sessions leave their heartbeat (`<key>.alive`) and where this script marks a worktree
+# retired. Outside every worktree, on purpose: a file inside one would make it dirty, which
+# blocks both the gate and finish itself.
 SESSIONS_DIR="${SPO_SESSION_DIR:-$HOME/.spo-bench/sessions}"
 # How long a heartbeat keeps a worktree: long enough to cover a session thinking, short
 # enough that an abandoned one is reaped the same day. A retired worktree needs far less —
@@ -153,8 +153,8 @@ heartbeat_age_min() {
 forget_session_files() {
   local key
   key="$(session_key "$1")"
-  # `.driving` is the driver-scope marker armed by a verified `board:take` claim
-  # (.claude/hooks/driver-scope-guard.sh). A finished session is no longer driving anything.
+  # `.driving` is the marker armed by a verified `board:take` claim (scripts/driver-scope.sh).
+  # A finished session is no longer driving anything.
   rm -f "$SESSIONS_DIR/$key.alive" "$SESSIONS_DIR/$key.finished" \
         "$SESSIONS_DIR/$key.driving" 2>/dev/null || true
 }
