@@ -434,9 +434,9 @@ describe('the gh recipes a session copies from', () => {
     expect(claimRead).toMatch(/\[\\\(\.Status \/\/ "-"\)\]/);
     expect(claimRead).toMatch(/area=\\\(\.Area \/\/ "-"\)/);
     expect(claimRead).toMatch(/session=\\\(\.Session \/\/ "-"\)/);
-    // The busy set itself — the same four statuses, with docs still exempt.
+    // The busy set itself — the same six statuses, with docs still exempt.
     expect(claimRead).toMatch(/"busy areas: /);
-    expect(claimRead).toMatch(/\.Status == "In progress" or \.Status == "Gate" or \.Status == "Validation" or \.Status == "PR"/);
+    expect(claimRead).toMatch(/\.Status == "Planning" or \.Status == "Implementing" or \.Status == "Gate" or \.Status == "Validation" or \.Status == "Checks & PR" or \.Status == "Merging"/);
     expect(claimRead).toMatch(/\.Area != "docs"/);
     expect(recipes).toMatch(/# Fill Area before the card moves to In progress/);
   });

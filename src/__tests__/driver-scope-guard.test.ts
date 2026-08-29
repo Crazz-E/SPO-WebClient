@@ -437,9 +437,9 @@ describe('driver-scope marker — every path that closes ownership releases it',
     expect(take.indexOf('arm_driver_scope "$issue"')).toBeGreaterThan(take.indexOf('LOST:'));
   });
 
-  it('board:move releases on Done and on Needs triage', () => {
+  it('board:move releases on Done and on Parked', () => {
     const move = readScript(path.join(ROOT, 'scripts', 'board-move.sh'));
-    expect(move).toMatch(/Done\|"Needs triage"\)\s*disarm_driver_scope/);
+    expect(move).toMatch(/Done\|Parked\)\s*disarm_driver_scope/);
   });
 
   it('finish releases it on the RETIRE path, where it keeps everything else', () => {

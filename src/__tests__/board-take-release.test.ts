@@ -90,8 +90,8 @@ describe('the read query and release guard require all three conditions together
     expect(script).toMatch(/\)\.Status \/\/ ""'/);
   });
 
-  it('a cross-session release requires Status to be Done or Needs triage', () => {
-    expect(releaseBranch).toMatch(/case "\$current_status" in\s*\n\s*Done \| "Needs triage"\)/);
+  it('a cross-session release requires Status to be Done or Parked', () => {
+    expect(releaseBranch).toMatch(/case "\$current_status" in\s*\n\s*Done \| Parked\)/);
   });
 
   it('inside that case, it requires the issue OPEN and stateReason REOPENED together, not either alone', () => {
@@ -110,14 +110,14 @@ describe('the read query and release guard require all three conditions together
 });
 
 describe('the refusal message names what to do for each refused case', () => {
-  it('names the active-owner case (Todo/In progress/Gate/Validation/PR)', () => {
-    expect(releaseBranch).toMatch(/Todo \| "In progress" \| Gate \| Validation \| PR\)/);
+  it('names the active-owner case (Todo/Planning/Implementing/Gate/Validation/Checks & PR/Merging)', () => {
+    expect(releaseBranch).toMatch(/Todo \| Planning \| Implementing \| Gate \| Validation \| "Checks & PR" \| Merging\)/);
     expect(releaseBranch).toMatch(/the owner is live.*only the human may free it/);
   });
 
   it('names the failure-trace case, citing the rulebook lines', () => {
     expect(releaseBranch).toMatch(
-      /Session is deliberately the trace of a failed attempt.*only the human reclassifies from Needs triage/,
+      /Session is deliberately the trace of a failed attempt.*only the human reclassifies from Parked/,
     );
     expect(releaseBranch).toMatch(/doc\/kanban-workflow\.md:26, :121-125/);
   });
@@ -143,7 +143,7 @@ describe('the header comment documents the rule and why all three conditions are
   it('names issue 299 and the three conditions', () => {
     const header = script.slice(0, script.indexOf('set -euo pipefail'));
     expect(header).toMatch(/#299/);
-    expect(header).toMatch(/Done.*Needs triage/);
+    expect(header).toMatch(/Done.*Parked/);
     expect(header).toMatch(/state.*is OPEN/);
     expect(header).toMatch(/stateReason.*is REOPENED/);
   });
