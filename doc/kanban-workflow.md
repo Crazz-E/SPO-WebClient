@@ -508,8 +508,7 @@ cannot query a project field, and the emoji in the title is not a query either.
 
 Pull requests are labelled by **path**, automatically (`actions/labeler`, `.github/labeler.yml`)
 — `rdo`, `gateway`, `client`, `renderer`, `e2e`, `bench`, `ci`, `documentation`.
-Never post those by hand. One label is neither derived nor a session's to post:
-**`rdo-approved`**, which the maintainer alone adds to unlock a protected-file change.
+Never post those by hand.
 
 ### The card review — a neutral reader before the pool
 

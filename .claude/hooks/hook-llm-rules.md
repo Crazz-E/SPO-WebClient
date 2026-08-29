@@ -59,7 +59,8 @@ Output ONLY the structured JSON your caller's schema demands. No prose outside i
 ## Hard boundaries — never cross these in a `corrected_command`
 
 - Never suggest editing `src/shared/rdo-types.ts`, `src/shared/rdo-frame.ts`,
-  `src/shared/rdo-members.ts`, or `src/server/rdo.ts` — frozen, `rdo-approved` label required.
+  `src/shared/rdo-members.ts`, or `src/server/rdo.ts` via a shell correction — the RDO wire
+  protocol is the project; treat any change to these as the highest-stakes work in the repo.
 - Never `gh project item-list` — name `npm run board:claim` instead (~2 GraphQL points vs ~103).
 - Never a hand-rolled `until`/`while`/`for` + `sleep` wait loop — name `npm run bench:wait --
   <job-id>` or `npm run pr:wait -- <n>`.

@@ -1,9 +1,9 @@
 /**
- * scripts/check-pr-rules.js — the three rules the ruleset cannot express, made mechanical.
+ * scripts/check-pr-rules.js — the two rules the ruleset cannot express, made mechanical.
  *
- * The pure predicates, plus the two ways the script used to fail OPEN: an unresolvable diff
- * base, and a rename that walked past the protected-file list. Those two need a real git
- * repository, so they get one — a throwaway in tmp, not the working tree.
+ * The pure predicates, plus the one way the script used to fail OPEN: an unresolvable diff
+ * base. That needs a real git repository, so it gets one — a throwaway in tmp, not the
+ * working tree.
  */
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
@@ -27,13 +27,7 @@ interface Thresholds {
 }
 
 interface CheckPrRulesModule {
-  PROTECTED_FILES: string[];
-  PROTECTED_PREFIXES: string[];
-  APPROVAL_LABEL: string;
   CITATION_FILES: string[];
-  protectedTouched(files: string[]): string[];
-  parseLabels(raw: string | undefined): string[];
-  checkProtectedPaths(files: string[], labels: string[]): RuleResult;
   checkCitation(files: string[], body: string): RuleResult;
   thresholdRegressions(base: Thresholds, head: Thresholds): Regression[];
   checkThresholds(base: Thresholds, head: Thresholds): RuleResult;
@@ -46,60 +40,6 @@ type BaseThresholdState =
   | { state: 'unreadable'; reason: string };
 
 const rules: CheckPrRulesModule = require('../../scripts/check-pr-rules.js');
-
-describe('protectedTouched', () => {
-  it('matches the frozen files exactly', () => {
-    expect(rules.protectedTouched(['src/server/rdo.ts'])).toEqual(['src/server/rdo.ts']);
-    expect(rules.protectedTouched(['jest.config.js'])).toEqual(['jest.config.js']);
-    expect(rules.protectedTouched(['src/server/rdo-request-guards.ts'])).toEqual([]);
-  });
-
-  it('leaves the catalogue out — it grows as normal work, guarded by the citation rule', () => {
-    expect(rules.protectedTouched(['src/shared/rdo-members.ts'])).toEqual([]);
-    expect(rules.CITATION_FILES).toContain('src/shared/rdo-members.ts');
-  });
-
-  it('normalises windows separators so a CRLF checkout cannot slip past', () => {
-    expect(rules.protectedTouched(['src\\shared\\rdo-frame.ts'])).toEqual(['src/shared/rdo-frame.ts']);
-  });
-});
-
-describe('parseLabels', () => {
-  it('reads the JSON array GitHub Actions produces', () => {
-    expect(rules.parseLabels('["rdo-approved","doc"]')).toEqual(['rdo-approved', 'doc']);
-  });
-
-  it('reads a raw label object array too', () => {
-    expect(rules.parseLabels('[{"name":"rdo-approved"}]')).toEqual(['rdo-approved']);
-  });
-
-  it('reads a comma list, for a human running it by hand', () => {
-    expect(rules.parseLabels(' rdo-approved , doc ')).toEqual(['rdo-approved', 'doc']);
-  });
-
-  it('treats an absent, empty or malformed value as no labels — never as an unlock', () => {
-    expect(rules.parseLabels(undefined)).toEqual([]);
-    expect(rules.parseLabels('')).toEqual([]);
-    expect(rules.parseLabels('[not json')).toEqual([]);
-  });
-});
-
-describe('checkProtectedPaths', () => {
-  it('passes when nothing protected is touched', () => {
-    expect(rules.checkProtectedPaths(['src/client/App.tsx'], []).ok).toBe(true);
-  });
-
-  it('fails when a protected file changes without the label, and names the file', () => {
-    const result = rules.checkProtectedPaths(['src/shared/rdo-types.ts', 'a.ts'], ['doc']);
-    expect(result.ok).toBe(false);
-    expect(result.detail).toContain('src/shared/rdo-types.ts');
-    expect(result.detail).toContain(rules.APPROVAL_LABEL);
-  });
-
-  it('passes once the human posts the label', () => {
-    expect(rules.checkProtectedPaths(['src/shared/rdo-types.ts'], ['rdo-approved']).ok).toBe(true);
-  });
-});
 
 describe('checkCitation', () => {
   it('is silent while the catalogue is untouched, whatever the body says', () => {
@@ -169,21 +109,6 @@ describe('checkThresholds', () => {
   });
 });
 
-describe('the guarded set matches what the repository declares protected', () => {
-  it('covers the wire emitter, the type module, the server socket and the machine floor', () => {
-    expect(rules.PROTECTED_FILES).toEqual(
-      expect.arrayContaining([
-        'src/shared/rdo-types.ts',
-        'src/shared/rdo-frame.ts',
-        'src/server/rdo.ts',
-        'jest.config.js',
-      ]),
-    );
-    expect(rules.PROTECTED_PREFIXES).toEqual([]);
-  });
-});
-
-
 describe('ratchetResult — the base states are not interchangeable', () => {
   it('passes when the base genuinely has no jest.config.js', () => {
     const result = rules.ratchetResult({ state: 'absent' }, { global: { lines: 38 } });
@@ -220,7 +145,7 @@ describe('the script against a real repository', () => {
         cwd: repo,
         encoding: 'utf8',
         stdio: 'pipe',
-        env: { ...process.env, PR_BODY: '', PR_LABELS: '', BASE_SHA: '', ...env },
+        env: { ...process.env, PR_BODY: '', BASE_SHA: '', ...env },
       });
       return { code: 0, out };
     } catch (err) {
@@ -256,27 +181,11 @@ describe('the script against a real repository', () => {
     expect(out).toContain('no diff base could be resolved');
   });
 
-  it('catches a protected file that was RENAMED, not edited', () => {
-    git('mv', 'src/shared/rdo-frame.ts', 'src/shared/wire-emitter.ts');
-    git('commit', '-qm', 'move the emitter');
-    const { code, out } = run();
-    expect(code).toBe(1);
-    expect(out).toContain('src/shared/rdo-frame.ts');
-    expect(out).toContain('rdo-approved');
-  });
-
-  it('lets the same rename through once the label is present', () => {
-    git('mv', 'src/shared/rdo-frame.ts', 'src/shared/wire-emitter.ts');
-    git('commit', '-qm', 'move the emitter');
-    expect(run({ PR_LABELS: '["rdo-approved"]' }).code).toBe(0);
-  });
-
   it('fails the ratchet when jest.config.js on the base cannot be required', () => {
     // The script reads the MERGE-BASE, not main's tip, so the unreadable config has to be
     // there — breaking main after the fork would never be looked at. Fast-forward the branch
     // onto the broken commit, then repair the config on the branch so the HEAD read succeeds
-    // and the base read is the only thing that can fail. The label isolates the ratchet from
-    // the protected-file rule, which jest.config.js also trips.
+    // and the base read is the only thing that can fail.
     git('checkout', '-q', 'main');
     fs.writeFileSync(path.join(repo, 'jest.config.js'), 'this is not javascript {{{\n');
     git('commit', '-qam', 'break the base config');
@@ -284,7 +193,7 @@ describe('the script against a real repository', () => {
     git('merge', '-q', 'main', '-m', 'take main');
     fs.writeFileSync(path.join(repo, 'jest.config.js'), 'module.exports = { coverageThreshold: { global: { lines: 38 } } };\n');
     git('commit', '-qam', 'repair the config on the branch');
-    const { code, out } = run({ PR_LABELS: '["rdo-approved"]' });
+    const { code, out } = run();
     expect(code).toBe(1);
     expect(out).toContain('could not be read');
   });

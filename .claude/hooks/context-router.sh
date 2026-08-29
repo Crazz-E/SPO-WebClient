@@ -101,7 +101,7 @@ esac
 
 case "$PROMPT" in
   *test*|*coverage*|*couverture*|*jest*)
-    add "TESTING — skill: spo-testing. Two coverage numbers, do not conflate: new/modified lines >= 93% (review convention) vs the jest.config.js machine floor (global 38%, per-directory higher). Thresholds only go UP; jest.config.js is protected. 7 custom RDO matchers available."
+    add "TESTING — skill: spo-testing. Two coverage numbers, do not conflate: new/modified lines >= 93% (review convention) vs the jest.config.js machine floor (global 38%, per-directory higher). Thresholds only go UP (jest.config.js ratchet, CI-enforced). 7 custom RDO matchers available."
     ;;
 esac
 

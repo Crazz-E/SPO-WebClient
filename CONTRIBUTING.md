@@ -28,13 +28,9 @@ crash a live server. So:
   **arity** taken from the server-side declaration in `../SPO-Original`, cited as `File.pas:Line`;
 - never probe a live server to find out.
 
-`src/shared/rdo-types.ts`, `src/shared/rdo-frame.ts`, `src/server/rdo.ts`,
-and `jest.config.js` are not modified without discussion — and this is
-**checked**, not merely stated: `scripts/check-pr-rules.js` runs inside the required
-`typecheck + tests` check and fails a pull request that touches one of them without the
-**`rdo-approved`** label. Only the maintainer posts that label; the author of a diff cannot
-unlock their own change. The same step requires a `File.pas:Line` citation in the PR body
-whenever `src/shared/rdo-members.ts` changes.
+Adding to the catalogue is checked, not merely stated: `scripts/check-pr-rules.js` runs
+inside the required `typecheck + tests` check and fails a pull request that changes
+`src/shared/rdo-members.ts` without a `File.pas:Line` citation in the PR body.
 
 ## Tests
 

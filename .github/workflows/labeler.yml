@@ -26,6 +26,6 @@ jobs:
     steps:
       - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
         with:
-          # Domain labels are derived, but a human-posted label (rdo-approved) must never
-          # be stripped by a later push.
+          # Domain labels are derived, but a human-posted label must never be stripped by
+          # a later push.
           sync-labels: false
