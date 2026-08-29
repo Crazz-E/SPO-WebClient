@@ -310,8 +310,9 @@ deployment.
 - `npm run dev:local` — build and run a gateway yourself, for interactive debugging. It
   picks the first free port from 8081 up and **refuses 8080** (`scripts/dev-local.sh`);
   `PORT=<n>` chooses. Its behaviour attests nothing.
-- `npm run gate:local` — the static gate without the worker. Evidence for reading; the
-  push hook does not accept it.
+- `npm run gate:local` — the static gate without the worker; static-only by default, the
+  live stage needs `--live`, which only the worker passes.
+  Evidence for reading; the push hook does not accept it.
 
 `.claude/hooks/bench-port-guard.sh` makes the boundary mechanical rather than advisory. It
 refuses, before the command runs:

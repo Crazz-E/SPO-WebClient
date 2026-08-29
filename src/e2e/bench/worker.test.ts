@@ -308,7 +308,7 @@ describe('runJob — gate', () => {
     expect(h.commands[1]).toMatchObject({ cmd: 'npm', args: ['run', 'build:server'], cwd: h.worktree });
     expect(h.commands[2]).toMatchObject({
       cmd: 'node',
-      args: ['scripts/verify-gate.js', '--attempt=2'],
+      args: ['scripts/verify-gate.js', '--live', '--attempt=2'],
       cwd: h.worktree,
     });
     expect(h.commands[2].env?.E2E_WORLD_STATE_DIR).toBe(h.paths.world);

@@ -266,7 +266,7 @@ npm run deps:gate    # Dependabot PRs: merges main in, installs, gates, pushes a
 npm run dev:local    # build + start yourself, on the first free port from 8081 up — never 8080.
                      # The CONSCIOUS EXCEPTION (see below); PORT=<n> to choose. A hook refuses any
                      # other way of taking the bench port.
-npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push
+npm run gate:local   # verify-gate.js directly, static-only — evidence for reading; does NOT unblock a push
 npm run verdict -- <alias> [--tail=N]  # run test/typecheck/lint/... with the full log in ~/.spo-bench/logs/, print the tail + EXIT=<code>, preserve the exit code — the sanctioned way to keep a verdict's transcript short
 npm run hook:harvest -- --take         # /next-task § 0.5: drain one hardening candidate from the LLM fallback hook's local journal
 npm run hook:stats                     # local read of that journal — invocation trend, top uncovered shapes — how "LLM usage → 0" is checked rather than asserted
