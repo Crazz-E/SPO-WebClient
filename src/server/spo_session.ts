@@ -1,6 +1,6 @@
 import * as net from 'net';
 import { EventEmitter } from 'events';
-import fetch from 'node-fetch';
+import { fetchWithTimeout } from './fetch-with-timeout';
 import { TimeoutCategory, TIMEOUT_CONFIG, IS_PROXY_TIMEOUT_MS } from '../shared/timeout-categories';
 import {
   RdoPacket,
@@ -944,7 +944,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
   public async fetchAspPage(aspPath: string, extraParams?: Record<string, string>): Promise<string> {
     const url = this.buildAspUrl(aspPath, extraParams);
     this.log.debug(`[ASP] Fetching ${aspPath}`);
-    const response = await fetch(url, { redirect: 'follow' });
+    const response = await fetchWithTimeout(url, { redirect: 'follow' });
     if (!response.ok) {
       throw new Error(`ASP request failed: ${response.status} ${response.statusText}`);
     }

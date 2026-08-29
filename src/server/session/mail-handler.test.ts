@@ -711,7 +711,7 @@ describe('getMailFolder', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, init] = mockFetch.mock.calls[0];
     expect(url).toBe('http://158.69.153.134/five/0/visual/voyager/mail/MessageList.asp?Folder=Inbox&WorldName=Shamba&Account=SPO%20test3%40shamba.net&MsgId=&Action=');
-    expect(init).toEqual({ redirect: 'follow' });
+    expect(init).toEqual(expect.objectContaining({ redirect: 'follow' }));
   });
 
   it('parses the rows through the real parseMessageListHtml', async () => {

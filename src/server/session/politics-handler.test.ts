@@ -1131,7 +1131,7 @@ describe('getPoliticsData', () => {
     expect(urls[4]).toContain('/tycooncampaign.asp?');
     expect(urls[0]).toContain('TownName=New%20Town');
     expect(urls[0]).not.toContain('+');
-    expect(mockFetch.mock.calls[0][1]).toEqual({ redirect: 'follow' });
+    expect(mockFetch.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'follow' }));
     const q = queryOf(0);
     expect(q.get('WorldName')).toBe('Shamba');
     expect(q.get('TycoonName')).toBe('SPO_test3');
@@ -1636,7 +1636,7 @@ describe.each([
     expect(url).toMatch(/^http:\/\/158\.69\.153\.134\/Five\/0\/Visual\/Voyager\/Politics\/tycooncampaign\.asp\?/);
     expect(url).toContain('TownName=New%20Town');
     expect(url).not.toContain('+');
-    expect(mockFetch.mock.calls[0][1]).toEqual({ redirect: 'follow' });
+    expect(mockFetch.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'follow' }));
     const q = queryOf(0);
     expect(q.get(action)).toBe('TRUE');
     expect(q.get('Capitol')).toBe('');

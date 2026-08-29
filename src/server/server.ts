@@ -6,7 +6,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { StarpeaceSession } from './spo_session';
 import { config } from '../shared/config';
 import { createLogger, getFileTransport, getErrorFileTransport, LogLevel } from '../shared/logger';
-import { UPDATE_SERVER } from '../shared/constants';
+import { UPDATE_SERVER, TIMEOUTS } from '../shared/constants';
+import { fetchWithTimeout, isTimeoutError } from './fetch-with-timeout';
 import { fileToProxyUrl, PROXY_IMAGE_ENDPOINT } from '../shared/proxy-utils';
 import * as ErrorCodes from '../shared/error-codes';
 import { FacilityDimensionsCache } from './facility-dimensions-cache';
@@ -437,7 +438,7 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
     for (const dir of imageDirs) {
       try {
         const updateUrl = `${UPDATE_SERVER.CACHE_URL}/${dir}/${filename}`;
-        const response = await fetch(updateUrl);
+        const response = await fetchWithTimeout(updateUrl, {}, TIMEOUTS.IMAGE_DOWNLOAD);
         if (response.ok) {
           const arrayBuffer = await response.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
@@ -468,7 +469,7 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
     if (downloaded) return;
 
     // Not on update server, try game server (fallback)
-    const response = await fetch(imageUrl);
+    const response = await fetchWithTimeout(imageUrl, {}, TIMEOUTS.IMAGE_DOWNLOAD);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -489,6 +490,12 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
     res.end(buffer);
   } catch (error: unknown) {
     logger.warn(`Failed to fetch image ${filename}: ${toErrorMessage(error)}`);
+
+    if (isTimeoutError(error)) {
+      res.writeHead(504, { 'Content-Type': 'text/plain' });
+      res.end('Upstream image fetch timed out');
+      return;
+    }
 
     // Cache the placeholder to avoid repeated failed downloads
     const placeholder = getPlaceholderImage();
@@ -784,7 +791,7 @@ const server = http.createServer(async (req, res) => {
     const cdnFullUrl = `${cdnBaseUrl}/${cdnPath}`;
 
     try {
-      const cdnResp = await fetch(cdnFullUrl);
+      const cdnResp = await fetchWithTimeout(cdnFullUrl);
       if (!cdnResp.ok) {
         res.writeHead(cdnResp.status);
         res.end();

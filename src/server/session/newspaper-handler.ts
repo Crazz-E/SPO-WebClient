@@ -22,7 +22,7 @@ import type { SessionContext } from './session-context';
 import type { NewspaperArticle, NewspaperBoard, NewspaperColumn } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 import { config } from '../../shared/config';
-import fetch from 'node-fetch';
+import { fetchWithTimeout } from '../fetch-with-timeout';
 import { redactUrlCredentials } from '../url-redact';
 
 // =========================================================================
@@ -215,7 +215,7 @@ export async function getNewspaperBoard(
     const url = `http://${worldIp}/Five/0/Visual/News/boardmsg.asp?${encodeParams(params)}`;
     ctx.log.debug(`[Newspaper] Reading ${redactUrlCredentials(url)}`);
 
-    const resp = await fetch(url, { redirect: 'follow' });
+    const resp = await fetchWithTimeout(url, { redirect: 'follow' });
     if (!resp.ok) {
       ctx.log.warn(`[Newspaper] board answered HTTP ${resp.status} — ${redactUrlCredentials(url)}`);
       return emptyBoard(target, `The newspaper answered HTTP ${resp.status}.`);
@@ -289,7 +289,7 @@ export async function postNewspaperColumn(
     });
 
     ctx.log.debug(`[Newspaper] Posting "${subject}" to ${target.paperName}`);
-    const resp = await fetch(url, {
+    const resp = await fetchWithTimeout(url, {
       method: 'POST',
       redirect: 'follow',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

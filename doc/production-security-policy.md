@@ -44,7 +44,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 |---|---|---|---|
 | SEC-G-2 | RDO lanes MUST stay serialized per session (prevents concurrent access to Delphi temp objects). | Met (`server.ts:rdoQueue`) | L1 harness |
 | SEC-G-3 | Reconnection MUST remain bounded (3 fast + 20 slow) with jitter, close-triggered only; ServerBusy polling MUST never trigger reconnect; timeouts MUST never close sockets. (Protects the Delphi login lock — risk B1.) | Met (Tier 4) | L1 (`world-reconnect`, `server-busy-reconnect`, `timeout-state-machine`) |
-| SEC-G-4 | Outbound HTTP calls to legacy ASP endpoints MUST have timeouts (risk C8). | **Missing — required work** | L0/L1 (with fix) |
+| SEC-G-4 | Outbound HTTP calls to legacy ASP endpoints MUST have timeouts (risk C8). | Met (`src/server/fetch-with-timeout.ts:fetchWithTimeout`, default `TIMEOUTS.FETCH` = 30 s in `src/shared/constants.ts`; `/proxy-image` → 504 on upstream timeout) | L0 (`fetch-with-timeout.test.ts`, `proxy-image-timeout.test.ts`) |
 
 ## 5. Secrets & Logging (SEC-L)
 
@@ -83,7 +83,7 @@ Normative language: **MUST** = required for production; **SHOULD** = required un
 ## 9. Compliance Gate & Exceptions
 
 - The **L4 compliance suite is the machine-readable form of this policy.** A PR that makes L4 fail is a policy violation and MUST NOT merge.
-- Items marked **Missing — required work** (SEC-G-4, global cap of SEC-W-3) are the remaining remediation backlog; each fix ships with its test. SEC-D-1 landed 2026-08-22 (CI audit step); SEC-R-2 landed 2026-08-25 (`server/production-config.ts`).
+- Items marked **Missing — required work** (global cap of SEC-W-3) are the remaining remediation backlog; each fix ships with its test. SEC-D-1 landed 2026-08-22 (CI audit step); SEC-R-2 landed 2026-08-25 (`server/production-config.ts`); SEC-G-4 landed 2026-08-29 (`server/fetch-with-timeout.ts`).
 - Exceptions: documented here, with owner, rationale, and expiry condition. Current exceptions: **SEC-X-1**, below.
 - Review cadence: re-audit this policy whenever the deployment topology changes (new public endpoint, new proxy layer, new distribution channel) and at least once per release cycle.
 
