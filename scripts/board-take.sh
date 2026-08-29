@@ -152,6 +152,75 @@ body_of() {
   tail -n 1 <<< "$1"
 }
 
+# --- write-failure diagnostics --------------------------------------------------------------
+# Every write call used to fold three different failures into the same generic
+# "RATE_LIMITED: write failed, card untouched" and exit 4 — the `gh` call itself failing (auth,
+# network, an actual secondary rate limit), and a GraphQL response that came back 200 with a
+# top-level `.errors` array, both threw away the one thing that would have said WHY. Exit codes
+# are the driver's contract and do not change (see header); only what gets printed does.
+
+looks_like_rate_limit() {
+  # $1 = text to inspect (gh's own stderr, or GraphQL error message text)
+  grep -qiE 'rate limit|abuse detection|secondary rate' <<< "$1"
+}
+
+run_write() {
+  # Runs "$@" (a `gh api graphql -i ...` write call), capturing ITS OWN stderr into $write_err
+  # instead of discarding it. Sets $wraw on success; on failure sets $write_err and returns 1.
+  local errfile
+  errfile="$(mktemp)"
+  if wraw=$("$@" 2>"$errfile"); then
+    rm -f "$errfile"
+    return 0
+  fi
+  write_err="$(cat "$errfile")"
+  rm -f "$errfile"
+  return 1
+}
+
+write_call_failed_diag() {
+  # $1 = gh's own stderr from a failed write call (may be empty, e.g. a bare non-zero exit).
+  # Prints it, then says plainly whether this looks like a genuine GitHub rate limit or
+  # something else — a human reading the log, or the park comment it becomes, should be able
+  # to tell at a glance.
+  local err="$1"
+  [ -n "$err" ] && echo "$err"
+  if looks_like_rate_limit "$err"; then
+    echo "RATE_LIMITED (confirmed): write call failed, card untouched"
+  else
+    echo "WRITE_FAILED (not a confirmed rate limit — see error above): write call failed, card untouched"
+  fi
+}
+
+report_write_errors() {
+  # $1 = full -i response (headers + body) of a write whose body carries a top-level `.errors`
+  # array. Prints the actual GraphQL error message(s) instead of just detecting them, then
+  # says whether this looks like a genuine rate limit — X-Ratelimit-Remaining: 0, already
+  # parsed into $last_remaining by report_header_ratelimit, or a message that says so — or not.
+  local body msgs
+  body="$(body_of "$1")"
+  msgs="$(jq -r '.errors[]? | (.message // tostring)' <<< "$body" 2>/dev/null)"
+  [ -n "$msgs" ] && echo "$msgs"
+  if [ "$last_remaining" = "0" ] || looks_like_rate_limit "$msgs"; then
+    echo "RATE_LIMITED (confirmed): write failed, card untouched"
+  else
+    echo "WRITE_FAILED (not a confirmed rate limit — see error above): write failed, card untouched"
+  fi
+}
+
+reread_failed_diag() {
+  # $1 = gh's own stderr from a failed re-read (may be empty). The write already landed here —
+  # a different condition from the write itself failing — so it gets its own label rather than
+  # reusing RATE_LIMITED/WRITE_FAILED for something that already happened.
+  local err="$1"
+  [ -n "$err" ] && echo "$err"
+  if looks_like_rate_limit "$err"; then
+    echo "REREAD_FAILED (confirmed rate limit): write landed, card was touched, re-read pending — re-check later"
+  else
+    echo "REREAD_FAILED (not a confirmed rate limit — see error above): write landed, card was touched, re-read pending — re-check later"
+  fi
+}
+
 # --- one read: the item for this issue, plus the field/option ids, plus current Session ---
 read_query='
 query($owner: String!, $repo: String!, $projNum: Int!, $issue: Int!) {
@@ -220,13 +289,21 @@ query($itemId: ID!) {
     ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } } } } } }
 }'
 
+# Sets $reread_result on success — called directly (not via `after=$(reread_session)`, a
+# command substitution forks a subshell, and a variable set inside one never reaches the
+# caller back out) so a failure's captured stderr actually reaches the terminal.
 reread_session() {
-  local rr
-  if ! rr=$(gh api graphql -f query="$reread_query" -f itemId="$item_id" 2>/dev/null); then
+  local rr errfile err
+  errfile="$(mktemp)"
+  if ! rr=$(gh api graphql -f query="$reread_query" -f itemId="$item_id" 2>"$errfile"); then
+    err="$(cat "$errfile")"
+    rm -f "$errfile"
+    reread_failed_diag "$err"
     return 1
   fi
+  rm -f "$errfile"
   report_query_ratelimit "$rr"
-  jq -r '([.data.node.fieldValues.nodes[]? | select(.field != null) | {(.field.name): (.text // .name)}] | add // {}).Session // ""' <<< "$rr"
+  reread_result="$(jq -r '([.data.node.fieldValues.nodes[]? | select(.field != null) | {(.field.name): (.text // .name)}] | add // {}).Session // ""' <<< "$rr")"
   return 0
 }
 
@@ -272,21 +349,21 @@ if [ "$release" -eq 1 ]; then
     m2: updateProjectV2ItemFieldValue(input: {projectId: $projectId, itemId: $itemId, fieldId: $statusFieldId, value: {singleSelectOptionId: $todoOptionId}}) { projectV2Item { id } }
   }'
 
-  if ! wraw=$(gh api graphql -i -f query="$mutation" -f projectId="$project_id" -f itemId="$item_id" \
-      -f sessionFieldId="$session_field_id" -f statusFieldId="$status_field_id" -f todoOptionId="$todo_option_id" 2>/dev/null); then
-    echo "RATE_LIMITED: write failed, card untouched"
+  if ! run_write gh api graphql -i -f query="$mutation" -f projectId="$project_id" -f itemId="$item_id" \
+      -f sessionFieldId="$session_field_id" -f statusFieldId="$status_field_id" -f todoOptionId="$todo_option_id"; then
+    write_call_failed_diag "$write_err"
     exit 4
   fi
   report_header_ratelimit "$wraw"
   if echo "$(body_of "$wraw")" | jq -e '.errors' >/dev/null 2>&1; then
-    echo "RATE_LIMITED: write failed, card untouched"
+    report_write_errors "$wraw"
     exit 4
   fi
 
-  if ! after=$(reread_session); then
-    echo "RATE_LIMITED: write landed, re-read pending"
+  if ! reread_session; then
     exit 5
   fi
+  after="$reread_result"
 
   disarm_driver_scope
   if [ "$reopened_release" -eq 1 ]; then
@@ -323,20 +400,20 @@ if [ -n "$area_option_id" ]; then
   write_args+=(-f areaFieldId="$area_field_id" -f areaOptionId="$area_option_id")
 fi
 
-if ! wraw=$(gh api graphql -i "${write_args[@]}" 2>/dev/null); then
-  echo "RATE_LIMITED: write failed, card untouched"
+if ! run_write gh api graphql -i "${write_args[@]}"; then
+  write_call_failed_diag "$write_err"
   exit 4
 fi
 report_header_ratelimit "$wraw"
 if echo "$(body_of "$wraw")" | jq -e '.errors' >/dev/null 2>&1; then
-  echo "RATE_LIMITED: write failed, card untouched"
+  report_write_errors "$wraw"
   exit 4
 fi
 
-if ! after=$(reread_session); then
-  echo "RATE_LIMITED: write landed, re-read pending"
+if ! reread_session; then
   exit 5
 fi
+after="$reread_result"
 
 if [ "$after" != "$session" ]; then
   echo "LOST: held by ${after:--}"
