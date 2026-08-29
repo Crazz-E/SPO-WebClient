@@ -63,33 +63,45 @@ export interface RoadCostEstimate {
 /**
  * The tiles a drag from (x1, y1) to (x2, y2) paves, in path order, start tile included.
  *
- * The longer axis is stepped first on ties, which is the rule the gateway's segment split
- * already follows — the two must agree, or the priced tiles are not the paved ones.
+ * Ported from Voyager's `FindCircuitPoints`
+ * (`Voyager/Components/MapIsoView/Circuits.pas:245-312`): when `|dx| <= |dy|` each pass adds
+ * the X-stepped point then the XY-stepped point, then the remaining Y distance is walked
+ * straight; the `|dx| > |dy|` branch does the same with the axes swapped (Y first, then the
+ * remaining X distance straight). `generateRoadSegments` derives its segments from this same
+ * path instead of re-deriving the walk.
  */
 export function roadPathTiles(x1: number, y1: number, x2: number, y2: number): RoadPathTile[] {
+  for (const v of [x1, y1, x2, y2]) {
+    if (!Number.isInteger(v)) throw new Error(`roadPathTiles: non-integer coordinate ${v}`);
+  }
   const tiles: RoadPathTile[] = [{ x: x1, y: y1 }];
-
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const stepX = dx > 0 ? 1 : dx < 0 ? -1 : 0;
-  const stepY = dy > 0 ? 1 : dy < 0 ? -1 : 0;
-
+  const stepX = x2 > x1 ? 1 : -1;
+  const stepY = y2 > y1 ? 1 : -1;
   let x = x1;
   let y = y1;
-  let remainingX = Math.abs(dx);
-  let remainingY = Math.abs(dy);
-
-  while (remainingX > 0 || remainingY > 0) {
-    if (remainingX >= remainingY && remainingX > 0) {
+  if (Math.abs(x2 - x1) <= Math.abs(y2 - y1)) {
+    while (x !== x2 && y !== y2) {
+      tiles.push({ x: x + stepX, y });
+      tiles.push({ x: x + stepX, y: y + stepY });
       x += stepX;
-      remainingX--;
-    } else if (remainingY > 0) {
       y += stepY;
-      remainingY--;
     }
-    tiles.push({ x, y });
+    while (y !== y2) {
+      y += stepY;
+      tiles.push({ x, y });
+    }
+  } else {
+    while (x !== x2 && y !== y2) {
+      tiles.push({ x, y: y + stepY });
+      tiles.push({ x: x + stepX, y: y + stepY });
+      x += stepX;
+      y += stepY;
+    }
+    while (x !== x2) {
+      x += stepX;
+      tiles.push({ x, y });
+    }
   }
-
   return tiles;
 }
 

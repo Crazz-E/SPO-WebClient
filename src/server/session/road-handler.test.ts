@@ -11,8 +11,8 @@
  * circuit 1, tycoon PROXY id, x1, y1, x2, y2, cost — every one an integer `#`.
  *
  * `generateRoadSegments` is module-private; it is observed through the frames
- * `buildRoad` emits: one for horizontal/vertical, a staircase of 1-tile
- * frames for a diagonal.
+ * `buildRoad` emits: one for horizontal/vertical, 1-tile frames while both
+ * axes of a diagonal still have distance left, then one straight tail frame.
  *
  * The handler assembles its `#` args with template strings rather than
  * `RdoValue.int()` (road-handler.ts:182-190, :339-344, :411-418), so the
@@ -24,7 +24,7 @@
  */
 
 import { buildRoad, getRoadCostEstimate, demolishRoad, wipeCircuit, ROAD_COST_PER_TILE } from './road-handler';
-import { BRIDGE_COST_PER_TILE } from '../../shared/road-cost';
+import { BRIDGE_COST_PER_TILE, roadPathTiles } from '../../shared/road-cost';
 import { makeSessionCtx, FAKE_CONTEXT_IDS } from '../__tests__/session/fake-session-context';
 import type { FakeSessionCtx, SentRequest } from '../__tests__/session/fake-session-context';
 import { RdoValue, RdoParser } from '../../shared/rdo-types';
@@ -144,27 +144,46 @@ describe('buildRoad — segment generation', () => {
     expect(result).toMatchObject({ success: true, cost: 5 * ROAD_COST_PER_TILE, tileCount: 4 });
   });
 
-  it('an L-shaped path favours the axis with more distance remaining', async () => {
+  it('an L-shaped path (|dx| > |dy|) steps Y first, then X, then the straight X tail as one segment (Circuits.pas:289-310)', async () => {
     const fake = makeRoadCtx();
     fake.respond(() => OK);
 
-    await buildRoad(fake.ctx, 0, 0, 3, 1);
+    const result = await buildRoad(fake.ctx, 0, 0, 3, 1);
 
-    // X has 3 to go, Y 1: X, X, then tie (1 vs 1) → X, then Y
     expect(segmentsOf(fake.sent)).toEqual([
-      [0, 0, 1, 0], [1, 0, 2, 0], [2, 0, 3, 0], [3, 0, 3, 1],
+      [0, 0, 0, 1], [0, 1, 1, 1], [1, 1, 3, 1],
     ]);
+    // 5 priced tiles (10 M) split across 3 segments — MapIsoHandler.pas:1100.
+    for (const req of fake.sent) {
+      expect(RdoParser.asInt(req.packet.args![6])).toBe(3_333_333);
+    }
+    expect(result).toMatchObject({ success: true, cost: 3 * 3_333_333, tileCount: 4 });
   });
 
-  it('a diagonal with more Y than X moves Y first', async () => {
+  it('a diagonal with more Y than X (|dx| <= |dy|) steps X first (Circuits.pas:266-287)', async () => {
     const fake = makeRoadCtx();
     fake.respond(() => OK);
 
     await buildRoad(fake.ctx, 5, 5, 6, 8);
 
     expect(segmentsOf(fake.sent)).toEqual([
-      [5, 5, 5, 6], [5, 6, 5, 7], [5, 7, 6, 7], [6, 7, 6, 8],
+      [5, 5, 6, 5], [6, 5, 6, 6], [6, 6, 6, 8],
     ]);
+  });
+
+  it('the segments concatenate to exactly roadPathTiles\' path — segments derive from the path (issue #246)', async () => {
+    const fake = makeRoadCtx();
+    fake.respond(() => OK);
+
+    await buildRoad(fake.ctx, 0, 0, 2, 5);
+
+    const path = roadPathTiles(0, 0, 2, 5).map(t => [t.x, t.y] as [number, number]);
+    const segs = segmentsOf(fake.sent);
+    expect(segs[0].slice(0, 2)).toEqual(path[0]);
+    expect(segs[segs.length - 1].slice(2, 4)).toEqual(path[path.length - 1]);
+    for (let i = 0; i < segs.length - 1; i++) {
+      expect(segs[i].slice(2, 4)).toEqual(segs[i + 1].slice(0, 2));
+    }
   });
 
   it('inverted coordinates step negatively, in the same staircase', async () => {
