@@ -240,7 +240,11 @@ export async function buildRoad(
           errorCode: resultCode
         };
         ctx.log.warn(`[RoadBuilding] Segment ${i + 1} failed: ${failedSegment.message}`);
-        // Continue with other segments (partial road is better than nothing)
+        // Voyager stops at the first refusal: `while (SegIdx < SegmentCount) and (ErrorCode = NOERROR)`
+        // (MapIsoHandler.pas:1099-1103). Each segment is charged independently
+        // (World.pas:4288), so sending further segments after a refusal would spend money
+        // on a road the reference client would never have built.
+        break;
       }
     }
 

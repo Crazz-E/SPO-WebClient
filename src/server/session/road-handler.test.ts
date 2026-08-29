@@ -296,31 +296,31 @@ describe('buildRoad — server answers', () => {
     expect(result).toEqual({ success: false, cost: 0, tileCount: 0, message: 'Failed with code -1', errorCode: -1 });
   });
 
-  it('keeps sending the remaining segments after one is refused and reports a partial road', async () => {
+  it('stops at the first refused segment (Voyager MapIsoHandler.pas:1099-1103) and reports the road built so far as partial', async () => {
     const fake = makeRoadCtx();
     // 4 segments; refuse the second one
     fake.respond((_p, i) => (i === 1 ? REJECTED_22 : OK));
 
     const result = await buildRoad(fake.ctx, 0, 0, 2, 2);
 
-    expect(fake.sent).toHaveLength(4);
+    expect(fake.sent).toHaveLength(2);
     expect(result).toEqual({
       success: true,
       partial: true,
-      cost: 3 * 2_500_000,
-      tileCount: 3,
-      message: 'Road partially built (3 tiles). Some segments failed: Cannot build a road at this location — area may be occupied or restricted',
+      cost: 1 * 2_500_000,
+      tileCount: 1,
+      message: 'Road partially built (1 tiles). Some segments failed: Cannot build a road at this location — area may be occupied or restricted',
     });
   });
 
-  it('when every segment is refused, reports the LAST failure and no tiles', async () => {
+  it('when every segment is refused, reports the first failure and no tiles', async () => {
     const fake = makeRoadCtx();
     fake.respond((_p, i) => (i === 0 ? 'res="#4"' : 'res="#3"'));
 
     const result = await buildRoad(fake.ctx, 0, 0, 1, 1);
 
-    expect(fake.sent).toHaveLength(2);
-    expect(result).toMatchObject({ success: false, cost: 0, tileCount: 0, errorCode: 3 });
+    expect(fake.sent).toHaveLength(1);
+    expect(result).toMatchObject({ success: false, cost: 0, tileCount: 0, errorCode: 4 });
   });
 
   it('a timeout is caught, logged and returned as a failure with the error message (no throw)', async () => {
