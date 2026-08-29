@@ -52,7 +52,7 @@ This document defines how SPO-WebClient reaches and *keeps* 100% E2E coverage of
 
 **F6 — No CI for the web/gateway path.** The only workflow is the release workflow (tag-triggered). No push/PR pipeline runs tests, coverage thresholds, lint, `npm audit`, or any E2E. The coverage ratchet in `jest.config.js` is enforced only when someone runs `test:coverage` locally.
 
-**F7 — No formal security/production policy existed.** Guidance was spread across `doc/deployment-security.md` (advisory checklist, since removed as superseded) and `deploy/DEPLOY.md` (manual Step-9 verification) — with discrepancies (`.env.example` ships `LOG_LEVEL=info`, checklist says `warn`). Known open gaps: no global session cap, no startup validation of production env vars. → Resolved by creating [production-security-policy.md](production-security-policy.md).
+**F7 — No formal security/production policy existed.** Guidance was spread across `doc/deployment-security.md` (advisory checklist, since removed as superseded) and the deployment guide, since extracted to SPO-Deploy (manual Step-9 verification) — with discrepancies (`.env.example` ships `LOG_LEVEL=info`, checklist says `warn`). Known open gaps: no global session cap, no startup validation of production env vars. → Resolved by creating [production-security-policy.md](production-security-policy.md).
 
 **F8 — Procedure drift.** Four overlapping artifacts (E2E-TESTING.md, E2E-SCENARIO.md, `.claude/commands/e2e.md`, `e2e-test` skill) duplicate the same login procedure and selector tables. Each change must be made four times.
 

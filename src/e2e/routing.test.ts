@@ -59,17 +59,11 @@ describe('route', () => {
     expect(decision.staticOnly).toBe(true);
   });
 
-  it('treats the container image and the deploy path as static-only', () => {
+  it('treats the container image as static-only', () => {
     // The bench builds the worktree and runs dist/server/server.js — it never builds the
-    // image and never deploys, so no live flow can observe either. Before this rule the
-    // gate failed closed on them (#215).
-    const decision = route([
-      'Dockerfile',
-      'Dockerfile.cache-sync',
-      '.dockerignore',
-      'deploy/deploy.sh',
-      'deploy/nginx/spo-webclient.conf',
-    ]);
+    // image, so no live flow can observe it. Before this rule the gate failed closed on it
+    // (#215).
+    const decision = route(['Dockerfile', 'Dockerfile.cache-sync', '.dockerignore']);
     expect(decision.unmapped).toEqual([]);
     expect(decision.staticOnly).toBe(true);
     expect(decision.required).toEqual([]);

@@ -169,7 +169,7 @@ resolved for you in that one call (kanban-workflow § Blocking order).
    | `client` | `src/client/**`, `public/**` |
    | `e2e` | `src/e2e/**` |
    | `shared` | `src/shared/**`, `src/*.d.ts` |
-   | `ci` | `.github/**`, `scripts/**`, `.claude/**`, `src/__tests__/**`, `src/__mocks__/**`, `jest.config.js`, `eslint.config.js`, `tsconfig*.json`, `vite.config.ts`, `Dockerfile*`, `docker-compose.yml`, `deploy/**` |
+   | `ci` | `.github/**`, `scripts/**`, `.claude/**`, `src/__tests__/**`, `src/__mocks__/**`, `jest.config.js`, `eslint.config.js`, `tsconfig*.json`, `vite.config.ts`, `Dockerfile*`, `docker-compose.yml` |
 
    `docs` comes first so a Markdown file is documentation wherever it lives; `ci` is the last
    row and the catch-all; where two rows could match, the earlier row wins. Full rule and

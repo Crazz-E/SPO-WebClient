@@ -60,7 +60,7 @@ Every path belongs to **exactly one** area. Where two rules could match, the ear
 | `client` | `src/client/**`, `public/**` |
 | `e2e` | `src/e2e/**` |
 | `shared` | `src/shared/**`, `src/*.d.ts` |
-| `ci` | `.github/**`, `scripts/**`, `.claude/**`, `src/__tests__/**`, `src/__mocks__/**`, `jest.config.js`, `eslint.config.js`, `tsconfig*.json`, `vite.config.ts`, `Dockerfile*`, `docker-compose.yml`, `deploy/**` |
+| `ci` | `.github/**`, `scripts/**`, `.claude/**`, `src/__tests__/**`, `src/__mocks__/**`, `jest.config.js`, `eslint.config.js`, `tsconfig*.json`, `vite.config.ts`, `Dockerfile*`, `docker-compose.yml` |
 
 **`ci` is the last row and the catch-all.** Anything reachable that no earlier row claims is
 `ci` — the machinery that builds, tests, ships and automates the repository. That is what makes
