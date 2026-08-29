@@ -549,7 +549,7 @@ const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 // phase: the bench worker serializes real live traffic, and the Delphi servers hold this
 // load without trouble. Tighten again before any public deployment.
 // Recorded as exception SEC-X-1 in doc/production-security-policy.md §9 — the policy floor
-// is auth 10/min and proxy 60/min, and deploy/DEPLOY.md ("Before the first public
+// is auth 10/min and proxy 60/min, and SPO-Deploy's DEPLOY.md ("Before the first public
 // deployment") is what raises the question at the right moment. This comment is not.
 const RATE_LIMIT_MAX_AUTH = 1000;     // max auth attempts per minute per IP
 const RATE_LIMIT_MAX_PROXY = 1000;    // max proxy-image requests per minute per IP
