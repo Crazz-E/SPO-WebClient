@@ -166,33 +166,36 @@ Four nested `CLAUDE.md` files load automatically in their directory and are auth
 
 **All open work lives on the kanban:**
 [github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/projects/1) — every
-task is a GitHub issue on the board, and a working session starts with **`/next-task`**.
-The rulebook is [doc/kanban-workflow.md](doc/kanban-workflow.md): seven columns (Todo · In
-progress · Gate · Validation · PR · Done · Needs triage), the `Session` field as ownership
-marker, board writes at state transitions only, the model routing, and which board workflows
-are on.
+task is a GitHub issue on the board. **The board is driven by the orchestrator in the sibling
+[SPO-Pipeline](https://github.com/Crazz-Org/SPO-Pipeline) repo**, not from inside this one: it
+claims a card, opens a worktree, implements, gates, validates and merges, writing the board at
+each state transition. This repo supplies the `board:*` scripts it spawns, and nothing else.
+The rulebook is [doc/kanban-workflow.md](doc/kanban-workflow.md): ten columns (Intake · Todo ·
+Planning · Implementing · Checks & PR · Gate · Validation · Merging · Done · Parked), the
+`Session` field as ownership marker, board writes at state transitions only, and which board
+workflows are on.
 
 **Ownership is sacred** — never touch a card whose `Session` is filled; every owner closes its
-ownership (Done or Needs triage). A session that dies without closing it leaves a card only the
+ownership (Done or Parked). A task that dies without closing it leaves a card only the
 human may free (`.github/workflows/orphan-cards.yml` only comments; it frees nothing).
 
 **One session per area:** a card also carries an `Area` — the one part of the tree its change
-lands in — and a session claims the topmost Todo card whose area no live card already holds.
-`docs` never blocks; every other area does. The reservation expires with the session heartbeat
+lands in — and the orchestrator claims the topmost Todo card whose area no live card already
+holds. `docs` never blocks; every other area does. The reservation expires on inactivity
 (`SPO_WORKTREE_IDLE_MIN`, 120 min), the card's `Session` field never does.
 
 **Order, where it exists, is a `blocked by` link** between two issues — the relation lives on
-the issue, not on the card. `/next-task` reads the whole blocked set in one GraphQL call and
-does not claim a card whose blocker is still open: it skips it and names the skip, or refuses
-out loud when that card was the one it was handed. A dependency
+the issue, not on the card. The claim read pulls the whole blocked set in one GraphQL call and
+the orchestrator does not claim a card whose blocker is still open: it skips it and names the
+skip, or refuses out loud when that card was the one it was handed. A dependency
 records *cannot start yet*, never priority — priority stays the human's vertical order in Todo.
 
 **GitHub reads are budgeted like board writes.** One account's quota — 5000 GraphQL points per
 hour — is shared by every session, worktree, workflow and PC. A `gh project item-list` costs
 ~103 points; the composite claim read costs ~2. So a session reads the pool **once**, at claim,
 with the recipe in [kanban-workflow.md § GitHub API discipline](doc/kanban-workflow.md); it
-never polls GitHub for a state that has a local surface (bench verdict, nightly, heartbeats —
-all under `~/.spo-bench/`); it asks `rateLimit { cost remaining resetAt }` in every
+never polls GitHub for a state that has a local surface (bench verdict, nightly — both under
+`~/.spo-bench/`); it asks `rateLimit { cost remaining resetAt }` in every
 hand-written GraphQL call; and on `RATE_LIMITED` mid-claim the **write half decides** — a
 half-made claim is never walked away from, because it leaves a card only a human can free.
 
@@ -203,11 +206,10 @@ no new issue, no closing section of the end report. A test session or a requeste
 it again, at a moment where someone asked for it. Only the maintainer widens a session's scope.
 
 **Filing a card is a deliberate act** — `/triage-report`, a maintainer's request, the split
-of a claimed task that turned out to be two, `/next-task` § 0.5 draining one candidate from the
-hook-LLM fallback layer's local journal ([doc/hook-llm-layer.md](doc/hook-llm-layer.md)), or a
+of a claimed task that turned out to be two, or a
 `PASS WITH FINDINGS` verdict from the `change-validator` sub-agent, bounded to ground the diff
 touched. `Auto-add to project` then puts the issue on the
-board and sets `Status` to Todo, so it lands straight in the pool `/next-task` reads — no
+board and sets `Status` to Todo, so it lands straight in the pool the claim read walks — no
 `item-add`, no column set by hand. What no workflow sets is `Category`, `Size` and `Area`; those
 stay the filer's job, along with the matching `cat:` / `size:` labels.
 **Every draft card is read first by the `card-reviewer` sub-agent** — which checks those three
@@ -269,8 +271,6 @@ npm run dev:local    # build + start yourself, on the first free port from 8081 
                      # other way of taking the bench port.
 npm run gate:local   # verify-gate.js directly — evidence for reading; does NOT unblock a push
 npm run verdict -- <alias> [--tail=N]  # run test/typecheck/lint/... with the full log in ~/.spo-bench/logs/, print the tail + EXIT=<code>, preserve the exit code — the sanctioned way to keep a verdict's transcript short
-npm run hook:harvest -- --take         # /next-task § 0.5: drain one hardening candidate from the LLM fallback hook's local journal
-npm run hook:stats                     # local read of that journal — invocation trend, top uncovered shapes — how "LLM usage → 0" is checked rather than asserted
 ```
 
 **The live bench has one owner: the bench worker.** Many sessions run on this machine, but
@@ -334,7 +334,7 @@ missing log line does. Three attempts maximum, each naming a different root caus
 on — so two branches that pass alone and break together would land unchallenged. Once a night
 the worker drives the L2 flows against `origin/main`, answer in
 `~/.spo-bench/nightly/latest.json`. **While `main` is red** (verdict `FAIL` and the sha is still
-`origin/main`), `/next-task` hands out only the repair and **no session merges `origin/main`
+`origin/main`), the orchestrator hands out only the repair and **no task merges `origin/main`
 into its branch** — updating from `main` must never import a defect
 ([bench-worker.md §8](doc/bench-worker.md)).
 
@@ -370,7 +370,7 @@ with `node .claude/generate-skills-manifest.js` (`--check` in CI fails if stale)
 `zustand-store-ts` (stores, selector stability), `mobile-ux-optimizer`
 (MobileShell/BottomNav/BottomSheet). The 20 installed skills are listed in the manifest.
 
-Slash **commands** live in `.claude/commands/`: `/next-task`, `/gate`, `/commit-push`,
+Slash **commands** live in `.claude/commands/`: `/gate`, `/commit-push`,
 `/coverage-check`, `/e2e`, `/release-notes`, `/triage-report`.
 
 **Sub-agents** (`.claude/agents/`), read-only:

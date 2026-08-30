@@ -11,7 +11,7 @@
  * is how a card ends up locked with nobody alive holding it.
  *
  * So this file pins the surfaces the way `card-dependencies.test.ts` established: the
- * rulebook, the `/next-task` command, `/commit-push`, and the one script that legitimately
+ * rulebook, `/commit-push`, and the one script that legitimately
  * polls a merge. Gut any of them and this test — inside the required `typecheck + tests`
  * check — goes red. Deciding the discipline is not worth its cost is a legitimate decision;
  * it just has to be made here as well as in those files.
@@ -22,13 +22,11 @@ import * as path from 'path';
 
 const ROOT = process.cwd();
 const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
-const NEXT_TASK = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const COMMIT_PUSH = path.join(ROOT, '.claude', 'commands', 'commit-push.md');
 const DEPS_GATE = path.join(ROOT, 'scripts', 'deps-gate.sh');
 const CLAIM_READ = path.join(ROOT, 'scripts', 'claim-read.sh');
 
 let rulebook: string;
-let nextTask: string;
 let commitPush: string;
 let depsGate: string;
 let claimRead: string;
@@ -38,7 +36,6 @@ const collapse = (text: string): string => text.replace(/\s+/g, ' ');
 
 beforeAll(() => {
   rulebook = fs.readFileSync(RULEBOOK, 'utf8');
-  nextTask = fs.readFileSync(NEXT_TASK, 'utf8');
   commitPush = fs.readFileSync(COMMIT_PUSH, 'utf8');
   depsGate = fs.readFileSync(DEPS_GATE, 'utf8');
   claimRead = fs.readFileSync(CLAIM_READ, 'utf8');
@@ -101,32 +98,6 @@ describe('the rulebook carries the discipline', () => {
     expect(recipes).not.toMatch(/^gh project item-list/m);
     // The handshake re-read is a single item, not a second listing.
     expect(collapse(recipes)).toMatch(/The handshake re-read — ONE item/);
-  });
-});
-
-describe('the /next-task command claims on one read', () => {
-  it('replaces the board listing with the claim read, and says why', () => {
-    const pick = nextTask.slice(nextTask.indexOf('## 1 · Pick'), nextTask.indexOf('## 2 · Claim'));
-    expect(collapse(pick)).toMatch(/One read for the whole claim/);
-    expect(collapse(pick)).toMatch(/never `gh project item-list`/);
-    expect(pick).not.toMatch(/^gh project item-list/m);
-  });
-
-  it('re-reads the handshake through the single item, never a second listing', () => {
-    const claim = nextTask.slice(nextTask.indexOf('## 2 · Claim'), nextTask.indexOf('## 3 ·'));
-    expect(collapse(claim)).toMatch(/never by listing the pool again/);
-  });
-
-  it('carries the RATE_LIMITED handshake rule at the claim itself', () => {
-    const claim = nextTask.slice(nextTask.indexOf('## 2 · Claim'), nextTask.indexOf('## 3 ·'));
-    expect(collapse(claim)).toMatch(/the write half decides/);
-    expect(collapse(claim)).toMatch(/do not walk away half-claimed/);
-  });
-
-  it('waits for checks with one read, never a vigil', () => {
-    const work = nextTask.slice(nextTask.indexOf('## 3 ·'), nextTask.indexOf('## 4 ·'));
-    expect(collapse(work)).toMatch(/Checking is one read, not a vigil/);
-    expect(collapse(work)).toMatch(/never a tight loop/);
   });
 });
 

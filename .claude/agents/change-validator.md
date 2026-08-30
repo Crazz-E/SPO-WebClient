@@ -9,7 +9,7 @@ model: fable
 
 The semantic question nobody else asks.
 
-Between the execution sub-agent and the merge, every check `/next-task` runs is mechanical:
+Between the execution step and the merge, every check the orchestrator runs is mechanical:
 the invariant substring check, `typecheck`, `lint`, `coverage:changed`, then the bench gate
 (build + static + L2 live drive). All of them answer *"does this break anything?"*. None of
 them answers *"does this actually fulfil the card's criterion, and does it sit coherently in

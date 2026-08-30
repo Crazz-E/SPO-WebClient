@@ -35,7 +35,7 @@
  *
  * A daily digest issue was the other candidate and is the worse one here: the project has
  * "Auto-add to project" enabled, so every issue this job opened would land in the Todo pool
- * as a card, and a session running `/next-task` would eventually claim the machine's own
+ * as a card, and the orchestrator would eventually claim the machine's own
  * bookkeeping as work. A comment creates no card, and it lands on the exact issue whose
  * `Session` the human has to decide about.
  *

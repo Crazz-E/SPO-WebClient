@@ -18,10 +18,6 @@
 #   bash scripts/board-move.sh 285 parked
 set -euo pipefail
 
-# Two of this script's columns CLOSE a session's ownership, and the `.driving` marker
-# (driver-scope.sh) must not outlive it.
-. "$(dirname "${BASH_SOURCE[0]}")/driver-scope.sh"
-
 OWNER="Crazz-Org"
 REPO="SPO-WebClient"
 PROJECT_NUMBER=1
@@ -146,10 +142,6 @@ if [ "$after" != "$option_name" ]; then
   echo "RATE_LIMITED: write landed, re-read pending"
   exit 5
 fi
-
-case "$option_name" in
-  Done|Parked) disarm_driver_scope ;;
-esac
 
 echo "MOVED #$issue -> $option_name"
 exit 0

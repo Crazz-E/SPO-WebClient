@@ -13,11 +13,10 @@
  *
  *   - **Read-only.** The reviewer must never file, comment or edit. A reviewer that writes
  *     to the board is a second author, and the card is back to having one reader.
- *   - **The five surfaces stay consistent.** The agent, the rulebook, the `/next-task`
- *     command, the `/triage-report` command and CLAUDE.md all have to name the mechanism, or
- *     a session reading any one of them is following a rule the others no longer carry. Gut
- *     any of the five and this test — inside the required `typecheck + tests` check — goes
- *     red.
+ *   - **The four surfaces stay consistent.** The agent, the rulebook, the `/triage-report`
+ *     command and CLAUDE.md all have to name the mechanism, or a session reading any one of
+ *     them is following a rule the others no longer carry. Gut any of the four and this
+ *     test — inside the required `typecheck + tests` check — goes red.
  *
  * Deciding the review is not worth its cost is a legitimate decision. It just has to be
  * made here as well as in the agent file, which is the point of pinning it.
@@ -29,14 +28,12 @@ import * as path from 'path';
 const ROOT = process.cwd();
 const AGENT = path.join(ROOT, '.claude', 'agents', 'card-reviewer.md');
 const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
-const COMMAND = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const TRIAGE_COMMAND = path.join(ROOT, '.claude', 'commands', 'triage-report.md');
 const CLAUDE_MD = path.join(ROOT, 'CLAUDE.md');
 
 let agent: string;
 let frontmatter: string;
 let rulebook: string;
-let command: string;
 let triageCommand: string;
 let claudeMd: string;
 
@@ -53,7 +50,6 @@ beforeAll(() => {
   const match = /^---\n([\s\S]*?)\n---\n/.exec(agent);
   frontmatter = match ? match[1] : '';
   rulebook = fs.readFileSync(RULEBOOK, 'utf8');
-  command = fs.readFileSync(COMMAND, 'utf8');
   triageCommand = fs.readFileSync(TRIAGE_COMMAND, 'utf8');
   claudeMd = fs.readFileSync(CLAUDE_MD, 'utf8');
 });
@@ -119,7 +115,7 @@ describe('card-reviewer agent', () => {
     });
 
     // #236: Area is the one field on a card that another session's claim depends on, and
-    // nothing else checks it — no workflow sets it, and /next-task only fills it after the
+    // nothing else checks it — no workflow sets it, and the orchestrator only fills it after the
     // claim. A card filed without one reserves no ground while looking like any other.
     it('receives Area alongside the two weight fields', () => {
       expect(collapse(agent)).toMatch(
@@ -136,7 +132,7 @@ describe('card-reviewer agent', () => {
     it('says why an empty Area costs something — it reserves no ground', () => {
       const text = collapse(agent);
       expect(text).toMatch(/\*\*empty\*\* `Area` blocks nothing/);
-      expect(text).toMatch(/two sessions can stand on the same tree/);
+      expect(text).toMatch(/two tasks can stand on the same tree/);
     });
 
     it('sends the reviewer to the partition, and forbids "none of them fits"', () => {
@@ -217,11 +213,6 @@ describe('the mechanism is named on all five surfaces', () => {
     expect(collapse(rulebook)).toMatch(/No session ever waits on another session's review/);
   });
 
-  it('is in the /next-task command, where a session meets the feeding rule', () => {
-    expect(command).toMatch(/`card-reviewer`/);
-    expect(command).toMatch(/DO NOT FILE/);
-  });
-
   it('is in the /triage-report command, which files the most cards of any surface', () => {
     expect(triageCommand).toMatch(/`card-reviewer`/);
     for (const verdict of ['FILE', 'FILE AMENDED', 'DO NOT FILE']) {
@@ -253,6 +244,6 @@ describe('the mechanism is named on all five surfaces', () => {
     const next = rulebook.indexOf('## Context discipline');
     const section = collapse(rulebook.slice(feeding, next));
     expect(section).toMatch(/\*\*`Area` is checked here because nothing else checks it\.\*\*/);
-    expect(section).toMatch(/`\/next-task` only fills it \*after\* a claim/);
+    expect(section).toMatch(/the orchestrator only fills it \*after\* a claim/);
   });
 });

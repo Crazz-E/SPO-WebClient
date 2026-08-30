@@ -40,7 +40,7 @@ describe('the merge-queue warning is documented as benign, with a verdict that i
 });
 
 describe('no command file teaches a flag that destroys the queue entry', () => {
-  const commandFiles = ['commit-push.md', 'next-task.md', 'gate.md', 'triage-report.md'];
+  const commandFiles = ['commit-push.md', 'gate.md', 'triage-report.md'];
 
   it.each(commandFiles)('%s never pairs gh pr merge with --delete-branch', (file) => {
     const text = read('.claude', 'commands', file);

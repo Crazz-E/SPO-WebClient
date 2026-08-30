@@ -72,7 +72,7 @@ const watch: OrphanModule = require('../../scripts/orphan-cards.js');
 
 const NOW = Date.parse('2026-08-24T12:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString();
-const SESSION = 'claude-crazz/next-task-79cc73 @ 2026-08-24';
+const SESSION = 'claude-crazz/mail-refresh-79cc73 @ 2026-08-24';
 
 function card(over: Partial<Item> = {}): Item {
   return {
@@ -93,7 +93,7 @@ const orphan = (over: Partial<Item> = {}): Orphan =>
 describe('parseSession', () => {
   it('splits the documented `<branch> @ <date>` form', () => {
     expect(watch.parseSession(SESSION)).toEqual({
-      branch: 'claude-crazz/next-task-79cc73',
+      branch: 'claude-crazz/mail-refresh-79cc73',
       date: '2026-08-24',
     });
   });
@@ -328,7 +328,7 @@ describe('renderDigest', () => {
     expect(digest).toContain('Orphan watch — 2026-08-24 12:00 UTC');
     expect(digest).toContain('1 card claimed and quiet');
     expect(digest).toContain('[#124](https://github.com/Crazz-Org/SPO-WebClient/issues/124)');
-    expect(digest).toContain('`claude-crazz/next-task-79cc73`');
+    expect(digest).toContain('`claude-crazz/mail-refresh-79cc73`');
     expect(digest).toContain('40 h');
     expect(digest).toContain('| posted |');
   });

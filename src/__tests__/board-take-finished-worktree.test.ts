@@ -41,7 +41,7 @@ beforeAll(() => {
   fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-take-bin-'));
   fs.writeFileSync(path.join(fakeBin, 'gh'), FAKE_GH, { mode: 0o755 });
   // The key board-take.sh derives for this worktree — sha1(realpath(toplevel))[0:16],
-  // the one derivation, in scripts/driver-scope.sh.
+  // the one derivation, in scripts/session-marker.sh.
   const toplevel = execFileSync('git', ['-C', ROOT, 'rev-parse', '--show-toplevel'], {
     encoding: 'utf8',
   }).trim();

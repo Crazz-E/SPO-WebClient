@@ -200,7 +200,6 @@ Roughly ten minutes, no phone required for the first half.
 
 ## Who does what
 
-`/triage-report` **creates** cards from the queue and never implements one.
-[`/next-task`](../.claude/commands/next-task.md) **claims and implements** cards and never reads
-the queue. A card born in the queue is an ordinary card from the moment it is filed: same
+`/triage-report` **creates** cards from the queue and never implements one. The orchestrator
+(sibling SPO-Pipeline repo) **claims and implements** cards and never reads the queue. A card born in the queue is an ordinary card from the moment it is filed: same
 columns, same ownership law, same [kanban rulebook](kanban-workflow.md).

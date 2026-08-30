@@ -27,14 +27,12 @@ import * as path from 'path';
 
 const ROOT = process.cwd();
 const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
-const COMMAND = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const CLAUDE_MD = path.join(ROOT, 'CLAUDE.md');
 const FINISH = path.join(ROOT, 'scripts', 'finish.sh');
 const HEARTBEAT_SCAN = path.join(ROOT, 'scripts', 'heartbeat-scan.sh');
 const CLAIM_READ = path.join(ROOT, 'scripts', 'claim-read.sh');
 
 let rulebook: string;
-let command: string;
 let claudeMd: string;
 let finish: string;
 let heartbeatScan: string;
@@ -50,7 +48,6 @@ const collapse = (text: string): string => text.replace(/\s+/g, ' ');
 
 beforeAll(() => {
   rulebook = fs.readFileSync(RULEBOOK, 'utf8');
-  command = fs.readFileSync(COMMAND, 'utf8');
   claudeMd = fs.readFileSync(CLAUDE_MD, 'utf8');
   finish = fs.readFileSync(FINISH, 'utf8');
   heartbeatScan = fs.readFileSync(HEARTBEAT_SCAN, 'utf8');
@@ -141,7 +138,7 @@ describe('the areas are a partition, first match from the top', () => {
   it('forbids area: labels, unlike Category and Size', () => {
     const section = collapse(partitionSection());
     expect(section).toMatch(/\*\*No `area:` labels\.\*\*/);
-    expect(section).toMatch(/`Area` is read only by `\/next-task`/);
+    expect(section).toMatch(/`Area` is read only by the claim read/);
   });
 });
 
@@ -234,7 +231,7 @@ describe('the partition is total in both directions', () => {
     ['src/shared/rdo-frame.ts', 'rdo'],
     ['src/__tests__/area-reservation.test.ts', 'ci'],
     ['jest.config.js', 'ci'],
-    ['.claude/commands/next-task.md', 'docs'],
+    ['.claude/commands/triage-report.md', 'docs'],
     ['.github/workflows/ci.yml', 'ci'],
     ['src/client/renderer/chunk-cache.ts', 'renderer'],
     ['src/e2e/bench/worker.ts', 'bench'],
@@ -262,16 +259,16 @@ describe('the busy set', () => {
     expect(rulebook.indexOf('### One session per area')).toBeLessThan(orphan);
   });
 
-  it('is exactly In progress, Gate, Validation and PR', () => {
+  it('is exactly the six owned, pre-merge columns', () => {
     expect(collapse(section())).toMatch(
-      /busy\*\* when a card holds it in \*\*In progress\*\*, \*\*Gate\*\*, \*\*Validation\*\* or \*\*PR\*\*/
+      /busy\*\* when a card holds it in \*\*Planning\*\*, \*\*Implementing\*\*, \*\*Checks & PR\*\*, \*\*Gate\*\*, \*\*Validation\*\* or \*\*Merging\*\*/
     );
   });
 
   it('excludes the three columns that hold no branch', () => {
-    // Gate and PR do block: the branch exists and is about to land.
+    // Gate, Validation and Merging do block: the branch exists and is about to land.
     expect(collapse(section())).toMatch(
-      /`Todo`, `Done` and `Needs triage` never make an area busy/
+      /`Todo`, `Done` and `Parked` never make an area busy/
     );
   });
 
@@ -282,8 +279,8 @@ describe('the busy set', () => {
     expect(text).toMatch(/\*\*Every other area blocks\.\*\*/);
   });
 
-  it('sends the algorithm to the command, rather than restating it', () => {
-    expect(collapse(section())).toMatch(/\.claude\/commands\/next-task\.md.*§ 1/);
+  it('sends the algorithm to the claim script, rather than restating it', () => {
+    expect(collapse(section())).toMatch(/scripts\/claim-read\.sh.*board:claim/);
   });
 });
 
@@ -338,69 +335,6 @@ describe('one idle window, shared with finish.sh', () => {
   });
 });
 
-describe('the /next-task command implements the claim algorithm', () => {
-  const pick = (): string => {
-    const start = command.indexOf('## 1 · Pick');
-    expect(start).toBeGreaterThan(-1);
-    const end = command.indexOf('## 2 · Claim');
-    expect(end).toBeGreaterThan(start);
-    return command.slice(start, end);
-  };
-
-  it('reads area alongside status and session from the board', () => {
-    expect(collapse(pick())).toMatch(/`status`, `session` and `area` come back on every item/);
-  });
-
-  it('computes the busy set first, with docs excluded from it', () => {
-    const text = pick();
-    expect(text).toMatch(/^1\. \*\*Compute the busy set\*\*/m);
-    expect(collapse(text)).toMatch(/`docs` never enters the busy set/);
-  });
-
-  it('walks Todo top-down and treats an empty Area as claimable', () => {
-    const text = pick();
-    expect(text).toMatch(/^2\. \*\*Walk Todo top-down\*\*/m);
-    expect(collapse(text)).toMatch(/an \*\*empty\*\* `Area` is claimable and blocks nothing/);
-  });
-
-  it('fills a missing Area before the card moves to In progress', () => {
-    const text = pick();
-    expect(text).toMatch(/^4\. \*\*If `Area` was empty\*\*/m);
-    expect(collapse(text)).toMatch(/do not classify it yourself.*sub-agent/);
-    expect(collapse(text)).toMatch(/\*\*write it before\*\* moving the card to In progress/);
-  });
-
-  it('backs off by clearing its own Session when the area turns out to be busy', () => {
-    const text = collapse(pick());
-    expect(text).toMatch(/clear `Session`, leave the card in Todo with `Area` now filled/);
-    expect(text).toMatch(/go back to step 2/);
-    expect(text).toMatch(/ownership law 3 is not violated/);
-  });
-
-  it('stops rather than taking a busy card or inventing work', () => {
-    const text = pick();
-    expect(text).toMatch(/^6\. \*\*If no Todo card is claimable, stop and say so\.\*\*/m);
-    expect(collapse(text)).toMatch(/do not invent work outside the board/);
-  });
-
-  it('carries a runnable heartbeat probe and the window it is read against', () => {
-    const text = pick();
-    // The probe is a named script now, not a composed one-liner: the § reaches it by alias,
-    // and the alive-file walk it used to inline is asserted against that script instead.
-    expect(text).toMatch(/npm run board:sessions/);
-    expect(heartbeatScan).toMatch(/\*\.alive/);
-    expect(heartbeatScan).toMatch(/rev-parse --abbrev-ref HEAD/);
-    expect(collapse(text)).toMatch(/`SPO_WORKTREE_IDLE_MIN` \(default \*\*120\*\* minutes\)/);
-    expect(collapse(text)).toMatch(/last commit date on `origin`, same window/);
-  });
-
-  it('keeps the ownership distinction at the point of use', () => {
-    expect(collapse(pick())).toMatch(
-      /what expired is the ground reservation, never the ownership/
-    );
-  });
-});
-
 describe('the rule is reachable from CLAUDE.md, which every session reads', () => {
   it('names the field, the docs exemption and the expiring window', () => {
     const text = collapse(claudeMd);
@@ -430,6 +364,6 @@ describe('the gh recipes a session copies from', () => {
     expect(claimRead).toMatch(/"busy areas: /);
     expect(claimRead).toMatch(/\.Status == "Planning" or \.Status == "Implementing" or \.Status == "Gate" or \.Status == "Validation" or \.Status == "Checks & PR" or \.Status == "Merging"/);
     expect(claimRead).toMatch(/\.Area != "docs"/);
-    expect(recipes).toMatch(/# Fill Area before the card moves to In progress/);
+    expect(recipes).toMatch(/# Fill Area before the card moves out of Todo/);
   });
 });

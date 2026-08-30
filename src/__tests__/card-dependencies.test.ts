@@ -15,10 +15,9 @@
  *   - **The skip is never silent.** #189's own criterion: without a stated visible behaviour,
  *     the board reads worse with dependencies than without — a card is passed over and the
  *     human is given no reason.
- *   - **The three surfaces stay consistent.** The rulebook, the `/next-task` command and
- *     CLAUDE.md all have to carry the rule, or a session reading any one of them follows a
- *     rule the others no longer state. Gut any of the three and this test — inside the
- *     required `typecheck + tests` check — goes red.
+ *   - **The two surfaces stay consistent.** The rulebook and CLAUDE.md both have to carry the
+ *     rule, or a session reading either one follows a rule the other no longer states. Gut
+ *     either and this test — inside the required `typecheck + tests` check — goes red.
  *
  * Deciding the mechanism is not worth its cost is a legitimate decision. It just has to be
  * made here as well as in the three files, which is the point of pinning it.
@@ -29,12 +28,10 @@ import * as path from 'path';
 
 const ROOT = process.cwd();
 const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
-const COMMAND = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const CLAUDE_MD = path.join(ROOT, 'CLAUDE.md');
 const CLAIM_READ = path.join(ROOT, 'scripts', 'claim-read.sh');
 
 let rulebook: string;
-let command: string;
 let claudeMd: string;
 let claimRead: string;
 
@@ -45,7 +42,6 @@ const collapse = (text: string): string => text.replace(/\s+/g, ' ');
 
 beforeAll(() => {
   rulebook = fs.readFileSync(RULEBOOK, 'utf8');
-  command = fs.readFileSync(COMMAND, 'utf8');
   claudeMd = fs.readFileSync(CLAUDE_MD, 'utf8');
   claimRead = fs.readFileSync(CLAIM_READ, 'utf8');
 });
@@ -96,9 +92,9 @@ describe('the rulebook carries the blocking order', () => {
     expect(collapse(section)).toMatch(/A silent skip would make the board read \*worse\*/);
   });
 
-  it('writes nothing to a blocked card — it is not Needs triage', () => {
+  it('writes nothing to a blocked card — it is not Parked', () => {
     expect(collapse(section)).toMatch(/`Session` stays empty, `Status` stays \*\*Todo\*\*/);
-    expect(collapse(section)).toMatch(/is \*\*not\*\* Needs triage/);
+    expect(collapse(section)).toMatch(/is \*\*not\*\* Parked/);
   });
 
   it('says who may post one, and that a session never removes one', () => {
@@ -137,56 +133,6 @@ describe('the rulebook carries the blocking order', () => {
     expect(tail).toMatch(/npm run board:block --/);
     // The script resolves node ids from issue numbers, so the driver never has to.
     expect(collapse(tail)).toMatch(/scripts\/board-block\.sh/);
-  });
-});
-
-describe('the /next-task command reads it at claim time', () => {
-  let pick: string;
-
-  beforeAll(() => {
-    const start = command.indexOf('## 1 · Pick');
-    const next = command.indexOf('## 2 · Claim', start);
-    expect(start).toBeGreaterThan(-1);
-    expect(next).toBeGreaterThan(start);
-    pick = command.slice(start, next);
-  });
-
-  it('reads the blocked set before walking Todo, in a single query', () => {
-    // The driver no longer reads the blocked set itself — npm run board:claim
-    // (scripts/claim-read.sh) computes it in the one claim-read query. The GraphQL-shape
-    // assertion follows the query into the script, so the pin stays on the code that could
-    // actually drift; the command only needs to state the guarantee it hands back.
-    expect(claimRead).toMatch(/blockedBy\(first: 10\) \{ nodes \{ number state \} \}/);
-    expect(collapse(pick)).toMatch(/resolved for you in that one call/);
-  });
-
-  it('states that open blockers are the ones that count', () => {
-    // Same move: the OPEN-only filter is bound once inside claim-read.sh and both the
-    // `#N blocked by …` line and the walk's skip line render from that one set.
-    expect(claimRead).toMatch(/select\(\.state == "OPEN"\)/);
-    expect(claimRead).toMatch(/one OPEN-only set/);
-  });
-
-  it('excludes a blocked card from the walk, and names the skip', () => {
-    expect(collapse(pick)).toMatch(
-      /already the named skip your final report must repeat verbatim/
-    );
-    expect(collapse(pick)).toMatch(/never silently/);
-  });
-
-  it('refuses out loud when the blocked card is the one it was handed', () => {
-    expect(collapse(pick)).toMatch(
-      /if it appears as a `skip` line in the walk, \*\*stop and say so\*\*, quoting that line/
-    );
-  });
-
-  it('writes nothing to the card it skipped', () => {
-    expect(collapse(pick)).toMatch(/A blocked card is never written to/);
-    expect(collapse(pick)).toMatch(/It is not Needs triage/);
-  });
-
-  it('sends the reader to the rulebook rather than restating it', () => {
-    expect(pick).toMatch(/§ Blocking order/);
   });
 });
 

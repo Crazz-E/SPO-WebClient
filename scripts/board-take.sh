@@ -91,10 +91,9 @@ done
 branch="$(git rev-parse --abbrev-ref HEAD)"
 session="${branch} @ $(date +%F)"
 
-# The `.driving` marker: a verified claim is the moment a session BECOMES the driver of a card.
-# Lifecycle, rationale and the one key derivation live in the sourced driver-scope.sh — never
-# a second copy.
-. "$(dirname "${BASH_SOURCE[0]}")/driver-scope.sh"
+# The one key derivation for this worktree's session markers lives in the sourced
+# session-marker.sh — never a second copy.
+. "$(dirname "${BASH_SOURCE[0]}")/session-marker.sh"
 
 # A worktree `finish` has already retired is over: its branch is merged, its card closed.
 # Claiming a SECOND card here is how a session chains tasks onto a dead branch — and the
@@ -366,7 +365,6 @@ if [ "$release" -eq 1 ]; then
   fi
   after="$reread_result"
 
-  disarm_driver_scope
   if [ "$reopened_release" -eq 1 ]; then
     echo "RELEASED #$issue (reopened — cleared claim of $current_session)"
   else
@@ -421,7 +419,6 @@ if [ "$after" != "$session" ]; then
   exit 3
 fi
 
-arm_driver_scope "$issue"
 if [ "$already_ours" -eq 1 ]; then
   echo "CLAIMED #$issue (already held)"
 else

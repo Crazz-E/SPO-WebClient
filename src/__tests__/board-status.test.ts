@@ -9,7 +9,7 @@
  *
  * This file pins the two halves of that fix, the way `card-dependencies.test.ts` pins #189:
  * the helper (`scripts/board-status.sh`) reads named issues only, never the pool; and the
- * rulebook + the `/next-task` command both name the moments a session must call it.
+ * rulebook names the moments a task must call it.
  */
 
 import * as fs from 'fs';
@@ -18,20 +18,17 @@ import * as path from 'path';
 const ROOT = process.cwd();
 const SCRIPT = path.join(ROOT, 'scripts', 'board-status.sh');
 const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
-const COMMAND = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const PACKAGE_JSON = path.join(ROOT, 'package.json');
 
 const collapse = (text: string): string => text.replace(/\s+/g, ' ');
 
 let script: string;
 let rulebook: string;
-let command: string;
 let packageJson: { scripts?: Record<string, string> };
 
 beforeAll(() => {
   script = fs.readFileSync(SCRIPT, 'utf8');
   rulebook = fs.readFileSync(RULEBOOK, 'utf8');
-  command = fs.readFileSync(COMMAND, 'utf8');
   packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8')) as { scripts?: Record<string, string> };
 });
 
@@ -105,26 +102,5 @@ describe('the rulebook names the re-read', () => {
     const recipes = rulebook.indexOf('## gh CLI recipes');
     expect(recipes).toBeGreaterThan(-1);
     expect(rulebook.slice(recipes)).toMatch(/npm run board:status -- 144 106/);
-  });
-});
-
-describe('the /next-task command names the re-read moment', () => {
-  let work: string;
-
-  beforeAll(() => {
-    const start = command.indexOf('## 3 · Work the lot end-to-end');
-    const next = command.indexOf('## 4 · If it fails', start);
-    expect(start).toBeGreaterThan(-1);
-    expect(next).toBeGreaterThan(start);
-    work = command.slice(start, next);
-  });
-
-  it('opens with the re-read rule, before the ordinary implementation steps', () => {
-    expect(collapse(work)).toMatch(/Never state another card's status from memory/);
-  });
-
-  it('names the helper and its cost', () => {
-    expect(work).toMatch(/npm run board:status -- <n>…/);
-    expect(collapse(work)).toMatch(/~1 point for any number of issues, never the pool/);
   });
 });
