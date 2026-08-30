@@ -43,7 +43,7 @@ function renderGrid(over: Partial<React.ComponentProps<typeof QuickPickGrid>> = 
   return { onSubmit, onCancel };
 }
 
-const LABELS = ['Too small', 'Covered', 'Out of reach', 'Cut off', 'Does not respond', 'Wrong data'];
+const LABELS = ['Too small', 'Covered', 'Out of reach', 'Cut off', 'Does not respond', 'Wrong data', 'Could be better'];
 
 describe('kindFromPicks', () => {
   it('lets data beat action beat appearance — the order a wrong answer costs most', () => {
@@ -53,10 +53,16 @@ describe('kindFromPicks', () => {
     expect(kindFromPicks(['too-small', 'cut-off'])).toBe('visual');
     expect(kindFromPicks([])).toBe('visual');
   });
+
+  it('lets could-be-better win over every defect symptom — the reporter said outright it is not broken', () => {
+    expect(kindFromPicks(['could-be-better'])).toBe('suggestion');
+    expect(kindFromPicks(['wrong-data', 'could-be-better'])).toBe('suggestion');
+    expect(kindFromPicks(['no-response', 'could-be-better', 'too-small'])).toBe('suggestion');
+  });
 });
 
 describe('QuickPickGrid', () => {
-  it('offers exactly the six one-tap options', () => {
+  it('offers exactly the seven one-tap options', () => {
     renderGrid();
     for (const label of LABELS) expect(screen.getByRole('button', { name: label })).toBeTruthy();
   });

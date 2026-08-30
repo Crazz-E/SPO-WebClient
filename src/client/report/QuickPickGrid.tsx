@@ -19,14 +19,20 @@ const PICKS: ReadonlyArray<{ value: MobileQuickPick; label: string }> = [
   { value: 'cut-off', label: 'Cut off' },
   { value: 'no-response', label: 'Does not respond' },
   { value: 'wrong-data', label: 'Wrong data' },
+  // Not a defect symptom: "this works, but could be better" -- see bug-report-schema.ts's own
+  // comment on BugReportKind's `suggestion` value.
+  { value: 'could-be-better', label: 'Could be better' },
 ];
 
 /**
  * The report kind, derived from the picks rather than asked for separately — one less decision
- * on a phone. Data beats action beats appearance, because that is the order in which a wrong
- * answer costs the most.
+ * on a phone. `could-be-better` wins over every other pick first: it is the reporter saying
+ * outright "this isn't broken", and a defect symptom picked alongside it by habit must not
+ * override that. Otherwise data beats action beats appearance, because that is the order in
+ * which a wrong answer costs the most.
  */
 export function kindFromPicks(picks: MobileQuickPick[]): BugReportKind {
+  if (picks.includes('could-be-better')) return 'suggestion';
   if (picks.includes('wrong-data')) return 'wrong-data';
   if (picks.includes('no-response')) return 'broken-action';
   return 'visual';

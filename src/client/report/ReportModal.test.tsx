@@ -68,6 +68,15 @@ describe('ReportModal', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ kind: 'visual' }));
   });
 
+  it('offers "Could be better" as a non-defect kind', () => {
+    const { onSubmit } = renderModal();
+    fireEvent.click(screen.getByRole('button', { name: 'Could be better' }));
+    expect(screen.getByRole('button', { name: 'Could be better' }).getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send report' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ kind: 'suggestion' }));
+  });
+
   it('hands over everything the human typed', () => {
     const { onSubmit } = renderModal();
 

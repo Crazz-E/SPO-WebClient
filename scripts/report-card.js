@@ -19,6 +19,7 @@
 //   exit 0 : stdout is
 //              anchorKey: <hex>
 //              profile: desktop|mobile
+//              kind: wrong-data|broken-action|visual|suggestion
 //              title: <one line>
 //              ---
 //              <body markdown to EOF>
@@ -173,7 +174,10 @@ function buildTitle(report) {
       : report.anchor && report.anchor.kind === 'canvas'
       ? `tile (${report.anchor.tileX},${report.anchor.tileY})`
       : 'unknown anchor';
-  return `[report] ${report.profile} · ${truncateForTitle(anchorLabel, 80)}`;
+  // `suggestion` reports get their own prefix -- "[report]" reads as a defect on the board, and
+  // this is explicitly the reporter saying it is not one. See BugReportKind's own comment.
+  const tag = report.kind === 'suggestion' ? '[suggestion]' : '[report]';
+  return `${tag} ${report.profile} · ${truncateForTitle(anchorLabel, 80)}`;
 }
 
 function buildBody(report, journalByteBudget) {
@@ -287,6 +291,7 @@ function main() {
 
   process.stdout.write(`anchorKey: ${report.anchorKey}\n`);
   process.stdout.write(`profile: ${report.profile}\n`);
+  process.stdout.write(`kind: ${report.kind}\n`);
   process.stdout.write(`title: ${title}\n`);
   process.stdout.write('---\n');
   process.stdout.write(body);
