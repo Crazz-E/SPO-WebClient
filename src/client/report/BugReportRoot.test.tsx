@@ -4,6 +4,8 @@ import { ClientContext } from '../context/ClientContext';
 import { createSpiedCallbacks } from '../__tests__/setup/render-helpers';
 import { validateBugReport } from '../../shared/bug-report-schema';
 import { reportJournal } from './journal';
+import { useGameStore } from '../store/game-store';
+import { useUiStore } from '../store/ui-store';
 // Through the barrel: that is the module main.tsx lazy-imports, so it is the surface that
 // must actually resolve.
 import { BugReportRoot } from './index';
@@ -67,6 +69,8 @@ afterEach(() => {
   delete (document as unknown as { elementFromPoint?: unknown }).elementFromPoint;
   reportJournal.disarm();
   reportJournal.reset();
+  useGameStore.setState({ gameDate: null });
+  useUiStore.setState({ stack: [] });
 });
 
 describe('BugReportRoot — arming', () => {
@@ -125,6 +129,34 @@ describe('BugReportRoot — capturing a DOM element', () => {
     });
     expect((report.anchor as { kind: string }).kind).toBe('dom');
     await waitFor(() => expect(screen.queryByTestId('report-modal')).toBeNull());
+  });
+
+  it('reads sessionContext from the stores at the moment of capture, not at submit', async () => {
+    useGameStore.setState({ gameDate: new Date('2026-08-30T12:00:00.000Z') });
+    useUiStore.setState({ stack: [{ kind: 'building' }] });
+    renderRoot();
+    pressF8();
+    clickAt();
+    // Changing the store AFTER capture must not leak into the already-captured snapshot.
+    useUiStore.setState({ stack: [{ kind: 'map' }] });
+    fireEvent.click(screen.getByRole('button', { name: 'Send report' }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    const report = JSON.parse(posted[0]) as { sessionContext: Record<string, unknown> };
+    expect(report.sessionContext).toEqual({ gameDate: '2026-08-30T12:00:00.000Z', surface: 'building' });
+  });
+
+  it('reports a null surface/gameDate honestly rather than guessing', async () => {
+    useGameStore.setState({ gameDate: null });
+    useUiStore.setState({ stack: [] });
+    renderRoot();
+    pressF8();
+    clickAt();
+    fireEvent.click(screen.getByRole('button', { name: 'Send report' }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    const report = JSON.parse(posted[0]) as { sessionContext: Record<string, unknown> };
+    expect(report.sessionContext).toEqual({ gameDate: null, surface: null });
   });
 
   it('closes the modal on a refusal too, rather than trapping the human', async () => {

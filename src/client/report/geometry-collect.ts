@@ -7,7 +7,7 @@
 
 import type { ElementGeometry, GeometryCapture } from '../../shared/bug-report-schema';
 import { MAX_GEOMETRY_ELEMENTS } from '../../shared/bug-report-schema';
-import { cssChainOf } from './dom-anchor';
+import { cssChainOf, componentChainOf } from './dom-anchor';
 import { analyzeGeometry, type GeometryProbe, type Insets } from './geometry';
 
 /** The computed properties worth carrying: the ones that explain a layout going wrong. */
@@ -59,6 +59,17 @@ function probeCentre(element: Element, rect: ElementGeometry['rect']): GeometryP
   return { cssChain: cssChainOf(found), isSelfOrDescendant: element.contains(found) };
 }
 
+/** Best-effort component name for the flagged element only — same fiber walk `dom-anchor.ts`
+ * uses for desktop, wrapped the same defensive way: a failure degrades to an empty chain, it
+ * never loses the geometry numbers over it. */
+function safeComponentChain(element: Element): string[] {
+  try {
+    return componentChainOf(element);
+  } catch {
+    return [];
+  }
+}
+
 /** Read everything the analysis needs, for the flagged element and its ancestors. */
 export function collectGeometry(element: Element): GeometryCapture {
   const elements: ElementGeometry[] = [];
@@ -68,6 +79,9 @@ export function collectGeometry(element: Element): GeometryCapture {
       selector: cssChainOf(current),
       rect: readRect(current),
       styles: readStyles(getComputedStyle(current)),
+      // Only the flagged element (depth 0) carries a component chain -- an ancestor's own name
+      // is rarely what triage needs, and walking every ancestor's fiber would be pure cost.
+      ...(depth === 0 ? { componentChain: safeComponentChain(current) } : {}),
     });
     current = current.parentElement;
   }

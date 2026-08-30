@@ -120,6 +120,10 @@ function renderGeometry(geometry) {
     const s = geometry.safeAreaInsets;
     lines.push(`- **safeAreaInsets:** top ${s.top} right ${s.right} bottom ${s.bottom} left ${s.left}`);
   }
+  const flaggedChain = geometry.elements && geometry.elements[0] && geometry.elements[0].componentChain;
+  if (flaggedChain && flaggedChain.length > 0) {
+    lines.push(`- **flagged element's component chain:** ${flaggedChain.join(' > ')}`);
+  }
   lines.push(`- **occludedBy:** ${geometry.occludedBy || '_(none)_'}`);
   if (geometry.overflowParent) {
     const o = geometry.overflowParent;
@@ -183,6 +187,11 @@ function buildBody(report, journalByteBudget) {
   lines.push(`| username | ${escapeForTable(report.username)} |`);
   lines.push(`| world | ${escapeForTable(report.world)} |`);
   lines.push(`| viewport | ${report.viewport.width} x ${report.viewport.height} |`);
+  if (report.sessionContext) {
+    const ctx = report.sessionContext;
+    lines.push(`| in-game date | ${ctx.gameDate || '_(unknown — not yet loaded at flag-time)_'} |`);
+    lines.push(`| surface | ${ctx.surface || '_(none — no surface open)_'} |`);
+  }
   lines.push('');
 
   lines.push('### Anchor', '', renderAnchor(report.anchor), '');

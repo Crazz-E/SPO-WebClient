@@ -110,6 +110,31 @@ describe('collectGeometry — what it reads', () => {
   });
 });
 
+describe('collectGeometry — componentChain (flagged element only)', () => {
+  it('carries a componentChain key on the flagged element, absent on every ancestor', () => {
+    const capture = collectGeometry(button);
+    expect(capture.elements[0]).toHaveProperty('componentChain');
+    expect(capture.elements[1]).not.toHaveProperty('componentChain');
+  });
+
+  it('reads the fiber chain when one is attached, same walk desktop already uses', () => {
+    // Component fibers carry a function `type` (its name is what the walk reads); a host fiber
+    // (a plain DOM tag) carries a string `type` and contributes only its leaf tag -- see
+    // dom-anchor.ts's own componentChainOf for the exact rule this mirrors.
+    function ThePanel(): null { return null; }
+    function TheButton(): null { return null; }
+    const outer = { type: ThePanel, return: null };
+    const inner = { type: TheButton, return: outer };
+    const host = { type: 'button', return: inner };
+    (button as unknown as Record<string, unknown>).__reactFiber$test = host;
+    expect(collectGeometry(button).elements[0].componentChain).toEqual(['ThePanel', 'TheButton', 'button']);
+  });
+
+  it('degrades to an empty chain, never throws, when no fiber is present', () => {
+    expect(collectGeometry(button).elements[0].componentChain).toEqual([]);
+  });
+});
+
 describe('collectGeometry — the occlusion probe', () => {
   it('says nothing when the centre is the element itself', () => {
     expect(collectGeometry(button).occludedBy).toBeNull();

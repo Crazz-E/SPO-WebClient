@@ -59,7 +59,7 @@ function componentNameOf(type: unknown): string | null {
  * Host fibers (`type` is a string like `'button'`) contribute only the leaf tag — the chain is
  * about components, and every intervening `div` would drown them.
  */
-function componentChainOf(element: Element): string[] {
+export function componentChainOf(element: Element): string[] {
   const fiberKey = Object.keys(element).find(k => k.startsWith('__reactFiber$'));
   if (!fiberKey) return [];
 

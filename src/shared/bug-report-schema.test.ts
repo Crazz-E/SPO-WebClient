@@ -146,6 +146,25 @@ describe('validateBugReport — the shapes it accepts', () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.report.trimmed).toEqual(trimmed);
   });
+
+  it('accepts a sessionContext with both fields present, or both null', () => {
+    const withValues = { gameDate: '2026-08-30T00:00:00.000Z', surface: 'building' };
+    const result = validateBugReport(desktopReport({ sessionContext: withValues }));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.report.sessionContext).toEqual(withValues);
+
+    const withNulls = { gameDate: null, surface: null };
+    expect(validateBugReport(desktopReport({ sessionContext: withNulls })).ok).toBe(true);
+  });
+
+  it('accepts a geometry element carrying a componentChain (mobile flagged element)', () => {
+    const base = mobileReport() as { geometry: { elements: Array<Record<string, unknown>> } };
+    const geometry = {
+      ...base.geometry,
+      elements: [{ ...base.geometry.elements[0], componentChain: ['GameScreen', 'QuickStats'] }],
+    };
+    expect(validateBugReport(mobileReport({ geometry: geometry as never })).ok).toBe(true);
+  });
 });
 
 describe('validateBugReport — the shapes it refuses', () => {
@@ -204,6 +223,12 @@ describe('validateBugReport — the shapes it refuses', () => {
 
   it('refuses a geometry block that is not an object', () => {
     rejects(mobileReport({ geometry: 'wide' as never }), 'geometry');
+  });
+
+  it('refuses a malformed sessionContext', () => {
+    rejects(desktopReport({ sessionContext: 'today' as never }), 'sessionContext must be an object');
+    rejects(desktopReport({ sessionContext: { gameDate: 42, surface: null } as never }), 'sessionContext.gameDate');
+    rejects(desktopReport({ sessionContext: { gameDate: null, surface: 7 } as never }), 'sessionContext.surface');
   });
 
   it('refuses a trim marker that does not say what was dropped', () => {
