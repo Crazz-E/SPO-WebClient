@@ -103,10 +103,5 @@ jobs:
       - name: Skills manifest is current
         run: node .claude/generate-skills-manifest.js --check
 
-      # No PR-only guard: this reads .claude/commands/next-task.md and package.json only,
-      # neither of which needs pull-request context — it must also run on merge_group.
-      - name: next-task.md aliases and prose are sanctioned
-        run: node scripts/check-command-aliases.js
-
       - name: Hooks parse
         run: bash -n .claude/hooks/*.sh scripts/*.sh

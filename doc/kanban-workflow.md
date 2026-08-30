@@ -12,26 +12,33 @@ deleted**; its full text stays readable at the archive permalink:
 · [`doc/BACKLOG.md` @ `94b059a0`](https://github.com/Crazz-Org/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG.md).
 `OB-N` identifiers survive as issue titles; new tasks get plain issue numbers.
 
-## The board — seven columns, one per milestone
+## The board — ten columns, one per milestone
 
-The `Status` field is single-select: a task is in exactly one column.
+The `Status` field is single-select: a task is in exactly one column. The column names below
+are the ones the machinery actually writes — `orchestrator/board.js`'s `COLUMN_BY_STATE` in the
+sibling [SPO-Pipeline](https://github.com/Crazz-Org/SPO-Pipeline) repo, and the busy-set query in
+[scripts/claim-read.sh](../scripts/claim-read.sh). Rename a column on the board and both break;
+this table is the description, not the source.
 
 | Column | Milestone | Enters when | Leaves when |
 |---|---|---|---|
-| 📥 **Todo** | Unowned pool | Issue created and added to the project. **Vertical order = priority**, maintained by the human — a session always takes the topmost unowned item. | A session claims it. |
-| 🔨 **In progress** | Owned, in development | Session wrote its identity into `Session` and moved the card. Branch, implementation, tests. | Gate deposited, or released. |
-| 🧪 **Gate** | `npm run gate` deposited on the bench worker | Implementation + tests done, committed, pushed, PR opened with `Closes #N`, gate queued (the PR precedes the gate — the worker only fetches a pushed sha, and `ci.yml` needs an open PR to run CI on it. The `Pull request linked to issue` workflow sets `Status` → PR the instant the PR opens; the driver moves it back to Gate, correcting that automatic jump rather than fighting it). | Gate PASS → Validation. Gate failure loops back to In progress (3 attempts max, then release). |
-| 🔍 **Validation** | `citation-verifier` sub-agent — only when the diff touches `rdo-members.ts` — verifying each new/changed catalogue entry's citation, then `change-validator` reviewing the diff against the card's criterion and the code it landed in | Gate returned PASS. | `citation-verifier` `REJECT` → back to In progress, same as a `change-validator` `REJECT` (own budget of 3, separate from gate attempts). `citation-verifier` `DIVERGES` does not block — it flags the entry and validation proceeds to `change-validator`. `change-validator` `PASS` / `PASS WITH FINDINGS` → PR. `change-validator` `REJECT` → back to In progress (own budget of 3, separate from gate attempts; a corrected attempt is re-committed, re-pushed and re-gated, then release after 3). |
-| 🔀 **PR** | Pull request open (opened back in the Gate step; this column is entered on a `change-validator` verdict, not a fresh PR) | `change-validator` returned `PASS` or `PASS WITH FINDINGS`. CI + `bench/gate` statuses already green, merge. | Merge (issue auto-closes). |
-| ✅ **Done** | Merged, released, finished | PR merged, release published, `npm run finish` run. Final synthetic comment posted. | Terminal. |
-| 🚨 **Needs triage** | Ownership released on failure/abandon | Owner released the task with a **simple, non-technical explanation** as an issue comment. | **Human only**: reprioritises, clears `Session`, moves back to Todo (or closes). |
+| 📨 **Intake** | A raw bug report, filed mechanically, not yet judged | `report-intake` filed the report verbatim as a card. Carries the `report:raw` label, and the claim read never sees it. | A maintainer comments `confirm` (→ triage, then Todo) or `discard`. |
+| 📥 **Todo** | Unowned pool | Issue created and added to the project. **Vertical order = priority**, maintained by the human — the orchestrator always takes the topmost unowned item. | The orchestrator claims it. |
+| 🗺️ **Planning** | Owned, worktree open, change being planned | The claim handshake wrote the task's identity into `Session`; the worktree exists. | The plan is in hand and implementation starts. |
+| 🔨 **Implementing** | Owned, in development | Planning returned a plan. Branch, implementation, tests. | Local checks start. |
+| 🧾 **Checks & PR** | typecheck / lint / coverage, then the pull request | Implementation done. The mechanical checks run here, and the PR opens with `Closes #N`. | Checks green and the PR open → the gate is deposited. |
+| 🧪 **Gate** | `npm run gate` deposited on the bench worker | Committed, pushed, PR open, gate queued (the PR precedes the gate — the worker only fetches a pushed sha, and `ci.yml` needs an open PR to run CI on it). | Gate PASS → Validation. Gate failure loops back to Implementing (3 attempts max, then the task parks). |
+| 🔍 **Validation** | `citation-verifier` — only when the diff touches `rdo-members.ts` — verifying each new/changed catalogue entry's citation, then `change-validator` reviewing the diff against the card's criterion and the code it landed in | Gate returned PASS. | `citation-verifier` `REJECT` → back to Implementing, same as a `change-validator` `REJECT` (own budget of 3, separate from gate attempts). `citation-verifier` `DIVERGES` does not block — it flags the entry and validation proceeds to `change-validator`. `change-validator` `PASS` / `PASS WITH FINDINGS` → Merging. `change-validator` `REJECT` → back to Implementing (own budget of 3; a corrected attempt is re-committed, re-pushed and re-gated, then parked after 3). |
+| 🔀 **Merging** | The pull request is being merged | `change-validator` returned `PASS` or `PASS WITH FINDINGS`. CI + `bench/gate` statuses already green. | Merge (issue auto-closes). |
+| ✅ **Done** | Merged, released, finished | PR merged, release published, the worktree removed. Final synthetic comment posted. | Terminal. |
+| 🅿️ **Parked** | Ownership closed on failure, exhausted budget or an unhandled case | The orchestrator parked the task with a legible reason as an issue comment. `Session` deliberately stays filled, as the trace ownership law 4 asks. | **Human only**: a `retry` comment restarts the task at intake, an `abandon` comment closes it. |
 
 **`citation-verifier` runs first in Validation, and only when the diff changed
 `src/shared/rdo-members.ts`.** It checks that every `File.pas:Line` cited for a new or changed
 catalogue entry is genuine and that the entry's kind and arity match the Pascal declaration —
 directly, or via a documented divergence under one of the two RDO rules (CLAUDE.md § *RDO —
 one catalogue, one emitter*). `REJECT` (a false citation, or an unjustified kind/arity
-mismatch) blocks the merge exactly like a `change-validator` `REJECT` — back to In progress,
+mismatch) blocks the merge exactly like a `change-validator` `REJECT` — back to Implementing,
 same shared budget of 3. `DIVERGES` (citation genuine, entry correct, but a real,
 rule-justified divergence from the bare declaration) does not block: it is flagged for a human
 to confirm the intent, and validation still proceeds to `change-validator`. A diff that does
@@ -44,7 +51,7 @@ not touch `rdo-members.ts` skips `citation-verifier` entirely.
 | `Session` | text | **The ownership marker.** Empty = claimable. Format: `<branch> @ <YYYY-MM-DD>` (e.g. `claude-crazz/mail-refresh-x1 @ 2026-08-24`). All sessions push as the same GitHub account, so the assignee cannot distinguish them — this field can. |
 | `Category` | single select | 🔴 Defect · 🟠 Latent trap · 🟡 Feature/Gap · ⚪ Observation · 📚 Doc/Infra — called `Category` and not `Type`, which GitHub Projects reserves |
 | `Size` | single select | S · M · L — rough estimate at creation, for scanning the pool. |
-| `Area` | single select | **The ground reservation.** Which part of the tree the card's change lands in — exactly one per card, from the partition below. No other field says what ground a task occupies, and `/next-task` skips a Todo card whose area another live session already holds. |
+| `Area` | single select | **The ground reservation.** Which part of the tree the card's change lands in — exactly one per card, from the partition below. No other field says what ground a task occupies, and the orchestrator skips a Todo card whose area another live task already holds. |
 
 ### The areas — a partition, first match from the top
 
@@ -98,8 +105,8 @@ is `renderer`, not `docs`. A task that genuinely spans two blocking areas is **s
 cards** — never invent a combined area, and never leave `Area` empty to dodge the rule.
 
 **No `area:` labels.** `Category` and `Size` carry labels because workflows and
-`gh issue list --label` cannot read a project field. `Area` is read only by `/next-task`, which
-reads project fields directly through the claim read (§ gh CLI recipes). A hand-posted `area:`
+`gh issue list --label` cannot read a project field. `Area` is read only by the claim read
+(`board:claim`, § gh CLI recipes), which reads project fields directly. A hand-posted `area:`
 label would duplicate the automatic PR path labels and drift from them.
 
 ## The board is written in English — all of it
@@ -130,9 +137,9 @@ English. Conversation with the maintainer is not board content and is not affect
    `Session` → **re-read the field**. If it holds someone else's identity, you lost the
    race: take the next item. Claim one card at a time.
 3. **Every owner must close its ownership** — in success (→ Done) or in failure
-   (→ Needs triage). A session that ends without doing either leaves a locked card; **only
+   (→ Parked). A task that ends without doing either leaves a locked card; **only
    the human** may free it (clear `Session`, move back to Todo).
-4. **Releasing a task** (failure, abandon, out of scope): move to Needs triage, keep
+4. **Parking a task** (failure, exhausted budget, out of scope): move to Parked, keep
    `Session` filled (it is the trace), and post one issue comment explaining **in simple,
    non-technical English** why the task failed — what was attempted, what blocked it, in
    words a non-programmer follows. The human reclassifies from there.
@@ -140,11 +147,11 @@ English. Conversation with the maintainer is not board content and is not affect
 **One narrow exception to "only the human may free it" (#299):** `npm run board:take --
 <n> --release` may clear a *different* session's stale claim when the card is the trace of
 an issue that got **reopened** after its owner correctly closed it — not a failure trace, and
-not a live owner. It checks all three at once: Status is `Done` or `Needs triage`, the issue
+not a live owner. It checks all three at once: Status is `Done` or `Parked`, the issue
 is **open**, and the issue's `stateReason` is **REOPENED**. A failure release never sets
 `stateReason` (the issue was never closed), so law 4's trace stays exactly as human-only as
 it was — this exception can never fire on it. Anything short of all three — a live owner in
-Todo/In progress/Gate/Validation/PR, a failure trace, or a closed issue — still exits refused, and the
+Todo/Planning/Implementing/Checks & PR/Gate/Validation/Merging, a failure trace, or a closed issue — still exits refused, and the
 tool says which.
 
 ### One session per area — the ground reservation
@@ -155,28 +162,34 @@ Measured on 2026-08-24: **19** forced `Merge remote-tracking branch 'origin/main
 single day, one branch re-syncing **six times** before it landed. Ownership of a *card* is
 therefore joined by a reservation on its *ground*.
 
-**The busy set.** An area is **busy** when a card holds it in **In progress**, **Gate**,
-**Validation** or **PR**, and that card's reservation is still live (below). `Todo`, `Done` and `Needs triage`
-never make an area busy. `Gate`, `Validation` and `PR` do: the branch exists and is about to land.
+**The busy set.** An area is **busy** when a card holds it in **Planning**, **Implementing**,
+**Checks & PR**, **Gate**, **Validation** or **Merging**, and that card's reservation is still
+live (below). `Todo`, `Done` and `Parked`
+never make an area busy. `Gate`, `Validation` and `Merging` do: the branch exists and is about to land.
 
 **`docs` never blocks.** Two or more cards may hold `docs` at the same time. A documentation
 change cannot break the build, and a same-line collision is caught by Git; blocking on it would
 freeze the board for no gain, since nearly every task edits some Markdown. **Every other area
 blocks.**
 
-**The claim rule.** `/next-task` walks Todo top-down and takes the first card whose `Area` is
-not in the busy set; a card with an **empty** `Area` is claimable and blocks nothing. The full
-algorithm — including what to do when the area determined *after* claiming turns out to be busy,
-and what to do when no card is claimable — is
-[.claude/commands/next-task.md](../.claude/commands/next-task.md) § 1.
+**The claim rule.** The orchestrator walks Todo top-down and takes the first card whose `Area`
+is not in the busy set; a card with an **empty** `Area` is claimable and blocks nothing. The busy
+set itself is computed by [scripts/claim-read.sh](../scripts/claim-read.sh) (`npm run
+board:claim`), which is the executable half of this rule. The full algorithm — including what to
+do when the area determined *after* claiming turns out to be busy, and what to do when no card is
+claimable — lives in the orchestrator's INTAKE step (SPO-Pipeline `orchestrator/README.md`).
 
-**The reservation expires on session inactivity — the card's ownership never does.** A task
-here can legitimately run for **several hours**, and board writes happen at state transitions
-only, so a busy session goes hours without touching its card. The reservation is keyed to
-factual activity instead: the liveness signal is the **session heartbeat**
-([.claude/hooks/session-heartbeat.sh](../.claude/hooks/session-heartbeat.sh)), which every hook
-stamps — a prompt, an edit, a Bash call, the end of a turn — so it moves continuously while a
-session works, whatever the task's length.
+**The reservation expires on inactivity — the card's ownership never does.** A task here can
+legitimately run for **several hours**, and board writes happen at state transitions only, so a
+busy task goes hours without touching its card. The reservation is keyed to factual activity
+instead.
+
+⚠ **The heartbeat store currently has no writer.** `~/.spo-bench/sessions/*.alive` was stamped
+by `.claude/hooks/session-heartbeat.sh`, retired with the pilot hook layer in #425.
+[scripts/claim-read.sh](../scripts/claim-read.sh) still *reads* it and therefore always takes
+its documented fallback: a busy-status branch with no heartbeat is aged by **that branch's last
+commit date on `origin`**. That fallback is the live behaviour — the heartbeat path below is
+kept because the reader is still there and a writer may return, not because it runs today.
 
 Joining a card to a heartbeat takes four steps, because `Session` holds a **branch** while the
 heartbeat store is keyed by **worktree path**. Do not guess the mapping from the names:
@@ -205,7 +218,7 @@ The area reservation above says *two sessions must not stand on the same ground 
 says nothing about **order**, and nothing else did either: a session could claim a card whose
 work cannot begin until another card's change exists. Until 2026-08-25 that order lived in
 prose — [#120](https://github.com/Crazz-Org/SPO-WebClient/issues/120) carried
-"⚠ Depends on #108 … Fix #108 first" inside its own body, and `/next-task` offered it at every
+"⚠ Depends on #108 … Fix #108 first" inside its own body, and the claim step offered it at every
 claim like any other Todo card. Its order held only because the human's vertical rank happened
 to agree, and any reprioritisation would have destroyed it silently.
 
@@ -224,10 +237,10 @@ frees the card by itself, with no board write anywhere.
 | The session was | It does |
 |---|---|
 | walking Todo top-down | **skips the card and names the skip in its final report** — `#120 skipped: blocked by #108`. A silent skip would make the board read *worse* with dependencies than without: the human sees a card passed over and is given no reason. |
-| handed the card by number (`/next-task 120`) | **stops and says so out loud**, exactly as it does for a card another session owns. The human named that card; claiming it anyway breaks the order, and skipping it silently answers nothing. |
+| handed the card by number (`spo run 120`) | **stops and says so out loud**, exactly as it does for a card another session owns. The human named that card; claiming it anyway breaks the order, and skipping it silently answers nothing. |
 
 In both cases `Session` stays empty, `Status` stays **Todo**, and no comment is posted. A
-blocked card is **not** Needs triage — nothing failed, and it was never owned.
+blocked card is **not** Parked — nothing failed, and it was never owned.
 
 **Who may post one, and what it may never be used for.**
 
@@ -246,15 +259,14 @@ blocked card is **not** Needs triage — nothing failed, and it was never owned.
    that link orders the children.
 
 [src/\_\_tests\_\_/card-dependencies.test.ts](../src/__tests__/card-dependencies.test.ts) keeps
-the three surfaces of this rule — this rulebook, the `/next-task` command and `CLAUDE.md` — from
-drifting apart.
+the two surfaces of this rule — this rulebook and `CLAUDE.md` — from drifting apart.
 
 ## The orphan watch — the law's missing half
 
 Rule 3 says a session that ends without closing its ownership leaves a locked card, and only
 the human may free it. Nothing told the human it had happened. With several sessions running
 in parallel on one machine, a session dying mid-flight is the likeliest failure of the
-assignment process, and its card sat in In progress / Gate / PR — owned by nobody alive —
+assignment process, and its card sat in Implementing / Gate / Merging — owned by nobody alive —
 until somebody happened to re-read the board.
 
 [`.github/workflows/orphan-cards.yml`](../.github/workflows/orphan-cards.yml) runs
@@ -264,9 +276,9 @@ moves a card — rule 1 is untouched, and the job holds no token that could brea
 
 | Decision | Answer | Why |
 |---|---|---|
-| What is a suspect | `Session` non-empty **and** column ∈ {In progress, Gate, Validation, PR} **and** the card's `updatedAt` is ≥ N old | `updatedAt` is the one clock that ticks on every milestone a live session must write. A missing branch or a missing PR is **evidence printed next to the card**, never the trigger — a card in In progress legitimately has neither. |
+| What is a suspect | `Session` non-empty **and** column ∈ {Planning, Implementing, Checks & PR, Gate, Validation, Merging} **and** the card's `updatedAt` is ≥ N old | `updatedAt` is the one clock that ticks on every milestone a live task must write. A missing branch or a missing PR is **evidence printed next to the card**, never the trigger — a card in Planning legitimately has neither. |
 | N | **24 h** (`ORPHAN_STALE_HOURS`) | The bench serialises every session's gate on one machine, so an L-sized task behind a queue can honestly be quiet for most of a working day. 12 h fires on a card claimed in the evening and worked next morning; every card that has landed so far was claimed and finished the same day. |
-| Shape of the reminder | **One comment on the quiet card**, once per ownership episode, plus a table in the run's job summary | A digest issue would be auto-added to the board (see below) and a `/next-task` session would eventually claim the machine's own bookkeeping as work. A comment creates no card and lands where the decision is made. |
+| Shape of the reminder | **One comment on the quiet card**, once per ownership episode, plus a table in the run's job summary | A digest issue would be auto-added to the board (see below) and the orchestrator would eventually claim the machine's own bookkeeping as work. A comment creates no card and lands where the decision is made. |
 | Repeat | Never, for the same owner | Each comment carries a hidden `<!-- orphan-watch:<Session> -->` marker. Keyed on the `Session` text, not a timestamp: posting the comment can itself bump `updatedAt`, and a timestamp key would make the job re-fire on the trace of its own last run every day. A freed and re-claimed card gets a new `Session` and re-arms. |
 
 **One human step, once.** The board is a Projects v2 board, which the repository's
@@ -299,9 +311,9 @@ board's behaviour proves it points at the right column. Project → ⋯ → Work
 | Workflow | Configured as | Why it matters |
 |---|---|---|
 | **Auto-add to project** | repository **picker** → `Crazz-Org/SPO-WebClient`; filter box → `is:issue is:open` | **The feeding rule rests on this one.** Without it a new issue belongs to no board, so a finding filed by a session is invisible |
-| **Item added to project** | trigger `issue, pull request`; set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status — on the board and outside the pool at the same time, since `/next-task` selects on `Status = Todo` |
-| **Pull request linked to issue** | set `Status` = **PR** | The column the ownership law defines as "pull request open", reached from the `Closes #N` the PR body already carries |
-| **Item reopened** | trigger `issue, pull request`; set `Status` = **Needs triage** | Without it, reopening a closed issue leaves its card in Done, where it misrepresents the work. **Not Todo:** `Session` still holds the old owner and Needs triage is the human's column — though `board:take --release` (#299) can now clear that stale claim itself, since a reopened issue's `stateReason` is the one thing a failure trace can never forge |
+| **Item added to project** | trigger `issue, pull request`; set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status — on the board and outside the pool at the same time, since the claim read selects on `Status = Todo` |
+| **Pull request linked to issue** | set `Status` = **Merging** | The column the ownership law defines as "pull request open", reached from the `Closes #N` the PR body already carries. Currently **OFF** — the orchestrator writes the column itself |
+| **Item reopened** | trigger `issue, pull request`; set `Status` = **Parked** | Without it, reopening a closed issue leaves its card in Done, where it misrepresents the work. **Not Todo:** `Session` still holds the old owner and Parked is the human's column — though `board:take --release` (#299) can now clear that stale claim itself, since a reopened issue's `stateReason` is the one thing a failure trace can never forge |
 | **Item closed** | trigger `issue, pull request`; set `Status` = **Done** | The Done cards with an empty `Session` are the trace of this firing on its own |
 | **Auto-close issue** | trigger *when the status is updated* → `Status: Done` | Closes the issue when a session moves the card |
 | **Auto-add sub-issues to project** | — | Inherited, no value to set |
@@ -309,18 +321,17 @@ board's behaviour proves it points at the right column. Project → ⋯ → Work
 **Every `Set value` step needs its value, and the value is not optional** — a workflow whose
 value is unset shows a red **!** in the sidebar and its *Save and turn on workflow* button
 stays greyed. Expect all of them to arrive that way on a freshly rebuilt board: rebuilding
-`Status` with these seven columns regenerates the option ids, so whatever GitHub pre-filled
+`Status` with these columns regenerates the option ids, so whatever GitHub pre-filled
 against its own `Todo` / `In Progress` / `Done` defaults is left pointing at options that no
 longer exist.
 
-⚠ **`Validation` must be appended to the `Status` field in the UI, never added by rebuilding
-the field.** Rebuilding regenerates every option id, including the six that already exist,
-which would leave all four `Set value` workflows above pointing at options that no longer
-exist.
+⚠ **A new column must be appended to the `Status` field in the UI, never added by rebuilding
+the field.** Rebuilding regenerates every option id, including those that already exist, which
+would leave all four `Set value` workflows above pointing at options that no longer exist.
 
 **`board:move` needs no change** — `board-move.sh` resolves a column by name against the
 `Status` field's own options, so it works the moment the option exists. Say so; do not edit
-`scripts/board-move.sh`. Adding the one new option in the UI leaves the existing seven ids untouched.
+`scripts/board-move.sh`. Adding a new option in the UI leaves the existing ids untouched.
 
 **Off, and staying off.** Three of the four are **pull-request workflows on an issue-only
 board** — GitHub's wording for the merge one is *"when pull requests in your project are
@@ -335,8 +346,8 @@ here and none of the three could fire whatever value it held.
 | `Auto-archive items` | any item | deliberately nothing — Done **is** the record of finished work; archiving would hide it |
 
 ⚠ **Never widen the auto-add filter to pull requests to "unlock" those three.** Combined with
-`Item added to project` → Todo, every open PR would drop into the pool and a `/next-task`
-session would claim a pull request as work.
+`Item added to project` → Todo, every open PR would drop into the pool and the
+orchestrator would claim a pull request as work.
 
 That is not a theoretical risk, and the reason is in the trigger rows above: `Item added to
 project`, `Item closed` and `Item reopened` are all typed **`issue, pull request`** — none of
@@ -360,21 +371,21 @@ card that reaches Todo without them is on the board but outside the pool the cla
 — `Area` above all, since a card carrying none reserves no ground — which is how one was
 nearly lost when the repository moved and the old board's filter stopped matching.
 
-## What a session writes on the board — and only this
+## What is written on the board — and only this
 
 Board writes happen at **state transitions only** — no running log, no progress notes.
 Every write is very short.
 
 | Moment | Writes |
 |---|---|
-| Claim | `Session` field + Status → In progress |
-| PR opened, gate deposited | Status → Gate (the PR link appears on the card automatically via `Closes #N`, and `Pull request linked to issue` is configured to set the column from the same link — so Status jumps to PR the instant the PR opens, before the gate has even run; the owner writes Status → Gate right after, correcting that automatic jump rather than fighting it: the workflow has not yet been *observed* firing, and the owner's write is what the law relies on) |
+| Claim | `Session` field + Status → Planning |
+| PR opened, gate deposited | Status → Gate (the PR link appears on the card automatically via `Closes #N`; if `Pull request linked to issue` is enabled it also sets the column from that link, and the owner's Status → Gate write right after corrects the automatic jump rather than fighting it — the owner's write is what the law relies on) |
 | Gate PASS | Status → Validation |
-| `change-validator` PASS / PASS WITH FINDINGS | Status → PR |
+| `change-validator` PASS / PASS WITH FINDINGS | Status → Merging |
 | Merged + finished | Status → Done + **one final comment, 2–4 lines**: what changed, PR number, anything the human should know |
-| Released | Status → Needs triage + the non-technical explanation comment |
-| Gate attempt failed | Nothing on the board (Status stays Gate or returns to In progress); the detail lives in the PR/commits |
-| `change-validator` REJECT | Status → In progress + ledger line (the failed attempt's detail lives in the PR/commits, not the board) |
+| Parked | Status → Parked + the legible reason comment |
+| Gate attempt failed | Nothing on the board (Status stays Gate or returns to Implementing); the detail lives in the PR/commits |
+| `change-validator` REJECT | Status → Implementing + ledger line (the failed attempt's detail lives in the PR/commits, not the board) |
 
 ## GitHub API discipline — reads are budgeted like writes
 
@@ -425,9 +436,9 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
    the 30 s floor (refused below it, never clamped), both bounds, and an exit code for the
    answer (0 merged · 1 closed unmerged · 4 still open). Four hand-rolled
    `until … do sleep 5 … done` loops were proposed here on 2026-08-25, three of them polling
-   at 5 s; `.claude/hooks/poll-loop-guard.sh` now refuses the shape and names the alias, and
-   `npm run bench:wait -- <job-id>` is its counterpart for a bench job whose wait was
-   interrupted. A tight retry
+   at 5 s. `npm run bench:wait -- <job-id>` is the counterpart for a bench job whose wait was
+   interrupted. (A `poll-loop-guard.sh` hook used to refuse that shape mechanically; it was
+   retired with the pilot hook layer in #425, so this is now a rule, not an enforcement.) A tight retry
    loop on any GitHub error is never correct: on failure, read the bucket's `reset` from
    `gh api rate_limit` (free) and wait once, in the background, until then. The same rule
    [doc/E2E-POLICY.md](E2E-POLICY.md) states for live evidence holds for a watch loop too —
@@ -472,10 +483,8 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
 
 **A card is filed deliberately, never in passing.** The board is fed by the surfaces whose job
 is to feed it — `/triage-report` draining the queued bug reports, a maintainer asking for a card
-by name, a claimed task that turned out to be two, `/next-task` § 0 filing the
-`Nightly: main is red` repair when the nightly proof says `main` is broken, `/next-task` § 0.5
-draining one recurring or classifier-flagged candidate from the hook-LLM fallback layer's local
-journal (doc/hook-llm-layer.md), and a
+by name, a claimed task that turned out to be two, the `Nightly: main is red` repair filed when
+the nightly proof says `main` is broken, and a
 `PASS WITH FINDINGS` verdict from the `change-validator` sub-agent (§ 3) — and by nothing
 else. That last one is on the list because it is not a finding met on the way: it is a
 consequence of the change the card produced, bounded to ground the diff touched, and the
@@ -520,7 +529,7 @@ finder's context, and it does not want the work.
 Why: a pull request has had a second reader since #143. A card had none — the session that
 finds something also judges it worth doing, sizes it and picks its `Category`.
 
-**`Area` is checked here because nothing else checks it.** No workflow sets it, `/next-task`
+**`Area` is checked here because nothing else checks it.** No workflow sets it, the orchestrator
 only fills it *after* a claim, and the claim rule reads it: a card filed without one is
 claimable by anyone and reserves no ground, which is the overlap § The areas exists to
 prevent. On 2026-08-25, 22 of 49 Todo cards had none — two of them filed after the field
@@ -547,8 +556,8 @@ comment on this board posts as the same GitHub account, so that heading — not 
 line — is what marks the card as read by something other than its writer. A card whose first
 comment is not a verdict is visibly unreviewed; that visibility is the enforcement, and
 [src/\_\_tests\_\_/card-reviewer-agent.test.ts](../src/__tests__/card-reviewer-agent.test.ts)
-keeps the five surfaces of the mechanism — this rulebook, the agent, `/next-task`,
-`/triage-report` and CLAUDE.md — from drifting apart.
+keeps the four surfaces of the mechanism — this rulebook, the agent, `/triage-report` and
+CLAUDE.md — from drifting apart.
 
 **What does not change.** The claim handshake is untouched. No human step is added. No
 session ever waits on another session's review: the cost is one sub-agent inside the
@@ -594,60 +603,25 @@ In descending order of what they actually save:
 
 ## Model routing
 
-**The driver is the expensive part.** A session's main loop re-reads its whole context on
-every turn, so the model it *runs on* costs far more than the models its sub-agents run on.
-Routing only the two glamorous steps (plan, implement) and leaving everything else on
-whatever the session started with is how a board of S-sized cards ends up billed as Opus:
-picking a card, waiting on the gate, writing the PR body, moving the column and running
-`finish` are the majority of a session's turns and none of them is execution.
+**Most of a task is not execution.** Picking a card, waiting on the gate, writing the PR body
+and moving the column are the bulk of the steps, and none of them is judgement. Pricing them
+all at the rate of the hardest step is how a board of S-sized cards ends up billed as Opus.
 
-So the rule is inverted from the obvious one: **drive on the cheapest model the step needs,
-and escalate a step by delegating it to a sub-agent**, never the other way round.
+So the rule is inverted from the obvious one: **run each step on the cheapest model that step
+needs, and escalate by isolating the hard step**, never by raising the floor for all of them.
+The orchestrator applies this per step rather than per session, which is why the routing is
+configuration and not prose — a `claude -p` call is pinned to its own model, effort and tool
+set.
 
-A *decision* delegates in one round trip; a *phase* does not. An implementation phase becomes
-one spawn per attempt with a driver-held ledger, and the gate stays with the driver because
-only the depositing worktree can reach it.
+### The steps of a task, and what each one is worth
 
-**And that boundary is now enforced, not asked.** "The driver never edits a tracked file
-itself" was prose the driver put to itself, which is the weakest enforcement there is: the
-model that has already drifted is the one being asked whether it is drifting. On 2026-08-26 a
-Haiku driver rewrote a whole script with a card and a criterion in hand, neither of which told
-it to stop. `.claude/hooks/driver-scope-guard.sh` now refuses the driver's own writes —
-`Edit`/`Write`, and the Bash verbs that reach the tree without them — arming on a verified
-`board:take` claim and releasing on every path that closes ownership. It tells the driver from
-its own sub-agent by the `agent_id` the PreToolUse payload carries only inside a Task worker,
-so the delegate writes unblocked. A guardrail, not a sandbox: what it buys is that drift now
-has to be deliberate instead of merely easy.
+The per-step model and effort routing is **not** kept here any more. The orchestrator owns it,
+as executable configuration rather than prose: SPO-Pipeline `orchestrator/step-contracts.js`,
+documented in its `doc/state-machine-spec.md` § Step contracts. A table in this file could only
+drift away from the thing that actually spawns the models.
 
-### The steps of a session, and what each one is worth
-
-| Step (`/next-task` §) | What it actually is | Model | Effort |
-|---|---|---|---|
-| § 0–2 nightly check, pick, claim, rename | scripted `gh`/`jq`, one right answer | **Haiku 4.5** | low |
-| § 0.5 hook-hardening harvest | a local file read; on the rare hit, one `card-reviewer` spawn + the § 5 filing mechanics | **Haiku 4.5** | low |
-| § 1.4 `Area` on a legacy card | first match on a path table | **Sonnet 5** sub-agent | low |
-| § 3 understand the card, plan the change | analysis | **Fable 5** | per Size (below) |
-| § 3 implement + tests | execution | **Opus 5** — but see the escalation rule | per Size |
-| § 3 a merge conflict | judgement over two intents | **Sonnet 5** sub-agent (Opus 5 on an `rdo-*` path) | per Size |
-| § 3 `main` moved — same ground? | a file-set intersection, not a judgement | **Haiku 4.5** driver | low |
-| § 3 typecheck / lint / coverage fixes | mechanical, the compiler names the fix | **Sonnet 5 or 4.6** | low |
-| § 3 deposit the gate, wait, read the exit code | a wait and a number | **Haiku 4.5** | low |
-| § 3/4 a gate or CI failure | diagnosis, the hardest reading in the loop | **Fable 5** | high |
-| § 3 `change-validator` semantic review, after gate PASS | judgement — adequacy to the goal, coherence of integration | **Fable 5**, escalated to Opus 5 on the wire rule or when Fable is unavailable — never Sonnet 5 | high, regardless of `Size` |
-| § 3 PR body, merge, `finish`, board writes | mechanical, template-shaped | **Haiku 4.5** | low |
-| § 4 the Needs-triage comment | plain-English writing | **Sonnet 5 or 4.6** | low |
-| § 5 a split, or a card asked for by name → draft → `card-reviewer` | analysis | **Fable 5** | medium |
-
-**The two Sonnet rows accept 4.6.** Both are mechanical: the compiler names the fix, and the
-triage comment is template-shaped prose. Neither needs a capability 4.6 lacks — Sonnet 5 is
-named there as *the cheapest model that is not Haiku*, not for a judgement only it can make.
-So a session already driving on Sonnet 4.6 (or on Haiku, between two scripted steps)
-**absorbs these two steps itself** instead of spending a sub-agent spawn on them. That is the
-whole point of the substitution; it buys nothing on a session already running Sonnet 5.
-
-It stops there. The `Sonnet 5` in the escalation rule below is real **execution** — writing
-code — and is not covered by this: route that one by the rule, not by what the session
-happens to be running.
+What stays here is the policy the routing has to honour — which work earns Opus, and how effort
+follows `Size`.
 
 ### Escalation — what actually earns Opus 5
 
@@ -682,8 +656,8 @@ harness cannot switch the session's own model, apply the routing to its **sub-ag
 (`model: haiku` / `model: sonnet` / `model: fable` / `model: opus` on the Agent tool or on
 workflow `agent()` calls). A `.claude/commands/*.md` file may also pin a whole command with
 `model:` frontmatter — `coverage-check` and `release-notes` do, because they are single-step
-and read-only. `next-task` deliberately does **not**: it spans every row of the table above,
-so pinning it to one model is exactly the mistake this section exists to prevent.
+and read-only. A multi-step command must **not**: pinning one model across steps that differ in
+kind is exactly the mistake this section exists to prevent.
 
 ## gh CLI recipes
 
@@ -691,11 +665,9 @@ The project scope is required once per machine: `gh auth refresh -s project` (ru
 
 **The reads are npm aliases, and that is deliberate.** `board:claim`, `board:verify`,
 `board:status`, `board:sessions` and `bench:nightly` each wrap one script under `scripts/`.
-A session drives its scripted steps on Haiku 4.5 (§ Model routing), and a model driving
-scripted steps must not be composing shell: `npm run …` is allowlisted, so these calls never
-stop to ask, while a hand-composed `cd … &&`, a variable assignment or a raw `gh api graphql`
-still prompts. That asymmetry is the point — **the query belongs in the script, never in the
-prompt**. Change a query by editing its script; do not paste one back into this file.
+The orchestrator spawns them by alias and branches on their exit codes, so the query has one
+definition and one place to change it — **the query belongs in the script, never in the caller**.
+Change a query by editing its script; do not paste one back into this file.
 
 ```bash
 # THE CLAIM READ — one query, ~2 GraphQL points per page (4 on today's 116-item board),
@@ -706,7 +678,8 @@ prompt**. Change a query by editing its script; do not paste one back into this 
 # (§ GitHub API discipline). The busy set is computed inside this call, never by a second one.
 npm run board:claim                        # the query lives in scripts/claim-read.sh
 # The `busy areas:` line IS the busy set (§ One session per area) — derived inside this one
-# call, never fetched by a second: In progress, Gate or PR, `docs` excluded because it never
+# call, never fetched by a second: Planning, Implementing, Checks & PR, Gate, Validation or
+# Merging, `docs` excluded because it never
 # blocks. It is computed rather than eyeballed off the item lines so the rule stays executable;
 # `$cards` is bound once and both outputs read it.
 # The blocked lines: `issueDependenciesSummary { blockedBy }` counts OPEN blockers only, so a
@@ -733,7 +706,7 @@ gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
   --field-id <SESSION_FIELD_ID> --text "<branch> @ <date>"
 
-# Fill Area before the card moves to In progress (single select, like Status)
+# Fill Area before the card moves out of Todo (single select, like Status)
 gh project item-edit --id <ITEM_ID> --project-id <PROJECT_ID> \
   --field-id <AREA_FIELD_ID> --single-select-option-id <OPTION_ID>
 
@@ -760,9 +733,10 @@ gh project item-add 1 --owner Crazz-Org --url <ISSUE_URL>
 gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body-file <file>
 ```
 
-The entry point for a working session is the **`/next-task`** command
-([.claude/commands/next-task.md](../.claude/commands/next-task.md)) — it encodes the claim
-handshake and the milestone writes; this document is the rulebook it follows.
+The entry point for a working task is the **orchestrator** in the sibling
+[SPO-Pipeline](https://github.com/Crazz-Org/SPO-Pipeline) repo — it encodes the claim handshake
+and the milestone writes, driving them through the `board:*` aliases below; this document is the
+rulebook it follows.
 
 ## While `main` is red — the nightly rule
 
@@ -780,7 +754,7 @@ stood every night before this existed.
 
 Two rules follow, and they bind every session:
 
-1. **`/next-task` hands out only the repair.** No new card is claimed while `main` is red.
+1. **The orchestrator hands out only the repair.** No new card is claimed while `main` is red.
    The repair is an ordinary card — issue `Nightly: main is red`, claimed, gated, merged like
    any other — it is simply the only one on offer.
 2. **No session merges `origin/main` into its branch.** Updating from `main` must never

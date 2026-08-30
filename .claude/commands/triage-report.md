@@ -9,9 +9,9 @@ A manual test session flags what looks wrong and moves on; the report lands in a
 This command is the other half: it reads that queue and files proper kanban cards, alone.
 
 **The boundary, and it is not negotiable.** `/triage-report` **creates** cards and never
-implements one. [`/next-task`](next-task.md) **claims and implements** cards and never reads the
-queue. A session that triages a report and then starts fixing it has taken work nobody
-prioritised — file the card, move to the next report.
+implements one. The orchestrator (sibling SPO-Pipeline repo) **claims and implements** cards and
+never reads the queue. A session that triages a report and then starts fixing it has taken work
+nobody prioritised — file the card, move to the next report.
 
 The feature itself is documented in [doc/bug-reporting.md](../../doc/bug-reporting.md); the board
 rules are [doc/kanban-workflow.md](../../doc/kanban-workflow.md). Do not restate either here.

@@ -108,6 +108,9 @@ work_is_on_main() {
 }
 
 # The key of a worktree in SESSIONS_DIR — the path itself would not make a filename.
+# This IS a second derivation of the key in scripts/session-marker.sh, kept because that one
+# is keyed to the CURRENT worktree (git rev-parse) while this one takes any path. The two must
+# stay identical: sha1(realpath(dir))[0:16]. Change one, change the other.
 session_key() {
   printf '%s' "$(readlink -f "$1")" | sha1sum | cut -c1-16
 }
@@ -153,10 +156,7 @@ heartbeat_age_min() {
 forget_session_files() {
   local key
   key="$(session_key "$1")"
-  # `.driving` is the marker armed by a verified `board:take` claim (scripts/driver-scope.sh).
-  # A finished session is no longer driving anything.
-  rm -f "$SESSIONS_DIR/$key.alive" "$SESSIONS_DIR/$key.finished" \
-        "$SESSIONS_DIR/$key.driving" 2>/dev/null || true
+  rm -f "$SESSIONS_DIR/$key.alive" "$SESSIONS_DIR/$key.finished" 2>/dev/null || true
 }
 
 # Session worktrees nobody is using any more. Three kinds, all clean, with no process
@@ -169,8 +169,12 @@ forget_session_files() {
 #     of it remains. Finishing it here is how one session's oversight is healed by the
 #     next, mechanically.
 # Anything else — an edit, an unmerged commit, a live session — is kept. Two independent
-# proofs of life are required to fail before a directory is taken away, because the cost
+# proofs of life were required to fail before a directory is taken away, because the cost
 # of being wrong is a session that cannot run a single command afterwards.
+#
+# ⚠ ONE OF THE TWO IS GONE. The heartbeat (`heartbeat_age_min` below) has had no writer since
+# #425, so it always answers empty and the standing-process check carries this guard alone.
+# The margin this comment describes is currently halved.
 prune_worktrees() {
   local dir wt_branch ahead state retired age window
   for dir in "$MAIN_REPO"/.claude/worktrees/*/; do
@@ -293,9 +297,7 @@ if [ "$branch_only" = 0 ] && [ "$here" != "$MAIN_REPO" ]; then
     # the directory is still there and the session can keep working in it.
     mkdir -p "$SESSIONS_DIR"
     printf '%s\t%s\t%s\n' "$here" "$branch" "$(git -C "$here" rev-parse HEAD)" > "$SESSIONS_DIR/$(session_key "$here").finished"
-    # The session may keep working here, so `.alive` stays. `.driving` must NOT: its card is
-    # finished, and an armed marker would lock this session out of every tracked file.
-    rm -f "$SESSIONS_DIR/$(session_key "$here").driving" 2>/dev/null || true
+    # The session may keep working here, so `.alive` stays.
     retired_here=1
     echo "== retiring worktree $here — kept while this session is in it"
   fi

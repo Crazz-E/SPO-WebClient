@@ -65,7 +65,7 @@ export const NIGHTLY_MIN_GAP_MS = 20 * 60 * 60 * 1000;
  */
 export const NIGHTLY_MOVE_RATE_LIMIT_MS = 15 * 60 * 1000;
 
-/** What `<bench>/nightly/latest.json` holds — the surface `/next-task` reads. */
+/** What `<bench>/nightly/latest.json` holds — the surface the orchestrator reads. */
 export interface NightlyResult {
   /** The spool job that produced this, when one ran. */
   jobId?: string;

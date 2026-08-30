@@ -166,12 +166,12 @@ describe('doc/kanban-workflow.md § the ownership law records the exception', ()
     const law = rulebook.slice(lawStart, areaStart);
     expect(law).toMatch(/#299/);
     expect(law).toMatch(/board:take --\s*\n?<n> --release|board:take -- <n> --release/);
-    expect(collapse(law)).toMatch(/Status is `Done` or `Needs triage`, the issue\s+is \*\*open\*\*, and the issue's `stateReason` is \*\*REOPENED\*\*/);
+    expect(collapse(law)).toMatch(/Status is `Done` or `Parked`, the issue\s+is \*\*open\*\*, and the issue's `stateReason` is \*\*REOPENED\*\*/);
   });
 
   it('still keeps ownership law 4 itself untouched', () => {
     expect(rulebook).toMatch(
-      /4\. \*\*Releasing a task\*\* \(failure, abandon, out of scope\): move to Needs triage, keep/,
+      /4\. \*\*Parking a task\*\* \(failure, exhausted budget, out of scope\): move to Parked, keep/,
     );
   });
 });
@@ -183,10 +183,10 @@ describe('doc/kanban-workflow.md the Item reopened row no longer claims only the
     const row = rowMatch ? rowMatch[0] : '';
     // The old, now-false sentence claimed unconditionally that only the human may clear it.
     expect(row).not.toMatch(
-      /`Session` still holds the old owner and only the human may clear it — Needs triage is the human's column \|/,
+      /`Session` still holds the old owner and only the human may clear it — Parked is the human's column \|/,
     );
-    // It must still say the card lands in Needs triage and Session still names the old owner.
-    expect(row).toMatch(/Needs triage/);
+    // It must still say the card lands in Parked and Session still names the old owner.
+    expect(row).toMatch(/Parked/);
     expect(row).toMatch(/`Session` still holds the old owner/);
     // But now names the tool that can clear the stale claim.
     expect(row).toMatch(/board:take --release/);

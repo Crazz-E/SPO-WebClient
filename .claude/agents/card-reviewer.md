@@ -71,9 +71,9 @@ that order for every session that reads the board afterwards. Say which value yo
 and why; do not haggle over one notch when the card is otherwise sound.
 
 `Area` is not weight. It is the **ground reservation**, and it is the one field on a card
-that another session's claim depends on: `/next-task` skips a Todo card whose area a live
+that another task's claim depends on: the orchestrator skips a Todo card whose area a live
 card already holds, and a card with an **empty** `Area` blocks nothing — it is claimable by
-anyone, so two sessions can stand on the same tree with the board showing no collision.
+anyone, so two tasks can stand on the same tree with the board showing no collision.
 Nothing repairs it later for free either: the claimer determines the area *after* writing
 `Session`, and has to back the claim out again when what it determines turns out busy.
 

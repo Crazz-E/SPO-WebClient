@@ -363,7 +363,7 @@ from, so a night that queued behind a long job cannot buy itself a second slot. 
 refresh the checkout at all is recorded as `ENVIRONMENT` with the failing step named — which
 is also what stops the idle loop retrying every two seconds until the window closes.
 
-**Reading it** is `/next-task`'s § 0, and the rule that follows — repair-only dispatch, no
+**Reading it** is the orchestrator's first move on a task, and the rule that follows — repair-only dispatch, no
 `origin/main` merges while red — is [kanban-workflow.md § While `main` is red](kanban-workflow.md).
 `main` counts as red only while the failing `sha` is *still* `origin/main`; `ENVIRONMENT` and
 `INTERRUPTED` are not red, because the run learned nothing about `main` either way.

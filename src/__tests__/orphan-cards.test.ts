@@ -8,7 +8,7 @@
  * too tight and the failure #124 describes stays invisible. The tests below fix both edges:
  * a working column is required, a `Session` is required, and the quiet clock is the card's
  * own `updatedAt` — never the absence of a branch or a PR, which is the ordinary state of a
- * card in In progress.
+ * card in Implementing.
  *
  * The **once-per-owner rule** is what keeps the job from becoming a daily alarm on a card the
  * human has decided to leave alone. It keys on the `Session` text rather than a timestamp
@@ -72,7 +72,7 @@ const watch: OrphanModule = require('../../scripts/orphan-cards.js');
 
 const NOW = Date.parse('2026-08-24T12:00:00Z');
 const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString();
-const SESSION = 'claude-crazz/next-task-79cc73 @ 2026-08-24';
+const SESSION = 'claude-crazz/mail-refresh-79cc73 @ 2026-08-24';
 
 function card(over: Partial<Item> = {}): Item {
   return {
@@ -80,7 +80,7 @@ function card(over: Partial<Item> = {}): Item {
     title: 'Nothing detects an orphan card',
     url: 'https://github.com/Crazz-Org/SPO-WebClient/issues/124',
     state: 'OPEN',
-    status: 'In progress',
+    status: 'Implementing',
     session: SESSION,
     updatedAt: hoursAgo(30),
     ...over,
@@ -93,7 +93,7 @@ const orphan = (over: Partial<Item> = {}): Orphan =>
 describe('parseSession', () => {
   it('splits the documented `<branch> @ <date>` form', () => {
     expect(watch.parseSession(SESSION)).toEqual({
-      branch: 'claude-crazz/next-task-79cc73',
+      branch: 'claude-crazz/mail-refresh-79cc73',
       date: '2026-08-24',
     });
   });
@@ -185,7 +185,22 @@ describe('isSuspect', () => {
     expect(watch.isSuspect(card({ status }), NOW, 24)).toBe(true);
   });
 
-  it.each(['Todo', 'Done', 'Needs triage', ''])('never watches %s', status => {
+  // The it.each above iterates the constant under test, so it stays green if that constant
+  // drifts. This is the assertion that actually binds it: orphan-cards.js and claim-read.sh
+  // ask the same question ("who holds ground right now") in two different jobs, and they
+  // disagreed for weeks — the watch listed `In progress` and `PR`, columns this board does
+  // not have, so it could never fire on the columns orphans actually sit in.
+  it('watches exactly the busy-status set scripts/claim-read.sh queries', () => {
+    const claimRead = fs.readFileSync(path.join(process.cwd(), 'scripts', 'claim-read.sh'), 'utf8');
+    // Every `.Status == "X"` in the busy-set jq filters, deduped and ordered.
+    const queried = [...new Set(Array.from(claimRead.matchAll(/\.Status == "([^"]+)"/g), m => m[1]))]
+      .filter(name => name !== 'Todo' && name !== 'Done' && name !== 'Parked')
+      .sort();
+    expect(queried.length).toBeGreaterThan(0);
+    expect([...watch.WORKING_STATUSES].sort()).toEqual(queried);
+  });
+
+  it.each(['Todo', 'Done', 'Parked', 'Intake', ''])('never watches %s', status => {
     expect(watch.isSuspect(card({ status }), NOW, 24)).toBe(false);
   });
 
@@ -213,7 +228,7 @@ describe('selectOrphans', () => {
     const items = [
       card({ number: 1, updatedAt: hoursAgo(26) }),
       card({ number: 2, status: 'Todo', session: '' }),
-      card({ number: 3, updatedAt: hoursAgo(90), status: 'PR' }),
+      card({ number: 3, updatedAt: hoursAgo(90), status: 'Merging' }),
       card({ number: 4, updatedAt: hoursAgo(2) }),
     ];
     const orphans = watch.selectOrphans(items, { now: NOW, staleHours: 24 });
@@ -295,7 +310,7 @@ describe('renderReminder', () => {
   });
 
   it('carries the column, the owner and the branch evidence', () => {
-    expect(body).toContain('column: **In progress**');
+    expect(body).toContain('column: **Implementing**');
     expect(body).toContain(SESSION);
     expect(body).toContain('branch gone from origin · no PR');
   });
@@ -328,7 +343,7 @@ describe('renderDigest', () => {
     expect(digest).toContain('Orphan watch — 2026-08-24 12:00 UTC');
     expect(digest).toContain('1 card claimed and quiet');
     expect(digest).toContain('[#124](https://github.com/Crazz-Org/SPO-WebClient/issues/124)');
-    expect(digest).toContain('`claude-crazz/next-task-79cc73`');
+    expect(digest).toContain('`claude-crazz/mail-refresh-79cc73`');
     expect(digest).toContain('40 h');
     expect(digest).toContain('| posted |');
   });
@@ -414,7 +429,7 @@ describe('main', () => {
       updatedAt: new Date(Date.now() - 40 * 3_600_000).toISOString(),
       fieldValues: {
         nodes: [
-          { name: 'In progress', field: { name: 'Status' } },
+          { name: 'Implementing', field: { name: 'Status' } },
           { text: 'claude-crazz/dead @ 2026-08-20', field: { name: 'Session' } },
         ],
       },

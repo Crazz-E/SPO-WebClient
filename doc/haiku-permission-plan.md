@@ -1,5 +1,13 @@
 # Plan — réduire les demandes de permission des drivers Haiku
 
+> **⚠ Sujet retiré — document d'archive.** Le pilote décrit ici (le driver LLM
+> `/next-task` et sa couche de gardes) n'existe plus : la commande a été supprimée et le
+> pilotage du kanban appartient désormais à l'orchestrateur du dépôt voisin
+> [SPO-Pipeline](https://github.com/Crazz-Org/SPO-Pipeline). Les mentions de `next-task`,
+> de « driver » et des hooks ci-dessous sont **historiques** — elles décrivent l'état observé
+> à la date du document, jamais le fonctionnement actuel. Conservé sans réécriture : le
+> réécrire falsifierait les traces de session qu'il enregistre.
+
 > **Note du 2026-08-29.** Ce document analyse la couche de hooks du pilote, **antérieure à
 > #425** : les gardes qu'il décrit ont été retirés à l'étape 4 de la strangler-migration, et
 > seuls `main-commit-guard.sh`, `pre-push-gate.sh` et `bench-port-guard.sh` subsistent dans

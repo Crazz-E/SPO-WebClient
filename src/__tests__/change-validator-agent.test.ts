@@ -6,7 +6,7 @@
  *
  * What CAN be held is everything else: the read-only tool set, the three verdicts, the two
  * axes, the forbidden categories, the filing boundary, the model/escalation rule, and that
- * the four surfaces — the agent file, `/next-task`, `CLAUDE.md`, `doc/kanban-workflow.md` —
+ * the three surfaces — the agent file, `CLAUDE.md`, `doc/kanban-workflow.md` —
  * all name the mechanism the same way. A rule that lives only in prose is protected by
  * nothing (#123), so this file pins it the same way the card-reviewer's own pin does.
  */
@@ -17,13 +17,11 @@ import * as path from 'path';
 const ROOT = process.cwd();
 const AGENT = path.join(ROOT, '.claude', 'agents', 'change-validator.md');
 const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
-const COMMAND = path.join(ROOT, '.claude', 'commands', 'next-task.md');
 const CLAUDE_MD = path.join(ROOT, 'CLAUDE.md');
 
 let agent: string;
 let frontmatter: string;
 let rulebook: string;
-let command: string;
 let claudeMd: string;
 
 /**
@@ -39,7 +37,6 @@ beforeAll(() => {
   const match = /^---\n([\s\S]*?)\n---\n/.exec(agent);
   frontmatter = match ? match[1] : '';
   rulebook = fs.readFileSync(RULEBOOK, 'utf8');
-  command = fs.readFileSync(COMMAND, 'utf8');
   claudeMd = fs.readFileSync(CLAUDE_MD, 'utf8');
 });
 
@@ -117,7 +114,7 @@ describe('change-validator agent', () => {
 
     it('makes PASS WITH FINDINGS non-blocking', () => {
       const text = collapse(agent);
-      expect(text).toMatch(/PASS WITH FINDINGS.{0,80}The driver still proceeds/);
+      expect(text).toMatch(/PASS WITH FINDINGS.{0,80}The orchestrator still proceeds/);
     });
   });
 
@@ -128,7 +125,7 @@ describe('change-validator agent', () => {
 
     it('routes findings to card-reviewer exactly as every other draft', () => {
       expect(collapse(agent)).toMatch(
-        /the driver routes it to `card-reviewer` exactly as every other draft is/
+        /the orchestrator routes it to `card-reviewer` exactly as every other draft is/
       );
     });
 
@@ -171,8 +168,8 @@ describe('change-validator agent', () => {
       }
     });
 
-    it('states that the driver, not the validator, routes the verdict onward', () => {
-      expect(collapse(agent)).toMatch(/You return text; the driver routes it to `card-reviewer`/);
+    it('states that the orchestrator, not the validator, routes the verdict onward', () => {
+      expect(collapse(agent)).toMatch(/You return text; the orchestrator routes it to `card-reviewer`/);
     });
   });
 });
@@ -195,57 +192,41 @@ describe('the mechanism is named on all four surfaces', () => {
     expect(rule.slice(0, listEnd)).toContain('change-validator');
   });
 
-  it('has its own row in the board column table, between Gate and PR', () => {
+  it('has its own row in the board column table, between Gate and Merging', () => {
     const table = rulebook.split('\n');
     const gateIdx = table.findIndex(l => l.startsWith('| 🧪 **Gate**'));
     const validationIdx = table.findIndex(l => l.startsWith('| 🔍 **Validation**'));
-    const prIdx = table.findIndex(l => l.startsWith('| 🔀 **PR**'));
+    const mergingIdx = table.findIndex(l => l.startsWith('| 🔀 **Merging**'));
     expect(gateIdx).toBeGreaterThan(-1);
     expect(validationIdx).toBe(gateIdx + 1);
-    expect(prIdx).toBe(validationIdx + 1);
+    expect(mergingIdx).toBe(validationIdx + 1);
   });
 
-  it('names seven columns, not six, in both the rulebook and CLAUDE.md', () => {
-    expect(rulebook).toMatch(/## The board — seven columns/);
-    expect(claudeMd).toMatch(/seven columns \(Todo · In\s+progress · Gate · Validation · PR · Done · Needs triage\)/);
+  it('names ten columns in both the rulebook and CLAUDE.md', () => {
+    expect(rulebook).toMatch(/## The board — ten columns/);
+    expect(claudeMd).toMatch(
+      /ten columns \(Intake · Todo ·\s+Planning · Implementing · Checks & PR · Gate · Validation · Merging · Done · Parked\)/
+    );
   });
 
   it('carries the UI-only warning for the new Status option', () => {
     const text = collapse(rulebook);
-    expect(text).toMatch(/`Validation` must be appended to the `Status` field in the UI/);
+    expect(text).toMatch(/A new column must be appended to the `Status` field in the UI/);
     expect(text).toMatch(/Rebuilding regenerates every option id/);
   });
 
-  it('has its own row in the model-routing step table, escalation named, never Sonnet', () => {
-    const row = rulebook.split('\n').find(l => l.startsWith('| § 3 `change-validator`'));
-    expect(row).toBeDefined();
-    expect(row).toMatch(/\*\*Fable 5\*\*/);
-    expect(row).toMatch(/never Sonnet 5/);
-    expect(row).toMatch(/high, regardless of `Size`/);
+  it('has its routing owned by the orchestrator, not restated as prose here', () => {
+    // The per-step model/effort table moved to SPO-Pipeline's step-contracts.js — a copy in
+    // this rulebook could only drift away from the thing that actually spawns the models.
+    const text = collapse(rulebook);
+    expect(text).toMatch(/SPO-Pipeline `orchestrator\/step-contracts\.js`/);
+    expect(text).toMatch(/`doc\/state-machine-spec\.md` § Step contracts/);
   });
 
   it('board:move needs no code change — it resolves a column by name', () => {
     expect(collapse(rulebook)).toMatch(
       /`board-move\.sh` resolves a column by name against the `Status` field's own options, so it works the moment the option exists/
     );
-  });
-
-  it('is in the /next-task command, between the gate-PASS line and the merge line', () => {
-    const section = command.slice(command.indexOf('## 3 ·'), command.indexOf('## 4 ·'));
-    expect(section).toMatch(/`npm run board:move -- <issue> Validation`/);
-    expect(section).toMatch(/change-validator/);
-    for (const verdict of ['PASS', 'PASS WITH FINDINGS', 'REJECT']) {
-      expect(section).toContain(verdict);
-    }
-    expect(section).toMatch(/own budget of \*\*3\*\*, separate from the implementation-attempt budget/);
-  });
-
-  it('the driver naming stays true, but the semantic review is delegated', () => {
-    const section = collapse(command.slice(command.indexOf('## 3 ·'), command.indexOf('## 4 ·')));
-    expect(section).toMatch(
-      /pretending a Haiku driver reviews a diff is the fiction that produced the incident/
-    );
-    expect(section).toMatch(/answered by the delegated `change-validator` sub-agent/);
   });
 
   it('is in the CLAUDE.md sub-agents table', () => {

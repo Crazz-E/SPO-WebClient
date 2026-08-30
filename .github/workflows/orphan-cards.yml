@@ -9,7 +9,7 @@
 #
 # One comment on the quiet card itself, once per ownership episode, plus a table in the run's
 # job summary. It deliberately never OPENS an issue: once "Auto-add to project" is configured
-# on the board, a digest issue would land in the Todo pool as a card and a `/next-task` session
+# on the board, a digest issue would land in the Todo pool as a card and the orchestrator
 # would eventually claim the machine's own bookkeeping as work.
 #
 # ## Why a PAT and not GITHUB_TOKEN
