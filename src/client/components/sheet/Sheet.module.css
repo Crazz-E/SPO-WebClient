@@ -64,6 +64,7 @@
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* ---- title (contents without their own header) ---- */
