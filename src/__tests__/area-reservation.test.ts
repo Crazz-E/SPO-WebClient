@@ -16,9 +16,11 @@
  *   - **`Session` is never touched.** What expires on inactivity is the ground reservation.
  *     Ownership law 1 has no timeout, and a rule that let a session clear someone else's
  *     `Session` field would repeal it by accident.
- *   - **One idle window, not two.** The reservation and `scripts/finish.sh` read the same
- *     `SPO_WORKTREE_IDLE_MIN` with the same 120-minute default. That claim is asserted here
- *     against the script itself, so the doc cannot drift away from the code it cites.
+ *   - **One idle window, and one script owns it.** The reservation window is
+ *     `SPO_WORKTREE_IDLE_MIN`, 120-minute default, read by `scripts/claim-read.sh`. It was
+ *     shared with `scripts/finish.sh` until #441 removed that script's heartbeat-driven
+ *     window entirely, leaving the standing-process check as its only guard. The default is
+ *     asserted here against the script itself, so the doc cannot drift away from the code.
  */
 
 import { execFileSync } from 'child_process';
@@ -29,13 +31,11 @@ const ROOT = process.cwd();
 const RULEBOOK = path.join(ROOT, 'doc', 'kanban-workflow.md');
 const CLAUDE_MD = path.join(ROOT, 'CLAUDE.md');
 const FINISH = path.join(ROOT, 'scripts', 'finish.sh');
-const HEARTBEAT_SCAN = path.join(ROOT, 'scripts', 'heartbeat-scan.sh');
 const CLAIM_READ = path.join(ROOT, 'scripts', 'claim-read.sh');
 
 let rulebook: string;
 let claudeMd: string;
 let finish: string;
-let heartbeatScan: string;
 let claimRead: string;
 
 /**
@@ -50,7 +50,6 @@ beforeAll(() => {
   rulebook = fs.readFileSync(RULEBOOK, 'utf8');
   claudeMd = fs.readFileSync(CLAUDE_MD, 'utf8');
   finish = fs.readFileSync(FINISH, 'utf8');
-  heartbeatScan = fs.readFileSync(HEARTBEAT_SCAN, 'utf8');
   claimRead = fs.readFileSync(CLAIM_READ, 'utf8');
 });
 
@@ -291,29 +290,25 @@ describe('the reservation expires, the ownership does not', () => {
     return rulebook.slice(start, end);
   };
 
-  it('keys liveness to factual activity, and admits the heartbeat has no writer', () => {
+  it('keys liveness to factual activity, named as the branch commit date', () => {
     const text = collapse(section());
     expect(text).toMatch(/board writes happen at state transitions only/);
-    // The heartbeat writer was retired with the pilot hooks (#425), so the rulebook must say
-    // the store has none and name the fallback that is actually live — otherwise a reader
-    // plans against a signal nothing produces.
-    expect(text).toMatch(/The heartbeat store currently has no writer/);
+    // The one live signal. A rulebook that named a second one would send a reader looking
+    // for a store nothing writes — which is exactly what #441 removed.
     expect(text).toMatch(/last commit date on `origin`/);
   });
 
-  it('names the four steps that join a branch to a worktree heartbeat', () => {
-    const text = section();
-    expect(text).toMatch(/^1\. list `~\/\.spo-bench\/sessions\/\*\.alive`/m);
-    expect(text).toMatch(/^2\. each file \*contains\* the absolute worktree path/m);
-    expect(text).toMatch(/^3\. `git -C <path> rev-parse --abbrev-ref HEAD`/m);
-    expect(text).toMatch(/^4\. a card matches when its `Session` field begins with that branch/m);
+  it('needs no branch-to-worktree mapping, because Session already names the ref', () => {
+    const text = collapse(section());
+    expect(text).toMatch(/`Session` holds a branch, so no mapping step is needed/);
+    // The four-step `.alive` lookup that used to live here died with its store (#441).
+    expect(text).not.toMatch(/\.spo-bench\/sessions\/\*\.alive`;/);
   });
 
-  it('falls back to the last origin commit when no heartbeat names the branch', () => {
+  it('frees the area when the ref cannot be read at all', () => {
     const text = collapse(section());
-    expect(text).toMatch(/no heartbeat is found for the branch/);
-    expect(text).toMatch(/last commit date on `origin`, with the same window/);
-    expect(text).toMatch(/A branch with neither signal does not hold its area/);
+    expect(text).toMatch(/does not hold its area/);
+    expect(text).toMatch(/`note:` line whenever a failed lookup is the reason/);
   });
 
   it('leaves Session untouched — ownership law 1 keeps its no-timeout guarantee', () => {
@@ -324,17 +319,25 @@ describe('the reservation expires, the ownership does not', () => {
   });
 });
 
-describe('one idle window, shared with finish.sh', () => {
+describe('one idle window, owned by claim-read.sh', () => {
   it('the rulebook cites SPO_WORKTREE_IDLE_MIN and its 120-minute default', () => {
     const text = collapse(rulebook);
     expect(text).toMatch(/The window is \*\*`SPO_WORKTREE_IDLE_MIN`\*\*/);
-    expect(text).toMatch(/the same 120-minute default/);
+    expect(text).toMatch(/default 120 minutes/);
   });
 
-  it('finish.sh really reads that variable with that default', () => {
-    // The claim "one number to tune, not two" is only true while this holds. Change the
-    // default in the script and this test — inside the required check — goes red.
-    expect(finish).toMatch(/IDLE_MIN="\$\{SPO_WORKTREE_IDLE_MIN:-120\}"/);
+  it('claim-read.sh really reads that variable with that default', () => {
+    // The rulebook's number is only trustworthy while this holds. Change the default in the
+    // script and this test — inside the required check — goes red.
+    expect(claimRead).toMatch(/idle_min="\$\{SPO_WORKTREE_IDLE_MIN:-120\}"/);
+  });
+
+  it('finish.sh keeps no idle window of its own', () => {
+    // #441 removed the heartbeat that fed it. A window reintroduced here without a writer
+    // would abstain silently on every worktree, which is how the halved margin went
+    // unnoticed the first time.
+    expect(finish).not.toMatch(/IDLE_MIN=/);
+    expect(finish).not.toMatch(/heartbeat_age_min/);
   });
 });
 

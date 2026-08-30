@@ -184,28 +184,23 @@ legitimately run for **several hours**, and board writes happen at state transit
 busy task goes hours without touching its card. The reservation is keyed to factual activity
 instead.
 
-⚠ **The heartbeat store currently has no writer.** `~/.spo-bench/sessions/*.alive` was stamped
-by `.claude/hooks/session-heartbeat.sh`, retired with the pilot hook layer in #425.
-[scripts/claim-read.sh](../scripts/claim-read.sh) still *reads* it and therefore always takes
-its documented fallback: a busy-status branch with no heartbeat is aged by **that branch's last
-commit date on `origin`**. That fallback is the live behaviour — the heartbeat path below is
-kept because the reader is still there and a writer may return, not because it runs today.
+The activity a reservation is keyed to is **the branch's last commit date on `origin`**, read by
+[scripts/claim-read.sh](../scripts/claim-read.sh) in one batched GraphQL call covering the whole
+busy set. `Session` holds a branch, so no mapping step is needed: the card's own `Session` field
+names the ref to age.
 
-Joining a card to a heartbeat takes four steps, because `Session` holds a **branch** while the
-heartbeat store is keyed by **worktree path**. Do not guess the mapping from the names:
+The window is **`SPO_WORKTREE_IDLE_MIN`** (default 120 minutes). While the branch's last commit is
+younger than that, the reservation is live; older, and the area is free. A branch whose ref cannot
+be read at all — it never existed on `origin`, or the lookup failed — does not hold its area, and
+`board:claim` prints a `note:` line whenever a failed lookup is the reason.
 
-1. list `~/.spo-bench/sessions/*.alive` (`SPO_SESSION_DIR` overrides the directory);
-2. each file *contains* the absolute worktree path — read it;
-3. `git -C <path> rev-parse --abbrev-ref HEAD` gives that worktree's branch;
-4. a card matches when its `Session` field begins with that branch.
-
-The window is **`SPO_WORKTREE_IDLE_MIN`** — the same variable and the same 120-minute default
-[`scripts/finish.sh:51`](../scripts/finish.sh) already uses to decide a worktree is abandoned.
-One number to tune, not two. While the heartbeat is younger than that, the reservation is live.
-**When no heartbeat is found for the branch** (the store was cleared, or the session runs on
-another machine — [#158](https://github.com/Crazz-Org/SPO-WebClient/issues/158)), fall back to the
-branch's last commit date on `origin`, with the same window. A branch with neither signal does
-not hold its area.
+There was a second and cheaper signal until #441: a per-session heartbeat under
+`~/.spo-bench/sessions/*.alive`, stamped by `.claude/hooks/session-heartbeat.sh`. That hook was
+retired with the pilot hook layer in #425, which left the store with no writer, so the commit-date
+rule above had been the only live path ever since; the readers were removed in #441 rather than
+left to imply a signal nothing produced. See
+[#158](https://github.com/Crazz-Org/SPO-WebClient/issues/158) for the cross-machine case that rule
+also covers.
 
 **`Session` is never touched by any of this**, in any of these cases. Ownership law 1 stands
 unchanged: a card whose `Session` is filled still belongs to that session, and only the human
@@ -424,8 +419,9 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
    writes are blind `item-edit`s: nothing between claim and Done re-reads the pool.
 2. **Never poll GitHub for a state that has a local surface.** The bench verdict is the exit
    code of `npm run gate` (one background command) and `~/.spo-bench/verdicts/<sha>.json`; the
-   nightly is `~/.spo-bench/nightly/latest.json`; session liveness is the heartbeat files in
-   `~/.spo-bench/sessions/`. None of these is ever asked of GitHub. The only GitHub-only waits
+   nightly is `~/.spo-bench/nightly/latest.json`. Neither is ever asked of GitHub. Reservation
+   liveness is the one state with no local surface — it is a ref read, and it is already folded
+   into the claim read's own batched call, so it costs no extra poll. The only GitHub-only waits
    are **CI and the merge queue**: check once when you arrive — CI normally concluded while
    the gate was queued — and if something is genuinely pending, re-read at **≥ 30 s**
    intervals, over REST (`gh api repos/Crazz-Org/SPO-WebClient/pulls/<N>`), the way
@@ -586,8 +582,8 @@ In descending order of what they actually save:
 1. **Spawn fewer agents.** Two questions for the same reader are one prompt. A one-liner is
    a direct tool call, never an agent (CLAUDE.md § Delegation strategy).
 2. **Grant the narrowest tool set.** An agent declared `tools: *` inherits the whole MCP
-   surface; the three agents in `.claude/agents/` declare `Read, Grep, Glob, Bash` and stay
-   that way. Prefer them, or `Explore`, over a general-purpose spawn.
+   surface; the five agents in `.claude/agents/` declare `Read, Grep, Glob, Bash` — or less,
+   `citation-verifier` needs no `Glob` — and stay that way. Prefer them, or `Explore`, over a general-purpose spawn.
 3. **Pass pointers, never bodies.** `src/server/session/push-dispatcher.ts:88` costs eight
    tokens; the function pasted around it costs four hundred, and the agent can open the file
    itself. The one exception is content that does not exist on disk — a draft card, a
@@ -664,7 +660,7 @@ kind is exactly the mistake this section exists to prevent.
 The project scope is required once per machine: `gh auth refresh -s project` (run inside WSL).
 
 **The reads are npm aliases, and that is deliberate.** `board:claim`, `board:verify`,
-`board:status`, `board:sessions` and `bench:nightly` each wrap one script under `scripts/`.
+`board:status` and `bench:nightly` each wrap one script under `scripts/`.
 The orchestrator spawns them by alias and branches on their exit codes, so the query has one
 definition and one place to change it — **the query belongs in the script, never in the caller**.
 Change a query by editing its script; do not paste one back into this file.

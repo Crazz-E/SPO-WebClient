@@ -16,8 +16,11 @@
   `RDOObjectServer.pas:292`); `"*"` on a `function` is an arbitrary memory write that does not
   self-recover (live-proven 2026-08-18, `call GetUserList "*"`). Read the server-side declaration
   with `delphi-archaeologist` and cite it. Once catalogued, neither mistake is expressible.
-- `session/rdo-request-guards.ts` still guards what the catalogue does not describe: forbidden
-  members, session-lifecycle members, connection-bound members, buffer depth.
+- What the catalogue does not describe — forbidden members, session-lifecycle members,
+  connection-bound members, buffer depth — is held by the ratchet in
+  `__tests__/rdo/capability-inventory.test.ts` (control 5 and the connection-bound case), not by
+  a guards module: `session/rdo-request-guards.ts` was absorbed into the catalogue and
+  `shared/rdo-frame.ts`.
 - Session/timer work (login, logoff, reconnect, KeepAlive, ServerBusy): verify the sequence
   against `~/SPO-Original` (or `../SPO-Original` relative to the repo root — not from a session
   worktree, where `..` resolves to `.claude/worktrees/`, not the repo root) before changing it.

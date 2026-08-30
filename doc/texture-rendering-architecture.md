@@ -2,6 +2,13 @@
 
 Developer reference for the full asset pipeline: from raw game files to pixels on screen.
 
+> **Where the first half runs.** Extraction, atlas building and chunk generation left this
+> repository in `6fc8611f` — they are the standalone
+> [SPO-WebClient-Chunks](https://github.com/Crazz-E/SPO-WebClient-Chunks) tool, and its output is
+> published to the Cloudflare R2 CDN at `https://spo.zz.works`. Nothing below the CDN box is
+> built at runtime any more; the client fetches it. `src/server/texture-extractor.ts`,
+> `atlas-generator.ts` and `terrain-chunk-renderer.ts` no longer exist here.
+
 ```
                         ┌─────────────────────────────────┐
                         │        ASSET SOURCES             │
@@ -14,64 +21,44 @@ Developer reference for the full asset pipeline: from raw game files to pixels o
                         │  cache/Maps/*.bmp        (maps)   │
                         └──────────┬───────────────────────┘
                                    │
-                    ═══════════════╪════════════════
-                       SERVER      │
-                    ═══════════════╪════════════════
+              ═════════════════════╪════════════════════
+                 BUILD TIME —      │  a separate repository
+                 SPO-WebClient-    │  (github.com/Crazz-E/
+                 Chunks            │   SPO-WebClient-Chunks)
+              ═════════════════════╪════════════════════
                                    ▼
                 ┌──────────────────────────────────────┐
-                │    TextureExtractor (Service)         │
-                │    texture-extractor.ts               │
-                │                                      │
                 │  CAB → BMP → PNG (alpha-baked)       │
                 │  INI → palette index mapping          │
-                └──────────┬───────────────────────────┘
-                           │
-              ┌────────────┴────────────┐
-              ▼                         ▼
-┌──────────────────────┐  ┌──────────────────────────┐
-│  AtlasGenerator      │  │  AtlasGenerator          │
-│  atlas-generator.ts  │  │  atlas-generator.ts      │
-│                      │  │                          │
-│  TERRAIN ATLAS       │  │  OBJECT ATLAS            │
-│  16×16 grid          │  │  Dynamic grid            │
-│  1024×1536 px        │  │  roads / concrete / cars │
-│  256 palette slots   │  │                          │
-│         │            │  │         │                │
-│  atlas.png + .json   │  │  *-atlas.png + .json     │
-└─────────┬────────────┘  └─────────┬────────────────┘
-          │                         │
-          ▼                         │
-┌───────────────────────┐           │
-│ TerrainChunkRenderer  │           │
-│ terrain-chunk-        │           │
-│   renderer.ts         │           │
-│                       │           │
-│ atlas + map.bmp       │           │
-│   → 32×32-tile chunks │           │
-│   → Z3→Z2→Z1→Z0      │           │
-│     (downscale 2×)    │           │
-│   → WebP to disk      │           │
-│                       │           │
-│ webclient-cache/      │           │
-│  chunks/{map}/{type}/ │           │
-│  {season}/z{0-3}/     │           │
-│  chunk_{i}_{j}.webp   │           │
-└─────────┬─────────────┘           │
-          │                         │
-          ▼                         ▼
+                │                                      │
+                │  TERRAIN ATLAS  16×16, 1024×1536 px, │
+                │                 256 palette slots     │
+                │  OBJECT ATLAS   dynamic grid —        │
+                │                 roads/concrete/cars   │
+                │                                      │
+                │  atlas + map.bmp → 32×32-tile chunks │
+                │    → Z3→Z2→Z1→Z0 (downscale 2×)     │
+                │    → WebP                            │
+                └──────────────────┬───────────────────┘
+                                   │  published once, offline
+                                   ▼
 ┌─────────────────────────────────────────────────────┐
-│              HTTP API (server.ts)                     │
+│        CLOUDFLARE R2 CDN — https://spo.zz.works       │
 │                                                      │
-│  /api/terrain-chunk/:map/:type/:s/:z/:i/:j  → WebP  │
-│  /api/terrain-atlas/:type/:season           → PNG   │
-│  /api/terrain-atlas/:type/:season/manifest  → JSON  │
-│  /api/object-atlas/:category                → PNG   │
-│  /api/object-atlas/:category/manifest       → JSON  │
-│  /api/map-data/:mapName                     → JSON  │
-│  /cache/:category/:filename                 → GIF   │
+│  chunks/{map}/{type}/{season}/z{0-3}/                │
+│                             chunk_{i}_{j}.webp        │
+│  the terrain and object atlases + their manifests    │
 │                                                      │
-│  Cache-Control: public, max-age=31536000 (1 year)    │
+│  `config.cdn.url` (src/shared/config.ts) — override  │
+│  with CHUNK_CDN_URL, or set it EMPTY to fall back to │
+│  the local `/cdn/...` path for offline development   │
 └──────────────────────┬──────────────────────────────┘
+                       │
+                       │   still served by server.ts, NOT the CDN:
+                       │     /api/map-data/:mapName      → JSON
+                       │     /api/terrain-info/:map      → JSON (seasons)
+                       │     /cache/:category/:filename  → GIF
+                       │       (BuildingImages are excluded from the CDN)
                        │
           ═════════════╪════════════════
              CLIENT    │  (Browser)
@@ -136,9 +123,9 @@ Developer reference for the full asset pipeline: from raw game files to pixels o
 
 | Class | File | Role |
 |-------|------|------|
-| TextureExtractor | `src/server/texture-extractor.ts` | CAB→BMP→PNG (alpha-baked), INI palette parsing |
-| AtlasGenerator | `src/server/atlas-generator.ts` | Terrain atlas (16×16 fixed grid) + object atlas (dynamic grid) |
-| TerrainChunkRenderer | `src/server/terrain-chunk-renderer.ts` | 32×32-tile chunks, Z3→Z0 downscale cascade, worker pool |
+| TextureExtractor | *(SPO-WebClient-Chunks)* | CAB→BMP→PNG (alpha-baked), INI palette parsing — build-time, not in this repo |
+| AtlasGenerator | *(SPO-WebClient-Chunks)* | Terrain atlas (16×16 fixed grid) + object atlas (dynamic grid) — build-time, not in this repo |
+| TerrainChunkRenderer | *(SPO-WebClient-Chunks)* | 32×32-tile chunks, Z3→Z0 downscale cascade, worker pool — build-time, not in this repo |
 | IsometricMapRenderer | `src/client/renderer/isometric-map-renderer.ts` | 9-layer compositor (terrain→vegetation→concrete→roads→buildings→cars→overlays) |
 | IsometricTerrainRenderer | `src/client/renderer/isometric-terrain-renderer.ts` | Terrain layer: chunk mode (fast) or atlas fallback |
 | ChunkCache | `src/client/renderer/chunk-cache.ts` | Client chunk fetching + LRU per zoom (48-300 entries) |

@@ -49,7 +49,7 @@ interface Bench {
   worktree: string;
   branch: string;
   installLog: string;
-  /** Stands in for ~/.spo-bench/sessions: heartbeats and the retired markers. */
+  /** Stands in for ~/.spo-bench/sessions, which holds the retired markers. */
   sessions: string;
 }
 
@@ -129,14 +129,6 @@ function scratchBench(): Bench {
 /** The key finish.sh files a worktree under in SESSIONS_DIR — sha1 of its real path. */
 function sessionKey(dir: string): string {
   return createHash('sha1').update(fs.realpathSync(dir)).digest('hex').slice(0, 16);
-}
-
-/** A session stamped its heartbeat in `dir` this many minutes ago. */
-function heartbeat(bench: Bench, dir: string, minutesAgo: number): void {
-  const file = path.join(bench.sessions, `${sessionKey(dir)}.alive`);
-  fs.writeFileSync(file, `${fs.realpathSync(dir)}\n`, 'utf8');
-  const when = new Date(Date.now() - minutesAgo * 60_000);
-  fs.utimesSync(file, when, when);
 }
 
 function isRetired(bench: Bench, dir: string): boolean {
@@ -296,9 +288,7 @@ describe('after a merge', () => {
       `${retired}\tclaude-x/retired\t${sha}\n`,
       'utf8',
     );
-    // Its session signed off well past the retired idle window; gh is never consulted.
-    heartbeat(bench, retired, 60);
-
+    // Nobody is standing in it, and gh is never consulted.
     const run = runFinish(bench, bench.mainRepo);
     expect(run.code).toBe(0);
     expect(run.stdout).toMatch(/== reaping retired worktree .*retired/);
@@ -326,42 +316,12 @@ describe('after a merge', () => {
     );
     // Session picks up a second card and makes a new commit — HEAD has moved.
     commitFile(active, 'src/second.ts', 'export const b = 2;\n', 'feat: second card');
-    // Heartbeat is old enough that it would not save the worktree on its own.
-    heartbeat(bench, active, 60);
-
     const run = runFinish(bench, bench.mainRepo);
     expect(run.code).toBe(0);
     expect(run.stdout).toMatch(/== un-retiring .*active.*new work detected/);
     expect(fs.existsSync(active)).toBe(true);
     // Marker is cleared so the next finish treats the worktree normally.
     expect(isRetired(bench, active)).toBe(false);
-  });
-
-  it('keeps a worktree whose session stamped a heartbeat inside the idle window', () => {
-    const bench = scratchBench();
-    const base = path.join(bench.mainRepo, '.claude', 'worktrees');
-    fs.mkdirSync(base, { recursive: true });
-    const live = path.join(base, 'live');
-    git(bench.mainRepo, 'worktree', 'add', '-q', '-b', 'claude-x/live', live);
-    heartbeat(bench, live, 3);
-
-    const run = runFinish(bench, bench.mainRepo, { SPO_WORKTREE_IDLE_MIN: '120' });
-    expect(run.code).toBe(0);
-    // The exact age is not ours to predict. finish.sh reads it off the wall clock —
-    // `(date +%s) - (stat -c %Y)`, whole seconds, scripts/finish.sh:119-126 — so a stamp
-    // made 180 s ago prints 3 only while the clock moves forward at one second per second.
-    // It cannot print 2 by rounding (stat truncates), which means the 2 that failed this
-    // assertion in CI came from the clock itself stepping between the stamp and the read;
-    // a step is unbounded in both directions, and no pinned number survives one.
-    const keeping =
-      /== keeping .*live — a session was working there (-?\d+) min ago \(idle window 120 min\)/;
-    const kept = keeping.exec(run.stdout);
-    // That line is printed by one branch and no other, and only for the live window (120)
-    // rather than the retired one (15) — which is the whole of what the case is about.
-    expect(kept).not.toBeNull();
-    // Whatever the clock said, the age the guard printed has to be the age it kept on.
-    expect(Number(kept?.[1])).toBeLessThan(120);
-    expect(fs.existsSync(live)).toBe(true);
   });
 
   /**
