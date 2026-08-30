@@ -55,15 +55,18 @@ describe('parseFavoritesResponse', () => {
   });
 
   describe('filtering', () => {
-    it('skips folder items (kind != 1)', () => {
+    it('parses folder items (kind=0) as folders and skips unknown kinds', () => {
       const raw = [
         favEntry(1, 0, 'Folder', ''),       // kind=0 folder
         favEntry(2, 1, 'Link', 'Link,5,6,0'), // kind=1 link
         favEntry(3, 2, 'Other', ''),          // kind=2 unknown
       ].join(ITEM);
       const result = parseFavoritesResponse(raw);
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(2);
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({
+        id: 1, name: 'Folder', x: 0, y: 0, path: '1', isFolder: true, children: [],
+      });
+      expect(result[1].id).toBe(2);
     });
 
     it('skips entries with fewer than 4 fields', () => {

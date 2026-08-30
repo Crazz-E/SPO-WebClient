@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, act } from '@testing-library/react';
 import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup/render-helpers';
 import { useUiStore } from '../../store/ui-store';
 import { useMapStore } from '../../store/map-store';
@@ -155,5 +155,116 @@ describe('FacilityList (H6)', () => {
     fireEvent.blur(input);
 
     expect(onRenameFavorite).toHaveBeenCalledWith('4210', 'Moulin');
+  });
+
+  // ── issue #385 — folders: create, move, delete ─────────────────────────
+
+  const folder = (id: number, name: string, children: FavoritesItem[] = []): FavoritesItem =>
+    ({ id, name, x: 0, y: 0, path: String(id), isFolder: true, children } as FavoritesItem);
+
+  it('prompts for a name and creates a root folder', () => {
+    const onCreateFavoriteFolder = jest.fn();
+    renderWithProviders(<FacilityList facilities={[fav(1, 'Mill', 1, 1)]} />, {
+      clientCallbacks: createSpiedCallbacks({ onCreateFavoriteFolder }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '+ New Folder' }));
+    const prompt = useUiStore.getState().promptPayload;
+    expect(prompt?.title).toBe('New folder');
+    act(() => prompt?.onSubmit('  Farms '));
+
+    expect(onCreateFavoriteFolder).toHaveBeenCalledWith('', 'Farms');
+  });
+
+  it('an empty folder name is not sent', () => {
+    const onCreateFavoriteFolder = jest.fn();
+    renderWithProviders(<FacilityList facilities={[fav(1, 'Mill', 1, 1)]} />, {
+      clientCallbacks: createSpiedCallbacks({ onCreateFavoriteFolder }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '+ New Folder' }));
+    act(() => useUiStore.getState().promptPayload?.onSubmit('   '));
+
+    expect(onCreateFavoriteFolder).not.toHaveBeenCalled();
+  });
+
+  it('lists folders above the status sections, with the item count', () => {
+    seedSource([bld(1, 1, false)]);
+    renderWithProviders(
+      <FacilityList facilities={[folder(9, 'Farms', [fav(1, 'Mill', 1, 1)])]} />,
+    );
+    expect(screen.getByText('Folders')).toBeTruthy();
+    expect(screen.getByText('📁 Farms')).toBeTruthy();
+    expect(screen.getByText('1 item')).toBeTruthy();
+    expect(screen.getByText('Operating')).toBeTruthy();
+    expect(screen.getByText('Mill')).toBeTruthy();
+  });
+
+  it('moves a facility into a folder through the Move to… select', () => {
+    const onMoveFavorite = jest.fn();
+    renderWithProviders(
+      <FacilityList facilities={[folder(9, 'Farms'), fav(1, 'Mill', 1, 1)]} />,
+      { clientCallbacks: createSpiedCallbacks({ onMoveFavorite }) },
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Move Mill to…' }), { target: { value: '9' } });
+
+    expect(onMoveFavorite).toHaveBeenCalledWith('1', '9', 'Mill');
+  });
+
+  it('moves a facility back to the root', () => {
+    const onMoveFavorite = jest.fn();
+    renderWithProviders(
+      <FacilityList facilities={[folder(9, 'Farms'), fav(1, 'Mill', 1, 1)]} />,
+      { clientCallbacks: createSpiedCallbacks({ onMoveFavorite }) },
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Move Mill to…' }), { target: { value: ' root' } });
+
+    expect(onMoveFavorite).toHaveBeenCalledWith('1', '', 'Mill');
+  });
+
+  it('does not show a Move to… select when the tree has no folders', () => {
+    renderWithProviders(<FacilityList facilities={[fav(1, 'Mill', 1, 1)]} />);
+    expect(screen.queryByRole('combobox', { name: 'Move Mill to…' })).toBeNull();
+  });
+
+  it('disables the delete button on a non-empty folder, with an explanatory title', () => {
+    renderWithProviders(<FacilityList facilities={[folder(9, 'Farms', [fav(1, 'Mill', 1, 1)])]} />);
+    const removeBtn = screen.getByRole('button', { name: 'Remove Farms' }) as HTMLButtonElement;
+    expect(removeBtn.disabled).toBe(true);
+    expect(removeBtn.getAttribute('title')).toContain('not empty');
+  });
+
+  it('removes an empty folder by its Location', () => {
+    const onRemoveFavorite = jest.fn();
+    renderWithProviders(<FacilityList facilities={[folder(9, 'Farms')]} />, {
+      clientCallbacks: createSpiedCallbacks({ onRemoveFavorite }),
+    });
+
+    const removeBtn = screen.getByRole('button', { name: 'Remove Farms' }) as HTMLButtonElement;
+    expect(removeBtn.disabled).toBe(false);
+    fireEvent.click(removeBtn);
+
+    expect(onRemoveFavorite).toHaveBeenCalledWith('9', 'Farms');
+  });
+
+  it('renames a folder like any other item', () => {
+    const onRenameFavorite = jest.fn();
+    renderWithProviders(<FacilityList facilities={[folder(9, 'Farms')]} />, {
+      clientCallbacks: createSpiedCallbacks({ onRenameFavorite }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Farms' }));
+    const input = screen.getByRole('textbox', { name: 'Rename Farms' });
+    fireEvent.change(input, { target: { value: 'Fermes' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onRenameFavorite).toHaveBeenCalledWith('9', 'Fermes');
+  });
+
+  it('never leaves a folder classified as "Status unknown"', () => {
+    renderWithProviders(<FacilityList facilities={[folder(9, 'Empty folder')]} />);
+    expect(screen.queryByText('Status unknown')).toBeNull();
   });
 });

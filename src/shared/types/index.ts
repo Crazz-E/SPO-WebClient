@@ -301,6 +301,10 @@ export type {
   WsRespFavoriteDelete,
   WsReqFavoriteRename,
   WsRespFavoriteRename,
+  WsReqFavoriteFolderCreate,
+  WsRespFavoriteFolderCreate,
+  WsReqFavoriteMove,
+  WsRespFavoriteMove,
   // Research / Inventions
   WsReqResearchInventory,
   WsRespResearchInventory,

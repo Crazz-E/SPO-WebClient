@@ -25,6 +25,16 @@ import { parseFavoritesResponse } from './session-utils';
 
 /** `fvkLink` — a bookmark with coordinates (`Kernel/FavProtocol.pas:7`). */
 const FAV_KIND_LINK = 1;
+/** `fvkFolder` (`Kernel/FavProtocol.pas:6`). */
+const FAV_KIND_FOLDER = 0;
+
+/**
+ * Bounds on the recursive folder walk in `fetchOwnedFacilities` — a folder
+ * past either cap keeps `children: []` rather than spinning the session on a
+ * pathological tree.
+ */
+const FAV_FOLDER_DEPTH_CAP = 8;
+const FAV_FOLDER_COUNT_CAP = 50;
 
 /**
  * `TFavorites.RDORenameItem` truncates past 50 characters (`Favorites.pas:283`).
@@ -74,17 +84,52 @@ function composeLinkCookie(name: string, x: number, y: number): string {
 // PUBLIC FUNCTIONS
 // =========================================================================
 
-/** List the root of the tree — the facilities the Empire panel shows. */
-export async function fetchOwnedFacilities(ctx: SessionContext): Promise<FavoritesItem[]> {
-  const targetId = requireWorldContext(ctx);
-
+async function fetchSubItems(
+  ctx: SessionContext, targetId: string, path: string,
+): Promise<FavoritesItem[]> {
   const packet = await ctx.sendRdoRequest('world', rdoCall(
     'RDOFavoritesGetSubItems', targetId,
-    RdoValue.string(''),
+    RdoValue.string(path),
   ).packet, undefined, TimeoutCategory.NORMAL);
 
   const raw = parsePropertyResponse(packet.payload!, 'res');
-  return parseFavoritesResponse(raw);
+  return parseFavoritesResponse(raw, path);
+}
+
+/**
+ * List the whole tree — the facilities the Empire panel shows. Folders are
+ * fetched breadth-first, each with its own `RDOFavoritesGetSubItems` call
+ * passing the folder's Location; a folder past `FAV_FOLDER_DEPTH_CAP` or
+ * `FAV_FOLDER_COUNT_CAP` keeps `children: []` rather than let a pathological
+ * tree spin the session. The wire's `subFolderCount` field is deliberately
+ * not used to skip a fetch — it counts sub-folders, not links.
+ */
+export async function fetchOwnedFacilities(ctx: SessionContext): Promise<FavoritesItem[]> {
+  const targetId = requireWorldContext(ctx);
+
+  const root = await fetchSubItems(ctx, targetId, '');
+
+  let folderCount = 0;
+  const queue: Array<{ item: FavoritesItem; depth: number }> = [];
+  for (const item of root) {
+    if (item.isFolder) queue.push({ item, depth: 1 });
+  }
+
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (!next) break;
+    const { item, depth } = next;
+    if (folderCount >= FAV_FOLDER_COUNT_CAP || depth > FAV_FOLDER_DEPTH_CAP) continue;
+    folderCount++;
+
+    const children = await fetchSubItems(ctx, targetId, item.path);
+    item.children = children;
+    for (const child of children) {
+      if (child.isFolder) queue.push({ item: child, depth: depth + 1 });
+    }
+  }
+
+  return root;
 }
 
 /**
@@ -117,6 +162,57 @@ export async function addFavorite(
   }
   ctx.log.warn(`[Favorites] RDOFavoritesNewItem refused "${trimmed}" (res="${res}")`);
   return { success: false, message: 'The server refused to add this favourite.' };
+}
+
+/**
+ * Create a folder under `parentPath` ('' for the root). Same call and the same
+ * `-1`/`0`/absent failure semantics as {@link addFavorite} — see its JSDoc —
+ * with `Kind = fvkFolder` and an empty Info cookie, which folders do not carry.
+ */
+export async function createFavoriteFolder(
+  ctx: SessionContext, parentPath: string, name: string,
+): Promise<FavoriteMutationResult> {
+  const targetId = requireWorldContext(ctx);
+  const trimmed = name.slice(0, FAV_NAME_MAX);
+
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'RDOFavoritesNewItem', targetId,
+    RdoValue.string(parentPath),
+    RdoValue.int(FAV_KIND_FOLDER),
+    RdoValue.string(trimmed),
+    RdoValue.string(''),
+  ).packet, undefined, TimeoutCategory.NORMAL);
+
+  const res = readResult(packet.payload);
+  const id = parseInt(res, 10);
+  if (Number.isFinite(id) && id > 0) {
+    return { success: true, id };
+  }
+  ctx.log.warn(`[Favorites] RDOFavoritesNewItem (folder) refused "${trimmed}" (res="${res}")`);
+  return { success: false, message: 'The server refused to create this folder.' };
+}
+
+/**
+ * Move an item to another folder. `RDOFavoritesMoveItem` answers a boolean —
+ * the server itself refuses moving a folder into its own subtree
+ * (`Favorites.pas:247`), so the gateway adds no duplicate guard here.
+ */
+export async function moveFavorite(
+  ctx: SessionContext, itemPath: string, destPath: string,
+): Promise<FavoriteMutationResult> {
+  const targetId = requireWorldContext(ctx);
+
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'RDOFavoritesMoveItem', targetId,
+    RdoValue.string(itemPath),
+    RdoValue.string(destPath),
+  ).packet, undefined, TimeoutCategory.NORMAL);
+
+  if (isTrueOrdinal(readResult(packet.payload))) {
+    return { success: true };
+  }
+  ctx.log.warn(`[Favorites] RDOFavoritesMoveItem refused "${itemPath}" -> "${destPath}"`);
+  return { success: false, message: 'The server refused to move this favourite.' };
 }
 
 /**

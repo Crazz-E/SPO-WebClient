@@ -54,7 +54,7 @@ describe('parseFavoritesResponse', () => {
     expect(result[2]).toEqual({ id: 3, name: 'Delmar Apts.', x: 687, y: 162, path: '3' });
   });
 
-  it('skips folder items (kind=0)', () => {
+  it('parses folder items (kind=0) as folders, with no coordinates of their own', () => {
     const raw = [
       favFolder(100, 'My Folder', 2),
       favLink(1, 'Factory', 100, 200),
@@ -62,8 +62,16 @@ describe('parseFavoritesResponse', () => {
 
     const result = parseFavoritesResponse(raw);
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 1, name: 'Factory', x: 100, y: 200, path: '1' });
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({
+      id: 100, name: 'My Folder', x: 0, y: 0, path: '100', isFolder: true, children: [],
+    });
+    expect(result[1]).toEqual({ id: 1, name: 'Factory', x: 100, y: 200, path: '1' });
+  });
+
+  it('nests a folder\'s Location under the parent it was asked for, like a link', () => {
+    const raw = favFolder(9, 'Sub', 0);
+    expect(parseFavoritesResponse(raw, '100')[0].path).toBe('100/9');
   });
 
   it('handles name with commas in info cookie', () => {

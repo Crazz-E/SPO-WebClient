@@ -44,7 +44,7 @@ describe('the catalogue', () => {
 
   it('marks exactly the writing flows as mutating', () => {
     const mutating = FLOWS.filter(f => f.mutates).map(f => f.name).sort();
-    expect(mutating).toEqual(['favorites-roundtrip', 'mail-roundtrip', 'politics-write']);
+    expect(mutating).toEqual(['favorites-folders', 'favorites-roundtrip', 'mail-roundtrip', 'politics-write']);
   });
 
   it('names the known flows when asked for one that does not exist', () => {
@@ -554,5 +554,132 @@ describe('favorites-roundtrip', () => {
 
     expect(result.status).toBe('FAIL');
     expect(result.assertions.find(a => !a.ok)?.what).toMatch(/serves the new name/);
+  });
+});
+
+describe('favorites-folders', () => {
+  interface TreeNode {
+    id: number; name: string; x: number; y: number; path: string;
+    isFolder?: boolean; children?: TreeNode[];
+  }
+
+  function find(tree: TreeNode[], path: string): TreeNode | undefined {
+    for (const n of tree) {
+      if (n.path === path) return n;
+      if (n.children) {
+        const found = find(n.children, path);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  }
+
+  function findAndRemove(tree: TreeNode[], path: string): TreeNode | null {
+    const idx = tree.findIndex(n => n.path === path);
+    if (idx >= 0) return tree.splice(idx, 1)[0];
+    for (const n of tree) {
+      if (n.children) {
+        const found = findAndRemove(n.children, path);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * A stub tree with folders, the same idea as `favSession` above: a create
+   * assigns an id under the given parent, a move re-parents the node and
+   * rewrites its Location, and every list serves the live tree — never a
+   * cached copy.
+   */
+  function favFolderSession(
+    seed: TreeNode[] = [],
+    opts: { refuseFolderCreate?: boolean } = {},
+  ) {
+    const tree: TreeNode[] = seed;
+    let nextId = 100;
+    const sent: WsMessage[] = [];
+    const s = stubSession(msg => {
+      sent.push(msg);
+      const m = msg as unknown as {
+        name?: string; x?: number; y?: number; path?: string; parentPath?: string; destPath?: string;
+      };
+      switch (msg.type) {
+        case WsMessageType.REQ_EMPIRE_FACILITIES:
+          return { type: WsMessageType.RESP_EMPIRE_FACILITIES, facilities: tree };
+        case WsMessageType.REQ_FAVORITE_FOLDER_CREATE: {
+          if (opts.refuseFolderCreate) return { type: WsMessageType.RESP_FAVORITE_FOLDER_CREATE, success: false };
+          const id = nextId++;
+          const parentPath = m.parentPath ?? '';
+          const path = parentPath ? `${parentPath}/${id}` : String(id);
+          const node: TreeNode = { id, name: m.name!, x: 0, y: 0, path, isFolder: true, children: [] };
+          if (parentPath === '') tree.push(node);
+          else find(tree, parentPath)?.children?.push(node);
+          return { type: WsMessageType.RESP_FAVORITE_FOLDER_CREATE, success: true, id };
+        }
+        case WsMessageType.REQ_FAVORITE_ADD: {
+          const id = nextId++;
+          tree.push({ id, name: m.name!, x: m.x!, y: m.y!, path: String(id) });
+          return { type: WsMessageType.RESP_FAVORITE_ADD, success: true, id };
+        }
+        case WsMessageType.REQ_FAVORITE_MOVE: {
+          const node = findAndRemove(tree, m.path!);
+          if (!node) return { type: WsMessageType.RESP_FAVORITE_MOVE, success: false };
+          const destPath = m.destPath ?? '';
+          node.path = destPath ? `${destPath}/${node.id}` : String(node.id);
+          if (destPath === '') tree.push(node);
+          else find(tree, destPath)?.children?.push(node);
+          return { type: WsMessageType.RESP_FAVORITE_MOVE, success: true };
+        }
+        default: {
+          findAndRemove(tree, m.path!);
+          return { type: WsMessageType.RESP_FAVORITE_DELETE, success: true };
+        }
+      }
+    });
+    return { session: s, tree, sent };
+  }
+
+  function install(fav: ReturnType<typeof favFolderSession>): void {
+    jest.spyOn(session, 'login').mockResolvedValue(fav.session);
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+  }
+
+  it('creates a folder, moves a link in and out, then deletes both, leaving the tree as it found it', async () => {
+    const fav = favFolderSession();
+    install(fav);
+
+    const result = await flowByName('favorites-folders').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(fav.tree).toEqual([]);
+  });
+
+  it('fails when the folder create is refused', async () => {
+    const fav = favFolderSession([], { refuseFolderCreate: true });
+    install(fav);
+
+    const result = await flowByName('favorites-folders').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/folder create was accepted/);
+  });
+
+  it('sweeps a stale marker folder and its link, deepest first', async () => {
+    const staleLink: TreeNode = { id: 10, name: 'e2e-favfolder-link', x: 1, y: 2, path: '9/10' };
+    const staleFolder: TreeNode = {
+      id: 9, name: 'e2e-favfolder 2026-01-01', x: 0, y: 0, path: '9', isFolder: true, children: [staleLink],
+    };
+    const fav = favFolderSession([staleFolder]);
+    install(fav);
+
+    const result = await flowByName('favorites-folders').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(fav.tree).toEqual([]);
+    const deletePaths = fav.sent
+      .filter(m => m.type === WsMessageType.REQ_FAVORITE_DELETE)
+      .map(m => (m as unknown as { path: string }).path);
+    expect(deletePaths.indexOf('9/10')).toBeLessThan(deletePaths.indexOf('9'));
   });
 });
