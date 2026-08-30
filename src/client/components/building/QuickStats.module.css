@@ -7,11 +7,11 @@
   padding: var(--space-3) var(--space-4);
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--surface-border);
-  /* Shrinks before the tab content does, and never takes more than its share
-     of the inspector — a warehouse summary is 30+ rows tall otherwise. */
+  /* Shrinks before the tab content does. The height cap itself lives on the
+     inspector's .quickStatsSlot wrapper, whose definite height the percentage
+     resolves against — a warehouse summary is 30+ rows tall otherwise. */
   flex: 0 1 auto;
   min-height: 0;
-  max-height: 45%;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;

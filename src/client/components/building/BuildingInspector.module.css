@@ -88,6 +88,17 @@
   scrollbar-color: var(--surface-border) transparent;
 }
 
+/* QuickStats slot — gives the percentage cap a definite parent: the slot is a
+   flex child of .inspector (height: 100%), so 45% resolves against the panel.
+   The bar inside shrinks to fit and scrolls; short content stays auto-height. */
+.quickStatsSlot {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 45%;
+}
+
 /* Staggered content entry — sections fade in sequentially when details arrive */
 .stagger0 { animation: fadeIn 150ms ease-out both; }
 .stagger1 { animation: fadeIn 150ms ease-out 50ms both; }
