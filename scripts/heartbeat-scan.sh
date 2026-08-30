@@ -3,9 +3,15 @@
 #
 # WHY. A card's ground reservation (§ One session per area) is live while the session standing
 # on its branch is still working — and that is read from the HEARTBEAT, not from the board
-# clock: a session may work for hours without touching its card. Sessions stamp
-# ~/.spo-bench/sessions/<key>.alive, writing the worktree's path INSIDE the file; the mtime is
-# the last sign of life.
+# clock: a session may work for hours without touching its card. The heartbeat file is
+# ~/.spo-bench/sessions/<key>.alive, holding the worktree's path INSIDE the file, with the
+# mtime as the last sign of life.
+#
+# ⚠ VESTIGIAL SINCE #425. `.claude/hooks/session-heartbeat.sh` stamped those files and was
+# retired with the pilot hook layer; nothing writes one now, so this script always prints
+# `no heartbeats in <store>` and `npm run board:sessions` answers nothing. It is kept because
+# claim-read.sh still reads the store and a writer may return — but do not read its empty
+# output as "no live sessions".
 #
 # Output, one line per heartbeat: `<branch>\t<age> min\t<LIVE|EXPIRED>`.
 # LIVE means younger than SPO_WORKTREE_IDLE_MIN (default 120) — the verdict is computed here

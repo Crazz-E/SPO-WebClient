@@ -91,8 +91,8 @@ done
 branch="$(git rev-parse --abbrev-ref HEAD)"
 session="${branch} @ $(date +%F)"
 
-# The one key derivation for this worktree's session markers lives in the sourced
-# session-marker.sh — never a second copy.
+# The key derivation for this worktree's session markers lives in the sourced
+# session-marker.sh (finish.sh keys arbitrary paths and carries a matching copy).
 . "$(dirname "${BASH_SOURCE[0]}")/session-marker.sh"
 
 # A worktree `finish` has already retired is over: its branch is merged, its card closed.

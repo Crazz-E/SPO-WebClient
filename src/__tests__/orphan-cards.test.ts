@@ -185,6 +185,21 @@ describe('isSuspect', () => {
     expect(watch.isSuspect(card({ status }), NOW, 24)).toBe(true);
   });
 
+  // The it.each above iterates the constant under test, so it stays green if that constant
+  // drifts. This is the assertion that actually binds it: orphan-cards.js and claim-read.sh
+  // ask the same question ("who holds ground right now") in two different jobs, and they
+  // disagreed for weeks — the watch listed `In progress` and `PR`, columns this board does
+  // not have, so it could never fire on the columns orphans actually sit in.
+  it('watches exactly the busy-status set scripts/claim-read.sh queries', () => {
+    const claimRead = fs.readFileSync(path.join(process.cwd(), 'scripts', 'claim-read.sh'), 'utf8');
+    // Every `.Status == "X"` in the busy-set jq filters, deduped and ordered.
+    const queried = [...new Set(Array.from(claimRead.matchAll(/\.Status == "([^"]+)"/g), m => m[1]))]
+      .filter(name => name !== 'Todo' && name !== 'Done' && name !== 'Parked')
+      .sort();
+    expect(queried.length).toBeGreaterThan(0);
+    expect([...watch.WORKING_STATUSES].sort()).toEqual(queried);
+  });
+
   it.each(['Todo', 'Done', 'Parked', 'Intake', ''])('never watches %s', status => {
     expect(watch.isSuspect(card({ status }), NOW, 24)).toBe(false);
   });

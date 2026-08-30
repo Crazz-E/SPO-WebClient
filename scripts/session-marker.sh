@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # The session-marker key — sourced, never run.
 #
-# One worktree, one key: `sha1(realpath(toplevel))[0:16]`. It lives in one file because the
-# derivation must be identical everywhere — finish.sh computes the same key, and a second
-# copy that drifted would leave markers nobody can find.
+# One worktree, one key: `sha1(realpath(toplevel))[0:16]`.
 #
-# Two markers hang off this key today:
+# finish.sh carries its own copy of this derivation (session_key), because it keys an ARBITRARY
+# path while this one keys the CURRENT worktree. The two must stay identical — a copy that
+# drifted would leave markers nobody can find.
+#
+# Two markers hang off this key:
 #   finished  `finish` ran here (finish.sh), which board-take.sh reads to refuse a second
 #             claim in a worktree whose work is already on main
-#   alive     the session heartbeat file `scripts/heartbeat-scan.sh` reads
+#   alive     the heartbeat file scripts/heartbeat-scan.sh and claim-read.sh read. NOTHING
+#             WRITES IT since #425 retired .claude/hooks/session-heartbeat.sh — both readers
+#             therefore always take their no-heartbeat path.
 session_marker() {
   local dir store key
   dir="$(git rev-parse --show-toplevel 2>/dev/null)" || return 1

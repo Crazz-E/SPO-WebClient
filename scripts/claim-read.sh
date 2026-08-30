@@ -34,7 +34,13 @@
 # disk, no API call) answers that for any branch with a heartbeat file; a busy-status card
 # whose branch has none falls back to that branch's last commit date on `origin`, fetched with
 # ONE batched GraphQL call — issued only when that branch set is
-# non-empty, so the common case (every busy branch has a heartbeat) costs nothing extra. If
+# non-empty.
+#
+# ⚠ SINCE #425 THAT IS EVERY READ. The heartbeat writer (.claude/hooks/session-heartbeat.sh)
+# was retired with the pilot hook layer and nothing stamps `.alive` any more, so no busy branch
+# has a heartbeat and the fallback below is the ONLY path. The batched call is therefore a
+# fixed cost of every claim read, not the rare case this comment used to describe. It is still
+# ONE batched call for the whole set, which is why the budget holds. If
 # that call fails for any reason the affected branches are treated as EXPIRED (free) and a
 # `note:` line says so — the read degrades to "more candidates", never hangs.
 #

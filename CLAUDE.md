@@ -513,8 +513,9 @@ fast-forwards `~/SPO-WebClient`, prunes stale refs, reinstalls the bench worker 
 touched `src/e2e/bench/` or `scripts/bench-*`, and **retires** this worktree — it stays on disk
 while a session stands in it, and the next run reaps it (it also heals worktrees a previous
 session forgot). **A session may keep working after `finish`**: a process standing in the
-worktree and the heartbeat in `~/.spo-bench/sessions/` both protect it
-(`SPO_WORKTREE_IDLE_MIN` 120 min, `SPO_RETIRED_IDLE_MIN` 15 min). `npm run finish -- --now`
+worktree protects it (`SPO_WORKTREE_IDLE_MIN` 120 min, `SPO_RETIRED_IDLE_MIN` 15 min). The
+heartbeat in `~/.spo-bench/sessions/` was the second protection; nothing has written one since
+#425, so the standing process is currently the only one. `npm run finish -- --now`
 removes immediately, for a human on the way out.
 
 **The last link is the release:** every merge to `main` runs `release.yml` — version from the

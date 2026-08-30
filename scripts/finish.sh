@@ -108,6 +108,9 @@ work_is_on_main() {
 }
 
 # The key of a worktree in SESSIONS_DIR — the path itself would not make a filename.
+# This IS a second derivation of the key in scripts/session-marker.sh, kept because that one
+# is keyed to the CURRENT worktree (git rev-parse) while this one takes any path. The two must
+# stay identical: sha1(realpath(dir))[0:16]. Change one, change the other.
 session_key() {
   printf '%s' "$(readlink -f "$1")" | sha1sum | cut -c1-16
 }
@@ -166,8 +169,12 @@ forget_session_files() {
 #     of it remains. Finishing it here is how one session's oversight is healed by the
 #     next, mechanically.
 # Anything else — an edit, an unmerged commit, a live session — is kept. Two independent
-# proofs of life are required to fail before a directory is taken away, because the cost
+# proofs of life were required to fail before a directory is taken away, because the cost
 # of being wrong is a session that cannot run a single command afterwards.
+#
+# ⚠ ONE OF THE TWO IS GONE. The heartbeat (`heartbeat_age_min` below) has had no writer since
+# #425, so it always answers empty and the standing-process check carries this guard alone.
+# The margin this comment describes is currently halved.
 prune_worktrees() {
   local dir wt_branch ahead state retired age window
   for dir in "$MAIN_REPO"/.claude/worktrees/*/; do
