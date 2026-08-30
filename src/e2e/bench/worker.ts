@@ -479,7 +479,7 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
           : `replaying the static stage — ${proof.why}`,
       );
       const args = proof.proven ? ['--skip-static', '--static-from=ci', ...request.args] : request.args;
-      const code = await deps.runCommand('node', ['scripts/verify-gate.js', ...args], {
+      const code = await deps.runCommand('node', ['scripts/verify-gate.js', '--live', ...args], {
         cwd: request.worktree,
         env,
         logFile,

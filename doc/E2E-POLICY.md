@@ -90,7 +90,7 @@ npm run gate
    its verdict is `PASS`, the tree fingerprint was stable across the run (a moved tree is
    `STALE`, never PASS), it names the pushing worktree, and it is younger than
    `GATE_MAX_AGE_MINUTES` (default 60). **Only the worker attests** — `npm run gate:local`
-   produces evidence for reading, not a push unblock.
+   is static-only and produces evidence for reading, not a push unblock.
 5. CI re-runs L0/L1 on the PR — it cannot hold the locked credentials. The worker
    publishes the attestation as the `bench/gate` **commit status** once the sha reaches
    GitHub (automatic retry); branch protection requires it, so a PR cannot merge on CI
@@ -329,6 +329,6 @@ npm run e2e:unlock               # clear a world-dirty lock after a human restor
 npm run finish                   # after the merge: main ff'd, refs pruned, worker reinstalled if needed, worktree + branch gone
 npm run deps:gate [PR...]        # Dependabot PRs: merge main in, npm ci in the PR's worktree, gate, push, auto-merge — one at a time
 
-npm run gate:local               # verify-gate directly — evidence for reading, no push unblock
+npm run gate:local               # verify-gate directly, static-only — evidence for reading, no push unblock
 npm run dev:local                # a debug gateway of your own, off the bench — attests nothing
 ```

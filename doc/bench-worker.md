@@ -310,16 +310,17 @@ deployment.
 - `npm run dev:local` — build and run a gateway yourself, for interactive debugging. It
   picks the first free port from 8081 up and **refuses 8080** (`scripts/dev-local.sh`);
   `PORT=<n>` chooses. Its behaviour attests nothing.
-- `npm run gate:local` — the static gate without the worker. Evidence for reading; the
-  push hook does not accept it.
+- `npm run gate:local` — the static gate without the worker; static-only by default, the
+  live stage needs `--live`, which only the worker passes.
+  Evidence for reading; the push hook does not accept it.
 
 `.claude/hooks/bench-port-guard.sh` makes the boundary mechanical rather than advisory. It
 refuses, before the command runs:
 
 | Refused | Because | Sanctioned form |
 |---------|---------|-----------------|
-| `npm start`, `node dist/server/server.js`, any `PORT=8080 …` | the default port *is* the bench port (`src/shared/config.ts:23`), and step 3 of a job SIGKILLs whatever it finds there | `npm run dev` (a lease) or `npm run dev:local` |
-| `npm run test:live:local`, `node dist/e2e/run.js` | they use the LOCKED accounts and mutate Helartia with no world lock — a concurrent job lands in the same town | `npm run test:live`, `npm run gate` |
+| `npm start`, `node dist/server/server.js`, any `PORT=8080 …`, `env PORT=8080 …`, `nohup node dist/server/server.js`, `bash -c '…'`/`sh -c "…"` wrapping any of the above, `npm --prefix … start` | the default port *is* the bench port (`src/shared/config.ts:23`), and step 3 of a job SIGKILLs whatever it finds there — wrapping the command in `env`, `nohup`, a shell `-c`, or an extra `npm` flag does not change what actually binds the port | `npm run dev` (a lease) or `npm run dev:local` |
+| `npm run test:live:local`, `node dist/e2e/run.js`, `node scripts/verify-gate.js --live`, `npm run gate:local -- --live` | they use the LOCKED accounts and mutate Helartia with no world lock — a concurrent job lands in the same town; the last two are the explicit `--live` opt-in outside the worker | `npm run test:live`, `npm run gate` |
 
 The escape hatch is deliberately awkward and human-only: prefix the command with
 `SPO_BENCH_PORT_OVERRIDE=i-own-the-bench`. A session must not reach for it — if the bench

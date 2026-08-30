@@ -23,7 +23,8 @@
  *                                                        the worker attests nothing)
  *
  * Usage:
- *   node scripts/verify-gate.js
+ *   node scripts/verify-gate.js                    # static-only: the live stage never runs
+ *   node scripts/verify-gate.js --live             # worker only: opts into the live stage
  *   node scripts/verify-gate.js --static-only
  *   node scripts/verify-gate.js --skip-static      # worker only: a receipt covers stage 1
  *   node scripts/verify-gate.js --skip-static --static-from=ci   # worker only: CI proved this sha
@@ -296,15 +297,36 @@ async function main() {
     return 1;
   }
 
-  const staticOnly = flag('static-only') === 'true' || decision.staticOnly;
+  const liveRequested = flag('live') === 'true';
+  const staticOnly = !liveRequested || flag('static-only') === 'true' || decision.staticOnly;
   const requested = flag('flows');
   const flows = requested ? requested.split(',').filter(Boolean) : decision.required;
 
-  // A capability question cannot be answered statically: the live stage runs for it even
-  // when nothing else is routed there.
+  // A capability question cannot be answered statically, and without --live the live stage
+  // cannot run at all — so it is a BLOCKED question for the worker, never a silent pass.
+  if (!liveRequested && capabilities.length > 0) {
+    artifact.verdict = 'BLOCKED';
+    artifact.live = {
+      skipped: true,
+      why:
+        'a President capability question needs the live stage, which requires --live ' +
+        '(worker-only): npm run gate',
+    };
+    const file = write(artifact);
+    process.stdout.write(
+      `\nGate BLOCKED — capability question needs the live stage: npm run gate\nArtifact: ${file}\n`,
+    );
+    return EXIT.BLOCKED;
+  }
+
   if ((staticOnly || flows.length === 0) && capabilities.length === 0) {
     artifact.verdict = 'PASS';
-    artifact.live = { skipped: true, why: 'nothing in this diff is observable over the wire' };
+    artifact.live = {
+      skipped: true,
+      why: liveRequested
+        ? 'nothing in this diff is observable over the wire'
+        : `live stage requires --live (worker-only); routed flows: ${flows.join(', ') || 'none'}`,
+    };
     const file = write(artifact);
     process.stdout.write(`\nGate PASS (static only). Artifact: ${file}\n`);
     if (decision.needsL3) warnL3();

@@ -312,7 +312,7 @@ describe('stage 4 — live', () => {
 
   it('drives the routed flows and exits 0 on a live PASS, with the artifact filled', () => {
     const live = { status: 'PASS', flows: [{ name: 'login-spine', status: 'PASS' }] };
-    const run = runGate(scratchRepo(), [], {
+    const run = runGate(scratchRepo(), ['--live'], {
       FAKE_ROUTING: needsLive,
       FAKE_LIVE: JSON.stringify(live),
     });
@@ -329,7 +329,7 @@ describe('stage 4 — live', () => {
   });
 
   it('exits 1 on a live FAIL', () => {
-    const run = runGate(scratchRepo(), [], {
+    const run = runGate(scratchRepo(), ['--live'], {
       FAKE_ROUTING: needsLive,
       FAKE_LIVE: JSON.stringify({ status: 'FAIL' }),
     });
@@ -339,7 +339,7 @@ describe('stage 4 — live', () => {
   });
 
   it('exits 2 on a live BLOCKED and records the verdict as BLOCKED', () => {
-    const run = runGate(scratchRepo(), [], {
+    const run = runGate(scratchRepo(), ['--live'], {
       FAKE_ROUTING: needsLive,
       FAKE_LIVE: JSON.stringify({ status: 'BLOCKED' }),
     });
@@ -350,7 +350,7 @@ describe('stage 4 — live', () => {
   it('exits 3 on an ENVIRONMENT abort, keeps the verdict, and says it is not an attempt', () => {
     // The exit code is what the bench worker reads. Collapsed to 1 it arrived there as
     // FAIL, and the worker then attested a sha whose code was never judged.
-    const run = runGate(scratchRepo(), [], {
+    const run = runGate(scratchRepo(), ['--live'], {
       FAKE_ROUTING: needsLive,
       FAKE_LIVE: JSON.stringify({ status: 'ENVIRONMENT' }),
     });
@@ -364,7 +364,7 @@ describe('stage 4 — live', () => {
     // An aborted run answers "undetermined" for every capability it never got to read.
     // Judging that answer would put the ENVIRONMENT straight back into FAIL through the
     // side door, and with it the attestation the abort must not produce.
-    const run = runGate(scratchRepo(), [], {
+    const run = runGate(scratchRepo(), ['--live'], {
       FAKE_ROUTING: needsLive,
       FAKE_LIVE: JSON.stringify({
         status: 'ENVIRONMENT',
@@ -377,7 +377,7 @@ describe('stage 4 — live', () => {
   });
 
   it('lets --flows= override the routed set', () => {
-    const run = runGate(scratchRepo(), ['--flows=mail-roundtrip,building-details'], {
+    const run = runGate(scratchRepo(), ['--live', '--flows=mail-roundtrip,building-details'], {
       FAKE_ROUTING: needsLive,
     });
     expect(run.code).toBe(0);
@@ -385,9 +385,41 @@ describe('stage 4 — live', () => {
   });
 
   it('exits 1 when the live driver crashes', () => {
-    const run = runGate(scratchRepo(), [], { FAKE_ROUTING: needsLive, FAKE_LIVE: '{not json' });
+    const run = runGate(scratchRepo(), ['--live'], { FAKE_ROUTING: needsLive, FAKE_LIVE: '{not json' });
     expect(run.code).toBe(1);
     expect(run.stderr).toMatch(/Gate crashed:/);
+  });
+
+  it('without --live, routed flows never reach runLive and the gate passes static-only', () => {
+    const run = runGate(scratchRepo(), [], { FAKE_ROUTING: needsLive });
+    expect(run.code).toBe(0);
+    expect(run.liveOptions).toBeNull();
+    expect(run.stdout).toMatch(/Gate PASS \(static only\)/);
+    expect(run.artifact).toMatchObject({
+      verdict: 'PASS',
+      live: { skipped: true, why: expect.stringContaining('--live') },
+    });
+  });
+
+  it('without --live, a capability question blocks rather than reaching runLive', () => {
+    const run = runGate(scratchRepo(), [], {
+      FAKE_ROUTING: JSON.stringify({ staticOnly: true }),
+      FAKE_PRESIDENT: JSON.stringify(['RDOSitMayor']),
+    });
+    expect(run.code).toBe(2);
+    expect(run.liveOptions).toBeNull();
+    expect(run.stdout).toMatch(/Gate BLOCKED — capability question needs the live stage/);
+    expect(run.artifact).toMatchObject({ verdict: 'BLOCKED' });
+  });
+
+  it('--live with a capability question restores the live stage', () => {
+    const run = runGate(scratchRepo(), ['--live'], {
+      FAKE_ROUTING: JSON.stringify({ staticOnly: true }),
+      FAKE_PRESIDENT: JSON.stringify(['RDOSitMayor']),
+      FAKE_LIVE: JSON.stringify({ status: 'PASS', capabilities: [] }),
+    });
+    expect(run.code).toBe(0);
+    expect(run.liveOptions).toEqual({ flows: [], branch: 'feature/x', capabilities: ['president'] });
   });
 });
 
@@ -460,7 +492,7 @@ describe('stage 5 — capability judgement (doc/E2E-POLICY.md §7)', () => {
     });
 
   it('runs the live stage for a capability even when routing is static-only', () => {
-    const run = runGate(scratchRepo(), [], {
+    const run = runGate(scratchRepo(), ['--live'], {
       FAKE_ROUTING: JSON.stringify({ staticOnly: true }),
       FAKE_PRESIDENT: president,
       FAKE_LIVE: evidence(false),
@@ -470,7 +502,7 @@ describe('stage 5 — capability judgement (doc/E2E-POLICY.md §7)', () => {
   });
 
   it('records a refused capability as an exception and passes', () => {
-    const run = runGate(scratchRepo(), [], {
+    const run = runGate(scratchRepo(), ['--live'], {
       FAKE_ROUTING: JSON.stringify({ required: ['login-spine'] }),
       FAKE_PRESIDENT: president,
       FAKE_LIVE: evidence(false),
@@ -488,7 +520,7 @@ describe('stage 5 — capability judgement (doc/E2E-POLICY.md §7)', () => {
   });
 
   it('fails closed when the server GRANTS the capability and no flow drives the member', () => {
-    const run = runGate(scratchRepo(), [], {
+    const run = runGate(scratchRepo(), ['--live'], {
       FAKE_ROUTING: JSON.stringify({ required: ['login-spine'] }),
       FAKE_PRESIDENT: president,
       FAKE_LIVE: evidence(true),
@@ -500,7 +532,7 @@ describe('stage 5 — capability judgement (doc/E2E-POLICY.md §7)', () => {
   });
 
   it('fails when the capability could not be determined — read, never assumed', () => {
-    const run = runGate(scratchRepo(), [], {
+    const run = runGate(scratchRepo(), ['--live'], {
       FAKE_ROUTING: JSON.stringify({ required: ['login-spine'] }),
       FAKE_PRESIDENT: president,
       FAKE_LIVE: evidence(false, false),
