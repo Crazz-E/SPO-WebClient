@@ -107,6 +107,16 @@ describe('buildReport', () => {
     expect(report.profile).toBe('mobile');
   });
 
+  it('carries sessionContext through when the caller supplies it', () => {
+    const report = buildReport({ ...draft, sessionContext: { gameDate: '2026-08-30T00:00:00.000Z', surface: 'building' } });
+    expect(report.sessionContext).toEqual({ gameDate: '2026-08-30T00:00:00.000Z', surface: 'building' });
+    expect(validateBugReport(report).ok).toBe(true);
+  });
+
+  it('drops sessionContext entirely when the caller supplies none, rather than sending it empty', () => {
+    expect(buildReport(draft)).not.toHaveProperty('sessionContext');
+  });
+
   it('leaves an ordinary report untouched, and marks nothing as dropped', () => {
     reportJournal.arm();
     reportJournal.record('ws-out', { type: 'REQ_SET_TAX' });

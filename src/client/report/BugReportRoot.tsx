@@ -12,8 +12,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useClient } from '../context';
 import { useResponsive } from '../hooks/useResponsive';
 import { useUiStore } from '../store/ui-store';
+import { useGameStore } from '../store/game-store';
 import { showToast } from '../components/common/Toast';
-import type { GeometryCapture, ReportAnchor } from '../../shared/bug-report-schema';
+import type { GeometryCapture, ReportAnchor, SessionContext } from '../../shared/bug-report-schema';
 import { reportJournal } from './journal';
 import { resolveDomAnchor } from './dom-anchor';
 import { collectGeometry } from './geometry-collect';
@@ -31,6 +32,21 @@ interface Captured {
   observedDefault: string;
   /** Mobile only: the measurements taken at the moment of the tap. */
   geometry?: GeometryCapture;
+  /** Both profiles: a cheap fingerprint of what the player was doing, read synchronously from
+   * the stores at the moment of capture -- a second correlation axis into the server log,
+   * independent of the createdAtUtc/log clock-skew triage already has to account for. */
+  sessionContext: SessionContext;
+}
+
+/** Read at the moment of capture, not later — the whole point is "what was true when flagged". */
+function captureSessionContext(): SessionContext {
+  const gameDate = useGameStore.getState().gameDate;
+  const stack = useUiStore.getState().stack;
+  const top = stack[stack.length - 1];
+  return {
+    gameDate: gameDate ? gameDate.toISOString() : null,
+    surface: top ? top.kind : null,
+  };
 }
 
 export function BugReportRoot() {
@@ -75,6 +91,7 @@ export function BugReportRoot() {
       setCaptured({
         anchor: { kind: 'canvas', ...probe, ...(screenshotDataUrl ? { screenshotDataUrl } : {}) },
         observedDefault: '',
+        sessionContext: captureSessionContext(),
       });
       return;
     }
@@ -84,6 +101,7 @@ export function BugReportRoot() {
       observedDefault: anchor.text,
       // Numbers, not a screenshot: a rect and a threshold are actionable, an impression is not.
       ...(isMobile ? { geometry: collectGeometry(element) } : {}),
+      sessionContext: captureSessionContext(),
     });
   }, [client, isMobile]);
 
@@ -95,6 +113,7 @@ export function BugReportRoot() {
       anchor: captured.anchor,
       username: client.onGetUsername?.() ?? '',
       world: client.onGetWorld?.() ?? '',
+      sessionContext: captured.sessionContext,
       ...partial,
     });
     setSubmitting(false);

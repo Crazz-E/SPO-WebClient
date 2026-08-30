@@ -77,6 +77,22 @@ export interface ElementGeometry {
     fontSize: string; padding: string; overflow: string;
     position: string; zIndex: string; transform: string;
   };
+  /** The flagged element only (never an ancestor) — same fiber-walk `dom-anchor.ts` already
+   * uses for desktop, so mobile triage can locate the owning component the same way. */
+  componentChain?: string[];
+}
+
+/**
+ * A cheap fingerprint of what the player was doing, read synchronously from the stores at
+ * flag-time — a second correlation axis into the server log, independent of clock skew between
+ * `createdAtUtc` and the log's own timestamps.
+ */
+export interface SessionContext {
+  /** The in-game date (ISO), or null if the client had not received one yet. */
+  gameDate: string | null;
+  /** The top of the UI surface stack at flag-time — same value the journal's own `surface`
+   * events use, so it reads consistently against the journal. */
+  surface: string | null;
 }
 
 export interface GeometryCapture {
@@ -130,6 +146,8 @@ export interface BugReport {
   /** Optional on both profiles. May be French; triage translates. */
   freeText?: string;
   geometry?: GeometryCapture;       // mobile only
+  /** Both profiles — read synchronously from the stores at flag-time. */
+  sessionContext?: SessionContext;
   /** Last ~60 s, oldest first. */
   journal: JournalEntry[];
   /** Set by the capture only when the report had to be cut to fit `MAX_BODY_BYTES`. */
@@ -293,6 +311,16 @@ export function validateBugReport(
   }
   if (value.geometry !== undefined && !isRec(value.geometry)) {
     return { ok: false, error: 'geometry must be an object' };
+  }
+  if (value.sessionContext !== undefined) {
+    const ctx = value.sessionContext;
+    if (!isRec(ctx)) return { ok: false, error: 'sessionContext must be an object' };
+    if (ctx.gameDate !== null && !isBoundedString(ctx.gameDate, MAX_TEXT_LENGTH)) {
+      return { ok: false, error: 'sessionContext.gameDate must be a string or null' };
+    }
+    if (ctx.surface !== null && !isBoundedString(ctx.surface, MAX_TEXT_LENGTH)) {
+      return { ok: false, error: 'sessionContext.surface must be a string or null' };
+    }
   }
 
   if (!Array.isArray(value.journal)) return { ok: false, error: 'journal must be an array' };

@@ -21,6 +21,7 @@ import {
   type GeometryCapture,
   type MobileQuickPick,
   type ReportAnchor,
+  type SessionContext,
 } from '../../shared/bug-report-schema';
 import { reportJournal } from './journal';
 
@@ -37,6 +38,7 @@ export interface ReportDraft {
   quickPicks?: MobileQuickPick[];
   freeText?: string;
   geometry?: GeometryCapture;
+  sessionContext?: SessionContext;
 }
 
 /** Drop the keys the schema would rather not see at all than see empty. */
@@ -123,6 +125,7 @@ export function buildReport(draft: ReportDraft): BugReport {
     quickPicks: draft.quickPicks,
     freeText: draft.freeText,
     geometry: draft.geometry,
+    sessionContext: draft.sessionContext,
     journal: reportJournal.snapshot(),
   }) as BugReport;
 
