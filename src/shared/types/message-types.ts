@@ -1572,6 +1572,16 @@ export interface FavoritesItem {
    * rename address an item by this path, never by its bare id.
    */
   path: string;
+  /**
+   * Item kind: 0 = folder, 1 = link (fvkFolder / fvkLink from Kernel/FavProtocol.pas:6-7).
+   * Only links have x/y coordinates; folders are containers for other items.
+   */
+  kind?: 0 | 1;
+  /**
+   * For folders (kind=0), the items contained within.
+   * Built recursively by fetchOwnedFacilities.
+   */
+  children?: FavoritesItem[];
 }
 
 export interface WsReqEmpireFacilities extends WsMessage {

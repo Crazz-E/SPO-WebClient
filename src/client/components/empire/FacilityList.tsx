@@ -126,6 +126,7 @@ export function FacilityList({ facilities }: FacilityListProps) {
   const openRightPanel = useUiStore((s) => s.openRightPanel);
   const source = useMapStore((s) => s.source);
   const client = useClient();
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
 
   const groups = useMemo(
     () => classifyFacilities(facilities, source?.getAllBuildings?.() ?? []),
@@ -146,6 +147,70 @@ export function FacilityList({ facilities }: FacilityListProps) {
     client.onRemoveFavorite(facility.path, facility.name);
   }, [client]);
 
+  const toggleFolder = useCallback((path: string) => {
+    setExpandedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+
+  const renderTreeItem = (item: FavoritesItem, level: number, state: FacilityState) => {
+    const isFolder = item.kind === 0;
+    const isExpanded = expandedFolders.has(item.path);
+    const indentStyle = { paddingLeft: `${level * 20}px` };
+
+    if (isFolder) {
+      return (
+        <div key={item.id}>
+          <div
+            className={styles.row}
+            style={indentStyle}
+          >
+            <button
+              className={styles.rowMain}
+              onClick={() => toggleFolder(item.path)}
+              style={{ flex: 1, textAlign: 'left' }}
+            >
+              <div className={styles.rowLeft}>
+                <span className={styles.name}>
+                  <span aria-hidden="true">
+                    {isExpanded ? '📁' : '📂'}
+                  </span>
+                  {' '}
+                  {item.name}
+                </span>
+              </div>
+            </button>
+          </div>
+          {isExpanded && item.children && item.children.map((child) =>
+            renderTreeItem(child, level + 1, state)
+          )}
+        </div>
+      );
+    }
+
+    // Render as item (kind === 1)
+    return (
+      <div key={item.id} style={indentStyle}>
+        <FacilityRow
+          facility={item}
+          state={state}
+          onClick={handleClick}
+          onRename={handleRename}
+          onRemove={handleRemove}
+        />
+        {item.children && item.children.map((child) =>
+          renderTreeItem(child, level + 1, state)
+        )}
+      </div>
+    );
+  };
+
   if (facilities.length === 0) {
     return (
       <div className={styles.empty}>
@@ -164,48 +229,21 @@ export function FacilityList({ facilities }: FacilityListProps) {
           No facility is losing money in the areas you&apos;ve visited.
         </div>
       ) : (
-        groups.losing.map((f) => (
-          <FacilityRow
-              key={f.id}
-              facility={f}
-              state="losing"
-              onClick={handleClick}
-              onRename={handleRename}
-              onRemove={handleRemove}
-            />
-        ))
+        groups.losing.map((f) => renderTreeItem(f, 0, 'losing'))
       )}
 
       {groups.unknown.length > 0 && (
         <>
           <div className={styles.sectionHeader}>Status unknown</div>
           <div className={styles.sectionNote}>Not visited yet — tap to check.</div>
-          {groups.unknown.map((f) => (
-            <FacilityRow
-              key={f.id}
-              facility={f}
-              state="unknown"
-              onClick={handleClick}
-              onRename={handleRename}
-              onRemove={handleRemove}
-            />
-          ))}
+          {groups.unknown.map((f) => renderTreeItem(f, 0, 'unknown'))}
         </>
       )}
 
       {groups.operating.length > 0 && (
         <>
           <div className={styles.sectionHeader}>Operating</div>
-          {groups.operating.map((f) => (
-            <FacilityRow
-              key={f.id}
-              facility={f}
-              state="operating"
-              onClick={handleClick}
-              onRename={handleRename}
-              onRemove={handleRemove}
-            />
-          ))}
+          {groups.operating.map((f) => renderTreeItem(f, 0, 'operating'))}
         </>
       )}
     </div>
