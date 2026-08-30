@@ -746,44 +746,16 @@ const server = http.createServer(async (req, res) => {
   // answers 404 (never 401/403) when the token is unset or wrong, same convention as the
   // deposit route. 20/min is generous for a 5-15 min poll cycle while still bounding a
   // misbehaving or malicious caller who somehow has the token.
-  if (safePath === '/api/report-pull/list' && req.method === 'GET') {
-    if (!checkRateLimit(getClientIp(req), 'report-pull', 20)) {
-      res.writeHead(429, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Too many requests. Try again in a minute.' }));
-      return;
-    }
-    handleReportPullList(req, res, {
+  if (safePath.startsWith('/api/report-pull/')) {
+    const pullDeps = {
       token: config.server.reportPullToken,
       queueDir: config.server.reportsDir || DEFAULT_QUEUE_DIR,
       peerIp: getClientIp(req),
-    });
-    return;
-  }
-  if (safePath.startsWith('/api/report-pull/fetch') && req.method === 'GET') {
-    if (!checkRateLimit(getClientIp(req), 'report-pull', 20)) {
-      res.writeHead(429, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Too many requests. Try again in a minute.' }));
-      return;
-    }
-    handleReportPullFetch(req, res, {
-      token: config.server.reportPullToken,
-      queueDir: config.server.reportsDir || DEFAULT_QUEUE_DIR,
-      peerIp: getClientIp(req),
-    });
-    return;
-  }
-  if (safePath === '/api/report-pull/ack' && req.method === 'POST') {
-    if (!checkRateLimit(getClientIp(req), 'report-pull', 20)) {
-      res.writeHead(429, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Too many requests. Try again in a minute.' }));
-      return;
-    }
-    handleReportPullAck(req, res, {
-      token: config.server.reportPullToken,
-      queueDir: config.server.reportsDir || DEFAULT_QUEUE_DIR,
-      peerIp: getClientIp(req),
-    });
-    return;
+      allowRequest: () => checkRateLimit(getClientIp(req), 'report-pull', 20),
+    };
+    if (safePath === '/api/report-pull/list' && req.method === 'GET') return handleReportPullList(req, res, pullDeps);
+    if (safePath.startsWith('/api/report-pull/fetch') && req.method === 'GET') return handleReportPullFetch(req, res, pullDeps);
+    if (safePath === '/api/report-pull/ack' && req.method === 'POST') return handleReportPullAck(req, res, pullDeps);
   }
 
   // Image proxy endpoint: /proxy-image?url=<encoded_url>

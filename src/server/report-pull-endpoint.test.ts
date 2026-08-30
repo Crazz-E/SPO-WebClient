@@ -136,6 +136,24 @@ describe('ackReport', () => {
     expect(result.status).toBe(400);
   });
 
+  it('answers 404 for a well-shaped but absent (never-deposited) filename', () => {
+    const result = ackReport(queueDir, REPORT_A, null, { peerIp: '1.2.3.4' });
+    expect(result.status).toBe(404);
+  });
+
+  it('answers 400 rather than throwing when the move itself fails', () => {
+    writeReport(REPORT_A);
+    // A plain FILE already sitting where pulled/ needs to be a directory makes mkdirSync throw
+    // ENOTDIR -- a portable way to force the move to fail without relying on permission bits,
+    // which root (this sandbox) ignores.
+    fs.writeFileSync(path.join(queueDir, 'pulled'), 'not a directory');
+
+    const result = ackReport(queueDir, REPORT_A, null, { peerIp: '1.2.3.4' });
+
+    expect(result.status).toBe(400);
+    if (result.status === 400) expect(result.body.error).toContain('Could not move the report');
+  });
+
   it('sweeps pulled/ entries past the retention window on the next ack', () => {
     writeReport(REPORT_A);
     writeReport(REPORT_B);
@@ -222,6 +240,13 @@ describe('handleReportPullList — the transport', () => {
     handleReportPullList(req as never, res, { token: null, queueDir, peerIp: '1.2.3.4' });
     expect(res.status).toBe(404);
   });
+
+  it('answers 429 without ever checking the token when the caller is over its allowance', () => {
+    const req = fakeRequest({ headers: {} }); // no Authorization at all
+    const res = fakeResponse();
+    handleReportPullList(req as never, res, { token: TOKEN, queueDir, peerIp: '1.2.3.4', allowRequest: () => false });
+    expect(res.status).toBe(429);
+  });
 });
 
 describe('handleReportPullFetch — the transport', () => {
@@ -233,6 +258,21 @@ describe('handleReportPullFetch — the transport', () => {
     expect(res.status).toBe(200);
     expect(res.rawBody?.toString('utf8')).toBe('{"a":1}');
     expect(res.headers['X-SPO-Report-Sha256']).toHaveLength(64);
+  });
+
+  it('answers 429 when the caller is over its allowance', () => {
+    const req = fakeRequest({ headers: {} });
+    const res = fakeResponse();
+    handleReportPullFetch(req as never, res, { token: TOKEN, queueDir, peerIp: '1.2.3.4', allowRequest: () => false });
+    expect(res.status).toBe(429);
+  });
+
+  it('forwards a fetchReport failure (e.g. 404 for an absent file) as JSON, not raw bytes', () => {
+    const req = fakeRequest({ headers: { authorization: `Bearer ${TOKEN}` }, url: `/api/report-pull/fetch?file=${REPORT_A}` });
+    const res = fakeResponse();
+    handleReportPullFetch(req as never, res, { token: TOKEN, queueDir, peerIp: '1.2.3.4' });
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Not found' });
   });
 });
 
@@ -249,6 +289,25 @@ describe('handleReportPullAck — the transport', () => {
     req.flush();
     expect(res.status).toBe(200);
     expect(fs.existsSync(path.join(queueDir, 'pulled', REPORT_A))).toBe(true);
+  });
+
+  it('answers 400 on a body that is not JSON', () => {
+    const req = fakeRequest({ headers: { authorization: `Bearer ${TOKEN}` }, chunks: [Buffer.from('{ broken')] });
+    const res = fakeResponse();
+    handleReportPullAck(req as never, res, { token: TOKEN, queueDir, peerIp: '1.2.3.4' });
+    req.flush();
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Invalid JSON body' });
+  });
+
+  it('answers 429 (never reads the body) when the caller is over its allowance', () => {
+    writeReport(REPORT_A);
+    const req = fakeRequest({ headers: {}, chunks: [Buffer.from(JSON.stringify({ file: REPORT_A }))] });
+    const res = fakeResponse();
+    handleReportPullAck(req as never, res, { token: TOKEN, queueDir, peerIp: '1.2.3.4', allowRequest: () => false });
+    req.flush();
+    expect(res.status).toBe(429);
+    expect(fs.existsSync(path.join(queueDir, REPORT_A))).toBe(true);
   });
 
   it('answers 404 (never reads the body) with a wrong token', () => {

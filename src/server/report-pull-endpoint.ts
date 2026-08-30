@@ -204,6 +204,20 @@ export interface ReportPullDeps {
   peerIp: string;
   now?: Date;
   retentionDays?: number;
+  /** `false` means the caller is over its allowance; the answer is 429, checked BEFORE auth
+   * (same ordering handleBugReportRequest already uses) so a rate-limited caller never even
+   * exercises the token compare. Defaults to always-allowed — server.ts is the only real
+   * caller and always supplies this; tests may omit it. */
+  allowRequest?: () => boolean;
+}
+
+function rateLimitedOr429(deps: ReportPullDeps, res: ReportPullResponse): boolean {
+  if (deps.allowRequest && !deps.allowRequest()) {
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Too many requests. Try again in a minute.' }));
+    return true;
+  }
+  return false;
 }
 
 function authOr404(req: ReportPullRequest, deps: ReportPullDeps, res: ReportPullResponse): boolean {
@@ -219,6 +233,7 @@ function authOr404(req: ReportPullRequest, deps: ReportPullDeps, res: ReportPull
 
 /** GET /api/report-pull/list */
 export function handleReportPullList(req: ReportPullRequest, res: ReportPullResponse, deps: ReportPullDeps): void {
+  if (rateLimitedOr429(deps, res)) return;
   if (!authOr404(req, deps, res)) return;
   const result = listReports(deps.queueDir);
   res.writeHead(result.status, { 'Content-Type': 'application/json' });
@@ -227,6 +242,7 @@ export function handleReportPullList(req: ReportPullRequest, res: ReportPullResp
 
 /** GET /api/report-pull/fetch?file=<name> */
 export function handleReportPullFetch(req: ReportPullRequest, res: ReportPullResponse, deps: ReportPullDeps): void {
+  if (rateLimitedOr429(deps, res)) return;
   if (!authOr404(req, deps, res)) return;
   const file = new URL(req.url ?? '', 'http://internal').searchParams.get('file');
   const result = fetchReport(deps.queueDir, file);
@@ -241,6 +257,7 @@ export function handleReportPullFetch(req: ReportPullRequest, res: ReportPullRes
 
 /** POST /api/report-pull/ack  body: {file, sha256} */
 export function handleReportPullAck(req: ReportPullRequest, res: ReportPullResponse, deps: ReportPullDeps): void {
+  if (rateLimitedOr429(deps, res)) return;
   if (!authOr404(req, deps, res)) return;
 
   const chunks: Buffer[] = [];
@@ -272,5 +289,4 @@ export function handleReportPullAck(req: ReportPullRequest, res: ReportPullRespo
   });
 }
 
-export const DEFAULT_RETENTION_DAYS_EXPORT = DEFAULT_RETENTION_DAYS;
 export { isSafeReportFilename };
