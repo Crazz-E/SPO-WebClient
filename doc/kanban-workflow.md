@@ -48,7 +48,7 @@ not touch `rdo-members.ts` skips `citation-verifier` entirely.
 
 | Field | Kind | Meaning |
 |---|---|---|
-| `Session` | text | **The ownership marker.** Empty = claimable. Format: `<branch> @ <YYYY-MM-DD>` (e.g. `claude-crazz/mail-refresh-x1 @ 2026-08-24`). All sessions push as the same GitHub account, so the assignee cannot distinguish them — this field can. |
+| `Session` | text | **The ownership marker.** Empty = claimable. Format: `<branch> @ <YYYY-MM-DD>` (e.g. `claude-crazz/mail-refresh-x1 @ 2026-08-24`). All sessions push as the same GitHub account, so the assignee cannot distinguish them — this field can. The date records the day of the first claim and is never recomputed; `board-take.sh` decides ownership by the branch part alone, so a retry of the same branch that crosses midnight keeps its claim. |
 | `Category` | single select | 🔴 Defect · 🟠 Latent trap · 🟡 Feature/Gap · ⚪ Observation · 📚 Doc/Infra — called `Category` and not `Type`, which GitHub Projects reserves |
 | `Size` | single select | S · M · L — rough estimate at creation, for scanning the pool. |
 | `Area` | single select | **The ground reservation.** Which part of the tree the card's change lands in — exactly one per card, from the partition below. No other field says what ground a task occupies, and the orchestrator skips a Todo card whose area another live task already holds. |

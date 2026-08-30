@@ -11,7 +11,9 @@
 #   0  claimed (`CLAIMED #<n>` or `CLAIMED #<n> (already held)` for an idempotent re-run)
 #   2  usage error, unknown issue, or the issue is not on the board
 #   3  the card's Session belongs to a DIFFERENT session (claim), or --release was asked on a
-#      card this branch does not hold
+#      card this branch does not hold. Ownership is decided by the BRANCH part of Session only
+#      (the part before ` @ `) — the date records the day of the first claim and is never
+#      recompared, so a retry of the same branch that crosses midnight keeps its claim.
 #   4  the write request itself failed — nothing landed, the card is untouched
 #   5  the write landed but the confirmation re-read failed — state is UNKNOWN, re-check later
 #   6  this worktree is FINISHED — `npm run finish` already ran here, so a new card belongs to
@@ -311,7 +313,7 @@ reread_session() {
 if [ "$release" -eq 1 ]; then
   reopened_release=0
 
-  if [ "$current_session" != "$session" ]; then
+  if [ "${current_session%% @ *}" != "$branch" ]; then
     # Cross-session release is allowed for exactly one case: the card is the trace of an
     # issue that got REOPENED after the owning session correctly closed it (see header
     # comment for why all three conditions are required together). Anything short of that —
@@ -374,13 +376,18 @@ if [ "$release" -eq 1 ]; then
 fi
 
 # --- normal claim path ----------------------------------------------------------------------
-if [ -n "$current_session" ] && [ "$current_session" != "$session" ]; then
+if [ -n "$current_session" ] && [ "${current_session%% @ *}" != "$branch" ]; then
   echo "LOST: held by $current_session"
   exit 3
 fi
 
 already_ours=0
-[ "$current_session" = "$session" ] && already_ours=1
+if [ -n "$current_session" ] && [ "${current_session%% @ *}" = "$branch" ]; then
+  already_ours=1
+  # Never recompute a held identity: rewrite the original claim string (original date
+  # preserved) instead of today's date, so the re-read comparison below still matches.
+  session="$current_session"
+fi
 
 mutation='mutation($projectId: ID!, $itemId: ID!, $sessionFieldId: ID!, $sessionValue: String!, $statusFieldId: ID!, $statusOptionId: String!'
 [ -n "$area_option_id" ] && mutation+=', $areaFieldId: ID!, $areaOptionId: String!'
