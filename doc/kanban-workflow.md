@@ -582,8 +582,8 @@ In descending order of what they actually save:
 1. **Spawn fewer agents.** Two questions for the same reader are one prompt. A one-liner is
    a direct tool call, never an agent (CLAUDE.md § Delegation strategy).
 2. **Grant the narrowest tool set.** An agent declared `tools: *` inherits the whole MCP
-   surface; the three agents in `.claude/agents/` declare `Read, Grep, Glob, Bash` and stay
-   that way. Prefer them, or `Explore`, over a general-purpose spawn.
+   surface; the five agents in `.claude/agents/` declare `Read, Grep, Glob, Bash` — or less,
+   `citation-verifier` needs no `Glob` — and stay that way. Prefer them, or `Explore`, over a general-purpose spawn.
 3. **Pass pointers, never bodies.** `src/server/session/push-dispatcher.ts:88` costs eight
    tokens; the function pasted around it costs four hundred, and the agent can open the file
    itself. The one exception is content that does not exist on disk — a draft card, a

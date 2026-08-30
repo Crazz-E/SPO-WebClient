@@ -82,8 +82,11 @@ compile, a wrong argument count throws, the separator cannot be hand-written.
 2. **A form the reference client demonstrably emitted wins over what the declaration suggests.**
    Explain why it works, then follow it; never silently "fix" a working call.
 
-`src/server/session/rdo-request-guards.ts` still guards what the catalogue says nothing about:
-forbidden members, session-lifecycle members, connection-bound members, buffer depth.
+What the catalogue does not describe — forbidden members, session-lifecycle members,
+connection-bound members, buffer depth — is held by the ratchet in
+`src/server/__tests__/rdo/capability-inventory.test.ts`, which derives every assertion from the
+sources at test time. The separate `rdo-request-guards.ts` module that once carried this was
+absorbed into the catalogue and `src/shared/rdo-frame.ts`.
 
 **A PR touching `rdo-members.ts` gets a second, automated reader before `change-validator`:**
 the `citation-verifier` sub-agent (`.claude/agents/citation-verifier.md`) opens every cited

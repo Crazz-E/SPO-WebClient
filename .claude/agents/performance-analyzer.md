@@ -53,10 +53,9 @@ Ask these questions:
 
 | File | Hot Path |
 |------|----------|
-| [isometric-map-renderer.ts](../../src/client/renderer/isometric-map-renderer.ts) | Main render loop, layer orchestration |
+| [isometric-map-renderer.ts](../../src/client/renderer/isometric-map-renderer.ts) | Main render loop, layer orchestration, depth sorting (screenY-based, not `i+j` — see its own note) |
 | [isometric-terrain-renderer.ts](../../src/client/renderer/isometric-terrain-renderer.ts) | Chunk rendering, visible tile calculation |
 | [chunk-cache.ts](../../src/client/renderer/chunk-cache.ts) | Chunk hit/miss rate, LRU eviction |
-| [painter-algorithm.ts](../../src/client/renderer/painter-algorithm.ts) | Sorting overhead (i+j calculation) |
 | [coordinate-mapper.ts](../../src/client/renderer/coordinate-mapper.ts) | Isometric projection math |
 
 **Profiling checklist:**
