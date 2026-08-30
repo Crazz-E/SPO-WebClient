@@ -19,8 +19,8 @@ import type {
 } from '../../shared/types';
 import { extractAllActionUrls } from '../asp-url-extractor';
 import { toErrorMessage } from '../../shared/error-utils';
-import { config } from '../../shared/config';
 import { fetchWithTimeout } from '../fetch-with-timeout';
+import { requireDaParams } from './asp-da-params';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PRIVATE — ASP money format
@@ -602,8 +602,7 @@ export async function executeBankAction(
         Password: ctx.cachedPassword || '',
         Company: ctx.currentCompany?.name || '',
         WorldName: ctx.currentWorldInfo?.name || '',
-        DAAddr: ctx.daAddr || config.rdo.directoryHost,
-        DAPort: String(ctx.daPort || config.rdo.ports.directory),
+        ...requireDaParams(ctx),
         SecurityId: '',
       });
       for (const [k, v] of extraParams) baseParams.set(k, v);

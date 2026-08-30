@@ -21,9 +21,9 @@
 import type { SessionContext } from './session-context';
 import type { NewspaperArticle, NewspaperBoard, NewspaperColumn } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
-import { config } from '../../shared/config';
 import { fetchWithTimeout } from '../fetch-with-timeout';
 import { redactUrlCredentials } from '../url-redact';
+import { requireDaParams } from './asp-da-params';
 
 // =========================================================================
 // PARSING
@@ -170,8 +170,7 @@ function boardParams(ctx: SessionContext, target: NewspaperTarget, root: string,
     Capitol: target.isCapitol ? 'YES' : '',
     x: target.isCapitol ? String(target.buildingX) : '',
     y: target.isCapitol ? String(target.buildingY) : '',
-    DAAddr: ctx.daAddr || config.rdo.directoryHost,
-    DAPort: String(ctx.daPort || config.rdo.ports.directory),
+    ...requireDaParams(ctx),
   });
 }
 

@@ -15,8 +15,8 @@ import type {
 } from '../../shared/types';
 import { extractAllActionUrls } from '../asp-url-extractor';
 import { toErrorMessage } from '../../shared/error-utils';
-import { config } from '../../shared/config';
 import { fetchWithTimeout } from '../fetch-with-timeout';
+import { requireDaParams } from './asp-da-params';
 
 // ===========================================================================
 // ACTION-PAGE OUTCOME
@@ -236,8 +236,7 @@ export async function executeAutoConnectionAction(
             Tycoon: ctx.activeUsername || ctx.cachedUsername || '',
             Password: ctx.cachedPassword || '',
             WorldName: ctx.currentWorldInfo?.name || '',
-            DAAddr: ctx.daAddr || config.rdo.directoryHost,
-            DAPort: String(ctx.daPort || config.rdo.ports.directory),
+            ...requireDaParams(ctx),
             Connect: 'YES',
             Fluid: fluidId,
             Suppliers: suppliers,
@@ -251,8 +250,7 @@ export async function executeAutoConnectionAction(
           const params = new URLSearchParams({
             TycoonId: tycoonId,
             FluidId: fluidId,
-            DAAddr: ctx.daAddr || config.rdo.directoryHost,
-            DAPort: String(ctx.daPort || config.rdo.ports.directory),
+            ...requireDaParams(ctx),
             Supplier: suppliers,
           });
           url = `${basePath}DeleteDefaultSupplier.asp?${params.toString().replace(/\+/g, '%20')}`;
@@ -263,11 +261,10 @@ export async function executeAutoConnectionAction(
           const params = new URLSearchParams({
             TycoonId: tycoonId,
             FluidId: fluidId,
-            DAAddr: ctx.daAddr || config.rdo.directoryHost,
             WorldName: ctx.currentWorldInfo?.name || '',
             Tycoon: ctx.activeUsername || ctx.cachedUsername || '',
             Password: ctx.cachedPassword || '',
-            DAPort: String(ctx.daPort || config.rdo.ports.directory),
+            ...requireDaParams(ctx),
             Hire: action === 'hireTradeCenter' ? 'YES' : 'NO',
           });
           url = `${basePath}ModifyTradeCenterStatus.asp?${params.toString().replace(/\+/g, '%20')}`;
@@ -278,11 +275,10 @@ export async function executeAutoConnectionAction(
           const params = new URLSearchParams({
             TycoonId: tycoonId,
             FluidId: fluidId,
-            DAAddr: ctx.daAddr || config.rdo.directoryHost,
             WorldName: ctx.currentWorldInfo?.name || '',
             Tycoon: ctx.activeUsername || ctx.cachedUsername || '',
             Password: ctx.cachedPassword || '',
-            DAPort: String(ctx.daPort || config.rdo.ports.directory),
+            ...requireDaParams(ctx),
             Hire: action === 'onlyWarehouses' ? 'YES' : 'NO',
           });
           url = `${basePath}ModifyWarehouseStatus.asp?${params.toString().replace(/\+/g, '%20')}`;
@@ -472,8 +468,7 @@ export async function setPolicyStatus(
         Tycoon: ctx.activeUsername || ctx.cachedUsername || '',
         TycoonId: ctx.tycoonId || '',
         Password: ctx.cachedPassword || '',
-        DAAddr: ctx.daAddr || config.rdo.directoryHost,
-        DAPort: String(ctx.daPort || config.rdo.ports.directory),
+        ...requireDaParams(ctx),
       });
       url = `http://${worldIp}/Five/0/Visual/Voyager/NewTycoon/TycoonPolicy.asp?${queryParams.toString().replace(/\+/g, '%20')}`;
       ctx.log.debug('[Policy] No cached URL, reconstructing');
@@ -607,8 +602,7 @@ export async function executeCurriculumAction(
           const params = new URLSearchParams({
             Tycoon: ctx.activeUsername || ctx.cachedUsername || '',
             WorldName: ctx.currentWorldInfo?.name || '',
-            DAAddr: ctx.daAddr || config.rdo.directoryHost,
-            DAPort: String(ctx.daPort || config.rdo.ports.directory),
+            ...requireDaParams(ctx),
             TycoonId: '',
             Password: ctx.cachedPassword || '',
           });
@@ -619,8 +613,7 @@ export async function executeCurriculumAction(
           const params = new URLSearchParams({
             Tycoon: ctx.activeUsername || ctx.cachedUsername || '',
             WorldName: ctx.currentWorldInfo?.name || '',
-            DAAddr: ctx.daAddr || config.rdo.directoryHost,
-            DAPort: String(ctx.daPort || config.rdo.ports.directory),
+            ...requireDaParams(ctx),
             TycoonId: '',
             Password: ctx.cachedPassword || '',
           });
@@ -633,8 +626,7 @@ export async function executeCurriculumAction(
             Password: ctx.cachedPassword || '',
             Value: String(value ?? true),
             WorldName: ctx.currentWorldInfo?.name || '',
-            DAAddr: ctx.daAddr || config.rdo.directoryHost,
-            DAPort: String(ctx.daPort || config.rdo.ports.directory),
+            ...requireDaParams(ctx),
             Tycoon: ctx.activeUsername || ctx.cachedUsername || '',
           });
           url = `http://${worldIp}/Five/0/Visual/Voyager/NewTycoon/rdoSetAdvanceLevel.asp?${params.toString().replace(/\+/g, '%20')}`;
@@ -646,8 +638,7 @@ export async function executeCurriculumAction(
             Password: ctx.cachedPassword || '',
             Company: ctx.currentCompany?.name || '',
             WorldName: ctx.currentWorldInfo?.name || '',
-            DAAddr: ctx.daAddr || config.rdo.directoryHost,
-            DAPort: String(ctx.daPort || config.rdo.ports.directory),
+            ...requireDaParams(ctx),
             ISAddr: worldIp,
             ISPort: '8000',
             ClientViewId: String(ctx.interfaceServerId || ''),

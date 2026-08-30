@@ -720,25 +720,22 @@ describe('ASP request building', () => {
     expect(params.get('ClientViewId')).toBe('6892548');
   });
 
-  it('falls back to the cached username and to blanks before the session is complete', () => {
+  it('refuses to build the base params before the DA lock channel is announced', () => {
     const session = newSession();
     session.setCachedUsername('SPO_test3');
 
-    const params = session.buildAspBaseParams();
-
-    expect(params.get('Tycoon')).toBe('SPO_test3');
-    expect(params.get('Password')).toBe('');
-    expect(params.get('Company')).toBe('');
-    expect(params.get('WorldName')).toBe('');
-    expect(params.get('ISAddr')).toBe('');
-    expect(params.get('ClientViewId')).toBe('0');
-    // No DA address yet → the configured directory host and its port.
-    expect(params.get('DAAddr')).toBe('www.starpeaceonline.com');
-    expect(params.get('DAPort')).toBe('1111');
+    // No DA address/port yet — there is no usable fallback, so the call refuses
+    // instead of substituting the Directory Server, which cannot serve these pages.
+    expect(() => session.buildAspBaseParams()).toThrow(
+      'ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)',
+    );
   });
 
   it('reports no tycoon at all when nothing is cached', () => {
-    expect(newSession().buildAspBaseParams().get('Tycoon')).toBe('');
+    const session = newSession();
+    session.setDaAddr('1.2.3.4');
+    session.setDaPort(7001);
+    expect(session.buildAspBaseParams().get('Tycoon')).toBe('');
   });
 
   it('refuses to build a URL before the world IP is known', () => {
@@ -750,6 +747,8 @@ describe('ASP request building', () => {
     const session = newSession();
     session.setCurrentWorldInfo(WORLD);
     session.setActiveUsername('Mayor of Kalisz');
+    session.setDaAddr('1.2.3.4');
+    session.setDaPort(7001);
 
     const url = session.buildAspUrl('NewTycoon/TycoonBankAccount.asp', { Company: 'Other Co' });
 
@@ -768,6 +767,8 @@ describe('fetchAspPage — the HTTP guard rail', () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200, statusText: 'OK', text: async () => '<html>ok</html>' });
     const session = newSession();
     session.setCurrentWorldInfo(WORLD);
+    session.setDaAddr('1.2.3.4');
+    session.setDaPort(7001);
 
     await expect(session.fetchAspPage('NewTycoon/TycoonBankAccount.asp')).resolves.toBe('<html>ok</html>');
     expect(fetchMock).toHaveBeenCalledWith(
@@ -784,6 +785,8 @@ describe('fetchAspPage — the HTTP guard rail', () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error', text: async () => 'boom' });
     const session = newSession();
     session.setCurrentWorldInfo(WORLD);
+    session.setDaAddr('1.2.3.4');
+    session.setDaPort(7001);
 
     await expect(session.fetchAspPage('NewTycoon/TycoonBankAccount.asp'))
       .rejects.toThrow('ASP request failed: 500 Internal Server Error');
@@ -793,6 +796,8 @@ describe('fetchAspPage — the HTTP guard rail', () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
     const session = newSession();
     session.setCurrentWorldInfo(WORLD);
+    session.setDaAddr('1.2.3.4');
+    session.setDaPort(7001);
 
     await session.fetchAspPage('NewTycoon/TycoonReport.asp', { Selection: 'Curriculum' });
 
@@ -861,11 +866,11 @@ describe('session state accessors', () => {
     expect(session.cachedUsername).toBeNull();
   });
 
-  it('falls back to the configured directory port until the world announces one', () => {
+  it('reports no DA port until the world announces one', () => {
     const session = newSession();
 
     expect(session.getDAAddr()).toBeNull();
-    expect(session.getDAPort()).toBe(1111);
+    expect(session.getDAPort()).toBeNull();
   });
 
   it('moves through the session phases the gateway watches', () => {

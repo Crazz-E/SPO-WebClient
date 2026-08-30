@@ -43,7 +43,6 @@ import { makeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { FakeSessionCtx, AspActionUrl } from '../__tests__/session/fake-session-context';
 import type { SessionContext } from './session-context';
 import type { WorldInfo, ProfitLossNode } from '../../shared/types';
-import { config } from '../../shared/config';
 
 const mockFetch = fetch as unknown as jest.MockedFunction<
   (url: string, init?: unknown) => Promise<Response>
@@ -1289,19 +1288,16 @@ describe('executeBankAction', () => {
       expect(q.get('LID')).toBe('1');
     });
 
-    it('falls back to cachedUsername, empty password/company/world name and the config DA', async () => {
+    it('refuses when the DA lock channel is unset, rather than falling back to the directory host/port', async () => {
       const fake = withSnapshot(makeWebCtx({
         activeUsername: null, cachedUsername: 'Cached', cachedPassword: null, currentCompany: null,
         currentWorldInfo: { ...WORLD, name: '' }, daAddr: null, daPort: null,
       }));
-      await executeBankAction(fake.ctx, 'borrow', '1');
-      const q = queryOf(0);
-      expect(q.get('Tycoon')).toBe('Cached');
-      expect(q.get('Password')).toBe('');
-      expect(q.get('Company')).toBe('');
-      expect(q.get('WorldName')).toBe('');
-      expect(q.get('DAAddr')).toBe(config.rdo.directoryHost);
-      expect(q.get('DAPort')).toBe(String(config.rdo.ports.directory));
+      const result = await executeBankAction(fake.ctx, 'borrow', '1');
+      expect(result).toEqual({
+        success: false,
+        message: 'ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)',
+      });
     });
 
     it('with no username at all sends an empty Tycoon', async () => {
