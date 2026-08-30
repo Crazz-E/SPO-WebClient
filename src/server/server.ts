@@ -28,6 +28,7 @@ import {
 } from '../shared/types';
 import { toErrorMessage } from '../shared/error-utils';
 import { wsHandlerRegistry } from './ws-handlers';
+import { sanitizeImageFilename, resolveSafeCachePath, assertPublicImageUrl } from './proxy-image';
 import { buildErrorContractReadout, buildPropertyFallbackReadout } from './session/diagnostics-readouts';
 import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '../shared/research-dat-parser';
 import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
@@ -377,38 +378,20 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
     return;
   }
 
-  // Security: block requests to private/internal IP ranges
-  try {
-    const urlObj = new URL(imageUrl);
-    const hostname = urlObj.hostname;
-    if (hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        hostname === '::1' ||
-        hostname === '[::1]' ||
-        hostname === '0.0.0.0' ||
-        hostname === '255.255.255.255' ||
-        hostname.startsWith('0.') ||
-        hostname.startsWith('10.') ||
-        hostname.startsWith('192.168.') ||
-        hostname.startsWith('169.254.') ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
-        /^fe80[:%]/i.test(hostname) ||
-        /^\[fe80[:%]/i.test(hostname) ||
-        /^fc/i.test(hostname) || /^\[fc/i.test(hostname) ||
-        /^fd/i.test(hostname) || /^\[fd/i.test(hostname)) {
-      res.writeHead(403);
-      res.end('Access to internal addresses is not allowed');
-      return;
-    }
-  } catch {
-    res.writeHead(400);
-    res.end('Invalid URL');
+  // Security: block requests to private/internal IP ranges (DNS-resolution-based)
+  if (!(await assertPublicImageUrl(imageUrl))) {
+    res.writeHead(403);
+    res.end('Access to internal addresses is not allowed');
     return;
   }
 
-  // Extract filename from URL
-  const urlParts = imageUrl.split('/');
-  const filename = urlParts[urlParts.length - 1] || 'unknown.gif';
+  // Extract and sanitize filename from URL
+  const filename = sanitizeImageFilename(imageUrl);
+  if (filename === null) {
+    res.writeHead(400);
+    res.end('Invalid image filename');
+    return;
+  }
 
   try {
     // O(1) lookup in pre-built file index (replaces readdirSync scans)
@@ -443,9 +426,11 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
           const buffer = Buffer.from(arrayBuffer);
 
           // Cache in proper directory structure (async)
-          const targetDir = path.join(CACHE_ROOT, dir);
-          await fsp.mkdir(targetDir, { recursive: true });
-          const targetPath = path.join(targetDir, filename);
+          const targetPath = resolveSafeCachePath(CACHE_ROOT, dir, filename);
+          if (targetPath === null) {
+            continue;
+          }
+          await fsp.mkdir(path.dirname(targetPath), { recursive: true });
           await fsp.writeFile(targetPath, buffer);
 
           // Update index
@@ -468,7 +453,7 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
     if (downloaded) return;
 
     // Not on update server, try game server (fallback)
-    const response = await fetch(imageUrl);
+    const response = await fetch(imageUrl, { redirect: 'error' });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -477,9 +462,11 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
     const buffer = Buffer.from(arrayBuffer);
 
     // Cache in webclient-cache (async)
-    const webclientImagePath = path.join(WEBCLIENT_CACHE_DIR, filename);
-    await fsp.writeFile(webclientImagePath, buffer);
-    imageFileIndex.set(filename.toLowerCase(), webclientImagePath);
+    const webclientImagePath = resolveSafeCachePath(WEBCLIENT_CACHE_DIR, filename);
+    if (webclientImagePath !== null) {
+      await fsp.writeFile(webclientImagePath, buffer);
+      imageFileIndex.set(filename.toLowerCase(), webclientImagePath);
+    }
     logger.debug(`Downloaded from game server: ${filename}`);
 
     res.writeHead(200, {
@@ -492,9 +479,11 @@ async function proxyImage(imageUrl: string, res: http.ServerResponse): Promise<v
 
     // Cache the placeholder to avoid repeated failed downloads
     const placeholder = getPlaceholderImage();
-    const webclientImagePath = path.join(WEBCLIENT_CACHE_DIR, filename);
-    await fsp.writeFile(webclientImagePath, placeholder).catch(() => {});
-    imageFileIndex.set(filename.toLowerCase(), webclientImagePath);
+    const webclientImagePath = resolveSafeCachePath(WEBCLIENT_CACHE_DIR, filename);
+    if (webclientImagePath !== null) {
+      await fsp.writeFile(webclientImagePath, placeholder).catch(() => {});
+      imageFileIndex.set(filename.toLowerCase(), webclientImagePath);
+    }
 
     // Return placeholder image instead of 404
     res.writeHead(200, { 'Content-Type': 'image/png' });
