@@ -165,6 +165,11 @@ describe('validateBugReport — the shapes it accepts', () => {
     };
     expect(validateBugReport(mobileReport({ geometry: geometry as never })).ok).toBe(true);
   });
+
+  it('accepts kind "suggestion" and quickPick "could-be-better" -- not a defect, never inferred', () => {
+    expect(validateBugReport(desktopReport({ kind: 'suggestion' })).ok).toBe(true);
+    expect(validateBugReport(mobileReport({ quickPicks: ['could-be-better'] })).ok).toBe(true);
+  });
 });
 
 describe('validateBugReport — the shapes it refuses', () => {

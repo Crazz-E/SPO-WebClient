@@ -35,10 +35,19 @@ const ISO_UTC_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const HEX_ONLY = /^[0-9a-f]+$/;
 
 export type BugReportProfile = 'desktop' | 'mobile';
-export type BugReportKind = 'wrong-data' | 'broken-action' | 'visual';
+/**
+ * `suggestion` is deliberately not a defect kind: "the thing I'm pointing at works, but could be
+ * better" — never inferred, always the reporter's own explicit pick (the desktop kind button,
+ * the mobile `could-be-better` quick pick). It is what lets a preference reach the board through
+ * this channel at all — see `MobileQuickPick`'s own comment and the pipeline-side
+ * `triage-bug-report.md`/`review-card.md` for what changes once a maintainer confirms one.
+ */
+export type BugReportKind = 'wrong-data' | 'broken-action' | 'visual' | 'suggestion';
 export type MobileQuickPick =
   | 'too-small' | 'covered' | 'out-of-reach'
-  | 'cut-off' | 'no-response' | 'wrong-data';
+  | 'cut-off' | 'no-response' | 'wrong-data'
+  /** "This works, but could be better" — see `BugReportKind`'s `suggestion` value. */
+  | 'could-be-better';
 
 export type JournalEntry =
   | { t: 'click'; ts: number; target: string; text?: string }
@@ -155,9 +164,9 @@ export interface BugReport {
 }
 
 const PROFILES: readonly string[] = ['desktop', 'mobile'];
-const KINDS: readonly string[] = ['wrong-data', 'broken-action', 'visual'];
+const KINDS: readonly string[] = ['wrong-data', 'broken-action', 'visual', 'suggestion'];
 const QUICK_PICKS: readonly string[] = [
-  'too-small', 'covered', 'out-of-reach', 'cut-off', 'no-response', 'wrong-data',
+  'too-small', 'covered', 'out-of-reach', 'cut-off', 'no-response', 'wrong-data', 'could-be-better',
 ];
 const CANVAS_LAYERS: readonly string[] = ['building', 'road', 'concrete', 'terrain'];
 const SURFACE_ACTIONS: readonly string[] = ['push', 'pop', 'root', 'clear'];

@@ -14,6 +14,10 @@ const KINDS: ReadonlyArray<{ value: BugReportKind; label: string }> = [
   { value: 'wrong-data', label: 'Wrong data' },
   { value: 'broken-action', label: 'Broken action' },
   { value: 'visual', label: 'Visual' },
+  // Not a defect kind: "this works, but could be better" -- the one pick that lets a
+  // preference reach the board through this channel at all. See bug-report-schema.ts's own
+  // comment on BugReportKind's `suggestion` value.
+  { value: 'suggestion', label: 'Could be better' },
 ];
 
 export interface ReportModalSubmission {
