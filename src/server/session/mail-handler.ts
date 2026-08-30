@@ -26,7 +26,7 @@ import type { RdoMemberName } from '../../shared/rdo-members';
 import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } from '../rdo-helpers';
 import { parseMessageListHtml } from '../mail-list-parser';
 import { toErrorMessage } from '../../shared/error-utils';
-import fetch from 'node-fetch';
+import { fetchWithTimeout } from '../fetch-with-timeout';
 
 // ── Fire-and-forget helper for void mail procedures ──────────────────────
 function mailFireAndForget(ctx: SessionContext, targetId: string, method: RdoMemberName, ...args: RdoValue[]): void {
@@ -401,7 +401,7 @@ export async function getMailFolder(
   ctx.log.debug(`[Mail] Fetching folder listing from ${url}`);
 
   try {
-    const response = await fetch(url, { redirect: 'follow' });
+    const response = await fetchWithTimeout(url, { redirect: 'follow' });
     if (!response.ok) {
       ctx.log.warn(`[Mail] MessageList.asp returned ${response.status}`);
       return [];

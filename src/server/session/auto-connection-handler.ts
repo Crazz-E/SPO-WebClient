@@ -16,7 +16,7 @@ import type {
 import { extractAllActionUrls } from '../asp-url-extractor';
 import { toErrorMessage } from '../../shared/error-utils';
 import { config } from '../../shared/config';
-import fetch from 'node-fetch';
+import { fetchWithTimeout } from '../fetch-with-timeout';
 
 // ===========================================================================
 // ACTION-PAGE OUTCOME
@@ -295,7 +295,7 @@ export async function executeAutoConnectionAction(
     }
 
     ctx.log.debug(`[AutoConnections] Executing ${action}: ${url}`);
-    const resp = await fetch(url, { redirect: 'follow' });
+    const resp = await fetchWithTimeout(url, { redirect: 'follow' });
     // `resp.ok` catches the missing page and the IIS fault, nothing else: a
     // refused RDO bind and a wrong password both answer 200 with a different
     // body. The body is the oracle.
@@ -488,7 +488,7 @@ export async function setPolicyStatus(
     });
 
     ctx.log.debug(`[Policy] Setting policy for ${tycoonName} to ${status}`);
-    const resp = await fetch(url, {
+    const resp = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
@@ -544,7 +544,7 @@ async function commitAbandonRole(
   }
 
   ctx.log.debug(`[Curriculum] Confirming abandonRole: ${target.url}`);
-  const commit = await fetch(target.url, { redirect: 'follow' });
+  const commit = await fetchWithTimeout(target.url, { redirect: 'follow' });
   await commit.text();
   if (!commit.ok) {
     return { success: false, message: `abandonRole failed: HTTP ${commit.status}` };
@@ -663,7 +663,7 @@ export async function executeCurriculumAction(
     }
 
     ctx.log.debug(`[Curriculum] Executing ${action}: ${url}`);
-    const resp = await fetch(url, { redirect: 'follow' });
+    const resp = await fetchWithTimeout(url, { redirect: 'follow' });
     const body = await resp.text();
     ctx.log.debug(`[Curriculum] ${action} response: ${resp.status} (${body.length} bytes)`);
     if (!resp.ok) {

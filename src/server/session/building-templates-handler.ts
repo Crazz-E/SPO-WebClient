@@ -18,7 +18,7 @@ import { TimeoutCategory } from '../../shared/timeout-categories';
 import { RdoValue } from '../../shared/rdo-types';
 import { rdoCall } from '../../shared/rdo-frame';
 import { deriveResidenceClass } from './session-utils';
-import fetch from 'node-fetch';
+import { fetchWithTimeout } from '../fetch-with-timeout';
 import { parseResultCode } from '../rdo-helpers';
 
 // ===========================================================================
@@ -39,7 +39,7 @@ import { parseResultCode } from '../rdo-helpers';
  * path that will not open all answer 200 with a different body.
  */
 async function fetchVoyagerPage(ctx: SessionContext, url: string, what: string): Promise<string | null> {
-  const response = await fetch(url, { redirect: 'follow' });
+  const response = await fetchWithTimeout(url, { redirect: 'follow' });
   if (!response.ok) {
     ctx.log.error(`[ClusterBrowse] ${what} answered HTTP ${response.status} — ${url}`);
     return null;
