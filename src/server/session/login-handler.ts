@@ -7,7 +7,7 @@
  */
 
 import * as net from 'net';
-import fetch from 'node-fetch';
+import { fetchWithTimeout } from '../fetch-with-timeout';
 import type { RdoPacket, WorldInfo, CompanyInfo } from '../../shared/types';
 import { SessionPhase, DIRECTORY_QUERY } from '../../shared/types';
 import { RdoValue } from '../../shared/rdo-types';
@@ -808,7 +808,7 @@ async function fetchCompaniesViaHttp(
   ctx.log.debug(`[HTTP] Fetching companies from ${url}`);
 
   try {
-    const response = await fetch(url, { redirect: 'follow' });
+    const response = await fetchWithTimeout(url, { redirect: 'follow' });
     const text = await response.text();
     const finalUrl = response.url;
 

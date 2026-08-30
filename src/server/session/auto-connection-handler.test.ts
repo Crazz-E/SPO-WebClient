@@ -522,7 +522,8 @@ describe('executeAutoConnectionAction', () => {
       const result = await executeAutoConnectionAction(fake.ctx, 'delete', 'PGIPlastics', '118,226,');
       expect(getCache(fake)).toHaveBeenCalledWith(AUTOCONN);
       expect(mockFetch.mock.calls[0][0].startsWith(`${IS_BASE}DeleteDefaultSupplier.asp?`)).toBe(true);
-      expect(mockFetch.mock.calls[0][1]).toEqual({ redirect: 'follow' });
+      expect(mockFetch.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'follow' }));
+      expect((mockFetch.mock.calls[0][1] as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal);
       const q = queryOf(0);
       expect(q.get('TycoonId')).toBe(FAKE_CONTEXT_IDS.tycoonId);
       expect(q.get('FluidId')).toBe('PGIPlastics');
@@ -958,12 +959,13 @@ describe('setPolicyStatus', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, init] = mockFetch.mock.calls[0];
     expect(url).toBe(cachedUrl);
-    expect(init).toEqual({
+    expect(init).toEqual(expect.objectContaining({
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ NextStatus: '2', SubTycoon: 'Alice Smith', Subject: 'Alice Smith', Status: '2' }).toString(),
       redirect: 'follow',
-    });
+    }));
+    expect((init as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal);
     expect(result).toEqual({ success: true });
     expect(fake.log.debug).toHaveBeenCalledWith('[Policy] Using cached form action URL');
   });
@@ -1155,7 +1157,8 @@ describe('executeCurriculumAction', () => {
 
       expect(getCache(fake)).toHaveBeenCalledWith(CURRICULUM);
       expect(mockFetch.mock.calls[0][0].startsWith(`${IS_BASE}rdoResetTycoon.asp?`)).toBe(true);
-      expect(mockFetch.mock.calls[0][1]).toEqual({ redirect: 'follow' });
+      expect(mockFetch.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'follow' }));
+      expect((mockFetch.mock.calls[0][1] as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal);
       const q = queryOf(0);
       expect(q.get('Tycoon')).toBe('SPO_test3');
       expect(q.get('WorldName')).toBe('Shamba');

@@ -16,6 +16,7 @@ import {
   estimateRoadCost,
   roadPathTiles,
   roadSegmentCost,
+  type RoadPathTile,
   type RoadTileFacts,
 } from '../../shared/road-cost';
 
@@ -28,12 +29,11 @@ export { ROAD_COST_PER_TILE };
 /**
  * Generate individual road segments for a path from (x1,y1) to (x2,y2)
  *
- * For horizontal/vertical paths: returns a single segment
- * For diagonal paths: returns multiple 1-tile segments in staircase pattern
- *
- * Algorithm for diagonal (staircase pattern):
- * - Alternate between horizontal and vertical 1-tile segments
- * - Prioritize the axis with more distance remaining
+ * Derives its segments from `roadPathTiles` — the same staircase path the client previews and
+ * the gateway prices — and groups its steps exactly as Voyager's `FindCircuitSegments`
+ * (`Voyager/Components/MapIsoView/Circuits.pas:154-243`) does: two 1-tile segments per
+ * alternating pass while both axes have distance left, then one segment for the whole
+ * remaining straight tail (which is also what a pure horizontal/vertical drag reduces to).
  *
  * @param x1 Start X
  * @param y1 Start Y
@@ -44,56 +44,21 @@ export { ROAD_COST_PER_TILE };
 function generateRoadSegments(
   x1: number, y1: number, x2: number, y2: number
 ): Array<{ sx: number; sy: number; ex: number; ey: number }> {
+  const tiles = roadPathTiles(x1, y1, x2, y2);
   const segments: Array<{ sx: number; sy: number; ex: number; ey: number }> = [];
+  const seg = (a: RoadPathTile, b: RoadPathTile) => ({ sx: a.x, sy: a.y, ex: b.x, ey: b.y });
 
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
-
-  // Pure horizontal segment
-  if (dy === 0 && dx !== 0) {
-    segments.push({ sx: x1, sy: y1, ex: x2, ey: y2 });
-    return segments;
+  let i = 0;
+  let rx = Math.abs(x2 - x1);
+  let ry = Math.abs(y2 - y1);
+  while (rx > 0 && ry > 0) {
+    segments.push(seg(tiles[i], tiles[i + 1]));
+    segments.push(seg(tiles[i + 1], tiles[i + 2]));
+    i += 2;
+    rx--;
+    ry--;
   }
-
-  // Pure vertical segment
-  if (dx === 0 && dy !== 0) {
-    segments.push({ sx: x1, sy: y1, ex: x2, ey: y2 });
-    return segments;
-  }
-
-  // Diagonal: create staircase pattern with 1-tile segments
-  // Direction increments
-  const stepX = dx > 0 ? 1 : -1;
-  const stepY = dy > 0 ? 1 : -1;
-
-  let currentX = x1;
-  let currentY = y1;
-  let remainingX = absDx;
-  let remainingY = absDy;
-
-  // Alternate between X and Y moves, prioritizing the axis with more remaining distance
-  while (remainingX > 0 || remainingY > 0) {
-    // Decide whether to move X or Y
-    // Prioritize the axis with more remaining steps
-    const moveX = remainingX > 0 && (remainingX >= remainingY || remainingY === 0);
-
-    if (moveX) {
-      // Horizontal 1-tile segment
-      const nextX = currentX + stepX;
-      segments.push({ sx: currentX, sy: currentY, ex: nextX, ey: currentY });
-      currentX = nextX;
-      remainingX--;
-    } else if (remainingY > 0) {
-      // Vertical 1-tile segment
-      const nextY = currentY + stepY;
-      segments.push({ sx: currentX, sy: currentY, ex: currentX, ey: nextY });
-      currentY = nextY;
-      remainingY--;
-    }
-  }
-
+  if (i < tiles.length - 1) segments.push(seg(tiles[i], tiles[tiles.length - 1]));
   return segments;
 }
 
@@ -240,7 +205,11 @@ export async function buildRoad(
           errorCode: resultCode
         };
         ctx.log.warn(`[RoadBuilding] Segment ${i + 1} failed: ${failedSegment.message}`);
-        // Continue with other segments (partial road is better than nothing)
+        // Voyager stops at the first refusal: `while (SegIdx < SegmentCount) and (ErrorCode = NOERROR)`
+        // (MapIsoHandler.pas:1099-1103). Each segment is charged independently
+        // (World.pas:4288), so sending further segments after a refusal would spend money
+        // on a road the reference client would never have built.
+        break;
       }
     }
 

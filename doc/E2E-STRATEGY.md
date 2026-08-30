@@ -52,7 +52,7 @@ This document defines how SPO-WebClient reaches and *keeps* 100% E2E coverage of
 
 **F6 — No CI for the web/gateway path.** The only workflow is the release workflow (tag-triggered). No push/PR pipeline runs tests, coverage thresholds, lint, `npm audit`, or any E2E. The coverage ratchet in `jest.config.js` is enforced only when someone runs `test:coverage` locally.
 
-**F7 — No formal security/production policy existed.** Guidance was spread across `doc/deployment-security.md` (advisory checklist, since removed as superseded) and `deploy/DEPLOY.md` (manual Step-9 verification) — with discrepancies (`.env.example` ships `LOG_LEVEL=info`, checklist says `warn`). Known open gaps: no global session cap, no startup validation of production env vars. → Resolved by creating [production-security-policy.md](production-security-policy.md).
+**F7 — No formal security/production policy existed.** Guidance was spread across `doc/deployment-security.md` (advisory checklist, since removed as superseded) and the deployment guide, since extracted to SPO-Deploy (manual Step-9 verification) — with discrepancies (`.env.example` ships `LOG_LEVEL=info`, checklist says `warn`). Known open gaps: no global session cap, no startup validation of production env vars. → Resolved by creating [production-security-policy.md](production-security-policy.md).
 
 **F8 — Procedure drift.** Four overlapping artifacts (E2E-TESTING.md, E2E-SCENARIO.md, `.claude/commands/e2e.md`, `e2e-test` skill) duplicate the same login procedure and selector tables. Each change must be made four times.
 
@@ -110,7 +110,7 @@ Jest `unit` + `component` projects, co-located `*.test.ts(x)`, per-directory thr
 - **Stack:** Jest project `compliance` that boots the built server (`dist/server/server.js`) as a child process with `NODE_ENV=production`, `TRUST_PROXY=true`, `ENABLE_HSTS=true`, `LOG_JSON=true`, `LOG_FILE=<tmp>` and a mock RDO backend, then tests it **black-box** over real HTTP/WS sockets.
 - **Checks map 1:1 to policy items** (IDs in [production-security-policy.md](production-security-policy.md)):
   - `SEC-H-1..3`: every response carries the security header set exactly **once** (catches nginx duplication regressions); CSP string matches policy; HSTS present when `ENABLE_HSTS=true`, absent otherwise.
-  - `SEC-H-4`: auth endpoints return 429 after 10 attempts/min/IP; debug-log after 2/30s; proxy-image after 60/min.
+  - `SEC-H-4`: auth endpoints return 429 after 10 attempts/min/IP; debug-log after 2/60s; proxy-image after 60/min.
   - `SEC-H-5/6`: path-traversal probes (`..`, `%2e%2e`, `\`, `%00`) on `/api/map-data`, `/cache/*`, `/cdn/*` → 4xx, never file contents; SSRF probes on `/proxy-image` (localhost, 10.x, 169.254, IPv6 fe80) → rejected.
   - `SEC-W-1..5`: WS handshake without/with bad Origin → 403; 6th connection from one IP → 429; >64KB frame → connection dropped; gameplay message pre-auth → `ERROR_AccessDenied`; unknown type → rejected.
   - `SEC-L-1/2`: send a real login attempt, then scan the NDJSON log file: password never appears, `[REDACTED]` does; no `debug`-level entries in production mode.

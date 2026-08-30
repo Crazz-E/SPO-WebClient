@@ -12,8 +12,9 @@ Browser Client --WebSocket--> Node.js Gateway --RDO/TCP--> Delphi Game Servers
 not. Treat RDO work as the highest-stakes work in the repo.
 
 **This file carries the trigger and the decision. The mechanism and the history live in
-[doc/](doc/)** — `.claude/hooks/context-router.sh` serves the right one from the prompt,
-before planning. Start from [architecture-overview.md](doc/architecture-overview.md).
+[doc/](doc/)** — start from [architecture-overview.md](doc/architecture-overview.md).
+Bug intake lands in [doc/bug-reporting.md](doc/bug-reporting.md) and is drained into
+kanban cards by `/triage-report` ([.claude/commands/triage-report.md](.claude/commands/triage-report.md)).
 
 ## Never do these
 
@@ -301,17 +302,9 @@ own. So does `out=$(npm test)`, which keeps the text and drops the number. Full 
 
 | Hook | Event | Does |
 |------|-------|------|
-| `context-router.sh` | UserPromptSubmit | Points at the relevant docs/skills before planning |
-| `typecheck-guard.sh` | PostToolUse (Edit\|Write) | Flags the tree dirty on `.ts`/`.tsx` writes — no work, ~0 ms |
-| `sanctuarize.sh` | Stop | Runs `npm run typecheck` once per turn if dirty; blocks the turn on failure |
 | `pre-push-gate.sh` | PreToolUse (Bash) | Blocks a **direct push to `main`** — nothing else. It cannot demand an attestation for HEAD: the worker gates a *pushed* sha |
 | `bench-port-guard.sh` | PreToolUse (Bash) | Blocks anything that would take the bench port (8080) or drive the live world outside the worker; names the sanctioned form |
-| `item-list-guard.sh` | PreToolUse (Bash) | Blocks `gh project item-list` (~103 GraphQL points) — names the claim read (`npm run board:claim`, ~2 points, doc/kanban-workflow.md § GitHub API discipline) |
-| `verdict-pipe-guard.sh` | PreToolUse (Bash) | Blocks piping a command whose exit code **is** the verdict (`npm test\|tail` reports tail, not Jest). Escape: `set -o pipefail` or a `PIPESTATUS` read |
-| `poll-loop-guard.sh` | PreToolUse (Bash) | Blocks the two ways a verdict gets lost while waiting: a trailing `&` on a verdict command (the shell reports the fork — always 0), and a hand-rolled wait loop (`until`/`while`/`for` + `sleep`) on a bench job or a GitHub read. Names `run_in_background`, `npm run bench:wait` or `npm run pr:wait` |
-| `driver-scope-guard.sh` | PreToolUse (Bash\|Edit\|Write\|NotebookEdit) | Refuses the **driver of a claimed card** writing to a tracked file itself — `Edit`/`Write`, and the Bash verbs that reach the tree without them (`sed -i`, `>`, `rm`, `chmod`, `git rm`, `npm run format`). Armed by a verified `board:take`, inert otherwise; the execution sub-agent passes (`agent_id`) |
-| `uncovered-command-guard.sh` | PreToolUse (Bash) | The LLM fallback layer, two modes (`SPO_HOOK_LLM_MODE`). **`async` (current default, the learning phase):** fires one tool-less, budget-capped Haiku call **detached** and returns in ~150ms — the command runs unexamined, nothing is denied, and the verdict lands under `~/.spo-bench/hook-llm/` 40–75s later to feed `hook:harvest`. **`sync`:** blocks on that call and denies with the corrected form. Never allows, never asks the human, in either mode. Doc: [doc/hook-llm-layer.md](doc/hook-llm-layer.md) |
-| `session-heartbeat.sh` | *sourced by the others* | Stamps `~/.spo-bench/sessions/<key>.alive` so `finish` never reaps a worktree a session is working in |
+| `main-commit-guard.sh` | PreToolUse (Bash) | Refuses `git add` / `git commit` when the repository the command resolves to is standing on `main` — the drift where an absolute path or a persisted `cd` lands a session's work on the main checkout instead of its worktree. `pre-push-gate.sh` and the ruleset stop the push; this stops the commit itself |
 
 `npm test` and `npm run build` stay manual — run them before declaring a session complete.
 

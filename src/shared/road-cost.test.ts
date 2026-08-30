@@ -40,7 +40,7 @@ describe('roadPathTiles', () => {
     ]);
   });
 
-  it('walks a staircase, stepping the axis with more left to go', () => {
+  it('walks Voyager\'s staircase — |dx| <= |dy| steps X then Y each pass (Circuits.pas:266-287)', () => {
     expect(roadPathTiles(0, 0, 2, 2)).toEqual([
       { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 },
     ]);
@@ -48,8 +48,25 @@ describe('roadPathTiles', () => {
 
   it('walks backwards just as well', () => {
     expect(roadPathTiles(2, 2, 0, 1)).toEqual([
-      { x: 2, y: 2 }, { x: 1, y: 2 }, { x: 0, y: 2 }, { x: 0, y: 1 },
+      { x: 2, y: 2 }, { x: 2, y: 1 }, { x: 1, y: 1 }, { x: 0, y: 1 },
     ]);
+  });
+
+  it('paves X, then Y, then straight down Y for a lopsided |dx| <= |dy| drag (Circuits.pas:266-287)', () => {
+    expect(roadPathTiles(0, 0, 1, 3)).toEqual([
+      { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 1, y: 3 },
+    ]);
+  });
+
+  it('paves Y, then X, then straight along X for a lopsided |dx| > |dy| drag (Circuits.pas:289-310)', () => {
+    expect(roadPathTiles(0, 0, 3, 1)).toEqual([
+      { x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 3, y: 1 },
+    ]);
+  });
+
+  it('throws on a non-integer coordinate rather than looping forever', () => {
+    expect(() => roadPathTiles(0, 0, Number.NaN, 0)).toThrow();
+    expect(() => roadPathTiles(0, 0, 1.5, 0)).toThrow();
   });
 
   it('prices one more tile than the drag has steps', () => {

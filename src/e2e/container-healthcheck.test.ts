@@ -4,8 +4,8 @@
  * Why it exists: the previous probe asked `/api/startup-status` for a status code, and
  * that endpoint is a Server-Sent Events stream whose `200` header is written before
  * initialisation finishes (`server.ts`). A gateway that was listening but hung therefore
- * reported healthy forever, and the deploy health gate delegated its own failure handling
- * to exactly that signal (policy SEC-R-3).
+ * reported healthy forever, and the deploy health gate — now in SPO-Deploy's `deploy.sh` —
+ * delegates its own failure handling to exactly that signal (policy SEC-R-3).
  *
  * The suite runs the probe *as the image runs it* — the snippet is read out of the
  * Dockerfile rather than restated here, so an edit to the image that breaks the probe

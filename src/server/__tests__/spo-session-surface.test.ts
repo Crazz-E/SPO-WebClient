@@ -770,7 +770,10 @@ describe('fetchAspPage — the HTTP guard rail', () => {
     session.setCurrentWorldInfo(WORLD);
 
     await expect(session.fetchAspPage('NewTycoon/TycoonBankAccount.asp')).resolves.toBe('<html>ok</html>');
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('TycoonBankAccount.asp'), { redirect: 'follow' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('TycoonBankAccount.asp'),
+      expect.objectContaining({ redirect: 'follow', signal: expect.any(AbortSignal) }),
+    );
   });
 
   it('throws on a non-2xx instead of parsing the error page as data', async () => {

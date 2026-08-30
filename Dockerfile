@@ -56,8 +56,8 @@ EXPOSE 8080
 # that is listening but hung. This consumes the stream instead and succeeds only on a
 # `ready` event; a hung start produces no such event and the probe fails.
 # start-period covers the 120 s the deploy health gate allows (policy SEC-R-3): a slow
-# start is never marked unhealthy, a hung one never turns healthy. deploy/deploy.sh reads
-# this status and rolls the deployment back when it never becomes `healthy`.
+# start is never marked unhealthy, a hung one never turns healthy. The deploy script in
+# SPO-Deploy reads this status and rolls the deployment back when it never becomes `healthy`.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=120s --retries=3 \
     CMD node -e 'const http=require("http");const t=setTimeout(()=>process.exit(1),4000);const r=http.get("http://localhost:8080/api/startup-status",s=>{if(s.statusCode!==200)process.exit(1);let b="";s.setEncoding("utf8");s.on("data",c=>{b+=c;if(b.includes(`"phase":"ready"`)){clearTimeout(t);process.exit(0)}});s.on("end",()=>process.exit(1))});r.on("error",()=>process.exit(1))'
 

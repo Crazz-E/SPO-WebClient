@@ -52,7 +52,7 @@ Browser Client ──WebSocket──> Node.js Gateway ──RDO/TCP──> Game 
 - **Mock server** — L1 protocol substrate (`src/mock-server/`): an RDO mock, a strict wire validator and per-feature scenarios, used for protocol-conformance tests. Not a mock backend for end-to-end runs — those go live against the real servers (`src/e2e/`)
 - **Service registry** — Managed service lifecycle with dependency ordering, health checks, and graceful shutdown
 - **In-app changelog** — Version badge with changelog modal for tracking updates
-- **Docker deployment** — Production-ready containerization with nginx reverse proxy and HTTPS via Let's Encrypt
+- **Docker-ready** — Dockerfile and docker-compose.yml build a production-ready container; the deploy procedure itself lives in [SPO-Deploy](https://github.com/Crazz-Org/SPO-Deploy)
 - **Auto-reconnect** — Seamless session recovery on mobile tab switch without re-login
 
 ## Getting Started
@@ -75,28 +75,12 @@ Pass `PORT=<n>` to pick one yourself.
 
 ## Production Deployment
 
-Quick deploy with Docker + nginx + HTTPS on a VPS:
-
-```bash
-git clone <repo> /opt/spo-webclient && cd /opt/spo-webclient
-cp deploy/.env.example .env && chmod 600 .env
-docker compose build && docker compose up -d
-# Copy nginx config, obtain TLS cert, reload nginx
-sudo cp deploy/nginx/spo-webclient.conf /etc/nginx/sites-available/spo-webclient
-sudo ln -sf /etc/nginx/sites-available/spo-webclient /etc/nginx/sites-enabled/
-sudo certbot certonly --webroot -w /var/www/certbot -d spo.yourdomain.com
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-| Component | Config location |
-|-----------|----------------|
-| App env vars | `.env` (root, chmod 600) |
-| Docker | `docker-compose.yml` + `Dockerfile` |
-| Nginx | `deploy/nginx/spo-webclient.conf` |
-| TLS | Let's Encrypt via certbot |
-| Env template | `deploy/.env.example` |
-
-For the **full step-by-step guide** (VPS setup, firewall, SSH hardening, fail2ban, Docker install, DNS, TLS, security checklist, verification, troubleshooting): **[deploy/DEPLOY.md](deploy/DEPLOY.md)**
+[SPO-Deploy](https://github.com/Crazz-Org/SPO-Deploy) owns the deploy procedure, script,
+nginx config and env template, and deploys from this repo's tagged Releases. This repo
+only produces the build artifact (`Dockerfile`, `docker-compose.yml`) and the Releases
+(`release.yml`). See SPO-Deploy's `DEPLOY.md` for the full step-by-step guide (VPS setup,
+firewall, SSH hardening, fail2ban, Docker install, DNS, TLS, security checklist,
+verification, troubleshooting).
 
 ### Commands
 
@@ -419,7 +403,7 @@ Detailed technical docs live in the [doc/](doc/) directory:
 - [Kanban board](https://github.com/orgs/Crazz-Org/projects/1) — All open work, tracked as issues
 - [Kanban workflow](doc/kanban-workflow.md) — Columns, ownership rules, session lifecycle
 - [Production Security Policy](doc/production-security-policy.md) — Normative SEC-* requirements and recorded exceptions
-- [Deployment Guide](deploy/DEPLOY.md) — VPS deployment procedure
+- [Deployment Guide](https://github.com/Crazz-Org/SPO-Deploy) — VPS deployment procedure (SPO-Deploy repo)
 
 ## License
 
