@@ -131,7 +131,7 @@ describe('the rulebook carries the blocking order', () => {
     const tail = rulebook.slice(recipes);
     expect(tail).toMatch(/issueDependenciesSummary \{ blockedBy \}/);
     expect(tail).toMatch(/npm run board:block --/);
-    // The script resolves node ids from issue numbers, so the driver never has to.
+    // The script resolves node ids from issue numbers, so the caller never has to.
     expect(collapse(tail)).toMatch(/scripts\/board-block\.sh/);
   });
 });

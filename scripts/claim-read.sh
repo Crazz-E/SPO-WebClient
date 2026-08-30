@@ -5,7 +5,7 @@
 # `walk:` block replays § 1.2 over every Todo card in board order and names the one it would
 # take (`candidates: 1`, or `candidates: none`). `busy areas:`, the blocked set and the item
 # lines are still printed — the walk is derived from them, so they stay here to show the work
-# and to feed `$ARGUMENTS` lookups and ownership statements — but a driver reads `walk:` /
+# and to feed `$ARGUMENTS` lookups and ownership statements — but the caller reads `walk:` /
 # `candidates:` and stops there.
 #
 # One query, paginated by `gh --paginate` and costing ~2 GraphQL points PER PAGE (4 on
@@ -21,7 +21,7 @@
 # Merging and Parked — the open, non-Todo columns, i.e. "who holds ground right now". Todo cards are already carried by
 # the `walk:` block with their rank, area and title, so an `item` line for them would be a
 # duplicate; and now that `board:take` resolves an item id from the issue number itself,
-# the driver never needs an item id for a Todo card either. Done cards own no ground and
+# the caller never needs an item id for a Todo card either. Done cards own no ground and
 # are never a candidate. `$cards` itself stays the FULL fetched set (Done included) so
 # `items: N/M` still proves the read was complete; `hidden: N (Done d, Todo t — …)`
 # immediately below it accounts for everything now missing from the `item` lines.
@@ -32,8 +32,8 @@
 # lines so the rule stays executable; `$cards` is bound once and both outputs read it. A busy
 # card only counts while its ground reservation is LIVE: `scripts/heartbeat-scan.sh` (local
 # disk, no API call) answers that for any branch with a heartbeat file; a busy-status card
-# whose branch has none falls back to that branch's last commit date on `origin` (next-
-# task.md's rule), fetched with ONE batched GraphQL call — issued only when that branch set is
+# whose branch has none falls back to that branch's last commit date on `origin`, fetched with
+# ONE batched GraphQL call — issued only when that branch set is
 # non-empty, so the common case (every busy branch has a heartbeat) costs nothing extra. If
 # that call fails for any reason the affected branches are treated as EXPIRED (free) and a
 # `note:` line says so — the read degrades to "more candidates", never hangs.

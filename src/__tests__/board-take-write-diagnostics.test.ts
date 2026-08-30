@@ -126,7 +126,7 @@ function readFixture(currentSession: string): string {
                 name: 'Status',
                 options: [
                   { id: 'OPT_todo', name: 'Todo' },
-                  { id: 'OPT_inprogress', name: 'In progress' },
+                  { id: 'OPT_planning', name: 'Planning' },
                 ],
               },
             ],

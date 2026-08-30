@@ -391,14 +391,15 @@ Slash **commands** live in `.claude/commands/`: `/gate`, `/commit-push`,
 - **Direct tools** for anything targeted — never spawn an agent for a one-liner
 - **Never delegate understanding.** Do not write "based on your findings, fix the bug."
   Synthesise the agent's results yourself, then act.
-- **Model routing — the driver is the expensive part.** The main loop re-reads its whole
-  context every turn, so drive on the cheapest model the step needs and escalate by
-  delegating, never the reverse. Haiku 4.5 for scripted steps (board reads and writes, gate
-  wait, PR/merge/`finish`); Fable 5 for planning and diagnosis; Sonnet 5 for ordinary
-  execution; **Opus 5 only where being wrong is not caught by a test** — the RDO wire, an
-  `L`-sized card, an unreproduced defect. Effort follows the card's `Size` (S low · M medium ·
-  L high). Step table: [kanban-workflow.md § Model routing](doc/kanban-workflow.md). A session
-  that cannot switch its own model applies the routing to its sub-agents.
+- **Model routing — most steps are not execution.** Run each step on the cheapest model it
+  needs and escalate by isolating the hard step, never by raising the floor for all of them.
+  Fable 5 for planning and diagnosis; Sonnet 5 for ordinary execution; **Opus 5 only where
+  being wrong is not caught by a test** — the RDO wire, an `L`-sized card, an unreproduced
+  defect. Effort follows the card's `Size` (S low · M medium · L high). The **per-step** table
+  is not prose anywhere: it is executable config in SPO-Pipeline
+  `orchestrator/step-contracts.js` (`doc/state-machine-spec.md` § Step contracts). What stays
+  in [kanban-workflow.md § Model routing](doc/kanban-workflow.md) is the escalation policy
+  only. A session that cannot switch its own model applies the routing to its sub-agents.
 
 ## MCP
 

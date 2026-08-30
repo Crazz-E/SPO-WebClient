@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # npm run board:move -- <issue> <column>
 #
-# Moves ONE board card's Status to <column>, so the driver never composes a
+# Moves ONE board card's Status to <column>, so the caller never composes a
 # `gh project item-edit` and never resolves an item id or a Status option id itself. It takes
 # the ISSUE NUMBER and the column NAME (case-insensitive, space-tolerant — "in progress",
 # "InProgress" and "In Progress" all resolve to the same option), resolved against the
 # Status field's own options rather than a hardcoded id. It writes, then re-reads the same
-# item and confirms the column actually landed before ever printing MOVED. The driver reads
+# item and confirms the column actually landed before ever printing MOVED. The caller reads
 # exactly ONE printed line and branches on the exit code, nothing else:
 #
 #   0  moved — column confirmed by re-read (`MOVED #<n> -> <column>`)

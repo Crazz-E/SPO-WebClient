@@ -8,7 +8,7 @@
  * too tight and the failure #124 describes stays invisible. The tests below fix both edges:
  * a working column is required, a `Session` is required, and the quiet clock is the card's
  * own `updatedAt` — never the absence of a branch or a PR, which is the ordinary state of a
- * card in In progress.
+ * card in Implementing.
  *
  * The **once-per-owner rule** is what keeps the job from becoming a daily alarm on a card the
  * human has decided to leave alone. It keys on the `Session` text rather than a timestamp
@@ -80,7 +80,7 @@ function card(over: Partial<Item> = {}): Item {
     title: 'Nothing detects an orphan card',
     url: 'https://github.com/Crazz-Org/SPO-WebClient/issues/124',
     state: 'OPEN',
-    status: 'In progress',
+    status: 'Implementing',
     session: SESSION,
     updatedAt: hoursAgo(30),
     ...over,
@@ -185,7 +185,7 @@ describe('isSuspect', () => {
     expect(watch.isSuspect(card({ status }), NOW, 24)).toBe(true);
   });
 
-  it.each(['Todo', 'Done', 'Needs triage', ''])('never watches %s', status => {
+  it.each(['Todo', 'Done', 'Parked', 'Intake', ''])('never watches %s', status => {
     expect(watch.isSuspect(card({ status }), NOW, 24)).toBe(false);
   });
 
@@ -213,7 +213,7 @@ describe('selectOrphans', () => {
     const items = [
       card({ number: 1, updatedAt: hoursAgo(26) }),
       card({ number: 2, status: 'Todo', session: '' }),
-      card({ number: 3, updatedAt: hoursAgo(90), status: 'PR' }),
+      card({ number: 3, updatedAt: hoursAgo(90), status: 'Merging' }),
       card({ number: 4, updatedAt: hoursAgo(2) }),
     ];
     const orphans = watch.selectOrphans(items, { now: NOW, staleHours: 24 });
@@ -295,7 +295,7 @@ describe('renderReminder', () => {
   });
 
   it('carries the column, the owner and the branch evidence', () => {
-    expect(body).toContain('column: **In progress**');
+    expect(body).toContain('column: **Implementing**');
     expect(body).toContain(SESSION);
     expect(body).toContain('branch gone from origin · no PR');
   });
@@ -414,7 +414,7 @@ describe('main', () => {
       updatedAt: new Date(Date.now() - 40 * 3_600_000).toISOString(),
       fieldValues: {
         nodes: [
-          { name: 'In progress', field: { name: 'Status' } },
+          { name: 'Implementing', field: { name: 'Status' } },
           { text: 'claude-crazz/dead @ 2026-08-20', field: { name: 'Session' } },
         ],
       },

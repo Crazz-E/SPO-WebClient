@@ -179,13 +179,17 @@ board:claim`), which is the executable half of this rule. The full algorithm —
 do when the area determined *after* claiming turns out to be busy, and what to do when no card is
 claimable — lives in the orchestrator's INTAKE step (SPO-Pipeline `orchestrator/README.md`).
 
-**The reservation expires on session inactivity — the card's ownership never does.** A task
-here can legitimately run for **several hours**, and board writes happen at state transitions
-only, so a busy session goes hours without touching its card. The reservation is keyed to
-factual activity instead: the liveness signal is the **session heartbeat**
-([.claude/hooks/session-heartbeat.sh](../.claude/hooks/session-heartbeat.sh)), which every hook
-stamps — a prompt, an edit, a Bash call, the end of a turn — so it moves continuously while a
-session works, whatever the task's length.
+**The reservation expires on inactivity — the card's ownership never does.** A task here can
+legitimately run for **several hours**, and board writes happen at state transitions only, so a
+busy task goes hours without touching its card. The reservation is keyed to factual activity
+instead.
+
+⚠ **The heartbeat store currently has no writer.** `~/.spo-bench/sessions/*.alive` was stamped
+by `.claude/hooks/session-heartbeat.sh`, retired with the pilot hook layer in #425.
+[scripts/claim-read.sh](../scripts/claim-read.sh) still *reads* it and therefore always takes
+its documented fallback: a busy-status branch with no heartbeat is aged by **that branch's last
+commit date on `origin`**. That fallback is the live behaviour — the heartbeat path below is
+kept because the reader is still there and a writer may return, not because it runs today.
 
 Joining a card to a heartbeat takes four steps, because `Session` holds a **branch** while the
 heartbeat store is keyed by **worktree path**. Do not guess the mapping from the names:
@@ -308,7 +312,7 @@ board's behaviour proves it points at the right column. Project → ⋯ → Work
 |---|---|---|
 | **Auto-add to project** | repository **picker** → `Crazz-Org/SPO-WebClient`; filter box → `is:issue is:open` | **The feeding rule rests on this one.** Without it a new issue belongs to no board, so a finding filed by a session is invisible |
 | **Item added to project** | trigger `issue, pull request`; set `Status` = **Todo** | Auto-add only *adds*. Without this a new card arrives with no status — on the board and outside the pool at the same time, since the claim read selects on `Status = Todo` |
-| **Pull request linked to issue** | set `Status` = **PR** | The column the ownership law defines as "pull request open", reached from the `Closes #N` the PR body already carries |
+| **Pull request linked to issue** | set `Status` = **Merging** | The column the ownership law defines as "pull request open", reached from the `Closes #N` the PR body already carries. Currently **OFF** — the orchestrator writes the column itself |
 | **Item reopened** | trigger `issue, pull request`; set `Status` = **Parked** | Without it, reopening a closed issue leaves its card in Done, where it misrepresents the work. **Not Todo:** `Session` still holds the old owner and Parked is the human's column — though `board:take --release` (#299) can now clear that stale claim itself, since a reopened issue's `stateReason` is the one thing a failure trace can never forge |
 | **Item closed** | trigger `issue, pull request`; set `Status` = **Done** | The Done cards with an empty `Session` are the trace of this firing on its own |
 | **Auto-close issue** | trigger *when the status is updated* → `Status: Done` | Closes the issue when a session moves the card |
@@ -317,18 +321,17 @@ board's behaviour proves it points at the right column. Project → ⋯ → Work
 **Every `Set value` step needs its value, and the value is not optional** — a workflow whose
 value is unset shows a red **!** in the sidebar and its *Save and turn on workflow* button
 stays greyed. Expect all of them to arrive that way on a freshly rebuilt board: rebuilding
-`Status` with these seven columns regenerates the option ids, so whatever GitHub pre-filled
+`Status` with these columns regenerates the option ids, so whatever GitHub pre-filled
 against its own `Todo` / `In Progress` / `Done` defaults is left pointing at options that no
 longer exist.
 
-⚠ **`Validation` must be appended to the `Status` field in the UI, never added by rebuilding
-the field.** Rebuilding regenerates every option id, including the six that already exist,
-which would leave all four `Set value` workflows above pointing at options that no longer
-exist.
+⚠ **A new column must be appended to the `Status` field in the UI, never added by rebuilding
+the field.** Rebuilding regenerates every option id, including those that already exist, which
+would leave all four `Set value` workflows above pointing at options that no longer exist.
 
 **`board:move` needs no change** — `board-move.sh` resolves a column by name against the
 `Status` field's own options, so it works the moment the option exists. Say so; do not edit
-`scripts/board-move.sh`. Adding the one new option in the UI leaves the existing seven ids untouched.
+`scripts/board-move.sh`. Adding a new option in the UI leaves the existing ids untouched.
 
 **Off, and staying off.** Three of the four are **pull-request workflows on an issue-only
 board** — GitHub's wording for the merge one is *"when pull requests in your project are
@@ -368,7 +371,7 @@ card that reaches Todo without them is on the board but outside the pool the cla
 — `Area` above all, since a card carrying none reserves no ground — which is how one was
 nearly lost when the repository moved and the old board's filter stopped matching.
 
-## What a session writes on the board — and only this
+## What is written on the board — and only this
 
 Board writes happen at **state transitions only** — no running log, no progress notes.
 Every write is very short.
@@ -376,9 +379,9 @@ Every write is very short.
 | Moment | Writes |
 |---|---|
 | Claim | `Session` field + Status → Planning |
-| PR opened, gate deposited | Status → Gate (the PR link appears on the card automatically via `Closes #N`, and `Pull request linked to issue` is configured to set the column from the same link — so Status jumps to PR the instant the PR opens, before the gate has even run; the owner writes Status → Gate right after, correcting that automatic jump rather than fighting it: the workflow has not yet been *observed* firing, and the owner's write is what the law relies on) |
+| PR opened, gate deposited | Status → Gate (the PR link appears on the card automatically via `Closes #N`; if `Pull request linked to issue` is enabled it also sets the column from that link, and the owner's Status → Gate write right after corrects the automatic jump rather than fighting it — the owner's write is what the law relies on) |
 | Gate PASS | Status → Validation |
-| `change-validator` PASS / PASS WITH FINDINGS | Status → PR |
+| `change-validator` PASS / PASS WITH FINDINGS | Status → Merging |
 | Merged + finished | Status → Done + **one final comment, 2–4 lines**: what changed, PR number, anything the human should know |
 | Parked | Status → Parked + the legible reason comment |
 | Gate attempt failed | Nothing on the board (Status stays Gate or returns to Implementing); the detail lives in the PR/commits |
@@ -433,9 +436,9 @@ one-off at a terminal; it is the loop and the fan-out that killed the board.)
    the 30 s floor (refused below it, never clamped), both bounds, and an exit code for the
    answer (0 merged · 1 closed unmerged · 4 still open). Four hand-rolled
    `until … do sleep 5 … done` loops were proposed here on 2026-08-25, three of them polling
-   at 5 s; `.claude/hooks/poll-loop-guard.sh` now refuses the shape and names the alias, and
-   `npm run bench:wait -- <job-id>` is its counterpart for a bench job whose wait was
-   interrupted. A tight retry
+   at 5 s. `npm run bench:wait -- <job-id>` is the counterpart for a bench job whose wait was
+   interrupted. (A `poll-loop-guard.sh` hook used to refuse that shape mechanically; it was
+   retired with the pilot hook layer in #425, so this is now a rule, not an enforcement.) A tight retry
    loop on any GitHub error is never correct: on failure, read the bucket's `reset` from
    `gh api rate_limit` (free) and wait once, in the background, until then. The same rule
    [doc/E2E-POLICY.md](E2E-POLICY.md) states for live evidence holds for a watch loop too —
@@ -600,30 +603,15 @@ In descending order of what they actually save:
 
 ## Model routing
 
-**The driver is the expensive part.** A session's main loop re-reads its whole context on
-every turn, so the model it *runs on* costs far more than the models its sub-agents run on.
-Routing only the two glamorous steps (plan, implement) and leaving everything else on
-whatever the session started with is how a board of S-sized cards ends up billed as Opus:
-picking a card, waiting on the gate, writing the PR body, moving the column and running
-`finish` are the majority of a session's turns and none of them is execution.
+**Most of a task is not execution.** Picking a card, waiting on the gate, writing the PR body
+and moving the column are the bulk of the steps, and none of them is judgement. Pricing them
+all at the rate of the hardest step is how a board of S-sized cards ends up billed as Opus.
 
-So the rule is inverted from the obvious one: **drive on the cheapest model the step needs,
-and escalate a step by delegating it to a sub-agent**, never the other way round.
-
-A *decision* delegates in one round trip; a *phase* does not. An implementation phase becomes
-one spawn per attempt with a driver-held ledger, and the gate stays with the driver because
-only the depositing worktree can reach it.
-
-**And that boundary is now enforced, not asked.** "The driver never edits a tracked file
-itself" was prose the driver put to itself, which is the weakest enforcement there is: the
-model that has already drifted is the one being asked whether it is drifting. On 2026-08-26 a
-Haiku driver rewrote a whole script with a card and a criterion in hand, neither of which told
-it to stop. `.claude/hooks/driver-scope-guard.sh` now refuses the driver's own writes —
-`Edit`/`Write`, and the Bash verbs that reach the tree without them — arming on a verified
-`board:take` claim and releasing on every path that closes ownership. It tells the driver from
-its own sub-agent by the `agent_id` the PreToolUse payload carries only inside a Task worker,
-so the delegate writes unblocked. A guardrail, not a sandbox: what it buys is that drift now
-has to be deliberate instead of merely easy.
+So the rule is inverted from the obvious one: **run each step on the cheapest model that step
+needs, and escalate by isolating the hard step**, never by raising the floor for all of them.
+The orchestrator applies this per step rather than per session, which is why the routing is
+configuration and not prose — a `claude -p` call is pinned to its own model, effort and tool
+set.
 
 ### The steps of a task, and what each one is worth
 

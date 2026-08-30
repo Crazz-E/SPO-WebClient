@@ -291,11 +291,14 @@ describe('the reservation expires, the ownership does not', () => {
     return rulebook.slice(start, end);
   };
 
-  it('keys liveness to the session heartbeat, not to a board write', () => {
+  it('keys liveness to factual activity, and admits the heartbeat has no writer', () => {
     const text = collapse(section());
-    expect(text).toMatch(/\*\*session heartbeat\*\*/);
-    expect(text).toMatch(/\.claude\/hooks\/session-heartbeat\.sh/);
     expect(text).toMatch(/board writes happen at state transitions only/);
+    // The heartbeat writer was retired with the pilot hooks (#425), so the rulebook must say
+    // the store has none and name the fallback that is actually live — otherwise a reader
+    // plans against a signal nothing produces.
+    expect(text).toMatch(/The heartbeat store currently has no writer/);
+    expect(text).toMatch(/last commit date on `origin`/);
   });
 
   it('names the four steps that join a branch to a worktree heartbeat', () => {

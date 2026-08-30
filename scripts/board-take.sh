@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # npm run board:take -- <issue> [--area <area>] [--release]
 #
-# Claims (or releases) ONE board card for the CURRENT branch, so the driver never composes a
+# Claims (or releases) ONE board card for the CURRENT branch, so the caller never composes a
 # `gh project item-edit` and never resolves or compares a project id, item id, field id,
 # option id or Session string itself. It takes the ISSUE NUMBER only — never an item id — and
 # resolves everything it needs in one read, then writes Session + Status (+ Area) as aliased
 # mutations in ONE GraphQL request, then re-reads the same item and compares identity itself.
-# The driver reads exactly ONE printed line and branches on the exit code, nothing else:
+# The caller reads exactly ONE printed line and branches on the exit code, nothing else:
 #
 #   0  claimed (`CLAIMED #<n>` or `CLAIMED #<n> (already held)` for an idempotent re-run)
 #   2  usage error, unknown issue, or the issue is not on the board
@@ -157,7 +157,7 @@ body_of() {
 # "RATE_LIMITED: write failed, card untouched" and exit 4 — the `gh` call itself failing (auth,
 # network, an actual secondary rate limit), and a GraphQL response that came back 200 with a
 # top-level `.errors` array, both threw away the one thing that would have said WHY. Exit codes
-# are the driver's contract and do not change (see header); only what gets printed does.
+# are the caller's contract and do not change (see header); only what gets printed does.
 
 looks_like_rate_limit() {
   # $1 = text to inspect (gh's own stderr, or GraphQL error message text)

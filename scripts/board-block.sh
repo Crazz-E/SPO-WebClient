@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # npm run board:block -- <blocked-issue> <blocker-issue>
 #
-# Records ONE blocking order between two issues, so the driver never composes the two-step
+# Records ONE blocking order between two issues, so the caller never composes the two-step
 # `gh api graphql` recipe by hand (doc/kanban-workflow.md § gh CLI recipes, lines 738-743) and
 # never resolves a node id itself. <blocked-issue> is the card that cannot start yet;
 # <blocker-issue> is the card it waits on — GitHub's `addBlockedBy` takes `issueId` (the
 # waiter) and `blockingIssueId` (the one it waits on), node ids, not issue numbers. This script
-# resolves both numbers to node ids in ONE query, then calls the mutation. The driver reads
+# resolves both numbers to node ids in ONE query, then calls the mutation. The caller reads
 # exactly ONE printed line and branches on the exit code, nothing else:
 #
 #   0  recorded (`BLOCKED #<blocked> by #<blocker>`)

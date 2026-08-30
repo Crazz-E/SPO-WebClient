@@ -1,7 +1,7 @@
 /**
  * scripts/run-verdict.sh (card #337, `npm run verdict`).
  *
- * A thin, script-agnostic wrapper the driver or a CI step can run instead of a bare
+ * A thin, script-agnostic wrapper a session or a CI step can run instead of a bare
  * `npm run <alias>`: it captures the full output to a log file OUTSIDE the worktree (so a
  * gate's dirty-tree check never sees it), tails a short excerpt to stdout, and — the property
  * that makes it usable by anything that branches on `$?` — the process exit code IS the

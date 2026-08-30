@@ -114,7 +114,7 @@ describe('change-validator agent', () => {
 
     it('makes PASS WITH FINDINGS non-blocking', () => {
       const text = collapse(agent);
-      expect(text).toMatch(/PASS WITH FINDINGS.{0,80}The driver still proceeds/);
+      expect(text).toMatch(/PASS WITH FINDINGS.{0,80}The orchestrator still proceeds/);
     });
   });
 
@@ -125,7 +125,7 @@ describe('change-validator agent', () => {
 
     it('routes findings to card-reviewer exactly as every other draft', () => {
       expect(collapse(agent)).toMatch(
-        /the driver routes it to `card-reviewer` exactly as every other draft is/
+        /the orchestrator routes it to `card-reviewer` exactly as every other draft is/
       );
     });
 
@@ -168,8 +168,8 @@ describe('change-validator agent', () => {
       }
     });
 
-    it('states that the driver, not the validator, routes the verdict onward', () => {
-      expect(collapse(agent)).toMatch(/You return text; the driver routes it to `card-reviewer`/);
+    it('states that the orchestrator, not the validator, routes the verdict onward', () => {
+      expect(collapse(agent)).toMatch(/You return text; the orchestrator routes it to `card-reviewer`/);
     });
   });
 });
@@ -211,7 +211,7 @@ describe('the mechanism is named on all four surfaces', () => {
 
   it('carries the UI-only warning for the new Status option', () => {
     const text = collapse(rulebook);
-    expect(text).toMatch(/`Validation` must be appended to the `Status` field in the UI/);
+    expect(text).toMatch(/A new column must be appended to the `Status` field in the UI/);
     expect(text).toMatch(/Rebuilding regenerates every option id/);
   });
 

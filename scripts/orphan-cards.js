@@ -7,19 +7,20 @@
  * whose `Session` field is filled belongs to that session, and only the human may free it.
  * That is the right rule, and this script does not touch it. What it fixes is the other
  * half: nothing told the human a card *needed* freeing. A session that dies mid-flight
- * leaves its card in In progress / Gate / PR, owned by nobody alive, and invisible until
+ * leaves its card in Planning / Implementing / Checks & PR / Gate / Validation / Merging,
+ * owned by nobody alive, and invisible until
  * somebody happens to re-read the board.
  *
  * ## What counts as a suspect
  *
- * Claimed (`Session` non-empty) + in a working column (In progress / Gate / PR) + the card
+ * Claimed (`Session` non-empty) + in a working column (see `WORKING_STATUSES`) + the card
  * has not moved for `ORPHAN_STALE_HOURS` (default 24).
  *
  * The quiet signal is the project item's own `updatedAt`. It is the one clock that ticks on
  * every milestone a live session is required to write — claim, gate deposited, PR opened —
  * so a session that is working moves it, and a session that has stopped cannot. The branch
  * and the pull request are read too, but only as *evidence printed next to the card*, never
- * as the trigger: a card in In progress legitimately has no pushed branch and no PR, so
+ * as the trigger: a card in Planning legitimately has no pushed branch and no PR, so
  * firing on their absence would report every healthy claim in the pool.
  *
  * 24 h rather than 12: the bench worker serialises every session's gate on one machine, so
@@ -63,8 +64,19 @@ const OWNER = process.env.ORPHAN_OWNER || 'Crazz-Org';
 const REPO = process.env.ORPHAN_REPO || 'SPO-WebClient';
 const PROJECT_NUMBER = Number(process.env.ORPHAN_PROJECT || 1);
 
-/** Columns where a card is owned and expected to be moving. Todo is unowned, Done and Needs triage are terminal. */
-const WORKING_STATUSES = ['In progress', 'Gate', 'Validation', 'PR'];
+/**
+ * Columns where a card is owned and expected to be moving. Todo is unowned; Done and Parked
+ * are terminal. This list must stay identical to the busy-status set in scripts/claim-read.sh
+ * -- they are the same question ("who holds ground right now") asked by two different jobs.
+ */
+const WORKING_STATUSES = [
+  'Planning',
+  'Implementing',
+  'Checks & PR',
+  'Gate',
+  'Validation',
+  'Merging',
+];
 
 const DEFAULT_STALE_HOURS = 24;
 

@@ -13,9 +13,9 @@ Between the execution step and the merge, every check the orchestrator runs is m
 the invariant substring check, `typecheck`, `lint`, `coverage:changed`, then the bench gate
 (build + static + L2 live drive). All of them answer *"does this break anything?"*. None of
 them answers *"does this actually fulfil the card's criterion, and does it sit coherently in
-the code it was inserted into?"* — deliberately so: the driver does not review the returned
-diff, because a Haiku driver reviewing a diff is the fiction that produced the 2026-08-26
-incident. That rule is right about the **driver**. It leaves the semantic question unasked by
+the code it was inserted into?"* — deliberately so: the orchestrator does not review the
+returned diff itself, because a cheap scripted step reviewing a diff is the fiction that
+produced the 2026-08-26 incident. That rule is right. It leaves the semantic question unasked by
 anyone. You are the delegated surface that asks it, the last moment before the merge — the
 point the work actually leaves its isolation and lands inside `main`.
 
@@ -57,8 +57,8 @@ a caller the diff did not touch.
 
 | Verdict | Meaning | Effect |
 |---|---|---|
-| `PASS` | Criterion met, integration clean. | The driver moves the card to PR and proceeds to merge. |
-| `PASS WITH FINDINGS` | Criterion met; serious doubts on the touched ground. | The driver still proceeds; your findings are routed to `card-reviewer` as drafts, never as a block. |
+| `PASS` | Criterion met, integration clean. | The orchestrator moves the card to Merging and proceeds to merge. |
+| `PASS WITH FINDINGS` | Criterion met; serious doubts on the touched ground. | The orchestrator still proceeds; your findings are routed to `card-reviewer` as drafts, never as a block. |
 | `REJECT` | The criterion is **not** met. | Failed attempt, root cause to the ledger, re-execute, re-push and re-gate. |
 
 `REJECT` carries **its own budget of 3**, separate from the implementation attempts, and is
@@ -68,7 +68,7 @@ what keeps the threshold honest.
 
 ## Filing boundary
 
-**You never open an issue.** You return a draft finding; the driver routes it to
+**You never open an issue.** You return a draft finding; the orchestrator routes it to
 `card-reviewer` exactly as every other draft is, and a `card-reviewer` verdict of
 `DO NOT FILE` creates nothing. That also gives duplicate detection against the open board for
 free.
@@ -102,7 +102,7 @@ what you read, no closing offer.
 ## What you never do
 
 - **Never file anything.** No `gh issue create`, no `gh issue comment`, no `gh issue edit`, no
-  `gh project item-*`. You return text; the driver routes it to `card-reviewer`, which itself
+  `gh project item-*`. You return text; the orchestrator routes it to `card-reviewer`, which itself
   files nothing either — a session posts it.
 - **Never edit a file.** You hold `Read, Grep, Glob, Bash` and no more.
 - **Never re-derive behaviour, hunt bugs, or re-run tests** — see § What you never do, above.
