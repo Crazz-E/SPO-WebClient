@@ -1,9 +1,112 @@
 import * as http from 'http';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
+import * as net from 'net';
+import * as dns from 'dns';
 import { toErrorMessage } from '../shared/error-utils';
 import { TIMEOUTS } from '../shared/constants';
 import { fetchWithTimeout, FetchTimeoutError } from './fetch-with-timeout';
+
+const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp'];
+
+/**
+ * Derive a safe filename from a caller-supplied image URL: strips query/hash via URL parsing,
+ * decodes percent-escapes, then enforces path.basename() plus an allow-list of characters and
+ * extensions so no traversal or separator sequence survives.
+ */
+export function sanitizeImageFilename(imageUrl: string): string | null {
+  let pathname: string;
+  try {
+    pathname = new URL(imageUrl).pathname;
+  } catch {
+    return null;
+  }
+
+  // Split on the *real* (still-encoded) slashes first, so a legitimate multi-segment
+  // path decodes segment-by-segment while an encoded separator hidden inside a single
+  // raw segment (e.g. `a%2fb.png`) is caught below instead of silently splitting it.
+  const rawSegments = pathname.split('/');
+  const rawLast = rawSegments[rawSegments.length - 1] || '';
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(rawLast);
+  } catch {
+    return null;
+  }
+
+  if (!decoded || decoded === '.' || decoded === '..') return null;
+  if (decoded.includes('..') || decoded.includes('/') || decoded.includes('\\')) return null;
+  if (decoded.startsWith('.')) return null;
+  if (!/^[A-Za-z0-9._-]+$/.test(decoded)) return null;
+  const ext = path.extname(decoded).toLowerCase();
+  if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext)) return null;
+
+  return path.basename(decoded);
+}
+
+/**
+ * Resolve `name` under `root`, returning null if the resolved path would escape it —
+ * the containment check CodeQL recognizes ahead of a filesystem write.
+ */
+function resolveInside(root: string, name: string): string | null {
+  const resolvedRoot = path.resolve(root);
+  const resolvedPath = path.resolve(resolvedRoot, name);
+  if (resolvedPath === resolvedRoot || !resolvedPath.startsWith(resolvedRoot + path.sep)) {
+    return null;
+  }
+  return resolvedPath;
+}
+
+/**
+ * Whether `ip` (already known to be a valid IP literal) is a private/link-local/loopback
+ * address, IPv4 or IPv6, including IPv4-mapped IPv6.
+ */
+export function isPrivateAddress(ip: string): boolean {
+  if (net.isIP(ip) === 4) {
+    const parts = ip.split('.').map(Number);
+    const [a, b] = parts;
+    if (a === 0) return true;
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (ip === '255.255.255.255') return true;
+    return false;
+  }
+  if (net.isIP(ip) === 6) {
+    const lower = ip.toLowerCase();
+    if (lower === '::' || lower === '::1') return true;
+    if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) {
+      return true;
+    }
+    if (/^f[cd]/.test(lower)) return true;
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
+    if (mapped) return isPrivateAddress(mapped[1]);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * DNS-resolution-based SSRF guard: resolves `hostname` and confirms every returned address is
+ * public, rather than trusting a hostname string deny-list.
+ */
+export async function resolvesToPublicAddress(hostname: string): Promise<boolean> {
+  const literal = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
+  if (net.isIP(literal)) {
+    return !isPrivateAddress(literal);
+  }
+  try {
+    const addresses = await dns.promises.lookup(hostname, { all: true, verbatim: true });
+    if (!addresses.length) return false;
+    return addresses.every((entry) => !isPrivateAddress(entry.address));
+  } catch {
+    return false;
+  }
+}
 
 export interface ProxyImageDeps {
   imageFileIndex: Map<string, string>;
@@ -99,9 +202,14 @@ export async function proxyImage(imageUrl: string, res: http.ServerResponse, dep
     return;
   }
 
-  // Extract filename from URL
-  const urlParts = imageUrl.split('/');
-  const filename = urlParts[urlParts.length - 1] || 'unknown.gif';
+  // Extract and sanitize filename from URL — no safe name means no cache write is possible
+  const filename = sanitizeImageFilename(imageUrl);
+  if (!filename) {
+    const placeholder = getPlaceholderImage();
+    res.writeHead(200, { 'Content-Type': 'image/png' });
+    res.end(placeholder);
+    return;
+  }
 
   try {
     // O(1) lookup in pre-built file index (replaces readdirSync scans)
@@ -137,11 +245,11 @@ export async function proxyImage(imageUrl: string, res: http.ServerResponse, dep
           // Cache in proper directory structure (async)
           const targetDir = path.join(cacheRoot, dir);
           await fsp.mkdir(targetDir, { recursive: true });
-          const targetPath = path.join(targetDir, filename);
-          await fsp.writeFile(targetPath, buffer);
-
-          // Update index
-          imageFileIndex.set(filename.toLowerCase(), targetPath);
+          const targetPath = resolveInside(targetDir, filename);
+          if (targetPath) {
+            await fsp.writeFile(targetPath, buffer);
+            imageFileIndex.set(filename.toLowerCase(), targetPath);
+          }
 
           res.writeHead(200, {
             'Content-Type': getImageContentType(filename),
@@ -159,7 +267,15 @@ export async function proxyImage(imageUrl: string, res: http.ServerResponse, dep
 
     if (downloaded) return;
 
-    // Not on update server, try game server (fallback)
+    // Not on update server, try game server (fallback) — guard against SSRF via DNS resolution
+    const fallbackHostname = new URL(imageUrl).hostname;
+    if (!(await resolvesToPublicAddress(fallbackHostname))) {
+      const placeholder = getPlaceholderImage();
+      res.writeHead(200, { 'Content-Type': 'image/png' });
+      res.end(placeholder);
+      return;
+    }
+
     const response = await fetchWithTimeout(imageUrl, {}, TIMEOUTS.IMAGE_DOWNLOAD);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -169,9 +285,11 @@ export async function proxyImage(imageUrl: string, res: http.ServerResponse, dep
     const buffer = Buffer.from(arrayBuffer);
 
     // Cache in webclient-cache (async)
-    const webclientImagePath = path.join(webclientCacheDir, filename);
-    await fsp.writeFile(webclientImagePath, buffer);
-    imageFileIndex.set(filename.toLowerCase(), webclientImagePath);
+    const webclientImagePath = resolveInside(webclientCacheDir, filename);
+    if (webclientImagePath) {
+      await fsp.writeFile(webclientImagePath, buffer);
+      imageFileIndex.set(filename.toLowerCase(), webclientImagePath);
+    }
     log.debug(`Downloaded from game server: ${filename}`);
 
     res.writeHead(200, {
@@ -191,9 +309,11 @@ export async function proxyImage(imageUrl: string, res: http.ServerResponse, dep
 
     // Cache the placeholder to avoid repeated failed downloads
     const placeholder = getPlaceholderImage();
-    const webclientImagePath = path.join(webclientCacheDir, filename);
-    await fsp.writeFile(webclientImagePath, placeholder).catch(() => {});
-    imageFileIndex.set(filename.toLowerCase(), webclientImagePath);
+    const webclientImagePath = resolveInside(webclientCacheDir, filename);
+    if (webclientImagePath) {
+      await fsp.writeFile(webclientImagePath, placeholder).catch(() => {});
+      imageFileIndex.set(filename.toLowerCase(), webclientImagePath);
+    }
 
     // Return placeholder image instead of 404
     res.writeHead(200, { 'Content-Type': 'image/png' });

@@ -3,15 +3,32 @@ jest.mock('node-fetch', () => ({
   default: jest.fn(),
 }));
 
+jest.mock('dns', () => ({
+  __esModule: true,
+  promises: {
+    lookup: jest.fn(),
+  },
+}));
+
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import * as dns from 'dns';
 import type { ServerResponse } from 'http';
 import fetch from 'node-fetch';
-import { proxyImage, getImageContentType, getPlaceholderImage, type ProxyImageDeps } from './proxy-image';
+import {
+  proxyImage,
+  getImageContentType,
+  getPlaceholderImage,
+  sanitizeImageFilename,
+  isPrivateAddress,
+  resolvesToPublicAddress,
+  type ProxyImageDeps,
+} from './proxy-image';
 
 const mockFetch = fetch as unknown as jest.Mock;
+const mockLookup = dns.promises.lookup as unknown as jest.Mock;
 
 function toArrayBuffer(text: string): ArrayBuffer {
   const buf = Buffer.from(text);
@@ -48,6 +65,8 @@ describe('proxy-image', () => {
 
   beforeEach(() => {
     mockFetch.mockReset();
+    mockLookup.mockReset();
+    mockLookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
     cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-cache-'));
     webclientCacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-webclient-'));
     deps = {
@@ -190,5 +209,121 @@ describe('proxy-image', () => {
     expect(deps.imageFileIndex.get('broken.png')).toBeDefined();
     const target = deps.imageFileIndex.get('broken.png') as string;
     expect(fs.existsSync(target)).toBe(true);
+  });
+
+  describe('sanitizeImageFilename', () => {
+    it('accepts plain filenames', () => {
+      expect(sanitizeImageFilename('http://example.test/dir/roof.gif')).toBe('roof.gif');
+      expect(sanitizeImageFilename('http://example.test/dir/Building_2x2.png')).toBe('Building_2x2.png');
+    });
+
+    it('rejects encoded traversal sequences', () => {
+      expect(sanitizeImageFilename('http://example.test/%2e%2e%2fx.gif')).toBeNull();
+      expect(sanitizeImageFilename('http://example.test/..%2f..%2fevil.png')).toBeNull();
+    });
+
+    it('rejects names containing separators after decoding', () => {
+      expect(sanitizeImageFilename('http://example.test/a%2fb.png')).toBeNull();
+      expect(sanitizeImageFilename('http://example.test/a%5cb.png')).toBeNull();
+    });
+
+    it('rejects hidden files, disallowed extensions and empty names', () => {
+      expect(sanitizeImageFilename('http://example.test/.hidden.png')).toBeNull();
+      expect(sanitizeImageFilename('http://example.test/x.exe')).toBeNull();
+      expect(sanitizeImageFilename('http://example.test/')).toBeNull();
+    });
+
+    it('rejects malformed percent escapes', () => {
+      expect(sanitizeImageFilename('http://example.test/%E0%A4%A')).toBeNull();
+    });
+  });
+
+  describe('isPrivateAddress', () => {
+    it('flags private and loopback IPv4 addresses', () => {
+      expect(isPrivateAddress('10.0.0.1')).toBe(true);
+      expect(isPrivateAddress('127.0.0.1')).toBe(true);
+      expect(isPrivateAddress('192.168.1.1')).toBe(true);
+      expect(isPrivateAddress('169.254.1.1')).toBe(true);
+      expect(isPrivateAddress('172.16.0.1')).toBe(true);
+      expect(isPrivateAddress('255.255.255.255')).toBe(true);
+    });
+
+    it('flags private and loopback IPv6 addresses, including mapped v4', () => {
+      expect(isPrivateAddress('::1')).toBe(true);
+      expect(isPrivateAddress('fe80::1')).toBe(true);
+      expect(isPrivateAddress('fc00::1')).toBe(true);
+      expect(isPrivateAddress('::ffff:10.0.0.1')).toBe(true);
+    });
+
+    it('accepts public addresses', () => {
+      expect(isPrivateAddress('93.184.216.34')).toBe(false);
+      expect(isPrivateAddress('2606:2800:220:1:248:1893:25c8:1946')).toBe(false);
+    });
+  });
+
+  describe('resolvesToPublicAddress', () => {
+    it('accepts a public IP literal without a DNS lookup', async () => {
+      expect(await resolvesToPublicAddress('93.184.216.34')).toBe(true);
+      expect(mockLookup).not.toHaveBeenCalled();
+    });
+
+    it('rejects a private IP literal without a DNS lookup', async () => {
+      expect(await resolvesToPublicAddress('127.0.0.1')).toBe(false);
+      expect(mockLookup).not.toHaveBeenCalled();
+    });
+
+    it('resolves a hostname and accepts it when every address is public', async () => {
+      mockLookup.mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]);
+      expect(await resolvesToPublicAddress('example.test')).toBe(true);
+    });
+
+    it('rejects a hostname resolving to a private address', async () => {
+      mockLookup.mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }]);
+      expect(await resolvesToPublicAddress('evil.test')).toBe(false);
+    });
+
+    it('rejects a hostname whose lookup throws or returns nothing', async () => {
+      mockLookup.mockRejectedValueOnce(new Error('ENOTFOUND'));
+      expect(await resolvesToPublicAddress('nowhere.test')).toBe(false);
+      mockLookup.mockResolvedValueOnce([]);
+      expect(await resolvesToPublicAddress('empty.test')).toBe(false);
+    });
+  });
+
+  it('rejects a path-traversal filename and never writes outside the cache directories', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => toArrayBuffer('evil'),
+    });
+
+    const res = fakeRes();
+    await proxyImage('http://example.test/%2e%2e%2f%2e%2e%2fetc%2fpasswd', res, deps);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers).toEqual({ 'Content-Type': 'image/png' });
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(deps.imageFileIndex.size).toBe(0);
+    expect(await fsp.readdir(cacheRoot)).toEqual([]);
+    expect(await fsp.readdir(webclientCacheDir)).toEqual([]);
+
+    const res2 = fakeRes();
+    await proxyImage('http://example.test/..%2f..%2fevil.png', res2, deps);
+    expect(res2.statusCode).toBe(200);
+    expect(res2.headers).toEqual({ 'Content-Type': 'image/png' });
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(deps.imageFileIndex.size).toBe(0);
+    expect(await fsp.readdir(cacheRoot)).toEqual([]);
+    expect(await fsp.readdir(webclientCacheDir)).toEqual([]);
+  });
+
+  it('does not call the fallback fetch when the hostname resolves to a private address', async () => {
+    mockLookup.mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }]);
+    const res = fakeRes();
+    await proxyImage('http://internal.example.test/dir/blocked.png', res, deps);
+
+    expect(mockFetch).not.toHaveBeenCalledWith('http://internal.example.test/dir/blocked.png', {}, expect.anything());
+    expect(res.statusCode).toBe(200);
+    expect(res.headers).toEqual({ 'Content-Type': 'image/png' });
+    expect(deps.imageFileIndex.get('blocked.png')).toBeUndefined();
   });
 });
