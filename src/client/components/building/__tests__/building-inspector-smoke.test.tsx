@@ -88,9 +88,14 @@ describe('BuildingInspector smoke tests', () => {
     useBuildingStore.getState().setFocus(mockFocus);
     useBuildingStore.setState({ details: mockDetails, isLoading: false });
 
-    renderWithProviders(<BuildingInspector />);
+    const { container } = renderWithProviders(<BuildingInspector />);
     expect(screen.getByText('Small Factory')).toBeTruthy();
     expect(screen.getByText('TestCo')).toBeTruthy();
+    // QuickStats' height cap needs a definite-height parent to resolve against —
+    // the slot wrapper supplies it (issue #443).
+    const quickStatsSlot = container.querySelector('.quickStatsSlot');
+    expect(quickStatsSlot).toBeTruthy();
+    expect(quickStatsSlot?.querySelector('.bar')).toBeTruthy();
   });
 
   it('renders without header when hideHeader is true', () => {

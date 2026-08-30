@@ -412,7 +412,7 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
 
       {/* Details + sales (hidden for civic — revenue/workers not meaningful) */}
       {!isCivic && (
-        <div className={styles.stagger1}>
+        <div className={`${styles.quickStatsSlot} ${styles.stagger1}`}>
           <QuickStats focus={focusedBuilding} />
         </div>
       )}
