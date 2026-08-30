@@ -12,7 +12,7 @@ import { useUiStore } from '../../store/ui-store';
 import { useBuildingStore } from '../../store/building-store';
 import { useMapStore } from '../../store/map-store';
 import { useClient } from '../../context';
-import type { FavoritesItem } from '@/shared/types';
+import type { FavoritesLinkItem } from '@/shared/types';
 import { classifyFacilities } from './facility-status';
 import styles from './FacilityList.module.css';
 
@@ -26,11 +26,11 @@ type FacilityState = 'losing' | 'unknown' | 'operating';
 const FAV_NAME_MAX = 50;
 
 interface FacilityRowProps {
-  facility: FavoritesItem;
+  facility: FavoritesLinkItem;
   state: FacilityState;
-  onClick: (facility: FavoritesItem) => void;
-  onRename: (facility: FavoritesItem, name: string) => void;
-  onRemove: (facility: FavoritesItem) => void;
+  onClick: (facility: FavoritesLinkItem) => void;
+  onRename: (facility: FavoritesLinkItem, name: string) => void;
+  onRemove: (facility: FavoritesLinkItem) => void;
 }
 
 const DOT_CLASS: Record<FacilityState, string> = {
@@ -119,7 +119,7 @@ const FacilityRow = memo(function FacilityRow({
 });
 
 interface FacilityListProps {
-  facilities: FavoritesItem[];
+  facilities: FavoritesLinkItem[];
 }
 
 export function FacilityList({ facilities }: FacilityListProps) {
@@ -132,17 +132,17 @@ export function FacilityList({ facilities }: FacilityListProps) {
     [facilities, source],
   );
 
-  const handleClick = useCallback((facility: FavoritesItem) => {
+  const handleClick = useCallback((facility: FavoritesLinkItem) => {
     useBuildingStore.getState().setLoading(true);
     openRightPanel('building');
     client.onNavigateToBuilding(facility.x, facility.y);
   }, [openRightPanel, client]);
 
-  const handleRename = useCallback((facility: FavoritesItem, name: string) => {
+  const handleRename = useCallback((facility: FavoritesLinkItem, name: string) => {
     client.onRenameFavorite(facility.path, name);
   }, [client]);
 
-  const handleRemove = useCallback((facility: FavoritesItem) => {
+  const handleRemove = useCallback((facility: FavoritesLinkItem) => {
     client.onRemoveFavorite(facility.path, facility.name);
   }, [client]);
 

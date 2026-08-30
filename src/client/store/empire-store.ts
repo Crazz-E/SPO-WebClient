@@ -4,15 +4,15 @@
  */
 
 import { create } from 'zustand';
-import type { FavoritesItem } from '@/shared/types';
+import type { FavoritesLinkItem } from '@/shared/types';
 
 interface EmpireState {
   // Data
-  facilities: FavoritesItem[];
+  facilities: FavoritesLinkItem[];
   isLoading: boolean;
 
   // Actions
-  setFacilities: (facilities: FavoritesItem[]) => void;
+  setFacilities: (facilities: FavoritesLinkItem[]) => void;
   setLoading: (loading: boolean) => void;
   reset: () => void;
 }

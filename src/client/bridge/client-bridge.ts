@@ -33,6 +33,7 @@ import type {
   ConnectionSearchResult,
   ClusterInfo,
   ClusterFacilityPreview,
+  FavoritesItem,
 
   BankActionType,
   AutoConnectionActionType,
@@ -258,6 +259,9 @@ export interface ClientCallbacks {
   onAddFavorite: (name: string, x: number, y: number) => void;
   onRemoveFavorite: (path: string, name: string) => void;
   onRenameFavorite: (path: string, name: string) => void;
+  /** Read one level of the Favorites tree — folders and links, `''` for the root. */
+  onFetchFavoritesFolder: (path: string) => Promise<FavoritesItem[]>;
+  onAddFavoriteFolder: (parentPath: string, name: string) => Promise<{ success: boolean; id?: number; message?: string }>;
 
   // Zone painting
   onToggleZonePainting: (zoneType: number) => void;

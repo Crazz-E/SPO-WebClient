@@ -301,6 +301,10 @@ export type {
   WsRespFavoriteDelete,
   WsReqFavoriteRename,
   WsRespFavoriteRename,
+  WsReqFavoritesFolder,
+  WsRespFavoritesFolder,
+  WsReqFavoriteAddFolder,
+  WsRespFavoriteAddFolder,
   // Research / Inventions
   WsReqResearchInventory,
   WsRespResearchInventory,
@@ -321,4 +325,12 @@ export type {
   WsRespCloneFacility,
 } from './message-types';
 
-export type { ConnectionSearchResult, FavoritesItem, ResearchCategoryData, ResearchInventionItem, ResearchInventionDetails } from './message-types';
+export type {
+  ConnectionSearchResult,
+  FavoritesItem,
+  FavoritesFolderItem,
+  FavoritesLinkItem,
+  ResearchCategoryData,
+  ResearchInventionItem,
+  ResearchInventionDetails,
+} from './message-types';

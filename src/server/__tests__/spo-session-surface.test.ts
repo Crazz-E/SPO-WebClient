@@ -299,8 +299,24 @@ const DELEGATIONS: readonly Delegation[] = [
     method: 'addFavorite',
     install: () => jest.spyOn(favoritesHandler, 'addFavorite'),
     call: s => s.addFavorite('Farm 1', 118, 226),
-    forwarded: ['Farm 1', 118, 226],
+    // The facade defaults the 4th argument to the root ('') when the caller
+    // omits it — issue #129 added it so a link can be added under a folder.
+    forwarded: ['Farm 1', 118, 226, ''],
     result: { success: true, id: 7 },
+  },
+  {
+    method: 'fetchFolderContents',
+    install: () => jest.spyOn(favoritesHandler, 'fetchFolderContents'),
+    call: s => s.fetchFolderContents('9'),
+    forwarded: ['9'],
+    result: [],
+  },
+  {
+    method: 'addFavoriteFolder',
+    install: () => jest.spyOn(favoritesHandler, 'addFolder'),
+    call: s => s.addFavoriteFolder('', 'New Folder'),
+    forwarded: ['', 'New Folder'],
+    result: { success: true, id: 12 },
   },
   {
     method: 'deleteFavorite',
@@ -634,7 +650,7 @@ describe('StarpeaceSession — handler delegation', () => {
   it('covers every one-line handler delegation the facade declares', () => {
     // A guard on the table itself: if a delegation is added to the facade and
     // not to the table, the count stops matching and this row says so.
-    expect(DELEGATIONS).toHaveLength(67);
+    expect(DELEGATIONS).toHaveLength(69);
     expect(new Set(DELEGATIONS.map(d => d.method)).size).toBe(DELEGATIONS.length);
   });
 

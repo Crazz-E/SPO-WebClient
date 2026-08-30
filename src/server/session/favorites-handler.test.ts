@@ -18,7 +18,9 @@
 
 import {
   fetchOwnedFacilities,
+  fetchFolderContents,
   addFavorite,
+  addFolder,
   deleteFavorite,
   renameFavorite,
 } from './favorites-handler';
@@ -50,17 +52,17 @@ describe('fetchOwnedFacilities', () => {
     });
   });
 
-  it('parses the \\x01/\\x02-separated favorites through the real parseFavoritesResponse (links only)', async () => {
+  it('reads through the real parseFavoritesResponse but keeps only links — a folder has no coordinates to list', async () => {
     const fake = makeSessionCtx();
     // id \x01 kind \x01 name \x01 info \x01 subCount \x01 '' — kind 1 = link, 0 = folder
     const link = ['4210', '1', 'Farm 1', 'Farm 1,118,226,0', '0', ''].join('\x01');
-    const folder = ['9', '0', 'Folder', 'Folder,0,0,0', '2', ''].join('\x01');
+    const folder = ['9', '0', 'Folder', '', '2', ''].join('\x01');
     fake.respond(() => `res="%${[folder, link].join('\x02')}"`);
 
     const items = await fetchOwnedFacilities(fake.ctx);
 
     // At the root the Location IS the id — that is what delete and rename take.
-    expect(items).toEqual([{ id: 4210, name: 'Farm 1', x: 118, y: 226, path: '4210' }]);
+    expect(items).toEqual([{ id: 4210, name: 'Farm 1', x: 118, y: 226, path: '4210', kind: 1 }]);
   });
 
   it('returns [] for an empty payload', async () => {
@@ -78,6 +80,63 @@ describe('fetchOwnedFacilities', () => {
     const fake = makeSessionCtx();
     fake.respond(() => new Error('Request timeout: RDOFavoritesGetSubItems'));
     await expect(fetchOwnedFacilities(fake.ctx)).rejects.toThrow('Request timeout: RDOFavoritesGetSubItems');
+  });
+});
+
+// =============================================================================
+// fetchFolderContents — RDOFavoritesGetSubItems(parentPath), folders AND links
+// =============================================================================
+describe('fetchFolderContents', () => {
+  it('calls RDOFavoritesGetSubItems with the given Location, not the root', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="%"');
+
+    await fetchFolderContents(fake.ctx, '9');
+
+    expect(fake.sent[0].packet).toEqual({
+      verb: RdoVerb.SEL,
+      targetId: FAKE_CONTEXT_IDS.worldContextId,
+      action: RdoAction.CALL,
+      member: 'RDOFavoritesGetSubItems',
+      separator: '"^"',
+      args: [RdoValue.string('9').format()],
+    });
+  });
+
+  it('keeps folders AND links — this is the one read the tree UI descends with', async () => {
+    const fake = makeSessionCtx();
+    const link = ['4210', '1', 'Farm 1', 'Farm 1,118,226,0', '0', ''].join('\x01');
+    const folder = ['9', '0', 'Folder', '', '2', ''].join('\x01');
+    fake.respond(() => `res="%${[folder, link].join('\x02')}"`);
+
+    const items = await fetchFolderContents(fake.ctx, '');
+
+    expect(items).toEqual([
+      { id: 9, name: 'Folder', path: '9', kind: 0 },
+      { id: 4210, name: 'Farm 1', x: 118, y: 226, path: '4210', kind: 1 },
+    ]);
+  });
+
+  it('nests the path under the parent it was asked for', async () => {
+    const fake = makeSessionCtx();
+    const link = ['10', '1', 'Farm 1', 'Farm 1,118,226,0', '0', ''].join('\x01');
+    fake.respond(() => `res="%${link}"`);
+
+    const items = await fetchFolderContents(fake.ctx, '9');
+
+    expect(items[0].path).toBe('9/10');
+  });
+
+  it('refuses without a world context and sends nothing', async () => {
+    const fake = makeSessionCtx({ worldContextId: null });
+    await expect(fetchFolderContents(fake.ctx, '9')).rejects.toThrow('Not logged in — no worldContextId');
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it('propagates a timeout', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => new Error('Request timeout: RDOFavoritesGetSubItems'));
+    await expect(fetchFolderContents(fake.ctx, '9')).rejects.toThrow('Request timeout: RDOFavoritesGetSubItems');
   });
 });
 
@@ -108,6 +167,17 @@ describe('addFavorite', () => {
         RdoValue.string('Farm 1,118,226,1').format(), // Info cookie
       ],
     });
+  });
+
+  it('adds a link under a given parent path — a link inside a folder', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#10"');
+
+    const result = await addFavorite(fake.ctx, 'Farm 1', 118, 226, '9');
+
+    expect(result).toEqual({ success: true, id: 10 });
+    const args = fake.sent[0].packet.args as string[];
+    expect(args[0]).toBe(RdoValue.string('9').format());
   });
 
   it('types Kind as an integer and the two strings as OLEStrings', async () => {
@@ -172,6 +242,84 @@ describe('addFavorite', () => {
     const fake = makeSessionCtx();
     fake.respond(() => new Error('Request timeout: RDOFavoritesNewItem'));
     await expect(addFavorite(fake.ctx, 'Farm 1', 1, 2)).rejects.toThrow('Request timeout: RDOFavoritesNewItem');
+  });
+});
+
+// =============================================================================
+// addFolder — RDOFavoritesNewItem(parentPath, 0, name, '')
+// =============================================================================
+describe('addFolder', () => {
+  it('emits Kind=fvkFolder and an empty Info cookie, at the given parent', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#9"');
+
+    const result = await addFolder(fake.ctx, '', 'New Folder');
+
+    expect(result).toEqual({ success: true, id: 9 });
+    expect(fake.sent[0].packet).toEqual({
+      verb: RdoVerb.SEL,
+      targetId: FAKE_CONTEXT_IDS.worldContextId,
+      action: RdoAction.CALL,
+      member: 'RDOFavoritesNewItem',
+      separator: '"^"',
+      args: [
+        RdoValue.string('').format(),      // Location — root, or any parent path
+        RdoValue.int(0).format(),          // Kind — fvkFolder
+        RdoValue.string('New Folder').format(),
+        RdoValue.string('').format(),      // Info — empty, as Voyager creates folders
+      ],
+    });
+  });
+
+  it('creates a folder nested under a given parent path', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#12"');
+
+    await addFolder(fake.ctx, '9', 'Subfolder');
+
+    const args = fake.sent[0].packet.args as string[];
+    expect(args[0]).toBe(RdoValue.string('9').format());
+  });
+
+  it('reads `-1` as the refusal it is, not as the wire boolean true', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#-1"');
+
+    const result = await addFolder(fake.ctx, '', 'New Folder');
+
+    expect(result.success).toBe(false);
+    expect(result.id).toBeUndefined();
+    expect(result.message).toBe('The server refused to add this folder.');
+    expect(fake.log.warn).toHaveBeenCalledWith(expect.stringContaining('RDOFavoritesNewItem (folder) refused'));
+  });
+
+  it('reads a SILENT server as a refusal (OB-1)', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => '');
+    expect((await addFolder(fake.ctx, '', 'New Folder')).success).toBe(false);
+  });
+
+  it('truncates the name to the 50 characters the server would keep', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#12"');
+    const long = 'x'.repeat(60);
+
+    await addFolder(fake.ctx, '', long);
+
+    const args = fake.sent[0].packet.args as string[];
+    expect(args[2]).toBe(RdoValue.string('x'.repeat(50)).format());
+  });
+
+  it('refuses without a world context and sends nothing', async () => {
+    const fake = makeSessionCtx({ worldContextId: null });
+    await expect(addFolder(fake.ctx, '', 'New Folder')).rejects.toThrow('Not logged in — no worldContextId');
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it('propagates a timeout instead of answering success', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => new Error('Request timeout: RDOFavoritesNewItem'));
+    await expect(addFolder(fake.ctx, '', 'New Folder')).rejects.toThrow('Request timeout: RDOFavoritesNewItem');
   });
 });
 

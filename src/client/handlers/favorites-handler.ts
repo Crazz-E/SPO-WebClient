@@ -17,6 +17,11 @@ import {
   type WsRespFavoriteDelete,
   type WsReqFavoriteRename,
   type WsRespFavoriteRename,
+  type WsReqFavoritesFolder,
+  type WsRespFavoritesFolder,
+  type WsReqFavoriteAddFolder,
+  type WsRespFavoriteAddFolder,
+  type FavoritesItem,
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
 import { ClientBridge } from '../bridge/client-bridge';
@@ -78,6 +83,52 @@ export async function renameFavorite(
     refreshFacilities(ctx);
   } catch (err: unknown) {
     ctx.showNotification(`Failed to rename favourite: ${toErrorMessage(err)}`, 'error');
+  }
+}
+
+/**
+ * Read one level of the tree — folders and links alike — for the Favorites
+ * tree UI. `path` is the Location to descend into, `''` for the root.
+ *
+ * Unlike the three mutations above, a failure here does not surface through
+ * `ctx.showNotification` — the tree component owns the request and decides
+ * how to show a folder that could not be read (collapsed, or with its own
+ * inline error), so the caller gets the thrown error back, not swallowed.
+ */
+export async function fetchFolderContents(
+  ctx: ClientHandlerContext, path: string,
+): Promise<FavoritesItem[]> {
+  const req: WsReqFavoritesFolder = { type: WsMessageType.REQ_FAVORITES_FOLDER, path };
+  const response = await ctx.sendRequest(req) as WsRespFavoritesFolder;
+  return response.items;
+}
+
+/** The result of the folder-creation mutation, as the server answered it. */
+export interface AddFolderResult {
+  success: boolean;
+  id?: number;
+  message?: string;
+}
+
+/**
+ * Create a folder under `parentPath` (`''` for the root). Unlike the other
+ * mutations, this does not re-read the flat root list — folders never appear
+ * there — the caller re-reads the tree branch it is showing instead.
+ */
+export async function addFolder(
+  ctx: ClientHandlerContext, parentPath: string, name: string,
+): Promise<AddFolderResult> {
+  const req: WsReqFavoriteAddFolder = { type: WsMessageType.REQ_FAVORITE_ADD_FOLDER, parentPath, name };
+  try {
+    const response = await ctx.sendRequest(req) as WsRespFavoriteAddFolder;
+    if (!response.success) {
+      ctx.showNotification(response.message || 'Could not add this folder.', 'error');
+    }
+    return { success: response.success, id: response.id, message: response.message };
+  } catch (err: unknown) {
+    const message = `Failed to add folder: ${toErrorMessage(err)}`;
+    ctx.showNotification(message, 'error');
+    return { success: false, message };
   }
 }
 

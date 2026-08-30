@@ -7,10 +7,11 @@
  *
  * Each item also carries its Location — the path a delete or a rename
  * addresses (`TFavorites.LocateItem`, `Kernel/Favorites.pas:312-334`). At the
- * root, which is the only level the client reads today, that path is the id.
+ * root that path is the id; one level down it is `parent/id`.
  */
 
 import { parseFavoritesResponse } from '../spo_session';
+import type { FavoritesLinkItem } from '../../shared/types';
 
 // Helper to build a favorites item string in wire format
 function favItem(id: number, kind: number, name: string, info: string, subFolderCount: number): string {
@@ -35,7 +36,7 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toEqual([
-      { id: 1, name: 'Company Headquarters', x: 670, y: 116, path: '1' },
+      { id: 1, name: 'Company Headquarters', x: 670, y: 116, path: '1', kind: 1 },
     ]);
   });
 
@@ -49,12 +50,12 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toHaveLength(3);
-    expect(result[0]).toEqual({ id: 1, name: 'Company Headquarters', x: 670, y: 116, path: '1' });
-    expect(result[1]).toEqual({ id: 2, name: "Caesar's Atrium", x: 615, y: 96, path: '2' });
-    expect(result[2]).toEqual({ id: 3, name: 'Delmar Apts.', x: 687, y: 162, path: '3' });
+    expect(result[0]).toEqual({ id: 1, name: 'Company Headquarters', x: 670, y: 116, path: '1', kind: 1 });
+    expect(result[1]).toEqual({ id: 2, name: "Caesar's Atrium", x: 615, y: 96, path: '2', kind: 1 });
+    expect(result[2]).toEqual({ id: 3, name: 'Delmar Apts.', x: 687, y: 162, path: '3', kind: 1 });
   });
 
-  it('skips folder items (kind=0)', () => {
+  it('parses folder items (kind=0) — no coordinates, since a folder holds none', () => {
     const raw = [
       favFolder(100, 'My Folder', 2),
       favLink(1, 'Factory', 100, 200),
@@ -62,8 +63,17 @@ describe('parseFavoritesResponse', () => {
 
     const result = parseFavoritesResponse(raw);
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 1, name: 'Factory', x: 100, y: 200, path: '1' });
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ id: 100, name: 'My Folder', path: '100', kind: 0 });
+    expect(result[1]).toEqual({ id: 1, name: 'Factory', x: 100, y: 200, path: '1', kind: 1 });
+  });
+
+  it('ignores a folder Info cookie entirely — Voyager writes it empty, but even a stray value must not become coordinates', () => {
+    const raw = favItem(100, 0, 'My Folder', 'not,a,coordinate,cookie', 0);
+
+    const result = parseFavoritesResponse(raw);
+
+    expect(result).toEqual([{ id: 100, name: 'My Folder', path: '100', kind: 0 }]);
   });
 
   it('handles name with commas in info cookie', () => {
@@ -75,7 +85,7 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 5, name: 'Building, Inc.', x: 450, y: 300, path: '5' });
+    expect(result[0]).toEqual({ id: 5, name: 'Building, Inc.', x: 450, y: 300, path: '5', kind: 1 });
   });
 
   it('handles trailing \\x02 separator', () => {
@@ -84,7 +94,7 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 1, name: 'Farm 1', x: 641, y: 66, path: '1' });
+    expect(result[0]).toEqual({ id: 1, name: 'Farm 1', x: 641, y: 66, path: '1', kind: 1 });
   });
 
   it('parses real trace data (from RDO capture)', () => {
@@ -99,7 +109,7 @@ describe('parseFavoritesResponse', () => {
       favLink(46, 'Bar 5', 461, 390),
     ].join('\x02');
 
-    const result = parseFavoritesResponse(raw);
+    const result = parseFavoritesResponse(raw) as FavoritesLinkItem[];
 
     expect(result).toHaveLength(5);
     expect(result[0].name).toBe('Company Headquarters');
@@ -139,6 +149,6 @@ describe('parseFavoritesResponse', () => {
     const result = parseFavoritesResponse(raw);
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({ id: 7, name: 'Mart 3', x: 678, y: 159, path: '7' });
+    expect(result[0]).toEqual({ id: 7, name: 'Mart 3', x: 678, y: 159, path: '7', kind: 1 });
   });
 });

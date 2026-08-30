@@ -37,6 +37,7 @@ import {
   PoliticalRoleInfo,
   ConnectionSearchResult,
   FavoritesItem,
+  FavoritesLinkItem,
   ResearchCategoryData,
   ResearchInventionDetails,
   ClusterInfo,
@@ -1137,12 +1138,20 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
   }
 
   // -- FAVORITES (facade -> favorites-handler) ------------------------------
-  public async fetchOwnedFacilities(): Promise<FavoritesItem[]> {
+  public async fetchOwnedFacilities(): Promise<FavoritesLinkItem[]> {
     return favoritesHandler.fetchOwnedFacilities(this);
   }
 
-  public async addFavorite(name: string, x: number, y: number): Promise<FavoriteMutationResult> {
-    return favoritesHandler.addFavorite(this, name, x, y);
+  public async fetchFolderContents(parentPath: string): Promise<FavoritesItem[]> {
+    return favoritesHandler.fetchFolderContents(this, parentPath);
+  }
+
+  public async addFavorite(name: string, x: number, y: number, parentPath = ''): Promise<FavoriteMutationResult> {
+    return favoritesHandler.addFavorite(this, name, x, y, parentPath);
+  }
+
+  public async addFavoriteFolder(parentPath: string, name: string): Promise<FavoriteMutationResult> {
+    return favoritesHandler.addFolder(this, parentPath, name);
   }
 
   public async deleteFavorite(path: string): Promise<FavoriteMutationResult> {

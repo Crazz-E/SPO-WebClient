@@ -8,7 +8,10 @@
  * if something had changed. That is the OB-1 defect, in the client half.
  */
 
-import { addFavorite, removeFavorite, renameFavorite, migrateLocalBookmarks } from './favorites-handler';
+import {
+  addFavorite, removeFavorite, renameFavorite, migrateLocalBookmarks,
+  fetchFolderContents, addFolder,
+} from './favorites-handler';
 import { ClientBridge } from '../bridge/client-bridge';
 import { useGameStore } from '../store/game-store';
 import { useEmpireStore } from '../store/empire-store';
@@ -151,6 +154,70 @@ describe('renameFavorite', () => {
   });
 });
 
+describe('fetchFolderContents', () => {
+  it('reads the given path and returns whatever items the gateway answered', async () => {
+    const items = [
+      { id: 9, name: 'Folder', path: '9', kind: 0 },
+      { id: 10, name: 'Farm 1', path: '9/10', kind: 1, x: 118, y: 226 },
+    ];
+    const { ctx, sendRequest } = makeCtx({ path: '9', items });
+
+    const result = await fetchFolderContents(ctx, '9');
+
+    expect(sendRequest).toHaveBeenCalledWith({ type: WsMessageType.REQ_FAVORITES_FOLDER, path: '9' });
+    expect(result).toBe(items);
+  });
+
+  it('reads the root when the path is empty', async () => {
+    const { ctx, sendRequest } = makeCtx({ path: '', items: [] });
+    await fetchFolderContents(ctx, '');
+    expect(sendRequest).toHaveBeenCalledWith({ type: WsMessageType.REQ_FAVORITES_FOLDER, path: '' });
+  });
+
+  it('propagates a transport failure rather than swallowing it', async () => {
+    const { ctx } = makeCtx(new Error('socket closed'));
+    await expect(fetchFolderContents(ctx, '9')).rejects.toThrow('socket closed');
+  });
+});
+
+describe('addFolder', () => {
+  it('sends the parent path and name, and reports the assigned id', async () => {
+    const { ctx, sendRequest, showNotification } = makeCtx({ success: true, id: 12 });
+
+    const result = await addFolder(ctx, '9', 'Subfolder');
+
+    expect(sendRequest).toHaveBeenCalledWith({
+      type: WsMessageType.REQ_FAVORITE_ADD_FOLDER, parentPath: '9', name: 'Subfolder',
+    });
+    expect(result).toEqual({ success: true, id: 12, message: undefined });
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it('a refusal is told to the player, in the server\'s own words', async () => {
+    const { ctx, showNotification } = makeCtx({ success: false, message: 'Nope.' });
+
+    const result = await addFolder(ctx, '', 'New Folder');
+
+    expect(showNotification).toHaveBeenCalledWith('Nope.', 'error');
+    expect(result).toEqual({ success: false, id: undefined, message: 'Nope.' });
+  });
+
+  it('falls back to its own wording when the gateway sent no reason', async () => {
+    const { ctx, showNotification } = makeCtx({ success: false });
+    await addFolder(ctx, '', 'New Folder');
+    expect(showNotification).toHaveBeenCalledWith('Could not add this folder.', 'error');
+  });
+
+  it('a transport failure is reported, never a silent success', async () => {
+    const { ctx, showNotification } = makeCtx(new Error('socket closed'));
+
+    const result = await addFolder(ctx, '', 'New Folder');
+
+    expect(showNotification).toHaveBeenCalledWith('Failed to add folder: socket closed', 'error');
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('migrateLocalBookmarks', () => {
   const store = new Map<string, string>();
   let world = 0;
@@ -185,7 +252,7 @@ describe('migrateLocalBookmarks', () => {
       { id: 'bm-1', name: 'Cotton farms', x: 120, y: 340 },
       { id: 'bm-2', name: 'Mill', x: 10, y: 20 },
     ]);
-    useEmpireStore.getState().setFacilities([{ id: 4210, name: 'Mill', x: 10, y: 20, path: '4210' }]);
+    useEmpireStore.getState().setFacilities([{ id: 4210, name: 'Mill', x: 10, y: 20, path: '4210', kind: 1 }]);
     const { ctx, sendRequest, sendMessage, showNotification } = makeCtx({ success: true, id: 4211 });
 
     await migrateLocalBookmarks(ctx);
@@ -225,7 +292,7 @@ describe('migrateLocalBookmarks', () => {
   it('drops the local key without a single write when the tree already holds every place', async () => {
     const w = freshWorld();
     const key = seedLocal(w, [{ name: 'Mill', x: 10, y: 20 }]);
-    useEmpireStore.getState().setFacilities([{ id: 4210, name: 'Mill', x: 10, y: 20, path: '4210' }]);
+    useEmpireStore.getState().setFacilities([{ id: 4210, name: 'Mill', x: 10, y: 20, path: '4210', kind: 1 }]);
     const { ctx, sendRequest, showNotification } = makeCtx({ success: true });
 
     await migrateLocalBookmarks(ctx);

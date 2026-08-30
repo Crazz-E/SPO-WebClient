@@ -56,15 +56,15 @@ describe('CommandPalette', () => {
     expect(onRequestFacilities).toHaveBeenCalledTimes(1);
     expect(onSearchMenuTowns).toHaveBeenCalledTimes(1);
     r2.unmount();
-    useEmpireStore.getState().setFacilities([{ id: 1, name: 'Farm', x: 1, y: 2, path: '1' }]);
+    useEmpireStore.getState().setFacilities([{ id: 1, name: 'Farm', x: 1, y: 2, path: '1', kind: 1 }]);
     renderWithProviders(<CommandPalette />, { clientCallbacks: createSpiedCallbacks({ onRequestFacilities }) });
     expect(onRequestFacilities).toHaveBeenCalledTimes(1);
   });
 
   it('finds one of my facilities by name and navigates to it', () => {
     useEmpireStore.getState().setFacilities([
-      { id: 7, name: 'Cotton Farm North', x: 120, y: 340, path: '7' },
-      { id: 8, name: 'Steel Mill', x: 5, y: 6, path: '8' },
+      { id: 7, name: 'Cotton Farm North', x: 120, y: 340, path: '7', kind: 1 },
+      { id: 8, name: 'Steel Mill', x: 5, y: 6, path: '8', kind: 1 },
     ]);
     const onNavigateToBuilding = jest.fn();
     renderWithProviders(<CommandPalette />, { clientCallbacks: createSpiedCallbacks({ onNavigateToBuilding }) });
@@ -106,7 +106,7 @@ describe('CommandPalette', () => {
   });
 
   it('arrow keys move the selection and Enter runs the selected command', () => {
-    useEmpireStore.getState().setFacilities([{ id: 1, name: 'Alpha', x: 1, y: 1, path: '1' }, { id: 2, name: 'Alps', x: 2, y: 2, path: '2' }]);
+    useEmpireStore.getState().setFacilities([{ id: 1, name: 'Alpha', x: 1, y: 1, path: '1', kind: 1 }, { id: 2, name: 'Alps', x: 2, y: 2, path: '2', kind: 1 }]);
     const onNavigateToBuilding = jest.fn();
     renderWithProviders(<CommandPalette />, { clientCallbacks: createSpiedCallbacks({ onNavigateToBuilding }) });
     openPalette();
