@@ -159,6 +159,37 @@ export async function addFavorite(
 }
 
 /**
+ * Create a folder under `parentPath` (`''` for the root).
+ *
+ * Same member and success rule as {@link addFavorite} — `RDOFavoritesNewItem` answers the id
+ * it assigned, `-1` when the parent Location does not resolve (`Favorites.pas:205`), so success
+ * is `id > 0`, NOT `isTrueOrdinal`. The only difference is the kind argument: `0` (`fvkFolder`)
+ * instead of `1`, and an empty Info cookie — a folder carries no coordinates.
+ */
+export async function createFavoriteFolder(
+  ctx: SessionContext, parentPath: string, name: string,
+): Promise<FavoriteMutationResult> {
+  const targetId = requireWorldContext(ctx);
+  const trimmed = name.slice(0, FAV_NAME_MAX);
+
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'RDOFavoritesNewItem', targetId,
+    RdoValue.string(parentPath),
+    RdoValue.int(FAV_KIND_FOLDER),
+    RdoValue.string(trimmed),
+    RdoValue.string(''),
+  ).packet, undefined, TimeoutCategory.NORMAL);
+
+  const res = readResult(packet.payload);
+  const id = parseInt(res, 10);
+  if (Number.isFinite(id) && id > 0) {
+    return { success: true, id };
+  }
+  ctx.log.warn(`[Favorites] RDOFavoritesNewItem (folder) refused "${trimmed}" (res="${res}")`);
+  return { success: false, message: 'The server refused to create this folder.' };
+}
+
+/**
  * Remove one item by its Location.
  *
  * `RDOFavoritesDelItem` answers a boolean — false when the Location does not

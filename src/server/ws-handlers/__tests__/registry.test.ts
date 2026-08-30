@@ -11,7 +11,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { WsMessageType } from '../../../shared/types';
 import { wsHandlerRegistry } from '../index';
-import { handleFavoriteAdd, handleFavoriteDelete, handleFavoriteRename, handleEmpireFacilities } from '../misc-handlers';
+import { handleFavoriteAdd, handleFavoriteDelete, handleFavoriteRename, handleFavoriteCreateFolder, handleFavoriteMove, handleEmpireFacilities } from '../misc-handlers';
 
 describe('wsHandlerRegistry', () => {
   it('routes the Favorites tree — its read and its three mutations', () => {
@@ -19,6 +19,8 @@ describe('wsHandlerRegistry', () => {
     expect(wsHandlerRegistry[WsMessageType.REQ_FAVORITE_ADD]).toBe(handleFavoriteAdd);
     expect(wsHandlerRegistry[WsMessageType.REQ_FAVORITE_DELETE]).toBe(handleFavoriteDelete);
     expect(wsHandlerRegistry[WsMessageType.REQ_FAVORITE_RENAME]).toBe(handleFavoriteRename);
+    expect(wsHandlerRegistry[WsMessageType.REQ_FAVORITE_CREATE_FOLDER]).toBe(handleFavoriteCreateFolder);
+    expect(wsHandlerRegistry[WsMessageType.REQ_FAVORITE_MOVE]).toBe(handleFavoriteMove);
   });
 
   it('registers a function under every key it declares, and only REQ_ keys', () => {

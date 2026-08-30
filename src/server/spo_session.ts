@@ -1153,6 +1153,14 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     return favoritesHandler.renameFavorite(this, path, name);
   }
 
+  public async createFavoriteFolder(parentPath: string, name: string): Promise<FavoriteMutationResult> {
+    return favoritesHandler.createFavoriteFolder(this, parentPath, name);
+  }
+
+  public async moveFavorite(path: string, destPath: string): Promise<FavoriteMutationResult> {
+    return favoritesHandler.moveFavorite(this, path, destPath);
+  }
+
   // -- POLITICS (facade -> politics-handler) --------------------------------
   public async getPoliticsData(townName: string, buildingX: number, buildingY: number, isCapitol = false): Promise<PoliticsData> {
     return politicsHandler.getPoliticsData(this, townName, buildingX, buildingY, isCapitol);

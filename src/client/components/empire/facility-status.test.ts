@@ -42,4 +42,48 @@ describe('classifyFacilities', () => {
     const groups = classifyFacilities([fav('1', 'Mill', 10, 10)], [bld(10, 11, false)]);
     expect(groups.unknown).toHaveLength(1);
   });
+
+  it('classifies a folder by its worst descendant link — losing wins', () => {
+    const losingLink = { ...fav('1', 'Mill', 10, 10), path: 'F/1', kind: 1 } as FavoritesItem;
+    const okLink = { ...fav('2', 'Farm', 20, 20), path: 'F/2', kind: 1 } as FavoritesItem;
+    const folder = { id: 3, name: 'Farms', path: 'F', kind: 0, x: 0, y: 0, children: [losingLink, okLink] } as FavoritesItem;
+
+    const groups = classifyFacilities([folder], [bld(10, 10, true), bld(20, 20, false)]);
+
+    expect(groups.losing.map((f) => f.name)).toEqual(['Farms']);
+    expect(groups.stateByPath.get('F')).toBe('losing');
+    expect(groups.stateByPath.get('F/1')).toBe('losing');
+    expect(groups.stateByPath.get('F/2')).toBe('operating');
+  });
+
+  it('classifies a folder with only unknown descendants as unknown, never operating', () => {
+    const unknownLink = { ...fav('1', 'Ghost', 5, 5), path: 'F/1', kind: 1 } as FavoritesItem;
+    const folder = { id: 2, name: 'Farms', path: 'F', kind: 0, x: 0, y: 0, children: [unknownLink] } as FavoritesItem;
+
+    const groups = classifyFacilities([folder], []);
+
+    expect(groups.unknown.map((f) => f.name)).toEqual(['Farms']);
+    expect(groups.stateByPath.get('F')).toBe('unknown');
+  });
+
+  it('classifies an empty folder as operating — nothing in it is in trouble', () => {
+    const folder = { id: 1, name: 'Empty', path: 'F', kind: 0, x: 0, y: 0, children: [] } as FavoritesItem;
+
+    const groups = classifyFacilities([folder], []);
+
+    expect(groups.operating.map((f) => f.name)).toEqual(['Empty']);
+    expect(groups.stateByPath.get('F')).toBe('operating');
+  });
+
+  it('keeps a nested link\'s own state distinct from its folder bucket', () => {
+    const losingLink = { ...fav('1', 'Mill', 10, 10), path: 'F/1', kind: 1 } as FavoritesItem;
+    const unknownLink = { ...fav('2', 'Ghost', 30, 30), path: 'F/2', kind: 1 } as FavoritesItem;
+    const folder = { id: 3, name: 'Farms', path: 'F', kind: 0, x: 0, y: 0, children: [losingLink, unknownLink] } as FavoritesItem;
+
+    const groups = classifyFacilities([folder], [bld(10, 10, true)]);
+
+    expect(groups.losing.map((f) => f.name)).toEqual(['Farms']);
+    expect(groups.stateByPath.get('F/1')).toBe('losing');
+    expect(groups.stateByPath.get('F/2')).toBe('unknown');
+  });
 });

@@ -12,7 +12,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import type { WebSocket } from 'ws';
 import { WsMessageType, type WsMessage } from '../../../shared/types';
-import { handleFavoriteAdd, handleFavoriteDelete, handleFavoriteRename } from '../misc-handlers';
+import { handleFavoriteAdd, handleFavoriteDelete, handleFavoriteRename, handleFavoriteCreateFolder, handleFavoriteMove } from '../misc-handlers';
 import type { WsHandlerContext } from '../types';
 
 function createCtx(method: string, result: unknown) {
@@ -124,6 +124,69 @@ describe('handleFavoriteRename', () => {
     const r = createCtx('renameFavorite', new Error('socket closed'));
 
     await handleFavoriteRename(r.ctx, msg(WsMessageType.REQ_FAVORITE_RENAME, { path: '4210', name: 'Moulin' }));
+
+    expect(r.sent[0].type).toBe(WsMessageType.RESP_ERROR);
+  });
+});
+
+describe('handleFavoriteCreateFolder', () => {
+  it('forwards the parent path and name and echoes the assigned id', async () => {
+    const r = createCtx('createFavoriteFolder', { success: true, id: 4212 });
+
+    await handleFavoriteCreateFolder(r.ctx, msg(WsMessageType.REQ_FAVORITE_CREATE_FOLDER, { parentPath: '', name: 'Farms' }));
+
+    expect(r.fn).toHaveBeenCalledWith('', 'Farms');
+    expect(r.sent).toEqual([{
+      type: WsMessageType.RESP_FAVORITE_CREATE_FOLDER, wsRequestId: 'req-1', success: true, id: 4212,
+    }]);
+  });
+
+  it('copies a refusal through verbatim — it never becomes an OK', async () => {
+    const r = createCtx('createFavoriteFolder', { success: false, message: 'The server refused to create this folder.' });
+
+    await handleFavoriteCreateFolder(r.ctx, msg(WsMessageType.REQ_FAVORITE_CREATE_FOLDER, { parentPath: '999', name: 'Farms' }));
+
+    expect(r.sent[0].success).toBe(false);
+    expect(r.sent[0].errorMessage).toBe('The server refused to create this folder.');
+    expect(r.sent[0].id).toBeUndefined();
+  });
+
+  it('turns a thrown failure into an error frame carrying the request id', async () => {
+    const r = createCtx('createFavoriteFolder', new Error('Request timeout: RDOFavoritesNewItem'));
+
+    await handleFavoriteCreateFolder(r.ctx, msg(WsMessageType.REQ_FAVORITE_CREATE_FOLDER, { parentPath: '', name: 'Farms' }));
+
+    expect(r.sent[0].type).toBe(WsMessageType.RESP_ERROR);
+    expect(r.sent[0].wsRequestId).toBe('req-1');
+    expect(r.sent[0].errorMessage).toBe('Request timeout: RDOFavoritesNewItem');
+  });
+});
+
+describe('handleFavoriteMove', () => {
+  it('forwards the item path and the destination path, in that order', async () => {
+    const r = createCtx('moveFavorite', { success: true });
+
+    await handleFavoriteMove(r.ctx, msg(WsMessageType.REQ_FAVORITE_MOVE, { path: '4210', destPath: '4212' }));
+
+    expect(r.fn).toHaveBeenCalledWith('4210', '4212');
+    expect(r.sent).toEqual([{
+      type: WsMessageType.RESP_FAVORITE_MOVE, wsRequestId: 'req-1', success: true,
+    }]);
+  });
+
+  it('copies a refusal through verbatim', async () => {
+    const r = createCtx('moveFavorite', { success: false, message: 'Nope.' });
+
+    await handleFavoriteMove(r.ctx, msg(WsMessageType.REQ_FAVORITE_MOVE, { path: '4210', destPath: '4210' }));
+
+    expect(r.sent[0].success).toBe(false);
+    expect(r.sent[0].message).toBe('Nope.');
+  });
+
+  it('turns a thrown failure into an error frame', async () => {
+    const r = createCtx('moveFavorite', new Error('socket closed'));
+
+    await handleFavoriteMove(r.ctx, msg(WsMessageType.REQ_FAVORITE_MOVE, { path: '4210', destPath: '4212' }));
 
     expect(r.sent[0].type).toBe(WsMessageType.RESP_ERROR);
   });

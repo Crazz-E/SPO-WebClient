@@ -286,6 +286,10 @@ export enum WsMessageType {
   RESP_FAVORITE_DELETE = 'RESP_FAVORITE_DELETE',
   REQ_FAVORITE_RENAME = 'REQ_FAVORITE_RENAME',
   RESP_FAVORITE_RENAME = 'RESP_FAVORITE_RENAME',
+  REQ_FAVORITE_CREATE_FOLDER = 'REQ_FAVORITE_CREATE_FOLDER',
+  RESP_FAVORITE_CREATE_FOLDER = 'RESP_FAVORITE_CREATE_FOLDER',
+  REQ_FAVORITE_MOVE = 'REQ_FAVORITE_MOVE',
+  RESP_FAVORITE_MOVE = 'RESP_FAVORITE_MOVE',
 
   // Research / Inventions
   REQ_RESEARCH_INVENTORY = 'REQ_RESEARCH_INVENTORY',
@@ -1633,6 +1637,34 @@ export interface WsReqFavoriteRename extends WsMessage {
 
 export interface WsRespFavoriteRename extends WsMessage {
   type: WsMessageType.RESP_FAVORITE_RENAME;
+  success: boolean;
+  message?: string;
+}
+
+/** Create a folder in the Favorites tree — `RDOFavoritesNewItem` with kind 0 (fvkFolder). */
+export interface WsReqFavoriteCreateFolder extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_CREATE_FOLDER;
+  parentPath: string;
+  name: string;
+}
+
+export interface WsRespFavoriteCreateFolder extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_CREATE_FOLDER;
+  success: boolean;
+  /** The id the server assigned, present only on success. */
+  id?: number;
+  errorMessage?: string;
+}
+
+/** Move one favourite to another folder — `RDOFavoritesMoveItem` (`InterfaceServer.pas:202`). */
+export interface WsReqFavoriteMove extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_MOVE;
+  path: string;
+  destPath: string;
+}
+
+export interface WsRespFavoriteMove extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_MOVE;
   success: boolean;
   message?: string;
 }
