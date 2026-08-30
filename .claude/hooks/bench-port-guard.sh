@@ -60,29 +60,46 @@ verdict="$(printf '%s' "$payload" | BENCH_PORT="$BENCH_PORT" DEFAULT_PORT="$DEFA
         continue;
       }
       kept.push(line);
-      const heredoc = line.match(/<<-?\s*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?/);
+      // Scrub arithmetic expansions first so an arithmetic left-shift never reads as a
+      // heredoc start; exclude herestrings (triple-angle-bracket) with the lookbehind/lookahead pair.
+      const scrubbed = line.replace(/\\\$\(\([\s\S]*?\)\)/g, '');
+      const heredoc = scrubbed.match(/(?<!<)<<(?!<)-?\s*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?/);
       if (heredoc) terminator = heredoc[1];
     }
     const text = kept.join('\n');
-    const segments = text.split(/\n|;|&&|\|\||\||\(/);
+
+    // Unwrap \`bash -c '…'\` / \`sh -c "…"\` / \`dash -c …\` payloads so a wrapped invocation is
+    // seen too — bounded to 3 passes so adversarial nesting cannot loop.
+    let unwrapped = text;
+    for (let pass = 0; pass < 3; pass++) {
+      const wrapRe = /(?:^|[\s;&|(])(?:ba|da|z)?sh\s+(?:-\S+\s+)*-c\s+(\"([^\"]*)\"|'([^']*)'|(\S+))/g;
+      let added = '';
+      let m;
+      while ((m = wrapRe.exec(unwrapped))) added += '\n' + (m[2] ?? m[3] ?? m[4] ?? '');
+      if (!added) break;
+      unwrapped += added;
+    }
+    const segments = unwrapped.split(/\n|;|&&|\|\||\||\(/);
 
     // A command that only READS a line of script — grep, cat, sed -n — mentions the verb
     // without invoking it. Only an invocation at the head of a segment counts.
-    const strip = s => s.replace(/^\s*(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*/, '');
+    const strip = s => s.replace(/^\s*(?:(?:env|nohup)\s+(?:-\S+\s+)*|[A-Za-z_][A-Za-z0-9_]*=[^\s]*\s+)*/, '');
 
     // \`npm start\` and the server entry take PORT as they find it — unset means 8080.
     // \`npm run dev:local\` picks its own free port off the bench (scripts/dev-local.sh),
     // so it is only a problem when a PORT=8080 is typed in front of it.
     const startsGateway = s => {
       const c = strip(s);
-      return /^npm\s+(?:run\s+)?start(\s|$)/.test(c)
+      return /^npm\s+(?:-{1,2}[^\s]+(?:\s+[^\s-][^\s]*)?\s+)*(?:run\s+)?start(\s|$)/.test(c)
         || /^(?:npx\s+)?node\s+(?:--[^\s]+\s+)*dist\/server\/server\.js(\s|$)/.test(c);
     };
     const startsLocalGateway = s => /^npm\s+run\s+dev:local(\s|$)/.test(strip(s));
     const drivesLiveWorld = s => {
       const c = strip(s);
       return /^npm\s+run\s+test:live:local(\s|$)/.test(c)
-        || /^(?:npx\s+)?node\s+(?:--[^\s]+\s+)*dist\/e2e\/run\.js(\s|$)/.test(c);
+        || /^(?:npx\s+)?node\s+(?:--[^\s]+\s+)*dist\/e2e\/run\.js(\s|$)/.test(c)
+        || /^npm\s+run\s+gate:local\b.*--live\b/.test(c)
+        || /^(?:npx\s+)?node\s+(?:--[^\s]+\s+)*scripts\/verify-gate\.js\b.*--live\b/.test(c);
     };
 
     // The port the gateway would actually bind: the last PORT= assignment anywhere in the
@@ -90,7 +107,7 @@ verdict="$(printf '%s' "$payload" | BENCH_PORT="$BENCH_PORT" DEFAULT_PORT="$DEFA
     // the default from src/shared/config.ts.
     const bench = Number(process.env.BENCH_PORT);
     const fallback = Number(process.env.DEFAULT_PORT);
-    const assignments = [...text.matchAll(/(?:^|[\s;&|])(?:export\s+)?PORT=(\d+)/g)];
+    const assignments = [...unwrapped.matchAll(/(?:^|[\s;&|])(?:export\s+)?PORT=(\d+)/g)];
     const explicit = assignments.length ? Number(assignments[assignments.length - 1][1]) : null;
     const port = explicit ?? fallback;
 

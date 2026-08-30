@@ -41,18 +41,46 @@ invokes_push="$(printf '%s' "$payload" | node -e "
         continue;
       }
       kept.push(line);
-      const heredoc = line.match(/<<-?\s*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?/);
+      // Scrub arithmetic expansions first so an arithmetic left-shift never reads as a
+      // heredoc start; exclude herestrings (triple-angle-bracket) with the lookbehind/lookahead pair.
+      const scrubbed = line.replace(/\\\$\(\([\s\S]*?\)\)/g, '');
+      const heredoc = scrubbed.match(/(?<!<)<<(?!<)-?\s*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?/);
       if (heredoc) terminator = heredoc[1];
     }
 
-    const segments = kept.join('\n').split(/\n|;|&&|\|\||\||\(/);
+    // Drop an unquoted trailing comment per line before segmenting — errs toward blocking,
+    // which is the safe direction for a push gate (\`git push origin main # not a --dry-run\`).
+    const uncommented = kept.map(l => l.replace(/\s#.*$/, '')).join('\n');
+    const segments = uncommented.split(/\n|;|&&|\|\||\||\(/);
     // Allow leading global flags, with or without a value: \`git -C . push\`.
     const isPush = s => /^\s*git\s+(?:-[^\s]+(?:\s+[^\s-][^\s]*)?\s+)*push(\s|$)/.test(s);
     const pushes = segments.filter(isPush);
-    const dryRun = /--dry-run/.test(command);
+    // Per-segment, not per-command: \`echo --dry-run && git push origin main\` must not be
+    // disarmed by a --dry-run token that belongs to a DIFFERENT segment.
+    const dryRun = pushes.length > 0 && pushes.every(s => /(^|\s)--dry-run(\s|$)/.test(s));
     // A push that only DELETES a remote ref (\`--delete\`, \`-d\`, or an empty-source refspec
     // \`origin :branch\`) moves no code and needs no attestation.
     const deleteOnly = pushes.length > 0 && pushes.every(s => /\s(?:--delete|-d)(?:\s|$)/.test(s) || /\s:[^\s]+/.test(s));
+
+    // Refspec pushes to main from ANY branch — \`git push origin HEAD:main\`,
+    // \`origin fix/x:main\`, \`--force origin HEAD:main\` — are not caught by the current-branch
+    // check below, which only sees the session's own HEAD. Tokenize each engaged push after
+    // \`push\`, drop flags, treat the first remaining token as the remote when 2+ tokens
+    // remain, and refuse when any remaining refspec's destination (after the last \`:\`, \`+\`
+    // stripped) is \`main\` or \`refs/heads/main\`.
+    let refspecToMain = false;
+    if (!dryRun && !deleteOnly) {
+      for (const s of pushes) {
+        const afterPush = s.replace(/^\s*git\s+(?:-[^\s]+(?:\s+[^\s-][^\s]*)?\s+)*push\s*/, '');
+        const tokens = afterPush.split(/\s+/).filter(Boolean).filter(t => !t.startsWith('-'));
+        const refspecs = tokens.length >= 2 ? tokens.slice(1) : [];
+        for (const raw of refspecs) {
+          const spec = raw.replace(/^\+/, '');
+          const dest = spec.includes(':') ? spec.slice(spec.lastIndexOf(':') + 1) : spec;
+          if (dest === 'main' || dest === 'refs/heads/main') refspecToMain = true;
+        }
+      }
+    }
 
     // Which repo the push acts on. The hook runs in the SESSION's cwd, which is not where
     // a \`cd <worktree> && git push\` or a \`git -C <worktree> push\` lands — judging the
@@ -70,12 +98,20 @@ invokes_push="$(printf '%s' "$payload" | node -e "
         }
       }
     }
-    process.stdout.write((pushes.length > 0 && !dryRun && !deleteOnly ? 'yes' : 'no') + '\t' + dir.replace(new RegExp('^[\\x22\\x27]|[\\x22\\x27]$', 'g'), ''));
+    const engaged = pushes.length > 0 && !dryRun && !deleteOnly;
+    const verdict = engaged ? (refspecToMain ? 'main' : 'yes') : 'no';
+    process.stdout.write(verdict + '\t' + dir.replace(new RegExp('^[\\x22\\x27]|[\\x22\\x27]$', 'g'), ''));
   });
 " 2>/dev/null)"
 
 push_dir="${invokes_push#*	}"
 invokes_push="${invokes_push%%	*}"
+
+if [ "$invokes_push" = "main" ]; then
+  echo "BLOCKED: push to main by refspec (e.g. \`origin HEAD:main\`, \`origin <branch>:main\`)." >&2
+  echo "doc/E2E-POLICY.md §3 — work on a feature/fix branch and open a PR." >&2
+  exit 2
+fi
 [ "$invokes_push" = "yes" ] || exit 0
 
 # The repo to judge: the directory the push command itself names (\`git -C <dir>\`, or a

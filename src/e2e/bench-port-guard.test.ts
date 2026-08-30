@@ -60,6 +60,12 @@ describe('starting a gateway on the bench port', () => {
     ['PORT=8080 npm start'],
     ['PORT=8080 npm run dev:local'],
     ['export PORT=8080; npm start'],
+    ['env PORT=8080 npm start'],
+    ['nohup node dist/server/server.js'],
+    ["bash -c 'npm start'"],
+    ['sh -c "npm start"'],
+    ['npm --prefix /x start'],
+    ['echo $((1 << 2))\nnpm start'],
   ])('blocks %s', (command) => {
     expect(guard(command)).toBe(2);
   });
@@ -82,6 +88,9 @@ describe('starting a gateway on the bench port', () => {
     ['npm run test:live'],
     ['npm run build'],
     ['npm test'],
+    ['env PORT=8081 npm start'],
+    ['npm run gate:local'],
+    ['node scripts/verify-gate.js'],
   ])('allows %s', (command) => {
     expect(guard(command)).toBe(0);
   });
@@ -93,7 +102,12 @@ describe('starting a gateway on the bench port', () => {
 });
 
 describe('driving the live world outside the worker', () => {
-  it.each([['npm run test:live:local'], ['node dist/e2e/run.js']])('blocks %s', (command) => {
+  it.each([
+    ['npm run test:live:local'],
+    ['node dist/e2e/run.js'],
+    ['node scripts/verify-gate.js --live'],
+    ['npm run gate:local -- --live'],
+  ])('blocks %s', (command) => {
     expect(guard(command)).toBe(2);
   });
 

@@ -161,7 +161,7 @@ describe('commands the hook must catch', () => {
     ['a push at the end of a chain', 'git add . && git push -u origin HEAD'],
     ['a push on a later line', 'git add .\ngit push'],
     ['a push after a semicolon', 'git commit -m x; git push'],
-    ['a push with a global git flag', 'git -C . push origin main'],
+    ['a push with a global git flag', 'git -C . push origin fix/x'],
     ['a refspec that has a source — code moves', 'git push origin fix/x:fix/x'],
     ['a deletion chained with a real push', 'git push origin --delete fix/old && git push -u origin HEAD'],
   ])('recognises %s', (_label, command) => {
@@ -239,5 +239,25 @@ describe('the main-branch guard', () => {
     expect(
       invoke('git push -u origin HEAD', { GATE_REPO_DIR: dir, SPO_BENCH_DIR: benchWith(dir, {}) }).code,
     ).toBe(0);
+  });
+});
+
+describe('the refspec-to-main guard', () => {
+  // These push main by NAMING it as the destination, from a repo whose local branch is a
+  // feature branch — the branch guard above never sees them, since it only reads the
+  // session's own HEAD. Run from scratchRepo() (fix/scratch), never scratchRepoOnMain().
+  it.each([
+    ['a HEAD:main refspec', 'git push origin HEAD:main'],
+    ['a branch:main refspec', 'git push origin fix/scratch:main'],
+    ['a forced HEAD:main refspec', 'git push --force origin HEAD:main'],
+    ['a bare main destination, no colon', 'git push origin main'],
+  ])('refuses %s from a feature branch', (_label, command) => {
+    const result = invoke(command, { GATE_REPO_DIR: scratchRepo(), SPO_BENCH_DIR: scratchBench() });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toMatch(/push to main by refspec/);
+  });
+
+  it('still allows a refspec that does not target main', () => {
+    expect(runHook('git push origin fix/x:fix/x')).toBe(0);
   });
 });
