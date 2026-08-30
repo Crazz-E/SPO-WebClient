@@ -33,6 +33,7 @@ import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '.
 import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 import { buildRuntimeConfigScript } from './runtime-config';
 import { handleBugReportRequest, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
+import { handleReportPullList, handleReportPullFetch, handleReportPullAck } from './report-pull-endpoint';
 import { enforceProductionConfig } from './production-config';
 
 /**
@@ -900,8 +901,55 @@ const server = http.createServer(async (req, res) => {
   if (safePath === '/api/bug-report' && req.method === 'POST') {
     handleBugReportRequest(req, res, {
       enabled: config.server.bugReportMode,
-      queueDir: DEFAULT_QUEUE_DIR,
+      queueDir: config.server.reportsDir || DEFAULT_QUEUE_DIR,
       allowRequest: () => checkRateLimit(getClientIp(req), 'bug-report', 10),
+    });
+    return;
+  }
+
+  // Bug report PULL: the dev-machine orchestrator's own initiative (SPO-Pipeline's
+  // remote-report-pull.js) fetches queued reports over HTTPS instead of production pushing
+  // anything. Gated by SPO_REPORT_PULL_TOKEN, deliberately independent of SPO_BUG_REPORT — a
+  // report already queued should still drain even with capture switched off. Every route
+  // answers 404 (never 401/403) when the token is unset or wrong, same convention as the
+  // deposit route. 20/min is generous for a 5-15 min poll cycle while still bounding a
+  // misbehaving or malicious caller who somehow has the token.
+  if (safePath === '/api/report-pull/list' && req.method === 'GET') {
+    if (!checkRateLimit(getClientIp(req), 'report-pull', 20)) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Too many requests. Try again in a minute.' }));
+      return;
+    }
+    handleReportPullList(req, res, {
+      token: config.server.reportPullToken,
+      queueDir: config.server.reportsDir || DEFAULT_QUEUE_DIR,
+      peerIp: getClientIp(req),
+    });
+    return;
+  }
+  if (safePath.startsWith('/api/report-pull/fetch') && req.method === 'GET') {
+    if (!checkRateLimit(getClientIp(req), 'report-pull', 20)) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Too many requests. Try again in a minute.' }));
+      return;
+    }
+    handleReportPullFetch(req, res, {
+      token: config.server.reportPullToken,
+      queueDir: config.server.reportsDir || DEFAULT_QUEUE_DIR,
+      peerIp: getClientIp(req),
+    });
+    return;
+  }
+  if (safePath === '/api/report-pull/ack' && req.method === 'POST') {
+    if (!checkRateLimit(getClientIp(req), 'report-pull', 20)) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Too many requests. Try again in a minute.' }));
+      return;
+    }
+    handleReportPullAck(req, res, {
+      token: config.server.reportPullToken,
+      queueDir: config.server.reportsDir || DEFAULT_QUEUE_DIR,
+      peerIp: getClientIp(req),
     });
     return;
   }

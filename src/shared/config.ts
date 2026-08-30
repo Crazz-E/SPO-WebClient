@@ -31,6 +31,14 @@ export const config = {
     bugReportMode: (typeof window !== 'undefined' && (window as unknown as Record<string, unknown>).__SPO_BUG_REPORT__ !== undefined)
       ? (window as unknown as Record<string, unknown>).__SPO_BUG_REPORT__ === true
       : getEnv('SPO_BUG_REPORT') === 'true',
+    /** Where deposited bug reports land — configurable so a container without a bind-mounted
+     * home directory can still point it at a durable, mounted path. Server-side only: never
+     * read from `window`, unlike bugReportMode/forceWorld above. */
+    reportsDir: getEnv('SPO_REPORTS_DIR') || undefined,
+    /** Bearer token gating GET/POST /api/report-pull/* (see report-pull-endpoint.ts). Unset or
+     * under 32 chars disables the whole surface — every route answers 404. Server-side only,
+     * and deliberately never exposed via /spo-runtime-config.js's window globals. */
+    reportPullToken: getEnv('SPO_REPORT_PULL_TOKEN') || null,
   },
 
   /**
