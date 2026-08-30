@@ -1,7 +1,7 @@
 /**
  * The busy set in `scripts/claim-read.sh` derives a branch name from the `Session` field with
  * `split(" @ ")[0]`. On an EMPTY `Session` that returns `[]`, so `[0]` is null, and
- * `$heartbeats[null]` is a hard jq error — "Cannot index object with null" — which does not
+ * `$live[null]` is a hard jq error — "Cannot index object with null" — which does not
  * degrade the claim read, it kills it. `npm run board:claim` exits 5 for EVERY session on the
  * machine, and nothing can be claimed at all until the field is filled again.
  *
@@ -33,45 +33,41 @@ const busySelects = (): string => {
   return script.slice(start + open.length, end).trim();
 };
 
-const busyAreas = (cards: unknown[], heartbeats: Record<string, string>): string[] => {
+const busyAreas = (cards: unknown[], live: Record<string, string>): string[] => {
   const program = `[$cards[] ${busySelects()} | .Area] | unique`;
   const out = execFileSync(
     'jq',
-    [
-      '-n',
-      '--argjson',
-      'cards',
-      JSON.stringify(cards),
-      '--argjson',
-      'heartbeats',
-      JSON.stringify(heartbeats),
-      program,
-    ],
+    ['-n', '--argjson', 'cards', JSON.stringify(cards), '--argjson', 'live', JSON.stringify(live), program],
     { encoding: 'utf8' }
   );
   return JSON.parse(out) as string[];
 };
 
-const heartbeats = { 'claude/live-one': 'LIVE', 'claude/dead-one': 'EXPIRED' };
+/**
+ * `<branch> -> LIVE|EXPIRED`, the map claim-read.sh builds from the batched ref-date call. It
+ * was merged with a per-session heartbeat scan until #441 retired that dead half; the binding
+ * is named `live` rather than `heartbeats` since.
+ */
+const live = { 'claude/live-one': 'LIVE', 'claude/dead-one': 'EXPIRED' };
 
 describe('the claim read survives a card the human has freed', () => {
   it('an empty Session in a busy column does not crash the read, and holds no ground', () => {
     // The exact board shape a human release leaves behind: still in Checks & PR, owner cleared.
-    expect(busyAreas([{ Status: 'Checks & PR', Area: 'rdo', Session: '' }], heartbeats)).toEqual([]);
+    expect(busyAreas([{ Status: 'Checks & PR', Area: 'rdo', Session: '' }], live)).toEqual([]);
   });
 
   it('a null Session is equally survivable — the field may be absent, not just blank', () => {
     expect(
-      busyAreas([{ Status: 'Validation', Area: 'gateway', Session: null }], heartbeats)
+      busyAreas([{ Status: 'Validation', Area: 'gateway', Session: null }], live)
     ).toEqual([]);
-    expect(busyAreas([{ Status: 'Validation', Area: 'gateway' }], heartbeats)).toEqual([]);
+    expect(busyAreas([{ Status: 'Validation', Area: 'gateway' }], live)).toEqual([]);
   });
 
   it('a live owner still reserves its ground — the fix must not disarm the rule', () => {
     expect(
       busyAreas(
         [{ Status: 'Checks & PR', Area: 'rdo', Session: 'claude/live-one @ 2026-08-28' }],
-        heartbeats
+        live
       )
     ).toEqual(['rdo']);
   });
@@ -80,7 +76,7 @@ describe('the claim read survives a card the human has freed', () => {
     expect(
       busyAreas(
         [{ Status: 'Gate', Area: 'bench', Session: 'claude/dead-one @ 2026-08-27' }],
-        heartbeats
+        live
       )
     ).toEqual([]);
   });
@@ -94,6 +90,6 @@ describe('the claim read survives a card the human has freed', () => {
       { Status: 'Checks & PR', Area: 'docs', Session: 'claude/live-one @ 2026-08-28' },
     ];
     // Only the live non-docs card. `docs` never blocks; Todo never makes an area busy.
-    expect(busyAreas(board, heartbeats)).toEqual(['client']);
+    expect(busyAreas(board, live)).toEqual(['client']);
   });
 });

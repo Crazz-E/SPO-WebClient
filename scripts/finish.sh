@@ -42,15 +42,9 @@ MAIN_REPO="${SPO_MAIN_REPO:-$HOME/SPO-WebClient}"
 here="$(git rev-parse --show-toplevel)"
 branch="$(git rev-parse --abbrev-ref HEAD)"
 
-# Where sessions leave their heartbeat (`<key>.alive`) and where this script marks a worktree
-# retired. Outside every worktree, on purpose: a file inside one would make it dirty, which
-# blocks both the gate and finish itself.
+# Where this script marks a worktree retired. Outside every worktree, on purpose: a file
+# inside one would make it dirty, which blocks both the gate and finish itself.
 SESSIONS_DIR="${SPO_SESSION_DIR:-$HOME/.spo-bench/sessions}"
-# How long a heartbeat keeps a worktree: long enough to cover a session thinking, short
-# enough that an abandoned one is reaped the same day. A retired worktree needs far less —
-# its work is already on main, only a live session still matters.
-IDLE_MIN="${SPO_WORKTREE_IDLE_MIN:-120}"
-RETIRED_IDLE_MIN="${SPO_RETIRED_IDLE_MIN:-15}"
 
 target=""
 remove_self=0
@@ -142,25 +136,14 @@ processes_inside() {
   '
 }
 
-# Minutes since this worktree's session last stamped its heartbeat; empty if it never has
-# (a worktree from before heartbeats existed, or one no session ever opened).
-heartbeat_age_min() {
-  local file now stamp
-  file="$SESSIONS_DIR/$(session_key "$1").alive"
-  [ -f "$file" ] || return 0
-  now="$(date +%s)"
-  stamp="$(stat -c %Y "$file" 2>/dev/null || echo "$now")"
-  echo $(( (now - stamp) / 60 ))
-}
-
 forget_session_files() {
   local key
   key="$(session_key "$1")"
-  rm -f "$SESSIONS_DIR/$key.alive" "$SESSIONS_DIR/$key.finished" 2>/dev/null || true
+  rm -f "$SESSIONS_DIR/$key.finished" 2>/dev/null || true
 }
 
 # Session worktrees nobody is using any more. Three kinds, all clean, with no process
-# standing inside them and no recent heartbeat:
+# standing inside them:
 #   - retired: `finish` ran there, its work is on main, and it was kept only so the
 #     session that ran it would not lose the ground under its feet;
 #   - orphans: zero commits ahead of origin/main — started and abandoned untouched;
@@ -168,15 +151,17 @@ forget_session_files() {
 #     session pushed, merged, and never ran finish. Its work is on main; only the shell
 #     of it remains. Finishing it here is how one session's oversight is healed by the
 #     next, mechanically.
-# Anything else — an edit, an unmerged commit, a live session — is kept. Two independent
-# proofs of life were required to fail before a directory is taken away, because the cost
-# of being wrong is a session that cannot run a single command afterwards.
+# Anything else — an edit, an unmerged commit, a live session — is kept. `processes_inside`
+# is the ONE proof of life here, and being wrong costs a session the ground under its feet,
+# so the three ways that check used to answer wrongly are each closed in its own comment.
 #
-# ⚠ ONE OF THE TWO IS GONE. The heartbeat (`heartbeat_age_min` below) has had no writer since
-# #425, so it always answers empty and the standing-process check carries this guard alone.
-# The margin this comment describes is currently halved.
+# There was a second proof until #441: a per-session heartbeat file. Its writer went with the
+# pilot hook layer in #425, so it had answered "no heartbeat" for every worktree since — and a
+# guard that always abstains is not a margin. What this glob still covers is hand-run session
+# worktrees: the orchestrator keeps its own outside `$MAIN_REPO/.claude/worktrees/` and removes
+# each one itself at FINISH, so it never reaches this code.
 prune_worktrees() {
-  local dir wt_branch ahead state retired age window
+  local dir wt_branch ahead state retired
   for dir in "$MAIN_REPO"/.claude/worktrees/*/; do
     dir="${dir%/}"
     [ -d "$dir/.git" ] || [ -f "$dir/.git" ] || continue
@@ -201,14 +186,6 @@ prune_worktrees() {
         retired=0
       fi
     fi
-    window="$IDLE_MIN"
-    [ "$retired" = "1" ] && window="$RETIRED_IDLE_MIN"
-    age="$(heartbeat_age_min "$dir")"
-    if [ -n "$age" ] && [ "$age" -lt "$window" ]; then
-      echo "== keeping $dir — a session was working there ${age} min ago (idle window ${window} min)"
-      continue
-    fi
-
     wt_branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
     ahead="$(git -C "$dir" rev-list --count origin/main..HEAD 2>/dev/null || echo 1)"
     if [ "$retired" = "1" ]; then
@@ -297,7 +274,6 @@ if [ "$branch_only" = 0 ] && [ "$here" != "$MAIN_REPO" ]; then
     # the directory is still there and the session can keep working in it.
     mkdir -p "$SESSIONS_DIR"
     printf '%s\t%s\t%s\n' "$here" "$branch" "$(git -C "$here" rev-parse HEAD)" > "$SESSIONS_DIR/$(session_key "$here").finished"
-    # The session may keep working here, so `.alive` stays.
     retired_here=1
     echo "== retiring worktree $here — kept while this session is in it"
   fi
@@ -318,7 +294,7 @@ echo
 if [ "$retired_here" = "1" ]; then
   echo "finished: main at $(git log --oneline -1)."
   echo "This worktree is retired: nothing left to do in it, and the next finish removes it"
-  echo "once no session is standing here (idle window ${RETIRED_IDLE_MIN} min)."
+  echo "once no process is standing in it."
   echo "To remove it now and lose this directory: npm run finish -- --now"
 else
   echo "finished: main at $(git log --oneline -1), no branch left for '$branch' locally or on origin."

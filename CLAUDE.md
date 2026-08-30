@@ -512,11 +512,11 @@ agent meets the same wall. `gh pr create`, `gh pr merge` and `gh issue list` are
 fast-forwards `~/SPO-WebClient`, prunes stale refs, reinstalls the bench worker if the merge
 touched `src/e2e/bench/` or `scripts/bench-*`, and **retires** this worktree — it stays on disk
 while a session stands in it, and the next run reaps it (it also heals worktrees a previous
-session forgot). **A session may keep working after `finish`**: a process standing in the
-worktree protects it (`SPO_WORKTREE_IDLE_MIN` 120 min, `SPO_RETIRED_IDLE_MIN` 15 min). The
-heartbeat in `~/.spo-bench/sessions/` was the second protection; nothing has written one since
-#425, so the standing process is currently the only one. `npm run finish -- --now`
-removes immediately, for a human on the way out.
+session forgot). **A session may keep working after `finish`**: a process standing anywhere inside the worktree
+protects it, and that is the only thing that does. A per-session heartbeat was the second
+protection until #441 removed it — its writer had gone with the pilot hooks in #425, so it had
+been abstaining on every worktree since. Keep a shell inside the tree if you want the ground to
+stay. `npm run finish -- --now` removes immediately, for a human on the way out.
 
 **The last link is the release:** every merge to `main` runs `release.yml` — version from the
 last `v*` tag and the commits since it (`feat` → minor, otherwise patch), then build, tag,

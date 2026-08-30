@@ -30,19 +30,17 @@
 # Gate, Validation, Checks & PR or Merging, `docs` excluded because it never blocks. It is
 # computed rather than eyeballed off the item
 # lines so the rule stays executable; `$cards` is bound once and both outputs read it. A busy
-# card only counts while its ground reservation is LIVE: `scripts/heartbeat-scan.sh` (local
-# disk, no API call) answers that for any branch with a heartbeat file; a busy-status card
-# whose branch has none falls back to that branch's last commit date on `origin`, fetched with
-# ONE batched GraphQL call — issued only when that branch set is
-# non-empty.
+# card only counts while its ground reservation is LIVE, and that is read from the branch's
+# last commit date on `origin`: ONE batched GraphQL call covering the whole busy set, issued
+# only when that set is non-empty. A branch whose last commit is older than
+# SPO_WORKTREE_IDLE_MIN (default 120) holds no ground. If that call fails for any reason the
+# affected branches are treated as EXPIRED (free) and a `note:` line says so — the read
+# degrades to "more candidates", never hangs.
 #
-# ⚠ SINCE #425 THAT IS EVERY READ. The heartbeat writer (.claude/hooks/session-heartbeat.sh)
-# was retired with the pilot hook layer and nothing stamps `.alive` any more, so no busy branch
-# has a heartbeat and the fallback below is the ONLY path. The batched call is therefore a
-# fixed cost of every claim read, not the rare case this comment used to describe. It is still
-# ONE batched call for the whole set, which is why the budget holds. If
-# that call fails for any reason the affected branches are treated as EXPIRED (free) and a
-# `note:` line says so — the read degrades to "more candidates", never hangs.
+# There was a second, cheaper source here until #441: a per-session heartbeat file stamped by
+# .claude/hooks/session-heartbeat.sh. That hook went with the pilot hook layer in #425, so the
+# commit date became the only path; the dead reader was removed rather than left to imply a
+# liveness signal nothing produces.
 #
 # The blocked lines: `blockedBy(first: 10) { nodes { state } }` is read into one OPEN-only set
 # and BOTH the `#N blocked by …` line and the walk's "blocked" skip render from that same
@@ -55,9 +53,9 @@
 # per page under `--paginate` and so cannot sum rateLimit.cost, dedupe the metadata, or compute
 # a busy set across pages — which is why the stream is slurped into one jq program with `-s`.
 # That is why the whole claim read is one program over one response, and not a saved file
-# filtered twice. The `items: N/M` line proves the read was complete. (The heartbeat scan and
-# the optional ref-date sidecar are separate, smaller reads feeding the same jq program as
-# `--argjson heartbeats`; they do not touch the board query or its pagination.)
+# filtered twice. The `items: N/M` line proves the read was complete. (The ref-date sidecar is
+# a separate, smaller read feeding the same jq program as `--argjson live`; it does not touch
+# the board query or its pagination.)
 #
 #   bash scripts/claim-read.sh
 set -euo pipefail
@@ -97,21 +95,17 @@ cards_json=$(jq -s -c '
       + {id: .id, number: (.content.number // 0), title: (.content.title // "")}]
 ' <<< "$raw")
 
-# Heartbeats, local disk, no API cost — `<branch> -> LIVE|EXPIRED`.
-heartbeats_json=$(bash scripts/heartbeat-scan.sh 2>/dev/null | jq -R -s '
-  split("\n") | map(select(test("\t"))) | map(split("\t")) | map({(.[0]): .[2]}) | add // {}
-')
-
-# Busy-status branches (Planning/Implementing/Gate/Validation/Checks & PR/Merging, area != docs) with NO heartbeat entry at all —
-# these are the only ones that need the ref-date sidecar (rule F).
-busy_branches_json=$(jq -c --argjson heartbeats "$heartbeats_json" '
+# Busy-status branches (Planning/Implementing/Gate/Validation/Checks & PR/Merging, area !=
+# docs) — every one of them needs the ref-date sidecar (rule F).
+busy_branches_json=$(jq -c '
   [.[] | select(.Status == "Planning" or .Status == "Implementing" or .Status == "Gate" or .Status == "Validation" or .Status == "Checks & PR" or .Status == "Merging")
     | select(.Area != null and .Area != "docs")
     | (.Session // "") | split(" @ ")[0] | select(length > 0)]
   | unique
-  | map(select($heartbeats[.] == null))
 ' <<< "$cards_json")
 
+# `<branch> -> LIVE|EXPIRED` for every busy branch; empty when no branch is busy.
+live_json='{}'
 if [ "$(jq 'length' <<< "$busy_branches_json")" -gt 0 ]; then
   query="{ repository(owner: \"$OWNER\", name: \"$REPO\") {"
   i=0
@@ -122,7 +116,7 @@ if [ "$(jq 'length' <<< "$busy_branches_json")" -gt 0 ]; then
   query+=" } }"
 
   if refraw=$(timeout 30 gh api graphql -f query="$query" 2>/dev/null); then
-    ref_status_json=$(jq -c --argjson branches "$busy_branches_json" --argjson idle_min_sec "$((idle_min * 60))" --arg now "$(date -u +%s)" '
+    live_json=$(jq -c --argjson branches "$busy_branches_json" --argjson idle_min_sec "$((idle_min * 60))" --arg now "$(date -u +%s)" '
       ($now | tonumber) as $now
       | .data.repository as $r
       | [range(0; ($branches | length))]
@@ -133,13 +127,11 @@ if [ "$(jq 'length' <<< "$busy_branches_json")" -gt 0 ]; then
             else "EXPIRED" end) })
       | from_entries
     ' <<< "$refraw")
-    heartbeats_json=$(jq -c --argjson extra "$ref_status_json" '. + $extra' <<< "$heartbeats_json")
     ref_note=""
   else
     n=$(jq 'length' <<< "$busy_branches_json")
     ref_note="note: ref-date lookup failed, $n branches treated as free"
-    ref_status_json=$(jq -c '[.[] | {key: ., value: "EXPIRED"}] | from_entries' <<< "$busy_branches_json")
-    heartbeats_json=$(jq -c --argjson extra "$ref_status_json" '. + $extra' <<< "$heartbeats_json")
+    live_json=$(jq -c '[.[] | {key: ., value: "EXPIRED"}] | from_entries' <<< "$busy_branches_json")
   fi
 else
   ref_note=""
@@ -159,7 +151,7 @@ jq -n -r \
   --argjson rl "$ratelimit_json" \
   --argjson meta "$meta_json" \
   --argjson issues "$blocked_json" \
-  --argjson heartbeats "$heartbeats_json" \
+  --argjson live "$live_json" \
   --arg ref_note "$ref_note" '
   if ($cards | length) != ($total // -1)
     then error(if $total == null
@@ -177,14 +169,14 @@ jq -n -r \
   | ([$cards[]
       | select(.Status == "Planning" or .Status == "Implementing" or .Status == "Gate" or .Status == "Validation" or .Status == "Checks & PR" or .Status == "Merging")
       | select(.Area != null and .Area != "docs")
-      # `split` on an EMPTY string returns [], so `[0]` is null and `$heartbeats[null]` is a
+      # `split` on an EMPTY string returns [], so `[0]` is null and `$live[null]` is a
       # hard jq error — "Cannot index object with null" — that kills the whole claim read for
       # every session. An empty `Session` in a busy column is not a corrupt state: it is
       # exactly what the human release of an orphaned card produces (§ The ownership law,
       # law 3), in the window before the card is re-taken or moved back to Todo. A card
       # nobody owns reserves no ground, so it must simply not be busy.
       | select(((((.Session // "") | split(" @ ")[0]) // "") | length) > 0)
-      | select((($heartbeats[((.Session // "") | split(" @ ")[0])]) // "EXPIRED") == "LIVE")
+      | select((($live[((.Session // "") | split(" @ ")[0])]) // "EXPIRED") == "LIVE")
       | .Area] | unique) as $busy
   | (reduce ($cards[] | select(.Status == "Todo")) as $c
       ({rank: 0, lines: []};
