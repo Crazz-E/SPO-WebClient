@@ -49,7 +49,6 @@ import type { RdoPacket, WorldInfo } from '../../shared/types';
 import { RdoValue, RdoCommand } from '../../shared/rdo-types';
 import { RdoVerb, RdoAction } from '../../shared/types';
 import { TimeoutCategory } from '../../shared/timeout-categories';
-import { config } from '../../shared/config';
 
 const mockFetch = fetch as unknown as jest.MockedFunction<
   (url: string, init?: unknown) => Promise<Response>
@@ -1247,18 +1246,15 @@ describe('getPoliticsData', () => {
     expect(propsAt(fake)).not.toHaveBeenCalled();
   });
 
-  it('falls back to cachedUsername and the config directory host/port when the session has none', async () => {
+  it('refuses when the DA lock channel is unset, rather than falling back to the directory host/port', async () => {
     const fake = makeWebCtx({ activeUsername: null, cachedUsername: 'Cached', cachedPassword: null, daAddr: null, daPort: null });
     mockFetch.mockResolvedValue(htmlResponse(''));
     stubTownRead(fake, []);
 
-    await getPoliticsData(fake.ctx, 'T', 1, 2);
-
-    const q = queryOf(0);
-    expect(q.get('TycoonName')).toBe('Cached');
-    expect(q.get('Password')).toBe('');
-    expect(q.get('DAAddr')).toBe(config.rdo.directoryHost);
-    expect(q.get('DAPort')).toBe(String(config.rdo.ports.directory));
+    // getPoliticsData's outer try/catch turns the refusal into the same default
+    // payload any other transport failure produces — it never lets a caller crash.
+    await expect(getPoliticsData(fake.ctx, 'T', 1, 2)).resolves.toEqual(getDefaultPoliticsData('T', false));
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('with no username at all sends an empty TycoonName, and an empty WorldName when the world has none', async () => {
@@ -1666,15 +1662,16 @@ describe.each([
     expect(q.get('TownName')).toBe('');
   });
 
-  it('falls back to cachedUsername and the config directory host/port', async () => {
+  it('refuses when the DA lock channel is unset, rather than falling back to the directory host/port', async () => {
     const fake = makeWebCtx({ activeUsername: null, cachedUsername: 'Cached', cachedPassword: null, daAddr: null, daPort: null });
     mockFetch.mockResolvedValue(htmlResponse(donePage()));
-    await fn(fake.ctx, 1, 2, 'T');
-    const q = queryOf(0);
-    expect(q.get('TycoonName')).toBe('Cached');
-    expect(q.get('Password')).toBe('');
-    expect(q.get('DAAddr')).toBe(config.rdo.directoryHost);
-    expect(q.get('DAPort')).toBe(String(config.rdo.ports.directory));
+    // The function's own try/catch turns the refusal into the same failure
+    // shape any other transport error produces — it never lets a caller crash.
+    expect(await fn(fake.ctx, 1, 2, 'T')).toEqual({
+      success: false,
+      message: 'ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('with no username at all sends an empty TycoonName and empty WorldName when the world has none', async () => {

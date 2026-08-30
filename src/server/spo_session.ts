@@ -88,6 +88,7 @@ import * as researchHandler from './session/research-handler';
 import { dispatchPush } from './session/push-dispatcher';
 import * as loginHandler from './session/login-handler';
 import { canBufferRequest, isConnectionBoundMember } from './session/request-routing';
+import { requireDaParams } from './session/asp-da-params';
 import { classifyRdoError, ErrorRecovery } from './session/rdo-error-classifier';
 import { handleRdoErrorResponse } from './session/rdo-error-contract';
 import { RdoConnectionPool, PooledConnection } from './session/rdo-connection-pool';
@@ -549,9 +550,10 @@ export class StarpeaceSession extends EventEmitter {
    * Filled from the InterfaceServer's `DALockPort`, exactly as Voyager fills its own
    * `fDAPort` (`Voyager/URLHandlers/ServerCnxHandler.pas:1046`) — the name follows the
    * `&DAPort=` URL parameter it feeds, not the InterfaceServer property it comes from.
+   * Null until the world announces it — there is no usable fallback.
    */
-  public getDAPort(): number {
-    return this.daPort || config.rdo.ports.directory;
+  public getDAPort(): number | null {
+    return this.daPort;
   }
 
   /**
@@ -911,8 +913,7 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
       Password: this.cachedPassword || '',
       Company: this.currentCompany?.name || '',
       WorldName: this.currentWorldInfo?.name || '',
-      DAAddr: this.daAddr || config.rdo.directoryHost,
-      DAPort: String(this.daPort || config.rdo.ports.directory),
+      ...requireDaParams({ daAddr: this.daAddr, daPort: this.daPort }),
       ISAddr: this.currentWorldInfo?.ip || '',
       ISPort: '8000',
       ClientViewId: String(this.interfaceServerId || '0'),

@@ -45,7 +45,6 @@ import { makeSessionCtx, FAKE_CONTEXT_IDS } from '../__tests__/session/fake-sess
 import type { FakeSessionCtx, AspActionUrl } from '../__tests__/session/fake-session-context';
 import type { SessionContext } from './session-context';
 import type { WorldInfo } from '../../shared/types';
-import { config } from '../../shared/config';
 
 const mockFetch = fetch as unknown as jest.MockedFunction<
   (url: string, init?: unknown) => Promise<Response>
@@ -483,19 +482,17 @@ describe('executeAutoConnectionAction', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('falls back to cachedUsername and the config directory when the session has none', async () => {
+    it('refuses when the DA lock channel is unset, rather than falling back to the directory host/port', async () => {
       const fake = makeWebCtx({
         activeUsername: null, cachedUsername: 'Cached', cachedPassword: null,
         daAddr: null, daPort: null, currentWorldInfo: { ...WORLD, name: '' },
       });
       mockFetch.mockResolvedValue(htmlResponse(ADDED));
-      await executeAutoConnectionAction(fake.ctx, 'add', 'PGIPlastics', '118,226,');
-      const q = queryOf(0);
-      expect(q.get('Tycoon')).toBe('Cached');
-      expect(q.get('Password')).toBe('');
-      expect(q.get('WorldName')).toBe('');
-      expect(q.get('DAAddr')).toBe(config.rdo.directoryHost);
-      expect(q.get('DAPort')).toBe(String(config.rdo.ports.directory));
+      const result = await executeAutoConnectionAction(fake.ctx, 'add', 'PGIPlastics', '118,226,');
+      expect(result).toEqual({
+        success: false,
+        message: 'ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)',
+      });
     });
 
     it('with no username at all sends an empty Tycoon', async () => {
@@ -561,33 +558,27 @@ describe('executeAutoConnectionAction', () => {
       expect(result).toEqual({ success: true });
     });
 
-    it.each(['hireTradeCenter', 'onlyWarehouses'])('%s falls back to cachedUsername, config directory host/port, empty tycoon id / password / world name', async (action) => {
+    it.each(['hireTradeCenter', 'onlyWarehouses'])('%s refuses when the DA lock channel is unset', async (action) => {
       const fake = makeWebCtx({
         activeUsername: null, cachedUsername: 'Cached', cachedPassword: null, daAddr: null, daPort: null,
         tycoonId: null, currentWorldInfo: { ...WORLD, name: '' },
       });
       mockFetch.mockResolvedValue(htmlResponse(TC_OK));
-      await executeAutoConnectionAction(fake.ctx, action, 'PGIFood');
-      const q = queryOf(0);
-      expect(q.get('Tycoon')).toBe('Cached');
-      expect(q.get('Password')).toBe('');
-      expect(q.get('TycoonId')).toBe('');
-      expect(q.get('WorldName')).toBe('');
-      expect(q.get('DAAddr')).toBe(config.rdo.directoryHost);
-      expect(q.get('DAPort')).toBe(String(config.rdo.ports.directory));
+      const result = await executeAutoConnectionAction(fake.ctx, action, 'PGIFood');
+      expect(result).toEqual({
+        success: false,
+        message: 'ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)',
+      });
     });
 
-    it('with no username at all sends an empty Tycoon; delete falls back to the config DA too', async () => {
+    it('delete also refuses when the DA lock channel is unset', async () => {
       const fake = makeWebCtx({ activeUsername: null, cachedUsername: null, daAddr: null, daPort: null });
-      mockFetch.mockResolvedValue(htmlResponse(TC_OK));
-      await executeAutoConnectionAction(fake.ctx, 'onlyWarehouses', 'PGIFood');
-      expect(queryOf(0).get('Tycoon')).toBe('');
-      await executeAutoConnectionAction(fake.ctx, 'hireTradeCenter', 'PGIFood');
-      expect(queryOf(1).get('Tycoon')).toBe('');
       mockFetch.mockResolvedValue(htmlResponse(DELETE_OK));
-      await executeAutoConnectionAction(fake.ctx, 'delete', 'PGIFood', '1,1,');
-      expect(queryOf(2).get('DAAddr')).toBe(config.rdo.directoryHost);
-      expect(queryOf(2).get('DAPort')).toBe(String(config.rdo.ports.directory));
+      const result = await executeAutoConnectionAction(fake.ctx, 'delete', 'PGIFood', '1,1,');
+      expect(result).toEqual({
+        success: false,
+        message: 'ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)',
+      });
     });
 
     it('an unknown action is refused without a fetch', async () => {
@@ -1018,16 +1009,13 @@ describe('setPolicyStatus', () => {
     expect(mockFetch.mock.calls[0][0].startsWith(`${IS_BASE}TycoonPolicy.asp?`)).toBe(true);
   });
 
-  it('falls back to cachedUsername, empty ids and the config DA when the session has none', async () => {
+  it('refuses when the DA lock channel is unset, rather than falling back to the directory host/port', async () => {
     const fake = makeWebCtx({ activeUsername: null, cachedUsername: 'Cached', cachedPassword: null, tycoonId: null, daAddr: null, daPort: null, currentWorldInfo: { ...WORLD, name: '' } });
-    await setPolicyStatus(fake.ctx, 'Alice Smith', 2);
-    const q = queryOf(0);
-    expect(q.get('Tycoon')).toBe('Cached');
-    expect(q.get('WorldName')).toBe('');
-    expect(q.get('TycoonId')).toBe('');
-    expect(q.get('Password')).toBe('');
-    expect(q.get('DAAddr')).toBe(config.rdo.directoryHost);
-    expect(q.get('DAPort')).toBe(String(config.rdo.ports.directory));
+    const result = await setPolicyStatus(fake.ctx, 'Alice Smith', 2);
+    expect(result).toEqual({
+      success: false,
+      message: 'ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)',
+    });
   });
 
   it('with no username at all sends an empty Tycoon', async () => {
@@ -1297,34 +1285,21 @@ describe('executeCurriculumAction', () => {
       });
     });
 
-    it('falls back to cachedUsername, config DA, empty company / interfaceServerId / world name', async () => {
-      const fake = makeWebCtx({
-        activeUsername: null, cachedUsername: 'Cached', cachedPassword: null, daAddr: null, daPort: null,
-        tycoonId: null, interfaceServerId: null, currentCompany: null, currentWorldInfo: { ...WORLD, name: '' },
-      });
-      fetchAsp(fake).mockResolvedValue(curriculumWithButton('reset'));
-      mockFetch
-        .mockResolvedValueOnce(htmlResponse(CURRICULUM_AFTER_RESET))
-        .mockResolvedValueOnce(htmlResponse(abandonRolePage()))
-        .mockResolvedValueOnce(htmlResponse(RDO_ABANDON_BODY))
-        .mockResolvedValueOnce(htmlResponse(ADVANCE_OK))
-        .mockResolvedValueOnce(htmlResponse('ok'));
-      for (const action of ['resetAccount', 'abandonRole', 'upgradeLevel', 'rebuildLinks']) {
-        await executeCurriculumAction(fake.ctx, action);
-      }
-      // call 0 reset, 1 abandon confirm, 2 rdoAbandonRole, 3 upgrade, 4 links
-      for (const i of [0, 1, 3, 4]) {
-        const q = queryOf(i);
-        expect(q.get('Tycoon')).toBe('Cached');
-        expect(q.get('WorldName')).toBe('');
-        expect(q.get('DAAddr')).toBe(config.rdo.directoryHost);
-        expect(q.get('DAPort')).toBe(String(config.rdo.ports.directory));
-      }
-      expect(queryOf(3).get('TycoonId')).toBe('');
-      expect(queryOf(3).get('Password')).toBe('');
-      expect(queryOf(4).get('Company')).toBe('');
-      expect(queryOf(4).get('ClientViewId')).toBe('');
-    });
+    it.each(['resetAccount', 'abandonRole', 'upgradeLevel', 'rebuildLinks'])(
+      '%s refuses when the DA lock channel is unset, rather than falling back to the directory host/port',
+      async (action) => {
+        const fake = makeWebCtx({
+          activeUsername: null, cachedUsername: 'Cached', cachedPassword: null, daAddr: null, daPort: null,
+          tycoonId: null, interfaceServerId: null, currentCompany: null, currentWorldInfo: { ...WORLD, name: '' },
+        });
+        fetchAsp(fake).mockResolvedValue(curriculumWithButton('reset'));
+        const result = await executeCurriculumAction(fake.ctx, action);
+        expect(result).toEqual({
+          success: false,
+          message: 'ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)',
+        });
+      },
+    );
 
     it('with no username at all sends an empty Tycoon on every action', async () => {
       const fake = makeWebCtx({ activeUsername: null, cachedUsername: null });

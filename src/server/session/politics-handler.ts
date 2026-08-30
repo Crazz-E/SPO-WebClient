@@ -23,9 +23,9 @@ import { rdoCall } from '../../shared/rdo-frame';
 import { writeRdoFrame } from '../rdo-helpers';
 import { splitMultilinePayload as splitMultilinePayloadHelper, isTrueOrdinal } from '../rdo-helpers';
 import { toErrorMessage } from '../../shared/error-utils';
-import { config } from '../../shared/config';
 import { fetchWithTimeout } from '../fetch-with-timeout';
 import { redactUrlCredentials } from '../url-redact';
+import { requireDaParams } from './asp-da-params';
 
 // =========================================================================
 // PRIVATE HELPERS
@@ -412,8 +412,7 @@ function buildCampaignParams(
     TycoonName: ctx.activeUsername || ctx.cachedUsername || '',
     Password: ctx.cachedPassword || '',
     TownName: townName || '',
-    DAAddr: ctx.daAddr || config.rdo.directoryHost,
-    DAPort: String(ctx.daPort || config.rdo.ports.directory),
+    ...requireDaParams(ctx),
     Capitol: isCapitol ? 'YES' : '',
     Recache: 'YES',
     x: isCapitol ? String(buildingX) : '',
@@ -435,8 +434,7 @@ function buildPoliticsParams(
     TycoonName: ctx.activeUsername || ctx.cachedUsername || '',
     Password: ctx.cachedPassword || '',
     TownName: isCapitol ? '' : townName,
-    DAAddr: ctx.daAddr || config.rdo.directoryHost,
-    DAPort: String(ctx.daPort || config.rdo.ports.directory),
+    ...requireDaParams(ctx),
     Capitol: isCapitol ? 'YES' : '',
     x: isCapitol ? String(x) : '',
     y: isCapitol ? String(y) : '',

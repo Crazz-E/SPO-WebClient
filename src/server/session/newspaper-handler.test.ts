@@ -27,7 +27,6 @@ import { makeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { FakeSessionCtx } from '../__tests__/session/fake-session-context';
 import type { SessionContext } from './session-context';
 import type { WorldInfo } from '../../shared/types';
-import { config } from '../../shared/config';
 
 const mockFetch = fetch as unknown as jest.MockedFunction<
   (url: string, init?: unknown) => Promise<Response>
@@ -344,14 +343,11 @@ describe('getNewspaperBoard', () => {
     expect(q.get('TownName')).toBe('');
   });
 
-  it('falls back to cachedUsername and the config directory host/port', async () => {
+  it('refuses when the DA lock channel is unset, rather than falling back to the directory host/port', async () => {
     const fake = makeWebCtx({ activeUsername: null, cachedUsername: 'Cached', daAddr: null, daPort: null });
     mockFetch.mockResolvedValue(htmlResponse(''));
-    await getNewspaperBoard(fake.ctx, TARGET);
-    const q = queryOf(0);
-    expect(q.get('Tycoon')).toBe('Cached');
-    expect(q.get('DAAddr')).toBe(config.rdo.directoryHost);
-    expect(q.get('DAPort')).toBe(String(config.rdo.ports.directory));
+    const result = await getNewspaperBoard(fake.ctx, TARGET);
+    expect(result.error).toBe('ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)');
   });
 
   it('reports an HTTP failure instead of parsing the error body', async () => {
