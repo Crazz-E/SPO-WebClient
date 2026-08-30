@@ -53,6 +53,21 @@ describe('Sheet', () => {
     expect(screen.queryByRole('heading', { name: 'Building Inspector' })).toBeNull();
   });
 
+  it('suppresses the redundant single-surface chip trail (issue #452)', () => {
+    act(() => useUiStore.getState().setRootSurface({ kind: 'building' }));
+    renderWithProviders(<Sheet />);
+    expect(screen.queryByText('Building Inspector')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Building Inspector' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Pin sheet/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
+  });
+
+  it('a root surface with its own h2 shows the title only once, not as a chip too', () => {
+    act(() => useUiStore.getState().setRootSurface({ kind: 'mail' }));
+    renderWithProviders(<Sheet />);
+    expect(screen.getAllByText('Mail')).toHaveLength(1);
+  });
+
   it('shows the stack as chips; clicking a chip returns to that surface', () => {
     act(() => {
       useUiStore.getState().setRootSurface({ kind: 'building' });

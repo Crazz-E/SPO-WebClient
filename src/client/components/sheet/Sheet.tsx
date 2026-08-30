@@ -116,25 +116,27 @@ export function Sheet() {
       aria-label={title}
     >
       <div className={styles.stackRow}>
-        <nav className={styles.chips} aria-label="Open surfaces">
-          {stack.map((surface, i) => {
-            const isTop = i === stack.length - 1;
-            const label = SURFACE_TITLES[surface.kind];
-            const collapsed = stack.length > 3 && i > 0 && i < stack.length - 1;
-            return (
-              <span key={`${surface.kind}-${i}`} className={styles.chipWrap}>
-                {i > 0 && <ChevronRight size={12} className={styles.sep} aria-hidden="true" />}
-                {isTop ? (
-                  <Chip variant="stack" active title={label}>{label}</Chip>
-                ) : (
-                  <Chip variant="stack" onClick={() => popToSurface(i)} title={collapsed ? label : undefined}>
-                    {collapsed ? '…' : label}
-                  </Chip>
-                )}
-              </span>
-            );
-          })}
-        </nav>
+        {stack.length > 1 && (
+          <nav className={styles.chips} aria-label="Open surfaces">
+            {stack.map((surface, i) => {
+              const isTop = i === stack.length - 1;
+              const label = SURFACE_TITLES[surface.kind];
+              const collapsed = stack.length > 3 && i > 0 && i < stack.length - 1;
+              return (
+                <span key={`${surface.kind}-${i}`} className={styles.chipWrap}>
+                  {i > 0 && <ChevronRight size={12} className={styles.sep} aria-hidden="true" />}
+                  {isTop ? (
+                    <Chip variant="stack" active title={label}>{label}</Chip>
+                  ) : (
+                    <Chip variant="stack" onClick={() => popToSurface(i)} title={collapsed ? label : undefined}>
+                      {collapsed ? '…' : label}
+                    </Chip>
+                  )}
+                </span>
+              );
+            })}
+          </nav>
+        )}
         <div className={styles.stackActions}>
           <IconButton
             icon={pinned ? <PinOff size={16} /> : <Pin size={16} />}
