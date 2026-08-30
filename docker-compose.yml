@@ -16,6 +16,9 @@ services:
       - spo-cache:/app/cache                     # Game assets from update server (persists across restarts)
       - spo-webclient-cache:/app/webclient-cache  # Downloaded images (dynamic cache)
       - ./logs:/app/logs                          # NDJSON structured logs (persists on host)
+      - ./reports:/home/spo/.spo-reports          # Bug-report queue (persists across rebuilds --
+                                                    # without this, SPO-Pipeline's remote pull has
+                                                    # nothing durable to read; see doc/bug-reporting.md
     depends_on:
       spo-cache-sync:
         condition: service_started  # Don't block gateway startup on sync completion

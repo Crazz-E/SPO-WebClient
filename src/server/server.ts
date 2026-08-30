@@ -33,6 +33,7 @@ import { parseResearchDat, buildInventionIndex, type DatInventionIndex } from '.
 import { getPublicDir, getCacheDir, getWebclientCacheDir } from './paths';
 import { buildRuntimeConfigScript } from './runtime-config';
 import { handleBugReportRequest, DEFAULT_QUEUE_DIR } from './bug-report-endpoint';
+import { handleReportPullList, handleReportPullFetch, handleReportPullAck } from './report-pull-endpoint';
 import { enforceProductionConfig } from './production-config';
 import { proxyImage, type ProxyImageDeps } from './proxy-image';
 import { fetchWithTimeout } from './fetch-with-timeout';
@@ -732,10 +733,29 @@ const server = http.createServer(async (req, res) => {
   if (safePath === '/api/bug-report' && req.method === 'POST') {
     handleBugReportRequest(req, res, {
       enabled: config.server.bugReportMode,
-      queueDir: DEFAULT_QUEUE_DIR,
+      queueDir: config.server.reportsDir || DEFAULT_QUEUE_DIR,
       allowRequest: () => checkRateLimit(getClientIp(req), 'bug-report', 10),
     });
     return;
+  }
+
+  // Bug report PULL: the dev-machine orchestrator's own initiative (SPO-Pipeline's
+  // remote-report-pull.js) fetches queued reports over HTTPS instead of production pushing
+  // anything. Gated by SPO_REPORT_PULL_TOKEN, deliberately independent of SPO_BUG_REPORT — a
+  // report already queued should still drain even with capture switched off. Every route
+  // answers 404 (never 401/403) when the token is unset or wrong, same convention as the
+  // deposit route. 20/min is generous for a 5-15 min poll cycle while still bounding a
+  // misbehaving or malicious caller who somehow has the token.
+  if (safePath.startsWith('/api/report-pull/')) {
+    const pullDeps = {
+      token: config.server.reportPullToken,
+      queueDir: config.server.reportsDir || DEFAULT_QUEUE_DIR,
+      peerIp: getClientIp(req),
+      allowRequest: () => checkRateLimit(getClientIp(req), 'report-pull', 20),
+    };
+    if (safePath === '/api/report-pull/list' && req.method === 'GET') return handleReportPullList(req, res, pullDeps);
+    if (safePath.startsWith('/api/report-pull/fetch') && req.method === 'GET') return handleReportPullFetch(req, res, pullDeps);
+    if (safePath === '/api/report-pull/ack' && req.method === 'POST') return handleReportPullAck(req, res, pullDeps);
   }
 
   // Image proxy endpoint: /proxy-image?url=<encoded_url>
