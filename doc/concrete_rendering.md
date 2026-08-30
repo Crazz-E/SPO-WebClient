@@ -192,6 +192,6 @@ the tile under the cursor.
 |------|---------|
 | `src/client/renderer/concrete-texture-system.ts` | Core texture selection logic |
 | `src/client/renderer/isometric-map-renderer.ts` | Rendering, positioning, and debug overlay |
-| `src/server/atlas-generator.ts` | Object atlas packing (variable cell heights) |
+| *(SPO-WebClient-Chunks)* | Object atlas packing (variable cell heights) — build-time, published to the `spo.zz.works` CDN, not in this repo since `6fc8611f` |
 | `cache/ConcreteClasses/*.ini` | Texture ID definitions |
 | `cache/ConcreteImages/*.bmp` | Texture assets (plat*.bmp = water platforms) |
