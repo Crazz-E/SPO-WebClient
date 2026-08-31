@@ -7,7 +7,7 @@ import { WsDriver } from './ws-driver';
 import * as session from './session';
 import * as probeModule from './probe';
 import * as liveLog from './live-log';
-import { PRIMARY_ACCOUNT } from './config';
+import { PRIMARY_ACCOUNT, SECONDARY_ACCOUNT } from './config';
 
 function stubSession(responder: (msg: WsMessage) => unknown): session.LiveSession {
   return {
@@ -277,6 +277,36 @@ describe('the politics-read flow', () => {
     });
 
     const result = await flowByName('politics-read').run(ctx);
+    expect(result.status).toBe('FAIL');
+  });
+});
+
+describe('the people-search flow', () => {
+  it('passes when the search finds the secondary account alias', async () => {
+    jest.spyOn(session, 'login').mockResolvedValue(
+      stubSession(msg =>
+        msg.type === WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH
+          ? { type: WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH, results: [SECONDARY_ACCOUNT.username] }
+          : undefined,
+      ),
+    );
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    const result = await flowByName('people-search').run(ctx);
+    expect(result.status).toBe('PASS');
+  });
+
+  it('fails when the search does not return the known alias', async () => {
+    jest.spyOn(session, 'login').mockResolvedValue(
+      stubSession(msg =>
+        msg.type === WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH
+          ? { type: WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH, results: [] }
+          : undefined,
+      ),
+    );
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    const result = await flowByName('people-search').run(ctx);
     expect(result.status).toBe('FAIL');
   });
 });

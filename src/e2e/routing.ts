@@ -78,6 +78,13 @@ export const ROUTES: RouteRule[] = [
     why: 'the Favorites tree — the only flow that writes to it',
   },
   {
+    // Before the broad session rule below, which would otherwise route people-search
+    // changes to flows that never exercise the Directory Server search path.
+    test: /login-handler\.ts$|^src\/server\/ws-handlers\/search-handlers\.ts$/,
+    flows: ['people-search', 'politics-read', 'politics-write', 'building-details'],
+    why: 'the Directory Server people search — the only flow that drives it',
+  },
+  {
     test: /^src\/shared\/rdo-|^src\/server\/rdo\.ts$|^src\/server\/session\//,
     flows: ['politics-read', 'politics-write', 'building-details'],
     why: 'wire-level change: frames, session phases or RDO members',

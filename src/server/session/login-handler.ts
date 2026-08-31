@@ -21,6 +21,7 @@ import {
   parseIdOfResponse as parseIdOfResponseHelper,
   cleanPayload as cleanPayloadHelper,
   writeRdoFrame,
+  isTrueOrdinal,
 } from '../rdo-helpers';
 import { RDO_PREFIX_STRIP } from '../../shared/rdo-types';
 
@@ -259,12 +260,24 @@ async function performDirectoryQuery(ctx: LoginContext, zonePath?: string): Prom
   }
 }
 
+const ALPHABET_BUCKETS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
 /**
- * Search for people/tycoons via RDOSearchKey on the Directory Server.
+ * Search for people/tycoons via RDOSearchKey on the Directory Server, mirroring
+ * SearchUsers (DirectoryServer.wsc:830-871): the registry is `Root/Users/<Letter>`,
+ * one bucket per letter of the alphabet — narrowed to a single bucket when the
+ * search string is itself one letter (`:840-843`), pattern `*` in that case,
+ * `*<searchStr>*` otherwise (`:837-838,:845`).
  * Opens an ephemeral directory session, searches, and closes.
  */
-export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZonePath: string): Promise<string[]> {
-  const currentWorldInfo = ctx.currentWorldInfo;
+export async function searchPeople(ctx: LoginContext, searchStr: string): Promise<string[]> {
+  const trimmed = searchStr.trim();
+  if (!trimmed) return [];
+
+  const isSingleLetter = trimmed.length === 1 && /[a-zA-Z]/.test(trimmed);
+  const buckets = isSingleLetter ? [trimmed.toUpperCase()] : ALPHABET_BUCKETS;
+  const pattern = isSingleLetter ? '*' : `*${trimmed}*`;
+
   const socket = await ctx.createSocket('directory_search', config.rdo.directoryHost, config.rdo.ports.directory);
   try {
     // 1. Resolve DirectoryServer object
@@ -275,38 +288,44 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
     const sessionPacket = await sendDirectoryRequest(ctx, 'directory_search',rdoGet('RDOOpenSession', directoryServerId).packet);
     const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');
 
-    // 3. Navigate to the world's directory root
-    const worldName = currentWorldInfo?.name || '';
-    const worldPath = `${cachedZonePath}/${worldName}`;
-    await sendDirectoryRequest(ctx, 'directory_search',rdoCall(
-      'RDOSetCurrentKey', sessionId,
-      RdoValue.string(worldPath),
-    ).packet);
+    const names: string[] = [];
 
-    // 4. Search for matching keys under the world.
-    //    P-M1: the pattern MUST carry the OLEString prefix explicitly. Passed raw,
-    //    its leading `*` was read as the VoidId type prefix, and the Delphi decoder
-    //    returns `Unassigned` for VoidId (RDOUtils.pas:351-352) — the search pattern
-    //    was destroyed before RDOSearchKey(SearchPattern, ValueNameList: widestring)
-    //    ever saw it (Directory Server/DirectoryServer.pas:78). Wire form must be
-    //    "%*<pattern>*", never "*<pattern>*".
-    const searchPacket = await sendDirectoryRequest(ctx, 'directory_search',rdoCall(
-      'RDOSearchKey', sessionId,
-      RdoValue.string(`*${searchStr}*`),
-      RdoValue.string(''),
-    ).packet);
-    const resValue = parsePropertyResponseHelper(searchPacket.payload || '', 'res');
+    for (const letter of buckets) {
+      // 3. Navigate to that letter's bucket under the users tree.
+      const setKeyPacket = await sendDirectoryRequest(ctx, 'directory_search',rdoCall(
+        'RDOSetCurrentKey', sessionId,
+        RdoValue.string(`Root/Users/${letter}`),
+      ).packet);
+      const setKeyRes = parsePropertyResponseHelper(setKeyPacket.payload || '', 'res');
+      if (!isTrueOrdinal(setKeyRes)) continue;
 
-    // 5. Parse results
-    const names = parseSearchKeyResults(ctx, resValue);
+      // 4. Search for matching keys under the bucket.
+      //    P-M1: the pattern MUST carry the OLEString prefix explicitly. Passed raw,
+      //    its leading `*` was read as the VoidId type prefix, and the Delphi decoder
+      //    returns `Unassigned` for VoidId (RDOUtils.pas:351-352) — the search pattern
+      //    was destroyed before RDOSearchKey(SearchPattern, ValueNameList: widestring)
+      //    ever saw it (Directory Server/DirectoryServer.pas:78). Wire form must be
+      //    "%*<pattern>*", never "*<pattern>*".
+      //    ValueNameList must be non-empty ("Alias\n") — TDirectoryManager.SearchKey
+      //    (DirectoryManager.pas:976) skips its whole body when valueNames.Count == 0.
+      const searchPacket = await sendDirectoryRequest(ctx, 'directory_search',rdoCall(
+        'RDOSearchKey', sessionId,
+        RdoValue.string(pattern),
+        RdoValue.string('Alias\n'),
+      ).packet);
+      const resValue = parsePropertyResponseHelper(searchPacket.payload || '', 'res').trim();
+      if (!resValue) continue;
 
-    // 6. End Session (fire-and-forget — void push, no RID)
+      names.push(...parseSearchKeyResults(ctx, resValue));
+    }
+
+    // 5. End Session (fire-and-forget — void push, no RID)
     writeRdoFrame(socket, rdoCall('RDOEndSession', sessionId).toFrame());
 
     return names;
   } catch (err: unknown) {
     ctx.log.error('[Session] searchPeople failed:', toErrorMessage(err));
-    return [];
+    throw err;
   } finally {
     socket.end();
     ctx.deleteSocket('directory_search');
@@ -909,7 +928,8 @@ function parseDirectoryResult(ctx: LoginContext, payload: string): WorldInfo[] {
 }
 
 /**
- * Parse RDOSearchKey results (Count=N, Key0=name0, Key1=name1, ...)
+ * Parse RDOSearchKey results (Count=N, Key<i>=<registry key>, Alias<i>=<display name>, ...
+ * — DirectoryManager.pas:1060-1078). The display name is the Alias value, not the key.
  */
 function parseSearchKeyResults(ctx: LoginContext, payload: string): string[] {
   let raw = payload.trim();
@@ -935,7 +955,7 @@ function parseSearchKeyResults(ctx: LoginContext, payload: string): string[] {
   const names: string[] = [];
 
   for (let i = 0; i < count; i++) {
-    const name = data.get(`key${i}`);
+    const name = data.get(`alias${i}`);
     if (name) names.push(name);
   }
 

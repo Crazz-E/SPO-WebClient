@@ -336,41 +336,95 @@ describe('connectDirectory — world list parsing', () => {
 // ── People search ───────────────────────────────────────────────────────────
 
 describe('searchPeople', () => {
-  const SEARCH_BLOCK = ['Count=3', 'Key0=SPO_test3', 'Key2=Mayor of Kalisz'].join('\n');
+  const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  // Alias0 != Key0 on purpose: a test that only checked Key<i> would still pass
+  // if the parser regressed to reading the registry key instead of the display name.
+  const SEARCH_BLOCK = ['Count=2', 'Key0=crazz', 'Alias0=Crazz', 'Key1=crazz2', 'Alias1=Crazz2'].join('\n');
 
-  function searchResponder(block: string): Responder {
+  /** Tracks the last `RDOSetCurrentKey` bucket so `RDOSearchKey` answers can depend on it. */
+  function searchResponder(opts: {
+    setKeyRes?: string;
+    blockForBucket?: (bucket: string) => string | undefined;
+  } = {}): Responder {
+    let currentBucket = '';
     return (packet) => {
       if (packet.verb === RdoVerb.IDOF) return `objid="${DIRECTORY_SERVER_ID}"`;
       if (packet.member === 'RDOOpenSession') return `RDOOpenSession="#${DIRECTORY_SESSION_ID}"`;
-      if (packet.member === 'RDOSearchKey') return `res="%${block}"`;
+      if (packet.member === 'RDOSetCurrentKey') {
+        currentBucket = String(packet.args?.[0] ?? '').replace(/^"%/, '').replace(/"$/, '');
+        return `res="${opts.setKeyRes ?? '#-1'}"`;
+      }
+      if (packet.member === 'RDOSearchKey') {
+        const block = opts.blockForBucket?.(currentBucket);
+        return block === undefined ? 'res="%"' : `res="%${block}"`;
+      }
       return 'res="%"';
     };
   }
 
-  it('navigates to the world key, searches, and returns the names it found', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond(searchResponder(SEARCH_BLOCK));
+  it('narrows a single letter to one bucket, pattern "*", and reads Alias<i> not Key<i>', async () => {
+    const fake = makeLoginCtx();
+    fake.respond(searchResponder({
+      blockForBucket: bucket => (bucket === 'Root/Users/C' ? SEARCH_BLOCK : undefined),
+    }));
 
-    const names = await searchPeople(fake.ctx, 'test', 'Root/Areas/Free Space/Worlds');
+    const names = await searchPeople(fake.ctx, 'c');
 
-    // The world path is the cached zone path + the CURRENT world's name.
-    const setKey = fake.sent.find(s => s.packet.member === 'RDOSetCurrentKey');
-    expect(setKey?.packet.args).toEqual(['"%Root/Areas/Free Space/Worlds/planitia"']);
+    const setKeys = fake.sent.filter(s => s.packet.member === 'RDOSetCurrentKey');
+    expect(setKeys).toHaveLength(1);
+    expect(setKeys[0].packet.args).toEqual(['"%Root/Users/C"']);
+    const search = fake.sent.find(s => s.packet.member === 'RDOSearchKey');
     // P-M1: the pattern MUST carry the OLEString prefix — a bare leading `*`
     // is read as the VoidId type prefix and decodes to Unassigned
     // (RDOUtils.pas:351-352), destroying the pattern before RDOSearchKey sees it.
-    const search = fake.sent.find(s => s.packet.member === 'RDOSearchKey');
-    expect(search?.packet.args).toEqual(['"%*test*"', '"%"']);
+    // The ValueNameList carries a real trailing LF, satisfying the server's
+    // `valueNames.Count > 0` guard (DirectoryManager.pas:976).
+    expect(search?.packet.args).toEqual(['"%*"', '"%Alias\n"']);
     expect(search?.packet.targetId).toBe(DIRECTORY_SESSION_ID);
-    // Count=3 but Key1 is absent: absent keys are skipped, not defaulted.
-    expect(names).toEqual(['SPO_test3', 'Mayor of Kalisz']);
+    expect(names).toEqual(['Crazz', 'Crazz2']);
+  });
+
+  it('sweeps all 26 buckets A-Z with pattern "*<str>*" for a multi-character search', async () => {
+    const fake = makeLoginCtx();
+    fake.respond(searchResponder({ blockForBucket: () => 'Count=0' }));
+
+    await searchPeople(fake.ctx, 'test');
+
+    const setKeys = fake.sent.filter(s => s.packet.member === 'RDOSetCurrentKey');
+    expect(setKeys.map(s => s.packet.args?.[0])).toEqual(ALPHABET.map(l => `"%Root/Users/${l}"`));
+    const searches = fake.sent.filter(s => s.packet.member === 'RDOSearchKey');
+    expect(searches).toHaveLength(26);
+    for (const s of searches) {
+      expect(s.packet.args).toEqual(['"%*test*"', '"%Alias\n"']);
+    }
+  });
+
+  it('skips a bucket whose RDOSetCurrentKey answers false, sending no RDOSearchKey for it', async () => {
+    const fake = makeLoginCtx();
+    fake.respond(searchResponder({ setKeyRes: '#0' }));
+
+    const names = await searchPeople(fake.ctx, 'test');
+
+    expect(fake.sent.some(s => s.packet.member === 'RDOSearchKey')).toBe(false);
+    expect(names).toEqual([]);
+  });
+
+  it('returns [] without opening a socket for a blank search string', async () => {
+    const fake = makeLoginCtx();
+
+    const names = await searchPeople(fake.ctx, '   ');
+
+    expect(names).toEqual([]);
+    expect(fake.hooks.createSocket).not.toHaveBeenCalled();
   });
 
   it('ends its own directory session fire-and-forget and drops the socket', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond(searchResponder(SEARCH_BLOCK));
+    const fake = makeLoginCtx();
+    fake.respond(searchResponder({
+      blockForBucket: bucket => (bucket === 'Root/Users/C' ? SEARCH_BLOCK : undefined),
+    }));
 
-    await searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds');
+    await searchPeople(fake.ctx, 'c');
 
     expect(fake.frames.directory_search).toEqual([
       RdoCommand.sel(DIRECTORY_SESSION_ID).call('RDOEndSession').push().build(),
@@ -378,48 +432,33 @@ describe('searchPeople', () => {
     expect(fake.hooks.deleteSocket).toHaveBeenCalledWith('directory_search');
   });
 
-  it('searches under the bare zone path when no world is selected yet', async () => {
-    const fake = makeLoginCtx();
-    fake.respond(searchResponder('Count=0'));
-
-    await searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds');
-
-    const setKey = fake.sent.find(s => s.packet.member === 'RDOSetCurrentKey');
-    expect(setKey?.packet.args).toEqual(['"%Root/Areas/Asia/Worlds/"']);
-  });
-
   it('ignores answer lines that are not key/value pairs', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond(searchResponder(['-- banner --', 'Count=1', 'Key0=SPO_test3'].join('\n')));
+    const fake = makeLoginCtx();
+    const block = ['-- banner --', 'Count=1', 'Key0=SPO_test3', 'Alias0=SPO_test3'].join('\n');
+    fake.respond(searchResponder({
+      blockForBucket: bucket => (bucket === 'Root/Users/C' ? block : undefined),
+    }));
 
-    await expect(searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds'))
-      .resolves.toEqual(['SPO_test3']);
+    await expect(searchPeople(fake.ctx, 'c')).resolves.toEqual(['SPO_test3']);
   });
 
   it('returns nothing and says why when the answer carries no Count', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond(searchResponder('Nothing=here'));
+    const fake = makeLoginCtx();
+    fake.respond(searchResponder({
+      blockForBucket: bucket => (bucket === 'Root/Users/C' ? 'Nothing=here' : undefined),
+    }));
 
-    await expect(searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds')).resolves.toEqual([]);
+    await expect(searchPeople(fake.ctx, 'c')).resolves.toEqual([]);
     expect(fake.log.warn).toHaveBeenCalledWith('[Session] SearchKey: no "count" key in response');
   });
 
-  it('returns nothing when the directory answers with no payload at all', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond((packet) => (packet.verb === RdoVerb.IDOF
-      ? `objid="${DIRECTORY_SERVER_ID}"`
-      : EMPTY_ANSWER));
-
-    await expect(searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds')).resolves.toEqual([]);
-  });
-
-  it('swallows a failed search — an empty list, never a rejected promise', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
+  it('a directory failure now rejects, and still releases the socket, instead of resolving []', async () => {
+    const fake = makeLoginCtx();
     fake.respond((packet) => (packet.verb === RdoVerb.IDOF
       ? new Error('Request timeout: idof')
       : 'res="%"'));
 
-    await expect(searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds')).resolves.toEqual([]);
+    await expect(searchPeople(fake.ctx, 'test')).rejects.toThrow('Request timeout: idof');
     expect(fake.log.error).toHaveBeenCalledWith(
       '[Session] searchPeople failed:', 'Request timeout: idof',
     );

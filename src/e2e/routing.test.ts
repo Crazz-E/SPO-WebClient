@@ -16,6 +16,13 @@ describe('route', () => {
     expect(decision.staticOnly).toBe(false);
   });
 
+  it('routes a login-handler change to the people-search flow, not only the wire-level ones', () => {
+    const decision = route(['src/server/session/login-handler.ts']);
+    expect(decision.required).toEqual(
+      expect.arrayContaining([SPINE_FLOW, 'people-search', 'politics-read', 'politics-write', 'building-details']),
+    );
+  });
+
   it('routes a Favorites change to its own flow, not to the governance ones', () => {
     const d = route(['src/server/session/favorites-handler.ts']);
     expect(d.required).toEqual(['login-spine', 'favorites-roundtrip']);

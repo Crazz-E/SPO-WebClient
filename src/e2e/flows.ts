@@ -15,6 +15,7 @@ import type {
   WsRespMailFolder,
   WsRespMailSent,
   WsRespPoliticsData,
+  WsRespSearchMenuPeopleSearch,
 } from '../shared/types/message-types';
 import { toErrorMessage } from '../shared/error-utils';
 import { GOVERNED_TOWN, PRIMARY_ACCOUNT, SECONDARY_ACCOUNT, TIMEOUTS } from './config';
@@ -120,6 +121,32 @@ const politicsRead: Flow = {
       assertions.check('politics data returned', Boolean(politics.data));
       assertions.check('no gateway errors', session.driver.errors.length === 0);
       return report('politics-read', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
+/** Read-only: the Directory Server people search, `Root/Users/<Letter>` (#455). */
+const peopleSearch: Flow = {
+  name: 'people-search',
+  what: 'people search for a known alias on the Directory Server',
+  mutates: false,
+  run: async () => {
+    const assertions = new Assertions();
+    const session = await login(PRIMARY_ACCOUNT);
+    try {
+      const results = await session.driver.request<WsRespSearchMenuPeopleSearch>(
+        { type: WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH, searchStr: SECONDARY_ACCOUNT.username },
+        WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH,
+      );
+      assertions.check(
+        `search results include ${SECONDARY_ACCOUNT.username}`,
+        results.results.includes(SECONDARY_ACCOUNT.username),
+        results.results.join(', '),
+      );
+      assertions.check('no gateway errors', session.driver.errors.length === 0);
+      return report('people-search', assertions, [], session);
     } finally {
       await logoff(session);
     }
@@ -425,6 +452,7 @@ export const FLOWS: Flow[] = [
   permissionNegative,
   mailRoundTrip,
   favoritesRoundTrip,
+  peopleSearch,
 ];
 
 export function flowByName(name: string): Flow {

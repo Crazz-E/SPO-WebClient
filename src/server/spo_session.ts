@@ -619,7 +619,7 @@ export class StarpeaceSession extends EventEmitter {
    * served by this method (#118).
    */
   public async searchPeople(searchStr: string): Promise<string[]> {
-    return loginHandler.searchPeople(this, searchStr, this.cachedZonePath);
+    return loginHandler.searchPeople(this, searchStr);
   }
 
 public async loginWorld(username: string, pass: string, world: WorldInfo): Promise<{
