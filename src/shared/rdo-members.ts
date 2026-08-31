@@ -160,7 +160,7 @@ export const RDO_MEMBERS = {
   RDODisconnectInput:        { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDODisconnectOutput:       { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDODowngrade:              { kind: 'procedure', arity: 0 },                // src/server/session/building-management-handler.ts:169
-  RDOEndSession:             { kind: 'procedure', arity: 0 },                // src/server/session/login-handler.ts:219
+  RDOEndSession:             { kind: 'procedure', arity: 0 },                // DServer/DirectoryServer.pas:31; src/server/session/login-handler.ts:215
   RDOFavoritesDelItem:       { kind: 'function',  arity: 1 },                // src/server/session/favorites-handler.ts
   RDOFavoritesGetSubItems:   { kind: 'function',  arity: 1 },                // src/server/session/politics-handler.ts:369
   RDOFavoritesNewItem:       { kind: 'function',  arity: 4 },                // src/server/session/favorites-handler.ts
@@ -168,19 +168,22 @@ export const RDO_MEMBERS = {
   RDOGetInvDescEx:           { kind: 'function',  arity: 2 },                // src/server/session/research-handler.ts:131
   RDOGetInvPropsByLang:      { kind: 'function',  arity: 2 },                // src/server/session/research-handler.ts:120
   RDOLaunchMovie:            { kind: 'procedure', arity: 4 },                // src/server/session/building-property-handler.ts:194,223
-  RDOLogonClient:            { kind: 'procedure', arity: 2 },                // src/server/spo_session.ts:1014
-  RDOLogonUser:              { kind: 'function',  arity: 2 },                // src/server/session/login-handler.ts:207
+  RDOLogonClient:            { kind: 'procedure', arity: 2 },                // Kernel/World.pas:412; src/server/spo_session.ts:997
+  RDOLogonUser:              { kind: 'function',  arity: 2 },                // DServer/DirectoryServer.pas:92; src/server/session/login-handler.ts:203
   RDOMapSegaUser:            { kind: 'function',  arity: 1 },                // src/server/session/login-handler.ts:199
-  RDOOpenSession:            { kind: 'accessor',  access: ['get'] },         // src/server/session/login-handler.ts:193
+  // DServer/DirectoryServer.pas:143 — a 0-arg published FUNCTION, kept as accessor `get`
+  // under rule 1: the verb follows the reference client, which emits `get RDOOpenSession`,
+  // served by the Delphi get→CallMethod fallthrough (RDOObjectServer.pas:112-116).
+  RDOOpenSession:            { kind: 'accessor',  access: ['get'] },         // src/server/session/login-handler.ts:194
   RDOQueryKey:               { kind: 'function',  arity: 2 },                // src/server/session/login-handler.ts:243
   RDOQueueResearch:          { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDOReleaseMovie:           { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223
   RdoRepair:                 { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223
-  RDOSearchKey:              { kind: 'function',  arity: 2 },                // src/server/session/login-handler.ts:303
+  RDOSearchKey:              { kind: 'function',  arity: 2 },                // DServer/DirectoryServer.pas:84; src/server/session/login-handler.ts:324
   RDOSelectWare:             { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDOSelSelected:            { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223
   RDOSetCompanyInputDemand:  { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
-  RDOSetCurrentKey:          { kind: 'function',  arity: 1 },                // src/server/session/login-handler.ts:291
+  RDOSetCurrentKey:          { kind: 'function',  arity: 1 },                // DServer/DirectoryServer.pas:36; src/server/session/login-handler.ts:309
   RDOSetInputFluidPerc:      { kind: 'procedure', arity: 1 },                // src/server/session/building-property-handler.ts:194,223
   RDOSetInputMaxPrice:       { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
   RDOSetInputMinK:           { kind: 'procedure', arity: 2 },                // src/server/session/building-property-handler.ts:194,223
