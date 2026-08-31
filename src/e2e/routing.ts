@@ -78,6 +78,19 @@ export const ROUTES: RouteRule[] = [
     why: 'the Favorites tree — the only flow that writes to it',
   },
   {
+    // Before the broad wire-level rule below, which would otherwise route
+    // login-handler.ts's people-search sweep through flows that never drive it.
+    test: /^src\/server\/session\/login-handler\.ts$/,
+    flows: ['people-search', 'politics-read', 'politics-write', 'building-details'],
+    why: 'the directory login/search path changed — including the Root/Users sweep',
+  },
+  {
+    // Same reason, one rule earlier than the ws-handlers rule below.
+    test: /^src\/server\/ws-handlers\/search-handlers\.ts$/,
+    flows: ['people-search', 'building-details', 'politics-read'],
+    why: 'the search WS handler changed — including the people-search request path',
+  },
+  {
     test: /^src\/shared\/rdo-|^src\/server\/rdo\.ts$|^src\/server\/session\//,
     flows: ['politics-read', 'politics-write', 'building-details'],
     why: 'wire-level change: frames, session phases or RDO members',

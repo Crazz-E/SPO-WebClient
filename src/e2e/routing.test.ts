@@ -16,6 +16,20 @@ describe('route', () => {
     expect(decision.staticOnly).toBe(false);
   });
 
+  it('routes login-handler.ts through the people-search flow, plus the wire-level flows', () => {
+    const decision = route(['src/server/session/login-handler.ts']);
+    expect(decision.required).toEqual(expect.arrayContaining([
+      SPINE_FLOW, 'people-search', 'politics-read', 'politics-write', 'building-details',
+    ]));
+  });
+
+  it('routes the search WS handler through the people-search flow', () => {
+    const decision = route(['src/server/ws-handlers/search-handlers.ts']);
+    expect(decision.required).toEqual(expect.arrayContaining([
+      SPINE_FLOW, 'people-search', 'building-details', 'politics-read',
+    ]));
+  });
+
   it('routes a Favorites change to its own flow, not to the governance ones', () => {
     const d = route(['src/server/session/favorites-handler.ts']);
     expect(d.required).toEqual(['login-spine', 'favorites-roundtrip']);

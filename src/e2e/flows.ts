@@ -15,6 +15,7 @@ import type {
   WsRespMailFolder,
   WsRespMailSent,
   WsRespPoliticsData,
+  WsRespSearchMenuPeopleSearch,
 } from '../shared/types/message-types';
 import { toErrorMessage } from '../shared/error-utils';
 import { GOVERNED_TOWN, PRIMARY_ACCOUNT, SECONDARY_ACCOUNT, TIMEOUTS } from './config';
@@ -263,6 +264,35 @@ const mailRoundTrip: Flow = {
   },
 };
 
+/**
+ * People search — issue #455: proves the Root/Users sweep finds a known
+ * alias live, on the account not currently logged in.
+ */
+const peopleSearch: Flow = {
+  name: 'people-search',
+  what: 'search menu: searching a known alias finds it under Root/Users',
+  mutates: false,
+  run: async () => {
+    const assertions = new Assertions();
+    const session = await login(PRIMARY_ACCOUNT);
+    try {
+      const response = await session.driver.request<WsRespSearchMenuPeopleSearch>(
+        { type: WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH, searchStr: SECONDARY_ACCOUNT.username },
+        WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH,
+      );
+      assertions.check(
+        `search for "${SECONDARY_ACCOUNT.username}" finds it`,
+        response.results.includes(SECONDARY_ACCOUNT.username),
+        `results: ${response.results.join(', ')}`,
+      );
+      assertions.check('no gateway errors', session.driver.errors.length === 0);
+      return report('people-search', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
 /** Building inspector read — the path every facility panel depends on. */
 /**
  * Building inspector read — the path every facility panel depends on.
@@ -425,6 +455,7 @@ export const FLOWS: Flow[] = [
   permissionNegative,
   mailRoundTrip,
   favoritesRoundTrip,
+  peopleSearch,
 ];
 
 export function flowByName(name: string): Flow {
