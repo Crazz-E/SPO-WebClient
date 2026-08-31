@@ -102,7 +102,16 @@ probes the live server, same as everything else in this section.
 Sibling of this repo, Delphi 5, ~1750 `.pas` — **both halves of the original system**, the
 Delphi servers *and* the Voyager client. Its own git repo (`Crazz-E/SPO-Original`), a
 **read-only historical artifact**: never write into it, never probe the live server instead.
-Every claim from it cites `File.pas:Line`, or is marked `[INFERRED]` / `[UNKNOWN]`. Read the WSL copy — the Windows
+Every claim from it cites `File.pas:Line`, or is marked `[INFERRED]` / `[UNKNOWN]`.
+
+**The defect is always on this side.** SPO-Original is the specification, never the suspect: the
+Delphi servers define what the gateway must send, Voyager shows what a working client
+demonstrably sent, and both have run unmodified for twenty years. Any divergence between them and
+SPO-WebClient is by construction SPO-WebClient's bug. Diagnose *through* the Delphi, never *at*
+it — cite `File.pas:Line` as the evidence for what correct behaviour is, then name the root cause
+in the file that will actually change. Never name a `.pas` as a root cause, never plan an edit to
+SPO-Original, never conclude "the server is wrong": if the server rejects or ignores what we
+send, the bug is in what we send. Read the WSL copy — the Windows
 mount (`/mnt/c/Users/Crazz/Documents/SPO/SPO-Original`) is the same commit with CRLF.
 Path: `~/SPO-Original`, or `../SPO-Original` relative to the repo root — **not** from a session
 worktree, where `..` resolves to `.claude/worktrees/`, not the repo root.
@@ -112,7 +121,7 @@ worktree, where `..` resolves to `.claude/worktrees/`, not the repo root.
 | `Rdo/Server/` | **the RDO authority** — `RDOObjectServer.pas`, the declaration the client must match (kind, arity) |
 | `Rdo.BIN/`, `Rdo.IS/` | divergent forks of the same units — do not cite them: a line number from `Rdo/` lands on other code there |
 | `Voyager/`, `Voyager.1/` | the original Delphi client — the reference for *what the client demonstrably emitted* (rule 2 above) |
-| `Kernel/`, `Model Server/`, `Interface Server/`, `Directory Server/` | game model and the servers behind the gateway |
+| `Kernel/`, `Model Server/`, `Interface Server/`, `Directory Server/` | game model and the servers behind the gateway — the contract to satisfy, never a defect site |
 
 ⚠ **Some `.pas` files are ISO-8859-encoded and defeat grep's binary detection** — a plain
 `grep <pattern> some-file.pas` silently returns nothing and exits 1, as if the text were absent
