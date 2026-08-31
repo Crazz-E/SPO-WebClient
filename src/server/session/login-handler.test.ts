@@ -336,94 +336,189 @@ describe('connectDirectory — world list parsing', () => {
 // ── People search ───────────────────────────────────────────────────────────
 
 describe('searchPeople', () => {
-  const SEARCH_BLOCK = ['Count=3', 'Key0=SPO_test3', 'Key2=Mayor of Kalisz'].join('\n');
+  const SEARCH_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-  function searchResponder(block: string): Responder {
-    return (packet) => {
-      if (packet.verb === RdoVerb.IDOF) return `objid="${DIRECTORY_SERVER_ID}"`;
-      if (packet.member === 'RDOOpenSession') return `RDOOpenSession="#${DIRECTORY_SESSION_ID}"`;
-      if (packet.member === 'RDOSearchKey') return `res="%${block}"`;
-      return 'res="%"';
-    };
+  /** idof/open-session plumbing shared by every scenario below. */
+  function directoryPlumbing(packet: Partial<RdoPacket>): string | undefined {
+    if (packet.verb === RdoVerb.IDOF) return `objid="${DIRECTORY_SERVER_ID}"`;
+    if (packet.member === 'RDOOpenSession') return `RDOOpenSession="#${DIRECTORY_SESSION_ID}"`;
+    return undefined;
   }
 
-  it('navigates to the world key, searches, and returns the names it found', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond(searchResponder(SEARCH_BLOCK));
+  it('sweeps exactly the 26 Root/Users buckets in order with the wildcard pattern, and aggregates Alias values across buckets', async () => {
+    const fake = makeLoginCtx();
+    let currentLetter = '';
+    fake.respond((packet) => {
+      const plumbing = directoryPlumbing(packet);
+      if (plumbing) return plumbing;
+      if (packet.member === 'RDOSetCurrentKey') {
+        currentLetter = String(packet.args?.[0] ?? '').replace(/^"%Root\/Users\//, '').replace(/"$/, '');
+        return 'res="#-1"';
+      }
+      if (packet.member === 'RDOSearchKey') {
+        if (currentLetter === 'A') return 'res="%Count=1\r\nKey0=aaron\r\nAlias0=Aaron"';
+        if (currentLetter === 'Z') return 'res="%Count=1\r\nKey0=zoe\r\nAlias0=Zoe"';
+        return 'res="%Count=0"';
+      }
+      return 'res="%"';
+    });
 
-    const names = await searchPeople(fake.ctx, 'test', 'Root/Areas/Free Space/Worlds');
+    const names = await searchPeople(fake.ctx, 'test');
 
-    // The world path is the cached zone path + the CURRENT world's name.
-    const setKey = fake.sent.find(s => s.packet.member === 'RDOSetCurrentKey');
-    expect(setKey?.packet.args).toEqual(['"%Root/Areas/Free Space/Worlds/planitia"']);
-    // P-M1: the pattern MUST carry the OLEString prefix — a bare leading `*`
-    // is read as the VoidId type prefix and decodes to Unassigned
-    // (RDOUtils.pas:351-352), destroying the pattern before RDOSearchKey sees it.
-    const search = fake.sent.find(s => s.packet.member === 'RDOSearchKey');
-    expect(search?.packet.args).toEqual(['"%*test*"', '"%"']);
-    expect(search?.packet.targetId).toBe(DIRECTORY_SESSION_ID);
-    // Count=3 but Key1 is absent: absent keys are skipped, not defaulted.
+    const setKeys = fake.sent.filter(s => s.packet.member === 'RDOSetCurrentKey');
+    expect(setKeys.map(s => s.packet.args)).toEqual(
+      Array.from(SEARCH_ALPHABET).map(letter => [`"%Root/Users/${letter}"`]),
+    );
+
+    const searches = fake.sent.filter(s => s.packet.member === 'RDOSearchKey');
+    expect(searches).toHaveLength(26);
+    for (const s of searches) {
+      // ValueNameList must never be empty — the server never builds its SQL
+      // query with an empty list (DirectoryManager.pas:976-1104).
+      expect(s.packet.args).toEqual(['"%*test*"', '"%Alias\r\n"']);
+      expect(s.packet.args?.[1]).not.toBe('"%"');
+      expect(s.packet.targetId).toBe(DIRECTORY_SESSION_ID);
+    }
+
+    expect(names).toEqual(['Aaron', 'Zoe']);
+  });
+
+  it('narrows a single letter to its own bucket, with pattern "*"', async () => {
+    const fake = makeLoginCtx();
+    fake.respond((packet) => {
+      const plumbing = directoryPlumbing(packet);
+      if (plumbing) return plumbing;
+      if (packet.member === 'RDOSetCurrentKey') return 'res="#-1"';
+      if (packet.member === 'RDOSearchKey') return 'res="%Count=1\r\nKey0=crazz\r\nAlias0=Crazz"';
+      return 'res="%"';
+    });
+
+    const names = await searchPeople(fake.ctx, 'c');
+
+    const setKeys = fake.sent.filter(s => s.packet.member === 'RDOSetCurrentKey');
+    expect(setKeys).toHaveLength(1);
+    expect(setKeys[0].packet.args).toEqual(['"%Root/Users/C"']);
+
+    const searches = fake.sent.filter(s => s.packet.member === 'RDOSearchKey');
+    expect(searches).toHaveLength(1);
+    expect(searches[0].packet.args).toEqual(['"%*"', '"%Alias\r\n"']);
+
+    expect(names).toEqual(['Crazz']);
+  });
+
+  it('skips a bucket whose RDOSetCurrentKey answers false — no RDOSearchKey follows it', async () => {
+    const fake = makeLoginCtx();
+    fake.respond((packet) => {
+      const plumbing = directoryPlumbing(packet);
+      if (plumbing) return plumbing;
+      if (packet.member === 'RDOSetCurrentKey') return 'res="#0"';
+      return 'res="%"';
+    });
+
+    const names = await searchPeople(fake.ctx, 'test');
+
+    expect(fake.sent.filter(s => s.packet.member === 'RDOSetCurrentKey')).toHaveLength(26);
+    expect(fake.sent.filter(s => s.packet.member === 'RDOSearchKey')).toHaveLength(0);
+    expect(names).toEqual([]);
+  });
+
+  it('reads names from Alias<i>, not Key<i>, and skips indices whose Alias is absent', async () => {
+    const fake = makeLoginCtx();
+    fake.respond((packet) => {
+      const plumbing = directoryPlumbing(packet);
+      if (plumbing) return plumbing;
+      if (packet.member === 'RDOSetCurrentKey') return 'res="#-1"';
+      // Count=3, but Alias1 is absent and Key0/Key2 deliberately differ from
+      // Alias0/Alias2 — a Key-based read would return the wrong names.
+      if (packet.member === 'RDOSearchKey') {
+        return 'res="%Count=3\r\nKey0=k-spo_test3\r\nAlias0=SPO_test3\r\nKey2=k-mayor\r\nAlias2=Mayor of Kalisz"';
+      }
+      return 'res="%"';
+    });
+
+    const names = await searchPeople(fake.ctx, 'q');
+
     expect(names).toEqual(['SPO_test3', 'Mayor of Kalisz']);
   });
 
-  it('ends its own directory session fire-and-forget and drops the socket', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond(searchResponder(SEARCH_BLOCK));
-
-    await searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds');
-
-    expect(fake.frames.directory_search).toEqual([
-      RdoCommand.sel(DIRECTORY_SESSION_ID).call('RDOEndSession').push().build(),
-    ]);
-    expect(fake.hooks.deleteSocket).toHaveBeenCalledWith('directory_search');
-  });
-
-  it('searches under the bare zone path when no world is selected yet', async () => {
-    const fake = makeLoginCtx();
-    fake.respond(searchResponder('Count=0'));
-
-    await searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds');
-
-    const setKey = fake.sent.find(s => s.packet.member === 'RDOSetCurrentKey');
-    expect(setKey?.packet.args).toEqual(['"%Root/Areas/Asia/Worlds/"']);
-  });
-
-  it('ignores answer lines that are not key/value pairs', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond(searchResponder(['-- banner --', 'Count=1', 'Key0=SPO_test3'].join('\n')));
-
-    await expect(searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds'))
-      .resolves.toEqual(['SPO_test3']);
-  });
-
   it('returns nothing and says why when the answer carries no Count', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond(searchResponder('Nothing=here'));
+    const fake = makeLoginCtx();
+    fake.respond((packet) => {
+      const plumbing = directoryPlumbing(packet);
+      if (plumbing) return plumbing;
+      if (packet.member === 'RDOSetCurrentKey') return 'res="#-1"';
+      if (packet.member === 'RDOSearchKey') return 'res="%Nothing=here"';
+      return 'res="%"';
+    });
 
-    await expect(searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds')).resolves.toEqual([]);
+    await expect(searchPeople(fake.ctx, 'q')).resolves.toEqual([]);
     expect(fake.log.warn).toHaveBeenCalledWith('[Session] SearchKey: no "count" key in response');
   });
 
-  it('returns nothing when the directory answers with no payload at all', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
-    fake.respond((packet) => (packet.verb === RdoVerb.IDOF
-      ? `objid="${DIRECTORY_SERVER_ID}"`
-      : EMPTY_ANSWER));
+  it('returns nothing, silently, for an empty answer — the server\'s normal zero-match reply', async () => {
+    const fake = makeLoginCtx();
+    fake.respond((packet) => {
+      const plumbing = directoryPlumbing(packet);
+      if (plumbing) return plumbing;
+      if (packet.member === 'RDOSetCurrentKey') return 'res="#-1"';
+      if (packet.member === 'RDOSearchKey') return 'res="%"';
+      return 'res="%"';
+    });
 
-    await expect(searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds')).resolves.toEqual([]);
+    await expect(searchPeople(fake.ctx, 'q')).resolves.toEqual([]);
+    expect(fake.log.warn).not.toHaveBeenCalled();
   });
 
-  it('swallows a failed search — an empty list, never a rejected promise', async () => {
-    const fake = makeLoginCtx({ currentWorldInfo: WORLD });
+  it('returns nothing when the directory answers with no payload at all', async () => {
+    const fake = makeLoginCtx();
+    fake.respond((packet) => {
+      const plumbing = directoryPlumbing(packet);
+      if (plumbing) return plumbing;
+      if (packet.member === 'RDOSetCurrentKey') return 'res="#-1"';
+      return EMPTY_ANSWER;
+    });
+
+    await expect(searchPeople(fake.ctx, 'q')).resolves.toEqual([]);
+  });
+
+  it('a directory failure now rejects — no more laundering into an empty list', async () => {
+    const fake = makeLoginCtx();
     fake.respond((packet) => (packet.verb === RdoVerb.IDOF
       ? new Error('Request timeout: idof')
       : 'res="%"'));
 
-    await expect(searchPeople(fake.ctx, 'test', 'Root/Areas/Asia/Worlds')).resolves.toEqual([]);
+    await expect(searchPeople(fake.ctx, 'test')).rejects.toThrow('Request timeout: idof');
     expect(fake.log.error).toHaveBeenCalledWith(
       '[Session] searchPeople failed:', 'Request timeout: idof',
     );
     // The `finally` still runs — the socket is not leaked on the error path.
+    expect(fake.hooks.deleteSocket).toHaveBeenCalledWith('directory_search');
+  });
+
+  it('resolves empty with zero sockets created for an empty or whitespace-only search string', async () => {
+    const fake = makeLoginCtx();
+    fake.respond(() => 'res="%"');
+
+    await expect(searchPeople(fake.ctx, '   ')).resolves.toEqual([]);
+    expect(fake.hooks.createSocket).not.toHaveBeenCalled();
+    expect(fake.sent).toEqual([]);
+  });
+
+  it('ends its own directory session fire-and-forget once and drops the socket', async () => {
+    const fake = makeLoginCtx();
+    fake.respond((packet) => {
+      const plumbing = directoryPlumbing(packet);
+      if (plumbing) return plumbing;
+      if (packet.member === 'RDOSetCurrentKey') return 'res="#-1"';
+      if (packet.member === 'RDOSearchKey') return 'res="%Count=0"';
+      return 'res="%"';
+    });
+
+    await searchPeople(fake.ctx, 'q');
+
+    expect(fake.frames.directory_search).toEqual([
+      RdoCommand.sel(DIRECTORY_SESSION_ID).call('RDOEndSession').push().build(),
+    ]);
     expect(fake.hooks.deleteSocket).toHaveBeenCalledWith('directory_search');
   });
 });

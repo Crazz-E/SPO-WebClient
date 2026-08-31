@@ -128,8 +128,7 @@ const DELEGATIONS: readonly Delegation[] = [
     method: 'searchPeople',
     install: () => jest.spyOn(loginHandler, 'searchPeople'),
     call: s => s.searchPeople('mayor'),
-    // The session owns the cached zone path; the caller never supplies it.
-    forwarded: ['mayor', 'Root/Areas/Asia/Worlds'],
+    forwarded: ['mayor'],
     result: ['Mayor of Kalisz'],
   },
   {

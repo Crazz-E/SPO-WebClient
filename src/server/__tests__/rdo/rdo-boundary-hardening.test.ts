@@ -344,12 +344,12 @@ describe('P-M1 — RDOSearchKey pattern reaches the wire as OLEString', () => {
         writeRdoFrame(socket, RdoProtocol.format(packet) + RDO_CONSTANTS.PACKET_DELIMITER, true);
         const payload = pd.verb === RdoVerb.IDOF
           ? 'objid="39751288"'
-          : pd.member === 'RDOOpenSession' ? 'RDOOpenSession="#142217260"' : 'res="%"';
+          : pd.member === 'RDOOpenSession' ? 'RDOOpenSession="#142217260"'
+          : pd.member === 'RDOSetCurrentKey' ? 'res="#-1"'
+          : 'res="%"';
         return { raw: '', type: 'RESPONSE', rid: packet.rid, payload };
       }
     );
-    session.setCurrentWorldInfo({ name: 'planitia' } as never);
-    session.setCachedZonePath('Root/Areas/America/Worlds');
 
     await session.searchPeople('SPO_test3');
 
@@ -361,7 +361,7 @@ describe('P-M1 — RDOSearchKey pattern reaches the wire as OLEString', () => {
     // — Directory Server/DirectoryServer.pas:78. VoidId would decode the first
     // parameter to Unassigned (RDOUtils.pas:351-352) and destroy the pattern.
     expect(search!.replace(/^C \d+ /, 'C ')).toBe(
-      'C sel 142217260 call RDOSearchKey "^" "%*SPO_test3*","%"'
+      'C sel 142217260 call RDOSearchKey "^" "%*SPO_test3*","%Alias\r\n"'
     );
     expect(search).not.toContain('"*SPO_test3*"');
   });

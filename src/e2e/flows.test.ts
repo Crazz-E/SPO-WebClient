@@ -7,7 +7,7 @@ import { WsDriver } from './ws-driver';
 import * as session from './session';
 import * as probeModule from './probe';
 import * as liveLog from './live-log';
-import { PRIMARY_ACCOUNT } from './config';
+import { PRIMARY_ACCOUNT, SECONDARY_ACCOUNT } from './config';
 
 function stubSession(responder: (msg: WsMessage) => unknown): session.LiveSession {
   return {
@@ -224,6 +224,58 @@ describe('building-details', () => {
     const result = await flowByName('building-details').run(ctx);
     expect(result.status).toBe('FAIL');
     expect(result.assertions.find(a => !a.ok)?.what).toMatch(/reads its group/);
+  });
+});
+
+describe('people-search', () => {
+  it('passes when the known alias is found', async () => {
+    jest.spyOn(session, 'login').mockResolvedValue(
+      stubSession(msg =>
+        msg.type === WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH
+          ? { type: WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH, results: [SECONDARY_ACCOUNT.username] }
+          : undefined,
+      ),
+    );
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    const result = await flowByName('people-search').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(session.logoff).toHaveBeenCalled();
+  });
+
+  it('fails when the search does not find the known alias', async () => {
+    jest.spyOn(session, 'login').mockResolvedValue(
+      stubSession(msg =>
+        msg.type === WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH
+          ? { type: WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH, results: [] }
+          : undefined,
+      ),
+    );
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    const result = await flowByName('people-search').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/finds it/);
+  });
+
+  it('searches for the secondary account, not the one logged in', async () => {
+    const sent: WsMessage[] = [];
+    jest.spyOn(session, 'login').mockResolvedValue(
+      stubSession(msg => {
+        sent.push(msg);
+        return msg.type === WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH
+          ? { type: WsMessageType.RESP_SEARCH_MENU_PEOPLE_SEARCH, results: [SECONDARY_ACCOUNT.username] }
+          : undefined;
+      }),
+    );
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    await flowByName('people-search').run(ctx);
+
+    const req = sent.find(m => m.type === WsMessageType.REQ_SEARCH_MENU_PEOPLE_SEARCH);
+    expect(req).toMatchObject({ searchStr: SECONDARY_ACCOUNT.username });
   });
 });
 

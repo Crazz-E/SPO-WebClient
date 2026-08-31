@@ -259,12 +259,31 @@ async function performDirectoryQuery(ctx: LoginContext, zonePath?: string): Prom
   }
 }
 
+/** `USERS_KEY & "/" & Mid(ALPHABET, idx, 1)` — DirectoryServer.wsc:175, :606, :838-871. */
+const SEARCH_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const USERS_KEY = 'Root/Users';
+/** Byte-for-byte `"Alias" & vbCrLf` — DirectoryServer.wsc:835-836. */
+const SEARCH_VALUE_NAMES = 'Alias\r\n';
+
+/**
+ * A directory boolean olevariant answer: any non-zero ordinal is true
+ * (`#-1` / `#0` convention, `shared/CLAUDE.md`), plus the literal string
+ * `"false"` a caller might hand back case-insensitively.
+ */
+function isTrueAnswer(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  return v !== '' && v !== '0' && v !== 'false';
+}
+
 /**
  * Search for people/tycoons via RDOSearchKey on the Directory Server.
- * Opens an ephemeral directory session, searches, and closes.
+ * Mirrors `SearchUsers` (DirectoryServer.wsc:830-880): one session, one bucket
+ * per letter of `Root/Users/<Letter>`, single-character searches narrowed to
+ * their own bucket. Opens an ephemeral directory session and closes it.
  */
-export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZonePath: string): Promise<string[]> {
-  const currentWorldInfo = ctx.currentWorldInfo;
+export async function searchPeople(ctx: LoginContext, searchStr: string): Promise<string[]> {
+  if (!searchStr.trim()) return [];
+
   const socket = await ctx.createSocket('directory_search', config.rdo.directoryHost, config.rdo.ports.directory);
   try {
     // 1. Resolve DirectoryServer object
@@ -275,38 +294,48 @@ export async function searchPeople(ctx: LoginContext, searchStr: string, cachedZ
     const sessionPacket = await sendDirectoryRequest(ctx, 'directory_search',rdoGet('RDOOpenSession', directoryServerId).packet);
     const sessionId = parsePropertyResponseHelper(sessionPacket.payload || '', 'RDOOpenSession');
 
-    // 3. Navigate to the world's directory root
-    const worldName = currentWorldInfo?.name || '';
-    const worldPath = `${cachedZonePath}/${worldName}`;
-    await sendDirectoryRequest(ctx, 'directory_search',rdoCall(
-      'RDOSetCurrentKey', sessionId,
-      RdoValue.string(worldPath),
-    ).packet);
+    // 3. Bucket selection: a single letter narrows to its own bucket with
+    //    pattern "*" (wsc:841-847); anything else sweeps all 26 buckets.
+    //    Deliberate, safe divergence: a single non-letter character falls
+    //    through to the full sweep instead of the wsc's negative Mid index.
+    const singleLetter = /^[A-Za-z]$/.test(searchStr) ? searchStr.toUpperCase() : null;
+    const buckets = singleLetter ? [singleLetter] : SEARCH_ALPHABET.split('');
+    const pattern = singleLetter ? '*' : `*${searchStr}*`;
 
-    // 4. Search for matching keys under the world.
-    //    P-M1: the pattern MUST carry the OLEString prefix explicitly. Passed raw,
-    //    its leading `*` was read as the VoidId type prefix, and the Delphi decoder
-    //    returns `Unassigned` for VoidId (RDOUtils.pas:351-352) — the search pattern
-    //    was destroyed before RDOSearchKey(SearchPattern, ValueNameList: widestring)
-    //    ever saw it (Directory Server/DirectoryServer.pas:78). Wire form must be
-    //    "%*<pattern>*", never "*<pattern>*".
-    const searchPacket = await sendDirectoryRequest(ctx, 'directory_search',rdoCall(
-      'RDOSearchKey', sessionId,
-      RdoValue.string(`*${searchStr}*`),
-      RdoValue.string(''),
-    ).packet);
-    const resValue = parsePropertyResponseHelper(searchPacket.payload || '', 'res');
+    // 4. One directory session for the whole sweep.
+    const names: string[] = [];
+    for (const letter of buckets) {
+      const setKeyPacket = await sendDirectoryRequest(ctx, 'directory_search',rdoCall(
+        'RDOSetCurrentKey', sessionId,
+        RdoValue.string(`${USERS_KEY}/${letter}`),
+      ).packet);
+      const setKeyRes = parsePropertyResponseHelper(setKeyPacket.payload || '', 'res');
+      if (!isTrueAnswer(setKeyRes)) continue;
 
-    // 5. Parse results
-    const names = parseSearchKeyResults(ctx, resValue);
+      // P-M1: the pattern MUST carry the OLEString prefix explicitly. Passed raw,
+      // its leading `*` was read as the VoidId type prefix, and the Delphi decoder
+      // returns `Unassigned` for VoidId (RDOUtils.pas:351-352) — the search pattern
+      // was destroyed before RDOSearchKey(SearchPattern, ValueNameList: widestring)
+      // ever saw it (Directory Server/DirectoryServer.pas:78). Wire form must be
+      // "%*<pattern>*", never "*<pattern>*". ValueNameList must be non-empty — the
+      // server wraps its whole body in `if valueNames.Count > 0`
+      // (DirectoryManager.pas:976-1104) and answers empty otherwise.
+      const searchPacket = await sendDirectoryRequest(ctx, 'directory_search',rdoCall(
+        'RDOSearchKey', sessionId,
+        RdoValue.string(pattern),
+        RdoValue.string(SEARCH_VALUE_NAMES),
+      ).packet);
+      const resValue = parsePropertyResponseHelper(searchPacket.payload || '', 'res');
+      names.push(...parseSearchKeyResults(ctx, resValue));
+    }
 
-    // 6. End Session (fire-and-forget — void push, no RID)
+    // 5. End Session (fire-and-forget — void push, no RID)
     writeRdoFrame(socket, rdoCall('RDOEndSession', sessionId).toFrame());
 
     return names;
   } catch (err: unknown) {
     ctx.log.error('[Session] searchPeople failed:', toErrorMessage(err));
-    return [];
+    throw err;
   } finally {
     socket.end();
     ctx.deleteSocket('directory_search');
@@ -909,11 +938,13 @@ function parseDirectoryResult(ctx: LoginContext, payload: string): WorldInfo[] {
 }
 
 /**
- * Parse RDOSearchKey results (Count=N, Key0=name0, Key1=name1, ...)
+ * Parse RDOSearchKey results (Count=N, Key0=key0, Alias0=alias0, Key1=..., ...)
+ * — names come from `Alias<i>`, the value the ASP reads (DirectoryServer.wsc:866).
  */
 function parseSearchKeyResults(ctx: LoginContext, payload: string): string[] {
   let raw = payload.trim();
   raw = raw.replace(RDO_PREFIX_STRIP, '');
+  if (!raw) return [];
   const lines = raw.split(/\n/);
   const data: Map<string, string> = new Map();
 
@@ -935,7 +966,7 @@ function parseSearchKeyResults(ctx: LoginContext, payload: string): string[] {
   const names: string[] = [];
 
   for (let i = 0; i < count; i++) {
-    const name = data.get(`key${i}`);
+    const name = data.get(`alias${i}`);
     if (name) names.push(name);
   }
 
