@@ -24,6 +24,7 @@
   transition: height var(--duration-panel) var(--ease-out);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
   max-height: calc(100vh - 56px - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px));
   overflow: hidden;
   will-change: transform;
 }
@@ -40,10 +41,12 @@
 
 .half {
   height: 50vh;
+  height: 50dvh;
 }
 
 .full {
   height: calc(100vh - 56px - env(safe-area-inset-bottom, 0px));
+  height: calc(100dvh - 56px - env(safe-area-inset-bottom, 0px));
 }
 
 /* Drag handle */
