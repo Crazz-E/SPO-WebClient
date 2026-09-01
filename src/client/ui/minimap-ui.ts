@@ -12,7 +12,8 @@
  *  - Click/tap inside → re-center main camera on that map position
  *
  * Layout:
- *  Desktop (≥ 768 px): docked top-left, shifts right when the left panel is open
+ *  Desktop (≥ 1024 px): docked top-left, fixed 12 px inset — never moves for an
+ *                      open surface (surfaces live in the right-edge Sheet)
  *  Mobile  (< 768 px): never docked — a floating diamond would sit on the
  *                      BottomSheet / BottomNav. The only mobile form is the
  *                      fullscreen overlay opened from MinimapToggleButton, and
@@ -193,17 +194,10 @@ export class MinimapUI {
   private applyPositioning(): void {
     if (!this.wrapper) return;
     // Docked minimap is desktop-only, so there is a single anchor: top-left,
-    // pushed right by an open left panel.
+    // fixed inset — no surface ever moves it.
     this.wrapper.style.bottom = '';
     this.wrapper.style.top    = `${DESKTOP_PAD}px`;
-    const panelOpen = useUiStore.getState().leftPanel !== null;
-    if (panelOpen) {
-      const w = getComputedStyle(document.documentElement)
-        .getPropertyValue('--panel-width-desktop').trim() || '420px';
-      this.wrapper.style.left = `calc(${w} + ${DESKTOP_PAD}px)`;
-    } else {
-      this.wrapper.style.left = `${DESKTOP_PAD}px`;
-    }
+    this.wrapper.style.left   = `${DESKTOP_PAD}px`;
   }
 
   /**
@@ -227,8 +221,6 @@ export class MinimapUI {
       z-index: var(--z-dropdown, 100);
       pointer-events: none;
       display: ${display};
-      transition: left 250ms cubic-bezier(0.16,1,0.3,1),
-                  bottom 250ms cubic-bezier(0.16,1,0.3,1);
     `;
 
     this.container.style.position  = 'absolute';
