@@ -209,10 +209,6 @@ beforeEach(() => {
     addEventListener: jest.fn(),
     removeEventListener: jest.fn(),
   };
-  (globalThis as Record<string, unknown>).getComputedStyle = jest.fn(() => ({
-    getPropertyValue: () => '420px',
-  }));
-
   useUiStore.setState({
     minimapFullscreen: false,
     mobileTab: 'map',
@@ -795,18 +791,23 @@ describe('MinimapUI', () => {
       minimap.destroy();
     });
 
-    it('shifts right when the desktop left panel opens', () => {
-      installWindow(1024);
+    it('stays anchored at left: 12px when a left surface opens and closes', () => {
+      for (const kind of ['empire', 'facilities', 'overlays'] as const) {
+        installWindow(1024);
 
-      const minimap = new MinimapUI();
-      minimap.setRenderer(createMockRenderer());
+        const minimap = new MinimapUI();
+        minimap.setRenderer(createMockRenderer());
 
-      useUiStore.getState().openLeftPanel('empire');
+        const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
 
-      const wrapper = allElements.find(el => el.id === 'minimap-wrapper');
-      expect(wrapper!.style.left).toBe('calc(420px + 12px)');
+        useUiStore.getState().openLeftPanel(kind);
+        expect(wrapper!.style.left).toBe('12px');
 
-      minimap.destroy();
+        useUiStore.getState().closeLeftPanel();
+        expect(wrapper!.style.left).toBe('12px');
+
+        minimap.destroy();
+      }
     });
 
     it('clears a stale fullscreen flag when the viewport shrinks into mobile', () => {
