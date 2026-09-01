@@ -181,6 +181,13 @@
   }
 }
 
+/* ---- Wide desktop — the sheet grows fluidly past 1400 px ---- */
+@media (min-width: 1400px) {
+  :root {
+    --panel-width-desktop: clamp(472px, 30vw, 1000px);
+  }
+}
+
 /* ---- Responsive adjustments ---- */
 @media (max-width: 767px) {
   :root {
