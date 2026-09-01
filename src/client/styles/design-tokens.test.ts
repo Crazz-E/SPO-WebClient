@@ -93,3 +93,62 @@ describe('design tokens', () => {
     }
   });
 });
+
+describe('desktop sheet width (issue 471)', () => {
+  const tokens = stripComments(readFileSync(join(STYLES_DIR, 'design-tokens.css'), 'utf8'));
+  const statusPill = stripComments(
+    readFileSync(join(CLIENT_ROOT, 'components/hud/StatusPill.module.css'), 'utf8')
+  );
+
+  it('the base declaration is 472px', () => {
+    expect(tokens).toMatch(/--panel-width-desktop:\s*472px/);
+  });
+
+  it('narrow-desktop and mobile rules are unchanged (no regression at or below 1400 px)', () => {
+    const narrowMatch = tokens.match(
+      /@media \(min-width: 1024px\) and \(max-width: 1399px\) \{\s*:root \{\s*--panel-width-desktop:\s*420px;/
+    );
+    expect(narrowMatch).not.toBeNull();
+
+    const mobileMatch = tokens.match(/@media \(max-width: 767px\) \{[\s\S]*?--panel-width-desktop:\s*100vw;/);
+    expect(mobileMatch).not.toBeNull();
+  });
+
+  it('a wide-desktop rule sets a fluid clamp() that reaches >= 900px at 3200px and stays continuous at 1400px', () => {
+    const match = tokens.match(
+      /@media \(min-width: 1400px\) \{\s*:root \{\s*--panel-width-desktop:\s*clamp\(472px,\s*([0-9.]+)vw,\s*([0-9.]+)px\)/
+    );
+    expect(match).not.toBeNull();
+    const g = parseFloat(match![1]);
+    const max = parseFloat(match![2]);
+
+    expect(max).toBeLessThanOrEqual(1000);
+
+    const widthAt = (viewport: number) => Math.min(Math.max(472, (viewport * g) / 100), max);
+
+    expect(widthAt(3200)).toBeGreaterThanOrEqual(900);
+    expect(widthAt(1400)).toBe(472);
+  });
+
+  it('StatusPill.module.css:35 max-width calc stays positive at the widest supported viewport (3840px)', () => {
+    const match = tokens.match(
+      /@media \(min-width: 1400px\) \{\s*:root \{\s*--panel-width-desktop:\s*clamp\(472px,\s*([0-9.]+)vw,\s*([0-9.]+)px\)/
+    );
+    expect(match).not.toBeNull();
+    const g = parseFloat(match![1]);
+    const max = parseFloat(match![2]);
+    const panelWidthAt3840 = Math.min(Math.max(472, (3840 * g) / 100), max);
+
+    expect(statusPill).toMatch(
+      /max-width:\s*calc\(100% - var\(--minimap-size\) - var\(--space-10\) - var\(--panel-width-desktop\) - var\(--sheet-inset\) - var\(--space-4\)\)/
+    );
+
+    const minimapSize = 200;
+    const space10 = 40;
+    const sheetInset = 16;
+    const space4 = 16;
+    const remaining = 3840 - minimapSize - space10 - panelWidthAt3840 - sheetInset - space4;
+
+    expect(remaining).toBeGreaterThan(0);
+  });
+});

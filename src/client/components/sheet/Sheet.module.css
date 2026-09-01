@@ -1,5 +1,6 @@
-/* Sheet — the universal surface (handoff 00 §3.2). Desktop: a floating 472 px frame below the
-   status pill, 16 px off the edges, rounded; the map stays visible and clickable around it.
+/* Sheet — the universal surface (handoff 00 §3.2). Desktop: a floating frame, 472 px floor,
+   growing to 1000 px on wide desktops, below the status pill, 16 px off the edges, rounded;
+   the map stays visible and clickable around it.
    Tablet keeps the docked right panel (the HUD shifts beside it); mobile routes the same stack
    into the BottomSheet. */
 
