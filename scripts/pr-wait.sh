@@ -54,10 +54,18 @@ fi
 deadline=$(( $(date +%s) + timeout_min * 60 ))
 polls=0
 
-while :; do
+read_pr() {
   # REST, not GraphQL: this costs nothing against the GraphQL budget, and `gh pr view`
   # goes through the deprecated project-cards path this repo trips on (CLAUDE.md § Git).
-  state="$(gh api "repos/$REPO/pulls/$pr" --jq '.state + " " + (.merged|tostring)' 2>/dev/null)"
+  # `merged` OR a non-null `merged_at` counts as merged: either is the PR's own testimony
+  # that the change landed, and a PR that merged is never "closed unmerged" whatever an
+  # earlier read said (#443 — PR #447 read `closed false` 30 s before it merged).
+  gh api "repos/$REPO/pulls/$pr" \
+    --jq '.state + " " + ((.merged or (.merged_at != null)) | tostring)' 2>/dev/null
+}
+
+while :; do
+  state="$(read_pr)"
 
   case "$state" in
     "closed true")
@@ -65,10 +73,30 @@ while :; do
       exit 0
       ;;
     "closed false")
-      echo "CLOSED UNMERGED: #$pr — the queue entry was destroyed, or a human closed it." >&2
-      echo "Recovery is in doc/bench-worker.md §12: push the branch, gh pr reopen $pr," >&2
-      echo "then merge again — same sha, so the attestation still holds." >&2
-      exit 1
+      # One `closed false` read is not a verdict: the API can report the queue entry
+      # closed for an instant while the merge itself is landing (#443 — PR #447 read
+      # `closed false` at 13:17:57 and merged at 13:18:27, and the card was falsely
+      # parked). Confirm with a second read separated by the full interval; the PR's
+      # own merged/merged_at always wins over the prior read.
+      echo "read closed-unmerged for #$pr — one read is not a verdict; confirming in ${interval}s" >&2
+      sleep "$interval"
+      polls=$(( polls + 1 ))
+      confirm="$(read_pr)"
+      case "$confirm" in
+        "closed true")
+          echo "MERGED: #$pr"
+          exit 0
+          ;;
+        "closed false")
+          echo "CLOSED UNMERGED: #$pr — the queue entry was destroyed, or a human closed it." >&2
+          echo "Recovery is in doc/bench-worker.md §12: push the branch, gh pr reopen $pr," >&2
+          echo "then merge again — same sha, so the attestation still holds." >&2
+          exit 1
+          ;;
+        *)
+          echo "closed-unmerged not confirmed (second read: '${confirm:-nothing}') — resuming the wait" >&2
+          ;;
+      esac
       ;;
     "open "*)
       : # still queued
