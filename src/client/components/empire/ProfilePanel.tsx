@@ -12,7 +12,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   GraduationCap, Landmark, TrendingUp, Factory, Link, Flag, X, Plus,
-  RotateCcw, LogOut, Wrench, ChevronUp, ChevronRight, ArrowLeft,
+  RotateCcw, LogOut, Wrench, ChevronUp, ChevronRight, ArrowLeft, User,
 } from 'lucide-react';
 import { Skeleton, SkeletonLines, ConfirmDialog, Switch } from '../common';
 import { useProfileStore, type ProfileTab } from '../../store/profile-store';
@@ -67,12 +67,47 @@ export function ProfilePanel() {
   const activeSection = SECTIONS.find((s) => s.id === currentTab) ?? null;
 
   return (
-    <div className={`${styles.panel} ${activeSection ? styles.split : ''}`}>
-      <SectionList activeTab={currentTab} onSelect={toggleSection} />
-      {activeSection && (
-        <SectionDrawer section={activeSection} isLoading={isLoading} onClose={() => setCurrentTab(null)} />
-      )}
+    <div className={styles.panel}>
+      <ProfileIdentityHeader />
+      <div className={`${styles.body} ${activeSection ? styles.split : ''}`}>
+        <SectionList activeTab={currentTab} onSelect={toggleSection} />
+        {activeSection && (
+          <SectionDrawer section={activeSection} isLoading={isLoading} onClose={() => setCurrentTab(null)} />
+        )}
+      </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Identity header — portrait, name and rank, shown above the section list
+// ---------------------------------------------------------------------------
+
+function ProfileIdentityHeader() {
+  const profile = useProfileStore((s) => s.profile);
+  const [photoErrored, setPhotoErrored] = useState(false);
+
+  if (!profile) return null;
+
+  const showPhoto = Boolean(profile.photoUrl) && !photoErrored;
+
+  return (
+    <header className={styles.identityHeader}>
+      {showPhoto ? (
+        <img
+          className={styles.identityPhoto}
+          src={profile.photoUrl}
+          alt={profile.name}
+          onError={() => setPhotoErrored(true)}
+        />
+      ) : (
+        <div className={styles.identityPhotoPlaceholder}>
+          <User size={20} />
+        </div>
+      )}
+      <span className={styles.identityName}>{profile.name}</span>
+      <span className={styles.identityRank}>#{profile.ranking}</span>
+    </header>
   );
 }
 

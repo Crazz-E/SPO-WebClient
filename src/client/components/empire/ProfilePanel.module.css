@@ -2,8 +2,59 @@
 
 .panel {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   height: 100%;
+  overflow: hidden;
+}
+
+/* ---- Identity header — portrait, name and rank ---- */
+
+.identityHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--surface-border);
+  flex-shrink: 0;
+}
+
+.identityPhoto,
+.identityPhotoPlaceholder {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+}
+
+.identityPhotoPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+
+.identityName {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+}
+
+.identityRank {
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--accent-gold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Body — the list + drawer row ---- */
+
+.body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
