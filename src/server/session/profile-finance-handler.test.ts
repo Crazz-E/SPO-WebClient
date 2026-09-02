@@ -133,6 +133,26 @@ interface CurriculumOpts {
   nobility?: number;
   ranks?: Array<[string, string]>;
   items?: Array<[string, string]>;
+  /** `Obj.TournamentOn = "1"` — renders the Ability block (:162-174). */
+  tournamentOn?: boolean;
+  /** Rendered verbatim, so a component can be blank (`:37-53` coerces blank to 0). */
+  abilityPoints?: [string, string, string];
+}
+
+/** :162-174 — the Ability block, rendered only on tournament worlds. Literal `&nbsp` with no
+ * trailing semicolon, matching the ASP's own markup. */
+function abilityStat(total: string, [rank, level, loan]: [string, string, string]): string {
+  return `${T(5)}<div class=label style="margin-left: 20px; margin-top: 5px; margin-bottom: 20px">\n`
+    + `${T(6)}Ability:\n`
+    + `${T(6)}<span class=value>\n`
+    + `${T(7)}${total}  points\n`
+    + `${T(8)}&nbsp(\n`
+    + `${T(9)}${rank}&nbspfrom the rankings,\n`
+    + `${T(9)}${level}&nbspfor being at the highest level,\n`
+    + `${T(9)}${loan}&nbspfor having loans\n`
+    + `${T(8)})\n`
+    + `${T(6)}</span>\n`
+    + `${T(5)}</div>`;
 }
 
 /** TycoonCurriculum.asp rendered for Five/0 (LangId = 0). */
@@ -149,6 +169,8 @@ function curriculumPage(opts: CurriculumOpts = {}): string {
     prestige: 1234, nobility: 2500,
     ranks: [['Fortune', '7'], ['Prestige', '-'], ['Population', ''], ['Weird', 'abc']] as Array<[string, string]>,
     items: [['Built a <b>Farm</b>', '+120'], ['Bankruptcy', '-1,000'], ['', '+5']] as Array<[string, string]>,
+    tournamentOn: false,
+    abilityPoints: ['0', '0', '0'] as [string, string, string],
     ...opts,
   };
 
@@ -210,6 +232,16 @@ ${T(1)}</script>
     currStat('Total Prestige', `${o.prestige}  points`, 'margin-left: 20px; margin-top: 5px'),
     currStat('Nobility', o.nobility > 5 ? `${o.nobility}  points` : ' 0 points',
       'margin-left: 20px; margin-top: 5px; margin-bottom: 20px'),
+    ...(o.tournamentOn
+      ? [abilityStat(
+          String(
+            (parseInt(o.abilityPoints[0], 10) || 0)
+            + (parseInt(o.abilityPoints[1], 10) || 0)
+            + (parseInt(o.abilityPoints[2], 10) || 0)
+          ),
+          o.abilityPoints
+        )]
+      : []),
   ];
 
   // :175-211 — reset (SuperRole = 0) or abandon (SuperRole <> 0), FullAccess only
@@ -550,6 +582,11 @@ describe('fetchCurriculumData', () => {
       facMax: 100,
       area: 0,
       nobPoints: 2500,
+      tournamentOn: false,
+      abilityTotal: 0,
+      abilityRankingPoints: 0,
+      abilityLevelPoints: 0,
+      abilityLoanPoints: 0,
       rankings: [
         { category: 'Fortune', rank: 7 },
         { category: 'Prestige', rank: null },
@@ -561,6 +598,23 @@ describe('fetchCurriculumData', () => {
         { item: 'Bankruptcy', prestige: -1000 },
       ],
     });
+    expect(data.tournamentOn).toBe(false);
+  });
+
+  it('a tournament world (Ability block present) parses the total and blank-tolerant components', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(
+      curriculumPage({ tournamentOn: true, abilityPoints: ['10', '', '5'] })
+    );
+    mockFetch.mockResolvedValue(htmlResponse(''));
+
+    const data = await fetchCurriculumData(fake.ctx);
+
+    expect(data.tournamentOn).toBe(true);
+    expect(data.abilityTotal).toBe(15);
+    expect(data.abilityRankingPoints).toBe(10);
+    expect(data.abilityLevelPoints).toBe(0);
+    expect(data.abilityLoanPoints).toBe(5);
   });
 
   // Regression guard for B-20. `FormatValue` (:17-23) is

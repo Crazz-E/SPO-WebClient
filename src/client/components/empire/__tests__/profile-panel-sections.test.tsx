@@ -10,6 +10,37 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders, createSpiedCallbacks } from '../../../__tests__/setup/render-helpers';
 import { useProfileStore } from '../../../store/profile-store';
 import { ProfilePanel } from '../ProfilePanel';
+import type { CurriculumData } from '@/shared/types';
+
+const CURRICULUM_BASE: CurriculumData = {
+  tycoonName: 'SPO_test3',
+  currentLevel: 4,
+  currentLevelName: 'Paradigm',
+  currentLevelDescription: 'You are a paradigm of industry.',
+  nextLevelName: 'Legend',
+  nextLevelDescription: 'Legends shape worlds.',
+  nextLevelRequirements: 'Prestige 5000 and 50 facilities',
+  canUpgrade: true,
+  isUpgradeRequested: false,
+  fortune: '$1,234,567',
+  averageProfit: '$88,000/h',
+  prestige: 1234,
+  facPrestige: 0,
+  researchPrestige: 0,
+  budget: '1234567',
+  ranking: 42,
+  facCount: 13,
+  facMax: 100,
+  area: 0,
+  nobPoints: 2500,
+  tournamentOn: false,
+  abilityTotal: 0,
+  abilityRankingPoints: 0,
+  abilityLevelPoints: 0,
+  abilityLoanPoints: 0,
+  rankings: [],
+  curriculumItems: [],
+};
 
 const SECTION_LABELS = [
   'Curriculum',
@@ -129,5 +160,37 @@ describe('ProfilePanel — sections', () => {
 
     unmount();
     expect(useProfileStore.getState().currentTab).toBeNull();
+  });
+
+  it('shows the Ability card and its components on a tournament world', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({
+        ...CURRICULUM_BASE,
+        tournamentOn: true,
+        abilityTotal: 15,
+        abilityRankingPoints: 10,
+        abilityLevelPoints: 0,
+        abilityLoanPoints: 5,
+      });
+    });
+
+    expect(screen.getByText('Ability')).toBeTruthy();
+    expect(screen.getByText('15 points')).toBeTruthy();
+    expect(screen.getByText(/from the rankings/)).toBeTruthy();
+  });
+
+  it('shows no Ability card on a non-tournament world', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE });
+    });
+
+    expect(screen.queryByText('Ability')).toBeNull();
+    expect(screen.queryByText(/from the rankings/)).toBeNull();
   });
 });

@@ -832,6 +832,11 @@ export interface CurriculumData {
   facMax: number;
   area: number;
   nobPoints: number;
+  tournamentOn: boolean;
+  abilityTotal: number;
+  abilityRankingPoints: number;
+  abilityLevelPoints: number;
+  abilityLoanPoints: number;
   rankings: CurriculumRanking[];
   curriculumItems: CurriculumItem[];
 }

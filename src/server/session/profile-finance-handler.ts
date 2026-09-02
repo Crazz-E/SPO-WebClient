@@ -335,6 +335,19 @@ function parseCurriculumDetails(
     }
   }
 
+  // Ability block, rendered only on tournament worlds (TycoonCurriculum.asp:162-174); the three
+  // components are coerced from blank to 0 at :37-53. Captions from eNewTycon.lng:126-129,
+  // unit "points" from StrTycoonCurriculum_4 (eNewTycon.lng:72).
+  const abilityMatch =
+    /Ability\s*:\s*(?:<[^>]*>\s*)*(\d+)\s*points[\s\S]*?\(\s*(\d*)(?:&nbsp;?|\s)*from the rankings\s*,\s*(\d*)(?:&nbsp;?|\s)*for being at the highest level\s*,\s*(\d*)(?:&nbsp;?|\s)*for having loans/i.exec(
+      html
+    );
+  const tournamentOn = abilityMatch !== null;
+  const abilityTotal = abilityMatch ? parseInt(abilityMatch[1], 10) || 0 : 0;
+  const abilityRankingPoints = abilityMatch ? parseInt(abilityMatch[2], 10) || 0 : 0;
+  const abilityLevelPoints = abilityMatch ? parseInt(abilityMatch[3], 10) || 0 : 0;
+  const abilityLoanPoints = abilityMatch ? parseInt(abilityMatch[4], 10) || 0 : 0;
+
   // Extract and cache action URLs from ASP HTML (links to resetTycoon.asp, abandonRole.asp, etc.)
   if (baseUrl && html) {
     const actionUrls = extractAllActionUrls(html, baseUrl);
@@ -365,6 +378,11 @@ function parseCurriculumDetails(
     facMax: profile.facMax,
     area: profile.area,
     nobPoints: profile.nobPoints,
+    tournamentOn,
+    abilityTotal,
+    abilityRankingPoints,
+    abilityLevelPoints,
+    abilityLoanPoints,
     rankings,
     curriculumItems,
   };

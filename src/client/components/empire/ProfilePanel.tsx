@@ -226,6 +226,17 @@ function CurriculumTab() {
         <StatCard label="Prestige" value={`${data.prestige} pts`} />
         <StatCard label="Nobility" value={`${data.nobPoints} pts`} />
       </div>
+      {data.tournamentOn && (
+        <div className={styles.statGrid}>
+          <StatCard label="Ability" value={`${data.abilityTotal} points`} />
+        </div>
+      )}
+      {data.tournamentOn && (
+        <div className={styles.abilityBreakdown}>
+          {data.abilityRankingPoints} from the rankings, {data.abilityLevelPoints} for being at
+          the highest level, {data.abilityLoanPoints} for having loans
+        </div>
+      )}
 
       {/* Section 2: Action Buttons */}
       <div className={styles.cvActions}>

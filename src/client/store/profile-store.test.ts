@@ -27,6 +27,11 @@ const mockCurriculum: CurriculumData = {
   facMax: 50,
   area: 100,
   nobPoints: 45,
+  tournamentOn: false,
+  abilityTotal: 0,
+  abilityRankingPoints: 0,
+  abilityLevelPoints: 0,
+  abilityLoanPoints: 0,
   rankings: [],
   curriculumItems: [],
 };
