@@ -25,13 +25,18 @@ const IN_WINDOW = Date.UTC(2026, 7, 25, 3, 0, 0);
 /** 12:00 UTC — the middle of a working day. */
 const OUTSIDE = Date.UTC(2026, 7, 25, 12, 0, 0);
 
+/** Stand-in for the real github auth environment; see ./git-auth. */
+const NIGHTLY_AUTH = { GIT_CONFIG_COUNT: '1' };
+
 interface Harness {
   deps: NightlyDeps;
   paths: BenchPaths;
   spool: Spool;
-  commands: { cmd: string; args: string[]; cwd: string }[];
+  commands: { cmd: string; args: string[]; cwd: string; env?: Record<string, string> }[];
   exitCodes: number[];
   logs: string[];
+  /** Every delay the retry loop asked for, in order — never really waited. */
+  slept: number[];
   gitCalls: { worktree: string; args: string[] }[];
   gitThrows: boolean;
   fingerprintThrows: boolean;
@@ -51,6 +56,7 @@ function harness(): Harness {
     paths,
     spool,
     commands: [],
+    slept: [],
     exitCodes: [],
     logs: [],
     gitCalls: [],
@@ -72,11 +78,13 @@ function harness(): Harness {
       },
       resolveRef: (): string | undefined => h.mainSha,
       runCommand: async (cmd, args, options) => {
-        h.commands.push({ cmd, args, cwd: options.cwd });
+        h.commands.push({ cmd, args, cwd: options.cwd, env: options.env });
         return h.exitCodes.shift() ?? 0;
       },
       now: () => h.clock.nowMs,
       log: line => h.logs.push(line),
+      sleep: async ms => void h.slept.push(ms),
+      gitAuthEnv: () => NIGHTLY_AUTH,
     },
   };
   return h;
@@ -302,10 +310,10 @@ describe('prepareCheckout', () => {
 
   it('names the clone when the clone fails', async () => {
     const h = harness();
-    h.exitCodes = [1];
+    h.exitCodes = [1, 1, 1]; // every attempt, or the retry would rescue it
 
     expect(await prepareCheckout(h.deps, '/repo', h.git)).toBe('git clone');
-    expect(ranSteps(h)).toEqual(['git clone']);
+    expect(ranSteps(h)).toEqual(['git clone', 'git clone', 'git clone']);
   });
 
   it('names the url lookup when the worker repo has no origin', async () => {

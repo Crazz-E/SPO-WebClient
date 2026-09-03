@@ -39,6 +39,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { toErrorMessage } from '../../shared/error-utils';
 import { type GitRunner } from './fingerprint';
+import { type GitAuthEnv } from './git-auth';
 
 export interface CheckoutCommandOptions {
   cwd: string;
@@ -51,6 +52,14 @@ export interface CheckoutDeps {
   runCommand: (cmd: string, args: string[], options: CheckoutCommandOptions) => Promise<number>;
   now: () => number;
   log: (line: string) => void;
+  /** Waits between attempts at a network step. Injected so tests do not really wait. */
+  sleep: (ms: number) => Promise<void>;
+  /**
+   * The environment that makes git authenticate to github.com — see ./git-auth. A
+   * dependency rather than a direct call so a test can prove the clone and the fetch carry
+   * it, and prove that nothing else does.
+   */
+  gitAuthEnv: () => GitAuthEnv;
 }
 
 export interface PrepareRequest {
@@ -133,6 +142,47 @@ export function needsInstall(dir: string, exists: (p: string) => boolean = fs.ex
 }
 
 /**
+ * How long to wait before each further attempt at a step that talks to the network.
+ *
+ * Two retries, ~10 s of patience in total. Deliberately modest, and the reason is worth
+ * stating: this is *not* the fix for the throttling that took out the merge queue and the
+ * nightly on 2026-09-03 — authenticating the fetch is (see ./git-auth), and an
+ * authenticated fetch is not subject to the limit that was hit. This exists for the
+ * ordinary transient — a dropped packet, a DNS blip, a moment of GitHub unavailability —
+ * where one more attempt a few seconds later is the whole cure.
+ *
+ * It stays short because the bench is serialised: every second spent retrying is a second
+ * no other job can run. Waiting out a multi-minute outage is not this loop's job; failing
+ * honestly and letting the caller resubmit is.
+ */
+export const NETWORK_RETRY_DELAYS_MS = [2_000, 8_000];
+
+/**
+ * Run a step that talks to the network, retrying on a non-zero exit.
+ *
+ * Only ever used for `clone` and `fetch`. `reset`, `clean` and `merge` are local and
+ * deterministic: retrying those would not fix anything and would turn a real error into
+ * three copies of itself in the log.
+ */
+async function runNetworkCommand(
+  deps: CheckoutDeps,
+  name: string,
+  cmd: string,
+  args: string[],
+  options: CheckoutCommandOptions,
+  delays: number[] = NETWORK_RETRY_DELAYS_MS,
+): Promise<number> {
+  let code = await deps.runCommand(cmd, args, options);
+  for (const delay of delays) {
+    if (code === 0) return code;
+    deps.log(`checkout: ${name} exited ${code} — retrying in ${delay}ms`);
+    await deps.sleep(delay);
+    code = await deps.runCommand(cmd, args, options);
+  }
+  return code;
+}
+
+/**
  * Bring `dir` to `ref`, cloning it the first time. Returns the name of the step that
  * failed, or null on success.
  *
@@ -150,6 +200,10 @@ export async function prepareCheckout(
   // One preparation per log: a red result points here, and yesterday's noise would bury it.
   fs.writeFileSync(logFile, `=== prepare ${dir} at ${ref} — ${new Date(deps.now()).toISOString()} ===\n`, 'utf8');
 
+  // Read once and used for the clone and the fetch — the only two steps that leave this
+  // machine. Nothing local gets the token, so `npm ci` and the drive itself never see it.
+  const env = deps.gitAuthEnv();
+
   if (!fs.existsSync(path.join(dir, '.git'))) {
     let url: string;
     try {
@@ -158,9 +212,10 @@ export async function prepareCheckout(
       fs.appendFileSync(logFile, `${toErrorMessage(err)}\n`, 'utf8');
       return { failed: 'git remote get-url origin' };
     }
-    const cloned = await deps.runCommand('git', ['clone', url, dir], {
+    const cloned = await runNetworkCommand(deps, 'git clone', 'git', ['clone', url, dir], {
       cwd: path.dirname(dir),
       logFile,
+      env,
     });
     if (cloned !== 0) return { failed: 'git clone' };
   }
@@ -168,12 +223,21 @@ export async function prepareCheckout(
   // Every branch, not just the one asked for: a bare sha cannot always be fetched
   // directly (the server has to allow it), while a sha reachable from a fetched branch
   // always resets cleanly. `--prune` keeps deleted branches from accumulating forever.
-  const steps: { name: string; cmd: string; args: string[] }[] = [
-    { name: 'git fetch', cmd: 'git', args: ['fetch', '--prune', '--force', 'origin'] },
+  const fetched = await runNetworkCommand(
+    deps,
+    'git fetch',
+    'git',
+    ['fetch', '--prune', '--force', 'origin'],
+    { cwd: dir, logFile, env },
+  );
+  if (fetched !== 0) return { failed: 'git fetch' };
+
+  // Local, deterministic, and given no token: see runNetworkCommand.
+  const localSteps: { name: string; cmd: string; args: string[] }[] = [
     { name: `git reset --hard ${ref}`, cmd: 'git', args: ['reset', '--hard', ref] },
     { name: 'git clean -fd', cmd: 'git', args: ['clean', '-fd'] },
   ];
-  for (const step of steps) {
+  for (const step of localSteps) {
     const code = await deps.runCommand(step.cmd, step.args, { cwd: dir, logFile });
     if (code !== 0) return { failed: step.name };
   }

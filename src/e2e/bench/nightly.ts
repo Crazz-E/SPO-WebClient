@@ -33,6 +33,7 @@ import { toErrorMessage } from '../../shared/error-utils';
 import type { BenchPaths } from './paths';
 import { runGit, type GitRunner, type TreeFingerprint } from './fingerprint';
 import { prepareCheckout as sharedPrepareCheckout } from './checkout';
+import { type GitAuthEnv } from './git-auth';
 import type { Spool, JobVerdict } from './job';
 
 /**
@@ -101,6 +102,14 @@ export interface NightlyDeps {
   runCommand: (cmd: string, args: string[], options: NightlyCommandOptions) => Promise<number>;
   now: () => number;
   log: (line: string) => void;
+  /** Waits between attempts at a network step — see checkout.ts. */
+  sleep: (ms: number) => Promise<void>;
+  /**
+   * The environment that makes git authenticate to github.com; see ./git-auth. The nightly
+   * needs this at least as much as a job does: it is the only proof `main` ever gets, and
+   * when its fetch was refused on 2026-09-03 there was nothing behind it to try again.
+   */
+  gitAuthEnv: () => GitAuthEnv;
 }
 
 /** The clone the nightly drives — refreshed to `origin/main`, written by nothing else. */

@@ -28,7 +28,7 @@ import {
   type CurrentJob,
 } from './paths';
 import { fingerprintTree, resolveRef, runGit, type TreeFingerprint } from './fingerprint';
-import { prepareCheckout, type PrepareResult } from './checkout';
+import { prepareCheckout, type CheckoutDeps, type PrepareResult } from './checkout';
 import { ciStaticProof, type CiProof } from './ci-proof';
 import { serveMergeQueue, type MergeQueueDeps } from './merge-queue';
 import { Spool, type JobReport, type JobRequest, type JobType, type JobVerdict } from './job';
@@ -50,6 +50,7 @@ import {
   type StatusPublisher,
 } from './verdict';
 import { maybeRunNightly, nightlyResultFromReport, writeNightlyResult } from './nightly';
+import { githubAuthEnv, type GitAuthEnv } from './git-auth';
 import {
   ghVariableReader,
   ghVariableWriter,
@@ -105,6 +106,12 @@ export interface WorkerDeps {
   now: () => number;
   sleep: (ms: number) => Promise<void>;
   log: (line: string) => void;
+  /**
+   * The environment that makes a git child authenticate to github.com. See ./git-auth for
+   * why the bench needs one at all — in short, this repo is public, so git never asks the
+   * credential helper and every fetch has always been anonymous.
+   */
+  gitAuthEnv: () => GitAuthEnv;
   /**
    * B5.2: which job the worker is executing right now, and since when. Reassigned on the SAME
    * `deps` object `main()` builds once and hands to the loop — never a fresh WorkerDeps — so
@@ -789,7 +796,11 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
 
   // Refresh origin/main so verify-gate judges the branch against the real main, not a
   // lagging local one. Best-effort: offline, the gate falls back on its own.
-  await deps.runCommand('git', ['fetch', '--quiet', 'origin', 'main'], { cwd: request.worktree, logFile });
+  await deps.runCommand('git', ['fetch', '--quiet', 'origin', 'main'], {
+    cwd: request.worktree,
+    logFile,
+    env: deps.gitAuthEnv(),
+  });
 
   // Which `main` this run stands on. The ruleset no longer forces the branch to be up to
   // date, so nothing else records the base — without this the attestation could not say
@@ -1282,11 +1293,38 @@ export function realRunCommand(
  * about itself, and what shape a queue entry's job takes. That is behaviour, and it is
  * tested directly.
  */
-export function mergeQueueDeps(paths: BenchPaths, log: (line: string) => void): MergeQueueDeps {
+/** git subcommands that talk to the network, and so need credentials. */
+export const NETWORK_SUBCOMMANDS = new Set(['fetch', 'ls-remote', 'clone', 'push']);
+
+/**
+ * Credentials for a git call, or nothing when it does not leave the machine.
+ *
+ * A named function rather than an inline ternary so the decision is testable on its own:
+ * the defect this closes was invisible precisely because nothing anywhere asserted which
+ * git calls were authenticated.
+ */
+export function authEnvForGitArgs(
+  args: string[],
+  log: (line: string) => void,
+  auth: (log: (line: string) => void) => GitAuthEnv = githubAuthEnv,
+): GitAuthEnv | undefined {
+  return NETWORK_SUBCOMMANDS.has(args[0]) ? auth(log) : undefined;
+}
+
+export function mergeQueueDeps(
+  paths: BenchPaths,
+  log: (line: string) => void,
+  gitRunner: typeof runGit = runGit,
+): MergeQueueDeps {
   const spool = new Spool(paths, log);
-  const git = (args: string[], cwd: string): string => runGit(cwd, args);
+  // Only the network subcommands get the token. Every other call this runner makes —
+  // `rev-parse`, `log`, `merge-base` — is local, and handing it credentials would put them
+  // in the environment of a process with no use for them. The `fetch` is the exact call
+  // GitHub refused seven times on 2026-09-03; see ./git-auth for why it was anonymous.
+  const git = (args: string[], cwd: string): string =>
+    gitRunner(cwd, args, undefined, authEnvForGitArgs(args, log));
   return {
-    lsRemote: cwd => runGit(cwd, ['ls-remote', 'origin', 'refs/heads/gh-readonly-queue/*']),
+    lsRemote: cwd => git(['ls-remote', 'origin', 'refs/heads/gh-readonly-queue/*'], cwd),
     git,
     attested: () => {
       // Lazy and memoized: the first-parent index costs a `git log`, and most calls never
@@ -1390,6 +1428,18 @@ export function realWorkerDeps(
   };
   const runGh = (cmd: string, args: string[], cwd: string): string =>
     execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  // Hoisted, not inlined at each use: `prepareRef` and the worker itself need the same
+  // three, and building a fresh copy per call made the wiring unreachable from any test —
+  // which is how a git call quietly loses its credentials.
+  const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+  const gitAuthEnv = (): GitAuthEnv => githubAuthEnv(log);
+  const checkoutDeps: CheckoutDeps = {
+    runCommand: realRunCommand,
+    now: () => Date.now(),
+    log,
+    sleep,
+    gitAuthEnv,
+  };
   const ownerDeps: OwnerDeps = {
     readVariable: ghVariableReader(runGh, process.cwd()),
     writeVariable: ghVariableWriter(runGh, process.cwd()),
@@ -1413,7 +1463,7 @@ export function realWorkerDeps(
     ciStaticProof: sha => ciStaticProof((args, cwd) => runGh('gh', args, cwd), sha, paths.refCheckout),
     prepareRef: (ref, logFile) =>
       prepareCheckout(
-        { runCommand: realRunCommand, now: () => Date.now(), log },
+        checkoutDeps,
         { dir: paths.refCheckout, ref, workerRepo: process.cwd(), logFile, mergeRef: 'origin/main' },
         runGit,
       ),
@@ -1421,7 +1471,8 @@ export function realWorkerDeps(
     renewLease: nowMs => renewLease(ownerDeps, lease, nowMs),
     processAlive,
     now: () => Date.now(),
-    sleep: ms => new Promise(resolve => setTimeout(resolve, ms)),
+    sleep,
+    gitAuthEnv,
     log,
     // B5.2: idle at construction; processOldest is the only writer from here on (set at claim,
     // cleared once a report exists — see its own comment). main()'s heartbeat timer reads this
