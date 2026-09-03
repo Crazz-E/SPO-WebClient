@@ -175,6 +175,29 @@ function isMainMoved(currentMainSha: string | undefined, lastProvenSha: string |
   );
 }
 
+/**
+ * Did the last result prove nothing about any sha at all?
+ *
+ * An `ENVIRONMENT` nightly records no `sha` — the checkout never got far enough to have
+ * one. That is the state this predicate exists for, and it is a trap without it: `main` is
+ * unproven, and the move trigger *cannot say so*, because `isMainMoved` needs two shas to
+ * compare and only has one. Every trigger but the 03:00 window is then dead until the next
+ * window.
+ *
+ * That is not hypothetical. On 2026-09-03 a single throttled fetch failed the nightly at
+ * 07:49:22Z, recorded `ENVIRONMENT` with no sha, and `main` went unproven for the rest of
+ * the working day — with eleven commits landing behind it.
+ *
+ * Retrying is bounded by construction, not by hope: this can only be true when nothing
+ * ran, because any nightly that got as far as driving records the sha it started on, and
+ * `isAlreadyProven` stops it there. So the loop this opens is "keep trying to prove main
+ * until you manage to", at the move trigger's own 15-minute rate limit — never "drive the
+ * live world again and again".
+ */
+function provedNothing(last: NightlyResult | null, lastProvenSha: string | undefined): boolean {
+  return last !== null && lastProvenSha === undefined;
+}
+
 /** Is the current `main` sha exactly the one already covered by the last result? */
 function isAlreadyProven(currentMainSha: string | undefined, lastProvenSha: string | undefined): boolean {
   return currentMainSha !== undefined && currentMainSha === lastProvenSha;
@@ -225,10 +248,13 @@ export function nightlyDue(
   const submittedAtMs = last ? Date.parse(last.submittedAt) : NaN;
   const effectiveLastRunAtMs = lastRunAtMs ?? (Number.isFinite(submittedAtMs) ? submittedAtMs : undefined);
 
-  if (
-    isMainMoved(currentMainSha, lastProvenSha) &&
-    isRateLimitExceeded(effectiveLastRunAtMs, nowMs, NIGHTLY_MOVE_RATE_LIMIT_MS)
-  ) {
+  // Two ways `main` can be unproven: it moved past what was proven, or nothing was ever
+  // proven because the last attempt died before it could learn anything. Both are answered
+  // by the same rate-limited retry.
+  const unproven =
+    currentMainSha !== undefined &&
+    (isMainMoved(currentMainSha, lastProvenSha) || provedNothing(last, lastProvenSha));
+  if (unproven && isRateLimitExceeded(effectiveLastRunAtMs, nowMs, NIGHTLY_MOVE_RATE_LIMIT_MS)) {
     return true;
   }
 
