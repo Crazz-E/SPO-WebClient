@@ -93,6 +93,60 @@ describe('ProfilePanel — Profit & Loss history series', () => {
     expect(rentAmount?.textContent).toBe('500');
   });
 
+  it('a tax section shows Town/IFEL captions on its header and the split figures on each row beneath', () => {
+    const TAX_TREE: ProfitLossData = {
+      root: {
+        label: 'Net Profit',
+        level: 0,
+        amount: '1000',
+        children: [
+          {
+            label: 'TAXES',
+            level: 2,
+            amount: '300000',
+            isHeader: true,
+            isTax: true,
+            children: [
+              { label: 'Income tax', level: 3, amount: '300000', secAmount: '100000', isTax: true },
+              { label: 'Rent', level: 3, amount: '500' },
+            ],
+          },
+        ],
+      },
+    };
+    const { container } = renderWithProviders(<ProfilePanel />);
+
+    clickSection('Profit & Loss');
+    act(() => {
+      useProfileStore.getState().setProfitLoss(TAX_TREE);
+    });
+
+    const tabBody = container.querySelector('[class*="tabBody"]') as HTMLElement;
+    const rows = tabBody.querySelectorAll('[class*="plRow"]');
+
+    const taxesRow = Array.from(rows).find((r) => r.textContent?.startsWith('TAXES'));
+    expect(taxesRow).toBeTruthy();
+    const taxesLastTwo = Array.from(taxesRow!.children).slice(-2);
+    expect(taxesLastTwo[0].textContent).toBe('Town');
+    expect(taxesLastTwo[1].textContent).toBe('IFEL');
+
+    const incomeTaxRow = Array.from(rows).find((r) => r.textContent?.startsWith('Income tax'));
+    expect(incomeTaxRow).toBeTruthy();
+    const incomeTaxLastTwo = Array.from(incomeTaxRow!.children).slice(-2);
+    expect(incomeTaxLastTwo[0].textContent).toBe('200000');
+    expect(incomeTaxLastTwo[1].textContent).toBe('100000');
+    expect(Number(incomeTaxLastTwo[0].textContent) + Number(incomeTaxLastTwo[1].textContent)).toBe(300000);
+
+    const rentRow = Array.from(rows).find((r) => r.textContent?.startsWith('Rent'));
+    expect(rentRow).toBeTruthy();
+    expect(rentRow!.children.length).toBe(2);
+    expect(rentRow!.lastElementChild?.className).toContain('plAmount');
+
+    expect((taxesRow as HTMLElement).style.paddingLeft).toBe(`${2 * 12 + 12}px`);
+    expect((incomeTaxRow as HTMLElement).style.paddingLeft).toBe(`${3 * 12 + 12}px`);
+    expect((rentRow as HTMLElement).style.paddingLeft).toBe(`${3 * 12 + 12}px`);
+  });
+
   it('renders no series for a single-point history', () => {
     const { container } = renderWithProviders(<ProfilePanel />);
 

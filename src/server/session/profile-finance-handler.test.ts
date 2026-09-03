@@ -1558,6 +1558,25 @@ function plFlush(money: string, title: string, chart = ''): string {
     + `${T(5)}</nobr>\n${T(5)}</div>\n${T(4)}</td>\n${T(3)}</tr>`;
 }
 
+/**
+ * A tax account row (`Obj.AccountIsTax`, :167-194) — the plain row from plRow(),
+ * with the tax cells spliced in before the closing `</tr>`: for level 2 the
+ * Town/IFEL captions (:167-178), for a deeper level the Town/IFEL figures
+ * (:179-194). `town` / `ifel` are ignored (and may be omitted) for level 2.
+ */
+function plTaxRow(level: number, label: string, money: string, town = '', ifel = ''): string {
+  const row = plRow(level, label, money);
+  const taxCells = level === 2
+    ? `${T(3)}<td>\n${T(4)}<div class=labelAccountLevel2 align="right">\n${T(5)}Town\n${T(4)}</div>\n${T(3)}</td>\n`
+      + `${T(3)}<td align="right">\n${T(4)}<div class=labelAccountLevel2>\n${T(5)}IFEL\n${T(4)}</div>\n${T(3)}</td>`
+    : `${T(3)}<td align="right">\n${T(4)}<nobr>\n${T(4)}<div class=labelAccountLevel${level} style="color: white; padding-left: 20px">\n`
+      + `${T(4)}${town}\n${T(4)}</div>\n${T(4)}</nobr>\n${T(3)}</td>\n`
+      + `${T(3)}<td style="padding-left: 20px" align="right">\n${T(4)}<nobr>\n`
+      + `${T(4)}<div class=labelAccountLevel${level} style="color: white; padding-left: 20px">\n`
+      + `${T(4)}${ifel}\n${T(4)}</div>\n${T(4)}</nobr>\n${T(3)}</td>`;
+  return row.replace(/<\/tr>$/, taxCells + '\n' + T(2) + '</tr>');
+}
+
 describe('fetchProfitLoss', () => {
   it('fetches TycoonProfitAndLoses.asp and builds the tree from the level numbers', async () => {
     const fake = makeWebCtx();
@@ -1590,6 +1609,77 @@ describe('fetchProfitLoss', () => {
     expect(residentials.children![0]).toMatchObject({ amount: '500000', chartData: undefined });
     expect(expenses).toMatchObject({ label: 'Expenses', level: 1, amount: '-1000000' });
     expect(expenses.children![0]).toMatchObject({ label: 'SALARIES', level: 2, amount: '-1000000', isHeader: true });
+  });
+
+  it('a tax section carries its Town/IFEL split, and the rest of the page is byte-identical', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue([
+      plRow(0, 'Net Profit (losses)', '$1,000,000', '3,10,-20,30'),
+      plRow(1, 'Income', '$2,000,000'),
+      plRow(2, 'Residentials', ''),
+      plRow(3, 'Houses', '$500,000'),
+      plRow(3, 'Flats', '$1,500,000'),
+      plFlush('$2,000,000', 'Residentials', '2,4,5'),
+      plRow(1, 'Expenses', '-$1,000,000'),
+      plRow(2, 'Salaries', ''),
+      plFlush('-$1,000,000', 'Salaries'),
+      plTaxRow(2, 'Taxes', ''),
+      plTaxRow(3, 'Income tax', '$300,000', '$200,000', '$100,000'),
+      plTaxRow(3, 'Import tax', '-$50,000', '-$30,000', '-$20,000'),
+      plFlush('$250,000', 'Taxes'),
+    ].join('\n'));
+
+    const data = await fetchProfitLoss(fake.ctx);
+    const root = data.root;
+
+    // Existing expectations, verbatim — the tax section must not change them.
+    expect(root).toMatchObject({ label: 'Net Profit (losses)', level: 0, amount: '1000000', chartData: [10, -20, 30] });
+    expect(root.isTax).toBeUndefined();
+    const [income, expenses] = root.children as ProfitLossNode[];
+    expect(income).toMatchObject({ label: 'Income', level: 1, amount: '2000000', isHeader: false });
+    expect(income.isTax).toBeUndefined();
+    const residentials = income.children![0];
+    expect(residentials).toMatchObject({ label: 'RESIDENTIALS', level: 2, amount: '2000000', isHeader: true, chartData: [4, 5] });
+    expect(residentials.isTax).toBeUndefined();
+    expect(residentials.children!.map(c => c.label)).toEqual(['Houses', 'Flats']);
+    expect(residentials.children![0]).toMatchObject({ amount: '500000', chartData: undefined });
+    expect(residentials.children![0].isTax).toBeUndefined();
+    expect(expenses).toMatchObject({ label: 'Expenses', level: 1, amount: '-1000000' });
+    const salaries = expenses.children![0];
+    expect(salaries).toMatchObject({ label: 'SALARIES', level: 2, amount: '-1000000', isHeader: true });
+    expect(salaries.isTax).toBeUndefined();
+
+    // New: the tax section.
+    const taxes = expenses.children![1];
+    expect(taxes).toMatchObject({ label: 'TAXES', level: 2, isHeader: true, isTax: true, amount: '250000' });
+    expect(taxes.secAmount).toBeUndefined();
+    const [incomeTax, importTax] = taxes.children as ProfitLossNode[];
+    expect(incomeTax).toMatchObject({ label: 'Income tax', isTax: true, amount: '300000', secAmount: '100000' });
+    expect(importTax).toMatchObject({ label: 'Import tax', isTax: true, amount: '-50000', secAmount: '-20000' });
+    expect(Number(incomeTax.amount) - Number(incomeTax.secAmount)).toBe(200000);
+    expect(Number(importTax.amount) - Number(importTax.secAmount)).toBe(-30000);
+  });
+
+  it('a tax row with only one split figure is not tax', async () => {
+    const fake = makeWebCtx();
+    const row = plTaxRow(3, 'Income tax', '$300,000', '$200,000', '$100,000');
+    // Truncate away the second figure cell, keeping the row's own value cell intact.
+    const truncated = row.substring(0, row.indexOf('padding-left: 20px" align="right"'));
+    fetchAsp(fake).mockResolvedValue(plRow(0, 'Net', '$1') + '\n' + truncated + `\n${T(2)}</tr>`);
+    const data = await fetchProfitLoss(fake.ctx);
+    const node = data.root.children![0];
+    expect(node.isTax).toBeUndefined();
+    expect(node.amount).toBe('300000');
+  });
+
+  it('a tax row truncated before its </tr> still has its split read to the end of the page', async () => {
+    const fake = makeWebCtx();
+    const row = plTaxRow(3, 'Income tax', '$300,000', '$200,000', '$100,000');
+    fetchAsp(fake).mockResolvedValue(
+      plRow(0, 'Net', '$1') + '\n' + row.substring(0, row.lastIndexOf('</tr>')),
+    );
+    const data = await fetchProfitLoss(fake.ctx);
+    expect(data.root.children![0]).toMatchObject({ isTax: true, amount: '300000', secAmount: '100000' });
   });
 
   // Regression guard for B-7. `FormatValue` = `FormatCurrency(v,0,0,0,-1)`

@@ -772,6 +772,10 @@ export async function fetchProfitLoss(ctx: SessionContext): Promise<ProfitLossDa
  *     dropped (the node used to read `$0`);
  *   - `ChartInfo` (:151-153) is looked up inside the row, not in a 500-character
  *     window forward, which used to attribute the NEXT row's chart to this one.
+ *
+ * A tax account (`Obj.AccountIsTax`, :167-194) carries two extra cells inside the
+ * same `<tr>` — Town/IFEL captions on its level-2 header, Town/IFEL figures on the
+ * rows beneath — read by the `taxOf` helper into `isTax` / `secAmount`.
  */
 function parseProfitLossHtml(html: string): ProfitLossData {
   const root: ProfitLossNode = {
@@ -787,6 +791,27 @@ function parseProfitLossHtml(html: string): ProfitLossData {
     const scope = html.substring(fromIdx, rowEnd === -1 ? html.length : rowEnd);
     const chartMatch = /ChartInfo=(\d+),([-\d,]+)/i.exec(scope);
     return chartMatch ? chartMatch[2].split(',').map(v => parseInt(v, 10)) : undefined;
+  }
+
+  /**
+   * Tax cells inside this row only (:167-194). A level-2 tax header carries the
+   * two captions (`<div class=labelAccountLevel2 align="right">` Town, then IFEL);
+   * a deeper tax row carries two figures in `style="color: white; padding-left: 20px"`
+   * divs — Town = Value − SecValue (:183), then IFEL = SecValue (:190).
+   */
+  function taxOf(fromIdx: number): { isTax: true; secAmount?: string } | undefined {
+    const rowEnd = html.indexOf('</tr>', fromIdx);
+    const scope = html.substring(fromIdx, rowEnd === -1 ? html.length : rowEnd);
+    if (/<div\s+class=labelAccountLevel2\s+align="right">/i.test(scope)) return { isTax: true };
+    const splitRegex = new RegExp(
+      String.raw`<div\s+class=labelAccountLevel\d\s+style="color:\s*white;\s*padding-left:\s*20px">\s*(` + ASP_MONEY_SOURCE + `)`,
+      'gi',
+    );
+    const figures: string[] = [];
+    let m;
+    while ((m = splitRegex.exec(scope)) !== null) figures.push(m[1]);
+    if (figures.length < 2) return undefined;
+    return { isTax: true, secAmount: parseAspMoney(figures[1]) ?? '0' };
   }
 
   // Account rows. The value alternative also accepts `</nobr>`, which is what
@@ -838,6 +863,7 @@ function parseProfitLossHtml(html: string): ProfitLossData {
     }
 
     const amount = token.money ? parseAspMoney(token.money) : null;
+    const tax = taxOf(token.index);
     const node: ProfitLossNode = {
       label: token.label || 'Unknown',
       level: token.level,
@@ -845,6 +871,7 @@ function parseProfitLossHtml(html: string): ProfitLossData {
       chartData: chartOf(token.index),
       // :121-124 renders every level-2 account as an upper-cased section header.
       isHeader: token.level === 2,
+      ...(tax ?? {}),
       children: [],
     };
     if (token.level === 2) pendingLevel2 = node;
