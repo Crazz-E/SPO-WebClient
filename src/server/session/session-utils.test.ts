@@ -17,7 +17,7 @@ describe('parseFavoritesResponse', () => {
     it('parses a single link item', () => {
       const raw = favEntry(42, 1, 'My Factory', 'My Factory,100,200,1');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 42, name: 'My Factory', x: 100, y: 200, path: '42' }]);
+      expect(result).toEqual([{ id: 42, kind: 1, name: 'My Factory', x: 100, y: 200, path: '42' }]);
     });
 
     it('parses multiple link items separated by \\x02', () => {
@@ -27,15 +27,21 @@ describe('parseFavoritesResponse', () => {
       ].join(ITEM);
       const result = parseFavoritesResponse(raw);
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({ id: 1, name: 'Fac A', x: 10, y: 20, path: '1' });
-      expect(result[1]).toEqual({ id: 2, name: 'Fac B', x: 30, y: 40, path: '2' });
+      expect(result[0]).toEqual({ id: 1, kind: 1, name: 'Fac A', x: 10, y: 20, path: '1' });
+      expect(result[1]).toEqual({ id: 2, kind: 1, name: 'Fac B', x: 30, y: 40, path: '2' });
     });
 
     it('handles display name with commas in info field', () => {
       // info = "Big, Bad, Factory,500,600,0" — last 3 commas delimit x,y,select
       const raw = favEntry(7, 1, 'Complex Name', 'Big, Bad, Factory,500,600,0');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 7, name: 'Complex Name', x: 500, y: 600, path: '7' }]);
+      expect(result).toEqual([{ id: 7, kind: 1, name: 'Complex Name', x: 500, y: 600, path: '7' }]);
+    });
+
+    it('parses a single folder item', () => {
+      const raw = favEntry(99, 0, 'My Folder', '');
+      const result = parseFavoritesResponse(raw);
+      expect(result).toEqual([{ id: 99, kind: 0, name: 'My Folder', x: 0, y: 0, path: '99' }]);
     });
   });
 
@@ -55,15 +61,16 @@ describe('parseFavoritesResponse', () => {
   });
 
   describe('filtering', () => {
-    it('skips folder items (kind != 1)', () => {
+    it('includes folder items (kind=0) and link items (kind=1)', () => {
       const raw = [
         favEntry(1, 0, 'Folder', ''),       // kind=0 folder
         favEntry(2, 1, 'Link', 'Link,5,6,0'), // kind=1 link
-        favEntry(3, 2, 'Other', ''),          // kind=2 unknown
+        favEntry(3, 2, 'Other', ''),          // kind=2 unknown (skipped)
       ].join(ITEM);
       const result = parseFavoritesResponse(raw);
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(2);
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({ id: 1, kind: 0, name: 'Folder', path: '1', x: 0, y: 0 });
+      expect(result[1]).toEqual({ id: 2, kind: 1, name: 'Link', x: 5, y: 6, path: '2' });
     });
 
     it('skips entries with fewer than 4 fields', () => {
@@ -112,13 +119,33 @@ describe('parseFavoritesResponse', () => {
     it('accepts zero coordinates', () => {
       const raw = favEntry(1, 1, 'Origin', 'Origin,0,0,0');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 1, name: 'Origin', x: 0, y: 0, path: '1' }]);
+      expect(result).toEqual([{ id: 1, kind: 1, name: 'Origin', x: 0, y: 0, path: '1' }]);
     });
 
     it('accepts negative coordinates', () => {
       const raw = favEntry(5, 1, 'Neg', 'Neg,-10,-20,0');
       const result = parseFavoritesResponse(raw);
-      expect(result).toEqual([{ id: 5, name: 'Neg', x: -10, y: -20, path: '5' }]);
+      expect(result).toEqual([{ id: 5, kind: 1, name: 'Neg', x: -10, y: -20, path: '5' }]);
+    });
+  });
+
+  describe('nested path composition', () => {
+    it('composes path correctly for items at root', () => {
+      const raw = favEntry(5, 1, 'Item', 'Item,10,20,0');
+      const result = parseFavoritesResponse(raw, '');
+      expect(result[0].path).toBe('5');
+    });
+
+    it('composes path correctly for items in a folder', () => {
+      const raw = favEntry(5, 1, 'Item', 'Item,10,20,0');
+      const result = parseFavoritesResponse(raw, '123');
+      expect(result[0].path).toBe('123/5');
+    });
+
+    it('composes path correctly for deeply nested items', () => {
+      const raw = favEntry(5, 1, 'Item', 'Item,10,20,0');
+      const result = parseFavoritesResponse(raw, '1/2/3');
+      expect(result[0].path).toBe('1/2/3/5');
     });
   });
 

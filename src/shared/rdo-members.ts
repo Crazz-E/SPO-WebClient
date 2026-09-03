@@ -165,6 +165,7 @@ export const RDO_MEMBERS = {
   RDOFavoritesGetSubItems:   { kind: 'function',  arity: 1 },                // src/server/session/politics-handler.ts:369
   RDOFavoritesNewItem:       { kind: 'function',  arity: 4 },                // src/server/session/favorites-handler.ts
   RDOFavoritesRenameItem:    { kind: 'function',  arity: 2 },                // src/server/session/favorites-handler.ts
+  RDOFavoritesMoveItem:      { kind: 'function',  arity: 2 },                // Interface Server/InterfaceServer.pas:202
   RDOGetInvDescEx:           { kind: 'function',  arity: 2 },                // src/server/session/research-handler.ts:131
   RDOGetInvPropsByLang:      { kind: 'function',  arity: 2 },                // src/server/session/research-handler.ts:120
   RDOLaunchMovie:            { kind: 'procedure', arity: 4 },                // src/server/session/building-property-handler.ts:194,223

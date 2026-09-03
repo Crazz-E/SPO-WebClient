@@ -18,6 +18,7 @@ const FAV_KIND_LINK = 1;      // fvkLink — a bookmark with coordinates
  * Wire format per item: id \x01 kind \x01 name \x01 info \x01 subFolderCount \x01
  * Items separated by \x02.
  * For links (kind=1): info = "displayName,x,y,select"
+ * For folders (kind=0): info is empty or ignored
  *
  * `parentPath` is the Location that was asked for — '' for the root. Each item
  * carries the Location that addresses it, because delete and rename take a
@@ -34,29 +35,42 @@ export function parseFavoritesResponse(raw: string, parentPath = ''): FavoritesI
     if (!entry) continue;
     const fields = entry.split(FAV_PROP_SEP);
     // fields: [id, kind, name, info, subFolderCount, '']
-    if (fields.length < 4) continue;
-
-    const kind = parseInt(fields[1], 10);
-    if (kind !== FAV_KIND_LINK) continue; // skip folders
+    if (fields.length < 3) continue;
 
     const id = parseInt(fields[0], 10);
+    if (!isFinite(id)) continue;
+
+    const kind = parseInt(fields[1], 10);
     const name = fields[2];
-    const info = fields[3]; // "displayName,x,y,select"
+    const info = fields[3] || ''; // "displayName,x,y,select" for links, empty for folders
 
-    // Parse info cookie: last 3 comma-separated values are x, y, select
-    const lastComma = info.lastIndexOf(',');
-    if (lastComma < 0) continue;
-    const beforeLast = info.lastIndexOf(',', lastComma - 1);
-    if (beforeLast < 0) continue;
-    const beforeXY = info.lastIndexOf(',', beforeLast - 1);
-    if (beforeXY < 0) continue;
+    const path = parentPath ? `${parentPath}/${id}` : String(id);
 
-    const x = parseInt(info.substring(beforeXY + 1, beforeLast), 10);
-    const y = parseInt(info.substring(beforeLast + 1, lastComma), 10);
+    // For folders (kind=0), we just store the id, name, path, and kind
+    if (kind === 0) {
+      items.push({ id, kind: 0, name, path, x: 0, y: 0 });
+      continue;
+    }
 
-    if (isNaN(id) || isNaN(x) || isNaN(y)) continue;
+    // For links (kind=1), parse the info cookie to extract x, y
+    if (kind === FAV_KIND_LINK) {
+      if (!info) continue; // No coordinates for this link
 
-    items.push({ id, name, x, y, path: parentPath ? `${parentPath}/${id}` : String(id) });
+      // Parse info cookie: last 3 comma-separated values are x, y, select
+      const lastComma = info.lastIndexOf(',');
+      if (lastComma < 0) continue;
+      const beforeLast = info.lastIndexOf(',', lastComma - 1);
+      if (beforeLast < 0) continue;
+      const beforeXY = info.lastIndexOf(',', beforeLast - 1);
+      if (beforeXY < 0) continue;
+
+      const x = parseInt(info.substring(beforeXY + 1, beforeLast), 10);
+      const y = parseInt(info.substring(beforeLast + 1, lastComma), 10);
+
+      if (isNaN(x) || isNaN(y)) continue;
+
+      items.push({ id, kind: 1, name, x, y, path });
+    }
   }
 
   return items;

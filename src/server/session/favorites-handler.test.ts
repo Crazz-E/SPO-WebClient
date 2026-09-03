@@ -21,6 +21,7 @@ import {
   addFavorite,
   deleteFavorite,
   renameFavorite,
+  moveFavorite,
 } from './favorites-handler';
 import { makeSessionCtx, FAKE_CONTEXT_IDS } from '../__tests__/session/fake-session-context';
 import { RdoValue } from '../../shared/rdo-types';
@@ -50,17 +51,62 @@ describe('fetchOwnedFacilities', () => {
     });
   });
 
-  it('parses the \\x01/\\x02-separated favorites through the real parseFavoritesResponse (links only)', async () => {
+  it('parses folders and links at the root', async () => {
     const fake = makeSessionCtx();
     // id \x01 kind \x01 name \x01 info \x01 subCount \x01 '' — kind 1 = link, 0 = folder
     const link = ['4210', '1', 'Farm 1', 'Farm 1,118,226,0', '0', ''].join('\x01');
-    const folder = ['9', '0', 'Folder', 'Folder,0,0,0', '2', ''].join('\x01');
-    fake.respond(() => `res="%${[folder, link].join('\x02')}"`);
+    const folder = ['9', '0', 'Folder', '', '0', ''].join('\x01'); // 0 subfolders
+    let callCount = 0;
+    fake.respond(() => {
+      callCount++;
+      if (callCount === 1) {
+        // First call: fetching root items
+        return `res="%${[folder, link].join('\x02')}"`;
+      } else {
+        // Subsequent calls: empty (folder has no children)
+        return 'res="%"';
+      }
+    });
 
     const items = await fetchOwnedFacilities(fake.ctx);
 
-    // At the root the Location IS the id — that is what delete and rename take.
-    expect(items).toEqual([{ id: 4210, name: 'Farm 1', x: 118, y: 226, path: '4210' }]);
+    // Should include both folder (kind=0) and link (kind=1) at the root
+    expect(items).toHaveLength(2);
+    expect(items[0]).toEqual({ id: 9, kind: 0, name: 'Folder', x: 0, y: 0, path: '9', children: [] });
+    expect(items[1]).toEqual({ id: 4210, kind: 1, name: 'Farm 1', x: 118, y: 226, path: '4210' });
+  });
+
+  it('recursively fetches folder children', async () => {
+    const fake = makeSessionCtx();
+    // Root: one folder
+    const rootFolder = ['9', '0', 'Folder', '', '1', ''].join('\x01');
+    const childLink = ['100', '1', 'Child Link', 'Child Link,50,60,0', '0', ''].join('\x01');
+    let callCount = 0;
+    fake.respond(() => {
+      callCount++;
+      if (callCount === 1) {
+        // First call: fetching root items
+        return `res="%${rootFolder}"`;
+      } else {
+        // Second call: fetching folder 9's children
+        return `res="%${childLink}"`;
+      }
+    });
+
+    const items = await fetchOwnedFacilities(fake.ctx);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({
+      id: 9,
+      kind: 0,
+      name: 'Folder',
+      x: 0,
+      y: 0,
+      path: '9',
+      children: [
+        { id: 100, kind: 1, name: 'Child Link', x: 50, y: 60, path: '9/100' },
+      ],
+    });
   });
 
   it('returns [] for an empty payload', async () => {
@@ -297,5 +343,77 @@ describe('renameFavorite', () => {
     const fake = makeSessionCtx();
     fake.respond(() => new Error('Request timeout: RDOFavoritesRenameItem'));
     await expect(renameFavorite(fake.ctx, '4210', 'Nope')).rejects.toThrow('Request timeout: RDOFavoritesRenameItem');
+  });
+});
+
+// =============================================================================
+// moveFavorite — RDOFavoritesMoveItem(itemPath, destPath)
+// =============================================================================
+describe('moveFavorite', () => {
+  it('addresses the item and destination by their Locations and reads `#-1` as true', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#-1"');
+
+    const result = await moveFavorite(fake.ctx, '4210', '9');
+
+    expect(result).toEqual({ success: true });
+    expect(fake.sent[0].socketName).toBe('world');
+    expect(fake.sent[0].category).toBe(TimeoutCategory.NORMAL);
+    expect(fake.sent[0].packet).toEqual({
+      verb: RdoVerb.SEL,
+      targetId: FAKE_CONTEXT_IDS.worldContextId,
+      action: RdoAction.CALL,
+      member: 'RDOFavoritesMoveItem',
+      separator: '"^"',
+      args: [
+        RdoValue.string('4210').format(),
+        RdoValue.string('9').format(),
+      ],
+    });
+  });
+
+  it('handles moving to root by passing empty string as destination', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#-1"');
+
+    await moveFavorite(fake.ctx, '9/100', '');
+
+    const args = fake.sent[0].packet.args as string[];
+    expect(args[1]).toBe(RdoValue.string('').format());
+  });
+
+  it('accepts any non-zero ordinal as true', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#1"');
+    expect((await moveFavorite(fake.ctx, '4210', '9')).success).toBe(true);
+  });
+
+  it('reads `#0` — an unresolvable Location — as a refusal', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => 'res="#0"');
+
+    const result = await moveFavorite(fake.ctx, '999', '9');
+
+    expect(result.success).toBe(false);
+    expect(result.message).toBe('The server refused to move this favourite.');
+    expect(fake.log.warn).toHaveBeenCalledWith(expect.stringContaining('RDOFavoritesMoveItem refused'));
+  });
+
+  it('reads a SILENT server as a refusal (OB-1)', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => '');
+    expect((await moveFavorite(fake.ctx, '4210', '9')).success).toBe(false);
+  });
+
+  it('refuses without a world context and sends nothing', async () => {
+    const fake = makeSessionCtx({ worldContextId: null });
+    await expect(moveFavorite(fake.ctx, '4210', '9')).rejects.toThrow('Not logged in — no worldContextId');
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it('propagates a timeout instead of answering success', async () => {
+    const fake = makeSessionCtx();
+    fake.respond(() => new Error('Request timeout: RDOFavoritesMoveItem'));
+    await expect(moveFavorite(fake.ctx, '4210', '9')).rejects.toThrow('Request timeout: RDOFavoritesMoveItem');
   });
 });

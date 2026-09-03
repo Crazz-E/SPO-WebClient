@@ -23,6 +23,8 @@ import { rdoCall } from '../../shared/rdo-frame';
 import { parsePropertyResponse, isTrueOrdinal } from '../rdo-helpers';
 import { parseFavoritesResponse } from './session-utils';
 
+/** `fvkFolder` — a container item (`Kernel/FavProtocol.pas:6`). */
+const FAV_KIND_FOLDER = 0;
 /** `fvkLink` — a bookmark with coordinates (`Kernel/FavProtocol.pas:7`). */
 const FAV_KIND_LINK = 1;
 
@@ -32,6 +34,9 @@ const FAV_KIND_LINK = 1;
  * is the name we asked for, not a silently shortened one.
  */
 const FAV_NAME_MAX = 50;
+
+/** Maximum recursion depth to prevent infinite loops on circular folder references. */
+const MAX_FOLDER_DEPTH = 20;
 
 /**
  * Read the `res` value out of a CALL response, type prefix stripped.
@@ -74,17 +79,51 @@ function composeLinkCookie(name: string, x: number, y: number): string {
 // PUBLIC FUNCTIONS
 // =========================================================================
 
-/** List the root of the tree — the facilities the Empire panel shows. */
-export async function fetchOwnedFacilities(ctx: SessionContext): Promise<FavoritesItem[]> {
-  const targetId = requireWorldContext(ctx);
+/**
+ * Recursively fetch items from a folder, building the tree structure.
+ * Tracks visited paths to prevent infinite loops on circular references.
+ */
+async function fetchFolderContents(
+  ctx: SessionContext,
+  targetId: string,
+  folderPath: string,
+  depth: number,
+  visited: Set<string>,
+): Promise<FavoritesItem[]> {
+  // Guard against circular references and excessive depth
+  if (depth > MAX_FOLDER_DEPTH || visited.has(folderPath)) {
+    return [];
+  }
+  visited.add(folderPath);
 
   const packet = await ctx.sendRdoRequest('world', rdoCall(
     'RDOFavoritesGetSubItems', targetId,
-    RdoValue.string(''),
+    RdoValue.string(folderPath),
   ).packet, undefined, TimeoutCategory.NORMAL);
 
   const raw = parsePropertyResponse(packet.payload!, 'res');
-  return parseFavoritesResponse(raw);
+  const items = parseFavoritesResponse(raw, folderPath);
+
+  // Recursively fetch children of any folders
+  for (const item of items) {
+    if (item.kind === FAV_KIND_FOLDER) {
+      item.children = await fetchFolderContents(
+        ctx,
+        targetId,
+        item.path,
+        depth + 1,
+        visited,
+      );
+    }
+  }
+
+  return items;
+}
+
+/** List the root of the tree — the facilities the Empire panel shows. */
+export async function fetchOwnedFacilities(ctx: SessionContext): Promise<FavoritesItem[]> {
+  const targetId = requireWorldContext(ctx);
+  return fetchFolderContents(ctx, targetId, '', 0, new Set());
 }
 
 /**
@@ -164,4 +203,30 @@ export async function renameFavorite(
   }
   ctx.log.warn(`[Favorites] RDOFavoritesRenameItem refused "${path}"`);
   return { success: false, message: 'The server refused to rename this favourite.' };
+}
+
+/**
+ * Move one item to a destination folder by its Location.
+ * `RDOFavoritesMoveItem` answers a boolean — false when either Location does not
+ * resolve (`Favorites.pas:295-305`). Any non-zero ordinal is true on the wire.
+ *
+ * @param itemPath The Location of the item to move (e.g., "123" or "456/789")
+ * @param destPath The Location of the destination folder (e.g., "123" or "" for root)
+ */
+export async function moveFavorite(
+  ctx: SessionContext, itemPath: string, destPath: string,
+): Promise<FavoriteMutationResult> {
+  const targetId = requireWorldContext(ctx);
+
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'RDOFavoritesMoveItem', targetId,
+    RdoValue.string(itemPath),
+    RdoValue.string(destPath),
+  ).packet, undefined, TimeoutCategory.NORMAL);
+
+  if (isTrueOrdinal(readResult(packet.payload))) {
+    return { success: true };
+  }
+  ctx.log.warn(`[Favorites] RDOFavoritesMoveItem refused "${itemPath}" -> "${destPath}"`);
+  return { success: false, message: 'The server refused to move this favourite.' };
 }
