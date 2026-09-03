@@ -12,11 +12,14 @@ import type {
   WsRespFavoriteAdd,
   WsRespFavoriteDelete,
   WsRespFavoriteRename,
+  WsRespFavoriteFolderCreate,
+  WsRespFavoriteMove,
   WsRespMailFolder,
   WsRespMailSent,
   WsRespPoliticsData,
   WsRespSearchMenuPeopleSearch,
 } from '../shared/types/message-types';
+import { flattenFavoriteLinks, flattenFolders } from '../shared/favorites-tree';
 import { toErrorMessage } from '../shared/error-utils';
 import { GOVERNED_TOWN, PRIMARY_ACCOUNT, SECONDARY_ACCOUNT, TIMEOUTS } from './config';
 import { findCurrentSurvivalLog, openLogWindow } from './live-log';
@@ -447,6 +450,138 @@ const favoritesRoundTrip: Flow = {
   },
 };
 
+/**
+ * Folder operations on the Favorites tree: create, move a link into it, move
+ * it back out, delete the (now empty) folder.
+ *
+ * EVIDENCE. Same reasoning as `favoritesRoundTrip`: `Kernel/Favorites.pas`
+ * logs nothing for these members, so the read-back through
+ * `RDOFavoritesGetSubItems` — which walks the very in-memory `TFavorites`
+ * object the write just touched — IS the proof, and a sound one: no
+ * model-server cache sits in between to lag.
+ *
+ * BLAST RADIUS. Per-tycoon and self-cleaning, same as the round trip: the
+ * tree lives inside SPO_test3's own `TTycoon`. The flow removes what it
+ * created and sweeps any marker left by an interrupted earlier run, deepest
+ * path first so a leftover link is gone before its leftover folder is asked
+ * to delete itself.
+ */
+const FOLDER_MARKER = 'e2e-favfolder';
+
+const favoritesFolders: Flow = {
+  name: 'favorites-folders',
+  what: 'favorites tree: create folder -> move link in -> move link out -> delete folder',
+  mutates: true,
+  run: async () => {
+    const assertions = new Assertions();
+    const name = `${FOLDER_MARKER} ${new Date().toISOString()}`;
+
+    const session = await login(PRIMARY_ACCOUNT);
+    const listFavorites = async (): Promise<WsRespEmpireFacilities> =>
+      session.driver.request<WsRespEmpireFacilities>(
+        { type: WsMessageType.REQ_EMPIRE_FACILITIES },
+        WsMessageType.RESP_EMPIRE_FACILITIES,
+      );
+
+    try {
+      // Sweep first, deepest path first: a link left inside a marker folder
+      // from an interrupted run must go before the folder that holds it.
+      const before = await listFavorites();
+      const stale = [
+        ...flattenFavoriteLinks(before.facilities),
+        ...flattenFolders(before.facilities).map(e => e.folder),
+      ].filter(item => item.name.startsWith(FOLDER_MARKER));
+      stale.sort((a, b) => b.path.split('/').length - a.path.split('/').length);
+      for (const item of stale) {
+        await session.driver.request<WsRespFavoriteDelete>(
+          { type: WsMessageType.REQ_FAVORITE_DELETE, path: item.path },
+          WsMessageType.RESP_FAVORITE_DELETE,
+        );
+      }
+
+      const created = await session.driver.request<WsRespFavoriteFolderCreate>(
+        { type: WsMessageType.REQ_FAVORITE_FOLDER_CREATE, parentPath: '', name },
+        WsMessageType.RESP_FAVORITE_FOLDER_CREATE,
+      );
+      assertions.check('the folder create was accepted and answered an id',
+        created.success && (created.id ?? 0) > 0, `id=${created.id ?? 'none'}`);
+
+      const afterCreate = await listFavorites();
+      const folder = flattenFolders(afterCreate.facilities).map(e => e.folder).find(f => f.name === name);
+      assertions.check('the folder is served with isFolder === true', folder?.isFolder === true, folder?.name);
+
+      if (folder) {
+        const added = await session.driver.request<WsRespFavoriteAdd>(
+          { type: WsMessageType.REQ_FAVORITE_ADD, name: `${FOLDER_MARKER}-link`, x: 641, y: 66 },
+          WsMessageType.RESP_FAVORITE_ADD,
+        );
+        assertions.check('the link add was accepted and answered an id',
+          added.success && (added.id ?? 0) > 0, `id=${added.id ?? 'none'}`);
+
+        const afterAdd = await listFavorites();
+        const link = flattenFavoriteLinks(afterAdd.facilities).find(f => f.name === `${FOLDER_MARKER}-link`);
+        assertions.check('the added link is at the root', Boolean(link), `${FOLDER_MARKER}-link`);
+
+        if (link) {
+          const movedIn = await session.driver.request<WsRespFavoriteMove>(
+            { type: WsMessageType.REQ_FAVORITE_MOVE, path: link.path, destPath: folder.path },
+            WsMessageType.RESP_FAVORITE_MOVE,
+          );
+          assertions.check('the move into the folder was accepted', movedIn.success);
+
+          const afterMoveIn = await listFavorites();
+          const inFolder = flattenFolders(afterMoveIn.facilities)
+            .map(e => e.folder).find(f => f.path === folder.path);
+          const movedLink = flattenFavoriteLinks(afterMoveIn.facilities).find(f => f.name === link.name);
+          assertions.check('the moved link\'s path now sits under the folder',
+            movedLink?.path.startsWith(`${folder.path}/`) ?? false, movedLink?.path);
+          assertions.check('the folder\'s own children list carries it — the tree persists after refresh',
+            inFolder?.children?.some(c => c.path === movedLink?.path) ?? false,
+            `children: ${inFolder?.children?.map(c => c.path).join(' ')}`);
+
+          if (movedLink) {
+            const movedOut = await session.driver.request<WsRespFavoriteMove>(
+              { type: WsMessageType.REQ_FAVORITE_MOVE, path: movedLink.path, destPath: '' },
+              WsMessageType.RESP_FAVORITE_MOVE,
+            );
+            assertions.check('the move back to the root was accepted', movedOut.success);
+
+            const afterMoveOut = await listFavorites();
+            const backAtRoot = flattenFavoriteLinks(afterMoveOut.facilities).find(f => f.name === link.name);
+            assertions.check('the link is at the root again',
+              backAtRoot?.path === String(backAtRoot?.id), backAtRoot?.path);
+
+            if (backAtRoot) {
+              await session.driver.request<WsRespFavoriteDelete>(
+                { type: WsMessageType.REQ_FAVORITE_DELETE, path: backAtRoot.path },
+                WsMessageType.RESP_FAVORITE_DELETE,
+              );
+            }
+          }
+        }
+
+        const deletedFolder = await session.driver.request<WsRespFavoriteDelete>(
+          { type: WsMessageType.REQ_FAVORITE_DELETE, path: folder.path },
+          WsMessageType.RESP_FAVORITE_DELETE,
+        );
+        assertions.check('the now-empty folder delete was accepted', deletedFolder.success);
+
+        const afterDelete = await listFavorites();
+        const remaining = [
+          ...flattenFavoriteLinks(afterDelete.facilities),
+          ...flattenFolders(afterDelete.facilities).map(e => e.folder),
+        ].filter(item => item.name.startsWith(FOLDER_MARKER));
+        assertions.check('no marker item remains — the world is restored', remaining.length === 0,
+          remaining.map(r => r.name).join(', '));
+      }
+
+      return report('favorites-folders', assertions, [], session);
+    } finally {
+      await logoff(session);
+    }
+  },
+};
+
 export const FLOWS: Flow[] = [
   loginSpine,
   politicsRead,
@@ -455,6 +590,7 @@ export const FLOWS: Flow[] = [
   permissionNegative,
   mailRoundTrip,
   favoritesRoundTrip,
+  favoritesFolders,
   peopleSearch,
 ];
 

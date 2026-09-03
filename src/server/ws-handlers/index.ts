@@ -37,7 +37,7 @@ import { handleNewspaperBoard, handleNewspaperPost } from './newspaper-handlers'
 import { handlePoliticsData, handlePoliticsVote, handlePoliticsLaunchCampaign, handlePoliticsCancelCampaign, handlePoliticsSetRating, handlePoliticsSetPublicity, handlePoliticsSetProject, handleTycoonRole } from './politics-handlers';
 
 // Miscellaneous
-import { handleDefineZone, handleCreateCompany, handleClusterInfo, handleClusterFacilities, handleSearchConnections, handleEmpireFacilities, handleFavoriteAdd, handleFavoriteDelete, handleFavoriteRename, handleResearchInventory, handleResearchDetails } from './misc-handlers';
+import { handleDefineZone, handleCreateCompany, handleClusterInfo, handleClusterFacilities, handleSearchConnections, handleEmpireFacilities, handleFavoriteAdd, handleFavoriteDelete, handleFavoriteRename, handleFavoriteFolderCreate, handleFavoriteMove, handleResearchInventory, handleResearchDetails } from './misc-handlers';
 
 export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   // Auth & session
@@ -140,6 +140,8 @@ export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   [WsMessageType.REQ_FAVORITE_ADD]: handleFavoriteAdd,
   [WsMessageType.REQ_FAVORITE_DELETE]: handleFavoriteDelete,
   [WsMessageType.REQ_FAVORITE_RENAME]: handleFavoriteRename,
+  [WsMessageType.REQ_FAVORITE_FOLDER_CREATE]: handleFavoriteFolderCreate,
+  [WsMessageType.REQ_FAVORITE_MOVE]: handleFavoriteMove,
   [WsMessageType.REQ_RESEARCH_INVENTORY]: handleResearchInventory,
   [WsMessageType.REQ_RESEARCH_DETAILS]: handleResearchDetails,
 };

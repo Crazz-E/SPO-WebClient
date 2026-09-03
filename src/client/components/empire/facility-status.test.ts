@@ -42,4 +42,14 @@ describe('classifyFacilities', () => {
     const groups = classifyFacilities([fav('1', 'Mill', 10, 10)], [bld(10, 11, false)]);
     expect(groups.unknown).toHaveLength(1);
   });
+
+  it('classifies a link nested in a folder by its own coordinates, and puts the folder in no bucket', () => {
+    const nested = fav('11', 'Nested Mill', 10, 10);
+    const folder: FavoritesItem = { id: 99, name: 'Folder', x: 0, y: 0, path: '99', isFolder: true, children: [nested] };
+    const groups = classifyFacilities([folder], [bld(10, 10, true)]);
+    expect(groups.losing.map((f) => f.name)).toEqual(['Nested Mill']);
+    expect(groups.losing.some((f) => f.name === 'Folder')).toBe(false);
+    expect(groups.unknown).toHaveLength(0);
+    expect(groups.operating).toHaveLength(0);
+  });
 });

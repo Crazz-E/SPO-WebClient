@@ -189,3 +189,42 @@
 .dotOperating {
   background: var(--surface-border-active);
 }
+
+/* Folder tree — create, and the per-row Move to… select */
+
+.listHead {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-4);
+}
+
+.newFolderButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border-active);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-sm);
+}
+
+.newFolderButton:hover {
+  background: var(--surface-border);
+}
+
+.moveSelect {
+  min-height: 32px;
+  max-width: 90px;
+  padding: 0 var(--space-1);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--surface-border-active);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: var(--text-xs);
+}

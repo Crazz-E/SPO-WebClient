@@ -9,6 +9,7 @@
  */
 
 import type { FavoritesItem, MapBuilding } from '@/shared/types';
+import { flattenFavoriteLinks } from '@/shared/favorites-tree';
 
 export interface ClassifiedFacilities {
   /** Confirmed losing money (alert bit set on a loaded building). */
@@ -27,7 +28,7 @@ export function classifyFacilities(
   for (const b of loadedBuildings) byPos.set(`${b.x},${b.y}`, b);
 
   const out: ClassifiedFacilities = { losing: [], unknown: [], operating: [] };
-  for (const f of favorites) {
+  for (const f of flattenFavoriteLinks(favorites)) {
     const b = byPos.get(`${f.x},${f.y}`);
     if (!b) out.unknown.push(f);
     else if (b.alert) out.losing.push(f);
