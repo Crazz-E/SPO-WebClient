@@ -319,18 +319,42 @@ async function main() {
     return EXIT.BLOCKED;
   }
 
-  if ((staticOnly || flows.length === 0) && capabilities.length === 0) {
+  // Nothing routed: the common case (doc/E2E-POLICY.md §4 — 186 of 215 skips in the
+  // corpus), and the only shape that may legitimately PASS without a live drive.
+  if (flows.length === 0 && capabilities.length === 0) {
     artifact.verdict = 'PASS';
-    artifact.live = {
-      skipped: true,
-      why: liveRequested
-        ? 'nothing in this diff is observable over the wire'
-        : `live stage requires --live (worker-only); routed flows: ${flows.join(', ') || 'none'}`,
-    };
+    artifact.live = { skipped: true, why: 'nothing in this diff is observable over the wire' };
     const file = write(artifact);
     process.stdout.write(`\nGate PASS (static only). Artifact: ${file}\n`);
     if (decision.needsL3) warnL3();
     return 0;
+  }
+
+  // Routing named flows this diff must be driven through, and the live stage will not run
+  // to drive them — for lack of --live (2026-08-29: a worker/script deploy skew meant the
+  // flag never arrived) or because --static-only was asked for over a routed diff (it is
+  // documented for doc/tooling diffs, which never route flows in the first place — see
+  // ROUTES in src/e2e/routing.ts — so this branch only fires when it is used to override a
+  // routing decision that wanted a live drive). Either way: the router said "drive these
+  // flows", nothing drove them, and PASS is not an available answer to that. BLOCKED is —
+  // the vocabulary already exists, and it is already a failure everywhere downstream.
+  if (staticOnly && capabilities.length === 0) {
+    artifact.verdict = 'BLOCKED';
+    artifact.live = {
+      skipped: true,
+      why: !liveRequested
+        ? `--live was never supplied; routed flows: ${flows.join(', ')}`
+        : flag('static-only') === 'true'
+          ? `--static-only was requested over a diff that routes flows; not driven: ${flows.join(', ')}`
+          : `the router decided static-only over a diff that routes flows; not driven: ${flows.join(', ')}`,
+    };
+    const file = write(artifact);
+    process.stdout.write(
+      `\nGate BLOCKED — routing requires flows that were not driven: ${flows.join(', ')}\n` +
+        'This is not a verdict on the change: the flows could not be driven, none failed.\n' +
+        `Artifact: ${file}\n`,
+    );
+    return EXIT.BLOCKED;
   }
 
   // --- Stage 4: live ---------------------------------------------------------

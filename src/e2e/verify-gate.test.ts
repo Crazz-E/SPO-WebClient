@@ -288,12 +288,54 @@ describe('stage 3 — routing', () => {
     expect(run.artifact).toMatchObject({ verdict: 'PASS', live: { skipped: true } });
   });
 
-  it('honours --static-only over a routing decision that wants a live drive', () => {
-    const run = runGate(scratchRepo(), ['--static-only'], {
+  it('DECISION: --static-only over a routing decision that wants a live drive BLOCKS, it does not PASS', () => {
+    // --static-only is documented (doc/E2E-POLICY.md §12) for doc/tooling diffs — which
+    // route no flows, so this branch never fires for that use. It is passthrough, not in
+    // cli.ts's KNOWN_FLAGS, so any session can attach it to `npm run gate --`; leaving it
+    // as an unmarked PASS over a diff that DOES route flows would recreate, on purpose,
+    // the exact shape (a flag makes the gate green without driving what was routed) this
+    // action exists to make impossible. BLOCKED costs the documented use case nothing —
+    // it only ever applies where flows.length is already 0 — and closes the loophole.
+    const run = runGate(scratchRepo(), ['--live', '--static-only'], {
       FAKE_ROUTING: JSON.stringify({ required: ['login-spine'] }),
     });
-    expect(run.code).toBe(0);
-    expect(run.artifact).toMatchObject({ verdict: 'PASS', live: { skipped: true } });
+    expect(run.code).toBe(2);
+    expect(run.artifact).toMatchObject({
+      verdict: 'BLOCKED',
+      // Pinned to the "a flag was passed" wording specifically, not just any mention of
+      // the flow name — the router-decided cause below says something different for the
+      // same flow, and a collapsed ternary must not satisfy both.
+      live: {
+        skipped: true,
+        why: expect.stringMatching(
+          /^--static-only was requested over a diff that routes flows; not driven: login-spine$/,
+        ),
+      },
+    });
+    expect(run.liveOptions).toBeNull();
+  });
+
+  it('DECISION: the router deciding static-only over an explicit --flows override BLOCKS, and says the router decided it — not that a flag was passed', () => {
+    // Third cause of the same BLOCKED branch: decision.staticOnly is the router's own
+    // verdict (it routed nothing), reached here despite --live because --flows overrides
+    // decision.required with a flow the router never named. Nobody typed --static-only.
+    // A why that says "was requested" here would send a maintainer looking for a flag
+    // that does not exist on the command line.
+    const run = runGate(scratchRepo(), ['--live', '--flows=login-spine'], {
+      FAKE_ROUTING: JSON.stringify({ staticOnly: true, required: [] }),
+    });
+    expect(run.code).toBe(2);
+    expect(run.artifact).toMatchObject({
+      verdict: 'BLOCKED',
+      live: {
+        skipped: true,
+        why: expect.stringMatching(
+          /^the router decided static-only over a diff that routes flows; not driven: login-spine$/,
+        ),
+      },
+    });
+    expect(run.artifact?.live?.why).not.toMatch(/was requested/);
+    expect(run.stdout).toMatch(/not driven: login-spine/);
     expect(run.liveOptions).toBeNull();
   });
 
@@ -390,15 +432,58 @@ describe('stage 4 — live', () => {
     expect(run.stderr).toMatch(/Gate crashed:/);
   });
 
-  it('without --live, routed flows never reach runLive and the gate passes static-only', () => {
+  it('without --live, routed flows never reach runLive and the gate BLOCKS rather than passing static-only', () => {
+    // This is the class B3.1 exists to close: routing required flows, the live stage did
+    // not run, and the gate must not exit 0. Before this change it did — see the
+    // 2026-08-29 incident test below for the exact conditions that shipped 11 PRs behind
+    // a silent PASS.
     const run = runGate(scratchRepo(), [], { FAKE_ROUTING: needsLive });
-    expect(run.code).toBe(0);
+    expect(run.code).toBe(2);
     expect(run.liveOptions).toBeNull();
-    expect(run.stdout).toMatch(/Gate PASS \(static only\)/);
+    expect(run.stdout).toMatch(/Gate BLOCKED — routing requires flows that were not driven/);
+    expect(run.stdout).toMatch(/not a verdict on the change/);
+    // The undriven flow names must be legible on stdout — the surface a human reads
+    // first — not only inside the artifact file.
+    expect(run.stdout).toMatch(/not driven: login-spine, politics-read/);
     expect(run.artifact).toMatchObject({
-      verdict: 'PASS',
-      live: { skipped: true, why: expect.stringContaining('--live') },
+      verdict: 'BLOCKED',
+      // Pinned to the "--live was never supplied" wording — the only cause this run
+      // exercises (no --static-only flag, no router staticOnly decision).
+      live: {
+        skipped: true,
+        why: expect.stringMatching(
+          /^--live was never supplied; routed flows: login-spine, politics-read$/,
+        ),
+      },
     });
+    // The flows the router named are legible in the artifact, not just implied.
+    expect(run.artifact?.live).toMatchObject({
+      why: expect.stringContaining('login-spine, politics-read'),
+    });
+  });
+
+  it('INCIDENT (2026-08-29): live routed login-spine + building-details, the worker did not pass --live — the gate refuses, it does not PASS', () => {
+    // Reproduces the exact shape of e180bfb6: verify-gate.js gained a --live-gated live
+    // stage and src/e2e/bench/worker.ts was updated to pass it in the same commit, but the
+    // worker ran from a separately installed binary and verify-gate.js ran from the gated
+    // commit's own tree — so from the moment that commit reached main, the new script ran
+    // under the old worker, which never passed --live. The gate recorded
+    // `verdict: PASS` next to `live: {skipped: true, why: "live stage requires --live
+    // (worker-only); routed flows: login-spine, building-details, ..."}` seventeen times.
+    // Name this test after the incident so nobody deletes it as "just another BLOCKED case".
+    const run = runGate(scratchRepo(), [], {
+      FAKE_ROUTING: JSON.stringify({ required: ['login-spine', 'building-details'] }),
+    });
+    expect(run.code).toBe(2);
+    expect(run.artifact?.verdict).not.toBe('PASS');
+    expect(run.artifact).toMatchObject({ verdict: 'BLOCKED' });
+    expect(run.artifact?.live).toMatchObject({
+      skipped: true,
+      why: expect.stringContaining('login-spine, building-details'),
+    });
+    // The names a maintainer reads first are on stdout, not buried in the artifact file.
+    expect(run.stdout).toMatch(/not driven: login-spine, building-details/);
+    expect(run.liveOptions).toBeNull();
   });
 
   it('without --live, a capability question blocks rather than reaching runLive', () => {
