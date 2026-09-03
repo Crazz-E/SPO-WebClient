@@ -473,6 +473,9 @@ pull request, and gate that sha**, in that order: the worker *fetches* the commi
 (0 approvals — solo maintainer), `typecheck + tests` **and** `bench/gate` required, no
 force-push, no deletion. CI cannot hold the locked credentials, so the worker publishes its
 verdict as the `bench/gate` commit status — a PR cannot merge on CI alone.
+`bench/gate` was dropped from this required list on 2026-08-29T10:17:40Z (advisory only for
+five days) and restored on 2026-09-03T07:32:42+02:00 — check the ruleset itself before trusting
+either this sentence or that date: `gh api repos/Crazz-Org/SPO-WebClient/rulesets/21111153`.
 
 **The branch is deliberately NOT required to be up to date with `main`** — that rule made every
 merge invalidate every other session's gate, at a cost growing as N² on a serialised bench.
