@@ -561,3 +561,65 @@ describe('nightlyResultFromReport', () => {
     expect(built.sha).toBe('at-submit');
   });
 });
+
+/**
+ * The 2026-09-03 trap, pinned.
+ *
+ * A single throttled fetch failed the nightly at 07:49:22Z. `ENVIRONMENT` records no sha,
+ * `isMainMoved` needs two shas to compare, and so every trigger but the 03:00 window went
+ * dead — `main` stayed unproven for the rest of the working day with eleven commits behind
+ * it. The failure that mattered was not the fetch; it was that nothing tried again.
+ */
+describe('nightlyDue after a result that proved nothing', () => {
+  const OUTSIDE = Date.UTC(2026, 8, 3, 18, 30, 0); // 18:30 UTC — nowhere near the window
+  const failed = (submittedAt: number): NightlyResult => ({
+    verdict: 'ENVIRONMENT',
+    submittedAt: new Date(submittedAt).toISOString(),
+    detail: 'git fetch failed while refreshing the nightly checkout',
+  });
+
+  it('is due again outside the window when the last attempt recorded no sha', () => {
+    const last = failed(Date.UTC(2026, 8, 3, 7, 49, 22));
+    expect(nightlyDue(last, false, OUTSIDE, 'main-sha', last.sha)).toBe(true);
+  });
+
+  it('is held off by the same 15-minute rate limit as a move, not retried in a tight loop', () => {
+    const last = failed(OUTSIDE - 60_000);
+    expect(nightlyDue(last, false, OUTSIDE, 'main-sha', last.sha)).toBe(false);
+  });
+
+  it('becomes due once that rate limit clears', () => {
+    const last = failed(OUTSIDE - NIGHTLY_MOVE_RATE_LIMIT_MS - 1);
+    expect(nightlyDue(last, false, OUTSIDE, 'main-sha', last.sha)).toBe(true);
+  });
+
+  it('stops as soon as a result proves the current sha — this is not an endless live drive', () => {
+    // Any nightly that got far enough to drive records the sha it started on, so the retry
+    // this opens can only ever cover attempts where nothing ran at all.
+    const proven: NightlyResult = {
+      verdict: 'PASS',
+      submittedAt: new Date(OUTSIDE - 3_600_000).toISOString(),
+      sha: 'main-sha',
+    };
+    expect(nightlyDue(proven, false, OUTSIDE, 'main-sha', proven.sha)).toBe(false);
+  });
+
+  it('a FAIL that names a sha does not retry either — the code was judged, not the environment', () => {
+    const failedRun: NightlyResult = {
+      verdict: 'FAIL',
+      submittedAt: new Date(OUTSIDE - 3_600_000).toISOString(),
+      sha: 'main-sha',
+    };
+    expect(nightlyDue(failedRun, false, OUTSIDE, 'main-sha', failedRun.sha)).toBe(false);
+  });
+
+  it('does not run while one is already queued or running', () => {
+    const last = failed(Date.UTC(2026, 8, 3, 7, 49, 22));
+    expect(nightlyDue(last, true, OUTSIDE, 'main-sha', last.sha)).toBe(false);
+  });
+
+  it('needs a current main sha — without one there is nothing to prove against', () => {
+    const last = failed(Date.UTC(2026, 8, 3, 7, 49, 22));
+    expect(nightlyDue(last, false, OUTSIDE, undefined, last.sha)).toBe(false);
+  });
+});
