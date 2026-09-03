@@ -153,8 +153,16 @@ An autonomous loop mutating a production game world needs two rails a human run 
 
 - **World-dirty lock.** If a run aborts before restore, `~/.spo-bench/world/world-lock.json`
   is left behind with the pending restores — one file for the whole machine, visible from
-  every worktree. **All further live runs are blocked** until a human clears it. Attempt 2
-  never starts on a world attempt 1 left mutated.
+  every worktree. **All further live runs are blocked** until a human clears it
+  (`npm run e2e:unlock`). Attempt 2 never starts on a world attempt 1 left mutated. This
+  holds even when the aborting run never got to call `release()` — a hard crash (SIGKILL,
+  OOM, host reboot) with writes still owed. `acquire()` treats any pending restores it finds
+  on a takeover as proof the previous holder left the world dirty, and marks it dirty itself
+  before refusing, whether or not that holder's process is still alive. (Before 2026-09-03,
+  B5.5: `acquire()` taking over a dead holder silently dropped its pending restores and never
+  marked the lock dirty, so this guarantee held only for a clean unwind — a hard crash left
+  `Helartia` mutated with nothing to block the next run or tell a human to look. Fixed; a
+  takeover now always preserves or flags what was owed.)
 - **Single-flight.** Mechanical since 2026-08-22: the bench worker executes one job at a
   time ([bench-worker.md](bench-worker.md)). The lock file remains as the world-dirty
   carrier and as a belt-and-braces refusal for `gate:local` runs.

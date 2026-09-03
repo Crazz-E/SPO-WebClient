@@ -882,7 +882,19 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
       }
       report.gateArtifact = gateArtifactPath(request.worktree, report.fingerprints.atStart.head);
     } else if (request.type === 'live' || request.type === 'nightly') {
-      const code = await deps.runCommand('node', ['dist/e2e/run.js', ...request.args], {
+      // Same reasoning as the `ref` bookkeeping above: placed AHEAD of `request.args` so
+      // they win over anything a caller happened to forward (run.ts's `flagged()` takes
+      // the first match). `request.branch` is the real branch cli.ts read at deposit time
+      // (or `main` for a nightly) — forwarding it is what stops run.ts's own `?? 'local'`
+      // default from firing and mislabelling every live/nightly artifact. The sha is
+      // `report.fingerprints.atStart.head`: taken above, after the checkout was fetched
+      // and reset but BEFORE the build steps and the drive itself run — the commit that
+      // is actually about to be driven, not one re-resolved from a ref that could have
+      // moved by the time the process reads it. A tree that still moves after this point
+      // is caught independently by `targetMoved` below and turned into STALE, so this
+      // sha is never trusted past the run it names.
+      const bookkeeping = [`--branch=${request.branch}`, `--sha=${report.fingerprints.atStart.head}`];
+      const code = await deps.runCommand('node', ['dist/e2e/run.js', ...bookkeeping, ...request.args], {
         cwd: request.worktree,
         env,
         logFile,

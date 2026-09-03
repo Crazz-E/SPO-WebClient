@@ -1323,7 +1323,41 @@ describe('runJob — nightly', () => {
     const report = await runJob(h.deps, job);
 
     expect(npmRuns(h)).toEqual(['build:server', 'build:e2e']);
-    expect(h.commands[3]).toMatchObject({ cmd: 'node', args: ['dist/e2e/run.js'] });
+    expect(h.commands[3]).toMatchObject({
+      cmd: 'node',
+      args: ['dist/e2e/run.js', '--branch=fix/x', `--sha=head-of-${path.basename(h.worktree)}`],
+    });
+    expect(report.verdict).toBe('PASS');
+  });
+
+  it('names the sha it actually checked out and is about to drive (atStart), never the one that was merely queued at deposit', async () => {
+    const h = harness();
+    // A custom deposit, not the `deposit()` helper: it needs atSubmit.head to differ from
+    // what `deps.fingerprint` (below) returns for atStart, so a worker.ts regression that
+    // reads the wrong fingerprint — atSubmit instead of atStart, or `resolveRef`'s
+    // `baseMain` (a live, movable ref) instead of either — shows up as a real mismatch
+    // rather than the two coincidentally-equal strings the shared helper would produce.
+    const job = h.spool.submit(
+      {
+        type: 'nightly',
+        worktree: h.worktree,
+        branch: 'main',
+        // hash matches the harness's default `h.hashes` so the tree does not also read as
+        // having moved mid-run (that is a separate concern, targetMoved, covered elsewhere)
+        // — only `head` differs, isolating exactly the thing this test checks.
+        fingerprint: { head: 'submit-time-sha-not-what-ran', hash: 'h1', clean: true },
+        submitter: { pid: 0 },
+        args: [],
+      },
+      h.clock.nowMs,
+    );
+
+    const report = await runJob(h.deps, job);
+
+    expect(h.commands[3]).toMatchObject({
+      cmd: 'node',
+      args: ['dist/e2e/run.js', '--branch=main', `--sha=head-of-${path.basename(h.worktree)}`],
+    });
     expect(report.verdict).toBe('PASS');
   });
 });
@@ -1334,7 +1368,15 @@ describe('runJob — live and lease', () => {
     const job = deposit(h, 'live', ['--flows=login-spine']);
     const report = await runJob(h.deps, job);
     expect(npmRuns(h)).toEqual(['build:server', 'build:e2e']);
-    expect(h.commands[3]).toMatchObject({ cmd: 'node', args: ['dist/e2e/run.js', '--flows=login-spine'] });
+    expect(h.commands[3]).toMatchObject({
+      cmd: 'node',
+      args: [
+        'dist/e2e/run.js',
+        '--branch=fix/x',
+        `--sha=head-of-${path.basename(h.worktree)}`,
+        '--flows=login-spine',
+      ],
+    });
     expect(report.verdict).toBe('PASS');
   });
 

@@ -5,7 +5,10 @@
  * 1. Single-flight — one live session at a time, across both accounts.
  * 2. World-dirty — a run that aborts before restoring what it wrote leaves the lock
  *    behind with the pending restores in it, and every later run refuses to start.
- *    Attempt 2 must never begin on a world attempt 1 left mutated.
+ *    Attempt 2 must never begin on a world attempt 1 left mutated. This holds even if
+ *    the aborting run never got to call `release()` at all (a hard crash) — the next
+ *    `acquire()` discovers the leftover pendingRestores itself and marks the world dirty
+ *    before taking over, instead of wiping them (B5.5).
  */
 
 import * as fs from 'fs';
@@ -60,6 +63,15 @@ export class WorldLock {
   /**
    * Take the lock, or refuse. Refuses hard on a dirty world; refuses on a live holder
    * but takes over from a holder whose process is gone (a crash, not a rival).
+   *
+   * A holder can die (SIGKILL, OOM, host reboot) with writes still owed: it never reaches
+   * its own `release()`, so `release()`'s dirty-marking never runs for it. The pendingRestores
+   * it left behind are the only record that those writes are unrestored. Taking over here
+   * must not discard that record — doing so would silently forget real, player-visible state
+   * in `Helartia` that nothing will ever put back. So a takeover that finds pendingRestores
+   * marks the world dirty right here, exactly as `release()` does for a graceful abort, and
+   * refuses instead of proceeding — the same block a clean-unwind crash already produces,
+   * now covering the ungraceful one too.
    */
   acquire(branch: string, pid: number = process.pid, isAlive: (p: number) => boolean = processAlive): void {
     const lock = this.read();
@@ -70,6 +82,20 @@ export class WorldLock {
         `A live run is already in flight (pid ${lock.holder.pid}, branch ${lock.holder.branch}, ` +
           `since ${lock.holder.startedAt}). Live runs are single-flight.`,
       );
+    }
+
+    if (lock.pendingRestores.length > 0) {
+      const holderDesc = lock.holder
+        ? `pid ${lock.holder.pid} (branch ${lock.holder.branch}, since ${lock.holder.startedAt})`
+        : 'an earlier run';
+      this.write({
+        ...lock,
+        holder: null,
+        dirty: true,
+        dirtySince: new Date().toISOString(),
+        dirtyReason: `${holderDesc} ended without releasing the lock, leaving writes unrestored`,
+      });
+      throw new WorldDirtyError(this.read());
     }
 
     this.write({
