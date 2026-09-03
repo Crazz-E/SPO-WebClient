@@ -3,10 +3,11 @@
  *
  * Everything the worker and its clients share lives here: the spool (sessions drop job
  * requests), the running slot, the reports, the per-HEAD attestations the push hook
- * reads, the shared world state, and the heartbeat whose CONTENT — the epoch ms
- * touchHeartbeat wrote, not the file's mtime — is the worker's sign of life (action
- * B5.3: mtime can be preserved by a `cp -p`-style copy, or bumped by an unrelated
- * touch that writes nothing; content is the one signal the writer actually controls).
+ * reads, the shared world state, and the heartbeat whose CONTENT — JSON since action
+ * B5.2 (see HeartbeatContent below: writtenAt plus currentJob/startedAt), a bare epoch
+ * ms before it — not the file's mtime, is the worker's sign of life (action B5.3: mtime
+ * can be preserved by a `cp -p`-style copy, or bumped by an unrelated touch that writes
+ * nothing; content is the one signal the writer actually controls).
  * It sits under $HOME (ext4), never under /mnt/c (DrvFs rename semantics) and
  * never in a session scratchpad (per-session, shares nothing).
  */
@@ -144,8 +145,106 @@ export function readWorkerInfo(paths: BenchPaths): WorkerInfo | null {
   }
 }
 
-export function touchHeartbeat(paths: BenchPaths): void {
-  fs.writeFileSync(paths.heartbeat, `${Date.now()}\n`, 'utf8');
+/**
+ * The job the worker is executing right now, for the heartbeat to carry — action B5.2.
+ * `id` is the `JobRequest.id`; `startedAt` is when THIS job began executing (the claim, not
+ * the deposit — a job can sit queued for a while before it is picked up, and "how long has
+ * the worker been on this" must measure from execution, not from the queue).
+ */
+export interface CurrentJob {
+  id: string;
+  startedAt: string;
+}
+
+/**
+ * What the heartbeat file's content actually is, since action B5.2: a fresh epoch-ms clock
+ * tick (`writtenAt` — everything `heartbeatAgeMs` ever measured) plus which job, if any, the
+ * worker is executing right now.
+ *
+ * Before B5.2 the heartbeat carried only a bare epoch-ms number, written on its own
+ * `setInterval` (worker.ts) deliberately independent of the work loop — so a worker wedged
+ * mid-job kept beating exactly like an idle one, and the ONE thing the heartbeat could say
+ * ("this process is still scheduling timers") was mistaken for "this worker is fine".
+ * `currentJob`/`startedAt` let a reader tell ALIVE (currentJob null: the worker is up and has
+ * nothing to do) from PROGRESSING (currentJob set: the worker is up AND has been on this exact
+ * job since `startedAt` — a client that also knows the job's own stage deadlines, see worker.ts's
+ * VERIFY_GATE_DEADLINE_MS and friends, can tell a long-but-normal drive from one that has
+ * outrun every bound the worker itself would have killed it at).
+ *
+ * `currentJob` is set and cleared from the SAME place — `processOldest`'s claim/finish
+ * boundary in worker.ts — rather than written once at job start and left alone: a heartbeat
+ * that never clears `currentJob` would make a worker that finished ten minutes ago, and has
+ * been idle since, read as still busy on its last job forever. See worker.ts's own comment at
+ * the `currentJob` field of `WorkerDeps` for exactly where it is set and cleared.
+ */
+export interface HeartbeatContent {
+  /** Epoch ms this beat was written — the staleness clock; the one thing this file always
+   *  carried, unchanged in meaning by B5.2. */
+  writtenAt: number;
+  /** The job id the worker is currently executing, or null when idle. */
+  currentJob: string | null;
+  /** ISO timestamp `currentJob` started executing, or null when idle. */
+  startedAt: string | null;
+}
+
+/**
+ * Write a fresh heartbeat: `writtenAt` is always `Date.now()`; `current` (undefined/null when
+ * idle) supplies `currentJob`/`startedAt`. Called from worker.ts's own `setInterval`, still
+ * deliberately independent of the work loop (see that file's comment) — this only changes
+ * WHAT gets written each beat, not the fact that it rides its own timer.
+ */
+export function touchHeartbeat(paths: BenchPaths, current?: CurrentJob | null): void {
+  const content: HeartbeatContent = {
+    writtenAt: Date.now(),
+    currentJob: current?.id ?? null,
+    startedAt: current?.startedAt ?? null,
+  };
+  fs.writeFileSync(paths.heartbeat, `${JSON.stringify(content)}\n`, 'utf8');
+}
+
+/**
+ * Read the heartbeat file's content back, or null when it is absent or unparseable as either
+ * shape below.
+ *
+ * Tries the current JSON shape (`HeartbeatContent`) first; falls back to the pre-B5.2 bare
+ * epoch-ms number (`currentJob`/`startedAt` read as absent) so a worker mid-upgrade — the old
+ * binary's last beat still on disk for up to one `HEARTBEAT_PERIOD_MS` after the new one
+ * starts — does not read as dead for that one tick. Genuinely corrupt content (neither shape
+ * parses to a finite timestamp) returns null, same as an absent file always has.
+ */
+export function readHeartbeat(paths: BenchPaths): HeartbeatContent | null {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(paths.heartbeat, 'utf8').trim();
+  } catch {
+    return null;
+  }
+  // A bare number (the legacy pre-B5.2 shape) is itself valid JSON — `JSON.parse("123")` is
+  // `123`, not a parse failure — so a `try/catch` around JSON.parse alone cannot tell the two
+  // shapes apart: it would "succeed" into a number with no `.writtenAt` to read. The object
+  // check below is what actually distinguishes them; legacy content falls through to the
+  // plain-number branch afterwards, exactly like malformed JSON does.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = undefined;
+  }
+  if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+    const candidate = parsed as Partial<HeartbeatContent>;
+    const writtenAt = Number(candidate.writtenAt);
+    if (!Number.isFinite(writtenAt)) return null;
+    return {
+      writtenAt,
+      currentJob: typeof candidate.currentJob === 'string' ? candidate.currentJob : null,
+      startedAt: typeof candidate.startedAt === 'string' ? candidate.startedAt : null,
+    };
+  }
+  // Legacy bare-number heartbeat (pre-B5.2), or genuinely corrupt content — either way there
+  // is no currentJob/startedAt to recover, only (maybe) a timestamp.
+  const writtenAt = Number(raw);
+  if (!Number.isFinite(writtenAt)) return null;
+  return { writtenAt, currentJob: null, startedAt: null };
 }
 
 /**
@@ -162,18 +261,14 @@ export function touchHeartbeat(paths: BenchPaths): void {
  *
  * console/collect.js in the sibling SPO-Pipeline repo reads this SAME file by content too (it
  * always did); this function used to be the odd one out. HEARTBEAT_STALE_MS itself is
- * unchanged by this action — see this file's own const above.
+ * unchanged by this action — see this file's own const above. Since B5.2 the content is JSON
+ * (see HeartbeatContent); this function is now a thin wrapper over readHeartbeat that keeps its
+ * own signature — `number | null`, unrelated to the job fields — exactly as every existing
+ * caller (cli.ts, workerStatus below) already expects.
  */
 export function heartbeatAgeMs(paths: BenchPaths, nowMs: number = Date.now()): number | null {
-  let raw: string;
-  try {
-    raw = fs.readFileSync(paths.heartbeat, 'utf8').trim();
-  } catch {
-    return null;
-  }
-  const writtenMs = Number(raw);
-  if (!Number.isFinite(writtenMs)) return null;
-  return nowMs - writtenMs;
+  const beat = readHeartbeat(paths);
+  return beat === null ? null : nowMs - beat.writtenAt;
 }
 
 export interface WorkerStatus {

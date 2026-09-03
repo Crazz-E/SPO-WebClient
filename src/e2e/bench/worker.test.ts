@@ -1,14 +1,17 @@
 import { execFileSync } from 'child_process';
+import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { benchPaths, ensureLayout, readWorkerInfo, type BenchPaths } from './paths';
+import { benchPaths, ensureLayout, readHeartbeat, readWorkerInfo, type BenchPaths } from './paths';
 import { Spool, type JobRequest } from './job';
 import { listVerdicts, publishPendingStatuses, writeVerdictIn } from './verdict';
 import { readNightlyResult } from './nightly';
 import { type GatewayDeps } from './gateway';
 import {
+  classifyStage,
   countCapabilityExceptions,
+  DEADLINE_EXIT_CODE,
   liveAttestationFrom,
   main,
   mergeQueueDeps,
@@ -19,6 +22,7 @@ import {
   recoverInterrupted,
   resolveLegacyLiveness,
   runJob,
+  runWithDeadline,
   staticProofAttestationFrom,
   workerLoop,
   type WorkerDeps,
@@ -145,6 +149,7 @@ function harness(): Harness {
       now: () => (h.clock.nowMs += 10),
       sleep: async () => {},
       log: line => h.logs.push(line),
+      currentJob: null,
     },
   };
   return h;
@@ -2113,5 +2118,259 @@ describe('mergeQueueDeps — what the queue service is given', () => {
     const paths = bench();
     mergeQueueDeps(paths, () => {}).reuse('0'.repeat(40), '1'.repeat(40), 'why');
     expect(listVerdicts(paths)).toHaveLength(0);
+  });
+});
+
+// ---- action B5.1: a deadline per stage, and an actual kill --------------------------------
+
+describe('classifyStage', () => {
+  it('classifies every git subcommand into the git bucket (120s)', () => {
+    expect(classifyStage('git', ['fetch', '--prune', '--force', 'origin'])).toMatchObject({ deadlineMs: 120_000 });
+    expect(classifyStage('git', ['reset', '--hard', 'origin/main'])).toMatchObject({ deadlineMs: 120_000 });
+    expect(classifyStage('git', ['clean', '-fd'])).toMatchObject({ deadlineMs: 120_000 });
+    expect(classifyStage('git', ['merge', '--no-edit', 'origin/main'])).toMatchObject({ deadlineMs: 120_000 });
+    expect(classifyStage('git', ['merge-base', '--is-ancestor', 'a', 'b'])).toMatchObject({ deadlineMs: 120_000 });
+  });
+
+  it('classifies npm ci into its own bucket (600s)', () => {
+    expect(classifyStage('npm', ['ci'])).toMatchObject({ deadlineMs: 600_000 });
+  });
+
+  it('classifies build:server and build:e2e into the single-tsc bucket (660s), distinct from the full build', () => {
+    expect(classifyStage('npm', ['run', 'build:server'])).toMatchObject({ deadlineMs: 660_000, stage: 'npm run build:server' });
+    expect(classifyStage('npm', ['run', 'build:e2e'])).toMatchObject({ deadlineMs: 660_000, stage: 'npm run build:e2e' });
+  });
+
+  it('classifies the full `npm run build` (lease jobs) with more room than a single tsc target', () => {
+    const full = classifyStage('npm', ['run', 'build']);
+    expect(full.deadlineMs).toBe(900_000);
+    expect(full.deadlineMs).toBeGreaterThan(classifyStage('npm', ['run', 'build:server']).deadlineMs);
+  });
+
+  it('classifies verify-gate.js on its own bound (20 min), well above the measured max (329.2s)', () => {
+    const gate = classifyStage('node', ['scripts/verify-gate.js', '--live', '--deposited-sha=x']);
+    expect(gate.deadlineMs).toBe(1_200_000);
+    expect(gate.deadlineMs).toBeGreaterThan(329_200 * 3); // margin over the measured corpus max
+  });
+
+  it('classifies run.js (live/nightly) on its own bound (15 min)', () => {
+    expect(classifyStage('node', ['dist/e2e/run.js', '--flag'])).toMatchObject({ deadlineMs: 900_000, stage: 'run.js' });
+  });
+
+  it('falls back to a bounded default for anything unrecognised, rather than leaving it unbounded', () => {
+    const unknown = classifyStage('some-unclassified-tool', ['--flag']);
+    expect(unknown.deadlineMs).toBe(660_000);
+    expect(unknown.stage).toContain('some-unclassified-tool');
+  });
+});
+
+describe('runWithDeadline: an actual kill, not just a timer that gives up waiting', () => {
+  function tmpLog(): string {
+    return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-deadline-')), 'job.log');
+  }
+
+  it('resolves the real exit code when the command finishes well inside its deadline', async () => {
+    const logFile = tmpLog();
+    const code = await runWithDeadline(
+      'node',
+      ['-e', 'process.stdout.write("hi"); process.exit(0)'],
+      { cwd: process.cwd(), logFile },
+      { stage: 'fast', deadlineMs: 30_000 },
+    );
+    expect(code).toBe(0);
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('hi');
+  });
+
+  // Mutation target: "remove a stage's deadline" — without the deadlineTimer, this test's
+  // process (which ignores SIGTERM AND never exits on its own) would hang the awaited
+  // Promise forever, and the test times out rather than resolving DEADLINE_EXIT_CODE.
+  //
+  // Mutation target: "make the kill not actually kill" — a mutant that no-ops the real
+  // `kill(-pid, signal)` call would still resolve DEADLINE_EXIT_CODE (the backstop timer
+  // does not depend on the kill succeeding — see runWithDeadline's own doc comment on what
+  // the backstop does and does not guarantee), so the resolved CODE alone cannot catch that
+  // mutation. Only checking that the OS process is actually gone afterward can — the pid is
+  // written to `pidFile` by the child itself, then polled here.
+  it('kills a process that ignores SIGTERM — SIGKILL still ends it, the OS process is actually gone, and the wait is bounded', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-deadline-'));
+    const logFile = path.join(dir, 'job.log');
+    const pidFile = path.join(dir, 'pid');
+    const start = Date.now();
+    const code = await runWithDeadline(
+      'node',
+      [
+        '-e',
+        `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); ` +
+          "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);",
+      ],
+      { cwd: process.cwd(), logFile },
+      { stage: 'ignores-sigterm', deadlineMs: 150, killGraceMs: 150 },
+    );
+    expect(code).toBe(DEADLINE_EXIT_CODE);
+    // Bound: deadlineMs + 2*killGraceMs + slack, never "however long the OS takes".
+    expect(Date.now() - start).toBeLessThan(3_000);
+    expect(fs.readFileSync(logFile, 'utf8')).toMatch(/exceeded its .*deadline — killing/);
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    expect(() => process.kill(pid, 0)).toThrow(); // ESRCH: no such process — SIGKILL actually landed
+  }, 10_000);
+
+  // Mutation target: "kill the direct child only" (drop detached:true, or signal +pid instead
+  // of -pid) — a real grandchild, spawned the way `npm run build:*` spawns `tsc`, must die too.
+  it('kills the whole process group — a grandchild the command spawns dies too', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-deadline-'));
+    const logFile = path.join(dir, 'job.log');
+    const marker = path.join(dir, 'grandchild-alive');
+    const scriptFile = path.join(dir, 'parent.js');
+    // The parent spawns a grandchild that keeps touching `marker` every 50ms, then hangs
+    // itself — exactly the shape of `npm run build:*` forking `tsc` and then a wedged tsc.
+    fs.writeFileSync(
+      scriptFile,
+      [
+        "const { spawn } = require('child_process');",
+        "const fs = require('fs');",
+        `const marker = ${JSON.stringify(marker)};`,
+        "const gc = spawn(process.execPath, ['-e', " +
+          "\"setInterval(() => { try { require('fs').writeFileSync(process.argv[1], String(Date.now())); } catch {} }, 50);\", marker], " +
+          "{ stdio: 'ignore' });",
+        'setInterval(() => {}, 1000);', // the parent itself also just hangs
+      ].join('\n'),
+    );
+    const code = await runWithDeadline(
+      process.execPath,
+      [scriptFile],
+      { cwd: dir, logFile },
+      { stage: 'group-kill', deadlineMs: 300, killGraceMs: 200 },
+    );
+    expect(code).toBe(DEADLINE_EXIT_CODE);
+    // The grandchild should have stopped writing by now; if only the direct child were
+    // killed, `marker` would keep getting fresher every 50ms indefinitely.
+    const firstCheck = fs.existsSync(marker) ? fs.statSync(marker).mtimeMs : 0;
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const secondCheck = fs.existsSync(marker) ? fs.statSync(marker).mtimeMs : 0;
+    expect(secondCheck).toBe(firstCheck);
+  }, 10_000);
+
+  // Mutation target: "a killer that waits on the process it killed" — the exact recurring
+  // shape this chantier's report warns about. A process that never reports 'close' (the
+  // real-world case: a child stuck in uninterruptible I/O wait, immune even to SIGKILL for a
+  // while) must not hang this function forever.
+  it('resolves via its own backstop even when the process never reports close', async () => {
+    const logFile = tmpLog();
+    const fakeChild = new EventEmitter() as unknown as ReturnType<typeof import('child_process').spawn>;
+    (fakeChild as unknown as { pid: number }).pid = 4242;
+    const killCalls: { pid: number; signal: NodeJS.Signals }[] = [];
+    const start = Date.now();
+    const code = await runWithDeadline(
+      'ignored-because-spawn-is-injected',
+      [],
+      { cwd: process.cwd(), logFile },
+      { stage: 'backstop', deadlineMs: 50, killGraceMs: 50 },
+      {
+        spawnProcess: (() => fakeChild) as unknown as typeof import('child_process').spawn,
+        kill: (pid, signal) => killCalls.push({ pid, signal }),
+      },
+    );
+    expect(code).toBe(DEADLINE_EXIT_CODE);
+    expect(Date.now() - start).toBeLessThan(2_000);
+    // Both signals sent, to the whole GROUP (negative pid), in order.
+    expect(killCalls).toEqual([
+      { pid: -4242, signal: 'SIGTERM' },
+      { pid: -4242, signal: 'SIGKILL' },
+    ]);
+  }, 5_000);
+});
+
+describe("runJob: a deadline kill produces ENVIRONMENT, not FAIL — B5.1's routing", () => {
+  // runCommand call order for a `ref` job: (1) the best-effort `git fetch` refresh (its exit
+  // code is never checked), (2) `npm run build:server` (BUILD_STEPS.ref), (3) verify-gate.js.
+  it('a build step killed by its deadline (exit 124) reports ENVIRONMENT, never FAIL', async () => {
+    const h = harness();
+    const job = deposit(h);
+    h.exitCodes = [0, DEADLINE_EXIT_CODE]; // (1) fetch refresh, (2) build:server killed
+    const report = await runJob(h.deps, job);
+    expect(report.verdict).toBe('ENVIRONMENT');
+    expect(report.detail).toMatch(/exceeded its deadline and was killed/);
+  });
+
+  it('a killed verify-gate.js reports ENVIRONMENT and never writes a verdicts/ file (NON_ATTESTING)', async () => {
+    const h = harness();
+    deposit(h);
+    h.exitCodes = [0, 0, DEADLINE_EXIT_CODE]; // (1) fetch refresh, (2) build:server ok, (3) gate killed
+    await processOldest(h.deps);
+    const written = listVerdicts(h.paths);
+    expect(written).toHaveLength(0);
+  });
+
+  // live/nightly order: (1) fetch refresh, (2) build:server, (3) build:e2e, (4) run.js.
+  it('a killed live drive (live/nightly) reports ENVIRONMENT, never FAIL', async () => {
+    const h = harness();
+    const job = deposit(h, 'live');
+    h.exitCodes = [0, 0, 0, DEADLINE_EXIT_CODE];
+    const report = await runJob(h.deps, job);
+    expect(report.verdict).toBe('ENVIRONMENT');
+    expect(report.detail).toMatch(/live drive exceeded its deadline and was killed/);
+  });
+
+  it('an ordinary non-zero exit is still FAIL — the deadline sentinel does not swallow real failures', async () => {
+    const h = harness();
+    const job = deposit(h);
+    h.exitCodes = [0, 1]; // (1) fetch refresh, (2) build:server genuinely failed, not timed out
+    const report = await runJob(h.deps, job);
+    expect(report.verdict).toBe('FAIL');
+    expect(report.detail).toMatch(/npm run build:server failed/);
+  });
+});
+
+// ---- action B5.2: the heartbeat reports progress, not existence ---------------------------
+
+describe('processOldest: currentJob tracks execution, not deposit or existence', () => {
+  it('sets currentJob at CLAIM time (not deposit time) while the job runs, and clears it once done', async () => {
+    const h = harness();
+    const job = deposit(h);
+    let observedDuring: WorkerDeps['currentJob'] = undefined as unknown as WorkerDeps['currentJob'];
+    const originalFingerprint = h.deps.fingerprint;
+    h.deps.fingerprint = wt => {
+      if (observedDuring === undefined) observedDuring = h.deps.currentJob;
+      return originalFingerprint(wt);
+    };
+    expect(h.deps.currentJob).toBeNull();
+    await processOldest(h.deps);
+    expect(observedDuring).not.toBeNull();
+    expect(observedDuring?.id).toBe(job.id);
+    // Claim time, not job.submittedAt (the deposit time) — a queue wait must not be counted
+    // as "how long the worker has been on this job".
+    expect(observedDuring?.startedAt).not.toBe(job.submittedAt);
+    // Cleared once the job is done — a heartbeat tick after this point must read idle, not
+    // "still busy on the job that finished".
+    expect(h.deps.currentJob).toBeNull();
+  });
+
+  it('clears currentJob even when runJob throws (the catch-and-FAIL path)', async () => {
+    const h = harness();
+    deposit(h);
+    h.deps.mayDriveLive = () => {
+      throw new Error('boom');
+    };
+    await processOldest(h.deps);
+    expect(h.deps.currentJob).toBeNull();
+  });
+
+  it('never sets currentJob for a submitter-died deposit — nothing ran, nothing to report progress on', async () => {
+    const h = harness();
+    deposit(h);
+    h.submitterAlive = false;
+    await processOldest(h.deps);
+    expect(h.deps.currentJob).toBeNull();
+  });
+});
+
+describe('the heartbeat carries currentJob/startedAt (B5.2), via main()', () => {
+  it('idles with currentJob null when the queue is empty', async () => {
+    const h = harness();
+    await main(h.deps, 0);
+    const beat = readHeartbeat(h.paths);
+    expect(beat).not.toBeNull();
+    expect(beat?.currentJob).toBeNull();
+    expect(beat?.startedAt).toBeNull();
   });
 });
