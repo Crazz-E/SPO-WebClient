@@ -63,8 +63,14 @@ export const HEARTBEAT_PERIOD_MS = 5_000;
 /** The port the worker owns. Nothing else on this machine may listen on it. */
 export const BENCH_PORT = 8080;
 
-export function benchRoot(): string {
-  return process.env.SPO_BENCH_DIR || path.join(os.homedir(), '.spo-bench');
+// `env` defaults to the real `process.env` for every production call site (every existing
+// caller passes nothing, so the default keeps behaviour identical). A test asserting the
+// UNSET-var default is the one caller with a reason to pass something else: injecting a
+// throwaway object — `benchRoot({})` — proves the same fallback computation
+// (`os.homedir()`-based; `os.homedir()` itself does no I/O) without ever touching or mutating
+// the real `process.env.SPO_BENCH_DIR`. See paths.test.ts.
+export function benchRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return env.SPO_BENCH_DIR || path.join(os.homedir(), '.spo-bench');
 }
 
 export function benchPaths(root: string = benchRoot()): BenchPaths {

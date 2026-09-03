@@ -43,6 +43,7 @@ import {
   listVerdicts,
   publishPendingStatuses,
   writeVerdictIn,
+  type BenchVerdict,
   type LiveAttestation,
   type StaticProofAttestation,
   type StatusPublisher,
@@ -311,7 +312,6 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
       branch: request.branch,
       worktree: request.worktree,
       verdict: report.verdict,
-      fingerprintStable: !report.targetMoved,
       baseMain: report.baseMain,
       ...(report.merged ? { merged: true, mergedBase: report.baseMain } : {}),
       ...(tree ? { tree } : {}),
@@ -344,6 +344,11 @@ export function countCapabilityExceptions(artifactPath: string | undefined): num
   } catch {
     return 0;
   }
+}
+
+/** Where `verify-gate.js` files a gate artifact for a sha, inside a given worktree. */
+function gateArtifactPath(worktree: string, sha: string): string {
+  return path.join(worktree, 'report', 'e2e', `gate-${sha}.json`);
 }
 
 /** The shape of `report/e2e/gate-<sha>.json` this module reads — see scripts/verify-gate.js. */
@@ -439,6 +444,119 @@ export function liveAttestationFrom(artifactPath: string | undefined): LiveAttes
       : `the gate artifact recorded live.status ${JSON.stringify(live.status ?? null)}, not a completed run`;
   const routedNote = required.length > 0 ? `; routed flows: ${required.join(', ')}` : '';
   return { status: 'unknown', why: `${reason}${routedNote}` };
+}
+
+/** A gate artifact's filename is `gate-<sha>.json`; this reads the merge-commit sha back out. */
+const GATE_ARTIFACT_NAME = /^gate-([0-9a-f]{40})\.json$/;
+
+/**
+ * Every gate artifact on file, keyed by its merge commit's FIRST PARENT — built once per
+ * `attested()` pass so first-parent inversion (see {@link resolveLegacyLiveness}) costs one
+ * batched `git log`, not one `git` process per legacy candidate. `git log --no-walk` reads
+ * exactly the named commits, nothing they lead to, so this is O(artifacts on file) regardless
+ * of how large the repository's history is.
+ *
+ * Never throws: an unreadable directory, an empty one, or a `git` that fails all read as "no
+ * index" — the caller falls back to `'unknown'`, the same as any other unresolvable liveness.
+ */
+function mergeShaByFirstParent(
+  refCheckout: string,
+  git: (worktree: string, args: string[]) => string,
+): Map<string, string> {
+  const dir = path.join(refCheckout, 'report', 'e2e');
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return new Map();
+  }
+  const shas = names
+    .map(name => GATE_ARTIFACT_NAME.exec(name)?.[1])
+    .filter((sha): sha is string => sha !== undefined);
+  if (shas.length === 0) return new Map();
+
+  let log: string;
+  try {
+    log = git(refCheckout, ['log', '--no-walk', '--format=%H %P', ...shas]);
+  } catch {
+    return new Map();
+  }
+  const index = new Map<string, string>();
+  for (const line of log.split('\n')) {
+    const [commit, firstParent] = line.trim().split(/\s+/);
+    if (commit && firstParent) index.set(firstParent, commit);
+  }
+  return index;
+}
+
+/**
+ * Recover `live` for a verdict that predates the field, from the gate artifact — the same
+ * source {@link liveAttestationFrom} reads for a fresh write, resolved here instead of never.
+ *
+ * This closes the gap the B2.4 validation measured against `~/.spo-bench/` but the shipped
+ * rule did not: `attested()` used to read `verdict.live` straight off disk, so every verdict
+ * written before this field existed (515 of 518 on the corpus measured 2026-09-03) read as
+ * `'unknown'` forever — the same bucket the reuse rule allows — even the 25 that are provable
+ * static-only PASSes. Verdicts are never purged (see job.ts's `purgeDone`, which only touches
+ * `done/`), so that gap does not shrink on its own; this is what actually closes it, at
+ * decision time, for every legacy verdict this rule is asked to reuse.
+ *
+ * Direct lookup first: `report/e2e/gate-<verdict.head>.json` in the shared ref checkout. That
+ * misses whenever the job merged `main` into the checkout before gating (`verdict.merged`) —
+ * the artifact is filed under the MERGE commit's sha (`report.fingerprints.atStart.head`),
+ * never the deposited head a verdict is keyed by (worker.ts's own `runJob` fixes the key to
+ * `request.fingerprint.head` for exactly this reason). First-parent inversion recovers it:
+ * the merge commit's first parent IS the deposited head, so `mergeIndex()` — built once,
+ * lazily, only when a direct lookup has already failed — finds it without walking history.
+ *
+ * A first-parent match is trusted only after three checks, because a first-parent match is
+ * not automatically the RIGHT merge commit — a different job could coincidentally have
+ * produced a merge with the same first parent (a superseded, re-gated push, for instance):
+ *  - the merge commit's tree equals `verdict.tree` — the code judged is the code recorded;
+ *  - the merge commit's second parent equals `verdict.mergedBase` — the base recorded;
+ *  - `verdict.merged` is true — a non-merge verdict has no business being looked up this way.
+ *
+ * Any failure along this path — no artifact directory, no `git`, no match, a match that
+ * fails validation — resolves to `'unknown'`, never a thrown error and never a refusal
+ * invented out of missing evidence: `'unknown'` is exactly what {@link mayReuseVerdict}
+ * (./merge-queue) already treats as "allow", precisely the disposition a verdict with no
+ * answer on file has always had.
+ */
+export function resolveLegacyLiveness(
+  refCheckout: string,
+  git: (worktree: string, args: string[]) => string,
+  verdict: Pick<BenchVerdict, 'head' | 'tree' | 'merged' | 'mergedBase'>,
+  mergeIndex: () => Map<string, string>,
+): LiveAttestation {
+  const direct = gateArtifactPath(refCheckout, verdict.head);
+  if (fs.existsSync(direct)) return liveAttestationFrom(direct);
+
+  if (!verdict.merged) {
+    return { status: 'unknown', why: 'no gate artifact was recorded for this run' };
+  }
+
+  const mergeSha = mergeIndex().get(verdict.head);
+  if (!mergeSha) {
+    return {
+      status: 'unknown',
+      why: 'no merge commit in the ref checkout has this head as its first parent',
+    };
+  }
+
+  try {
+    const tree = git(refCheckout, ['rev-parse', `${mergeSha}^{tree}`]).trim();
+    if (verdict.tree && tree !== verdict.tree) {
+      return { status: 'unknown', why: 'the recovered merge commit tree does not match the verdict' };
+    }
+    const secondParent = git(refCheckout, ['rev-parse', `${mergeSha}^2`]).trim();
+    if (verdict.mergedBase && secondParent !== verdict.mergedBase) {
+      return { status: 'unknown', why: 'the recovered merge commit base does not match the verdict' };
+    }
+  } catch {
+    return { status: 'unknown', why: 'could not validate the recovered merge commit' };
+  }
+
+  return liveAttestationFrom(gateArtifactPath(refCheckout, mergeSha));
 }
 
 /**
@@ -599,12 +717,7 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
       });
       bodyVerdict = GATE_EXIT_VERDICT[code] ?? 'FAIL';
       bodyDetail = `verify-gate exited ${code} (${bodyVerdict})`;
-      report.gateArtifact = path.join(
-        request.worktree,
-        'report',
-        'e2e',
-        `gate-${report.fingerprints.atStart.head}.json`,
-      );
+      report.gateArtifact = gateArtifactPath(request.worktree, report.fingerprints.atStart.head);
     } else if (request.type === 'live' || request.type === 'nightly') {
       const code = await deps.runCommand('node', ['dist/e2e/run.js', ...request.args], {
         cwd: request.worktree,
@@ -748,16 +861,31 @@ export function realRunCommand(
  */
 export function mergeQueueDeps(paths: BenchPaths, log: (line: string) => void): MergeQueueDeps {
   const spool = new Spool(paths);
+  const git = (args: string[], cwd: string): string => runGit(cwd, args);
   return {
     lsRemote: cwd => runGit(cwd, ['ls-remote', 'origin', 'refs/heads/gh-readonly-queue/*']),
-    git: (args, cwd) => runGit(cwd, args),
-    attested: () =>
-      listVerdicts(paths).map(({ verdict }) => ({
+    git,
+    attested: () => {
+      // Lazy and memoized: the first-parent index costs a `git log`, and most calls never
+      // need it at all — either every candidate already carries `live`, or a direct gate
+      // artifact lookup answers it, both of which are plain reads. See
+      // resolveLegacyLiveness's own comment for why this is trusted only after validation.
+      let mergeIndex: Map<string, string> | undefined;
+      const getMergeIndex = (): Map<string, string> =>
+        (mergeIndex ??= mergeShaByFirstParent(paths.refCheckout, (wt, a) => git(a, wt)));
+      return listVerdicts(paths).map(({ verdict }) => ({
         head: verdict.head,
         tree: verdict.tree ?? null,
         verdict: verdict.verdict,
-        fingerprintStable: verdict.fingerprintStable,
-      })),
+        live:
+          verdict.live ??
+          // Only a PASS with a tree can ever be reused (mayReuseVerdict), so only those are
+          // worth resolving — the other legacy verdicts stay `undefined`, same as before.
+          (verdict.verdict === 'PASS' && verdict.tree
+            ? resolveLegacyLiveness(paths.refCheckout, (wt, a) => git(a, wt), verdict, getMergeIndex)
+            : undefined),
+      }));
+    },
     pendingFor: sha => [...spool.queued(), ...spool.running()].some(e => e.request.ref === sha),
     reuse: (fromSha, toSha, _why) => {
       const source = listVerdicts(paths).find(v => v.verdict.head === fromSha);
@@ -765,8 +893,15 @@ export function mergeQueueDeps(paths: BenchPaths, log: (line: string) => void): 
       // nothing leaves the entry unanswered, and the next tick gates it properly — which
       // is the safe direction.
       if (!source) return;
+      // A legacy source may still carry `fingerprintStable` on disk (B2.5 deleted the
+      // field from every reader and writer, not from the 515 verdicts already on file) —
+      // spreading it forward would resurrect it into every new write copied from one,
+      // indefinitely. Legacy verdicts keep it; new writes, reused or not, never gain it.
+      const { fingerprintStable: _fingerprintStable, ...sourceVerdict } = source.verdict as typeof source.verdict & {
+        fingerprintStable?: unknown;
+      };
       writeVerdictIn(paths.verdicts, {
-        ...source.verdict,
+        ...sourceVerdict,
         head: toSha,
         // jobId always names the ORIGINAL live drive, byte-identical no matter how many
         // reuse hops led here — nothing is appended to it. `reusedFrom` carries the

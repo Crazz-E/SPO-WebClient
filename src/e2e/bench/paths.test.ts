@@ -33,18 +33,35 @@ describe('bench layout', () => {
   });
 
   it('honours SPO_BENCH_DIR, and defaults under the home directory', () => {
-    const old = process.env.SPO_BENCH_DIR;
-    try {
-      process.env.SPO_BENCH_DIR = '/somewhere/else';
-      expect(benchRoot()).toBe('/somewhere/else');
-      expect(benchPaths().spool).toBe('/somewhere/else/spool');
-      expect(benchPaths().cache).toBe('/somewhere/else/cache');
-      delete process.env.SPO_BENCH_DIR;
-      expect(benchRoot()).toBe(path.join(os.homedir(), '.spo-bench'));
-    } finally {
-      if (old === undefined) delete process.env.SPO_BENCH_DIR;
-      else process.env.SPO_BENCH_DIR = old;
-    }
+    // action b5.4: the real `process.env.SPO_BENCH_DIR` is never set, deleted or restored
+    // here. This suite forces it to a fresh temp directory for every test file
+    // (src/server/__tests__/setup/jest-setup.ts) precisely so nothing can resolve a bench
+    // path against the real `~/.spo-bench` — a test that deleted the real var mid-run, even
+    // inside a try/finally, would reopen exactly that window for the synchronous span in
+    // between. `benchRoot` takes an injectable `env` (default `process.env`, unchanged for
+    // every production call site) so this test can prove both branches of the fallback — SET
+    // and UNSET — against throwaway objects instead of the process-wide one.
+    const fakeEnv = { SPO_BENCH_DIR: '/somewhere/else' } as NodeJS.ProcessEnv;
+    expect(benchRoot(fakeEnv)).toBe('/somewhere/else');
+    expect(benchPaths(benchRoot(fakeEnv)).spool).toBe('/somewhere/else/spool');
+    expect(benchPaths(benchRoot(fakeEnv)).cache).toBe('/somewhere/else/cache');
+
+    // The zero-arg production path: every real call site (src/e2e/bench/cli.ts,
+    // src/e2e/bench/worker.ts) calls `benchRoot()` with no argument at all, relying entirely on
+    // the default parameter to fall through to the real `process.env`. The assertions above only
+    // ever exercise the injected-`env` branch, so a mutant that breaks the default itself (e.g.
+    // `env: NodeJS.ProcessEnv = {}`, which makes production ignore SPO_BENCH_DIR entirely) would
+    // pass every other test in this suite. jest-setup.ts has already pointed
+    // `process.env.SPO_BENCH_DIR` at a throwaway mkdtemp directory for this test file (see
+    // src/server/__tests__/setup/jest-setup.ts), so reading it back here proves the DEFAULT
+    // itself resolves SPO_BENCH_DIR, without ever touching or depending on the real
+    // `~/.spo-bench`.
+    expect(benchRoot()).toBe(process.env.SPO_BENCH_DIR);
+
+    // The UNSET-var default: `os.homedir()` is a pure lookup (no filesystem access), so this
+    // asserts the computed path without ever creating, reading or touching the directory it
+    // names — real or otherwise.
+    expect(benchRoot({} as NodeJS.ProcessEnv)).toBe(path.join(os.homedir(), '.spo-bench'));
   });
 });
 
