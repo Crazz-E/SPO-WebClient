@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -15,6 +16,7 @@ import {
   realRunCommand,
   realWorkerDeps,
   recoverInterrupted,
+  resolveLegacyLiveness,
   runJob,
   staticProofAttestationFrom,
   workerLoop,
@@ -242,9 +244,11 @@ describe('processOldest — the queue discipline', () => {
     expect(verdicts[0].verdict).toMatchObject({
       head: `head-of-${path.basename(h.worktree)}`,
       verdict: 'PASS',
-      fingerprintStable: true,
       worktree: h.worktree,
     });
+    // B2.5 — the real write path (not a hand-built fixture) never emits the removed
+    // `fingerprintStable` field.
+    expect(verdicts[0].verdict).not.toHaveProperty('fingerprintStable');
   });
 
   it('records the origin/main the run was judged against, in the report and the attestation', async () => {
@@ -288,8 +292,8 @@ describe('processOldest — the queue discipline', () => {
   });
 
   // B2.1 — the attestation gains what the gate actually did. These are the exact class
-  // measured on the real corpus: 509 of 509 verdicts carried no `live` key at all, and
-  // 17 artifacts recorded a skipped live stage in the same run that wrote PASS.
+  // measured on the real corpus (2026-09-03): 515 of 518 verdicts carried no `live` key
+  // at all, and 17 artifacts recorded a skipped live stage in the same run that wrote PASS.
   describe('the attestation carries what the gate artifact actually proved', () => {
     function artifactPathFor(h: Harness): string {
       return path.join(h.worktree, 'report', 'e2e', `gate-head-of-${path.basename(h.worktree)}.json`);
@@ -920,7 +924,9 @@ describe('runJob — ref: gating a commit the worker fetched', () => {
     const report = h.spool.readReport(job.id);
     expect(report?.verdict).toBe('STALE');
     expect(report?.bodyVerdict).toBe('PASS');
-    expect(listVerdicts(h.paths)[0].verdict.fingerprintStable).toBe(false);
+    // B2.5 — the fact survives into the persisted attestation via the STALE verdict word
+    // itself; there is no longer a separate `fingerprintStable` boolean repeating it.
+    expect(listVerdicts(h.paths)[0].verdict.verdict).toBe('STALE');
   });
 
   it('attests where the merge rule reads — a ref job IS the gate now', async () => {
@@ -936,7 +942,7 @@ describe('runJob — ref: gating a commit the worker fetched', () => {
 
     const verdicts = listVerdicts(h.paths);
     expect(verdicts).toHaveLength(1);
-    expect(verdicts[0].verdict).toMatchObject({ verdict: 'PASS', fingerprintStable: true });
+    expect(verdicts[0].verdict).toMatchObject({ verdict: 'PASS' });
   });
 
   it('publishes it as the required context', async () => {
@@ -1394,21 +1400,21 @@ describe('mergeQueueDeps — what the queue service is given', () => {
     return paths;
   }
 
-  it('offers every attestation as a candidate, with the tree it drove', () => {
+  it('offers every attestation as a candidate, with the tree it drove and its liveness', () => {
     const paths = bench();
     writeVerdictIn(paths.verdicts, {
       head: 'a'.repeat(40),
       branch: 'x',
       worktree: paths.refCheckout,
       verdict: 'PASS',
-      fingerprintStable: true,
+      live: { status: 'ran', flows: ['login-spine'] },
       tree: 'tree-1',
       jobId: 'job-1',
       createdAt: new Date().toISOString(),
     });
 
     expect(mergeQueueDeps(paths, () => {}).attested()).toEqual([
-      { head: 'a'.repeat(40), tree: 'tree-1', verdict: 'PASS', fingerprintStable: true },
+      { head: 'a'.repeat(40), tree: 'tree-1', verdict: 'PASS', live: { status: 'ran', flows: ['login-spine'] } },
     ]);
   });
 
@@ -1421,11 +1427,268 @@ describe('mergeQueueDeps — what the queue service is given', () => {
       branch: 'x',
       worktree: '/wt',
       verdict: 'PASS',
-      fingerprintStable: true,
       jobId: 'job-2',
       createdAt: new Date().toISOString(),
     });
     expect(mergeQueueDeps(paths, () => {}).attested()[0].tree).toBeNull();
+  });
+
+  /** A real git repo rooted at the ref checkout — first-parent inversion reads real objects. */
+  function gitRepoRefCheckout(paths: BenchPaths): (...args: string[]) => string {
+    fs.mkdirSync(paths.refCheckout, { recursive: true });
+    const git = (...args: string[]): string =>
+      execFileSync('git', ['-C', paths.refCheckout, ...args], { encoding: 'utf8' });
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    return git;
+  }
+
+  describe('attested() resolves `live` for a legacy PASS-with-tree candidate that lacks it', () => {
+    // Y1 — the validation derived every source's liveness from its gate artifact; the
+    // shipped `attested()` used to read `verdict.live` straight off disk and nothing
+    // else, so a legacy verdict (515 of 518 on the real corpus, 2026-09-03) always read
+    // as `'unknown'` even when its own gate artifact proved otherwise. These pin the fix.
+
+    it('reads the artifact directly when it is filed under the verdict head itself', () => {
+      const paths = bench();
+      const git = gitRepoRefCheckout(paths);
+      fs.writeFileSync(path.join(paths.refCheckout, 'a.txt'), 'one\n');
+      git('add', '.');
+      git('commit', '-q', '-m', 'c0');
+      const head = git('rev-parse', 'HEAD').trim();
+      const tree = git('rev-parse', 'HEAD^{tree}').trim();
+
+      const dir = path.join(paths.refCheckout, 'report', 'e2e');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, `gate-${head}.json`),
+        JSON.stringify({ live: { skipped: true, why: 'requires --live' }, routing: { required: ['login-spine'] } }),
+      );
+
+      writeVerdictIn(paths.verdicts, {
+        head,
+        branch: 'x',
+        worktree: paths.refCheckout,
+        verdict: 'PASS',
+        tree,
+        jobId: 'job-legacy',
+        createdAt: new Date().toISOString(),
+        // no `live` — the legacy shape this fix exists for.
+      });
+
+      const [candidate] = mergeQueueDeps(paths, () => {}).attested();
+      expect(candidate.live).toEqual({ status: 'skipped', why: 'requires --live', required: ['login-spine'] });
+    });
+
+    it('resolves via first-parent inversion when the artifact is filed under a real merge commit', () => {
+      // Reproduces the shape 122 of the corpus's 377 reusable candidates are in: `main`
+      // was merged into the checkout before the gate ran, so the artifact is keyed by the
+      // MERGE commit, never the deposited head the verdict itself is keyed by.
+      const paths = bench();
+      const git = gitRepoRefCheckout(paths);
+      fs.writeFileSync(path.join(paths.refCheckout, 'a.txt'), 'one\n');
+      git('add', '.');
+      git('commit', '-q', '-m', 'c0');
+
+      git('checkout', '-q', '-b', 'feature');
+      fs.writeFileSync(path.join(paths.refCheckout, 'feature.txt'), 'f\n');
+      git('add', '.');
+      git('commit', '-q', '-m', 'feature commit');
+      const featureHead = git('rev-parse', 'HEAD').trim();
+
+      git('checkout', '-q', 'main');
+      fs.writeFileSync(path.join(paths.refCheckout, 'main.txt'), 'm\n');
+      git('add', '.');
+      git('commit', '-q', '-m', 'main moved');
+      const mainHead = git('rev-parse', 'HEAD').trim();
+
+      git('checkout', '-q', 'feature');
+      git('merge', '-q', '--no-ff', '-m', 'merge main', 'main');
+      const mergeSha = git('rev-parse', 'HEAD').trim();
+      const mergeTree = git('rev-parse', 'HEAD^{tree}').trim();
+      // Prove the fixture really is a merge shaped the way worker.ts produces one.
+      expect(git('rev-parse', `${mergeSha}^1`).trim()).toBe(featureHead);
+      expect(git('rev-parse', `${mergeSha}^2`).trim()).toBe(mainHead);
+
+      const dir = path.join(paths.refCheckout, 'report', 'e2e');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, `gate-${mergeSha}.json`),
+        JSON.stringify({ live: { status: 'PASS', flows: [{ name: 'login-spine' }] } }),
+      );
+
+      writeVerdictIn(paths.verdicts, {
+        head: featureHead,
+        branch: 'feature',
+        worktree: paths.refCheckout,
+        verdict: 'PASS',
+        tree: mergeTree,
+        merged: true,
+        mergedBase: mainHead,
+        jobId: 'job-legacy-merged',
+        createdAt: new Date().toISOString(),
+      });
+
+      const [candidate] = mergeQueueDeps(paths, () => {}).attested();
+      expect(candidate.live).toEqual({ status: 'ran', flows: ['login-spine'] });
+    });
+
+    it('leaves `live` undefined for a legacy verdict with no tree — never reusable, not worth resolving', () => {
+      const paths = bench();
+      fs.mkdirSync(paths.refCheckout, { recursive: true });
+      writeVerdictIn(paths.verdicts, {
+        head: 'a'.repeat(40),
+        branch: 'x',
+        worktree: '/wt',
+        verdict: 'PASS',
+        jobId: 'job-notree',
+        createdAt: new Date().toISOString(),
+      });
+      const [candidate] = mergeQueueDeps(paths, () => {}).attested();
+      expect(candidate.live).toBeUndefined();
+    });
+
+    it('leaves `live` undefined for a FAIL verdict — mayReuseVerdict never looks at it', () => {
+      const paths = bench();
+      fs.mkdirSync(paths.refCheckout, { recursive: true });
+      writeVerdictIn(paths.verdicts, {
+        head: 'a'.repeat(40),
+        branch: 'x',
+        worktree: '/wt',
+        verdict: 'FAIL',
+        tree: 'T1',
+        jobId: 'job-fail',
+        createdAt: new Date().toISOString(),
+      });
+      const [candidate] = mergeQueueDeps(paths, () => {}).attested();
+      expect(candidate.live).toBeUndefined();
+    });
+  });
+
+  describe('resolveLegacyLiveness — unit', () => {
+    function bench(): BenchPaths {
+      const paths = benchPaths(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-legacy-live-')));
+      ensureLayout(paths);
+      fs.mkdirSync(paths.refCheckout, { recursive: true });
+      return paths;
+    }
+    function writeArtifact(paths: BenchPaths, sha: string, body: unknown): void {
+      const dir = path.join(paths.refCheckout, 'report', 'e2e');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, `gate-${sha}.json`), JSON.stringify(body), 'utf8');
+    }
+    const gitMustNotBeCalled = (): string => {
+      throw new Error('git must not be called for this case');
+    };
+
+    it('is unknown, not an error, for an unmerged verdict with no direct artifact', () => {
+      const paths = bench();
+      const result = resolveLegacyLiveness(
+        paths.refCheckout,
+        gitMustNotBeCalled,
+        { head: 'b'.repeat(40), tree: 'T', merged: false, mergedBase: undefined },
+        () => new Map(),
+      );
+      expect(result).toEqual({ status: 'unknown', why: 'no gate artifact was recorded for this run' });
+    });
+
+    it('is unknown when no merge commit in the index has this head as its first parent', () => {
+      const paths = bench();
+      const result = resolveLegacyLiveness(
+        paths.refCheckout,
+        gitMustNotBeCalled,
+        { head: 'd'.repeat(40), tree: 'T', merged: true, mergedBase: 'e'.repeat(40) },
+        () => new Map(),
+      );
+      expect(result).toEqual({
+        status: 'unknown',
+        why: 'no merge commit in the ref checkout has this head as its first parent',
+      });
+    });
+
+    // "Make first-parent inversion return the wrong commit" — a first-parent hit is not
+    // proof on its own; these three pin the validation that catches it.
+    it('refuses a first-parent match whose tree does not match the verdict', () => {
+      const paths = bench();
+      const head = 'c'.repeat(40);
+      const mergeSha = 'm'.repeat(40);
+      writeArtifact(paths, mergeSha, { live: { status: 'PASS', flows: [] } });
+      const git = (_wt: string, args: string[]): string => {
+        if (args[1] === `${mergeSha}^{tree}`) return 'SOME-OTHER-TREE\n';
+        throw new Error(`unexpected git call: ${args.join(' ')}`);
+      };
+      const result = resolveLegacyLiveness(
+        paths.refCheckout,
+        git,
+        { head, tree: 'tree-M', merged: true, mergedBase: 'e'.repeat(40) },
+        () => new Map([[head, mergeSha]]),
+      );
+      expect(result).toEqual({ status: 'unknown', why: 'the recovered merge commit tree does not match the verdict' });
+    });
+
+    it('refuses a first-parent match whose second parent does not match mergedBase', () => {
+      const paths = bench();
+      const head = 'c'.repeat(40);
+      const mergeSha = 'm'.repeat(40);
+      writeArtifact(paths, mergeSha, { live: { status: 'PASS', flows: [] } });
+      const git = (_wt: string, args: string[]): string => {
+        if (args[1] === `${mergeSha}^{tree}`) return 'tree-M\n';
+        if (args[1] === `${mergeSha}^2`) return 'DIFFERENT-BASE\n';
+        throw new Error(`unexpected git call: ${args.join(' ')}`);
+      };
+      const result = resolveLegacyLiveness(
+        paths.refCheckout,
+        git,
+        { head, tree: 'tree-M', merged: true, mergedBase: 'e'.repeat(40) },
+        () => new Map([[head, mergeSha]]),
+      );
+      expect(result).toEqual({
+        status: 'unknown',
+        why: 'the recovered merge commit base does not match the verdict',
+      });
+    });
+
+    it('accepts a first-parent match once all three checks agree, carrying `required` through', () => {
+      const paths = bench();
+      const head = 'c'.repeat(40);
+      const mergeSha = 'm'.repeat(40);
+      const base = 'e'.repeat(40);
+      writeArtifact(paths, mergeSha, {
+        live: { skipped: true, why: 'no --live' },
+        routing: { required: ['login-spine'] },
+      });
+      const git = (_wt: string, args: string[]): string => {
+        if (args[1] === `${mergeSha}^{tree}`) return 'tree-M\n';
+        if (args[1] === `${mergeSha}^2`) return `${base}\n`;
+        throw new Error(`unexpected git call: ${args.join(' ')}`);
+      };
+      const result = resolveLegacyLiveness(
+        paths.refCheckout,
+        git,
+        { head, tree: 'tree-M', merged: true, mergedBase: base },
+        () => new Map([[head, mergeSha]]),
+      );
+      // "make the resolved answer ignore `required`" — this pins that it does not.
+      expect(result).toEqual({ status: 'skipped', why: 'no --live', required: ['login-spine'] });
+    });
+
+    // "Make the artifact lookup always fail" — must fall back to allow (unknown), never
+    // throw and never a blanket refuse.
+    it('falls back to unknown, never throws, when every git call fails', () => {
+      const paths = bench();
+      const head = 'd'.repeat(40);
+      const mergeSha = 'm'.repeat(40);
+      const result = resolveLegacyLiveness(
+        paths.refCheckout,
+        () => {
+          throw new Error('git is unavailable');
+        },
+        { head, tree: 'T', merged: true, mergedBase: 'e'.repeat(40) },
+        () => new Map([[head, mergeSha]]),
+      );
+      expect(result).toEqual({ status: 'unknown', why: 'could not validate the recovered merge commit' });
+    });
   });
 
   it('deposits a queue entry as a PRIORITY ref job in the shared checkout', () => {
@@ -1459,7 +1722,7 @@ describe('mergeQueueDeps — what the queue service is given', () => {
       branch: 'x',
       worktree: paths.refCheckout,
       verdict: 'PASS',
-      fingerprintStable: true,
+      live: { status: 'ran', flows: ['login-spine'] },
       tree: 'tree-9',
       jobId: 'job-src',
       createdAt: new Date().toISOString(),
@@ -1475,6 +1738,39 @@ describe('mergeQueueDeps — what the queue service is given', () => {
     // original live drive, and `reusedFrom` carries the provenance instead.
     expect(copy.published).toBe(false);
     expect(copy.jobId).toBe('job-src');
+    expect(copy.reusedFrom).toBe('e'.repeat(40));
+    // The source's own liveness travels with the copy — a chain of reuses two hops from
+    // the original live drive is still traceable back to what actually proved it.
+    expect(copy.live).toEqual({ status: 'ran', flows: ['login-spine'] });
+  });
+
+  // Y2 — B2.5 deleted `fingerprintStable` from every reader and writer, not from the 515
+  // verdicts already on file when it shipped. `{ ...source.verdict, ... }` spread any
+  // extra key straight through, so reusing off one of those 515 resurrected the field
+  // into a brand-new write — the deletion was real for a fresh gate, but not for a reuse.
+  it('does not resurrect fingerprintStable when reusing from a legacy source that still carries it on disk', () => {
+    const paths = bench();
+    // Written directly, not through writeVerdictIn: BenchVerdict no longer declares this
+    // field, but a real legacy file on disk still has it — that JSON is what `reuse` reads.
+    const legacySource = {
+      head: 'e'.repeat(40),
+      branch: 'x',
+      worktree: paths.refCheckout,
+      verdict: 'PASS',
+      tree: 'tree-9',
+      jobId: 'job-src',
+      createdAt: new Date().toISOString(),
+      fingerprintStable: true,
+    };
+    fs.mkdirSync(paths.verdicts, { recursive: true });
+    fs.writeFileSync(path.join(paths.verdicts, `${legacySource.head}.json`), JSON.stringify(legacySource), 'utf8');
+
+    mergeQueueDeps(paths, () => {}).reuse('e'.repeat(40), 'f'.repeat(40), 'identical tree');
+
+    const copy = listVerdicts(paths).find(v => v.verdict.head === 'f'.repeat(40))!.verdict;
+    expect(copy).not.toHaveProperty('fingerprintStable');
+    // Everything else about the copy still behaves exactly as before this fix.
+    expect(copy.tree).toBe('tree-9');
     expect(copy.reusedFrom).toBe('e'.repeat(40));
   });
 
@@ -1492,7 +1788,6 @@ describe('mergeQueueDeps — what the queue service is given', () => {
       branch: 'x',
       worktree: paths.refCheckout,
       verdict: 'PASS',
-      fingerprintStable: true,
       tree: 'tree-chain',
       jobId: 'job-original',
       createdAt: new Date().toISOString(),

@@ -173,8 +173,12 @@ async function submit(parsed: ParsedArgs, deps: CliDeps): Promise<number> {
 
   // A ref job is about a commit on GitHub, not about this worktree. The subject does not
   // exist on this machine until the worker fetches it, so there is nothing here to
-  // fingerprint — the placeholder below names the ref and is never compared against the
-  // tree (see the staleness rule in worker.ts).
+  // fingerprint — the placeholder below just names the ref. `worker.ts`'s atStart/atEnd
+  // staleness check still runs against the WORKER's own checkout after it fetches and
+  // resets to this ref; it does not, and cannot, compare against this placeholder (B2.5 —
+  // a field that once claimed otherwise, `fingerprintStable`, was removed because it was
+  // true in the whole corpus (518 verdicts on file as of 2026-09-03; it only grows) and
+  // could not be made false for a `ref` job).
   const fingerprint =
     type === 'ref' ? { head: ref as string, hash: `ref:${ref}`, clean: true } : deps.fingerprint(worktree);
   let request;
