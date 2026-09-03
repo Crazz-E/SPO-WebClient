@@ -566,6 +566,11 @@ describe('fetchCurriculumData', () => {
       currentLevel: 4,
       currentLevelName: 'Paradigm',
       currentLevelDescription: 'You are a paradigm of industry.',
+      currentLevelBadgeUrl: '/proxy-image?url=' + encodeURIComponent(
+        'http://158.69.153.134/Five/0/Visual/Voyager/NewTycoon/images/levelParadigm.gif'
+      ),
+      currentLevelCondition: '',
+      levelReqStatus: '',
       nextLevelName: 'Legend',
       nextLevelDescription: 'Legends shape worlds.',
       nextLevelRequirements: 'Prestige 5000 and 50 facilities',
@@ -677,6 +682,33 @@ describe('fetchCurriculumData', () => {
     expect((await fetchCurriculumData(fake.ctx)).currentLevelDescription).toBe('You are a paradigm of industry.');
   });
 
+  it.each([
+    ['', ''],
+    ['', 'Prestige is falling'],
+    ['Keep 10 wonders.', ''],
+    ['Keep 10 wonders.', 'Prestige is falling'],
+  ])(
+    'levelCond=%j levelReqStatus=%j: description stays fixed, badge and the two new fields parse correctly',
+    async (levelCond, levelReqStatus) => {
+      const fake = makeWebCtx();
+      const currLevel = levelCond ? 6 : 4;
+      fetchAsp(fake).mockResolvedValue(curriculumPage({ currLevel, levelCond, levelReqStatus }));
+      mockFetch.mockResolvedValue(htmlResponse(''));
+
+      const data = await fetchCurriculumData(fake.ctx);
+
+      expect(data.currentLevelDescription).toBe('You are a paradigm of industry.');
+      expect(data.currentLevelCondition).toBe(levelCond);
+      expect(data.levelReqStatus).toBe(levelReqStatus ? `${levelReqStatus}.` : '');
+      const badgeImage = currLevel <= 5 ? 'levelParadigm.gif' : 'levelLegendX.gif';
+      expect(data.currentLevelBadgeUrl).toBe(
+        '/proxy-image?url=' + encodeURIComponent(
+          `http://158.69.153.134/Five/0/Visual/Voyager/NewTycoon/images/${badgeImage}`
+        )
+      );
+    }
+  );
+
   // Regression guard for B-9. `function onAdvanceClick()` is declared
   // unconditionally in the <head> (:91), so `/onAdvanceClick/i.test(html)` was
   // ALWAYS true: the "level up" control was offered to players with no next
@@ -746,6 +778,9 @@ describe('fetchCurriculumData', () => {
       currentLevel: 0,
       currentLevelName: 'Apprentice',
       currentLevelDescription: '',
+      currentLevelBadgeUrl: '',
+      currentLevelCondition: '',
+      levelReqStatus: '',
       nextLevelName: '',
       nextLevelDescription: '',
       nextLevelRequirements: '',
@@ -809,6 +844,7 @@ describe('fetchCurriculumData', () => {
 
     expect(fake.log.warn).toHaveBeenCalledWith('[Profile] TycoonCurriculum.asp re-fetch for curriculum details failed');
     expect(data).toMatchObject({ currentLevel: 4, currentLevelName: 'Paradigm', prestige: 1234, rankings: [], curriculumItems: [], fortune: '123456789' });
+    expect(data.currentLevelBadgeUrl).toBe('');
     expect(setCache(fake)).not.toHaveBeenCalled();
   });
 

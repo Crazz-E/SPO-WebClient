@@ -297,6 +297,18 @@ function CurriculumTab() {
           {data.currentLevelDescription && (
             <div className={styles.levelDesc}>{data.currentLevelDescription}</div>
           )}
+          {data.currentLevelBadgeUrl && (
+            <img
+              className={styles.levelBadge}
+              src={data.currentLevelBadgeUrl}
+              alt={`${data.currentLevelName} level badge`}
+              width={80}
+              height={80}
+            />
+          )}
+          {data.currentLevelCondition && (
+            <div className={styles.levelCondition}>{data.currentLevelCondition}</div>
+          )}
           {data.canUpgrade && (
             <label className={styles.upgradeCheck}>
               <input
@@ -309,6 +321,11 @@ function CurriculumTab() {
             </label>
           )}
         </div>
+        {data.levelReqStatus && (
+          <div className={styles.levelReqStatus} role="alert">
+            {data.levelReqStatus}
+          </div>
+        )}
         {data.nextLevelName && (
           <div className={styles.levelCard}>
             <div className={styles.levelHeader}>Next Level</div>

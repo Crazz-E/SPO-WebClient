@@ -816,6 +816,12 @@ export interface CurriculumData {
   currentLevel: number;
   currentLevelName: string;
   currentLevelDescription: string;
+  /** Proxied URL of the level badge (TycoonCurriculum.asp:228-236), '' when the page has none. */
+  currentLevelBadgeUrl: string;
+  /** Obj.LevelCond — rendered only past level 5 (TycoonCurriculum.asp:245-249), '' otherwise. */
+  currentLevelCondition: string;
+  /** Obj.LevelReqStatus — the maroon banner (TycoonCurriculum.asp:262-266), '' when absent. */
+  levelReqStatus: string;
   nextLevelName: string;
   nextLevelDescription: string;
   nextLevelRequirements: string;

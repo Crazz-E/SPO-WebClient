@@ -17,6 +17,9 @@ const CURRICULUM_BASE: CurriculumData = {
   currentLevel: 4,
   currentLevelName: 'Paradigm',
   currentLevelDescription: 'You are a paradigm of industry.',
+  currentLevelBadgeUrl: '',
+  currentLevelCondition: '',
+  levelReqStatus: '',
   nextLevelName: 'Legend',
   nextLevelDescription: 'Legends shape worlds.',
   nextLevelRequirements: 'Prestige 5000 and 50 facilities',
@@ -192,5 +195,81 @@ describe('ProfilePanel — sections', () => {
 
     expect(screen.queryByText('Ability')).toBeNull();
     expect(screen.queryByText(/from the rankings/)).toBeNull();
+  });
+
+  it('shows the level badge when the page carries one', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({
+        ...CURRICULUM_BASE,
+        currentLevelBadgeUrl: '/proxy-image?url=x',
+      });
+    });
+
+    expect(screen.getByAltText(/level badge/)).toBeTruthy();
+  });
+
+  it('shows no level badge when the page carries none', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE });
+    });
+
+    expect(screen.queryByAltText(/level badge/)).toBeNull();
+  });
+
+  it('shows the level condition past tier 5', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({
+        ...CURRICULUM_BASE,
+        currentLevelCondition: 'Keep 10 wonders.',
+      });
+    });
+
+    expect(screen.getByText('Keep 10 wonders.')).toBeTruthy();
+  });
+
+  it('shows no level condition when the page carries none', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE });
+    });
+
+    expect(screen.queryByText('Keep 10 wonders.')).toBeNull();
+  });
+
+  it('shows the LevelReqStatus banner when present', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({
+        ...CURRICULUM_BASE,
+        levelReqStatus: 'Prestige is falling.',
+      });
+    });
+
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByText('Prestige is falling.')).toBeTruthy();
+  });
+
+  it('shows no banner when levelReqStatus is empty', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE });
+    });
+
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

@@ -259,6 +259,45 @@ function parseCurriculumDetails(
       .trim();
   }
 
+  // Level badge — src="images/level<Name>.gif" (:228-236), the first match on
+  // the page (the next-level column emits `level<Name>Disabled.gif`, later).
+  // Resolved against baseUrl and served through the same /proxy-image route
+  // as the avatar (:111).
+  let currentLevelBadgeUrl = '';
+  const badgeMatch = /images\/level(\w+)\.gif/i.exec(html);
+  if (badgeMatch && baseUrl) {
+    try {
+      currentLevelBadgeUrl = `/proxy-image?url=${encodeURIComponent(new URL(badgeMatch[0], baseUrl).href)}`;
+    } catch {
+      // unusable page URL — no badge
+    }
+  }
+
+  // Level condition — Obj.LevelCond (:245-249), the bare `<div class=label>`
+  // immediately after the description's closing `</div>`. Rendered by the
+  // page only when Obj.CurrLevel > 5; the parser just reports what is there.
+  let currentLevelCondition = '';
+  if (levelDescMatch) {
+    const afterDesc = html.slice(levelDescMatch.index + levelDescMatch[0].length);
+    const condMatch = /^\s*<div\s+class=label>\s*([\s\S]*?)\s*<\/div>/i.exec(afterDesc);
+    if (condMatch) {
+      currentLevelCondition = condMatch[1]
+        .replace(/<[^>]*>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+  }
+
+  // LevelReqStatus — the maroon banner (:262-266), rendered only when non-empty.
+  let levelReqStatus = '';
+  const bannerMatch = /<div\s+class=label\s+style="[^"]*background-color:\s*maroon[^"]*">\s*([\s\S]*?)\s*<\/div>/i.exec(html);
+  if (bannerMatch) {
+    levelReqStatus = bannerMatch[1]
+      .replace(/<[^>]*>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   // Next level name — second <div class=header1>
   let nextLevelName = '';
   const headerMatches = html.match(/<div\s+class=header1>\s*([^<]+)/gi);
@@ -362,6 +401,9 @@ function parseCurriculumDetails(
     currentLevel: level,
     currentLevelName: profile.levelName || levelNames[level] || 'Unknown',
     currentLevelDescription,
+    currentLevelBadgeUrl,
+    currentLevelCondition,
+    levelReqStatus,
     nextLevelName,
     nextLevelDescription,
     nextLevelRequirements,
