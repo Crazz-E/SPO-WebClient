@@ -70,6 +70,32 @@ describe('heartbeat', () => {
     touchHeartbeat(paths);
     expect(heartbeatAgeMs(paths)).toBeLessThan(5_000);
   });
+
+  it('reads null when the file exists but its content is not a parseable timestamp', () => {
+    const paths = tempBench();
+    fs.writeFileSync(paths.heartbeat, 'not a number\n', 'utf8');
+    expect(heartbeatAgeMs(paths)).toBeNull();
+  });
+
+  // Action B5.3: the contract is CONTENT, never mtime -- these two cases are the ones that tell
+  // them apart. A reader reverted to fs.statSync(...).mtimeMs would flip BOTH assertions below.
+  it('trusts content over mtime: stale content with a freshly-bumped mtime (e.g. an unrelated touch, a backup pass) still reads stale', () => {
+    const paths = tempBench();
+    const staleWrittenMs = Date.now() - HEARTBEAT_STALE_MS - 5_000;
+    fs.writeFileSync(paths.heartbeat, `${staleWrittenMs}\n`, 'utf8');
+    const freshTime = new Date();
+    fs.utimesSync(paths.heartbeat, freshTime, freshTime); // mtime says "just now"; content still says stale
+    expect(heartbeatAgeMs(paths)).toBeGreaterThan(HEARTBEAT_STALE_MS);
+  });
+
+  it('trusts content over mtime: fresh content with a stale mtime (e.g. a `cp -p`-preserved copy) still reads fresh', () => {
+    const paths = tempBench();
+    const freshWrittenMs = Date.now();
+    fs.writeFileSync(paths.heartbeat, `${freshWrittenMs}\n`, 'utf8');
+    const oldTime = new Date(Date.now() - 10 * 60 * 1000);
+    fs.utimesSync(paths.heartbeat, oldTime, oldTime); // mtime says 10 minutes old; content still says now
+    expect(heartbeatAgeMs(paths)).toBeLessThan(5_000);
+  });
 });
 
 describe('workerStatus — what a submitter learns at deposit time', () => {
