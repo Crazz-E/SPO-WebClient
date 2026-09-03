@@ -10,6 +10,7 @@ import type { FavoritesItem, ResearchInventionItem } from '../../shared/types';
 // Favorites protocol constants (from Delphi FavProtocol.pas)
 const FAV_PROP_SEP = '\x01';  // chrPropSeparator = char(1)
 const FAV_ITEM_SEP = '\x02';  // chrItemSeparator = char(2)
+const FAV_KIND_FOLDER = 0;    // fvkFolder — Kernel/FavProtocol.pas:6
 const FAV_KIND_LINK = 1;      // fvkLink — a bookmark with coordinates
 
 /**
@@ -37,10 +38,21 @@ export function parseFavoritesResponse(raw: string, parentPath = ''): FavoritesI
     if (fields.length < 4) continue;
 
     const kind = parseInt(fields[1], 10);
-    if (kind !== FAV_KIND_LINK) continue; // skip folders
-
     const id = parseInt(fields[0], 10);
     const name = fields[2];
+
+    if (kind === FAV_KIND_FOLDER) {
+      if (isNaN(id)) continue;
+      items.push({
+        id, name, x: 0, y: 0,
+        path: parentPath ? `${parentPath}/${id}` : String(id),
+        isFolder: true,
+        children: [],
+      });
+      continue;
+    }
+    if (kind !== FAV_KIND_LINK) continue; // skip unknown kinds
+
     const info = fields[3]; // "displayName,x,y,select"
 
     // Parse info cookie: last 3 comma-separated values are x, y, select

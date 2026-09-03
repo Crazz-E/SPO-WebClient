@@ -6,8 +6,8 @@
  * The tree lives inside the player's own `TTycoon` (`Kernel/Kernel.pas:11858-11910`,
  * delegating to `TFavorites`, `Kernel/Favorites.pas:190-305`) and is reached
  * through `TClientView` on the world socket
- * (`Interface Server/InterfaceServer.pas:200-204`). All four members are Delphi
- * `function`s, so every call is a `rdoCall` — the catalogue in
+ * (`Interface Server/InterfaceServer.pas:200-204`). Five members now — all
+ * Delphi `function`s, so every call is a `rdoCall` — the catalogue in
  * `src/shared/rdo-members.ts` carries the kinds and arities.
  *
  * An item is addressed by its **Location**: the '/'-separated path of ids that
@@ -23,8 +23,18 @@ import { rdoCall } from '../../shared/rdo-frame';
 import { parsePropertyResponse, isTrueOrdinal } from '../rdo-helpers';
 import { parseFavoritesResponse } from './session-utils';
 
+/** `fvkFolder` — a container (`Kernel/FavProtocol.pas:6`). */
+const FAV_KIND_FOLDER = 0;
 /** `fvkLink` — a bookmark with coordinates (`Kernel/FavProtocol.pas:7`). */
 const FAV_KIND_LINK = 1;
+
+/**
+ * Bounds on the recursive tree walk. The wire's sub-folder count
+ * deliberately is NOT used to skip a fetch — it counts sub-folders, not
+ * links (`Favorites.pas:95-104`) — so these are the only limits.
+ */
+const FAV_FOLDER_DEPTH_CAP = 8;
+const FAV_FOLDER_COUNT_CAP = 50;
 
 /**
  * `TFavorites.RDORenameItem` truncates past 50 characters (`Favorites.pas:283`).
@@ -74,17 +84,46 @@ function composeLinkCookie(name: string, x: number, y: number): string {
 // PUBLIC FUNCTIONS
 // =========================================================================
 
-/** List the root of the tree — the facilities the Empire panel shows. */
-export async function fetchOwnedFacilities(ctx: SessionContext): Promise<FavoritesItem[]> {
-  const targetId = requireWorldContext(ctx);
-
+/** One `RDOFavoritesGetSubItems` read, at the given Location. */
+async function fetchSubItems(ctx: SessionContext, targetId: string, path: string): Promise<FavoritesItem[]> {
   const packet = await ctx.sendRdoRequest('world', rdoCall(
     'RDOFavoritesGetSubItems', targetId,
-    RdoValue.string(''),
+    RdoValue.string(path),
   ).packet, undefined, TimeoutCategory.NORMAL);
 
   const raw = parsePropertyResponse(packet.payload!, 'res');
-  return parseFavoritesResponse(raw);
+  return parseFavoritesResponse(raw, path);
+}
+
+/**
+ * List the root of the tree — the facilities the Empire panel shows — and
+ * walk every folder found to fill its `children`, breadth-first, one socket,
+ * serial awaits. A folder beyond either cap keeps `children: []` rather than
+ * being fetched further.
+ */
+export async function fetchOwnedFacilities(ctx: SessionContext): Promise<FavoritesItem[]> {
+  const targetId = requireWorldContext(ctx);
+
+  const root = await fetchSubItems(ctx, targetId, '');
+
+  let frontier = root.filter((item) => item.isFolder);
+  let depth = 0;
+  let fetched = 0;
+  while (frontier.length > 0 && depth < FAV_FOLDER_DEPTH_CAP) {
+    const next: FavoritesItem[] = [];
+    for (const folder of frontier) {
+      if (fetched >= FAV_FOLDER_COUNT_CAP) break;
+      fetched++;
+      folder.children = await fetchSubItems(ctx, targetId, folder.path);
+      for (const child of folder.children) {
+        if (child.isFolder) next.push(child);
+      }
+    }
+    frontier = next;
+    depth++;
+  }
+
+  return root;
 }
 
 /**
@@ -117,6 +156,62 @@ export async function addFavorite(
   }
   ctx.log.warn(`[Favorites] RDOFavoritesNewItem refused "${trimmed}" (res="${res}")`);
   return { success: false, message: 'The server refused to add this favourite.' };
+}
+
+/**
+ * Create a folder at a given Location.
+ *
+ * Same call and the same result reading as `addFavorite` — `RDOFavoritesNewItem`
+ * with `Kind = fvkFolder` and an empty `Info` cookie, since a folder carries
+ * none (`Favorites.pas:190-206`).
+ */
+export async function createFavoriteFolder(
+  ctx: SessionContext, parentPath: string, name: string,
+): Promise<FavoriteMutationResult> {
+  const targetId = requireWorldContext(ctx);
+  const trimmed = name.slice(0, FAV_NAME_MAX);
+
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'RDOFavoritesNewItem', targetId,
+    RdoValue.string(parentPath),
+    RdoValue.int(FAV_KIND_FOLDER),
+    RdoValue.string(trimmed),
+    RdoValue.string(''),
+  ).packet, undefined, TimeoutCategory.NORMAL);
+
+  const res = readResult(packet.payload);
+  const id = parseInt(res, 10);
+  if (Number.isFinite(id) && id > 0) {
+    return { success: true, id };
+  }
+  ctx.log.warn(`[Favorites] RDOFavoritesNewItem (folder) refused "${trimmed}" (res="${res}")`);
+  return { success: false, message: 'The server refused to create this folder.' };
+}
+
+/**
+ * Move one item by its Location to another.
+ *
+ * `RDOFavoritesMoveItem` answers a boolean, refusing the root and any move
+ * into a Location that starts with the item's own path
+ * (`Favorites.pas:239-273`, guard at `:247`) — no client-side cycle guard is
+ * needed on top of it.
+ */
+export async function moveFavorite(
+  ctx: SessionContext, itemPath: string, destPath: string,
+): Promise<FavoriteMutationResult> {
+  const targetId = requireWorldContext(ctx);
+
+  const packet = await ctx.sendRdoRequest('world', rdoCall(
+    'RDOFavoritesMoveItem', targetId,
+    RdoValue.string(itemPath),
+    RdoValue.string(destPath),
+  ).packet, undefined, TimeoutCategory.NORMAL);
+
+  if (isTrueOrdinal(readResult(packet.payload))) {
+    return { success: true };
+  }
+  ctx.log.warn(`[Favorites] RDOFavoritesMoveItem refused "${itemPath}" -> "${destPath}"`);
+  return { success: false, message: 'The server refused to move this favourite.' };
 }
 
 /**
