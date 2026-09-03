@@ -861,6 +861,31 @@
   margin-bottom: var(--space-2);
 }
 
+.levelBadge {
+  display: block;
+  width: 80px;
+  height: 80px;
+  margin-bottom: var(--space-2);
+}
+
+.levelCondition {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-2);
+}
+
+/* Obj.LevelReqStatus — TycoonCurriculum.asp:263 renders it white on maroon, bold, centred. */
+.levelReqStatus {
+  background: maroon;
+  color: #fff;
+  font-weight: var(--font-bold);
+  font-size: var(--text-xs);
+  text-align: center;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+}
+
 .levelReqs {
   font-size: var(--text-xs);
   color: var(--text-muted);
