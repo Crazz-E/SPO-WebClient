@@ -20,6 +20,7 @@ import {
   shouldGate,
   treeOf,
   type QueueEntry,
+  type ReuseCandidate,
 } from './merge-queue';
 
 const SHA_A = 'a'.repeat(40);
@@ -168,24 +169,61 @@ describe('fetchEntry — the objects have to be local before the tree can be rea
 });
 
 describe('mayReuseVerdict — a live slot only where it proves something', () => {
-  const passing = { head: SHA_B, tree: 'T1', verdict: 'PASS', fingerprintStable: true };
+  const passing = { head: SHA_B, tree: 'T1', verdict: 'PASS' };
+  const ran = { status: 'ran' as const, flows: ['login-spine'] };
+  const legitSkip = { status: 'skipped' as const, why: 'nothing observable over the wire', required: [] };
+  const requiredSkip = { status: 'skipped' as const, why: 'requires --live', required: ['login-spine'] };
+  const unknown = { status: 'unknown' as const, why: 'no gate artifact was recorded for this run' };
 
   it('reuses a PASS that shares the tree — identical code proves nothing twice', () => {
     // The common case with one entry at a time: nothing landed between the PR head's gate
     // and its turn, so the merge commit differs while its tree does not.
-    const decision = mayReuseVerdict('T1', [passing]);
+    const decision = mayReuseVerdict('T1', [{ ...passing, live: ran }]);
     expect(decision.reuseFrom).toBe(SHA_B);
     expect(decision.why).toMatch(/identical tree/);
   });
 
   it('drives when the tree differs — that is main having moved, the case worth paying for', () => {
-    expect(mayReuseVerdict('T2', [passing]).reuseFrom).toBeNull();
+    expect(mayReuseVerdict('T2', [{ ...passing, live: ran }]).reuseFrom).toBeNull();
+  });
+
+  // B2.4 — the reuse rule now also asks what the source's OWN gate proved.
+  it('reuses a source whose live stage ran and covers this entry', () => {
+    expect(mayReuseVerdict('T1', [{ ...passing, live: ran }]).reuseFrom).toBe(SHA_B);
+  });
+
+  // The 15-record case the corpus audit found: a source whose own router required live
+  // flows but whose own gate skipped them anyway. Reusing it would propagate a
+  // static-only PASS forward as if it were live — exactly the bug B2.4 closes.
+  it('refuses reuse from a source that is itself a `requires --live` skip', () => {
+    const decision = mayReuseVerdict('T1', [{ ...passing, live: requiredSkip }]);
+    expect(decision.reuseFrom).toBeNull();
+    expect(decision.why).toBe('no passing attestation shares this tree');
+  });
+
+  it('reuses a source that legitimately skipped — nothing was owed, nothing is missing', () => {
+    expect(mayReuseVerdict('T1', [{ ...passing, live: legitSkip }]).reuseFrom).toBe(SHA_B);
+  });
+
+  // Disposition for `'unknown'` and for the legacy shape with no `live` key at all: allow.
+  // Refusing every unrecorded-liveness reuse would strand the merge queue on a verdict
+  // that never had a chance to answer at all, instead of closing the one proven hole (the
+  // required-skip case above). This is `mayReuseVerdict`'s own rule regardless of source:
+  // worker.ts's `attested()` now resolves most legacy verdicts' `live` from their gate
+  // artifact before this function ever sees them (see merge-queue.ts's own doc comment for
+  // the measured counts), but the carve-out still has to exist for what even that cannot
+  // answer — verdicts are never purged, so that remainder does not shrink on its own.
+  it("reuses a source whose liveness is 'unknown' rather than stranding the queue", () => {
+    expect(mayReuseVerdict('T1', [{ ...passing, live: unknown }]).reuseFrom).toBe(SHA_B);
+  });
+
+  it('reuses a source with no `live` key at all — the pre-B2.4 legacy shape', () => {
+    expect(mayReuseVerdict('T1', [passing]).reuseFrom).toBe(SHA_B);
   });
 
   it.each([
-    ['a FAIL', { ...passing, verdict: 'FAIL' }],
-    ['an unstable PASS', { ...passing, fingerprintStable: false }],
-    ['an attestation with no readable tree', { ...passing, tree: null }],
+    ['a FAIL', { ...passing, verdict: 'FAIL', live: ran }],
+    ['an attestation with no readable tree', { ...passing, tree: null, live: ran }],
   ])('never reuses %s', (_label, attestation) => {
     expect(mayReuseVerdict('T1', [attestation]).reuseFrom).toBeNull();
   });
@@ -193,7 +231,7 @@ describe('mayReuseVerdict — a live slot only where it proves something', () =>
   it('drives when the entry tree itself could not be read', () => {
     // Fails toward driving. Reusing on an unknown tree would publish a PASS for code
     // nobody has looked at.
-    expect(mayReuseVerdict(null, [passing]).reuseFrom).toBeNull();
+    expect(mayReuseVerdict(null, [{ ...passing, live: ran }]).reuseFrom).toBeNull();
   });
 
   it('drives when there is nothing attested at all', () => {
@@ -211,7 +249,7 @@ describe('serveMergeQueue — one pass over the queue', () => {
 
   function recorder(
     refs: string,
-    attested: { head: string; tree: string | null; verdict: string; fingerprintStable: boolean }[] = [],
+    attested: ReuseCandidate[] = [],
     trees: Record<string, string> = {},
     pending: (sha: string) => boolean = () => false,
     fetched: string[] = [],
@@ -263,7 +301,7 @@ describe('serveMergeQueue — one pass over the queue', () => {
     const fetched: string[] = [];
     const r = recorder(
       `${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`,
-      [{ head: SHA_B, tree: 'T1', verdict: 'PASS', fingerprintStable: true }],
+      [{ head: SHA_B, tree: 'T1', verdict: 'PASS', live: { status: 'ran', flows: [] } }],
       { [SHA_A]: 'T1' },
       () => false,
       fetched,
@@ -281,7 +319,7 @@ describe('serveMergeQueue — one pass over the queue', () => {
     // nothing is reused, and the entry takes the live drive it would have taken anyway.
     const r = recorder(
       `${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`,
-      [{ head: SHA_B, tree: 'T1', verdict: 'PASS', fingerprintStable: true }],
+      [{ head: SHA_B, tree: 'T1', verdict: 'PASS', live: { status: 'ran', flows: [] } }],
       { [SHA_A]: 'T1' },
     );
     const inner = r.deps.git;
@@ -299,7 +337,7 @@ describe('serveMergeQueue — one pass over the queue', () => {
   it('gates rather than reuses when the tree differs — main moved', () => {
     const r = recorder(
       `${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`,
-      [{ head: SHA_B, tree: 'T1', verdict: 'PASS', fingerprintStable: true }],
+      [{ head: SHA_B, tree: 'T1', verdict: 'PASS', live: { status: 'ran', flows: [] } }],
       { [SHA_A]: 'T2' },
     );
     serveMergeQueue(r.deps);
@@ -309,7 +347,7 @@ describe('serveMergeQueue — one pass over the queue', () => {
 
   it('skips an entry that already carries a status', () => {
     const r = recorder(`${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`, [
-      { head: SHA_A, tree: 'T1', verdict: 'PASS', fingerprintStable: true },
+      { head: SHA_A, tree: 'T1', verdict: 'PASS', live: { status: 'ran', flows: [] } },
     ]);
     expect(serveMergeQueue(r.deps)).toBe(0);
     expect(r.deposited).toHaveLength(0);
@@ -327,7 +365,7 @@ describe('serveMergeQueue — one pass over the queue', () => {
         `${SHA_A}\trefs/heads/gh-readonly-queue/main/pr-1-abc`,
         `${SHA_B}\trefs/heads/gh-readonly-queue/main/pr-2-abc`,
       ].join('\n'),
-      [{ head: 'c'.repeat(40), tree: 'T1', verdict: 'PASS', fingerprintStable: true }],
+      [{ head: 'c'.repeat(40), tree: 'T1', verdict: 'PASS', live: { status: 'ran', flows: [] } }],
       { [SHA_A]: 'T1' },
     );
     expect(serveMergeQueue(r.deps)).toBe(2);

@@ -121,7 +121,6 @@ function benchWith(dir: string, attestation: Record<string, unknown>): string {
     branch: 'fix/scratch',
     worktree: toplevelOf(dir),
     verdict: 'PASS',
-    fingerprintStable: true,
     jobId: 'job-test',
     createdAt: new Date().toISOString(),
     ...attestation,
