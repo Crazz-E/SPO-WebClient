@@ -17,6 +17,9 @@ const CURRICULUM_BASE: CurriculumData = {
   currentLevel: 4,
   currentLevelName: 'Paradigm',
   currentLevelDescription: 'You are a paradigm of industry.',
+  currentLevelBadgeUrl: '/proxy-image?url=x',
+  currentLevelCondition: '',
+  levelReqStatus: '',
   nextLevelName: 'Legend',
   nextLevelDescription: 'Legends shape worlds.',
   nextLevelRequirements: 'Prestige 5000 and 50 facilities',
@@ -192,5 +195,51 @@ describe('ProfilePanel — sections', () => {
 
     expect(screen.queryByText('Ability')).toBeNull();
     expect(screen.queryByText(/from the rankings/)).toBeNull();
+  });
+
+  it('shows the level badge when the page carries one, and none otherwise', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE });
+    });
+    expect(screen.getByAltText(/level badge/)).toBeTruthy();
+
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE, currentLevelBadgeUrl: '' });
+    });
+    expect(screen.queryByAltText(/level badge/)).toBeNull();
+  });
+
+  it('shows the level condition past tier 5, and hides it otherwise', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE });
+    });
+    expect(screen.queryByText('Keep 10 wonders.')).toBeNull();
+
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE, currentLevelCondition: 'Keep 10 wonders.' });
+    });
+    expect(screen.getByText('Keep 10 wonders.')).toBeTruthy();
+  });
+
+  it('shows the missed-requirement banner when LevelReqStatus is present, and no banner otherwise', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Curriculum');
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE });
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    act(() => {
+      useProfileStore.getState().setCurriculum({ ...CURRICULUM_BASE, levelReqStatus: 'Prestige is falling.' });
+    });
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toBe('Prestige is falling.');
   });
 });

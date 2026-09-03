@@ -259,6 +259,48 @@ function parseCurriculumDetails(
       .trim();
   }
 
+  // Level badge — src="images/level<Name>.gif" (:228-236); the first match on
+  // the page is the current level's image (the next-level column emits
+  // `level<Name>Disabled.gif`, which appears later). Resolved against the
+  // page URL and served through the proxy already used for the avatar (:111).
+  let currentLevelBadgeUrl = '';
+  const badgeMatch = /images\/level(\w+)\.gif/i.exec(html);
+  if (badgeMatch && baseUrl) {
+    try {
+      currentLevelBadgeUrl = `/proxy-image?url=${encodeURIComponent(new URL(badgeMatch[0], baseUrl).href)}`;
+    } catch {
+      // unusable page URL — no badge
+    }
+  }
+
+  // Level condition — Obj.LevelCond (:245-249), the only bare
+  // `<div class=label>` that can immediately follow the description's
+  // closing `</div>`: the upgrade box (:250-260) and the banner (:262-266)
+  // both carry a `style=` attribute. Anchored on the description match so it
+  // never competes with it for the same text.
+  let currentLevelCondition = '';
+  if (levelDescMatch) {
+    const afterDesc = html.slice(levelDescMatch.index + levelDescMatch[0].length);
+    const condMatch = /^\s*<div\s+class=label>\s*([\s\S]*?)\s*<\/div>/i.exec(afterDesc);
+    if (condMatch) {
+      currentLevelCondition = condMatch[1]
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+  }
+
+  // Missed-requirement banner — Obj.LevelReqStatus (:262-266), rendered white
+  // on maroon when non-empty. The ASP appends a literal `.` (:264), kept.
+  let levelReqStatus = '';
+  const bannerMatch = /<div\s+class=label\s+style="[^"]*background-color:\s*maroon[^"]*">\s*([\s\S]*?)\s*<\/div>/i.exec(html);
+  if (bannerMatch) {
+    levelReqStatus = bannerMatch[1]
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   // Next level name — second <div class=header1>
   let nextLevelName = '';
   const headerMatches = html.match(/<div\s+class=header1>\s*([^<]+)/gi);
@@ -362,6 +404,9 @@ function parseCurriculumDetails(
     currentLevel: level,
     currentLevelName: profile.levelName || levelNames[level] || 'Unknown',
     currentLevelDescription,
+    currentLevelBadgeUrl,
+    currentLevelCondition,
+    levelReqStatus,
     nextLevelName,
     nextLevelDescription,
     nextLevelRequirements,
