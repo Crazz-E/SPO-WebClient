@@ -157,6 +157,29 @@ describe('runLive', () => {
 
     expect(runFlow.mock.calls[0][1].survivalLogUrl).toBe('http://logs/S.log');
   });
+
+  it('carries the sha it was told to drive through to the result, when the caller knows one', async () => {
+    jest.spyOn(preflightModule, 'preflight').mockResolvedValue(okPreflight);
+    jest.spyOn(flowsModule, 'runFlow').mockImplementation(async flow => passingFlow(flow.name));
+
+    const result = await runLive({
+      flows: ['login-spine'],
+      branch: 'main',
+      sha: 'a'.repeat(40),
+      lock: tempLock(),
+    });
+
+    expect(result.sha).toBe('a'.repeat(40));
+  });
+
+  it('leaves sha unset for an ad hoc run nobody told the commit to — absent, not a guess', async () => {
+    jest.spyOn(preflightModule, 'preflight').mockResolvedValue(okPreflight);
+    jest.spyOn(flowsModule, 'runFlow').mockImplementation(async flow => passingFlow(flow.name));
+
+    const result = await runLive({ flows: ['login-spine'], branch: 'fix/a', lock: tempLock() });
+
+    expect(result.sha).toBeUndefined();
+  });
 });
 
 describe('formatSummary', () => {
@@ -223,6 +246,16 @@ describe('formatSummary', () => {
     expect(summary).toContain('restored=true');
   });
 
+  it('includes a short sha in the headline when the run named one', () => {
+    expect(formatSummary({ ...base, status: 'PASS', sha: 'c'.repeat(40) })).toContain(
+      `L2 live drive on planitia — PASS (${'c'.repeat(8)})`,
+    );
+  });
+
+  it('omits the sha suffix entirely when none was recorded, rather than printing a blank or "undefined"', () => {
+    expect(formatSummary({ ...base, status: 'PASS' })).toBe('L2 live drive on planitia — PASS');
+  });
+
   it('surfaces failed pre-flight checks', () => {
     const summary = formatSummary({
       ...base,
@@ -276,6 +309,18 @@ describe('main', () => {
     });
   });
 
+  it('forwards the sha flag to the runner, when the caller (the worker) passed one', async () => {
+    const runner = jest.fn(async (_options: LiveRunOptions) => result);
+    await main(['--flows=login-spine', '--branch=fix/x', `--sha=${'b'.repeat(40)}`], runner, sink().stream);
+    expect(runner.mock.calls[0][0]).toMatchObject({ branch: 'fix/x', sha: 'b'.repeat(40) });
+  });
+
+  it('leaves sha unset when no --sha flag was given — never a default that could collide', async () => {
+    const runner = jest.fn(async (_options: LiveRunOptions) => result);
+    await main(['--flows=login-spine'], runner, sink().stream);
+    expect(runner.mock.calls[0][0].sha).toBeUndefined();
+  });
+
   it('forwards the capabilities the caller asked for, and refuses an unknown one', async () => {
     const runner = jest.fn(async (_options: LiveRunOptions) => result);
     await main(['--flows=login-spine', '--capabilities=president'], runner, sink().stream);
@@ -291,6 +336,25 @@ describe('main', () => {
     const expected = path.join('report', 'e2e', 'live-2026-08-21T10-00-00-000Z.json');
     expect(out.text()).toContain(expected);
     expect(JSON.parse(fs.readFileSync(expected, 'utf8')).status).toBe('PASS');
+    fs.unlinkSync(expected);
+  });
+
+  it('writes the sha into the run artifact when the result carries one', async () => {
+    const withSha = { ...result, sha: 'd'.repeat(40) };
+    const out = sink();
+    await main(['--flows=login-spine'], async () => withSha, out.stream);
+    const expected = path.join('report', 'e2e', 'live-2026-08-21T10-00-00-000Z.json');
+    expect(JSON.parse(fs.readFileSync(expected, 'utf8')).sha).toBe('d'.repeat(40));
+    fs.unlinkSync(expected);
+  });
+
+  it('writes no sha key at all when the result has none — absent, never a null or empty placeholder a reader could mistake for a match', async () => {
+    const out = sink();
+    await main(['--flows=login-spine'], async () => result, out.stream);
+    const expected = path.join('report', 'e2e', 'live-2026-08-21T10-00-00-000Z.json');
+    expect(Object.prototype.hasOwnProperty.call(JSON.parse(fs.readFileSync(expected, 'utf8')), 'sha')).toBe(
+      false,
+    );
     fs.unlinkSync(expected);
   });
 
