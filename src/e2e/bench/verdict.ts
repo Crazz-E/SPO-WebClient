@@ -67,6 +67,20 @@ export type StaticProofAttestation =
   | { status: 'unknown' };
 
 export interface BenchVerdict {
+  /**
+   * The DEPOSITED sha — what the submitter (a push, a merge-queue entry) asked to gate.
+   * Also this file's own name (`verdicts/<head>.json`) and what
+   * `.claude/hooks/pre-push-gate.sh` and the GitHub commit status look this record up by.
+   *
+   * This is NOT always the sha `scripts/verify-gate.js` actually ran against: a `ref` job
+   * whose checkout got merged with `origin/main` before gating (see {@link merged}) checks
+   * out a fresh merge commit, and the gate artifact is filed under THAT sha
+   * (`report/e2e/gate-<sha>.json`), never this one. {@link gatedSha} names it explicitly,
+   * so a reader never has to guess which sha `head` means in which file
+   * (SPO-Pipeline/doc/bench-audit-2026-09-02.md, D6). `merged`/`mergedBase` answer WHETHER a merge
+   * happened and AGAINST WHAT; `gatedSha` answers WHAT ACTUALLY GOT TESTED — distinct
+   * questions, and none of the three substitutes for another.
+   */
   head: string;
   branch: string;
   /** The worktree the attestation was produced for — the hook matches it to the pusher. */
@@ -111,6 +125,47 @@ export interface BenchVerdict {
    * live slot to re-prove byte-identical code. See ./merge-queue.
    */
   tree?: string;
+  /**
+   * The sha this record's `head` was actually checked out and tested as — identical to
+   * `head` for a plain (non-merged) gate, and equal to the merge commit's sha when
+   * {@link merged} is true. This is the sha `scripts/verify-gate.js` named its artifact
+   * after (`report/e2e/gate-<gatedSha>.json`), so a reader holding only this verdict can
+   * find that artifact directly — no git lookup required (B4.1,
+   * SPO-Pipeline/doc/bench-audit-2026-09-02.md D6). Always recorded, even when it equals `head`, so a
+   * reader never has to infer which case this is. Absent on a verdict written before this
+   * field existed.
+   *
+   * ALWAYS ABSENT on a reuse copy ({@link reusedFrom} set). `head` was never checked out
+   * for a reuse copy at all — there is no sha to name here, and copying the source's
+   * `gatedSha` onto a different `head` would describe evidence for a commit this record
+   * did not gate while looking exactly like this record's own. See
+   * {@link reusedGatedSha} for the (distinctly named) equivalent fact about the source.
+   */
+  gatedSha?: string;
+  /**
+   * `head`, spelled out under the name the gate artifact's matching field uses
+   * (`depositedSha`) — so a reader who arrived here FROM the artifact (via `gatedSha`,
+   * above) can confirm the pair without remembering that this file calls the same fact
+   * `head` and the artifact calls it `depositedSha`. Always equal to `head`; present for
+   * symmetry with the artifact, not because it can ever differ from it. Absent on a
+   * verdict written before this field existed.
+   */
+  depositedSha?: string;
+  /**
+   * Present ONLY on a reuse copy ({@link reusedFrom} set): the source verdict's own
+   * {@link gatedSha} at the moment it was copied — i.e. the gate artifact that holds the
+   * REAL evidence backing this reuse (`report/e2e/gate-<reusedGatedSha>.json`), filed
+   * under a commit this record's `head` never was.
+   *
+   * Deliberately NOT named `gatedSha`: this record's `head` (the queue entry's own sha)
+   * was never checked out or tested, so a field named `gatedSha` here would read as this
+   * record's own evidence when it instead describes a different commit entirely — the
+   * exact defect this field's introduction fixes (F1,
+   * SPO-Pipeline/doc/bench-audit-2026-09-02.md). A reader who wants the underlying
+   * artifact for a reuse copy must come here, not to `gatedSha`, which this record never
+   * sets.
+   */
+  reusedGatedSha?: string;
   jobId: string;
   /**
    * The sha whose live drive this attestation copies; absent = not a reuse.

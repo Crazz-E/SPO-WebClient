@@ -12,6 +12,7 @@ import {
   liveAttestationFrom,
   main,
   mergeQueueDeps,
+  nextGateAttempt,
   processOldest,
   realRunCommand,
   realWorkerDeps,
@@ -552,18 +553,42 @@ describe('processOldest — the queue discipline', () => {
 describe('runJob — gate', () => {
   it('builds in the worktree, then runs verify-gate with the shared world state', async () => {
     const h = harness();
-    const job = deposit(h, 'ref', ['--attempt=2']);
+    const job = deposit(h);
     await runJob(h.deps, job);
     expect(h.commands[0]).toMatchObject({ cmd: 'git', args: ['fetch', '--quiet', 'origin', 'main'], cwd: h.worktree });
     expect(h.commands[1]).toMatchObject({ cmd: 'npm', args: ['run', 'build:server'], cwd: h.worktree });
+    // B4.1/B4.3: the worker always tells verify-gate.js the deposited sha and this
+    // target's attempt count, ahead of anything a caller supplied in request.args.
+    const depositedSha = `head-of-${path.basename(h.worktree)}`;
     expect(h.commands[2]).toMatchObject({
       cmd: 'node',
-      args: ['scripts/verify-gate.js', '--live', '--attempt=2'],
+      args: ['scripts/verify-gate.js', '--live', `--deposited-sha=${depositedSha}`, '--attempt=1'],
       cwd: h.worktree,
     });
     expect(h.commands[2].env?.E2E_WORLD_STATE_DIR).toBe(h.paths.world);
     expect(h.gatewayStarts).toEqual([h.worktree]);
     expect(h.gatewayStops).toBe(1);
+  });
+
+  it('places its own --deposited-sha/--attempt ahead of request.args, so its own values win', async () => {
+    // flag() in verify-gate.js resolves the FIRST match in argv — a caller-forwarded
+    // --attempt must never override the count the bench itself is tracking (B4.3), which
+    // is exactly the class of bug that let 314 of 314 real artifacts read attempt: 1.
+    const h = harness();
+    const job = deposit(h, 'ref', ['--attempt=99', '--flows=login-spine']);
+    await runJob(h.deps, job);
+    const depositedSha = `head-of-${path.basename(h.worktree)}`;
+    expect(h.commands[2]).toMatchObject({
+      cmd: 'node',
+      args: [
+        'scripts/verify-gate.js',
+        '--live',
+        `--deposited-sha=${depositedSha}`,
+        '--attempt=1',
+        '--attempt=99',
+        '--flows=login-spine',
+      ],
+    });
   });
 
   it('points the gateway and the body at the bench-wide asset cache, not the worktree', async () => {
@@ -1090,6 +1115,162 @@ describe('runJob — ref: gating a commit the worker fetched', () => {
       expect(verdict.head).toBe(ref);
       expect(verdict.head).not.toBe(`head-of-${path.basename(h.worktree)}`);
     });
+
+    // B4.1 — D6: the artifact and the verdict used to be filed under different shas with
+    // nothing connecting them. This proves the join works starting from EITHER file,
+    // using only what each file itself records — no git lookup.
+    it('records both shas in the verdict, and gatedSha names exactly the artifact this run wrote (D6 join)', async () => {
+      const h = harness();
+      h.prepareRefMerged = true;
+      const ref = 'a'.repeat(40);
+      const job = depositRef(h, ref);
+
+      await processOldest(h.deps);
+
+      const verdict = listVerdicts(h.paths)[0].verdict;
+      const report = h.spool.readReport(job.id);
+
+      // Direction 1 — starting from the DEPOSITED sha (this verdict's own filename basis),
+      // the verdict names the GATED sha explicitly.
+      expect(verdict.depositedSha).toBe(ref);
+      expect(verdict.gatedSha).toBe(`head-of-${path.basename(h.worktree)}`); // the merge commit HEAD
+      expect(verdict.gatedSha).not.toBe(ref); // a real merge ran; the two really do differ
+
+      // Direction 2 — `gatedSha` is exactly the sha `gateArtifactPath` used to file the
+      // artifact this run actually produced (report.gateArtifact, read back from done/).
+      // A reader who only has the verdict can build that path without ever calling git.
+      expect(report?.gateArtifact).toBe(
+        path.join(h.worktree, 'report', 'e2e', `gate-${verdict.gatedSha}.json`),
+      );
+    });
+
+    it('falls back to the deposited sha for gatedSha when a merge conflict means nothing was ever checked out', async () => {
+      // A merge conflict returns before the worktree is ever fingerprinted (prepareRef has
+      // already run `merge --abort`) — report.fingerprints.atStart is never set, so there
+      // is no OTHER sha to name. gatedSha must still be present, not silently dropped.
+      const h = harness();
+      h.prepareRefConflictBase = 'deadbeef'.repeat(5);
+      const ref = 'e'.repeat(40);
+      depositRef(h, ref);
+
+      await processOldest(h.deps);
+
+      const verdict = listVerdicts(h.paths)[0].verdict;
+      expect(verdict.depositedSha).toBe(ref);
+      expect(verdict.gatedSha).toBe(ref);
+      expect(verdict.gatedSha).toBe(verdict.head);
+    });
+
+    // B4.3 — D8: attempt: 1 in 314 of 314 real artifacts, though at least one sha was
+    // demonstrably gated twice. The natural key is the DEPOSITED sha: a merge-queue
+    // re-gate keeps it constant even though the GATED sha (the merge commit) moves with
+    // `main` between runs — keying on the gated sha instead would still show attempt: 1
+    // both times, which is exactly the corpus's own shape for `3ef3d3c3`.
+    it('increments attempt on a re-gate of the identical deposited sha, and resets for a different one', async () => {
+      const h = harness();
+      const sha = 'b'.repeat(40);
+
+      depositRef(h, sha);
+      await processOldest(h.deps);
+      depositRef(h, sha); // the SAME target, gated a second time
+      await processOldest(h.deps);
+      depositRef(h, 'c'.repeat(40)); // a genuinely different target
+      await processOldest(h.deps);
+
+      const attemptFlags = h.commands
+        .filter(c => c.args[0] === 'scripts/verify-gate.js')
+        .map(c => c.args.find(a => a.startsWith('--attempt=')));
+      expect(attemptFlags).toEqual(['--attempt=1', '--attempt=2', '--attempt=1']);
+    });
+  });
+});
+
+// F2 (SPO-Pipeline/doc/bench-audit-2026-09-02.md): a malformed gate-attempts.json must
+// never fail the gate it is only supposed to be counting. Round 1's docstring claimed
+// "unreadable or missing is treated as empty rather than thrown", which was false for
+// every JSON-valid non-object: null and a string both threw a TypeError the moment the
+// old code assigned `counts[sha] = attempt` onto them, and a JSON array silently pinned
+// every attempt to 1 forever (JSON.stringify drops properties assigned past an array's
+// length, so it never threw at all). These tests cover all four shapes plus the two
+// non-fatal failure paths (persist failure, and the ENOENT/corruption logging split).
+describe('nextGateAttempt — F2: a malformed counter file must never fail the gate', () => {
+  function tmpRoot(): string {
+    return fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-attempts-'));
+  }
+  const sha = 'a'.repeat(40);
+
+  it('treats a missing file as empty, silently — no log for the ordinary first-run case', () => {
+    const root = tmpRoot();
+    const logs: string[] = [];
+    expect(nextGateAttempt(root, sha, m => logs.push(m))).toBe(1);
+    expect(logs).toEqual([]);
+    // And it persisted, so the next call increments rather than starting over.
+    expect(nextGateAttempt(root, sha, m => logs.push(m))).toBe(2);
+  });
+
+  it('resets and proceeds, without throwing, when the file holds a JSON null', () => {
+    const root = tmpRoot();
+    fs.writeFileSync(path.join(root, 'gate-attempts.json'), 'null', 'utf8');
+    const logs: string[] = [];
+    expect(() => nextGateAttempt(root, sha, m => logs.push(m))).not.toThrow();
+    expect(nextGateAttempt(root, sha)).toBe(2); // proves the reset write actually landed
+    expect(logs.some(m => m.includes('gate-attempts.json') && m.toLowerCase().includes('null'))).toBe(true);
+  });
+
+  it('resets and proceeds, without throwing, when the file holds a bare JSON string', () => {
+    const root = tmpRoot();
+    fs.writeFileSync(path.join(root, 'gate-attempts.json'), '"oops"', 'utf8');
+    const logs: string[] = [];
+    expect(() => nextGateAttempt(root, sha, m => logs.push(m))).not.toThrow();
+    expect(nextGateAttempt(root, sha)).toBe(2);
+    expect(logs.some(m => m.includes('gate-attempts.json'))).toBe(true);
+  });
+
+  it('resets and proceeds, without throwing, when the bytes are not valid JSON at all', () => {
+    const root = tmpRoot();
+    fs.writeFileSync(path.join(root, 'gate-attempts.json'), '{ not json at all', 'utf8');
+    const logs: string[] = [];
+    expect(() => nextGateAttempt(root, sha, m => logs.push(m))).not.toThrow();
+    expect(nextGateAttempt(root, sha)).toBe(2);
+    expect(logs.some(m => m.includes('gate-attempts.json'))).toBe(true);
+  });
+
+  // The important one: a JSON array never throws, so only asserting on the INCREMENTED
+  // value (not on the absence of a throw) catches it. Before this fix, `counts` would BE
+  // the array, `counts[sha] = 1` would set a non-index property JSON.stringify silently
+  // drops, and every subsequent call would read the same array back and compute
+  // `(counts[sha] ?? 0) + 1 === 1` again — attempt pinned to 1 forever, the exact defect
+  // B4.3 exists to remove, reintroduced one level in.
+  it('resets and proceeds when the file holds a JSON array — the shape that does not throw', () => {
+    const root = tmpRoot();
+    fs.writeFileSync(path.join(root, 'gate-attempts.json'), '["not", "a", "map"]', 'utf8');
+    const logs: string[] = [];
+    const first = nextGateAttempt(root, sha, m => logs.push(m));
+    expect(first).toBe(1);
+    const second = nextGateAttempt(root, sha, m => logs.push(m));
+    // The critical assertion: it actually incremented. A regression to the old bug would
+    // make this 1 again, not throw.
+    expect(second).toBe(2);
+    expect(logs.some(m => m.includes('gate-attempts.json') && m.toLowerCase().includes('array'))).toBe(true);
+  });
+
+  it('never throws and still returns a usable attempt when persisting the count fails', () => {
+    const root = tmpRoot();
+    fs.writeFileSync(path.join(root, 'gate-attempts.json'), JSON.stringify({ [sha]: 4 }), 'utf8');
+    fs.chmodSync(root, 0o500); // read + execute only: the tmp-then-rename write cannot land
+    try {
+      const logs: string[] = [];
+      let attempt = -1;
+      expect(() => {
+        attempt = nextGateAttempt(root, sha, m => logs.push(m));
+      }).not.toThrow();
+      // Computed in memory from the count it COULD read, even though persisting it failed —
+      // this call's own return value is still correct; only the NEXT call loses precision.
+      expect(attempt).toBe(5);
+      expect(logs.some(m => m.includes('could not persist'))).toBe(true);
+    } finally {
+      fs.chmodSync(root, 0o700); // restore so the harness can clean up the tmp dir
+    }
   });
 });
 
@@ -1744,6 +1925,44 @@ describe('mergeQueueDeps — what the queue service is given', () => {
     expect(copy.live).toEqual({ status: 'ran', flows: ['login-spine'] });
   });
 
+  // F1 (SPO-Pipeline/doc/bench-audit-2026-09-02.md): a reuse copy's `head` is the QUEUE
+  // ENTRY's sha, which is never checked out or gated — so the source's `gatedSha` must
+  // never ride along under that name onto the copy. A live example on disk (verdict
+  // `083e7a1c…`, `reusedFrom 95158cf2…`, `merged: true`, `mergedBase b31e6bc5…`) had
+  // every field but `reusedFrom` describing a commit other than its own `head` — a
+  // reader following `gatedSha` from that copy lands on the SOURCE's gate artifact
+  // believing it describes the copy.
+  it('never carries a gatedSha describing a commit it did not gate — the source gate travels under reusedGatedSha instead', () => {
+    const paths = bench();
+    const sourceGatedSha = 'g'.repeat(40); // the merge commit the SOURCE actually ran through verify-gate.js
+    writeVerdictIn(paths.verdicts, {
+      head: 'e'.repeat(40),
+      depositedSha: 'e'.repeat(40),
+      gatedSha: sourceGatedSha,
+      branch: 'x',
+      worktree: paths.refCheckout,
+      verdict: 'PASS',
+      merged: true,
+      mergedBase: 'base-sha',
+      tree: 'tree-9',
+      jobId: 'job-src',
+      createdAt: new Date().toISOString(),
+      published: true,
+    });
+
+    mergeQueueDeps(paths, () => {}).reuse('e'.repeat(40), 'f'.repeat(40), 'identical tree');
+
+    const copy = listVerdicts(paths).find(v => v.verdict.head === 'f'.repeat(40))!.verdict;
+    // The copy's head ('f'.repeat(40)) was never checked out — gatedSha must be absent,
+    // never the source's value under this record's own head.
+    expect(copy.gatedSha).toBeUndefined();
+    expect(copy).not.toHaveProperty('gatedSha');
+    // The real evidence is preserved, but under a name that cannot be mistaken for this
+    // record's own gate.
+    expect(copy.reusedGatedSha).toBe(sourceGatedSha);
+    expect(copy.depositedSha).toBe('f'.repeat(40));
+  });
+
   // Y2 — B2.5 deleted `fingerprintStable` from every reader and writer, not from the 515
   // verdicts already on file when it shipped. `{ ...source.verdict, ... }` spread any
   // extra key straight through, so reusing off one of those 515 resurrected the field
@@ -1802,6 +2021,41 @@ describe('mergeQueueDeps — what the queue service is given', () => {
     const final = listVerdicts(paths).find(v => v.verdict.head === shaD)!.verdict;
     expect(final.jobId).toBe('job-original');
     expect(final.reusedFrom).toBe(shaA);
+  });
+
+  // F1, mirroring the jobId/reusedFrom chain test just above: a reuse-of-a-reuse must
+  // still point at the ORIGINAL gate artifact, not at an intermediate copy that itself
+  // never carries gatedSha. Without the `sourceGatedSha ?? sourceReusedGatedSha` fallback,
+  // hop 2 (B->C) would copy `undefined` forward and the chain would go dark from there.
+  it('collapses reusedGatedSha to the original gate artifact across a reuse chain', () => {
+    const paths = bench();
+    const shaA = 'a'.repeat(40);
+    const shaB = 'b'.repeat(40);
+    const shaC = 'c'.repeat(40);
+    const shaD = 'd'.repeat(40);
+    const originalGatedSha = 'g'.repeat(40);
+    writeVerdictIn(paths.verdicts, {
+      head: shaA,
+      depositedSha: shaA,
+      gatedSha: originalGatedSha,
+      branch: 'x',
+      worktree: paths.refCheckout,
+      verdict: 'PASS',
+      tree: 'tree-chain',
+      jobId: 'job-original',
+      createdAt: new Date().toISOString(),
+      published: true,
+    });
+
+    const deps = mergeQueueDeps(paths, () => {});
+    deps.reuse(shaA, shaB, 'identical tree');
+    deps.reuse(shaB, shaC, 'identical tree');
+    deps.reuse(shaC, shaD, 'identical tree');
+
+    const final = listVerdicts(paths).find(v => v.verdict.head === shaD)!.verdict;
+    expect(final.reusedGatedSha).toBe(originalGatedSha);
+    expect(final.gatedSha).toBeUndefined();
+    expect(final).not.toHaveProperty('gatedSha');
   });
 
   it('does nothing when the source verdict has vanished — the next tick gates it', () => {

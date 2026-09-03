@@ -29,7 +29,15 @@
  *   node scripts/verify-gate.js --skip-static      # worker only: a receipt covers stage 1
  *   node scripts/verify-gate.js --skip-static --static-from=ci   # worker only: CI proved this sha
  *   node scripts/verify-gate.js --flows=login-spine,politics-write
- *   node scripts/verify-gate.js --attempt=2
+ *   node scripts/verify-gate.js --attempt=2               # worker only: the bench computes
+ *                                                          # and passes this — see worker.ts's
+ *                                                          # nextGateAttempt (B4.3)
+ *   node scripts/verify-gate.js --deposited-sha=<sha>      # worker only: the sha the submitter
+ *                                                          # actually asked to gate, when it
+ *                                                          # differs from HEAD (a merged-base
+ *                                                          # gate — see the artifact's
+ *                                                          # `depositedSha`/`gatedSha` fields,
+ *                                                          # B4.1, SPO-Pipeline/doc/bench-audit-2026-09-02.md D6)
  */
 
 const { execFileSync, execSync } = require('child_process');
@@ -210,11 +218,31 @@ async function main() {
   const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
   const files = changedFiles();
 
+  // The sha this run actually checked out and is about to test — this file's own filename
+  // basis (`gate-<head>.json`). Named `gatedSha` too, by the same name the verdict uses for
+  // it, so a reader never has to remember that this file calls it `head`.
+  const gatedSha = head;
+  // The sha the submitter actually asked to gate — equal to `head`/`gatedSha` unless the
+  // worker merged `origin/main` onto it first (a merge-queue / merged-base gate; see
+  // `worker.ts`'s `prepareRef`), in which case HEAD is now a merge commit nobody pushed and
+  // this is the only place that still names what was. Passed by the worker via
+  // `--deposited-sha`; a session invoking this directly has nothing to differ from HEAD, so
+  // it defaults to `head`. Recording both explicitly closes D6
+  // (SPO-Pipeline/doc/bench-audit-2026-09-02.md): the verdict keys on the deposited sha, this artifact
+  // keys on the gated one, and until now neither file said which sha the OTHER one meant.
+  const depositedSha = flag('deposited-sha') || head;
+
   const artifact = {
     head,
+    depositedSha,
+    gatedSha,
     branch,
     verdict: 'FAIL',
     createdAt: new Date().toISOString(),
+    // Supplied by the worker for a `ref` job — see `nextGateAttempt` in worker.ts (B4.3):
+    // it counts how many times THIS depositedSha has been sent through this script,
+    // so a re-gate of the identical target is never silently `attempt: 1` again. Defaults
+    // to 1 for a direct, worker-less invocation (nothing to count against).
     attempt: Number(flag('attempt') || 1),
     static: {},
     routing: {},

@@ -236,6 +236,39 @@ describe('stage 1 — static', () => {
     const run = runGate(scratchRepo(), ['--attempt=2'], { FAKE_NPM_FAIL: 'lint' });
     expect(run.artifact?.attempt).toBe(2);
   });
+
+  // B4.1 — D6: the artifact used to name only the sha it checked out (`head`), leaving no
+  // way to tell, from the artifact alone, what the submitter actually asked to gate when
+  // the worker had merged origin/main onto it first. --deposited-sha is how the worker
+  // (worker.ts's runJob) supplies that fact; this proves the SHIPPED script records both,
+  // under distinct names, whenever they differ.
+  it('records --deposited-sha separately from the checked-out HEAD it names the artifact after', () => {
+    const dir = scratchRepo();
+    const head = git(dir, 'rev-parse', 'HEAD');
+    const deposited = 'f'.repeat(40);
+
+    const run = runGate(dir, [`--deposited-sha=${deposited}`], { FAKE_NPM_FAIL: 'lint' });
+
+    // The artifact is still filed under HEAD — the filename convention is unchanged.
+    expect(run.artifact?.head).toBe(head);
+    // `gatedSha` spells out, under the verdict's own name for the same fact, exactly what
+    // got checked out — always present, even though here it is just `head` again.
+    expect(run.artifact?.gatedSha).toBe(head);
+    // `depositedSha` carries what the flag said, not what got checked out — the two are
+    // deliberately different in this test, the way they are for a real merged-base gate.
+    expect(run.artifact?.depositedSha).toBe(deposited);
+    expect(run.artifact?.depositedSha).not.toBe(run.artifact?.head);
+  });
+
+  it('defaults depositedSha to HEAD when no --deposited-sha is given — the common, non-merged case', () => {
+    const dir = scratchRepo();
+    const head = git(dir, 'rev-parse', 'HEAD');
+
+    const run = runGate(dir, [], { FAKE_NPM_FAIL: 'lint' });
+
+    expect(run.artifact?.depositedSha).toBe(head);
+    expect(run.artifact?.gatedSha).toBe(head);
+  });
 });
 
 describe('stage 2 — the diff handed to the exclusion scan', () => {
