@@ -17,8 +17,8 @@ import { WorldLock } from './world-lock';
 /**
  * Exit codes — matches `EXIT` in scripts/verify-gate.js, and read the same way by
  * `worker.ts`'s `GATE_EXIT_VERDICT`: 0 PASS, 1 FAIL, 2 BLOCKED (refused before driving
- * anything — a rate limit or a dirty world), 3 ENVIRONMENT (a preflight abort; does not
- * consume an attempt, doc/E2E-POLICY.md §8).
+ * anything — a dirty world or another live run already in flight), 3 ENVIRONMENT (a
+ * preflight abort; does not consume an attempt, doc/E2E-POLICY.md §8).
  */
 const EXIT: Readonly<Record<LiveRunResult['status'], number>> = {
   PASS: 0,
@@ -53,9 +53,8 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
   const startedAt = new Date().toISOString();
   const base = { world: WORLD_NAME, branch: options.branch, startedAt };
 
-  // A rate-limit or dirty-world refusal is a BLOCK, not a test failure: nothing ran.
+  // A dirty-world or single-flight refusal is a BLOCK, not a test failure: nothing ran.
   try {
-    lock.checkRateLimit(options.branch);
     lock.acquire(options.branch);
   } catch (err: unknown) {
     return {
@@ -83,7 +82,6 @@ export async function runLive(options: LiveRunOptions): Promise<LiveRunResult> {
     };
   }
 
-  lock.recordRun(options.branch);
   const results: FlowResult[] = [];
   const capabilities: CapabilityEvidence[] = [];
   let releaseError: string | undefined;

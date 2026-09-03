@@ -104,7 +104,13 @@ Jest `unit` + `component` projects, co-located `*.test.ts(x)`, per-directory thr
 ### L3 — Live Smoke (existing procedure, slimmed)
 - Keep Playwright-MCP + locked credentials (`SPO_test3` / Free Space / planitia — unchanged, still LOCKED).
 - Reduce E2E-SCENARIO.md's 17 phases to an 8-phase **read-only** smoke: server start → login → map render → zoom/rotate → stats → chat ping → one panel sweep → logout → server stop. Everything else moved to L2.
-- Cadence: before a release/deploy, or on demand — never in CI, never in a loop (SEC-N-3: live E2E traffic budget).
+- Cadence: before a release/deploy, or on demand — never in CI, never in a loop. This is
+  operator discipline, not a mechanised guard: the e2e layer's own live-run limiter that
+  once enforced "never in a loop" was removed 2026-09-03, not tuned (B3.5,
+  [bench-worker.md](bench-worker.md) §6). SEC-N-3 is a different rule — it routes load,
+  soak, reconnect-storm and fuzz *traffic* to the mock backend
+  ([production-security-policy.md](production-security-policy.md) §8); it does not cap how
+  often this live smoke may run.
 
 ### L4 — Production Behavior & Security Compliance (new)
 - **Stack:** Jest project `compliance` that boots the built server (`dist/server/server.js`) as a child process with `NODE_ENV=production`, `TRUST_PROXY=true`, `ENABLE_HSTS=true`, `LOG_JSON=true`, `LOG_FILE=<tmp>` and a mock RDO backend, then tests it **black-box** over real HTTP/WS sockets.

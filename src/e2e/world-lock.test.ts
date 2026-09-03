@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { WorldLock, WorldDirtyError } from './world-lock';
-import { LIMITS } from './config';
 
 function tempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'spo-e2e-lock-'));
@@ -109,79 +108,5 @@ describe('WorldLock — world dirty', () => {
     const dir = tempDir();
     fs.writeFileSync(path.join(dir, 'world-lock.json'), 'not json', 'utf8');
     expect(new WorldLock(dir).read().dirty).toBe(false);
-  });
-});
-
-describe('WorldLock — rate limiting', () => {
-  // The mechanism is exercised with pinned limits, not the shipping defaults: since
-  // 2026-08-22 the defaults are open (interval 0, cap 1000 — developer decision, the
-  // bench worker serializes live runs mechanically), so only injection reaches the
-  // refusal branches.
-  const TIGHT = { minIntervalMinutes: 10, maxRunsPerDay: 20 };
-
-  it('allows the first run on a branch', () => {
-    expect(() => new WorldLock(tempDir()).checkRateLimit('fix/a')).not.toThrow();
-  });
-
-  it('lets back-to-back runs through under the shipping defaults — the queue throttles, not the clock', () => {
-    const lock = new WorldLock(tempDir());
-    lock.recordRun('fix/a', new Date('2026-08-21T10:00:00Z'));
-    expect(LIMITS.minIntervalMinutes).toBe(0);
-    expect(() => lock.checkRateLimit('fix/a', new Date('2026-08-21T10:00:01Z'))).not.toThrow();
-  });
-
-  it('refuses a second run on the same branch inside the minimum interval', () => {
-    const lock = new WorldLock(tempDir());
-    const now = new Date('2026-08-21T10:00:00Z');
-    lock.recordRun('fix/a', now);
-    expect(() => lock.checkRateLimit('fix/a', new Date('2026-08-21T10:01:00Z'), TIGHT)).toThrow(
-      /minimum interval/,
-    );
-  });
-
-  it('allows the run once the interval has passed', () => {
-    const lock = new WorldLock(tempDir());
-    lock.recordRun('fix/a', new Date('2026-08-21T10:00:00Z'));
-    const later = new Date(Date.parse('2026-08-21T10:00:00Z') + (TIGHT.minIntervalMinutes + 1) * 60_000);
-    expect(() => lock.checkRateLimit('fix/a', later, TIGHT)).not.toThrow();
-  });
-
-  it('holds a run on one branch against a run on another', () => {
-    // A per-branch limiter is defeated by passing a different --branch on each retry, and
-    // the live server does not care which branch the traffic came from.
-    const lock = new WorldLock(tempDir());
-    lock.recordRun('fix/a', new Date('2026-08-21T10:00:00Z'));
-    expect(() => lock.checkRateLimit('fix/b', new Date('2026-08-21T10:01:00Z'), TIGHT)).toThrow(
-      /minimum interval/,
-    );
-  });
-
-  it('names the branch of the run that is holding the limiter', () => {
-    const lock = new WorldLock(tempDir());
-    lock.recordRun('fix/a', new Date('2026-08-21T10:00:00Z'));
-    expect(() =>
-      lock.checkRateLimit('fix/b', new Date('2026-08-21T10:01:00Z'), TIGHT),
-    ).toThrow(/fix\/a/);
-  });
-
-  it('refuses once the daily cap is reached', () => {
-    const lock = new WorldLock(tempDir());
-    const start = Date.parse('2026-08-21T00:00:00Z');
-    for (let i = 0; i < TIGHT.maxRunsPerDay; i++) {
-      lock.recordRun(`fix/${i}`, new Date(start + i * 60_000));
-    }
-    expect(() =>
-      lock.checkRateLimit('fix/new', new Date(start + 10 * 60 * 60_000), TIGHT),
-    ).toThrow(/Daily live-run cap/);
-  });
-
-  it('forgets runs older than 24 h', () => {
-    const lock = new WorldLock(tempDir());
-    const start = Date.parse('2026-08-20T00:00:00Z');
-    for (let i = 0; i < TIGHT.maxRunsPerDay; i++) {
-      lock.recordRun(`fix/${i}`, new Date(start + i * 60_000));
-    }
-    const nextDay = new Date(start + 26 * 60 * 60_000);
-    expect(() => lock.checkRateLimit('fix/new', nextDay, TIGHT)).not.toThrow();
   });
 });
