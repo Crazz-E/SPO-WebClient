@@ -13,6 +13,13 @@
 # merge without the worker's live evidence for its head sha — and neither can the
 # maintainer. Pushing a branch nobody has gated is now how a session ASKS to be gated.
 #
+# That justification is load-bearing, and it has failed once: `bench/gate` was REMOVED from
+# ruleset 21111153's required list 2026-08-29T10:17:40Z and restored 2026-09-03T07:32:42+02:00
+# (action B1.5). For those five days this hook stood down on a guarantee that did not exist,
+# and 11 PRs merged behind a gate that certified less than its name promised. Verify, never
+# assume:
+#   gh api repos/Crazz-Org/SPO-WebClient/rulesets/21111153 --jq '.rules[]|select(.type=="required_status_checks").parameters.required_status_checks[].context, .bypass_actors'
+#
 # Exit 0 = allow. Exit 2 = block, and stderr goes back to the model as the reason.
 
 set -uo pipefail
@@ -140,6 +147,9 @@ fi
 # worker's live evidence for its head sha, and the maintainer cannot wave it through either.
 # What a session can now do that it could not before is push a branch nobody has gated —
 # which is exactly how it asks to be gated.
+#
+# See the header: that ruleset property was false 2026-08-29 to 2026-09-03. It holds again,
+# but it is a fact about a server-side setting this file cannot see, not an invariant.
 #
 # The `main` block above stays, and it is now this hook's whole job.
 
