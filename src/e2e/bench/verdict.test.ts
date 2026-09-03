@@ -239,6 +239,48 @@ describe('statusDescription', () => {
       true,
     );
   });
+
+  // B2.2 — the whole reason this section exists: 17 gate artifacts recorded a skipped
+  // live stage in the same run that wrote PASS, and statusDescription rendered them
+  // identically to a real live PASS. These are the tests that would have caught it.
+  describe('liveness — a static-only PASS must never read like a live one', () => {
+    it('marks a live PASS distinctly from a static-only PASS', () => {
+      const liveDescription = statusDescription(
+        verdictFor('c1', { live: { status: 'ran', flows: ['login-spine', 'send-message'] } }),
+      );
+      const staticDescription = statusDescription(
+        verdictFor('c1', { live: { status: 'skipped', why: 'requires --live', required: ['login-spine'] } }),
+      );
+      expect(liveDescription).toBe('PASS — live — job job-1');
+      expect(staticDescription).toBe('PASS — static-only — job job-1');
+      expect(liveDescription).not.toBe(staticDescription);
+    });
+
+    it('marks an unreadable/absent artifact as unknown — never as live, never as plain static-only', () => {
+      const description = statusDescription(verdictFor('c1', { live: { status: 'unknown', why: 'no artifact' } }));
+      expect(description).toBe('PASS — live unknown — job job-1');
+    });
+
+    it('omits the marker entirely for a verdict written before the field existed', () => {
+      // No `live` key at all — verdictFor's default. Must render exactly as it always did,
+      // never inferring "ran" or "static-only" from silence.
+      expect(statusDescription(verdictFor('c1'))).toBe('PASS — job job-1');
+    });
+
+    it('keeps the liveness marker within the 140-char limit alongside every other field', () => {
+      const description = statusDescription(
+        verdictFor('c1', {
+          live: { status: 'skipped', why: 'requires --live', required: ['login-spine'] },
+          exceptions: 3,
+          baseMain: 'b'.repeat(40),
+          reusedFrom: 'e'.repeat(40),
+          jobId: 'x'.repeat(200),
+        }),
+      );
+      expect(description.length).toBeLessThanOrEqual(STATUS_DESCRIPTION_MAX);
+      expect(description).toContain('static-only');
+    });
+  });
 });
 
 describe('publishPendingStatuses — failure-streak logging', () => {

@@ -8,6 +8,7 @@ import { readNightlyResult } from './nightly';
 import { type GatewayDeps } from './gateway';
 import {
   countCapabilityExceptions,
+  liveAttestationFrom,
   main,
   mergeQueueDeps,
   processOldest,
@@ -15,6 +16,7 @@ import {
   realWorkerDeps,
   recoverInterrupted,
   runJob,
+  staticProofAttestationFrom,
   workerLoop,
   type WorkerDeps,
 } from './worker';
@@ -283,6 +285,250 @@ describe('processOldest — the queue discipline', () => {
     const bad = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-')), 'gate.json');
     fs.writeFileSync(bad, '{not json', 'utf8');
     expect(countCapabilityExceptions(bad)).toBe(0);
+  });
+
+  // B2.1 — the attestation gains what the gate actually did. These are the exact class
+  // measured on the real corpus: 509 of 509 verdicts carried no `live` key at all, and
+  // 17 artifacts recorded a skipped live stage in the same run that wrote PASS.
+  describe('the attestation carries what the gate artifact actually proved', () => {
+    function artifactPathFor(h: Harness): string {
+      return path.join(h.worktree, 'report', 'e2e', `gate-head-of-${path.basename(h.worktree)}.json`);
+    }
+    function writeArtifact(h: Harness, body: unknown): void {
+      const artifactDir = path.join(h.worktree, 'report', 'e2e');
+      fs.mkdirSync(artifactDir, { recursive: true });
+      fs.writeFileSync(artifactPathFor(h), JSON.stringify(body), 'utf8');
+    }
+
+    it('a gate whose live stage ran writes live.status "ran" with the flows it drove', async () => {
+      const h = harness();
+      deposit(h);
+      writeArtifact(h, { live: { status: 'PASS', flows: [{ name: 'login-spine' }, { name: 'send-message' }] } });
+      await processOldest(h.deps);
+      expect(listVerdicts(h.paths)[0].verdict.live).toEqual({
+        status: 'ran',
+        flows: ['login-spine', 'send-message'],
+      });
+    });
+
+    it('a gate that skipped with routed flows writes the skip and the flows it did not drive', async () => {
+      const h = harness();
+      deposit(h);
+      writeArtifact(h, {
+        live: { skipped: true, why: 'live stage requires --live (worker-only); routed flows: login-spine' },
+        routing: { required: ['login-spine'] },
+      });
+      await processOldest(h.deps);
+      expect(listVerdicts(h.paths)[0].verdict.live).toEqual({
+        status: 'skipped',
+        why: 'live stage requires --live (worker-only); routed flows: login-spine',
+        required: ['login-spine'],
+      });
+    });
+
+    it('a skip with nothing routed is distinguishable from a skip with routed flows', async () => {
+      const h = harness();
+      deposit(h);
+      writeArtifact(h, {
+        live: { skipped: true, why: 'nothing in this diff is observable over the wire' },
+        routing: { required: [] },
+      });
+      await processOldest(h.deps);
+      const live = listVerdicts(h.paths)[0].verdict.live;
+      expect(live).toEqual({
+        status: 'skipped',
+        why: 'nothing in this diff is observable over the wire',
+        required: [],
+      });
+      // And it must not equal the routed-flows case above.
+      expect(live).not.toEqual({
+        status: 'skipped',
+        why: 'nothing in this diff is observable over the wire',
+        required: ['login-spine'],
+      });
+    });
+
+    it('an absent gate artifact produces an explicit unknown, never a shape that reads as "live ran"', async () => {
+      const h = harness();
+      // A build failure returns before report.gateArtifact is ever set (fetch ok, build fails).
+      h.exitCodes = [0, 1];
+      deposit(h);
+      await processOldest(h.deps);
+      const verdict = listVerdicts(h.paths)[0].verdict;
+      expect(verdict.live?.status).toBe('unknown');
+      expect(verdict.live).not.toMatchObject({ status: 'ran' });
+    });
+
+    it('an unreadable gate artifact also produces unknown, not a false "ran"', async () => {
+      const h = harness();
+      deposit(h);
+      const artifactDir = path.join(h.worktree, 'report', 'e2e');
+      fs.mkdirSync(artifactDir, { recursive: true });
+      fs.writeFileSync(artifactPathFor(h), '{not json at all', 'utf8');
+      await processOldest(h.deps);
+      const verdict = listVerdicts(h.paths)[0].verdict;
+      expect(verdict.live?.status).toBe('unknown');
+      expect((verdict.live as { why: string }).why).toContain(
+        `the gate artifact at ${artifactPathFor(h)} could not be read`,
+      );
+    });
+
+    it('a gate BLOCKED by a live refusal (rate limit / dirty world) does not attest "ran"', async () => {
+      const h = harness();
+      deposit(h);
+      writeArtifact(h, {
+        live: { status: 'BLOCKED', flows: [], error: 'rate limit: 3 live runs in the last hour' },
+        routing: { required: ['login-spine'] },
+      });
+      await processOldest(h.deps);
+      const live = listVerdicts(h.paths)[0].verdict.live;
+      expect(live?.status).not.toBe('ran');
+      expect(live).toEqual({
+        status: 'unknown',
+        why: 'rate limit: 3 live runs in the last hour; routed flows: login-spine',
+      });
+    });
+
+    it('carries staticProof "ci" when CI proved the sha', async () => {
+      const h = harness();
+      h.ciProof = { proven: true };
+      deposit(h);
+      writeArtifact(h, { live: { skipped: true, why: 'x' }, routing: { required: [] } });
+      await processOldest(h.deps);
+      expect(listVerdicts(h.paths)[0].verdict.staticProof).toEqual({ status: 'ci' });
+    });
+
+    it('carries staticProof "bench" with why when it replayed on the bench', async () => {
+      const h = harness();
+      h.ciProof = { proven: false, why: 'no CI run for this commit yet' };
+      deposit(h);
+      writeArtifact(h, { live: { skipped: true, why: 'x' }, routing: { required: [] } });
+      await processOldest(h.deps);
+      expect(listVerdicts(h.paths)[0].verdict.staticProof).toEqual({
+        status: 'bench',
+        why: 'no CI run for this commit yet',
+      });
+    });
+
+    it('staticProof reads unknown when the gate never reached the static-proof question', async () => {
+      const h = harness();
+      h.exitCodes = [0, 1]; // fetch ok, build:server fails; returns before staticProof is ever set
+      deposit(h);
+      await processOldest(h.deps);
+      expect(listVerdicts(h.paths)[0].verdict.staticProof).toEqual({ status: 'unknown' });
+    });
+  });
+
+  describe('liveAttestationFrom — unit', () => {
+    it('reads a "ran" live block with named flows', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-'));
+      const file = path.join(dir, 'gate.json');
+      fs.writeFileSync(file, JSON.stringify({ live: { status: 'PASS', flows: [{ name: 'a' }, { name: 'b' } ] } }));
+      expect(liveAttestationFrom(file)).toEqual({ status: 'ran', flows: ['a', 'b'] });
+    });
+
+    it('drops a flow entry with no readable name rather than inventing one', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-'));
+      const file = path.join(dir, 'gate.json');
+      fs.writeFileSync(file, JSON.stringify({ live: { status: 'PASS', flows: [{ name: 'a' }, {}] } }));
+      expect(liveAttestationFrom(file)).toEqual({ status: 'ran', flows: ['a'] });
+    });
+
+    it('reads a skipped live block, defaulting required to empty when routing is absent', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-'));
+      const file = path.join(dir, 'gate.json');
+      fs.writeFileSync(file, JSON.stringify({ live: { skipped: true, why: 'no --live' } }));
+      expect(liveAttestationFrom(file)).toEqual({ status: 'skipped', why: 'no --live', required: [] });
+    });
+
+    it('is unknown for undefined, missing, unreadable, and a null live block alike', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-'));
+      const missing = path.join(dir, 'nope.json');
+      const bad = path.join(dir, 'bad.json');
+      fs.writeFileSync(bad, '{not json');
+      const nullLive = path.join(dir, 'null-live.json');
+      fs.writeFileSync(nullLive, JSON.stringify({ live: null }));
+
+      expect(liveAttestationFrom(undefined).status).toBe('unknown');
+      expect(liveAttestationFrom(missing).status).toBe('unknown');
+      expect(liveAttestationFrom(bad).status).toBe('unknown');
+      expect(liveAttestationFrom(nullLive).status).toBe('unknown');
+    });
+
+    // M1: `'ran'` must be asserted from `live.status`, never the fallthrough of "not a
+    // skip". A `live` block with no `skipped` key is exactly what verify-gate.js writes
+    // for BLOCKED/ENVIRONMENT (LiveRunResult, src/e2e/run.ts) — none of these may read 'ran'.
+    it('a BLOCKED live refusal (no `skipped` key) does not read as "ran"', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-'));
+      const file = path.join(dir, 'gate.json');
+      fs.writeFileSync(
+        file,
+        JSON.stringify({
+          live: { status: 'BLOCKED', flows: [], error: 'world lock held by another branch' },
+          routing: { required: ['login-spine'] },
+        }),
+      );
+      expect(liveAttestationFrom(file)).toEqual({
+        status: 'unknown',
+        why: 'world lock held by another branch; routed flows: login-spine',
+      });
+    });
+
+    it('an ENVIRONMENT preflight abort (no `skipped` key) does not read as "ran"', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-'));
+      const file = path.join(dir, 'gate.json');
+      fs.writeFileSync(
+        file,
+        JSON.stringify({ live: { status: 'ENVIRONMENT', flows: [], error: 'gateway: connect refused' } }),
+      );
+      expect(liveAttestationFrom(file)).toEqual({ status: 'unknown', why: 'gateway: connect refused' });
+    });
+
+    it('a live.status this code has never seen does not read as "ran"', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-'));
+      const file = path.join(dir, 'gate.json');
+      fs.writeFileSync(file, JSON.stringify({ live: { status: 'TOTALLY_NEW', flows: [{ name: 'a' }] } }));
+      const attestation = liveAttestationFrom(file);
+      expect(attestation.status).not.toBe('ran');
+      expect(attestation.status).toBe('unknown');
+    });
+
+    // M2: the read/parse failure must not be thrown away — a missing artifact (ENOENT;
+    // the 145-of-393 "filed under the merge commit's sha" case) has to stay distinguishable
+    // from a corrupt/truncated one, at least in the caught error text.
+    it('keeps a missing artifact distinguishable from an unparseable one via the caught error', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-art-'));
+      const missing = path.join(dir, 'nope.json');
+      const bad = path.join(dir, 'bad.json');
+      fs.writeFileSync(bad, '{not json at all');
+
+      const missingWhy = (liveAttestationFrom(missing) as { why: string }).why;
+      const badWhy = (liveAttestationFrom(bad) as { why: string }).why;
+
+      expect(missingWhy).toContain('ENOENT');
+      expect(missingWhy).not.toEqual(badWhy);
+      expect(liveAttestationFrom(undefined)).toEqual({
+        status: 'unknown',
+        why: 'no gate artifact was recorded for this run',
+      });
+    });
+  });
+
+  describe('staticProofAttestationFrom — unit', () => {
+    it('maps used:true to status "ci"', () => {
+      expect(staticProofAttestationFrom({ used: true })).toEqual({ status: 'ci' });
+    });
+
+    it('maps used:false to status "bench" carrying why', () => {
+      expect(staticProofAttestationFrom({ used: false, why: 'no CI run yet' })).toEqual({
+        status: 'bench',
+        why: 'no CI run yet',
+      });
+    });
+
+    it('maps undefined to status "unknown"', () => {
+      expect(staticProofAttestationFrom(undefined)).toEqual({ status: 'unknown' });
+    });
   });
 
   it('still reports when runJob itself throws', async () => {
