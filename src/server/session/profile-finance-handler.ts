@@ -10,6 +10,7 @@ import type {
   TycoonProfileFull,
   CurriculumData,
   BankAccountData,
+  SendMoneyBlock,
   LoanInfo,
   BankActionResult,
   ProfitLossData,
@@ -436,12 +437,29 @@ function parseBankAccountHtml(ctx: SessionContext, html: string, baseUrl: string
     totalLoans = totalLoansMatch[1];
   }
 
-  // Extract max transfer from "You can transfer up to $X"
-  let maxTransfer = '0';
-  const maxTransferMatch = /You can transfer up to \$([0-9,]+)/i.exec(html);
+  // Send panel, :424-509. The page decides whether a transfer is possible and
+  // which of four texts replaces the form; read its verdict, never recompute
+  // TransferMoney (:116-122) from the numbers.
+  let maxTransfer: string | undefined;
+  const maxTransferMatch = /You can transfer up to \$([0-9,]+)/i.exec(html);   // :438 strYouCanTransferX
   if (maxTransferMatch) {
     maxTransfer = maxTransferMatch[1].replace(/,/g, '');
   }
+  let sendMoneyBlock: SendMoneyBlock | undefined;
+  if (/Money transfers are not allowed in Tournament planets/i.test(html)) {
+    sendMoneyBlock = 'tournament';                                                // :506 StrTyconBank_28
+  } else if (/Since this is a\s*<b>\s*DEMO\s*<\/b>\s*account/i.test(html)) {
+    sendMoneyBlock = 'demo';                                                      // :467 / :488 StrTyconBank_27
+  } else if (/You cannot send money/i.test(html)) {
+    sendMoneyBlock = 'loansOrVisa';                                               // :476 StrTyconBank_16
+  } else if (/You have no money to send/i.test(html)) {
+    sendMoneyBlock = 'noMoney';                                                   // :478 StrTyconBank_17
+  }
+  // The form is offered iff the cap note is on the page (:427-439) and no text
+  // blocks it. Demo wins over the zero-cap explanations: on a zero-cap Demo
+  // page both are rendered (:473-492) and the account-level reason is the one
+  // that stays true after the player earns money.
+  const canSendMoney = maxTransfer !== undefined && sendMoneyBlock === undefined;
 
   // Parse loan rows — <tr id="r0" lid="0" onClick="onRowClick()"> (:550).
   // Cells are read by their own id (`r<i>Bank`, `…Date`, `…Amount`, `…Int`,
@@ -531,6 +549,8 @@ function parseBankAccountHtml(ctx: SessionContext, html: string, baseUrl: string
     loans,
     defaultInterest,
     defaultTerm,
+    canSendMoney,
+    sendMoneyBlock,
   };
 }
 

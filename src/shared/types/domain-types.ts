@@ -867,15 +867,23 @@ export interface LoanInfo {
   loanIndex: number;
 }
 
+/** Why TycoonBankAccount.asp shows a text where the send form would be (:424-509). */
+export type SendMoneyBlock = 'tournament' | 'demo' | 'loansOrVisa' | 'noMoney';
+
 export interface BankAccountData {
   balance: string;
   maxLoan: string;
   totalLoans: string;
-  maxTransfer: string;
+  /** Present only when the page carries the cap note (:438). Never '0'. */
+  maxTransfer?: string;
   totalNextPayment: string;
   loans: LoanInfo[];
   defaultInterest: number;
   defaultTerm: number;
+  /** True iff the page rendered the send form and the account is not Demo. */
+  canSendMoney: boolean;
+  /** The text the page shows in place of (or, for Demo, beside) the form. */
+  sendMoneyBlock?: SendMoneyBlock;
 }
 
 export type BankActionType = 'borrow' | 'send' | 'payoff';

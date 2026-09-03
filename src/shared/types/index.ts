@@ -78,6 +78,7 @@ export type {
   CurriculumItem,
   LoanInfo,
   BankAccountData,
+  SendMoneyBlock,
   BankActionResult,
   ProfitLossNode,
   ProfitLossData,

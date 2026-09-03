@@ -45,6 +45,7 @@ const mockBank: BankAccountData = {
   totalNextPayment: '5000',
   defaultInterest: 5,
   defaultTerm: 10,
+  canSendMoney: true,
 };
 
 const mockPolicy: PolicyData = {

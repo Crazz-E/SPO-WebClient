@@ -19,7 +19,7 @@ import { useProfileStore, type ProfileTab } from '../../store/profile-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
-import type { AutoConnectionActionType, CurriculumActionType } from '@/shared/types';
+import type { AutoConnectionActionType, CurriculumActionType, SendMoneyBlock } from '@/shared/types';
 import styles from './ProfilePanel.module.css';
 
 import { formatMoney } from '../../format-utils';
@@ -417,6 +417,15 @@ function CurriculumTab() {
 // Bank Tab — with date column, pay off, total row, dynamic calc
 // ---------------------------------------------------------------------------
 
+// The four texts TycoonBankAccount.asp shows where the send form would be
+// (:424-509), flattened from eNewTycon.lng — StrTyconBank_28, _27, _16, _17.
+const SEND_MONEY_BLOCK_TEXT: Record<SendMoneyBlock, string> = {
+  tournament: 'Money transfers are not allowed in Tournament planets',
+  demo: 'Since this is a DEMO account, you cannot transfer money to other players or political figures',
+  loansOrVisa: 'You cannot send money that you received with loans or as part of your Investor Visa',
+  noMoney: 'You have no money to send',
+};
+
 function BankTab() {
   const data = useProfileStore((s) => s.bankAccount);
   const client = useClient();
@@ -534,13 +543,18 @@ function BankTab() {
         >
           Request Loan
         </button>
-        <button
-          className={`${styles.actionPill} ${action === 'send' ? styles.actionPillActive : ''}`}
-          onClick={() => setAction(action === 'send' ? null : 'send')}
-        >
-          Send Money
-        </button>
+        {data.canSendMoney && (
+          <button
+            className={`${styles.actionPill} ${action === 'send' ? styles.actionPillActive : ''}`}
+            onClick={() => setAction(action === 'send' ? null : 'send')}
+          >
+            Send Money
+          </button>
+        )}
       </div>
+      {data.sendMoneyBlock && (
+        <p className={styles.hint}>{SEND_MONEY_BLOCK_TEXT[data.sendMoneyBlock]}</p>
+      )}
 
       {/* Inline forms */}
       {action === 'borrow' && (
@@ -566,7 +580,7 @@ function BankTab() {
           </div>
         </div>
       )}
-      {action === 'send' && (
+      {action === 'send' && data.canSendMoney && (
         <div className={styles.inlineForm}>
           <label className={styles.formLabel}>Recipient</label>
           <input
@@ -584,8 +598,8 @@ function BankTab() {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
-          {data.maxTransfer && (
-            <p className={styles.hint}>You can transfer up to ${data.maxTransfer}</p>
+          {data.maxTransfer !== undefined && (
+            <p className={styles.hint}>You can transfer up to {formatMoney(data.maxTransfer)}</p>
           )}
           <label className={styles.formLabel}>Reason (optional)</label>
           <input

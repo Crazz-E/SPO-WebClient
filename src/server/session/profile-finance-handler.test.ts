@@ -861,6 +861,14 @@ function loanRow(i: number, l: Loan): string {
     + `${T(8)}</tr>`;
 }
 
+/** StrTyconBank_27 — the DEMO notice, rendered beside either send branch (:466-468 / :487-489). */
+function demoBlock(demo: boolean): string {
+  if (!demo) return '';
+  return `${T(6)}<div style="font-size: 10pt; margin-top: 4px">\n${T(7)}<br>\n`
+    + `${T(7)}<b>NOTE:</b> Since this is a <b>DEMO</b> account,<br>you cannot transfer money <br>to other players or political figures\n`
+    + `${T(6)}</div>\n`;
+}
+
 interface BankOpts {
   objValid?: boolean;
   fullAccess?: boolean;
@@ -870,6 +878,8 @@ interface BankOpts {
   /** `FormatValue(TransferMoney)`; 0 drops the whole "send" panel (:427). */
   transferMoney?: number;
   sendingMoneyOn?: boolean;
+  /** `Obj.Demo` (:124) — renders StrTyconBank_27 at :466-468 / :487-489. */
+  demo?: boolean;
   loans?: Loan[];
   /** `FormatValue(TotalPayment)` — :580 */
   totalPayment?: string;
@@ -881,7 +891,7 @@ function bankPage(opts: BankOpts = {}): string {
   const o = {
     objValid: true, fullAccess: true,
     budget: 123456789, ifelLoanEstimated: 2000000000, loanAmount: 500000000,
-    transferMoney: 12345678, sendingMoneyOn: true,
+    transferMoney: 12345678, sendingMoneyOn: true, demo: false,
     loans: [] as Loan[], totalPayment: '$0', errorText: '',
     ...opts,
   };
@@ -959,8 +969,12 @@ ${T(1)}</script>
       + `${T(5)}<td valign="top" width="50%">\n`
       + (o.sendingMoneyOn
         ? (o.transferMoney > 0
-          ? `${T(6)}<div style="font-size: 8pt; margin-top: 4px">\n${T(7)}<b>Note:</b> You can transfer up to $${o.transferMoney.toLocaleString('en-US')}.\n${T(6)}</div>\n`
-          : `${T(6)}<div style="font-size: 10pt; margin-top: 4px">\n${T(7)}You have no money to send\n${T(6)}</div>\n`)
+          // :437-439 strYouCanTransferX, then :466-468 StrTyconBank_27 when Demo = 1.
+          ? `${T(6)}<div style="font-size: 8pt; margin-top: 4px">\n${T(7)}<b>Note:</b> You can transfer up to $${o.transferMoney.toLocaleString('en-US')}.\n${T(6)}</div>\n${demoBlock(o.demo)}`
+          // :474-480 — Obj.Budget decides which explanation, then :487-489 for Demo.
+          : `${T(6)}<div style="font-size: 10pt; margin-top: 4px">\n${T(7)}${o.budget > 0
+            ? 'You cannot send money <br> that you received with loans <br> or as part of your Investor Visa'
+            : 'You have no money to send'}\n${T(6)}</div>\n${demoBlock(o.demo)}`)
         : `${T(6)}<div style="font-size: 10pt; margin-top: 4px">\n${T(7)}Money transfers are not allowed in Tournament planets\n${T(6)}</div>\n`)
       + `${T(5)}</td>\n${T(4)}</tr>\n${T(3)}</table>`);
   }
@@ -1015,6 +1029,8 @@ describe('fetchBankAccount', () => {
       // 200 - 2500M/10M = -50, clamped to 5 BEFORE rounding.
       defaultInterest: 25,
       defaultTerm: 5,
+      canSendMoney: true,          // :427 TransferMoney > 0, no blocking text
+      sendMoneyBlock: undefined,
     });
   });
 
@@ -1052,7 +1068,10 @@ describe('fetchBankAccount', () => {
     fetchAsp(fake).mockResolvedValue(html);
     const data = await fetchBankAccount(fake.ctx);
     expect(data.loans).toHaveLength(1);
-    expect(data.maxTransfer).toBe('0');
+    // No send panel at all: no cap note to report, and no text to explain it.
+    expect(data.maxTransfer).toBeUndefined();
+    expect(data.canSendMoney).toBe(false);
+    expect(data.sendMoneyBlock).toBeUndefined();
     expect(data).toMatchObject({ balance: '123456789', maxLoan: '2000000000' });
   });
 
@@ -1065,10 +1084,49 @@ describe('fetchBankAccount', () => {
     expect(data.totalNextPayment).toBe('0');
   });
 
-  it('a page with no send panel reports no transfer allowance', async () => {
+  it('a tournament planet reports no allowance and the tournament reason (:506 StrTyconBank_28)', async () => {
     const fake = makeWebCtx();
     fetchAsp(fake).mockResolvedValue(bankPage({ sendingMoneyOn: false }));
-    expect((await fetchBankAccount(fake.ctx)).maxTransfer).toBe('0');
+    const data = await fetchBankAccount(fake.ctx);
+    expect(data.maxTransfer).toBeUndefined();
+    expect(data.canSendMoney).toBe(false);
+    expect(data.sendMoneyBlock).toBe('tournament');
+  });
+
+  it('a zero cap with a positive budget reports loansOrVisa (:475-476 StrTyconBank_16)', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(bankPage({ transferMoney: 0 }));
+    const data = await fetchBankAccount(fake.ctx);
+    expect(data.maxTransfer).toBeUndefined();
+    expect(data.canSendMoney).toBe(false);
+    expect(data.sendMoneyBlock).toBe('loansOrVisa');
+  });
+
+  it('a zero cap with a zero budget reports noMoney (:477-478 StrTyconBank_17)', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(bankPage({ transferMoney: 0, budget: 0 }));
+    const data = await fetchBankAccount(fake.ctx);
+    expect(data.balance).toBe('0');
+    expect(data.canSendMoney).toBe(false);
+    expect(data.sendMoneyBlock).toBe('noMoney');
+  });
+
+  it('a Demo account keeps the cap note but is not offered the form (:466-468 StrTyconBank_27)', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(bankPage({ demo: true }));
+    const data = await fetchBankAccount(fake.ctx);
+    expect(data.maxTransfer).toBe('12345678');
+    expect(data.canSendMoney).toBe(false);
+    expect(data.sendMoneyBlock).toBe('demo');
+  });
+
+  it('a Demo account with a zero cap reports demo, not the zero-cap explanation (:487-489)', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(bankPage({ demo: true, transferMoney: 0 }));
+    const data = await fetchBankAccount(fake.ctx);
+    expect(data.maxTransfer).toBeUndefined();
+    expect(data.canSendMoney).toBe(false);
+    expect(data.sendMoneyBlock).toBe('demo');
   });
 
   it('with an empty page: balance from the session, default max loan, no loans, defaults 25 / 5', async () => {
@@ -1078,8 +1136,8 @@ describe('fetchBankAccount', () => {
     const data = await fetchBankAccount(fake.ctx);
 
     expect(data).toEqual({
-      balance: '123456789', maxLoan: '2500000000', totalLoans: '0', maxTransfer: '0', totalNextPayment: '0', loans: [],
-      defaultInterest: 25, defaultTerm: 5,
+      balance: '123456789', maxLoan: '2500000000', totalLoans: '0', totalNextPayment: '0', loans: [],
+      defaultInterest: 25, defaultTerm: 5, canSendMoney: false,
     });
     expect(setCache(fake)).not.toHaveBeenCalled();
   });

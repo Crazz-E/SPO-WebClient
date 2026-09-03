@@ -10,7 +10,7 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders, createSpiedCallbacks } from '../../../__tests__/setup/render-helpers';
 import { useProfileStore } from '../../../store/profile-store';
 import { ProfilePanel } from '../ProfilePanel';
-import type { CurriculumData } from '@/shared/types';
+import type { BankAccountData, CurriculumData } from '@/shared/types';
 
 const CURRICULUM_BASE: CurriculumData = {
   tycoonName: 'SPO_test3',
@@ -40,6 +40,18 @@ const CURRICULUM_BASE: CurriculumData = {
   abilityLoanPoints: 0,
   rankings: [],
   curriculumItems: [],
+};
+
+/** A page with no send panel at all: neither the pill nor a reason (:320). */
+const BANK_BASE: BankAccountData = {
+  balance: '123456789',
+  maxLoan: '2000000000',
+  totalLoans: '0',
+  totalNextPayment: '0',
+  loans: [],
+  defaultInterest: 25,
+  defaultTerm: 5,
+  canSendMoney: false,
 };
 
 const SECTION_LABELS = [
@@ -192,5 +204,65 @@ describe('ProfilePanel — sections', () => {
 
     expect(screen.queryByText('Ability')).toBeNull();
     expect(screen.queryByText(/from the rankings/)).toBeNull();
+  });
+
+  // The send panel mirrors TycoonBankAccount.asp :424-509 — the page decides
+  // whether the form is offered, and which text stands in its place.
+  function openBank(data: BankAccountData): void {
+    renderWithProviders(<ProfilePanel />);
+    clickSection('Bank Account');
+    act(() => {
+      useProfileStore.getState().setBankAccount(data);
+    });
+  }
+
+  it('offers Send Money with the page cap note when transfers are allowed (:427-439)', () => {
+    openBank({ ...BANK_BASE, canSendMoney: true, maxTransfer: '12345678' });
+
+    fireEvent.click(screen.getByText('Send Money'));
+
+    expect(screen.getByText('You can transfer up to $12,345,678')).toBeTruthy();
+    expect(screen.queryByText(/Money transfers are not allowed/)).toBeNull();
+    expect(screen.queryByText(/DEMO account/)).toBeNull();
+  });
+
+  it('offers no Send Money on a tournament planet, and says why (:506)', () => {
+    openBank({ ...BANK_BASE, sendMoneyBlock: 'tournament' });
+
+    expect(screen.queryByText('Send Money')).toBeNull();
+    expect(screen.getByText('Money transfers are not allowed in Tournament planets')).toBeTruthy();
+    expect(screen.queryByText(/transfer up to/)).toBeNull();
+  });
+
+  it('offers no Send Money on a Demo account, and shows the Demo notice (:467)', () => {
+    openBank({ ...BANK_BASE, sendMoneyBlock: 'demo', maxTransfer: '12345678' });
+
+    expect(screen.queryByText('Send Money')).toBeNull();
+    expect(screen.getByText(/Since this is a DEMO account/)).toBeTruthy();
+    expect(screen.queryByText(/transfer up to/)).toBeNull();
+  });
+
+  it('offers no Send Money on a zero cap with a positive budget (:476)', () => {
+    openBank({ ...BANK_BASE, sendMoneyBlock: 'loansOrVisa' });
+
+    expect(screen.queryByText('Send Money')).toBeNull();
+    expect(screen.getByText(/received with loans or as part of your Investor Visa/)).toBeTruthy();
+    expect(screen.queryByText(/transfer up to/)).toBeNull();
+  });
+
+  it('offers no Send Money on a zero cap with a zero budget (:478)', () => {
+    openBank({ ...BANK_BASE, sendMoneyBlock: 'noMoney', balance: '0' });
+
+    expect(screen.queryByText('Send Money')).toBeNull();
+    expect(screen.getByText('You have no money to send')).toBeTruthy();
+    expect(screen.queryByText(/transfer up to/)).toBeNull();
+  });
+
+  it('shows neither the pill nor a reason when the page carries no send panel (:320)', () => {
+    openBank(BANK_BASE);
+
+    expect(screen.queryByText('Send Money')).toBeNull();
+    expect(screen.queryByText(/transfer up to/)).toBeNull();
+    expect(screen.getByText('Request Loan')).toBeTruthy();
   });
 });
