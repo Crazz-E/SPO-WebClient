@@ -35,6 +35,11 @@
 # `gh pr merge --auto` below cannot land a commit the worker has not attested. The
 # guarantee moved from the push to the merge, which is where the irreversible act
 # always was. The worker publishes bench/gate on the pushed sha within ~30 s.
+#
+# That guarantee held a gap: ruleset 21111153 dropped `bench/gate` from the required list
+# on 2026-08-29T10:17:40Z (advisory only — `gh pr merge --auto` COULD have landed an
+# unattested sha for those five days) and it was restored on 2026-09-03T07:32:42+02:00.
+# Re-check before trusting this comment: `gh api repos/Crazz-Org/SPO-WebClient/rulesets/21111153`.
 set -euo pipefail
 
 MAIN_REPO="${SPO_MAIN_REPO:-$HOME/SPO-WebClient}"
@@ -93,7 +98,9 @@ for n in "${prs[@]}"; do
   # Nothing is weakened by pushing an ungated sha to a PR branch: `bench/gate` is a
   # required status check on `main` with an empty bypass list, so the `gh pr merge --auto`
   # below cannot land anything the worker has not attested. The guarantee moved from the
-  # push to the merge, which is where the irreversible act always was.
+  # push to the merge, which is where the irreversible act always was. (That was false for
+  # five days — 2026-08-29T10:17:40Z to 2026-09-03T07:32:42+02:00, see the header comment
+  # above `set -euo pipefail`.)
   echo "-- pushing ${sha:0:8} so the bench can fetch it (fast-forward, no force)"
   # Dependabot may have recreated the branch (its conflict rebase): the remote then holds
   # work we do not have, and a fast-forward is rightly refused. That is not ours to force —
