@@ -69,7 +69,10 @@ function harness(): Harness {
   const paths = benchPaths(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-worker-')));
   ensureLayout(paths);
   const worktree = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-wt-'));
-  const spool = new Spool(paths);
+  // Same `log` the harness hands WorkerDeps below — production wires both through the one
+  // logger too (realWorkerDeps), so an appendJobsLog failure surfaces exactly where every
+  // other worker log line does.
+  const spool = new Spool(paths, line => h.logs.push(line));
   let fingerprintCalls = 0;
 
   const h: Harness = {
@@ -152,6 +155,21 @@ function npmRuns(h: Harness): string[] {
   return h.commands.filter(c => c.cmd === 'npm').map(c => c.args[1]);
 }
 
+/** Every verdict jobsLog has recorded so far, in append order — read through the real file. */
+function jobsLogVerdicts(h: Harness): { id: string; verdict: string }[] {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(h.paths.jobsLog, 'utf8');
+  } catch {
+    return [];
+  }
+  return raw
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line))
+    .map(l => ({ id: l.id, verdict: l.verdict }));
+}
+
 /**
  * A deposit shaped the way the client shapes one.
  *
@@ -210,6 +228,21 @@ describe('recoverInterrupted', () => {
 
     expect(readNightlyResult(h.paths)).toBeNull();
   });
+
+  it('an INTERRUPTED report reaches jobsLog — the state that never reaches runJob at all', () => {
+    // B4.2's own warning, verbatim: "the state that by definition never reaches the normal
+    // end of the job still never gets written". recoverInterrupted never calls runJob and
+    // never returns through its finish() closure — it builds the report inline and hands it
+    // to spool.writeReport directly. This only passes because the jobsLog append lives
+    // INSIDE writeReport (job.ts), not bolted onto processOldest's own success path.
+    const h = harness();
+    const job = deposit(h);
+    h.spool.claim(h.spool.queued()[0].file);
+
+    recoverInterrupted(h.deps);
+
+    expect(jobsLogVerdicts(h)).toEqual([{ id: job.id, verdict: 'INTERRUPTED' }]);
+  });
 });
 
 describe('processOldest — the queue discipline', () => {
@@ -225,6 +258,9 @@ describe('processOldest — the queue discipline', () => {
     expect(h.spool.readReport(job.id)?.verdict).toBe('ABANDONED');
     expect(h.commands).toHaveLength(0);
     expect(h.spool.queued()).toHaveLength(0);
+    // ABANDONED is written before runJob is ever called (there is no worktree to run
+    // against) — the other non-attesting verdict that must not depend on reaching finish().
+    expect(jobsLogVerdicts(h)).toEqual([{ id: job.id, verdict: 'ABANDONED' }]);
   });
 
   it('runs the oldest job end to end: claim, execute, report, release', async () => {
@@ -1370,6 +1406,19 @@ describe('runJob — live and lease', () => {
     expect((early as unknown as { leaseUntil?: string }).leaseUntil).toBeDefined();
     expect(report.detail).toMatch(/lease released by the session/);
     expect(h.gatewayStops).toBe(1);
+  });
+
+  it('a lease job appends exactly one jobsLog line, though writeReport runs twice for it', async () => {
+    // runJob itself calls spool.writeReport for the early LEASED unblock; processOldest
+    // calls it again for the real, finished report once the lease ends. Two writeReport
+    // calls, and jobsLog must still hold exactly one line for this one job.
+    const h = harness();
+    const job = deposit(h, 'lease');
+    h.deps.sleep = async () => h.spool.requestRelease(job.id);
+
+    await processOldest(h.deps);
+
+    expect(jobsLogVerdicts(h)).toEqual([{ id: job.id, verdict: 'LEASED' }]);
   });
 
   it('runs a job deposited without --wait even though nobody is waiting (pid 0)', async () => {

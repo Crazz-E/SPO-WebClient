@@ -152,7 +152,7 @@ const PINS: Pin[] = [
       { file: 'src/e2e/bench/worker.ts', contains: 'const DONE_RETENTION_MS = 24 * 60 * 60 * 1000;' },
       {
         file: 'doc/bench-worker.md',
-        contains: 'done/<jobid>.json + .log        reports, purged after 24 h',
+        contains: 'done/<jobid>.json + .log        reports; only the .log is purged (24 h)',
       },
       {
         file: 'doc/bench-worker.md',
@@ -295,7 +295,7 @@ describe('mutation proof -- every check row actually reds on its own, measured a
     // Corrupt exactly this literal's occurrence, leaving every other literal in the same file
     // (other checks may share a file) untouched -- proves the kill is localized, not a
     // sledgehammer that reds the whole file's checks at once.
-    const mutated = before.replace(contains, contains.slice(0, -1) + ' MUTATED');
+    const mutated = before.replace(contains, contains.slice(0, -1) + '\u0000MUTATED');
     expect(mutated).not.toEqual(before);
     fs.writeFileSync(full, mutated);
 

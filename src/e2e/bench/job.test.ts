@@ -2,7 +2,15 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { benchPaths, ensureLayout, type BenchPaths } from './paths';
-import { DuplicateJobError, newJobId, Spool, type JobReport, type JobRequest } from './job';
+import {
+  appendJobsLog,
+  DuplicateJobError,
+  newJobId,
+  Spool,
+  type JobReport,
+  type JobRequest,
+  type JobsLogLine,
+} from './job';
 
 function tempBench(): BenchPaths {
   const paths = benchPaths(fs.mkdtempSync(path.join(os.tmpdir(), 'spo-bench-job-')));
@@ -34,6 +42,30 @@ function reportFor(id: string): JobReport {
     targetMoved: false,
     startedAt: '2026-08-22T09:00:00Z',
   };
+}
+
+/** A report shaped the way every real return from `finish()` is: `finishedAt` set. */
+function finishedReportFor(id: string, overrides: Partial<JobReport> = {}): JobReport {
+  return {
+    ...reportFor(id),
+    finishedAt: '2026-08-22T09:05:00Z',
+    detail: 'verify-gate exited 0 (PASS)',
+    ...overrides,
+  };
+}
+
+/** jobsLog is append-only JSON-lines; read every line back as a JobsLogLine. */
+function readJobsLog(paths: BenchPaths): JobsLogLine[] {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(paths.jobsLog, 'utf8');
+  } catch {
+    return [];
+  }
+  return raw
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as JobsLogLine);
 }
 
 describe('newJobId', () => {
@@ -139,17 +171,154 @@ describe('Spool — reports', () => {
     expect(spool.isPending(job.id)).toBe(false);
   });
 
-  it('purges only reports older than the retention window', () => {
+  it('purges only .log files older than the retention window, never the .json', () => {
+    // B4.2: purgeDone used to delete the whole done/<id>.json + .log pair, which is why
+    // the non-attesting vocabulary (DIRTY, ENVIRONMENT, ABANDONED, INTERRUPTED) was
+    // invisible past 24 h — verdicts/ never records them, and done/ was the only other
+    // place they existed. Now only the .log — the large, reproduce-nothing part — ages
+    // out; the .json (and the durable jobsLog line written alongside it) do not.
     const paths = tempBench();
     const spool = new Spool(paths);
     spool.writeReport(reportFor('job-old'));
     spool.writeReport(reportFor('job-new'));
-    const oldFile = path.join(paths.done, 'job-old.json');
+    const oldJson = path.join(paths.done, 'job-old.json');
+    const oldLog = path.join(paths.done, 'job-old.log');
+    fs.writeFileSync(oldLog, 'stdout/stderr from the old job\n', 'utf8');
     const past = (Date.now() - 48 * 60 * 60 * 1000) / 1000;
-    fs.utimesSync(oldFile, past, past);
+    fs.utimesSync(oldJson, past, past);
+    fs.utimesSync(oldLog, past, past);
+
     spool.purgeDone(24 * 60 * 60 * 1000);
-    expect(spool.readReport('job-old')).toBeNull();
+
+    expect(fs.existsSync(oldLog)).toBe(false);
+    expect(spool.readReport('job-old')).not.toBeNull();
     expect(spool.readReport('job-new')).not.toBeNull();
+  });
+
+  it('never purges a .json report, however old it is', () => {
+    const paths = tempBench();
+    const spool = new Spool(paths);
+    spool.writeReport(reportFor('job-ancient'));
+    const file = path.join(paths.done, 'job-ancient.json');
+    const yearAgo = (Date.now() - 365 * 24 * 60 * 60 * 1000) / 1000;
+    fs.utimesSync(file, yearAgo, yearAgo);
+
+    spool.purgeDone(24 * 60 * 60 * 1000);
+
+    expect(spool.readReport('job-ancient')).not.toBeNull();
+  });
+});
+
+describe('jobsLog — the durable line jobsLog purge (and done/) can no longer take away', () => {
+  it('writeReport appends exactly one line, shaped from the finished report', () => {
+    const paths = tempBench();
+    const spool = new Spool(paths);
+    const report = finishedReportFor('job-1', {
+      verdict: 'FAIL',
+      detail: 'npm run build:server failed in the worktree — see /path/job-1.log',
+    });
+
+    spool.writeReport(report);
+
+    const lines = readJobsLog(paths);
+    expect(lines).toEqual([
+      {
+        id: 'job-1',
+        type: 'ref',
+        depositedSha: FP.head,
+        branch: 'fix/x',
+        verdict: 'FAIL',
+        startedAt: report.startedAt,
+        finishedAt: report.finishedAt,
+        detail: report.detail,
+      },
+    ]);
+  });
+
+  it('carries bodyVerdict when the report has one (STALE overriding a body PASS)', () => {
+    const paths = tempBench();
+    const spool = new Spool(paths);
+    spool.writeReport(
+      finishedReportFor('job-stale', { verdict: 'STALE', bodyVerdict: 'PASS', detail: 'the tree changed' }),
+    );
+    expect(readJobsLog(paths)[0]).toMatchObject({ verdict: 'STALE', bodyVerdict: 'PASS' });
+  });
+
+  it('does not append the lease job\'s early, not-yet-finished write', () => {
+    // worker.ts writes the LEASED report TWICE: once early (no finishedAt — "the report is
+    // written EARLY... then the worker holds the bench") so the waiting session unblocks,
+    // and once for real when the lease ends. Appending on the early write would double the
+    // line for every lease job — this is the mutation that placement guards against.
+    const paths = tempBench();
+    const spool = new Spool(paths);
+    const early: JobReport = { ...reportFor('job-lease'), type: 'lease', verdict: 'LEASED' };
+    expect(early.finishedAt).toBeUndefined();
+
+    spool.writeReport(early);
+    expect(readJobsLog(paths)).toEqual([]);
+
+    spool.writeReport({ ...early, finishedAt: '2026-08-22T09:30:00Z', detail: 'lease expired' });
+    expect(readJobsLog(paths)).toHaveLength(1);
+  });
+
+  it('appends once per writeReport call, in call order, across multiple jobs', () => {
+    const paths = tempBench();
+    const spool = new Spool(paths);
+    spool.writeReport(finishedReportFor('job-a', { verdict: 'PASS' }));
+    spool.writeReport(finishedReportFor('job-b', { verdict: 'FAIL' }));
+    spool.writeReport(finishedReportFor('job-c', { verdict: 'BLOCKED' }));
+    expect(readJobsLog(paths).map(l => [l.id, l.verdict])).toEqual([
+      ['job-a', 'PASS'],
+      ['job-b', 'FAIL'],
+      ['job-c', 'BLOCKED'],
+    ]);
+  });
+
+  it('survives a simulated 48 h purge — the B4 gate criterion, verbatim', () => {
+    // "a job that ends ENVIRONMENT appears in jobs.jsonl and survives a simulated 48 h"
+    // (SPO-Pipeline/doc/bench-plan-derived-2026-09-02.md, Gate B4).
+    const paths = tempBench();
+    const spool = new Spool(paths);
+    spool.writeReport(finishedReportFor('job-env', { verdict: 'ENVIRONMENT', detail: 'git fetch failed' }));
+    const jsonFile = path.join(paths.done, 'job-env.json');
+    const past = (Date.now() - 48 * 60 * 60 * 1000) / 1000;
+    fs.utimesSync(jsonFile, past, past);
+
+    spool.purgeDone(24 * 60 * 60 * 1000, Date.now());
+
+    expect(readJobsLog(paths)).toEqual([
+      expect.objectContaining({ id: 'job-env', verdict: 'ENVIRONMENT' }),
+    ]);
+  });
+
+  it('an unwritable jobsLog does not throw, does not touch done/, and is reported through log', () => {
+    const paths = tempBench();
+    // A directory in jobsLog's place makes the append fail (EISDIR) without touching
+    // permissions, which is more portable across CI than chmod.
+    fs.mkdirSync(paths.jobsLog);
+    const seen: string[] = [];
+    const spool = new Spool(paths, line => seen.push(line));
+    const report = finishedReportFor('job-x');
+
+    expect(() => spool.writeReport(report)).not.toThrow();
+
+    expect(spool.readReport('job-x')).toEqual(report);
+    expect(seen.some(line => line.includes('job-x') && line.includes('jobs.jsonl'))).toBe(true);
+  });
+
+  it('an unwritable jobsLog with no log callback still does not throw', () => {
+    const paths = tempBench();
+    fs.mkdirSync(paths.jobsLog);
+    const spool = new Spool(paths);
+    expect(() => spool.writeReport(finishedReportFor('job-y'))).not.toThrow();
+    expect(spool.readReport('job-y')).not.toBeNull();
+  });
+
+  it('appendJobsLog itself is a no-op, not a throw, for a report with no finishedAt', () => {
+    const paths = tempBench();
+    ensureLayout(paths);
+    appendJobsLog(paths, reportFor('job-z'));
+    expect(readJobsLog(paths)).toEqual([]);
   });
 });
 
