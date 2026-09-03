@@ -282,7 +282,7 @@ function parseCurriculumDetails(
     const condMatch = /^\s*<div\s+class=label>\s*([\s\S]*?)\s*<\/div>/i.exec(afterDesc);
     if (condMatch) {
       currentLevelCondition = condMatch[1]
-        .replace(/<[^>]*>/g, '')
+        .replace(/<[^>]*>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
     }
@@ -293,7 +293,7 @@ function parseCurriculumDetails(
   const bannerMatch = /<div\s+class=label\s+style="[^"]*background-color:\s*maroon[^"]*">\s*([\s\S]*?)\s*<\/div>/i.exec(html);
   if (bannerMatch) {
     levelReqStatus = bannerMatch[1]
-      .replace(/<[^>]*>/g, '')
+      .replace(/<[^>]*>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
   }
