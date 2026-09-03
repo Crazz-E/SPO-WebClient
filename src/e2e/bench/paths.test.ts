@@ -8,6 +8,7 @@ import {
   HEARTBEAT_STALE_MS,
   heartbeatAgeMs,
   processAlive,
+  readHeartbeat,
   readWorkerInfo,
   touchHeartbeat,
   workerStatus,
@@ -112,6 +113,58 @@ describe('heartbeat', () => {
     const oldTime = new Date(Date.now() - 10 * 60 * 1000);
     fs.utimesSync(paths.heartbeat, oldTime, oldTime); // mtime says 10 minutes old; content still says now
     expect(heartbeatAgeMs(paths)).toBeLessThan(5_000);
+  });
+
+  // Action B5.2: the heartbeat carries {currentJob, startedAt} so a reader can tell ALIVE from
+  // PROGRESSING, not just a bare epoch-ms number any more.
+  describe('B5.2: currentJob/startedAt', () => {
+    it('idle (no argument) writes null currentJob/startedAt, and heartbeatAgeMs still works', () => {
+      const paths = tempBench();
+      touchHeartbeat(paths);
+      const beat = readHeartbeat(paths);
+      expect(beat?.currentJob).toBeNull();
+      expect(beat?.startedAt).toBeNull();
+      expect(heartbeatAgeMs(paths)).toBeLessThan(5_000);
+    });
+
+    it('round-trips a currentJob, and heartbeatAgeMs still reads writtenAt correctly', () => {
+      const paths = tempBench();
+      touchHeartbeat(paths, { id: 'job-123', startedAt: '2026-09-03T10:00:00.000Z' });
+      const beat = readHeartbeat(paths);
+      expect(beat?.currentJob).toBe('job-123');
+      expect(beat?.startedAt).toBe('2026-09-03T10:00:00.000Z');
+      expect(heartbeatAgeMs(paths)).toBeLessThan(5_000);
+    });
+
+    it('a later idle beat clears a previous currentJob — B5.2 must not leave a finished job looking busy forever', () => {
+      const paths = tempBench();
+      touchHeartbeat(paths, { id: 'job-123', startedAt: '2026-09-03T10:00:00.000Z' });
+      expect(readHeartbeat(paths)?.currentJob).toBe('job-123');
+      touchHeartbeat(paths, null);
+      expect(readHeartbeat(paths)?.currentJob).toBeNull();
+      expect(readHeartbeat(paths)?.startedAt).toBeNull();
+    });
+
+    it('readHeartbeat tolerates a legacy bare-number heartbeat (pre-B5.2), with currentJob absent', () => {
+      const paths = tempBench();
+      fs.writeFileSync(paths.heartbeat, `${Date.now()}\n`, 'utf8');
+      const beat = readHeartbeat(paths);
+      expect(beat).not.toBeNull();
+      expect(beat?.currentJob).toBeNull();
+      expect(beat?.startedAt).toBeNull();
+    });
+
+    it('readHeartbeat returns null for genuinely corrupt content (neither JSON nor a number)', () => {
+      const paths = tempBench();
+      fs.writeFileSync(paths.heartbeat, 'not json and not a number\n', 'utf8');
+      expect(readHeartbeat(paths)).toBeNull();
+    });
+
+    it('readHeartbeat returns null when the JSON parses but writtenAt is not a finite number', () => {
+      const paths = tempBench();
+      fs.writeFileSync(paths.heartbeat, `${JSON.stringify({ writtenAt: 'not-a-number', currentJob: 'x', startedAt: 'y' })}\n`, 'utf8');
+      expect(readHeartbeat(paths)).toBeNull();
+    });
   });
 });
 
