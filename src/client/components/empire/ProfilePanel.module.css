@@ -449,6 +449,14 @@
   white-space: nowrap;
 }
 
+.plChart {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+}
+
 .plAmount {
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;

@@ -14,12 +14,16 @@ import {
   GraduationCap, Landmark, TrendingUp, Factory, Link, Flag, X, Plus,
   RotateCcw, LogOut, Wrench, ChevronUp, ChevronRight, ArrowLeft, User,
 } from 'lucide-react';
-import { Skeleton, SkeletonLines, ConfirmDialog, Switch } from '../common';
+import { Skeleton, SkeletonLines, ConfirmDialog, Switch, Sparkline } from '../common';
 import { useProfileStore, type ProfileTab } from '../../store/profile-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
-import type { AutoConnectionActionType, CurriculumActionType } from '@/shared/types';
+import type {
+  AutoConnectionActionType,
+  CurriculumActionType,
+  ProfitLossNode as ProfitLossNodeData,
+} from '@/shared/types';
 import styles from './ProfilePanel.module.css';
 
 import { formatMoney } from '../../format-utils';
@@ -623,7 +627,7 @@ function BankTab() {
 }
 
 // ---------------------------------------------------------------------------
-// P&L Tab — unchanged
+// P&L Tab — with inline history series
 // ---------------------------------------------------------------------------
 
 function ProfitLossTab() {
@@ -637,8 +641,12 @@ function ProfitLossTab() {
   );
 }
 
-function ProfitLossNode({ node }: { node: { label: string; amount: string; level: number; isHeader?: boolean; children?: Array<{ label: string; amount: string; level: number; isHeader?: boolean; children?: unknown[] }> } }) {
+function ProfitLossNode({ node }: { node: ProfitLossNodeData }) {
   const indent = node.level * 12;
+  const history = node.chartData && node.chartData.length >= 2 ? node.chartData : null;
+  const historySummary = history
+    ? `Latest ${formatMoney(history[history.length - 1])} · High ${formatMoney(Math.max(...history))} · Low ${formatMoney(Math.min(...history))}`
+    : undefined;
   return (
     <>
       <div
@@ -646,10 +654,15 @@ function ProfitLossNode({ node }: { node: { label: string; amount: string; level
         style={{ paddingLeft: `${indent + 12}px` }}
       >
         <span className={styles.plLabel}>{node.label}</span>
+        {history && (
+          <span className={styles.plChart} title={historySummary} aria-label={historySummary}>
+            <Sparkline data={history} width={64} height={14} />
+          </span>
+        )}
         <span className={styles.plAmount}>{node.amount}</span>
       </div>
       {node.children?.map((child, i) => (
-        <ProfitLossNode key={i} node={child as Parameters<typeof ProfitLossNode>[0]['node']} />
+        <ProfitLossNode key={i} node={child} />
       ))}
     </>
   );
