@@ -4,7 +4,6 @@ import * as path from 'path';
 import { Writable } from 'stream';
 import { formatSummary, main, runLive, type LiveRunOptions, type LiveRunResult } from './run';
 import { WorldLock } from './world-lock';
-import { LIMITS } from './config';
 import * as preflightModule from './preflight';
 import * as flowsModule from './flows';
 import * as capabilityModule from './capability';
@@ -115,35 +114,10 @@ describe('runLive', () => {
     expect(lock.read().holder).toBeNull();
   });
 
-  it('does not consume a run against the rate limit when pre-flight fails', async () => {
-    jest.spyOn(preflightModule, 'preflight').mockResolvedValue({
-      ok: false,
-      checks: [],
-      environmentAbort: true,
-    });
-    const lock = tempLock();
-    await runLive({ flows: ['login-spine'], branch: 'fix/a', lock });
-    expect(() => lock.checkRateLimit('fix/a')).not.toThrow();
-  });
-
-  it('reports BLOCKED rather than FAIL when the rate limiter refuses', async () => {
-    // Since 2026-08-22 the shipping interval is 0 (developer decision — the bench worker
-    // queue throttles), so the refusal is reached through the daily backstop cap instead.
-    const lock = tempLock();
-    const now = Date.now();
-    for (let i = 0; i < LIMITS.maxRunsPerDay; i++) {
-      lock.recordRun(`fix/${i}`, new Date(now - i * 1_000));
-    }
-    const preflight = jest.spyOn(preflightModule, 'preflight');
-
-    const result = await runLive({ flows: ['login-spine'], branch: 'fix/a', lock });
-
-    expect(result.status).toBe('BLOCKED');
-    expect(result.error).toMatch(/Daily live-run cap/);
-    expect(preflight).not.toHaveBeenCalled();
-  });
-
   it('reports BLOCKED when the world is still dirty from an earlier run', async () => {
+    const preflight = jest.spyOn(preflightModule, 'preflight').mockResolvedValue(okPreflight);
+    const runFlow = jest.spyOn(flowsModule, 'runFlow').mockImplementation(async f => passingFlow(f.name));
+
     const lock = tempLock();
     lock.acquire('fix/a', 1, () => false);
     lock.addPendingRestore({ what: 'x', x: 1, y: 2, propertyName: 'RDOSetTaxValue', originalValue: '7' });
@@ -152,6 +126,11 @@ describe('runLive', () => {
     const result = await runLive({ flows: ['login-spine'], branch: 'fix/b', lock });
     expect(result.status).toBe('BLOCKED');
     expect(result.error).toMatch(/dirty/);
+    // The BLOCKED refusal must happen before anything is driven — if the early return in
+    // runLive's lock.acquire() catch is ever broken, this is what stops the test from
+    // falling through into an unmocked preflight/flow that would reach the live world.
+    expect(preflight).not.toHaveBeenCalled();
+    expect(runFlow).not.toHaveBeenCalled();
   });
 
   it('fails the run when a flow left the world dirty', async () => {

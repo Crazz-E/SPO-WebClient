@@ -6,17 +6,11 @@
  * 2. World-dirty — a run that aborts before restoring what it wrote leaves the lock
  *    behind with the pending restores in it, and every later run refuses to start.
  *    Attempt 2 must never begin on a world attempt 1 left mutated.
- *
- * Also the run-rate limiter, which is what keeps a retry loop from becoming a login
- * storm against the live Delphi servers.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { LIMITS, WORLD_STATE_DIR } from './config';
-
-/** The two knobs `checkRateLimit` reads — injectable so tests can pin tight values. */
-export type RateLimits = Pick<typeof LIMITS, 'minIntervalMinutes' | 'maxRunsPerDay'>;
+import { WORLD_STATE_DIR } from './config';
 
 export interface PendingRestore {
   /** Human description used in the dirty-world report. */
@@ -38,10 +32,6 @@ export interface WorldLockFile {
   dirtyReason?: string;
 }
 
-interface RunHistoryFile {
-  runs: { branch: string; at: string }[];
-}
-
 const EMPTY_LOCK: WorldLockFile = { holder: null, pendingRestores: [], dirty: false };
 
 export class WorldDirtyError extends Error {
@@ -58,11 +48,9 @@ export class WorldDirtyError extends Error {
 
 export class WorldLock {
   private readonly lockPath: string;
-  private readonly historyPath: string;
 
   constructor(private readonly dir: string = WORLD_STATE_DIR) {
     this.lockPath = path.join(dir, 'world-lock.json');
-    this.historyPath = path.join(dir, 'run-history.json');
   }
 
   read(): WorldLockFile {
@@ -131,49 +119,6 @@ export class WorldLock {
     const previous = this.read();
     this.write(EMPTY_LOCK);
     return previous;
-  }
-
-  /**
-   * Refuse a run that is too soon after the last one on this branch, or over the daily
-   * cap. Throws with the wait time rather than sleeping — the caller decides.
-   */
-  checkRateLimit(branch: string, now: Date = new Date(), limits: RateLimits = LIMITS): void {
-    const history = readJson<RunHistoryFile>(this.historyPath, { runs: [] });
-    const nowMs = now.getTime();
-
-    const dayAgo = nowMs - 24 * 60 * 60 * 1000;
-    const recent = history.runs.filter(r => Date.parse(r.at) > dayAgo);
-    if (recent.length >= limits.maxRunsPerDay) {
-      throw new Error(
-        `Daily live-run cap reached (${recent.length}/${limits.maxRunsPerDay} in the last 24 h). ` +
-          `This cap exists to keep a retry loop from becoming a login storm.`,
-      );
-    }
-
-    // Deliberately the last run on ANY branch, not just this one. A per-branch limiter is
-    // trivially defeated by passing a different --branch on each retry, and the thing being
-    // protected is the live server, which does not care which branch the traffic came from.
-    // The gateway enforces its own ceiling too (10 auth attempts per minute per IP,
-    // server.ts:545), and tripping that reads as a login failure rather than a rate limit.
-    const lastRun = recent.map(r => Date.parse(r.at)).sort().pop();
-    if (lastRun !== undefined) {
-      const waitMs = limits.minIntervalMinutes * 60 * 1000 - (nowMs - lastRun);
-      if (waitMs > 0) {
-        const previous = recent.find(r => Date.parse(r.at) === lastRun)?.branch ?? 'another branch';
-        throw new Error(
-          `Last live run (${previous}) was ${Math.round((nowMs - lastRun) / 1000)} s ago. ` +
-            `Wait ${Math.ceil(waitMs / 1000)} s (minimum interval ${limits.minIntervalMinutes} min).`,
-        );
-      }
-    }
-  }
-
-  recordRun(branch: string, now: Date = new Date()): void {
-    const history = readJson<RunHistoryFile>(this.historyPath, { runs: [] });
-    const dayAgo = now.getTime() - 24 * 60 * 60 * 1000;
-    history.runs = history.runs.filter(r => Date.parse(r.at) > dayAgo);
-    history.runs.push({ branch, at: now.toISOString() });
-    writeJson(this.historyPath, history);
   }
 
   private write(lock: WorldLockFile): void {

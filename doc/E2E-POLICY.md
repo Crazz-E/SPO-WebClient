@@ -169,11 +169,18 @@ An autonomous loop mutating a production game world needs two rails a human run 
 stale session for the account. A failed pre-flight is an **environment abort** — it does not
 consume one of the three attempts (§8).
 
-**Rate limit.** Since 2026-08-22 (developer decision) the queue is the throttle and the
-numeric quotas stand aside for the test phase: interval 0, daily backstop 1000
-(`E2E_MIN_INTERVAL_MINUTES`, `E2E_MAX_RUNS_PER_DAY`), gateway ceilings 1000/min
-([bench-worker.md](bench-worker.md) §6). The SEC-N-3 login-storm protection now rests on
-the worker's serialization; the knobs remain for tightening before any public deployment.
+**Rate limit — removed, not tuned (2026-09-03, B3.5).** The e2e layer used to carry its
+own live-run limiter (`checkRateLimit` in `src/e2e/world-lock.ts`: a minimum interval
+between runs, a daily cap). It has been deleted. Its config defaults — interval 0, cap
+1000 — had stood since 2026-08-22, so the guard could never fire in production, and the
+threat it was written against, a retry loop becoming a login storm, is not `planitia`'s
+threat model: this is an MMO world built for many concurrent players. What actually
+serializes live traffic is the bench worker's single-flight queue above, which is bench
+policy — one owner, one job at a time — not a protection the world needs. Gateway-side
+rate limits (auth attempts, `/proxy-image`, concurrent WS connections per IP —
+[bench-worker.md](bench-worker.md) §6) are a separate mechanism, keyed by IP rather than
+by run, and are unaffected by this removal; they remain raised for the test phase and are
+tightened at public-deployment time per SEC-H-4 (`doc/production-security-policy.md`).
 
 ---
 

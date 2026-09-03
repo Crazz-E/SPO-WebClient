@@ -30,7 +30,7 @@ discipline rule.
 ├── cache/                          the ~570-file asset mirror, ONE copy for the machine
 ├── nightly/checkout + latest.json  the worker's own `main` clone, and last night's verdict
 ├── ref/checkout                    the checkout a fetched commit is gated in
-└── world/                          world-lock.json + run-history.json — finally GLOBAL
+└── world/                          world-lock.json — finally GLOBAL
 ```
 
 `cache/` is the mirror of `update.starpeaceonline.com/five/client/cache/`. It used to sit
@@ -134,7 +134,8 @@ one process (the worker) consumes the spool.
     a wrong one is never revisited.
 
 Verdicts: `PASS` (possibly with capability exceptions listed — §7 of the policy) · `FAIL` ·
-`BLOCKED` (the live stage was refused before running: dirty world or rate limit) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `DIRTY` (gate on
+`BLOCKED` (the live stage was refused before running: dirty world or another run already
+in flight) · `ENVIRONMENT` (does not consume an attempt) · `STALE` · `DIRTY` (gate on
 uncommitted changes — commit first) · `ABANDONED` ·
 `INTERRUPTED` (worker died mid-job — check the world lock before resubmitting) · `LEASED`.
 
@@ -289,21 +290,33 @@ The worker publishes through `gh`, which must be authenticated for the user runn
 unit (it is). Publishing cannot be disabled: a gate that ran but left no trace on GitHub
 is exactly the silent pass this bench exists to prevent.
 
-## 6. Rate limits (2026-08-22, developer decision)
+## 6. Rate limits (2026-08-22, developer decision; live-run limiter removed 2026-09-03)
 
-The bench queue is now the real throttle, so the numeric quotas got out of the way for
-the test phase — the servers hold this easily:
+The bench queue is the real throttle — one job at a time — so the gateway's own numeric
+quotas got out of the way for the test phase; the servers hold this easily:
 
 | Knob | Was | Is |
 |---|---|---|
 | gateway auth attempts / min / IP (`server.ts`) | 10 | 1000 |
 | gateway proxy-image requests / min / IP | 60 | 1000 |
 | gateway concurrent WS connections / IP | 5 | 1000 |
-| live-run minimum interval (`E2E_MIN_INTERVAL_MINUTES`) | 10 min | 0 |
-| live runs / day (`E2E_MAX_RUNS_PER_DAY`) | 20 | 1000 (backstop) |
 
-The mechanisms all remain (env knobs, injectable limits) — tighten before any public
-deployment.
+The mechanisms remain (env knobs, `production-config.ts` readout at boot) — tighten before
+any public deployment.
+
+The e2e layer's own live-run rate limiter — `checkRateLimit` in `src/e2e/world-lock.ts`,
+a minimum interval between runs plus a daily cap — was **deleted**, not tuned, on
+2026-09-03 (B3.5). Its config defaults (`minIntervalMinutes: 0`, `maxRunsPerDay: 1000`)
+had stood since 2026-08-22, so neither guard could ever fire in production, and the threat
+it named in its own error message — "keep a retry loop from becoming a login storm" — was
+never `planitia`'s threat model: it is an MMO world built for many concurrent players, and
+the worker's single-flight queue (§1) is bench policy (one owner, one job at a time), not
+protection the world needs. `recordRun`, which existed only to feed that limiter, went with
+it — but `~/.spo-bench/world/run-history.json`, the file it wrote, did **not**: nothing
+else read that file, but nothing sweeps it either, so it is left behind on disk, inert.
+It stops growing at whatever it held on 2026-09-03 and stays there indefinitely, looking
+like a live artifact while recording nothing further. It was the only ledger of "a live
+run happened at time T on branch B"; nothing replaces that record.
 
 ## 7. The conscious exceptions
 
