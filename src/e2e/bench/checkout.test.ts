@@ -17,6 +17,7 @@ import {
   needsInstall,
   prepareCheckout,
   recordInstalled,
+  NETWORK_RETRY_DELAYS_MS,
   type CheckoutDeps,
 } from './checkout';
 
@@ -28,23 +29,30 @@ function tempDir(): string {
 
 interface Harness {
   deps: CheckoutDeps;
-  commands: { cmd: string; args: string[]; cwd: string }[];
+  commands: { cmd: string; args: string[]; cwd: string; env?: Record<string, string> }[];
   exitCodes: number[];
   logs: string[];
+  /** Every delay the retry loop asked for, in order — never really waited. */
+  slept: number[];
 }
+
+const AUTH = { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader' };
 
 function harness(): Harness {
   const h: Harness = {
     commands: [],
     exitCodes: [],
     logs: [],
+    slept: [],
     deps: {
       runCommand: async (cmd, args, options) => {
-        h.commands.push({ cmd, args, cwd: options.cwd });
+        h.commands.push({ cmd, args, cwd: options.cwd, env: options.env });
         return h.exitCodes.shift() ?? 0;
       },
       now: () => NOW,
       log: line => h.logs.push(line),
+      sleep: async ms => void h.slept.push(ms),
+      gitAuthEnv: () => AUTH,
     },
   };
   return h;
@@ -204,7 +212,6 @@ describe('prepareCheckout', () => {
   });
 
   it.each([
-    ['git fetch', 0],
     ['git reset --hard origin/main', 1],
     ['git clean -fd', 2],
   ])('names %s when it is the step that failed', async (name, index) => {
@@ -224,7 +231,7 @@ describe('prepareCheckout', () => {
 
   it('names the clone when it fails, and never touches the ref afterwards', async () => {
     const h = harness();
-    h.exitCodes = [1];
+    h.exitCodes = [1, 1, 1]; // every attempt, or the retry would rescue it
     const result = await prepareCheckout(
       h.deps,
       {
@@ -236,7 +243,9 @@ describe('prepareCheckout', () => {
       git,
     );
     expect(result.failed).toBe('git clone');
-    expect(h.commands).toHaveLength(1);
+    // The intent is that nothing runs against a checkout that was never created — not that
+    // the clone ran once. It now runs three times, because a clone is a network step.
+    expect(h.commands.every(c => c.args[0] === 'clone')).toBe(true);
   });
 
   it('reports the origin lookup rather than cloning from a guess', async () => {
@@ -363,5 +372,128 @@ describe('mergeRef — gating the tree the branch would actually land, not the b
 
     expect(result).toEqual({ failed: null, merged: false });
     expect(h.commands.some(c => c.args.includes('merge-base'))).toBe(false);
+  });
+});
+
+/**
+ * The bug these pin: SPO-WebClient is a public repo, so git never asks the credential
+ * helper (it only asks after a 401, and GitHub answers 200) and every fetch the bench
+ * has ever made went out anonymous — until GitHub's anonymous-traffic throttle refused
+ * seven merge-queue fetches and the nightly on 2026-09-03. Nothing anywhere asserted
+ * which git calls carried credentials, which is why it was invisible for as long as it
+ * was. See ./git-auth.
+ */
+describe('prepareCheckout — credentials', () => {
+  const prep = (h: Harness, dir: string): Promise<unknown> =>
+    prepareCheckout(
+      h.deps,
+      { dir, ref: 'origin/main', workerRepo: '/repo', logFile: path.join(tempDir(), 'p.log') },
+      git,
+    );
+
+  it('gives the fetch the github credentials', async () => {
+    const h = harness();
+    await prep(h, clonedDir());
+    expect(h.commands.find(c => c.args[0] === 'fetch')?.env).toEqual(AUTH);
+  });
+
+  it('gives the clone the github credentials — the first fetch of all is a clone', async () => {
+    const h = harness();
+    await prep(h, path.join(tempDir(), 'fresh'));
+    expect(h.commands.find(c => c.args[0] === 'clone')?.env).toEqual(AUTH);
+  });
+
+  it.each([['reset'], ['clean']])(
+    'gives %s no credentials — it is local, and a token there is a token somewhere it is not needed',
+    async verb => {
+      const h = harness();
+      await prep(h, clonedDir());
+      expect(h.commands.find(c => c.args[0] === verb)?.env).toBeUndefined();
+    },
+  );
+
+  it('gives npm ci no credentials', async () => {
+    const h = harness();
+    await prep(h, clonedDir());
+    expect(h.commands.find(c => c.cmd === 'npm')?.env).toBeUndefined();
+  });
+
+  it('reads the environment once per prepare, not once per command', async () => {
+    let reads = 0;
+    const h = harness();
+    h.deps.gitAuthEnv = () => {
+      reads += 1;
+      return AUTH;
+    };
+    await prep(h, path.join(tempDir(), 'fresh'));
+    expect(reads).toBe(1);
+  });
+});
+
+describe('prepareCheckout — retrying a network step', () => {
+  const prep = (h: Harness, dir: string): Promise<{ failed: string | null }> =>
+    prepareCheckout(
+      h.deps,
+      { dir, ref: 'origin/main', workerRepo: '/repo', logFile: path.join(tempDir(), 'p.log') },
+      git,
+    );
+
+  it('retries a failed fetch and succeeds on the second attempt', async () => {
+    const h = harness();
+    h.exitCodes = [1, 0, 0, 0, 0];
+    const result = await prep(h, clonedDir());
+
+    expect(result.failed).toBeNull();
+    expect(h.commands.filter(c => c.args[0] === 'fetch')).toHaveLength(2);
+    expect(h.slept).toEqual([NETWORK_RETRY_DELAYS_MS[0]]);
+  });
+
+  it('backs off between attempts, and gives up after the last delay', async () => {
+    const h = harness();
+    h.exitCodes = [1, 1, 1];
+    const result = await prep(h, clonedDir());
+
+    expect(result.failed).toBe('git fetch');
+    expect(h.commands.filter(c => c.args[0] === 'fetch')).toHaveLength(
+      NETWORK_RETRY_DELAYS_MS.length + 1,
+    );
+    expect(h.slept).toEqual(NETWORK_RETRY_DELAYS_MS);
+  });
+
+  it('says in the log that it is retrying, and what it is waiting for', async () => {
+    const h = harness();
+    h.exitCodes = [1, 0];
+    await prep(h, clonedDir());
+    expect(h.logs.join('\n')).toMatch(/git fetch exited 1 — retrying in 2000ms/);
+  });
+
+  it.each([['reset', 1], ['clean', 2]])(
+    'never retries %s — it is local and deterministic, so a second run would only hide the error',
+    async (verb, index) => {
+      const h = harness();
+      h.exitCodes = [0, 0, 0];
+      h.exitCodes[index] = 1;
+      await prep(h, clonedDir());
+
+      expect(h.commands.filter(c => c.args[0] === verb)).toHaveLength(1);
+      expect(h.slept).toEqual([]);
+    },
+  );
+
+  it('never retries npm ci', async () => {
+    const h = harness();
+    const dir = clonedDir();
+    fs.writeFileSync(path.join(dir, 'package-lock.json'), '{"v":9}');
+    h.exitCodes = [0, 0, 0, 1];
+    await prep(h, dir);
+
+    expect(h.commands.filter(c => c.cmd === 'npm')).toHaveLength(1);
+    expect(h.slept).toEqual([]);
+  });
+
+  it('waits long enough to outlast a blip, and short enough not to wedge a serialised bench', () => {
+    const total = NETWORK_RETRY_DELAYS_MS.reduce((a, b) => a + b, 0);
+    expect(total).toBeGreaterThanOrEqual(5_000);
+    expect(total).toBeLessThanOrEqual(30_000);
   });
 });

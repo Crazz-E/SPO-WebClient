@@ -3,12 +3,16 @@ import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { type runGit } from './fingerprint';
 import { benchPaths, ensureLayout, readHeartbeat, readWorkerInfo, type BenchPaths } from './paths';
 import { Spool, type JobRequest } from './job';
 import { listVerdicts, publishPendingStatuses, writeVerdictIn } from './verdict';
 import { readNightlyResult } from './nightly';
 import { type GatewayDeps } from './gateway';
 import {
+  authEnvForGitArgs,
+  mergeQueueDeps,
+  NETWORK_SUBCOMMANDS,
   classifyStage,
   countCapabilityExceptions,
   DEADLINE_EXIT_CODE,
@@ -42,6 +46,8 @@ interface Harness {
   gatewayStops: number;
   logs: string[];
   submitterAlive: boolean;
+  /** What deps.gitAuthEnv() returns; see ./git-auth. */
+  gitAuthEnv: Record<string, string>;
   /** Successive fingerprint hashes; the last one repeats. */
   hashes: string[];
   /** What every fingerprint reports for `clean`. */
@@ -90,6 +96,7 @@ function harness(): Harness {
     gatewayStops: 0,
     logs: [],
     submitterAlive: true,
+    gitAuthEnv: { GIT_CONFIG_COUNT: '1' },
     hashes: ['h1'],
     clean: true,
     baseMain: 'main-sha-1',
@@ -148,6 +155,7 @@ function harness(): Harness {
       processAlive: () => h.submitterAlive,
       now: () => (h.clock.nowMs += 10),
       sleep: async () => {},
+      gitAuthEnv: () => h.gitAuthEnv,
       log: line => h.logs.push(line),
       currentJob: null,
     },
@@ -1556,7 +1564,9 @@ describe('workerLoop and main', () => {
     const h = harness();
     // 03:00 UTC: inside the window, whatever the machine's timezone.
     h.clock.nowMs = Date.UTC(2026, 7, 25, 3, 0, 0);
-    h.exitCodes = [1]; // the clone fails, so nothing touches the network or the disk
+    // Every clone attempt fails, so nothing touches the network or the disk. Three, not
+    // one: a clone is a network step and gets retried — see checkout.ts.
+    h.exitCodes = [1, 1, 1];
 
     await workerLoop(h.deps, 1);
 
@@ -2414,5 +2424,121 @@ describe('the heartbeat carries currentJob/startedAt (B5.2), via main()', () => 
     expect(beat).not.toBeNull();
     expect(beat?.currentJob).toBeNull();
     expect(beat?.startedAt).toBeNull();
+  });
+});
+
+/**
+ * The merge queue is where the outage actually landed: between 07:44:26Z and 07:45:17Z on
+ * 2026-09-03 it resubmitted the same `gh-readonly-queue` ref seven times and GitHub refused
+ * every fetch as unauthenticated. Its git runner is shared between calls that leave the
+ * machine and calls that do not, so which of them carries credentials is a decision, and a
+ * decision nothing asserted is a decision that silently reverts.
+ */
+describe('authEnvForGitArgs', () => {
+  const AUTH = { GIT_CONFIG_COUNT: '1' };
+  const auth = (): typeof AUTH => AUTH;
+  const log = (): void => {};
+
+  it.each([['fetch'], ['ls-remote'], ['clone'], ['push']])(
+    'authenticates git %s — it leaves the machine',
+    verb => {
+      expect(authEnvForGitArgs([verb, 'origin'], log, auth)).toEqual(AUTH);
+    },
+  );
+
+  it.each([['rev-parse'], ['log'], ['merge-base'], ['status'], ['diff'], ['hash-object']])(
+    'gives git %s nothing — it is local, and credentials it cannot use are credentials somewhere they need not be',
+    verb => {
+      expect(authEnvForGitArgs([verb], log, auth)).toBeUndefined();
+    },
+  );
+
+  it('is undefined, not an empty object, for a local call — runGit then leaves the env alone', () => {
+    expect(authEnvForGitArgs(['rev-parse'], log, auth)).toBeUndefined();
+  });
+
+  it('handles an empty argument list without throwing', () => {
+    expect(authEnvForGitArgs([], log, auth)).toBeUndefined();
+  });
+
+  it('pins the network set, so adding a network call without credentials is a failing test', () => {
+    expect([...NETWORK_SUBCOMMANDS].sort()).toEqual(['clone', 'fetch', 'ls-remote', 'push']);
+  });
+});
+
+/**
+ * Reachability, not correctness. `authEnvForGitArgs` having the right answer proves
+ * nothing about whether production ever asks it — that is the distinction the whole B-series
+ * kept paying for, and it is exactly the shape of the original defect: the credential helper
+ * was configured and correct, and simply never on the path. These call the wiring the worker
+ * really builds.
+ */
+describe('the worker wiring reaches the credentials', () => {
+  function paths(): BenchPaths {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'spo-wiring-'));
+    const p = benchPaths(root);
+    ensureLayout(p);
+    return p;
+  }
+
+  it('routes the merge queue fetch through the credentials', () => {
+    const calls: { args: string[]; env?: NodeJS.ProcessEnv }[] = [];
+    const runner = ((cwd: string, args: string[], input?: string, env?: NodeJS.ProcessEnv) => {
+      calls.push({ args, env });
+      return '';
+    }) as typeof runGit;
+
+    const deps = mergeQueueDeps(paths(), () => {}, runner);
+    deps.git(['fetch', '--no-tags', 'origin', 'refs/heads/x'], '/repo');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].env).toBeDefined();
+  });
+
+  it('routes the merge queue ls-remote through the credentials — it polls GitHub on every tick', () => {
+    const calls: { args: string[]; env?: NodeJS.ProcessEnv }[] = [];
+    const runner = ((cwd: string, args: string[], input?: string, env?: NodeJS.ProcessEnv) => {
+      calls.push({ args, env });
+      return '';
+    }) as typeof runGit;
+
+    mergeQueueDeps(paths(), () => {}, runner).lsRemote('/repo');
+
+    expect(calls[0].args[0]).toBe('ls-remote');
+    expect(calls[0].env).toBeDefined();
+  });
+
+  it('gives the merge queue local reads no credentials', () => {
+    const calls: { args: string[]; env?: NodeJS.ProcessEnv }[] = [];
+    const runner = ((cwd: string, args: string[], input?: string, env?: NodeJS.ProcessEnv) => {
+      calls.push({ args, env });
+      return 'sha\n';
+    }) as typeof runGit;
+
+    mergeQueueDeps(paths(), () => {}, runner).git(['rev-parse', 'HEAD'], '/repo');
+
+    expect(calls[0].env).toBeUndefined();
+  });
+
+  /**
+   * Asserted on key NAMES only, never on the object. This calls the real `gh auth token`,
+   * so `env` holds a live credential on a developer machine, and a jest diff of a whole
+   * env object prints every value it holds straight into the test output and CI log.
+   */
+  it('hands the worker a gitAuthEnv that is either complete or empty, never half-built', () => {
+    const keys = Object.keys(realWorkerDeps(paths()).gitAuthEnv()).sort();
+    // A partial triple would make git fail with a config error rather than fall back to
+    // anonymous, which is worse than the bug this replaces. Empty is the honest other
+    // answer: no token, so no header — see githubAuthEnv.
+    expect([
+      [].join(),
+      ['GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0'].join(),
+    ]).toContain(keys.join());
+  });
+
+  it('hands the worker a sleep that really waits', async () => {
+    const before = Date.now();
+    await realWorkerDeps(paths()).sleep(5);
+    expect(Date.now() - before).toBeGreaterThanOrEqual(4);
   });
 });

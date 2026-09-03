@@ -29,11 +29,23 @@ export interface TreeFingerprint {
 
 export type GitRunner = (worktree: string, args: string[], input?: string) => string;
 
-export function runGit(worktree: string, args: string[], input?: string): string {
+/**
+ * `env` is merged over the process environment, never substituted for it: git needs `HOME`
+ * to find its config and `PATH` to find its helpers. It exists so a caller can hand a
+ * network command the credentials from ./git-auth without those credentials being in the
+ * environment of every other git call the bench makes.
+ */
+export function runGit(
+  worktree: string,
+  args: string[],
+  input?: string,
+  env?: NodeJS.ProcessEnv,
+): string {
   return execFileSync('git', ['-C', worktree, ...args], {
     encoding: 'utf8',
     input,
     maxBuffer: 64 * 1024 * 1024,
+    env: env ? { ...process.env, ...env } : undefined,
   });
 }
 

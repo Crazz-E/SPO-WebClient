@@ -495,6 +495,43 @@ Three things that are not obvious:
   would leave whichever finished last, destroying the comparison; publishing as `bench/gate`
   would put the new path behind the required check before it has earned it.
 
+### Why every fetch carries a token
+
+**Code:** `src/e2e/bench/git-auth.ts` · **Incident:** 2026-09-03 07:44:26Z–07:49:22Z
+
+SPO-WebClient is a **public** repository. Git's HTTP transport tries anonymously first and
+consults a credential helper only after the server answers `401`; GitHub answers `200` to
+anonymous reads of a public repo. So `credential.https://github.com.helper = !gh auth
+git-credential` — which is configured on this machine, and works — was **never invoked for
+this repo**, and every fetch the bench had ever made went out unauthenticated.
+
+Confirmed with `GIT_TRACE=1`: `gh auth git-credential` is spawned for the private
+SPO-Pipeline and never for this one.
+
+Anonymous traffic is throttled. On 2026-09-03 GitHub refused seven consecutive merge-queue
+fetches of PR #643 between 07:44:26Z and 07:45:17Z, then the nightly's at 07:49:22Z, each
+with `GitHub is temporarily limiting some unauthenticated downloads`. `main` went unproven
+for the day.
+
+Two things follow, in this order of importance:
+
+1. **The token goes in the environment of every git call that leaves the machine** —
+   `GIT_CONFIG_KEY_n=http.https://github.com/.extraheader`, the mechanism
+   `actions/checkout` uses. Not in `argv`, where `ps` would show it; not in a config file,
+   where it would be a credential at rest; and never in a log. Local calls (`rev-parse`,
+   `reset`, `merge-base`) and `npm ci` get nothing — `NETWORK_SUBCOMMANDS` in `worker.ts`
+   is the list, and it is pinned by a test.
+2. **`clone` and `fetch` retry** — `NETWORK_RETRY_DELAYS_MS` in `checkout.ts`, two retries
+   over about ten seconds. This is the lesser half and deliberately modest: an authenticated
+   fetch is not subject to the limit that was hit, the bench is serialised so patience costs
+   every other job, and waiting out a multi-minute outage is the caller's business, not this
+   loop's. `reset` and `clean` never retry — they are local and deterministic, and a second
+   run would only hide a real error.
+
+If `gh auth token` produces nothing, the fetch is anonymous exactly as it was before and a
+line says so. A missing token must never turn a job that would have worked into one that
+fails.
+
 ## 11. The push chain after #158 stage C
 
 **The gate tests a pushed commit.** A session commits, pushes, and asks the bench to gate the
