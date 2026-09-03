@@ -315,6 +315,20 @@ const DELEGATIONS: readonly Delegation[] = [
     forwarded: ['4210', 'Ferme du Nord'],
     result: { success: true },
   },
+  {
+    method: 'createFavoriteFolder',
+    install: () => jest.spyOn(favoritesHandler, 'createFavoriteFolder'),
+    call: s => s.createFavoriteFolder('', 'Farms'),
+    forwarded: ['', 'Farms'],
+    result: { success: true, id: 12 },
+  },
+  {
+    method: 'moveFavorite',
+    install: () => jest.spyOn(favoritesHandler, 'moveFavorite'),
+    call: s => s.moveFavorite('4210', '12'),
+    forwarded: ['4210', '12'],
+    result: { success: true },
+  },
 
   // ── politics-handler ─────────────────────────────────────────────────────
   {
@@ -633,7 +647,7 @@ describe('StarpeaceSession — handler delegation', () => {
   it('covers every one-line handler delegation the facade declares', () => {
     // A guard on the table itself: if a delegation is added to the facade and
     // not to the table, the count stops matching and this row says so.
-    expect(DELEGATIONS).toHaveLength(67);
+    expect(DELEGATIONS).toHaveLength(69);
     expect(new Set(DELEGATIONS.map(d => d.method)).size).toBe(DELEGATIONS.length);
   });
 
