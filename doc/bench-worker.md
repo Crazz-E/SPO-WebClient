@@ -25,7 +25,8 @@ discipline rule.
 ├── heartbeat                       touched every 5 s; its mtime IS the sign of life
 ├── spool/job-<epochms>-<rand>.json deposits; filename order = queue order
 ├── running/                        the one claimed job
-├── done/<jobid>.json + .log        reports, purged after 24 h
+├── done/<jobid>.json + .log        reports; only the .log is purged (24 h) — see jobs.jsonl
+├── jobs.jsonl                      one durable line per finished job, forever (§B4.2 below)
 ├── verdicts/<sha>.json             per-commit attestations — what `bench/gate` publishes
 ├── cache/                          the ~570-file asset mirror, ONE copy for the machine
 ├── nightly/checkout + latest.json  the worker's own `main` clone, and last night's verdict
@@ -43,6 +44,18 @@ next sync, and `rm -rf ~/.spo-bench/cache` forces a full re-prime.
 
 Every hand-off is a same-filesystem `rename(2)`: atomic, no locks needed, because exactly
 one process (the worker) consumes the spool.
+
+`jobs.jsonl` (action B4.2, SPO-Pipeline/doc/bench-plan-derived-2026-09-02.md row 4.2) is
+the durable answer to "what happened to this job", for every verdict — including DIRTY,
+ENVIRONMENT, ABANDONED and INTERRUPTED, which `verdicts/` never records at all and `done/`
+used to lose the moment its 24 h purge ran. `Spool.writeReport` (`src/e2e/bench/job.ts`)
+appends one JSON line per finished job — never rewritten, never reordered, a single
+`fs.appendFileSync` so a crash mid-write cannot corrupt an earlier line — and `purgeDone`
+now deletes only the `.log`; the `.json` and this file are left alone. It is bookkeeping,
+not evidence: an unwritable `jobs.jsonl` cannot fail or even taint the job it was trying to
+record (same rule as `gate-attempts.json`, B4.3), and the failure surfaces through the
+worker's own log rather than vanishing silently. No rotation: see `appendJobsLog`'s doc
+comment in `job.ts` for the measured line size and growth rate.
 
 | Piece | File | Role |
 |---|---|---|
@@ -124,7 +137,8 @@ one process (the worker) consumes the spool.
    two jobs.**
 11. **Fingerprint `atEnd`**; if the three differ → verdict **`STALE`, never PASS** — the
    report says so plainly and carries all three fingerprints.
-12. **Report** to `done/`, **attestation** to `verdicts/<sha>.json` (gate jobs) or
+12. **Report** to `done/` (and, in the same `writeReport` call, one durable line to
+    `jobs.jsonl` — see above), **attestation** to `verdicts/<sha>.json` (gate jobs) or
     `nightly/latest.json` (nightly jobs — never both, §8), running slot released, next job.
     **Three verdicts attest nothing** — `NON_ATTESTING` in `src/e2e/bench/worker.ts`:
     `DIRTY` (the tree is not the sha), `ENVIRONMENT` (fetch, owner lease, gateway or live

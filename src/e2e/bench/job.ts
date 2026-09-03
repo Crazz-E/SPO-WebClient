@@ -11,6 +11,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { toErrorMessage } from '../../shared/error-utils';
 import type { BenchPaths } from './paths';
 import type { TreeFingerprint } from './fingerprint';
 
@@ -108,6 +109,89 @@ export interface JobReport {
   leaseUntil?: string;
 }
 
+/**
+ * One line of `jobsLog` (~/.spo-bench/jobs.jsonl) — the durable answer to "what happened
+ * to this job", for every verdict including the ones `verdicts/` never records (DIRTY,
+ * ENVIRONMENT, ABANDONED) and the one nothing else ever recorded past 24 h (INTERRUPTED).
+ * Deliberately a subset of `JobReport`: no `fingerprints.atStart`/`atEnd`, no
+ * `gateArtifact`, no `logFile` — those name paths and hashes that answer "was this build
+ * reproducible", which is `done/<id>.json`'s job while it still exists. This line answers
+ * "what verdict did job X reach, on what sha, and why" — cheap enough to keep forever (see
+ * `appendJobsLog`'s doc comment for the measured size).
+ */
+export interface JobsLogLine {
+  id: string;
+  type: JobType;
+  /** The sha the submitter deposited — `report.fingerprints.atSubmit.head`, never the
+   *  merge commit a `ref` job's `prepareRef` may have produced (see worker.ts's own
+   *  `depositedSha`/`gatedSha` split, B4.1). */
+  depositedSha: string;
+  branch: string;
+  verdict: JobVerdict;
+  /** What the body concluded before STALE overrode it — absent unless it did. */
+  bodyVerdict?: JobVerdict;
+  startedAt: string;
+  finishedAt: string;
+  detail?: string;
+}
+
+/**
+ * Append one durable line to `jobsLog` for a FINISHED report — never for the `lease` job's
+ * own early write (`worker.ts`: "the report is written EARLY... then the worker holds the
+ * bench"), which has no `finishedAt` yet. That early write and the lease's real final write
+ * both reach here through the same `Spool.writeReport`; gating on `finishedAt` is what
+ * keeps this one line per job instead of two for every lease.
+ *
+ * `finishedAt` is set exactly once per job, by `runJob`'s `finish()` closure for every
+ * ordinary outcome, and directly by `recoverInterrupted` (INTERRUPTED) and `processOldest`
+ * (ABANDONED, submitter-died-before-start) for the two paths that never reach `runJob` at
+ * all. All three write through `Spool.writeReport`, so hooking the append there — rather
+ * than in each of those three call sites — is what makes INTERRUPTED reach this file: a
+ * worker that died mid-job has nothing to do with any of `runJob`'s own return paths, but
+ * `recoverInterrupted` still calls `writeReport`, so it still lands here.
+ *
+ * WHOLLY NON-FATAL, the same rule as `nextGateAttempt` (B4.3): this is bookkeeping, never
+ * evidence a gate's own verdict depends on. A full disk, an unwritable `~/.spo-bench`, a
+ * permissions change — none of it may throw out of here, and none of it may touch the
+ * `done/<id>.json` this function is called right after writing. The failure is not
+ * swallowed, though: it is handed to `log` when the caller supplies one, so a jobs.jsonl
+ * that quietly stopped growing is at least visible in the worker's own log — the gap this
+ * action exists to close, one level in.
+ *
+ * Retention: no rotation, and none is planned. Measured by literally replaying this
+ * function over every real `~/.spo-bench/done/*.json` on disk (37 reports, 2026-09-03):
+ * 11,933 bytes total, 323 bytes/line average — against ~1-1.3 KB for the `.json` each line
+ * summarizes. The bench is one worker running one job at a time, and that same corpus shows
+ * on the order of tens of jobs a day (37 in the trailing 24 h). At 40 jobs/day * 323 B that
+ * is ~13 KB/day, ~4.6 MB/year: trivial to keep forever, and trivial next to the `.log`
+ * files this deliberately excludes (measured up to ~48 KB each, and still purged after
+ * 24 h by `purgeDone`). Revisit only if the job rate itself grows by orders of magnitude —
+ * nothing here assumes it will.
+ */
+export function appendJobsLog(
+  paths: BenchPaths,
+  report: JobReport,
+  log?: (line: string) => void,
+): void {
+  if (report.finishedAt === undefined) return;
+  const line: JobsLogLine = {
+    id: report.id,
+    type: report.type,
+    depositedSha: report.fingerprints.atSubmit.head,
+    branch: report.branch,
+    verdict: report.verdict,
+    ...(report.bodyVerdict !== undefined ? { bodyVerdict: report.bodyVerdict } : {}),
+    startedAt: report.startedAt,
+    finishedAt: report.finishedAt,
+    ...(report.detail !== undefined ? { detail: report.detail } : {}),
+  };
+  try {
+    fs.appendFileSync(paths.jobsLog, `${JSON.stringify(line)}\n`, 'utf8');
+  } catch (err: unknown) {
+    log?.(`jobs.jsonl: could not append ${report.id} (${toErrorMessage(err)})`);
+  }
+}
+
 export class DuplicateJobError extends Error {
   constructor(existing: JobRequest) {
     super(
@@ -125,7 +209,16 @@ export function newJobId(nowMs: number = Date.now()): string {
 }
 
 export class Spool {
-  constructor(private readonly paths: BenchPaths) {}
+  /**
+   * `log`: where an unwritable `jobsLog` becomes observable (see `appendJobsLog`).
+   * Optional so every existing test construction (`new Spool(paths)`) keeps compiling;
+   * production wiring always supplies one (worker.ts, cli.ts) — the same `log` the rest
+   * of the worker already uses, not a second logging path.
+   */
+  constructor(
+    private readonly paths: BenchPaths,
+    private readonly log?: (line: string) => void,
+  ) {}
 
   /**
    * Deposit a request. Refuses (DuplicateJobError) while an earlier request for the same
@@ -197,6 +290,9 @@ export class Spool {
   writeReport(report: JobReport): string {
     const target = path.join(this.paths.done, `${report.id}.json`);
     writeAtomically(target, report);
+    // After, not before: a jobsLog failure must never stop the report that IS the job's
+    // evidence from landing in done/ (see appendJobsLog's doc comment — bookkeeping only).
+    appendJobsLog(this.paths, report, this.log);
     return target;
   }
 
@@ -213,9 +309,22 @@ export class Spool {
     return [...this.queued(), ...this.running()].some(entry => entry.request.id === id);
   }
 
-  /** Reports older than maxAgeMs are deleted; nothing else is ever purged automatically. */
+  /**
+   * Deletes `.log` files in `done/` older than maxAgeMs — build/test output, the one part
+   * of a finished job that is both large (measured up to ~48 KB) and reproduces nothing a
+   * reader needs once the job is old news. The `.json` report is left alone: it used to be
+   * deleted right alongside the log, which is the entire reason DIRTY / ENVIRONMENT /
+   * ABANDONED / INTERRUPTED were invisible in a 509-record corpus (action B4.2,
+   * SPO-Pipeline/doc/bench-plan-derived-2026-09-02.md row 4.2) — `verdicts/` never records
+   * a non-attesting verdict, and `done/` was the only place they existed at all. Its
+   * content is now durable regardless (`appendJobsLog`, called from `writeReport` before
+   * this ever runs), so leaving the `.json` in place is redundant-but-harmless rather than
+   * load-bearing — but B3.4 in SPO-Pipeline reads `done/<jobId>.json` right after a gate,
+   * and no longer racing a 24 h clock only makes that read safer.
+   */
   purgeDone(maxAgeMs: number, nowMs: number = Date.now()): void {
     for (const name of safeReaddir(this.paths.done)) {
+      if (!name.endsWith('.log')) continue;
       const file = path.join(this.paths.done, name);
       try {
         if (nowMs - fs.statSync(file).mtimeMs > maxAgeMs) fs.rmSync(file, { force: true });

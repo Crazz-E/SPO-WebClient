@@ -62,9 +62,14 @@ export interface CliDeps {
 
 export function realCliDeps(): CliDeps {
   const paths = benchPaths();
+  // cli.ts never itself calls writeReport (only the worker does) — wired anyway so a
+  // future call site doesn't silently swallow an appendJobsLog failure by omission.
+  const log = (line: string): void => {
+    process.stderr.write(`[bench] ${line}\n`);
+  };
   return {
     paths,
-    spool: new Spool(paths),
+    spool: new Spool(paths, log),
     fingerprint: fingerprintTree,
     git: args => execFileSync('git', args, { encoding: 'utf8' }).trim(),
     workerAlive: () => workerStatus(paths),

@@ -21,7 +21,13 @@ export interface BenchPaths {
   spool: string;
   /** The one claimed job — a file here means a job is executing. */
   running: string;
-  /** Job reports, purged after 24 h. */
+  /**
+   * Job reports (`<id>.json`) and per-job build/test output (`<id>.log`). Only the `.log`
+   * is purged (24 h, `purgeDone` in ./job) — the `.json` is left alone, and every job's
+   * outcome is ALSO appended as one line to `jobsLog` the moment its report is written, so
+   * neither a purge nor a `rm -rf done/` loses the answer. See `jobsLog` below and action
+   * B4.2 (SPO-Pipeline/doc/bench-plan-derived-2026-09-02.md).
+   */
   done: string;
   /** Per-HEAD gate attestations — what `.claude/hooks/pre-push-gate.sh` reads. */
   verdicts: string;
@@ -52,6 +58,18 @@ export interface BenchPaths {
   heartbeat: string;
   /** Who the worker is: pid, repo it runs from, port it owns. */
   workerFile: string;
+  /**
+   * One durable JSON line per finished job (id, type, deposited sha, verdict, detail,
+   * timestamps — see `JobsLogLine` in ./job), appended by `Spool.writeReport` and never
+   * rewritten, reordered, or purged. `done/` answers "what happened to a job I just ran";
+   * this file answers "what has ever happened", including the non-attesting verdicts
+   * (DIRTY, ENVIRONMENT, ABANDONED, INTERRUPTED) that `verdicts/` never records and
+   * `done/` used to lose after 24 h (action B4.2, SPO-Pipeline/doc/bench-plan-derived-2026-09-02.md
+   * row 4.2). One line runs a few hundred bytes; at the bench's observed rate (tens of
+   * jobs/day) that is single-digit MB per year — see job.ts's doc comment on
+   * `appendJobsLog` for the measured figures and why no rotation is built here.
+   */
+  jobsLog: string;
 }
 
 /** Heartbeat older than this = the worker is not running, whatever systemd believes. */
@@ -86,6 +104,7 @@ export function benchPaths(root: string = benchRoot()): BenchPaths {
     refCheckout: path.join(root, 'ref', 'checkout'),
     heartbeat: path.join(root, 'heartbeat'),
     workerFile: path.join(root, 'worker.json'),
+    jobsLog: path.join(root, 'jobs.jsonl'),
   };
 }
 

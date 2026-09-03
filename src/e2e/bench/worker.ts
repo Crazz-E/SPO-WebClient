@@ -980,7 +980,7 @@ export function realRunCommand(
  * tested directly.
  */
 export function mergeQueueDeps(paths: BenchPaths, log: (line: string) => void): MergeQueueDeps {
-  const spool = new Spool(paths);
+  const spool = new Spool(paths, log);
   const git = (args: string[], cwd: string): string => runGit(cwd, args);
   return {
     lsRemote: cwd => runGit(cwd, ['ls-remote', 'origin', 'refs/heads/gh-readonly-queue/*']),
@@ -1096,7 +1096,7 @@ export function realWorkerDeps(
   };
   return {
     paths,
-    spool: new Spool(paths),
+    spool: new Spool(paths, log),
     port: BENCH_PORT,
     fingerprint: fingerprintTree,
     resolveRef,
