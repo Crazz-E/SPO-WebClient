@@ -43,6 +43,8 @@ import {
   listVerdicts,
   publishPendingStatuses,
   writeVerdictIn,
+  type LiveAttestation,
+  type StaticProofAttestation,
   type StatusPublisher,
 } from './verdict';
 import { maybeRunNightly, nightlyResultFromReport, writeNightlyResult } from './nightly';
@@ -316,6 +318,8 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
       jobId: request.id,
       createdAt: new Date(deps.now()).toISOString(),
       exceptions: countCapabilityExceptions(report.gateArtifact),
+      live: liveAttestationFrom(report.gateArtifact),
+      staticProof: staticProofAttestationFrom(report.staticProof),
     });
   }
 
@@ -340,6 +344,115 @@ export function countCapabilityExceptions(artifactPath: string | undefined): num
   } catch {
     return 0;
   }
+}
+
+/** The shape of `report/e2e/gate-<sha>.json` this module reads — see scripts/verify-gate.js. */
+interface GateArtifactShape {
+  live?: {
+    skipped?: boolean;
+    why?: string;
+    /** `LiveRunResult['status']` (src/e2e/run.ts) when `runLive()` actually ran — absent on a skip. */
+    status?: unknown;
+    /** `LiveRunResult['error']` — set on BLOCKED/ENVIRONMENT/FAIL. */
+    error?: unknown;
+    flows?: { name?: unknown }[];
+  } | null;
+  routing?: { required?: unknown[] };
+}
+
+type GateArtifactRead = { ok: true; artifact: GateArtifactShape } | { ok: false; error: string };
+
+/**
+ * Read and parse the gate artifact, keeping the read/parse failure apart from a clean
+ * absence: the two most common causes on the real corpus are indistinguishable without
+ * it — an artifact filed under the merge commit's sha rather than the deposited one
+ * (ENOENT; 145 of 393 ref-checkout verdicts) versus a genuinely corrupt/truncated file
+ * (a `SyntaxError` from `JSON.parse`). The caller decides what to do with `error`; this
+ * function only refuses to throw it away.
+ */
+function readGateArtifact(artifactPath: string): GateArtifactRead {
+  try {
+    return { ok: true, artifact: JSON.parse(fs.readFileSync(artifactPath, 'utf8')) as GateArtifactShape };
+  } catch (err) {
+    return { ok: false, error: toErrorMessage(err) };
+  }
+}
+
+/**
+ * What the live stage did, read from the gate artifact — never recomputed. See
+ * {@link LiveAttestation} for what each outcome means and why `'unknown'` must never be
+ * mistaken for `'ran'`.
+ *
+ * `'ran'` is asserted, never defaulted: `verify-gate.js` writes `runLive()`'s
+ * `LiveRunResult` into `artifact.live` verbatim on every path that isn't a skip, and that
+ * result carries its own `status` — `'PASS' | 'FAIL' | 'BLOCKED' | 'ENVIRONMENT'` — with
+ * no `skipped` key at all. Only `'PASS'` and `'FAIL'` mean the live stage actually drove
+ * the world; `'BLOCKED'` (a rate-limit or dirty-world refusal — run.ts's own comment:
+ * "nothing ran") and `'ENVIRONMENT'` (a preflight abort) both mean the flows were never
+ * driven, exactly like a missing artifact, so they — and any `status` this code has never
+ * seen — read `'unknown'`, not `'ran'`.
+ *
+ * Ways to land on `'unknown'`: no artifact path at all (`report.gateArtifact` unset —
+ * most `NON_ATTESTING` outcomes never reach here anyway), a path that does not read as
+ * JSON (see {@link readGateArtifact}), a readable artifact whose `live` block is still
+ * `null` (the static, build or routing stage failed before the live question was ever
+ * asked), and a readable, non-null `live` block that is neither a skip nor a completed
+ * PASS/FAIL run. The routed flows and the refusal's own reason are folded into `why` in
+ * every case so neither is silently dropped.
+ */
+export function liveAttestationFrom(artifactPath: string | undefined): LiveAttestation {
+  if (!artifactPath) {
+    return { status: 'unknown', why: 'no gate artifact was recorded for this run' };
+  }
+  const read = readGateArtifact(artifactPath);
+  if (!read.ok) {
+    return {
+      status: 'unknown',
+      why: `the gate artifact at ${artifactPath} could not be read: ${read.error}`,
+    };
+  }
+  const live = read.artifact.live;
+  if (!live) {
+    return { status: 'unknown', why: 'the gate artifact recorded no live stage' };
+  }
+  const required = Array.isArray(read.artifact.routing?.required)
+    ? read.artifact.routing!.required!.filter((f): f is string => typeof f === 'string')
+    : [];
+  if (live.skipped) {
+    return {
+      status: 'skipped',
+      why: live.why ?? 'the gate artifact did not record why the live stage was skipped',
+      required,
+    };
+  }
+  if (live.status === 'PASS' || live.status === 'FAIL') {
+    const flows = Array.isArray(live.flows)
+      ? live.flows
+          .map(f => (typeof f?.name === 'string' ? f.name : undefined))
+          .filter((name): name is string => name !== undefined)
+      : [];
+    return { status: 'ran', flows };
+  }
+  const reason =
+    typeof live.error === 'string'
+      ? live.error
+      : `the gate artifact recorded live.status ${JSON.stringify(live.status ?? null)}, not a completed run`;
+  const routedNote = required.length > 0 ? `; routed flows: ${required.join(', ')}` : '';
+  return { status: 'unknown', why: `${reason}${routedNote}` };
+}
+
+/**
+ * The verdict's copy of `JobReport.staticProof` (§ ci-proof.ts), reshaped into
+ * {@link StaticProofAttestation}. `undefined` — the question was never asked, because a
+ * `ref` job returned before it invoked verify-gate (a merge conflict, a build failure) —
+ * becomes `'unknown'`, never a silent "proven".
+ */
+export function staticProofAttestationFrom(
+  staticProof: { used: boolean; why?: string } | undefined,
+): StaticProofAttestation {
+  if (!staticProof) return { status: 'unknown' };
+  if (staticProof.used) return { status: 'ci' };
+  return { status: 'bench', why: staticProof.why ?? 'replayed on the bench' };
 }
 
 export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<JobReport> {

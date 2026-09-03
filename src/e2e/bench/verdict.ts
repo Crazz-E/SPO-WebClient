@@ -20,6 +20,51 @@ import { toErrorMessage } from '../../shared/error-utils';
 import type { BenchPaths } from './paths';
 import type { JobVerdict } from './job';
 
+/**
+ * What the gate's live stage did — copied verbatim from the artifact's own `live` block
+ * (`report/e2e/gate-<sha>.json`), never recomputed. This is the fix for the class this
+ * action exists to close: 17 artifacts recorded `live.skipped: true` with the flows the
+ * router required, in the same run that wrote a `PASS` nothing downstream could tell
+ * apart from a live one.
+ *
+ * `status` is the discriminant, and every member spells out its own case in full — a
+ * reader (or the type checker) can never mistake `'skipped'` or `'unknown'` for `'ran'`.
+ *
+ * - `'ran'` — the live stage actually drove the world; `flows` names what it drove.
+ * - `'skipped'` — the gate never asked the live world anything, and says why. `required`
+ *   carries `routing.required` from the artifact: the flows the router determined were
+ *   necessary, whether or not any of them ran. An empty array here is a materially
+ *   different fact from a non-empty one — nothing was owed, versus something was skipped.
+ * - `'unknown'` — the question could not be answered at all: the artifact is missing,
+ *   unreadable, or (a readable artifact, but no `live` block — the gate failed before it
+ *   got that far, e.g. a static/build/routing failure). Also covers a `live` block that
+ *   is not a skip but is not a completed run either — `runLive()`'s own `status` came
+ *   back `BLOCKED` (rate limit / dirty world) or `ENVIRONMENT` (preflight abort), or a
+ *   value this code has never seen: the gate did try to ask the live world something, but
+ *   never got an answer, so it is exactly as unanswered as a missing artifact. This must
+ *   never collapse into `'skipped'`: skipped states a known reason, unknown admits there
+ *   isn't one on file — and never into `'ran'`: nothing here proves the live stage drove
+ *   the world.
+ */
+export type LiveAttestation =
+  | { status: 'ran'; flows: string[] }
+  | { status: 'skipped'; why: string; required: string[] }
+  | { status: 'unknown'; why: string };
+
+/**
+ * Whether the static stage (typecheck, lint, the Jest suite) was proven by CI or
+ * replayed on the bench — copied verbatim from `JobReport.staticProof`, which `runJob`
+ * sets from `ci-proof.ts`'s verdict before it ever invokes verify-gate.
+ *
+ * `'unknown'` covers both a verdict written before this field existed and a `ref` job
+ * that never reached the question — a merge conflict, a build failure, or anything else
+ * that returned before the static stage was ever asked about.
+ */
+export type StaticProofAttestation =
+  | { status: 'ci' }
+  | { status: 'bench'; why: string }
+  | { status: 'unknown' };
+
 export interface BenchVerdict {
   head: string;
   branch: string;
@@ -62,6 +107,19 @@ export interface BenchVerdict {
   createdAt: string;
   /** Capability exceptions the gate recorded (doc/E2E-POLICY.md §7) — shown on GitHub. */
   exceptions?: number;
+  /**
+   * What the live stage did. See {@link LiveAttestation}. Absent on a verdict written
+   * before this field existed — a reader MUST treat that absence exactly like the
+   * `'unknown'` member, never as "the live stage ran": that conflation is the bug this
+   * field exists to close (11 PRs merged behind a PASS that never said which it was).
+   */
+  live?: LiveAttestation;
+  /**
+   * Whether the static stage was proven by CI or replayed on the bench. See
+   * {@link StaticProofAttestation}. Absent on a verdict written before this field
+   * existed — treat exactly like `{ status: 'unknown' }`.
+   */
+  staticProof?: StaticProofAttestation;
   /** Set once the commit status landed on GitHub. */
   published?: boolean;
 }
@@ -150,14 +208,21 @@ export const STATUS_DESCRIPTION_MAX = 140;
  * Build the GitHub commit-status description for a verdict, never exceeding
  * {@link STATUS_DESCRIPTION_MAX} characters.
  *
- * The verdict word, "(tree moved)", the exception count and the base sha form a
- * protected tail — always included in full. The job id is appended last, into whatever
- * budget remains; when a long `reusedFrom`/`jobId`/`baseMain` chain would blow the
- * budget, the job id is truncated, or dropped entirely if there is no room for it at all.
+ * The verdict word, the liveness marker, "(tree moved)", the exception count and the
+ * base sha form a protected tail — always included in full. The job id is appended
+ * last, into whatever budget remains; when a long `reusedFrom`/`jobId`/`baseMain` chain
+ * would blow the budget, the job id is truncated, or dropped entirely if there is no
+ * room for it at all.
  *
  * `merged` renders as "merged base <sha8>" in place of the plain "base <sha8>" — the
  * distinction a reader needs is not just which `main` the gate stood on, but whether the
  * tree it judged was the branch alone or a merge with that `main`.
+ *
+ * The liveness marker is the fix for the 3.5-day class this action closes: a static-only
+ * PASS used to render byte-identical to a live one. `verdict.live` present renders
+ * "— live" (ran), "— static-only" (skipped) or "— live unknown" (unreadable/absent
+ * artifact) immediately after the verdict word; `verdict.live` absent — a verdict written
+ * before this field existed — renders nothing, same as before this fix.
  */
 export function statusDescription(verdict: BenchVerdict): string {
   const base =
@@ -166,8 +231,17 @@ export function statusDescription(verdict: BenchVerdict): string {
       : verdict.baseMain
         ? ` — base ${verdict.baseMain.slice(0, 8)}`
         : '';
+  const live =
+    verdict.live === undefined
+      ? ''
+      : verdict.live.status === 'ran'
+        ? ' — live'
+        : verdict.live.status === 'skipped'
+          ? ' — static-only'
+          : ' — live unknown';
   const tail =
     `${verdict.verdict}${verdict.fingerprintStable ? '' : ' (tree moved)'}` +
+    live +
     `${verdict.exceptions ? ` — ${verdict.exceptions} capability exception(s)` : ''}` +
     base +
     `${verdict.reusedFrom ? ` — reused ${verdict.reusedFrom.slice(0, 8)}` : ''}`;
