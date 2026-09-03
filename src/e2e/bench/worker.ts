@@ -303,12 +303,25 @@ export async function processOldest(deps: WorkerDeps): Promise<boolean> {
     // The attestation key must stay the sha the push hook and the GitHub commit status
     // actually look up — request.fingerprint.head, fixed at deposit time.
     const head = request.fingerprint.head;
+    // The GATED sha: what was actually checked out and tested. Equal to `head` unless
+    // prepareRef merged origin/main in, in which case it is the merge commit
+    // verify-gate.js ran against and named its artifact after
+    // (report/e2e/gate-<gatedSha>.json) — report.fingerprints.atStart is taken (line
+    // ~638) AFTER prepareRef runs and BEFORE verify-gate.js starts, so it names exactly
+    // the same HEAD verify-gate.js itself reads. Falls back to `head` on the rare early
+    // FAIL that never reached the fingerprint step (a merge conflict — prepareRef already
+    // ran `merge --abort`, so nothing else was ever checked out to name). Recording this
+    // explicitly closes D6 (SPO-Pipeline/doc/bench-audit-2026-09-02.md): the artifact and the verdict
+    // used to be filed under different shas with no field connecting them — B4.1.
+    const gatedSha = report.fingerprints.atStart?.head ?? head;
     // The tree, not just the sha: a merge-queue entry is a fresh merge commit even when
     // nothing landed since this was gated, so only the tree can say "identical code".
     const tree =
       request.type === 'ref' ? deps.resolveRef(request.worktree, 'HEAD^{tree}') : undefined;
     writeVerdictIn(deps.paths.verdicts, {
       head,
+      depositedSha: head,
+      gatedSha,
       branch: request.branch,
       worktree: request.worktree,
       verdict: report.verdict,
@@ -349,6 +362,104 @@ export function countCapabilityExceptions(artifactPath: string | undefined): num
 /** Where `verify-gate.js` files a gate artifact for a sha, inside a given worktree. */
 function gateArtifactPath(worktree: string, sha: string): string {
   return path.join(worktree, 'report', 'e2e', `gate-${sha}.json`);
+}
+
+/** Where the per-target gate-attempt counter lives, next to worker.json and the heartbeat. */
+function gateAttemptsFile(root: string): string {
+  return path.join(root, 'gate-attempts.json');
+}
+
+/**
+ * Reads `gate-attempts.json` back into a `sha -> count` map, tolerating everything short
+ * of a plain object.
+ *
+ * A missing file (`ENOENT`) is the ordinary first-run case and is never logged. Anything
+ * else that stops this from being a usable map IS logged when `log` is given — a reset a
+ * reader cannot see is exactly how this counter would go quiet a second time (F2,
+ * SPO-Pipeline/doc/bench-audit-2026-09-02.md): unreadable bytes, invalid JSON, and three
+ * JSON-valid shapes that are not a `sha -> count` map all reset here rather than
+ * propagating:
+ *   - `null` and a JSON string both throw a TypeError the moment `nextGateAttempt` tries
+ *     to assign a property onto them;
+ *   - a JSON array does NOT throw, but `JSON.stringify` silently drops any property
+ *     assigned past the array's length — so the file keeps parsing, keeps "working", and
+ *     every attempt reads back as 1 forever. This is the dangerous one: it never raises a
+ *     hand, so only asserting on the INCREMENTED value catches it, not on whether a throw
+ *     occurred.
+ * Both failure modes matter, but only a throw could previously escape `runJob`'s body
+ * `try` and reach `processOldest`'s catch, which writes a FAIL JobReport — turning a
+ * bookkeeping file into something that can publish `bench/gate=failure` on an otherwise
+ * good gate. Neither case is allowed to do that any more; see {@link nextGateAttempt}.
+ */
+function readGateAttempts(file: string, log?: (line: string) => void): Record<string, number> {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      log?.(`gate-attempts.json unreadable (${toErrorMessage(err)}) — resetting the attempt count`);
+    }
+    return {};
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    log?.(`gate-attempts.json is not valid JSON (${toErrorMessage(err)}) — resetting the attempt count`);
+    return {};
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    const shape = parsed === null ? 'null' : Array.isArray(parsed) ? 'an array' : typeof parsed;
+    log?.(`gate-attempts.json was ${shape}, not a { sha: count } object — resetting the attempt count`);
+    return {};
+  }
+  return parsed as Record<string, number>;
+}
+
+/**
+ * How many times this exact DEPOSITED sha has now been sent through
+ * `scripts/verify-gate.js`, including this call — 1 the first time, 2 the second, and so
+ * on.
+ *
+ * This is `attempt`'s natural key (B4.3, SPO-Pipeline/doc/bench-audit-2026-09-02.md D8: `attempt: 1` in
+ * 314 of 314 artifacts, though `3ef3d3c3` was demonstrably gated twice). A merge-queue
+ * re-gate keeps the same DEPOSITED sha across runs even though `origin/main` — and
+ * therefore the GATED sha, the merge commit the worker actually checks out — moves between
+ * them, which is exactly the shape `3ef3d3c3` took on 2026-08-28. Keying on the gated sha
+ * instead would still read `attempt: 1` both times: the bug this closes.
+ *
+ * Persisted as a flat `sha -> count` map under the bench root, written tmp-then-rename like
+ * every other bench file — see {@link writeVerdictIn}. It only grows; nothing here prunes
+ * it (a general retention sweep is B4.5, not this action).
+ *
+ * WHOLLY NON-FATAL (F2, SPO-Pipeline/doc/bench-audit-2026-09-02.md): this is bookkeeping —
+ * a courtesy count for a human reading a re-gate, never evidence the gate's own verdict
+ * should depend on. Neither an unreadable/malformed counter file (see
+ * {@link readGateAttempts}) nor a failure to persist the write can throw out of this
+ * function; both fall back to treating the count as absent for this call, so the caller
+ * always gets a good-faith attempt number and the gate proceeds. The corrupt-shape and
+ * write-failure cases are still surfaced through `log` rather than swallowed outright —
+ * silently resetting a counter nobody can see reset is the same "quietly pinned to 1"
+ * failure this function exists to close, one level in.
+ */
+export function nextGateAttempt(root: string, depositedSha: string, log?: (line: string) => void): number {
+  const file = gateAttemptsFile(root);
+  const counts = readGateAttempts(file, log);
+  const attempt = (counts[depositedSha] ?? 0) + 1;
+  counts[depositedSha] = attempt;
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const tmp = `${file}.tmp-${process.pid}`;
+    fs.writeFileSync(tmp, `${JSON.stringify(counts, null, 2)}\n`, 'utf8');
+    fs.renameSync(tmp, file);
+  } catch (err) {
+    // Persisting is bookkeeping too: losing this write loses precision (the NEXT call
+    // starts back over from the last value it could read, or 1) but must never fail the
+    // gate that is about to run because of it. Observable, not silent — see the
+    // docstring above.
+    log?.(`gate-attempts.json: could not persist attempt ${attempt} for ${depositedSha} (${toErrorMessage(err)})`);
+  }
+  return attempt;
 }
 
 /** The shape of `report/e2e/gate-<sha>.json` this module reads — see scripts/verify-gate.js. */
@@ -709,7 +820,16 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
           ? 'static stage from CI (it ran on this sha)'
           : `replaying the static stage — ${proof.why}`,
       );
-      const args = proof.proven ? ['--skip-static', '--static-from=ci', ...request.args] : request.args;
+      // verify-gate.js needs the DEPOSITED sha to record both halves of the D6 join
+      // (B4.1), and the attempt count to make a re-gate visible (B4.3) — both placed
+      // ahead of `request.args` so they win over anything a caller happened to forward
+      // (flag() takes the first match), while a session running the script directly,
+      // without the worker, keeps its own `--attempt` exactly as before.
+      const attempt = nextGateAttempt(deps.paths.root, request.fingerprint.head, deps.log);
+      const bookkeeping = [`--deposited-sha=${request.fingerprint.head}`, `--attempt=${attempt}`];
+      const args = proof.proven
+        ? [...bookkeeping, '--skip-static', '--static-from=ci', ...request.args]
+        : [...bookkeeping, ...request.args];
       const code = await deps.runCommand('node', ['scripts/verify-gate.js', '--live', ...args], {
         cwd: request.worktree,
         env,
@@ -897,12 +1017,34 @@ export function mergeQueueDeps(paths: BenchPaths, log: (line: string) => void): 
       // field from every reader and writer, not from the 515 verdicts already on file) —
       // spreading it forward would resurrect it into every new write copied from one,
       // indefinitely. Legacy verdicts keep it; new writes, reused or not, never gain it.
-      const { fingerprintStable: _fingerprintStable, ...sourceVerdict } = source.verdict as typeof source.verdict & {
-        fingerprintStable?: unknown;
-      };
+      //
+      // `gatedSha` is dropped here too, for a sharper reason (F1,
+      // SPO-Pipeline/doc/bench-audit-2026-09-02.md): a reuse copy's `head` is the QUEUE
+      // ENTRY's sha (`toSha`, below), which is never checked out or tested, so the
+      // source's `gatedSha` would describe a different commit's evidence under a field
+      // whose contract is "what THIS record's head was tested as" — a live example on
+      // disk (verdict `083e7a1c…`, `reusedFrom 95158cf2…`) had every field but
+      // `reusedFrom` describing a commit other than its own `head`. The real fact — which
+      // artifact actually holds the evidence — is preserved below as `reusedGatedSha`
+      // instead, a name that cannot be mistaken for this record's own gate.
+      const {
+        fingerprintStable: _fingerprintStable,
+        gatedSha: sourceGatedSha,
+        reusedGatedSha: sourceReusedGatedSha,
+        ...sourceVerdict
+      } = source.verdict as typeof source.verdict & { fingerprintStable?: unknown };
       writeVerdictIn(paths.verdicts, {
         ...sourceVerdict,
         head: toSha,
+        // The reused verdict's own deposited sha is the QUEUE ENTRY's sha (toSha), never
+        // the source's — a reader keying off `head`/`depositedSha` must land on THIS
+        // record.
+        depositedSha: toSha,
+        // Mirrors jobId/reusedFrom just below: if the source is ITSELF a reuse copy, its
+        // own `gatedSha` is unset (this same rule applied one hop back) and the real
+        // artifact pointer lives in ITS `reusedGatedSha` — so the chain collapses to the
+        // original gate no matter how many reuse hops led here, same as `jobId` does.
+        reusedGatedSha: sourceGatedSha ?? sourceReusedGatedSha,
         // jobId always names the ORIGINAL live drive, byte-identical no matter how many
         // reuse hops led here — nothing is appended to it. `reusedFrom` carries the
         // provenance instead: `??` means a reuse-of-a-reuse still points at the original
