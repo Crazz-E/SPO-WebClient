@@ -3,8 +3,11 @@
  *
  * Everything the worker and its clients share lives here: the spool (sessions drop job
  * requests), the running slot, the reports, the per-HEAD attestations the push hook
- * reads, the shared world state, and the heartbeat whose mtime is the worker's sign of
- * life. It sits under $HOME (ext4), never under /mnt/c (DrvFs rename semantics) and
+ * reads, the shared world state, and the heartbeat whose CONTENT — the epoch ms
+ * touchHeartbeat wrote, not the file's mtime — is the worker's sign of life (action
+ * B5.3: mtime can be preserved by a `cp -p`-style copy, or bumped by an unrelated
+ * touch that writes nothing; content is the one signal the writer actually controls).
+ * It sits under $HOME (ext4), never under /mnt/c (DrvFs rename semantics) and
  * never in a session scratchpad (per-session, shares nothing).
  */
 
@@ -42,7 +45,10 @@ export interface BenchPaths {
    * wait for, or disturb, the nightly's copy of `main`. See ./checkout.
    */
   refCheckout: string;
-  /** Touched every few seconds by the worker; its mtime is the liveness signal. */
+  /**
+   * Written every few seconds by the worker; its CONTENT (the epoch ms it wrote, see
+   * touchHeartbeat/heartbeatAgeMs) is the liveness signal, not its mtime.
+   */
   heartbeat: string;
   /** Who the worker is: pid, repo it runs from, port it owns. */
   workerFile: string;
@@ -123,13 +129,32 @@ export function touchHeartbeat(paths: BenchPaths): void {
   fs.writeFileSync(paths.heartbeat, `${Date.now()}\n`, 'utf8');
 }
 
-/** Milliseconds since the last heartbeat, or null when there has never been one. */
+/**
+ * Milliseconds since the last heartbeat, or null when there has never been one (the file is
+ * absent) or its content isn't a parseable timestamp.
+ *
+ * Reads by CONTENT — the epoch ms touchHeartbeat wrote — never by the file's mtime (action
+ * B5.3, replacing an earlier mtime-based read). mtime is not a safe proxy for "the worker wrote
+ * this recently": a `cp -p`-style copy preserves the SOURCE's old mtime on a byte-identical
+ * fresh copy, and an unrelated touch (a backup pass, a filesystem re-sync) can bump mtime with
+ * no write at all. Content has neither failure mode, because touchHeartbeat writes a fresh
+ * epoch ms on every single beat — see paths.test.ts's two heartbeat/mtime-divergence cases for
+ * both directions pinned directly.
+ *
+ * console/collect.js in the sibling SPO-Pipeline repo reads this SAME file by content too (it
+ * always did); this function used to be the odd one out. HEARTBEAT_STALE_MS itself is
+ * unchanged by this action — see this file's own const above.
+ */
 export function heartbeatAgeMs(paths: BenchPaths, nowMs: number = Date.now()): number | null {
+  let raw: string;
   try {
-    return nowMs - fs.statSync(paths.heartbeat).mtimeMs;
+    raw = fs.readFileSync(paths.heartbeat, 'utf8').trim();
   } catch {
     return null;
   }
+  const writtenMs = Number(raw);
+  if (!Number.isFinite(writtenMs)) return null;
+  return nowMs - writtenMs;
 }
 
 export interface WorkerStatus {
