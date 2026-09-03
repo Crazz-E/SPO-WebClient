@@ -2,10 +2,11 @@
  * Per-HEAD attestations — the only thing that unblocks a `git push`, and the bridge to
  * GitHub's merge gate.
  *
- * Locally: `.claude/hooks/pre-push-gate.sh` reads verdicts/<sha>.json and refuses the
- * push unless the verdict is PASS, fingerprint-stable, fresh, and was attested for the
- * worktree doing the pushing. Only the worker writes these files — a session running
- * `npm run gate:local` produces evidence for reading, not an attestation.
+ * Locally: `.claude/hooks/pre-push-gate.sh` no longer reads this directory — #158 stage C
+ * removed the pre-push attestation check (the gate tests a commit the worker FETCHES, so
+ * a commit must be pushed before it can be gated; see that hook's own comment for why the
+ * two rules were mutually exclusive). Only the worker writes these files — a session
+ * running `npm run gate:local` produces evidence for reading, not an attestation.
  *
  * On GitHub: the worker publishes each attestation as a commit status (context
  * `bench/gate`). A status can only attach to a sha GitHub knows, and the gate runs
@@ -71,8 +72,6 @@ export interface BenchVerdict {
   /** The worktree the attestation was produced for — the hook matches it to the pusher. */
   worktree: string;
   verdict: JobVerdict;
-  /** false when the tree moved between deposit and the end of the run. */
-  fingerprintStable: boolean;
   /**
    * The `origin/main` sha this run was judged against.
    *
@@ -88,6 +87,17 @@ export interface BenchVerdict {
    * gate ran — `ref` was not already an ancestor of it. Absent (or false) means the gate
    * ran on the branch's own tree, unchanged: the common case, taken whenever the branch
    * already contains everything on `main`. See doc/bench-worker.md § The gate base.
+   *
+   * This is the field that answers "is the tree judged the tree that gets pushed" — the
+   * question a since-removed `fingerprintStable` boolean claimed to answer but could not:
+   * it was `!report.targetMoved` on the WORKER's own checkout, which `prepareRef` resets
+   * and cleans immediately before every `ref` job runs and which nothing else writes to
+   * except gitignored paths (`dist/`, `report/e2e/`) — so it was `true` in the whole
+   * corpus (518 verdicts on file as of 2026-09-03; it only grows) and could only ever go
+   * `false` if fingerprinting itself threw.
+   * `merged`/`mergedBase` were already the honest, non-tautological version of that
+   * question (B2.5): `merged: true` says outright that the judged tree is NOT the tree on
+   * the branch alone, i.e. not what a plain `git log` of the PR shows as pushed.
    */
   merged?: boolean;
   /** The `origin/main` sha that was merged in, when {@link merged} is true. */
@@ -102,7 +112,17 @@ export interface BenchVerdict {
    */
   tree?: string;
   jobId: string;
-  /** The sha whose live drive this attestation copies; absent = not a reuse. */
+  /**
+   * The sha whose live drive this attestation copies; absent = not a reuse.
+   *
+   * This is the CURRENT encoding, and every writer (`mergeQueueDeps.reuse` in
+   * ./worker) has used it since 19490070 (2026-08-26). 27 reuse records on the real
+   * corpus predate that change and instead append prose to `jobId` — e.g.
+   * `job-01787672998877-1a15c1 (reused: identical tree to cf537547, already driven
+   * live)`. Nothing in this codebase writes that shape any more; {@link reuseSourceOf}
+   * reads both because a check that only recognised the current encoding would silently
+   * miss a third of the corpus's reuse history.
+   */
   reusedFrom?: string;
   createdAt: string;
   /** Capability exceptions the gate recorded (doc/E2E-POLICY.md §7) — shown on GitHub. */
@@ -122,6 +142,57 @@ export interface BenchVerdict {
   staticProof?: StaticProofAttestation;
   /** Set once the commit status landed on GitHub. */
   published?: boolean;
+}
+
+/** The old, pre-19490070 encoding: prose appended to `jobId` rather than `reusedFrom`. */
+const LEGACY_REUSE_PROSE = /reused: identical tree to ([0-9a-f]{7,40})/;
+
+/**
+ * The sha a verdict was reused from, in whichever of the two encodings it was written
+ * with — the structured {@link BenchVerdict.reusedFrom} field, or the legacy prose
+ * appended inside `jobId` before 19490070 (2026-08-26). Returns `null` when the verdict
+ * is not a reuse at all.
+ *
+ * The legacy prose form always carries an 8-character short sha (`cf537547`, not the
+ * full 40), because that is all the log line it was lifted from ever printed. The
+ * STRUCTURED field is not guaranteed to be the full 40, though it always has been until
+ * today: `mergeQueueDeps.reuse` (./worker) writes it byte-identical to `source.verdict.head`,
+ * and every writer of `head` itself is expected to hold a full sha — except a session can
+ * submit `spo bench --ref <short>` (cli.ts), which stores exactly what it was given. One
+ * real record does this (`083e7a1c…json`, 2026-09-03, `reusedFrom: "95158cf2"`), and the
+ * corpus now holds a verdict whose OWN head is that same short string (`95158cf2.json`)
+ * alongside the 40-character one it was actually meant to reuse from
+ * (`95158cf237d3610c7cb06b06e8202d7fcd0f5675`). A bare `head === reusedFrom` lookup against
+ * either is not safe in general for a short value in either encoding — see
+ * {@link resolveReuseSource}, which is.
+ */
+export function reuseSourceOf(verdict: Pick<BenchVerdict, 'reusedFrom' | 'jobId'>): string | null {
+  if (verdict.reusedFrom) return verdict.reusedFrom;
+  const match = LEGACY_REUSE_PROSE.exec(verdict.jobId);
+  return match ? match[1] : null;
+}
+
+/**
+ * Resolve what {@link reuseSourceOf} returns to the verdict it actually names, against a
+ * real corpus where that value can be short — deliberately (the legacy prose encoding) or
+ * accidentally (a `--ref` submitted short; see {@link reuseSourceOf}'s own comment). A
+ * short value is resolved as a PREFIX of a full head, which is what the legacy encoding
+ * always needs and the accidental case usually doesn't.
+ *
+ * Refuses to guess rather than silently pick one: if the value matches more than one
+ * distinct head — a short reference that is simultaneously some verdict's own full head
+ * AND a genuine prefix of a different, longer one, which is exactly what the corpus holds
+ * today for `95158cf2` — this returns `null`. An exact 40-character match is unambiguous
+ * by construction (at most one verdict can hold any given head) and always resolves.
+ */
+export function resolveReuseSource(
+  reusedFrom: string,
+  verdicts: Pick<BenchVerdict, 'head'>[],
+): string | null {
+  const candidates = new Set(
+    verdicts.map(v => v.head).filter(head => head === reusedFrom || head.startsWith(reusedFrom)),
+  );
+  return candidates.size === 1 ? [...candidates][0] : null;
 }
 
 export function writeVerdict(paths: BenchPaths, verdict: BenchVerdict): string {
@@ -208,11 +279,17 @@ export const STATUS_DESCRIPTION_MAX = 140;
  * Build the GitHub commit-status description for a verdict, never exceeding
  * {@link STATUS_DESCRIPTION_MAX} characters.
  *
- * The verdict word, the liveness marker, "(tree moved)", the exception count and the
- * base sha form a protected tail — always included in full. The job id is appended
- * last, into whatever budget remains; when a long `reusedFrom`/`jobId`/`baseMain` chain
- * would blow the budget, the job id is truncated, or dropped entirely if there is no
- * room for it at all.
+ * The verdict word, the liveness marker, the exception count and the base sha form a
+ * protected tail — always included in full. The job id is appended last, into whatever
+ * budget remains; when a long `reusedFrom`/`jobId`/`baseMain` chain would blow the
+ * budget, the job id is truncated, or dropped entirely if there is no room for it at all.
+ *
+ * There used to be a "(tree moved)" marker here too, driven by a `fingerprintStable`
+ * field removed in B2.5: it was `true` in the whole corpus (518 verdicts on file as of
+ * 2026-09-03; it only grows) and could not go `false` for the only job type that ever
+ * wrote one (`ref`) short of the fingerprinter
+ * itself throwing — see {@link BenchVerdict.merged} for what actually answers "is the
+ * judged tree the pushed tree" now.
  *
  * `merged` renders as "merged base <sha8>" in place of the plain "base <sha8>" — the
  * distinction a reader needs is not just which `main` the gate stood on, but whether the
@@ -240,7 +317,7 @@ export function statusDescription(verdict: BenchVerdict): string {
           ? ' — static-only'
           : ' — live unknown';
   const tail =
-    `${verdict.verdict}${verdict.fingerprintStable ? '' : ' (tree moved)'}` +
+    verdict.verdict +
     live +
     `${verdict.exceptions ? ` — ${verdict.exceptions} capability exception(s)` : ''}` +
     base +

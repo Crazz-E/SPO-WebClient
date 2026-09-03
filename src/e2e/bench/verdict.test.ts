@@ -6,6 +6,8 @@ import {
   ghStatusPublisher,
   listVerdicts,
   publishPendingStatuses,
+  resolveReuseSource,
+  reuseSourceOf,
   STATUS_DESCRIPTION_MAX,
   statusDescription,
   statusState,
@@ -25,7 +27,6 @@ function verdictFor(head: string, overrides: Partial<BenchVerdict> = {}): BenchV
     branch: 'fix/x',
     worktree: '/wt/a',
     verdict: 'PASS',
-    fingerprintStable: true,
     jobId: 'job-1',
     createdAt: new Date().toISOString(),
     ...overrides,
@@ -158,12 +159,17 @@ describe('publishPendingStatuses — the retry-until-pushed loop', () => {
     expect(published).toEqual([]);
   });
 
-  it('flags an unstable fingerprint in the status description', () => {
+  it('carries the STALE verdict word itself into the status description', () => {
+    // B2.5 removed the separate `fingerprintStable` boolean and its "(tree moved)"
+    // marker: it was `true` in the whole corpus (518 verdicts on file as of 2026-09-03)
+    // for the only job type that ever wrote one, and the STALE verdict word already says
+    // everything it claimed to.
     const paths = tempBench();
-    writeVerdict(paths, verdictFor('abc123', { verdict: 'STALE', fingerprintStable: false }));
+    writeVerdict(paths, verdictFor('abc123', { verdict: 'STALE' }));
     const descriptions: string[] = [];
     publishPendingStatuses(paths, (_wt, _head, _state, description) => descriptions.push(description), () => {});
-    expect(descriptions[0]).toMatch(/STALE \(tree moved\)/);
+    expect(descriptions[0]).toBe('STALE — job job-1');
+    expect(descriptions[0]).not.toMatch(/tree moved/);
   });
 
   it('never publishes a description over the 140-char limit even with a very long jobId', () => {
@@ -209,18 +215,17 @@ describe('statusDescription', () => {
     expect(description).toBe('PASS — reused eeeeeeee — job job-1');
   });
 
-  it('composes tree-moved, exceptions, base and reused together, always within the limit', () => {
+  it('composes the verdict word, exceptions, base and reused together, always within the limit', () => {
     const description = statusDescription(
       verdictFor('c1', {
         verdict: 'STALE',
-        fingerprintStable: false,
         exceptions: 5,
         baseMain: 'b'.repeat(40),
         reusedFrom: 'e'.repeat(40),
       }),
     );
     expect(description).toBe(
-      'STALE (tree moved) — 5 capability exception(s) — base bbbbbbbb — reused eeeeeeee — job job-1',
+      'STALE — 5 capability exception(s) — base bbbbbbbb — reused eeeeeeee — job job-1',
     );
     expect(description.length).toBeLessThanOrEqual(STATUS_DESCRIPTION_MAX);
   });
@@ -325,5 +330,95 @@ describe('publishPendingStatuses — failure-streak logging', () => {
     writeVerdict(paths, verdictFor('def456'));
     publishPendingStatuses(paths, () => {}, () => {}, Date.now(), paths.verdicts, failures);
     expect(failures.has('def456')).toBe(false);
+  });
+});
+
+// B2.4 — 27 of the 91 real reuse records on the corpus (measured 2026-09-03; 64
+// `reusedFrom` + 27 legacy prose) predate `reusedFrom` (19490070, 2026-08-26) and instead
+// carry their provenance as prose inside `jobId`. Both shapes must be recognised, or any
+// check built on this reads most of the corpus's reuse history and calls it complete.
+describe('reuseSourceOf — both reuse encodings the real corpus carries', () => {
+  it('reads the current, structured encoding', () => {
+    expect(reuseSourceOf({ reusedFrom: 'e'.repeat(40), jobId: 'job-1' })).toBe('e'.repeat(40));
+  });
+
+  it('reads the legacy prose encoding, pre-19490070', () => {
+    // Lifted verbatim from the real corpus (bc5e2335…json).
+    expect(
+      reuseSourceOf({
+        reusedFrom: undefined,
+        jobId: 'job-01787672998877-1a15c1 (reused: identical tree to cf537547, already driven live)',
+      }),
+    ).toBe('cf537547');
+  });
+
+  it('returns null for a verdict that is not a reuse at all', () => {
+    expect(reuseSourceOf({ reusedFrom: undefined, jobId: 'job-01787672998877-1a15c1' })).toBeNull();
+  });
+
+  it('prefers the structured field when (hypothetically) both are present', () => {
+    expect(
+      reuseSourceOf({
+        reusedFrom: 'a'.repeat(40),
+        jobId: 'job-1 (reused: identical tree to bbbbbbbb, already driven live)',
+      }),
+    ).toBe('a'.repeat(40));
+  });
+});
+
+// Y5 — verdict.ts's own comment on `reuseSourceOf` used to claim only the legacy prose
+// encoding is ever short. It isn't the only one: `083e7a1c…json` (2026-09-03) carries a
+// STRUCTURED `reusedFrom: "95158cf2"`, because a session submitted `--ref 95158cf2` and
+// the short value was stored verbatim. The corpus now holds both a verdict whose own head
+// IS that 8-character string and the 40-character one the short ref actually meant
+// (`95158cf237d3610c7cb06b06e8202d7fcd0f5675`) — real records, not a constructed fixture.
+describe('resolveReuseSource — a short reusedFrom, in either encoding, against the real corpus', () => {
+  const LONG = '95158cf237d3610c7cb06b06e8202d7fcd0f5675';
+  const SHORT = '95158cf2';
+
+  it('resolves a full 40-character reusedFrom to the one verdict with that exact head', () => {
+    expect(resolveReuseSource(LONG, [{ head: LONG }, { head: 'a'.repeat(40) }])).toBe(LONG);
+  });
+
+  it('resolves a short reusedFrom as a prefix when exactly one head could be meant', () => {
+    // The ordinary legacy-prose case: nothing on file carries the short string as its own
+    // literal head, so the only candidate is the full one it is a prefix of.
+    expect(resolveReuseSource('cf537547', [{ head: LONG }, { head: `cf537547${'0'.repeat(32)}` }])).toBe(
+      `cf537547${'0'.repeat(32)}`,
+    );
+  });
+
+  it('refuses to guess when a short reusedFrom is simultaneously a literal head AND a prefix of a different one', () => {
+    // Today's actual corpus state: SHORT is its own verdict's real head (the submit bug)
+    // AND a genuine prefix of LONG (what the short --ref was meant to name). Picking
+    // either silently would be a guess dressed up as a resolution.
+    expect(resolveReuseSource(SHORT, [{ head: SHORT }, { head: LONG }])).toBeNull();
+  });
+
+  it('resolves cleanly when only the literal short head exists — no prefix collision', () => {
+    expect(resolveReuseSource(SHORT, [{ head: SHORT }, { head: 'a'.repeat(40) }])).toBe(SHORT);
+  });
+
+  it('returns null when nothing on file matches at all', () => {
+    expect(resolveReuseSource('deadbeef', [{ head: 'a'.repeat(40) }])).toBeNull();
+  });
+});
+
+// B2.5 — fingerprintStable was removed: it was `true` in the whole corpus (518 verdicts
+// on file as of 2026-09-03) for the only job type that ever wrote it (`ref`), and could
+// only go `false` if the
+// fingerprinter itself threw. See ./merge-queue's mayReuseVerdict for what replaced it
+// as a reuse precondition (the source's own `live` status), and BenchVerdict.merged for
+// what now answers "is the judged tree the pushed tree".
+describe('fingerprintStable is gone (B2.5)', () => {
+  it('a verdict with none of the fields fingerprintStable used to gate off still round-trips cleanly', () => {
+    const paths = tempBench();
+    writeVerdict(paths, verdictFor('abc123'));
+    expect(listVerdicts(paths)[0].verdict).not.toHaveProperty('fingerprintStable');
+  });
+
+  it('never renders a "(tree moved)" marker in the status description, for any verdict', () => {
+    expect(statusDescription(verdictFor('c1', { verdict: 'STALE' }))).not.toMatch(/tree moved/);
+    expect(statusDescription(verdictFor('c1'))).not.toMatch(/tree moved/);
   });
 });
