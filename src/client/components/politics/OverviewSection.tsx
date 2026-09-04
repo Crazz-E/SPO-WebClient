@@ -106,8 +106,8 @@ export function OverviewSection({
         </div>
       )}
 
-      {/* The two buttons Voyager puts on this very sheet
-          (`TownHallSheet.pas:320`/`:337`, `CapitolSheet.pas:258`). "Visit
+      {/* The three buttons Voyager puts on this very sheet
+          (`TownHallSheet.pas:49`/`:320`/`:337`, `CapitolSheet.pas:258`). "Visit
           Politics Page" opens a second window there; here it selects the tab. */}
       <div className={styles.overviewActions}>
         <button
@@ -122,6 +122,14 @@ export function OverviewSection({
         {!isCapitol && newspaperName !== '' && (
           <button className={styles.actionBtn} onClick={openNewspaper}>
             Rate the Mayor
+          </button>
+        )}
+        {/* Voyager's third button, `ReadNews` (`TownHallSheet.pas:49`, `:355-371`):
+            same town and paper as RateMayor, opened to read. The board opens on
+            its column index with the composer collapsed, which is read mode. */}
+        {!isCapitol && newspaperName !== '' && (
+          <button className={styles.actionBtn} onClick={openNewspaper}>
+            Read News
           </button>
         )}
       </div>
