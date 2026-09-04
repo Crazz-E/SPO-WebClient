@@ -463,6 +463,14 @@
   margin-left: var(--space-3);
 }
 
+.plSplit {
+  flex-shrink: 0;
+  min-width: 6em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  margin-left: var(--space-3);
+}
+
 /* ---- Action bar (Bank tab) ---- */
 
 .actionBar {

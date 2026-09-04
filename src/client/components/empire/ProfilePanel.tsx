@@ -660,6 +660,18 @@ function ProfitLossNode({ node }: { node: ProfitLossNodeData }) {
           </span>
         )}
         <span className={styles.plAmount}>{node.amount}</span>
+        {node.isTax && node.isHeader && (
+          <>
+            <span className={styles.plSplit}>Town</span>
+            <span className={styles.plSplit}>IFEL</span>
+          </>
+        )}
+        {node.isTax && !node.isHeader && node.secAmount !== undefined && (
+          <>
+            <span className={styles.plSplit}>{String(Number(node.amount) - Number(node.secAmount))}</span>
+            <span className={styles.plSplit}>{node.secAmount}</span>
+          </>
+        )}
       </div>
       {node.children?.map((child, i) => (
         <ProfitLossNode key={i} node={child} />

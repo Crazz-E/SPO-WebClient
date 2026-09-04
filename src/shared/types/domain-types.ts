@@ -901,6 +901,10 @@ export interface ProfitLossNode {
   amount: string;
   chartData?: number[];
   isHeader?: boolean;
+  /** The account is a tax (Obj.AccountIsTax, TycoonProfitAndLoses.asp:167/:179). */
+  isTax?: boolean;
+  /** IFEL share of a tax row (:190, FormatValue(AccountSecValue)); Town = amount − secAmount (:183). */
+  secAmount?: string;
   children?: ProfitLossNode[];
 }
 

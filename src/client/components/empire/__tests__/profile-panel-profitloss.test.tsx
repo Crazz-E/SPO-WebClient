@@ -38,6 +38,27 @@ const TREE_ONE_POINT: ProfitLossData = {
   root: { label: 'Net Profit', level: 0, amount: '1000', chartData: [5] },
 };
 
+const TAX_TREE: ProfitLossData = {
+  root: {
+    label: 'Net Profit',
+    level: 0,
+    amount: '1000',
+    children: [
+      {
+        label: 'TAXES',
+        level: 2,
+        amount: '300000',
+        isHeader: true,
+        isTax: true,
+        children: [
+          { label: 'Income tax', level: 3, amount: '300000', secAmount: '100000', isTax: true },
+          { label: 'Rent', level: 3, amount: '500' },
+        ],
+      },
+    ],
+  },
+};
+
 describe('ProfilePanel — Profit & Loss history series', () => {
   beforeEach(() => {
     useProfileStore.getState().reset();
@@ -105,5 +126,39 @@ describe('ProfilePanel — Profit & Loss history series', () => {
     expect(tabBody).toBeTruthy();
     expect(tabBody.querySelectorAll('[class*="plChart"]').length).toBe(0);
     expect(tabBody.querySelectorAll('svg').length).toBe(0);
+  });
+
+  it('a tax section shows Town/IFEL captions on its header and the split on each row beneath, without disturbing plain rows', () => {
+    const { container } = renderWithProviders(<ProfilePanel />);
+
+    clickSection('Profit & Loss');
+    act(() => {
+      useProfileStore.getState().setProfitLoss(TAX_TREE);
+    });
+
+    const tabBody = container.querySelector('[class*="tabBody"]') as HTMLElement;
+    const rows = tabBody.querySelectorAll('[class*="plRow"]');
+
+    const taxesRow = Array.from(rows).find((r) => r.textContent?.startsWith('TAXES'));
+    expect(taxesRow).toBeTruthy();
+    expect(taxesRow!.children.length).toBe(4);
+    expect(taxesRow!.children[2].textContent).toBe('Town');
+    expect(taxesRow!.children[3].textContent).toBe('IFEL');
+    expect((taxesRow as HTMLElement).style.paddingLeft).toBe(`${2 * 12 + 12}px`);
+
+    const incomeTaxRow = Array.from(rows).find((r) => r.textContent?.startsWith('Income tax'));
+    expect(incomeTaxRow).toBeTruthy();
+    expect(incomeTaxRow!.children.length).toBe(4);
+    const town = incomeTaxRow!.children[2].textContent;
+    const ifel = incomeTaxRow!.children[3].textContent;
+    expect(town).toBe('200000');
+    expect(ifel).toBe('100000');
+    expect(Number(town) + Number(ifel)).toBe(300000);
+    expect((incomeTaxRow as HTMLElement).style.paddingLeft).toBe(`${3 * 12 + 12}px`);
+
+    const rentRow = Array.from(rows).find((r) => r.textContent?.startsWith('Rent'));
+    expect(rentRow).toBeTruthy();
+    expect(rentRow!.children.length).toBe(2);
+    expect(rentRow!.lastElementChild?.className).toContain('plAmount');
   });
 });
