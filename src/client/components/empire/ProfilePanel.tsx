@@ -828,13 +828,15 @@ function AutoConnectionsTab() {
               checked={fluid.hireTradeCenter}
               onChange={() => toggleOption(fluid.fluidId, fluid.hireTradeCenter, 'hireTradeCenter', 'dontHireTradeCenter')}
             />
-            <Switch
-              className={styles.toggleRow}
-              label="Auto-include only warehouses"
-              labelPosition="start"
-              checked={fluid.onlyWarehouses}
-              onChange={() => toggleOption(fluid.fluidId, fluid.onlyWarehouses, 'onlyWarehouses', 'dontOnlyWarehouses')}
-            />
+            {fluid.storable && (
+              <Switch
+                className={styles.toggleRow}
+                label="Auto-include only warehouses"
+                labelPosition="start"
+                checked={fluid.onlyWarehouses}
+                onChange={() => toggleOption(fluid.fluidId, fluid.onlyWarehouses, 'onlyWarehouses', 'dontOnlyWarehouses')}
+              />
+            )}
           </div>
 
           {/* Supplier list */}
