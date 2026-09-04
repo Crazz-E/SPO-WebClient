@@ -3,6 +3,8 @@ import { screen, fireEvent } from '@testing-library/react';
 import { renderWithProviders, createSpiedCallbacks } from '../../__tests__/setup/render-helpers';
 import { useBuildingStore } from '../../store/building-store';
 import { usePoliticsStore } from '../../store/politics-store';
+import { useMailStore } from '../../store/mail-store';
+import { useUiStore } from '../../store/ui-store';
 import { BuildingSurface } from './BuildingSurface';
 import type { BuildingDetailsResponse } from '@/shared/types';
 
@@ -59,5 +61,32 @@ describe('BuildingSurface', () => {
     renderWithProviders(<BuildingSurface />);
     expect(screen.getByRole('heading', { name: 'Town Hall' })).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Refresh' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('offers "Write to the Mayor" for a Town Hall and opens compose addressed to mayor@<Town>.gov', () => {
+    useBuildingStore.getState().setDetails(details({ groups: { townGeneral: [{ name: 'Town', value: 'Helartia' }] } as never }));
+    renderWithProviders(<BuildingSurface />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Write to the Mayor of Helartia' }));
+
+    expect(useMailStore.getState().composeTo).toBe('mayor@Helartia.gov');
+    expect(useMailStore.getState().currentView).toBe('compose');
+    expect(useUiStore.getState().rightPanel).toBe('mail');
+  });
+
+  it('offers no mayor write action for the Capitol', () => {
+    useBuildingStore.getState().setDetails(details({
+      buildingName: 'Capitol',
+      tabs: [{ id: 'capitol' }] as never,
+      groups: { g: [{ name: 'ActualRuler', value: 'Crazz' }], townGeneral: [{ name: 'Town', value: 'Helartia' }] } as never,
+    }));
+    renderWithProviders(<BuildingSurface />);
+    expect(screen.queryByRole('button', { name: /Write to the Mayor/ })).toBeNull();
+  });
+
+  it('offers no mayor write action when the Town property has not been read yet', () => {
+    useBuildingStore.getState().setDetails(details({ groups: {} }));
+    renderWithProviders(<BuildingSurface />);
+    expect(screen.queryByRole('button', { name: /Write to the Mayor/ })).toBeNull();
   });
 });

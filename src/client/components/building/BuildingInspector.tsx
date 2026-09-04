@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Edit3, RefreshCw, X, Check, Crosshair, Star } from 'lucide-react';
+import { Edit3, RefreshCw, X, Check, Crosshair, Star, Mail } from 'lucide-react';
 import { useBuildingStore } from '../../store/building-store';
 import { useEmpireStore } from '../../store/empire-store';
 import { useGameStore } from '../../store/game-store';
@@ -22,6 +22,7 @@ import { InspectorHeader, findPropertyValue } from './InspectorHeader';
 import { DiagnosisBanner, tabForAction } from './DiagnosisBanner';
 import { parseFacilityDiagnosis } from '@/shared/building-details/facility-diagnosis';
 import { InspectorMenu } from './InspectorMenu';
+import { tycoonAddress, writeTo } from '../mail/write-to';
 import { resolveSectionFetch, sectionDisplayState, type SectionDisplayState } from './inspector-sections';
 import { parseRichDetails } from './RichDetails';
 import { PropertyGroup } from './PropertyGroup';
@@ -79,6 +80,7 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
   const isCivic = details ? isCivicBuilding(details.visualClass) : false;
   const connectionStatus = useGameStore((s) => s.status);
   const isConnected = connectionStatus === 'connected';
+  const worldName = useGameStore((s) => s.worldName);
 
   // Build civic tabs from server groups (only for civic buildings)
   const civicTabs = useMemo(() => {
@@ -368,29 +370,42 @@ export function BuildingInspector({ hideHeader }: BuildingInspectorProps = {}) {
                 />
               </>
             ) : undefined}
-            actions={!isRenaming && isOwner ? (
+            actions={!isRenaming ? (
               <>
-                {/* Adding to the Empire list — the write half of the Favorites
-                    tree the panel has only ever read. Disabled, not hidden,
-                    when the facility is already bookmarked: a control that
-                    vanishes reads as a bug. */}
-                <IconButton
-                  icon={<Star size={14} />}
-                  label={isFavorited ? 'Already in your Empire list' : 'Add to Empire list'}
-                  size="sm"
-                  variant="ghost"
-                  disabled={isFavorited}
-                  onClick={handleAddFavorite}
-                />
-                <IconButton
-                  icon={<Edit3 size={14} />}
-                  label="Rename building"
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleStartRename}
-                />
-                {/* The rename now says whether it took, and why not (B6). */}
-                <SaveIndicator propertyKey={RENAME_PENDING_KEY} />
+                {ownerTycoon && (
+                  <IconButton
+                    icon={<Mail size={14} />}
+                    label={`Write to ${ownerTycoon}`}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => writeTo(tycoonAddress(ownerTycoon, worldName))}
+                  />
+                )}
+                {isOwner && (
+                  <>
+                    {/* Adding to the Empire list — the write half of the Favorites
+                        tree the panel has only ever read. Disabled, not hidden,
+                        when the facility is already bookmarked: a control that
+                        vanishes reads as a bug. */}
+                    <IconButton
+                      icon={<Star size={14} />}
+                      label={isFavorited ? 'Already in your Empire list' : 'Add to Empire list'}
+                      size="sm"
+                      variant="ghost"
+                      disabled={isFavorited}
+                      onClick={handleAddFavorite}
+                    />
+                    <IconButton
+                      icon={<Edit3 size={14} />}
+                      label="Rename building"
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleStartRename}
+                    />
+                    {/* The rename now says whether it took, and why not (B6). */}
+                    <SaveIndicator propertyKey={RENAME_PENDING_KEY} />
+                  </>
+                )}
               </>
             ) : undefined}
           />
