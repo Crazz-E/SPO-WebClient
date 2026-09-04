@@ -1038,6 +1038,12 @@ export interface PoliticsCampaignEntry {
   rating: number;
   /** `Prestige{i}` — Kernel/PoliticsCache.pas:162, Kernel/WorldPolitics.pas:1398. */
   prestige: number;
+  /**
+   * `opositiondata.asp:53` — `/fivedata/userinfo/<World>/<Tycoon>/largephoto.jpg`,
+   * absolute on the world host, built by the gateway like `rulerPhotoUrl`.
+   * Empty string when the entry has no name (never an `<img>` for it).
+   */
+  photoUrl: string;
 }
 
 /**

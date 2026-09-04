@@ -94,12 +94,18 @@ export function CampaignPanel({ data, buildingX, buildingY }: CampaignPanelProps
   const client = useClient();
   const rail = usePoliticsStore((s) => s.activeCampaignRail);
   const setRail = usePoliticsStore((s) => s.setActiveCampaignRail);
+  // `opositiondata.asp:53-56` ships the <img> behind an `if true then` where a
+  // FileExists check used to be (`:54`), so most candidates have no photo on
+  // disk. Remember the URL that failed, not a bare boolean: a new strongest
+  // candidate with a different URL gets a fresh try without an effect or a key.
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState<string | null>(null);
 
   const office = data.isCapitol ? 'President' : 'Mayor';
   // `opositiondata.asp:46` — `Tycoon0`, the head of the campaign list.
   const strongest = data.campaigns[0];
   // `campaigntabs.asp:104` — the second tab exists only when someone is running.
   const showAll = data.campaigns.length > 0;
+  const showPhoto = strongest !== undefined && strongest.photoUrl !== '' && failedPhotoUrl !== strongest.photoUrl;
 
   return (
     <>
@@ -107,9 +113,18 @@ export function CampaignPanel({ data, buildingX, buildingY }: CampaignPanelProps
         <h4 className={styles.politicsCardTitle}>The Opposition</h4>
         {strongest ? (
           <div className={styles.rulerLayout}>
-            <div className={styles.rulerAvatar}>
-              {strongest.candidateName.charAt(0).toUpperCase()}
-            </div>
+            {showPhoto ? (
+              <img
+                className={styles.rulerPhoto}
+                src={strongest.photoUrl}
+                alt=""
+                onError={() => setFailedPhotoUrl(strongest.photoUrl)}
+              />
+            ) : (
+              <div className={styles.rulerAvatar}>
+                {strongest.candidateName.charAt(0).toUpperCase()}
+              </div>
+            )}
             <dl className={styles.rulerFigures}>
               <dt>Name</dt>
               <dd className={styles.rulerFigureName}>
