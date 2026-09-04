@@ -684,8 +684,13 @@ export const ClientBridge = {
           showToast('Message sent.', 'success', { title: 'Sent' });
         } else {
           // The draft stays on screen (T6, audit P2) — a silent failure is a lost letter.
+          // The gateway forwards only the `Post` boolean (mail-handler.ts), so the toast
+          // names the most likely cause without claiming to know which recipient failed.
           mail.setSending(false);
-          showToast('Message not sent. Your draft is kept.', 'error');
+          showToast(
+            'Message not sent. Most likely one of the recipients does not exist — the server does not say which. Your draft is kept.',
+            'error',
+          );
         }
         break;
       }

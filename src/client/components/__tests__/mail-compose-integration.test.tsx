@@ -18,8 +18,13 @@ import {
   createSpiedCallbacks,
 } from '../../__tests__/setup/render-helpers';
 import { useMailStore } from '../../store/mail-store';
-import { MailPanel } from '../mail/MailPanel';
+import { MailPanel, MAIL_BODY_MAX_CHARS } from '../mail/MailPanel';
 import type { MailMessageFull } from '@/shared/types';
+
+jest.mock('../common', () => ({
+  ...(jest.requireActual('../common') as object),
+  showToast: jest.fn(),
+}));
 
 describe('Mail compose — integration flow', () => {
   beforeEach(() => {
@@ -283,6 +288,7 @@ describe('Mail compose — integration flow', () => {
       renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSaveDraft: saveSpy }) });
       fireEvent.click(screen.getByText('Compose'));
       fireEvent.change(screen.getByPlaceholderText('To'), { target: { value: 'player42' } });
+      fireEvent.change(screen.getByPlaceholderText('Subject'), { target: { value: 'ping' } });
       fireEvent.click(screen.getByText('Send'));
 
       const save = screen.getByText('Save draft').closest('button') as HTMLButtonElement;
@@ -371,5 +377,91 @@ describe('Mail compose — integration flow', () => {
 
     expect(getFolderSpy).toHaveBeenCalledTimes(2);
     expect(getFolderSpy).toHaveBeenLastCalledWith('Inbox');
+  });
+
+  // #505 — Send accepted a subject-less letter, the body had no cap, and a refused
+  // send gave no clue why.
+  describe('#505 — compose guards', () => {
+    const { showToast } = jest.requireMock('../common') as { showToast: jest.Mock };
+
+    beforeEach(() => {
+      showToast.mockClear();
+    });
+
+    it('Send disabled with an empty subject', () => {
+      const sendSpy = jest.fn();
+      renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSend: sendSpy }) });
+      fireEvent.click(screen.getByText('Compose'));
+      fireEvent.change(screen.getByPlaceholderText('To'), { target: { value: 'player42' } });
+      fireEvent.change(screen.getByPlaceholderText('Message...'), { target: { value: 'hello' } });
+
+      const send = screen.getByText('Send').closest('button') as HTMLButtonElement;
+      expect(send.disabled).toBe(true);
+      expect(send.title).toBe('Add a subject');
+      fireEvent.click(send);
+      expect(sendSpy).not.toHaveBeenCalled();
+
+      const save = screen.getByText('Save draft').closest('button') as HTMLButtonElement;
+      expect(save.disabled).toBe(false);
+
+      fireEvent.change(screen.getByPlaceholderText('Subject'), { target: { value: 'Trade' } });
+      expect(send.disabled).toBe(false);
+    });
+
+    it('Send disabled with a whitespace-only subject', () => {
+      renderWithProviders(<MailPanel />);
+      fireEvent.click(screen.getByText('Compose'));
+      fireEvent.change(screen.getByPlaceholderText('To'), { target: { value: 'player42' } });
+      fireEvent.change(screen.getByPlaceholderText('Subject'), { target: { value: '   ' } });
+
+      const send = screen.getByText('Send').closest('button') as HTMLButtonElement;
+      expect(send.disabled).toBe(true);
+    });
+
+    it('a 20000-character paste leaves 10240 in the field', () => {
+      renderWithProviders(<MailPanel />);
+      fireEvent.click(screen.getByText('Compose'));
+      const textarea = screen.getByPlaceholderText('Message...') as HTMLTextAreaElement;
+
+      fireEvent.change(textarea, { target: { value: 'x'.repeat(20000) } });
+
+      expect(useMailStore.getState().composeBody.length).toBe(MAIL_BODY_MAX_CHARS);
+      expect(textarea.value.length).toBe(10240);
+      expect(screen.getByText('0 characters left')).toBeTruthy();
+    });
+
+    it('warns once across two oversized pastes, and not at all for an in-budget paste', () => {
+      renderWithProviders(<MailPanel />);
+      fireEvent.click(screen.getByText('Compose'));
+      const textarea = screen.getByPlaceholderText('Message...') as HTMLTextAreaElement;
+
+      fireEvent.change(textarea, { target: { value: 'a short message' } });
+      expect(showToast).not.toHaveBeenCalled();
+
+      fireEvent.change(textarea, { target: { value: 'x'.repeat(20000) } });
+      fireEvent.change(textarea, { target: { value: 'y'.repeat(15000) } });
+
+      expect(showToast).toHaveBeenCalledTimes(1);
+      expect(showToast).toHaveBeenCalledWith(expect.stringContaining('10240'), 'warning');
+    });
+
+    it('the counter tracks the remaining budget', () => {
+      renderWithProviders(<MailPanel />);
+      fireEvent.click(screen.getByText('Compose'));
+      const textarea = screen.getByPlaceholderText('Message...') as HTMLTextAreaElement;
+
+      fireEvent.change(textarea, { target: { value: 'abcde' } });
+
+      expect(screen.getByText('10235 characters left')).toBeTruthy();
+    });
+
+    it('the To field hints that several recipients can be separated by ;', () => {
+      renderWithProviders(<MailPanel />);
+      fireEvent.click(screen.getByText('Compose'));
+
+      expect(screen.getByText(/Separate the addresses with ;/)).toBeTruthy();
+      const to = screen.getByPlaceholderText('To') as HTMLInputElement;
+      expect(to.getAttribute('aria-describedby')).toBe('mail-to-hint');
+    });
   });
 });
