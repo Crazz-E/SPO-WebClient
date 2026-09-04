@@ -8,6 +8,8 @@ import { useUiStore } from '../store/ui-store';
 import { useBuildingStore } from '../store/building-store';
 import { useLogStore } from '../store/log-store';
 import { useChatStore } from '../store/chat-store';
+import { useProfileStore } from '../store/profile-store';
+import { WsMessageType, type WsMessage } from '../../shared/types';
 
 // Mock showToast to prevent import issues in test environment
 jest.mock('../components/common/Toast', () => ({
@@ -320,5 +322,43 @@ describe('ClientBridge optimistic write feedback (OB-1)', () => {
 
     expect(useBuildingStore.getState().failedUpdates.get(KEY)?.error)
       .toBe('Server rejected the change');
+  });
+});
+
+describe('ClientBridge handleProfileResponse — RESP_PROFILE_COMPANY_PROFITLOSS', () => {
+  beforeEach(() => {
+    useProfileStore.getState().reset();
+  });
+
+  it('routes the response into the store, keyed by company name', () => {
+    useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+    const tree = { root: { label: 'Net', level: 0, amount: '1', children: [] } };
+
+    ClientBridge.handleProfileResponse({
+      type: WsMessageType.RESP_PROFILE_COMPANY_PROFITLOSS,
+      wsRequestId: 'req-1',
+      companyName: 'Green Co',
+      data: tree,
+    } as unknown as WsMessage);
+
+    expect(useProfileStore.getState().companyProfitLoss).toEqual({
+      companyName: 'Green Co', cluster: 'A', status: 'loaded', data: tree, error: null,
+    });
+  });
+
+  it('a null data + error moves the view to error', () => {
+    useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+
+    ClientBridge.handleProfileResponse({
+      type: WsMessageType.RESP_PROFILE_COMPANY_PROFITLOSS,
+      wsRequestId: 'req-1',
+      companyName: 'Green Co',
+      data: null,
+      error: 'boom',
+    } as unknown as WsMessage);
+
+    expect(useProfileStore.getState().companyProfitLoss).toEqual({
+      companyName: 'Green Co', cluster: 'A', status: 'error', data: null, error: 'boom',
+    });
   });
 });

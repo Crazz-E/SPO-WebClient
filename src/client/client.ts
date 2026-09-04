@@ -435,6 +435,9 @@ export class StarpeaceClient implements ClientHandlerContext {
       onProfileBank: () => this.sendMessage({ type: WsMessageType.REQ_PROFILE_BANK }),
       onProfileProfitLoss: () => this.sendMessage({ type: WsMessageType.REQ_PROFILE_PROFITLOSS }),
       onProfileCompanies: () => this.sendMessage({ type: WsMessageType.REQ_PROFILE_COMPANIES }),
+      onProfileCompanyProfitLoss: (companyName, cluster) => this.sendMessage({
+        type: WsMessageType.REQ_PROFILE_COMPANY_PROFITLOSS, companyName, cluster,
+      }),
       onProfileAutoConnections: () => this.sendMessage({ type: WsMessageType.REQ_PROFILE_AUTOCONNECTIONS }),
       onProfilePolicy: () => this.sendMessage({ type: WsMessageType.REQ_PROFILE_POLICY }),
 

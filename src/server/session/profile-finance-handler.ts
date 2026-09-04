@@ -747,6 +747,31 @@ export async function fetchProfitLoss(ctx: SessionContext): Promise<ProfitLossDa
   return parseProfitLossHtml(html);
 }
 
+/** CompanyPage.asp:185 — the one div the parser keys on; only rendered under `if ObjValid` (:139). */
+const COMPANY_PAGE_ACCOUNT_ROW = /<div\s+class=labelAccountLevel\d\s+style="margin-left:/i;
+
+/**
+ * Fetch one company's P&L via NewTycoon/CompanyPage.asp. Same generator as
+ * TycoonProfitAndLoses.asp (one differing line, :236 vs :170), so the tree is
+ * parsed by parseProfitLossHtml unchanged. `Company` overrides the active
+ * company the base params carry; `CompanyCluster` is what the legacy link
+ * sent (chooseCompany.asp) and only picks the icon (:105).
+ *
+ * An ObjValid=false answer (:296-299) has no account row: parsed as-is it
+ * would be the empty default root, so it is refused here instead.
+ */
+export async function fetchCompanyProfitLoss(ctx: SessionContext, companyName: string, cluster: string): Promise<ProfitLossData> {
+  const html = await ctx.fetchAspPage('NewTycoon/CompanyPage.asp', {
+    Company: companyName,
+    CompanyCluster: cluster,
+    RIWS: '',
+  });
+  if (!COMPANY_PAGE_ACCOUNT_ROW.test(html)) {
+    throw new Error(`CompanyPage.asp carries no account tree for "${companyName}"`);
+  }
+  return parseProfitLossHtml(html);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PRIVATE — parseProfitLossHtml
 // ═══════════════════════════════════════════════════════════════════════════

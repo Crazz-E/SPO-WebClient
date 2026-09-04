@@ -16,6 +16,17 @@ import type {
 
 export type ProfileTab = 'curriculum' | 'bank' | 'profitloss' | 'companies' | 'autoconnections' | 'policy';
 
+export type CompanyProfitLossStatus = 'loading' | 'loaded' | 'error';
+
+/** The company drill-down open inside the Companies tab, or null when the list shows. */
+export interface CompanyProfitLossView {
+  companyName: string;
+  cluster: string;
+  status: CompanyProfitLossStatus;
+  data: ProfitLossData | null;
+  error: string | null;
+}
+
 interface ProfileState {
   // State
   profile: TycoonProfileFull | null;
@@ -28,6 +39,8 @@ interface ProfileState {
   bankAccount: BankAccountData | null;
   profitLoss: ProfitLossData | null;
   companies: CompaniesData | null;
+  /** The company drill-down open inside the Companies tab, or null when the list shows. */
+  companyProfitLoss: CompanyProfitLossView | null;
   autoConnections: AutoConnectionsData | null;
   policy: PolicyData | null;
 
@@ -47,6 +60,9 @@ interface ProfileState {
   setBankAccount: (data: BankAccountData) => void;
   setProfitLoss: (data: ProfitLossData) => void;
   setCompanies: (data: CompaniesData) => void;
+  openCompanyProfitLoss: (companyName: string, cluster: string) => void;
+  setCompanyProfitLoss: (companyName: string, data: ProfitLossData | null, error?: string) => void;
+  closeCompanyProfitLoss: () => void;
   setAutoConnections: (data: AutoConnectionsData) => void;
   setPolicy: (data: PolicyData) => void;
   openSupplierSearch: (fluidId: string, fluidName: string) => void;
@@ -65,6 +81,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
   bankAccount: null,
   profitLoss: null,
   companies: null,
+  companyProfitLoss: null,
   autoConnections: null,
   policy: null,
   supplierSearch: null,
@@ -73,12 +90,25 @@ export const useProfileStore = create<ProfileState>((set) => ({
   refreshCounter: 0,
 
   setProfile: (profile) => set({ profile, isLoading: false }),
-  setCurrentTab: (tab) => set({ currentTab: tab }),
+  setCurrentTab: (tab) => set({ currentTab: tab, companyProfitLoss: null }),
   setLoading: (loading) => set({ isLoading: loading }),
   setCurriculum: (data) => set({ curriculum: data, isLoading: false }),
   setBankAccount: (data) => set({ bankAccount: data, isLoading: false }),
   setProfitLoss: (data) => set({ profitLoss: data, isLoading: false }),
   setCompanies: (data) => set({ companies: data, isLoading: false }),
+  openCompanyProfitLoss: (companyName, cluster) => set({
+    companyProfitLoss: { companyName, cluster, status: 'loading', data: null, error: null },
+  }),
+  setCompanyProfitLoss: (companyName, data, error) => set((s) => {
+    const view = s.companyProfitLoss;
+    if (!view || view.companyName !== companyName) return {};
+    return {
+      companyProfitLoss: data
+        ? { ...view, status: 'loaded', data, error: null }
+        : { ...view, status: 'error', data: null, error: error ?? 'The company page could not be read' },
+    };
+  }),
+  closeCompanyProfitLoss: () => set({ companyProfitLoss: null }),
   setAutoConnections: (data) => set({ autoConnections: data, isLoading: false }),
   setPolicy: (data) => set({ policy: data, isLoading: false }),
   openSupplierSearch: (fluidId, fluidName) => set({
@@ -100,6 +130,7 @@ export const useProfileStore = create<ProfileState>((set) => ({
       bankAccount: null,
       profitLoss: null,
       companies: null,
+      companyProfitLoss: null,
       autoConnections: null,
       policy: null,
       supplierSearch: null,

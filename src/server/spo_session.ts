@@ -1112,6 +1112,10 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     return profileFinanceHandler.fetchProfitLoss(this);
   }
 
+  public async fetchCompanyProfitLoss(companyName: string, cluster: string): Promise<ProfitLossData> {
+    return profileFinanceHandler.fetchCompanyProfitLoss(this, companyName, cluster);
+  }
+
   public async fetchCompanies(): Promise<CompaniesData> {
     return profileFinanceHandler.fetchCompanies(this);
   }

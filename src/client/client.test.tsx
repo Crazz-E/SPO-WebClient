@@ -47,6 +47,20 @@ describe('StarpeaceClient callback wiring', () => {
 
     expect(chatHandler.requestChannelInfo).toHaveBeenCalledWith(client, 'Trade');
   });
+
+  it('onProfileCompanyProfitLoss sends REQ_PROFILE_COMPANY_PROFITLOSS with the company name and cluster', () => {
+    const sendSpy = jest.spyOn(client, 'sendMessage' as any);
+
+    client.callbacks.onProfileCompanyProfitLoss('Green Co', 'A');
+
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'REQ_PROFILE_COMPANY_PROFITLOSS',
+        companyName: 'Green Co',
+        cluster: 'A',
+      })
+    );
+  });
 });
 
 describe('Mail body splitting', () => {
