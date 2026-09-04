@@ -291,6 +291,31 @@ describe('Mail compose — integration flow', () => {
       expect(screen.queryByRole('button', { name: 'Edit draft' })).toBeNull();
     });
 
+    it('a noReply message offers no Reply control', () => {
+      const msg: MailMessageFull = {
+        messageId: 'msg-2', from: 'System', fromAddr: 'system', to: 'Me', toAddr: 'me',
+        subject: 'Notice', date: '2025-01-15', dateFmt: 'Jan 15',
+        body: ['this is a broadcast'], read: true, stamp: 3, noReply: true, attachments: [],
+      };
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage(msg));
+      expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Edit draft' })).toBeNull();
+    });
+
+    it('a message with noReply false still offers Reply alongside Delete', () => {
+      const msg: MailMessageFull = {
+        messageId: 'msg-3', from: 'Alice', fromAddr: 'alice', to: 'Me', toAddr: 'me',
+        subject: 'Hello again', date: '2025-01-15', dateFmt: 'Jan 15',
+        body: ['hi'], read: true, stamp: 3, noReply: false, attachments: [],
+      };
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage(msg));
+      expect(screen.getByRole('button', { name: 'Reply' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+    });
+
     it('a send in flight locks the draft button too — one letter, one gesture', () => {
       const saveSpy = jest.fn();
       renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSaveDraft: saveSpy }) });
