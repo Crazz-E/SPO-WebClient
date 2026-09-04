@@ -341,13 +341,17 @@ describe('one idle window, owned by claim-read.sh', () => {
   });
 });
 
-describe('the rule is reachable from CLAUDE.md, which every session reads', () => {
+describe("the rule is reachable from the rulebook's short form, which CLAUDE.md points to", () => {
   it('names the field, the docs exemption and the expiring window', () => {
-    const text = collapse(claudeMd);
+    const text = collapse(rulebook);
     expect(text).toMatch(/\*\*One session per area:\*\* a card also carries an `Area`/);
     expect(text).toMatch(/`docs` never blocks; every other area does/);
     expect(text).toMatch(/`SPO_WORKTREE_IDLE_MIN`, 120 min/);
     expect(text).toMatch(/the card's `Session` field never does/);
+  });
+
+  it('CLAUDE.md points at the rulebook', () => {
+    expect(collapse(claudeMd)).toMatch(/doc\/kanban-workflow\.md/);
   });
 });
 

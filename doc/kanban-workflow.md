@@ -12,6 +12,60 @@ deleted**; its full text stays readable at the archive permalink:
 · [`doc/BACKLOG.md` @ `94b059a0`](https://github.com/Crazz-Org/SPO-WebClient/blob/94b059a08caa5d834ce9e1fac6ac5f398b91943f/doc/BACKLOG.md).
 `OB-N` identifiers survive as issue titles; new tasks get plain issue numbers.
 
+## The short form — what every session must know
+
+**All open work lives on the kanban:**
+[github.com/orgs/Crazz-Org/projects/1](https://github.com/orgs/Crazz-Org/projects/1) — every
+task is a GitHub issue on the board. **The board is driven by the orchestrator in the sibling
+[SPO-Pipeline](https://github.com/Crazz-Org/SPO-Pipeline) repo**, not from inside this one: it
+claims a card, opens a worktree, implements, gates, validates and merges, writing the board at
+each state transition. This repo supplies the `board:*` scripts it spawns, and nothing else.
+This rulebook covers the ten columns (Intake · Todo ·
+Planning · Implementing · Checks & PR · Gate · Validation · Merging · Done · Parked), the
+`Session` field as ownership marker, board writes at state transitions only, and which board
+workflows are on.
+
+**Ownership is sacred** — never touch a card whose `Session` is filled; every owner closes its
+ownership (Done or Parked). A task that dies without closing it leaves a card only the
+human may free (`.github/workflows/orphan-cards.yml` only comments; it frees nothing).
+
+**One session per area:** a card also carries an `Area` — the one part of the tree its change
+lands in — and the orchestrator claims the topmost Todo card whose area no live card already
+holds. `docs` never blocks; every other area does. The reservation expires on inactivity
+(`SPO_WORKTREE_IDLE_MIN`, 120 min), the card's `Session` field never does.
+
+**Order, where it exists, is a `blocked by` link** between two issues — the relation lives on
+the issue, not on the card. The claim read pulls the whole blocked set in one GraphQL call and
+the orchestrator does not claim a card whose blocker is still open: it skips it and names the
+skip, or refuses out loud when that card was the one it was handed. A dependency
+records *cannot start yet*, never priority — priority stays the human's vertical order in Todo.
+
+**GitHub reads are budgeted like board writes.** One account's quota — 5000 GraphQL points per
+hour — is shared by every session, worktree, workflow and PC. A `gh project item-list` costs
+~103 points; the composite claim read costs ~2. So a session reads the pool **once**, at claim,
+with the recipe in § GitHub API discipline, below; it
+never polls GitHub for a state that has a local surface (bench verdict, nightly — both under
+`~/.spo-bench/`); it asks `rateLimit { cost remaining resetAt }` in every
+hand-written GraphQL call; and on `RATE_LIMITED` mid-claim the **write half decides** — a
+half-made claim is never walked away from, because it leaves a card only a human can free.
+
+**Filing a card is a deliberate act** — `/triage-report`, a maintainer's request, the split
+of a claimed task that turned out to be two, or a
+`PASS WITH FINDINGS` verdict from the `change-validator` sub-agent, bounded to ground the diff
+touched. `Auto-add to project` then puts the issue on the
+board and sets `Status` to Todo, so it lands straight in the pool the claim read walks — no
+`item-add`, no column set by hand. What no workflow sets is `Category`, `Size` and `Area`; those
+stay the filer's job, along with the matching `cat:` / `size:` labels.
+**Every draft card is read first by the `card-reviewer` sub-agent** — which checks those three
+fields too, `Area` included, because the claim rule reads it and a card filed without one
+reserves no ground — whose dated verdict becomes the card's first comment; on `DO NOT FILE` no
+issue is created.
+
+**The board is written in English — all of it**, whatever language the session, the source or
+the conversation was in: titles, bodies, every comment, columns, fields, labels. Translate on
+the way in; never transcribe. The former `doc/BACKLOG*.md` files are deleted; their text is
+archived at commit `94b059a0`.
+
 ## The board — ten columns, one per milestone
 
 The `Status` field is single-select: a task is in exactly one column. The column names below
@@ -573,14 +627,14 @@ finder's own turn, and it is paid by the finder rather than by the claimer.
 **The spawn is the cost, not the payload.** Every sub-agent invocation re-pays a fixed
 preamble — the project instructions, the agent definition, the tool schemas it was granted —
 before it reads the first word of its task. Measured on this repo: `CLAUDE.md` alone is
-~8.8k tokens and `card-reviewer.md` ~1.7k, against a task payload of ~150. Re-encoding that
+~5.4k tokens (was ~8.8k before #671) and `card-reviewer.md` ~1.7k, against a task payload of ~150. Re-encoding that
 payload from Markdown prose to a `key: value` block saves ~40 tokens — real, and worth
 taking, but it is a rounding error next to the four levers above it.
 
 In descending order of what they actually save:
 
 1. **Spawn fewer agents.** Two questions for the same reader are one prompt. A one-liner is
-   a direct tool call, never an agent (CLAUDE.md § Delegation strategy).
+   a direct tool call, never an agent (§ Delegation strategy, below).
 2. **Grant the narrowest tool set.** An agent declared `tools: *` inherits the whole MCP
    surface; the five agents in `.claude/agents/` declare `Read, Grep, Glob, Bash` — or less,
    `citation-verifier` needs no `Glob` — and stay that way. Prefer them, or `Explore`, over a general-purpose spawn.
@@ -596,6 +650,25 @@ In descending order of what they actually save:
    consumes; **Markdown for anything posted verbatim** to GitHub or read by the human — the
    `card-reviewer` verdict becomes an issue comment, so encoding it as YAML only means
    rendering it back to Markdown afterwards, at a net loss.
+
+### Delegation strategy
+
+- **Skills first** — they load into the main conversation, keep context unified, cost nothing to spawn
+- **Sub-agents** for work that produces heavy intermediate output: screenshot reads
+  (mandatory), cross-corpus RDO audits, deep multi-file investigations
+- **Explore agents** (up to 3 in parallel) when scope is genuinely uncertain
+- **Direct tools** for anything targeted — never spawn an agent for a one-liner
+- **Never delegate understanding.** Do not write "based on your findings, fix the bug."
+  Synthesise the agent's results yourself, then act.
+- **Model routing — most steps are not execution.** Run each step on the cheapest model it
+  needs and escalate by isolating the hard step, never by raising the floor for all of them.
+  Fable 5 for planning and diagnosis; Sonnet 5 for ordinary execution; **Opus 5 only where
+  being wrong is not caught by a test** — the RDO wire, an `L`-sized card, an unreproduced
+  defect. Effort follows the card's `Size` (S low · M medium · L high). The **per-step** table
+  is not prose anywhere: it is executable config in SPO-Pipeline
+  `orchestrator/step-contracts.js` (`doc/state-machine-spec.md` § Step contracts). What stays
+  in § Model routing, below, is the escalation policy
+  only. A session that cannot switch its own model applies the routing to its sub-agents.
 
 ## Model routing
 
@@ -658,6 +731,12 @@ kind is exactly the mistake this section exists to prevent.
 ## gh CLI recipes
 
 The project scope is required once per machine: `gh auth refresh -s project` (run inside WSL).
+
+`jq` (1.7+) is required by four scripts that call the `jq` binary directly:
+`scripts/claim-read.sh` (15 standalone `jq` calls), `scripts/board-take.sh` (14),
+`scripts/board-move.sh` (9) and `scripts/nightly-check.sh` (6) — `apt install jq`. Seven
+other scripts pass `--jq` to `gh` itself (its own built-in JSON filter, no separate binary
+needed) and work with no `jq` installed.
 
 **The reads are npm aliases, and that is deliberate.** `board:claim`, `board:verify`,
 `board:status` and `bench:nightly` each wrap one script under `scripts/`.
@@ -728,6 +807,24 @@ gh project item-add 1 --owner Crazz-Org --url <ISSUE_URL>
 # Final comment
 gh issue comment <N> --repo Crazz-Org/SPO-WebClient --body-file <file>
 ```
+
+### Two gh commands that fail on this repository
+
+**`gh pr edit` does not work on this repository.** Every invocation fails with `GraphQL:
+Projects (classic) is being deprecated …`, exit 1, **and applies nothing** — on stderr, so a
+piped or backgrounded call reads as success while the PR is unchanged. Use REST: `gh api -X
+PATCH repos/Crazz-Org/SPO-WebClient/pulls/<N> --input <json>`.
+
+**The same deprecation kills the _bare_ `gh pr view` and `gh issue view`.** Both ask for
+`projectCards`, so `gh pr view <N>` and `gh issue view <N>` exit 1 on
+`(repository.pullRequest.projectCards)` / `(repository.issue.projectCards)` and print nothing
+usable — the error is on stderr, so a piped or backgrounded call reads as success again.
+**`--json` never touches that field and works**: `gh pr view <N> --json state`,
+`gh issue view <N> --json state,title`. That is why nothing in the tree is broken — every
+caller already passes it (`scripts/finish.sh:188,208,215`, `scripts/deps-gate.sh:61`). Read a
+PR or an issue with `--json`, or with REST (`gh api repos/Crazz-Org/SPO-WebClient/issues/<N>`).
+⚠ `.github/workflows/claude-review.yml:123` allowlists the bare `gh pr view`, so the review
+agent meets the same wall. `gh pr create`, `gh pr merge` and `gh issue list` are unaffected.
 
 The entry point for a working task is the **orchestrator** in the sibling
 [SPO-Pipeline](https://github.com/Crazz-Org/SPO-Pipeline) repo — it encodes the claim handshake

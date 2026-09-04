@@ -15,9 +15,10 @@
  *   - **The skip is never silent.** #189's own criterion: without a stated visible behaviour,
  *     the board reads worse with dependencies than without — a card is passed over and the
  *     human is given no reason.
- *   - **The two surfaces stay consistent.** The rulebook and CLAUDE.md both have to carry the
- *     rule, or a session reading either one follows a rule the other no longer states. Gut
- *     either and this test — inside the required `typecheck + tests` check — goes red.
+ *   - **The two surfaces stay consistent.** The rulebook carries the rule twice — long form and
+ *     short form — and CLAUDE.md carries the pointer to it, so a session reading either one
+ *     still reaches the rule. Gut either and this test — inside the required
+ *     `typecheck + tests` check — goes red.
  *
  * Deciding the mechanism is not worth its cost is a legitimate decision. It just has to be
  * made here as well as in the three files, which is the point of pinning it.
@@ -136,20 +137,24 @@ describe('the rulebook carries the blocking order', () => {
   });
 });
 
-describe('CLAUDE.md carries the rule a session loads without asking', () => {
-  it('names the mechanism in the backlog section', () => {
-    expect(collapse(claudeMd)).toMatch(/\*\*Order, where it exists, is a `blocked by` link\*\*/);
+describe('the rulebook carries the rule a session loads without asking', () => {
+  it('names the mechanism in the short form', () => {
+    expect(collapse(rulebook)).toMatch(/\*\*Order, where it exists, is a `blocked by` link\*\*/);
   });
 
   it('states the claim behaviour and keeps priority the human\'s', () => {
-    expect(collapse(claudeMd)).toMatch(/does not claim a card whose blocker is still open/);
-    expect(collapse(claudeMd)).toMatch(/records \*cannot start yet\*, never priority/);
+    expect(collapse(rulebook)).toMatch(/does not claim a card whose blocker is still open/);
+    expect(collapse(rulebook)).toMatch(/records \*cannot start yet\*, never priority/);
   });
 
   it('sits beside the area reservation, the other claim-time filter', () => {
-    const area = claudeMd.indexOf('**One session per area:**');
-    const order = claudeMd.indexOf('**Order, where it exists');
+    const area = rulebook.indexOf('**One session per area:**');
+    const order = rulebook.indexOf('**Order, where it exists');
     expect(area).toBeGreaterThan(-1);
     expect(order).toBeGreaterThan(area);
+  });
+
+  it('CLAUDE.md points at the rulebook', () => {
+    expect(collapse(claudeMd)).toMatch(/doc\/kanban-workflow\.md/);
   });
 });

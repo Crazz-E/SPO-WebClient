@@ -145,6 +145,21 @@ members log on entry, *before* their `try`, so a line proves the frame reached t
 Read-back may legitimately lag the write (`OB-29`) — so a read-back mismatch **downgrades**
 to `UNCONFIRMED`, it does not by itself fail the probe. A missing log line **fails**.
 
+### The live server logs — http://158.69.153.134/logs/
+
+An open IIS directory listing, no auth — this is how a live run is proved rather than assumed.
+**Reading a log is not probing the server.** It is also not a substitute for the Pascal: a log
+proves what *happened*, the declaring unit under `Kernel/` (or `DServer/`, `Voyager/`) in
+SPO-Original defines a member's kind and arity. Download and grep; the Survival log runs 2–3
+MB/day, too big for context.
+
+| Path | Carries |
+|------|---------|
+| `FIVEMODELSERVER/Survival <YY-MM-DD>.log` | **the one that matters** — civic RDO members log on entry, *before* their `try`, so a line here proves the frame reached the object (`Setting Tax value: …`, `Setting Min Wage: …`, `Caching Town..`) |
+| `FIVEMODELSERVER/TimeWarp <date>.log` | a periodic world snapshot — who holds each ministry, per-town vacancies and average salaries. Small (~20 KB), good for checking model state without replaying a session |
+| `FIVEINTERFACESERVER/Survival <date>.log` | `LOGON ATTEMPT: User=<name>` / `Start Disconnecting <name>` — which identity (human vs role company) was active at a given second |
+| `FIVECACHESERVER/`, `FIVEMAILSERVER/` | near-empty, rarely useful |
+
 ---
 
 ## 6. Safety rails

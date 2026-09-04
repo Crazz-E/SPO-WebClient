@@ -227,14 +227,14 @@ describe('the mechanism is named on all five surfaces', () => {
     expect(claudeMd).toMatch(/\|\s*`card-reviewer`\s*\|\s*Fable\s*\|/);
   });
 
-  it('is in the CLAUDE.md feeding rule', () => {
-    expect(collapse(claudeMd)).toMatch(/Every draft card is read first by the `card-reviewer` sub-agent/);
+  it('is in the feeding rule', () => {
+    expect(collapse(rulebook)).toMatch(/Every draft card is read first by the `card-reviewer` sub-agent/);
   });
 
-  it('says in CLAUDE.md that the review covers Area, where the filer reads its job', () => {
+  it('says that the review covers Area, where the filer reads its job', () => {
     // The three fields no workflow sets are named two sentences earlier; the sentence that
     // sends the draft to the reviewer has to reach them, or the check is invisible to the filer.
-    const text = collapse(claudeMd);
+    const text = collapse(rulebook);
     expect(text).toMatch(/`Category`, `Size` and `Area`; those stay the filer's job/);
     expect(text).toMatch(/which checks those three fields too, `Area` included/);
   });

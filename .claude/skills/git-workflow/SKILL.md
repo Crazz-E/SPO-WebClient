@@ -315,7 +315,7 @@ that warning is expected and benign, not a failure. Judge the result on the **ex
 and, in doubt, on the PR state — one REST call, no polling:
 `gh api repos/<owner>/<repo>/pulls/<N> --jq '{state,merged}'` (`open` = enqueued) — never
 on stderr text. Never pass `--delete-branch` into a queue: it destroys the entry and closes
-the PR unmerged (CLAUDE.md § merge queue, doc/bench-worker.md §12).
+the PR unmerged (doc/bench-worker.md §12).
 </merge_strategies>
 
 <commit_hooks>

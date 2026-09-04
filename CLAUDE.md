@@ -62,10 +62,15 @@ rdoSet('Stopped', targetId, RdoValue.int(-1))
 ### Adding or changing a member
 
 The catalogue is a census of what the client emits, not a copy of the Pascal. To add an entry
-you need the member's **kind** and **arity**, and the only authority for those is the server-side
-declaration in the Rdo/Server/ directory of SPO-Original (at `~/SPO-Original/Rdo/Server/` or
-`../SPO-Original/Rdo/Server/` relative to the repo root) — read it with **`delphi-archaeologist`**,
-cite `File.pas:Line`, and never probe the live server. Get it wrong and the server has no
+you need the member's **kind** and **arity**, and the only authority for those is the
+**declaring unit** in SPO-Original — the server-side object under `Kernel/`
+(`Kernel/TownPolitics.pas:40` declares the 3-arg `RDOSetRatingFrom` the catalogue cites),
+`DServer/` for the directory server, or the Voyager unit for a member the reference client
+declares (`TVGeneralSheet.pas:15`); `Rdo/Server/` (`RDOObjectServer.pas`) is the **transport** —
+it fixes how a call is dispatched (kind → separator, arity → register file) and holds no member
+declaration at all. Read it with **`delphi-archaeologist`**,
+cite `File.pas:Line`, and never probe the live server (`~/SPO-Original`, or `../SPO-Original`
+relative to the repo root). Get it wrong and the server has no
 self-recovery: `"^"` on a `procedure` leaves a result pointer nobody pops (**freeze**); `"*"` on
 a `function` writes through a register nobody set (**arbitrary memory write**); `"^"` with no rid
 builds a reply with no destination (**crash**). Arity follows the same register file —
@@ -109,10 +114,10 @@ worktree, where `..` resolves to `.claude/worktrees/`, not the repo root.
 
 | Path | Holds |
 |------|-------|
-| `Rdo/Server/` | **the RDO authority** — `RDOObjectServer.pas`, the declaration the client must match (kind, arity) |
+| `Rdo/Server/` | the RDO **transport** (`RDOObjectServer.pas`): how a frame is dispatched; holds no member declarations |
 | `Rdo.BIN/`, `Rdo.IS/` | divergent forks of the same units — do not cite them: a line number from `Rdo/` lands on other code there |
 | `Voyager/`, `Voyager.1/` | the original Delphi client — the reference for *what the client demonstrably emitted* (rule 2 above) |
-| `Kernel/`, `Model Server/`, `Interface Server/`, `Directory Server/` | game model and the servers behind the gateway |
+| `Kernel/`, `Model Server/`, `Interface Server/`, `Directory Server/` | game model and the servers behind the gateway — **the member declarations the catalogue cites** (`Kernel/TownPolitics.pas`, `Kernel/WorldPolitics.pas`, `Kernel/World.pas`, `DServer/DirectoryServer.pas`) |
 
 ⚠ **Some `.pas` files are ISO-8859-encoded and defeat grep's binary detection** — a plain
 `grep <pattern> some-file.pas` silently returns nothing and exits 1, as if the text were absent
@@ -153,18 +158,6 @@ Two things the pages are the authority for, and the Pascal is not:
 `Five/Client/Cache/` is the client's **map image** cache (`images.cab`), not the model server's
 object cache — it cannot tell you what a cached property currently holds.
 
-## Directory-scoped memory
-
-Four nested `CLAUDE.md` files load automatically in their directory and are authoritative there
-— read them rather than guessing:
-
-| File | Covers |
-|------|--------|
-| `src/server/CLAUDE.md` | RDO socket rules, session phases, handler extraction, push dispatcher, timeout categories |
-| `src/shared/CLAUDE.md` | RDO type prefixes, boolean encoding, type modules, error handling |
-| `src/mock-server/CLAUDE.md` | Mock RDO server API, scenarios, match hierarchy, strict validator |
-| `src/client/CLAUDE.md` | Client structure and conventions |
-
 ## Backlog — GitHub Projects
 
 **All open work lives on the kanban:**
@@ -173,57 +166,21 @@ task is a GitHub issue on the board. **The board is driven by the orchestrator i
 [SPO-Pipeline](https://github.com/Crazz-Org/SPO-Pipeline) repo**, not from inside this one: it
 claims a card, opens a worktree, implements, gates, validates and merges, writing the board at
 each state transition. This repo supplies the `board:*` scripts it spawns, and nothing else.
-The rulebook is [doc/kanban-workflow.md](doc/kanban-workflow.md): ten columns (Intake · Todo ·
-Planning · Implementing · Checks & PR · Gate · Validation · Merging · Done · Parked), the
-`Session` field as ownership marker, board writes at state transitions only, and which board
-workflows are on.
+This rulebook covers the ten columns (Intake · Todo · Planning · Implementing · Checks & PR ·
+Gate · Validation · Merging · Done · Parked), the
+`Session` field as ownership marker, board writes at state transitions only, ownership,
+one-session-per-area, blocking order, GitHub API budgeting and card filing:
+[doc/kanban-workflow.md § The short form](doc/kanban-workflow.md).
 
 **Ownership is sacred** — never touch a card whose `Session` is filled; every owner closes its
 ownership (Done or Parked). A task that dies without closing it leaves a card only the
 human may free (`.github/workflows/orphan-cards.yml` only comments; it frees nothing).
-
-**One session per area:** a card also carries an `Area` — the one part of the tree its change
-lands in — and the orchestrator claims the topmost Todo card whose area no live card already
-holds. `docs` never blocks; every other area does. The reservation expires on inactivity
-(`SPO_WORKTREE_IDLE_MIN`, 120 min), the card's `Session` field never does.
-
-**Order, where it exists, is a `blocked by` link** between two issues — the relation lives on
-the issue, not on the card. The claim read pulls the whole blocked set in one GraphQL call and
-the orchestrator does not claim a card whose blocker is still open: it skips it and names the
-skip, or refuses out loud when that card was the one it was handed. A dependency
-records *cannot start yet*, never priority — priority stays the human's vertical order in Todo.
-
-**GitHub reads are budgeted like board writes.** One account's quota — 5000 GraphQL points per
-hour — is shared by every session, worktree, workflow and PC. A `gh project item-list` costs
-~103 points; the composite claim read costs ~2. So a session reads the pool **once**, at claim,
-with the recipe in [kanban-workflow.md § GitHub API discipline](doc/kanban-workflow.md); it
-never polls GitHub for a state that has a local surface (bench verdict, nightly — both under
-`~/.spo-bench/`); it asks `rateLimit { cost remaining resetAt }` in every
-hand-written GraphQL call; and on `RATE_LIMITED` mid-claim the **write half decides** — a
-half-made claim is never walked away from, because it leaves a card only a human can free.
 
 **Stay on the claimed card.** A session solves and implements the task it took, and reports on
 that task only. What it met in passing — an unrelated snag noticed while reading, a smell in a
 file it did not change, a "valuable but out of scope" remark — is neither filed nor narrated:
 no new issue, no closing section of the end report. A test session or a requested audit finds
 it again, at a moment where someone asked for it. Only the maintainer widens a session's scope.
-
-**Filing a card is a deliberate act** — `/triage-report`, a maintainer's request, the split
-of a claimed task that turned out to be two, or a
-`PASS WITH FINDINGS` verdict from the `change-validator` sub-agent, bounded to ground the diff
-touched. `Auto-add to project` then puts the issue on the
-board and sets `Status` to Todo, so it lands straight in the pool the claim read walks — no
-`item-add`, no column set by hand. What no workflow sets is `Category`, `Size` and `Area`; those
-stay the filer's job, along with the matching `cat:` / `size:` labels.
-**Every draft card is read first by the `card-reviewer` sub-agent** — which checks those three
-fields too, `Area` included, because the claim rule reads it and a card filed without one
-reserves no ground — whose dated verdict becomes the card's first comment; on `DO NOT FILE` no
-issue is created.
-
-**The board is written in English — all of it**, whatever language the session, the source or
-the conversation was in: titles, bodies, every comment, columns, fields, labels. Translate on
-the way in; never transcribe. The former `doc/BACKLOG*.md` files are deleted; their text is
-archived at commit `94b059a0`.
 
 ## Environment
 
@@ -235,71 +192,29 @@ Node.js 22 / npm 10 in WSL (`/usr/bin/node`). Everything the project needs runs 
 - Processes: `ps` / `kill` inside WSL; `tasklist` / `taskkill` only for host-side processes
 - Line endings: LF only (`.gitattributes` and `.editorconfig`) — never introduce CRLF
 - Minimum supported runtime is Node 22 (`engines`, the Dockerfile's `node:22`, CI)
-- `jq` (1.7+) is required by four scripts that call the `jq` binary directly:
-  `scripts/claim-read.sh` (15 standalone `jq` calls), `scripts/board-take.sh` (14),
-  `scripts/board-move.sh` (9) and `scripts/nightly-check.sh` (6) — `apt install jq`. Seven
-  other scripts pass `--jq` to `gh` itself (its own built-in JSON filter, no separate binary
-  needed) and work with no `jq` installed.
 
 ## Commands
 
 ```bash
-npm run build        # server + client + terrain-test
-npm run typecheck    # all four tsconfigs (server, client, e2e, tests)
-npm run lint         # ESLint 10, flat config — 0 errors is the CI gate
-npm run format       # Prettier over the whole tree (not enforced yet, see below)
-npm test             # full Jest suite
-npm run test:coverage
-npm run test:changed # --onlyChanged --bail
-
-npm run gate         # THE GATE — a bench job for the PUSHED sha (queued, serialized).
-                     # Commit, push and open the PR FIRST; it refuses a sha that is not on origin
-npm run test:live    # the L2 live drive as a bench job
-npm run dev          # a bench LEASE: the worker builds THIS worktree and holds its gateway on 8080 for you
-npm run dev:release  # end your lease early (otherwise it expires, 30 min default)
-npm run bench:status # worker liveness + queue
-npm run bench:wait -- <job-id>   # re-attach to a job whose wait was interrupted. `gate` and
-                     # `test:live` already wait; this is for the wait you lost, not a second one
-npm run pr:wait -- <n>           # wait for a PR to leave the merge queue: 30 s floor, deadline,
-                     # exit 0 merged / 1 closed unmerged / 4 still open. NEVER hand-roll this loop
-npm run e2e:unlock   # clear a world-dirty lock after a human restore
-npm run finish       # THE END of an update, after the PR is merged — see the Git section.
-                     # `-- <branch>` finishes a merged branch checked out nowhere; `-- --now`
-                     # removes this worktree immediately (you lose your cwd)
-npm run deps:gate    # Dependabot PRs: merges main in, installs, gates, pushes and auto-merges them one by one;
-                     # a lockfile change routes to spine + building-details
-
-npm run dev:local    # build + start yourself, on the first free port from 8081 up — never 8080.
-                     # The CONSCIOUS EXCEPTION (see below); PORT=<n> to choose. A hook refuses any
-                     # other way of taking the bench port.
-npm run gate:local   # verify-gate.js directly, static-only — evidence for reading; does NOT unblock a push
-npm run verdict -- <alias> [--tail=N]  # run test/typecheck/lint/... with the full log in ~/.spo-bench/logs/, print the tail + EXIT=<code>, preserve the exit code — the sanctioned way to keep a verdict's transcript short
+npm run build              # server + client + terrain-test
+npm run typecheck          # all four tsconfigs (server, client, e2e, tests)
+npm run lint                # ESLint 10, flat config — 0 errors is the CI gate
+npm test                     # full Jest suite
+npm run test:changed        # --onlyChanged --bail
+npm run coverage:changed    # the coverage ratchet on new/modified lines
+npm run verdict -- <alias>  # run test/typecheck/lint/... with the full log kept, short transcript
+npm run gate                # THE GATE — commit, push, open the PR first; then this
+npm run finish              # THE END of an update, after the PR is merged
+npm run dev:local           # build + start yourself, for debugging only — attests nothing
+# every other alias (leases, bench:status, bench:wait, pr:wait, test:live, deps:gate,
+# e2e:unlock, gate:local): doc/bench-worker.md
 ```
 
-**The live bench has one owner: the bench worker.** Many sessions run on this machine, but
-port 8080, the LOCKED accounts and the Helartia world state belong to one permanent process
-(systemd --user unit `spo-bench-worker`, installed by `scripts/bench-install.sh`). Sessions
-never start a gateway, never kill a process, never hold a lock: they deposit a job and wait for
-the report — one background command, zero tokens. **Background it with the tool's own
-`run_in_background`, never with a trailing `&`**: the shell then reports the fork rather
-than the run, so the exit code is 0 whatever happened and the verdict is destroyed before
-anyone reads it. The redirect to a log file is fine and needs no permission; only the
-ampersand does. Jobs run one at a time, oldest first,
-each in the depositing session's worktree, which the worker builds. `npm run dev:local` is the
-conscious exception, for debugging only — its results attest nothing.
-`.claude/hooks/bench-port-guard.sh` refuses every other route to the port and to the live
-world, naming the sanctioned form in the refusal.
-
-**Read the verdict from the exit code, never from the printed report** — 0 PASS · 1 verdict not
-passing · 2 refused at deposit (dirty tree) · 3 worker down · 4 wait timed out. The
-machine-readable surfaces are that code and `~/.spo-bench/verdicts/<sha>.json`. **And a
-pipeline's exit code is the last stage's**, so never pipe a command whose exit code is the
-verdict: `npm test | tail -20` reports *tail*, and has already been read here as a green suite
-that had failed. Redirect to a file, capture the code, then filter the file. **A trailing `&`
-loses it the same way** — the shell reports the fork, so the code is 0 whatever happened;
-background with the tool's own `run_in_background`, keeping the redirect, which is fine on its
-own. So does `out=$(npm test)`, which keeps the text and drops the number. Full spec:
-[doc/bench-worker.md](doc/bench-worker.md).
+**Verdict = exit code, never the printed report.** Never pipe a verdict command into
+`tail`/`head`/`grep`, never background it with a trailing `&`, never `out=$(…)` — each of
+those drops or destroys the exit code. `npm run verdict -- <alias>` is the sanctioned way to
+keep a transcript short. Codes: 0 PASS · 1 verdict not passing · 2 refused at deposit (dirty
+tree) · 3 worker down · 4 wait timed out. Full spec: [doc/bench-worker.md](doc/bench-worker.md) §5.
 
 ## Automation (`.claude/hooks/`)
 
@@ -331,15 +246,12 @@ for reading, never a merge unblock. **A crash is a failure, but silence is not a
 mutation is proven by the `FIVEMODELSERVER/Survival` log line, not by a `success: true`
 response (`OB-28`); a lagging read-back is expected (`OB-29`) and does not fail a probe, a
 missing log line does. Three attempts maximum, each naming a different root cause. Full rules:
-[doc/E2E-POLICY.md](doc/E2E-POLICY.md), [doc/bench-worker.md](doc/bench-worker.md).
+[doc/E2E-POLICY.md](doc/E2E-POLICY.md), [doc/bench-worker.md](doc/bench-worker.md). Live server
+logs (open IIS listing, `http://158.69.153.134/logs/`) prove what happened; reading one is not
+probing the server — `doc/E2E-POLICY.md` §5.
 
-**The nightly proves `main`.** The gate proves branches, each against the `main` it was based
-on — so two branches that pass alone and break together would land unchallenged. Once a night
-the worker drives the L2 flows against `origin/main`, answer in
-`~/.spo-bench/nightly/latest.json`. **While `main` is red** (verdict `FAIL` and the sha is still
-`origin/main`), the orchestrator hands out only the repair and **no task merges `origin/main`
-into its branch** — updating from `main` must never import a defect
-([bench-worker.md §8](doc/bench-worker.md)).
+**The nightly proves `main`** (`doc/bench-worker.md` §8): while `main` is red no task merges
+`origin/main` into its branch.
 
 `module.ts` → `module.test.ts`, same directory. Two Jest projects: `unit` (node, `.test.ts`)
 and `component` (jsdom, `.test.tsx`).
@@ -351,9 +263,6 @@ precheck's suite pass** — `--collectCoverageFrom` restricts instrumentation, n
 running `npm test` beside it runs the whole suite twice. `jest.config.js` separately enforces a
 machine floor (global 38 %, higher per directory). Thresholds only go UP. Details:
 **`spo-testing`** skill.
-
-Seven custom RDO matchers: `toContainRdoCommand`, `toMatchRdoFormat`, `toMatchRdoCallFormat`,
-`toMatchRdoSetFormat`, `toHaveRdoTypePrefix`, `toMatchRdoResponse`, `toPassStrictRdoValidation`.
 
 ## Skills, commands, sub-agents
 
@@ -371,7 +280,7 @@ with `node .claude/generate-skills-manifest.js` (`--check` in CI fails if stale)
 
 **Auto-load only** (not slash-invokable): `web-games` (Canvas 2D renderer, frame budget),
 `zustand-store-ts` (stores, selector stability), `mobile-ux-optimizer`
-(MobileShell/BottomNav/BottomSheet). The 20 installed skills are listed in the manifest.
+(MobileShell/BottomNav/BottomSheet).
 
 Slash **commands** live in `.claude/commands/`: `/gate`, `/commit-push`,
 `/coverage-check`, `/e2e`, `/release-notes`, `/triage-report`.
@@ -385,69 +294,15 @@ Slash **commands** live in `.claude/commands/`: `/gate`, `/commit-push`,
 | `card-reviewer` | Fable | The neutral reader of a draft backlog card, before it is filed |
 | `change-validator` | Fable | Read-only semantic review of a finished change — adequacy to the card's criterion and coherence of integration — after a gate PASS, before the merge |
 
-## Delegation strategy
-
-- **Skills first** — they load into the main conversation, keep context unified, cost nothing to spawn
-- **Sub-agents** for work that produces heavy intermediate output: screenshot reads
-  (mandatory), cross-corpus RDO audits, deep multi-file investigations
-- **Explore agents** (up to 3 in parallel) when scope is genuinely uncertain
-- **Direct tools** for anything targeted — never spawn an agent for a one-liner
-- **Never delegate understanding.** Do not write "based on your findings, fix the bug."
-  Synthesise the agent's results yourself, then act.
-- **Model routing — most steps are not execution.** Run each step on the cheapest model it
-  needs and escalate by isolating the hard step, never by raising the floor for all of them.
-  Fable 5 for planning and diagnosis; Sonnet 5 for ordinary execution; **Opus 5 only where
-  being wrong is not caught by a test** — the RDO wire, an `L`-sized card, an unreproduced
-  defect. Effort follows the card's `Size` (S low · M medium · L high). The **per-step** table
-  is not prose anywhere: it is executable config in SPO-Pipeline
-  `orchestrator/step-contracts.js` (`doc/state-machine-spec.md` § Step contracts). What stays
-  in [kanban-workflow.md § Model routing](doc/kanban-workflow.md) is the escalation policy
-  only. A session that cannot switch its own model applies the routing to its sub-agents.
-
-## MCP
-
-| Server | For |
-|--------|-----|
-| Playwright | Browser automation, E2E |
+Delegation ladder and model routing: `doc/kanban-workflow.md` § Sub-agent handoffs and §
+Model routing. Never delegate understanding — synthesise an agent's result yourself, then act.
 
 ## E2E credentials — LOCKED
 
-| | Primary | Secondary |
-|---|---|---|
-| Account | `SPO_test3` / `test3` | `Crazz` / `test` |
-| Holds | **Mayor of Helartia**, Minister of Agriculture, company *SPO_test3 - Green* | basic, 2 buildings |
-| For | governance reads and writes, roads, zones | permission-negative, mail receive, rating another term |
-
-**Never change without explicit developer approval.** Zone **Free Space**, not BETA — the
-live directory hosts `planitia`/`shamba`/`zorcon` under Free Space; BETA only has `aries`.
-
-- **Blast radius:** mutations only on Helartia. The second account receives one test mail,
-  deleted in the same run — no flow touches its buildings. Never another player's assets,
-  never a world-scope value.
-- **Capability exceptions, not overrides.** The six `TPresidentialHall` members and any
-  `canGovern`-gated Capitol path need the president capability, which `SPO_test3` does not
-  hold. The gate reads that from the server (`IsPresident` in the tycoon cache, `canGovern` on
-  the Capitol), never from the UI: a missing control is a bug to fix, a refused capability is a
-  recorded exception the gate continues past. If the server ever grants it, the gate fails
-  closed until a flow drives the member — no flag, no human text, clears it
-  ([E2E-POLICY.md](doc/E2E-POLICY.md) §7).
-
-Procedure and selectors: `/e2e-test` skill and [E2E-TESTING.md](doc/E2E-TESTING.md).
-
-## Live server logs — http://158.69.153.134/logs/
-
-An open IIS directory listing, no auth — this is how a live run is proved rather than assumed.
-**Reading a log is not probing the server.** It is also not a substitute for the Pascal: a log
-proves what *happened*, the declaration in the Rdo/Server/ directory of SPO-Original
-(`~/SPO-Original/Rdo/Server/`) defines a member's
-kind and arity. Download and grep; the Survival log runs 2–3 MB/day, too big for context.
-
-| Path | Carries |
-|------|---------|
-| `FIVEMODELSERVER/Survival <YY-MM-DD>.log` | **the one that matters** — civic RDO members log on entry, *before* their `try`, so a line here proves the frame reached the object (`Setting Tax value: …`, `Setting Min Wage: …`, `Caching Town..`) |
-| `FIVEMODELSERVER/TimeWarp <date>.log` | a periodic world snapshot — who holds each ministry, per-town vacancies and average salaries. Small (~20 KB), good for checking model state without replaying a session |
-| `FIVEINTERFACESERVER/Survival <date>.log` | `LOGON ATTEMPT: User=<name>` / `Start Disconnecting <name>` — which identity (human vs role company) was active at a given second |
-| `FIVECACHESERVER/`, `FIVEMAILSERVER/` | near-empty, rarely useful |
+Accounts `SPO_test3`/`test3` (Mayor of Helartia, primary) and `Crazz`/`test` (secondary), zone
+Free Space, world planitia. **Never change without explicit developer approval.** Mutations only
+on Helartia; capability exceptions are read from the server, never overridden —
+`doc/E2E-POLICY.md` §7 and §9, procedure `doc/E2E-TESTING.md`.
 
 ## Code style
 
@@ -473,60 +328,20 @@ pull request, and gate that sha**, in that order: the worker *fetches* the commi
 (0 approvals — solo maintainer), `typecheck + tests` **and** `bench/gate` required, no
 force-push, no deletion. CI cannot hold the locked credentials, so the worker publishes its
 verdict as the `bench/gate` commit status — a PR cannot merge on CI alone.
-`bench/gate` was dropped from this required list on 2026-08-29T10:17:40Z (advisory only for
-five days) and restored on 2026-09-03T07:32:42+02:00 — check the ruleset itself before trusting
-either this sentence or that date: `gh api repos/Crazz-Org/SPO-WebClient/rulesets/21111153`.
 
-**The branch is deliberately NOT required to be up to date with `main`** — that rule made every
-merge invalidate every other session's gate, at a cost growing as N² on a serialised bench.
-Instead each attestation records `baseMain`, the `origin/main` it was judged against, and `main`
-having moved past it is *announced* (status description, gate report, a `NOTE:` from the push
-hook) — not refused. **Read the note and judge**: if the incoming `main` touches the same
-ground, merge `origin/main` in and re-gate. Live evidence rides in the PR body.
-[bench-worker.md §5, §11](doc/bench-worker.md).
+The branch is deliberately not required to be up to date with `main` — `doc/bench-worker.md`
+§ The gate base.
 
-**`main` has a merge queue** — so `gh pr merge <N> --merge` **enqueues**; it does not merge.
-Every `gh pr merge` here — the correct form included — prints one stderr warning,
-`! The merge strategy for main is set by the merge queue`, and exits 0: **expected and
-benign**, not a failure. The queue's method is `MERGE`, so a `--squash` or `--rebase` you pass
-is **overridden, not refused**; pass `--merge` so the command says what will happen. Judge on
-the **exit code and the PR state, never on stderr text** — in doubt, one REST call settles it:
-`gh api repos/Crazz-Org/SPO-WebClient/pulls/<N> --jq '{state,merged}'` (`open` = enqueued).
-Never "recover" a merge that did not fail. **Never add `--delete-branch`**: `gh` honours it the
-instant the entry is created, destroying it and leaving the PR CLOSED and unmerged — same exit
-0, same warning. GitHub deletes the branch itself when the entry lands. Recovery:
-`git push -u origin <branch>` + `gh pr reopen <N>` + merge again, same sha
-([bench-worker.md §12](doc/bench-worker.md)).
+**`main` has a merge queue** — `gh pr merge <N> --merge` **enqueues**; it does not merge.
+**Never add `--delete-branch`**. Judge on the exit code and the PR state, never on stderr
+text — the whole trap, both directions, in [bench-worker.md §12](doc/bench-worker.md).
 
-**`gh pr edit` does not work on this repository.** Every invocation fails with `GraphQL:
-Projects (classic) is being deprecated …`, exit 1, **and applies nothing** — on stderr, so a
-piped or backgrounded call reads as success while the PR is unchanged. Use REST: `gh api -X
-PATCH repos/Crazz-Org/SPO-WebClient/pulls/<N> --input <json>`.
+`gh pr edit` and the bare `gh pr view` / `gh issue view` fail on this repository (Projects
+classic deprecation) and apply nothing — use `--json` or REST; `doc/kanban-workflow.md` § gh
+CLI recipes.
 
-**The same deprecation kills the _bare_ `gh pr view` and `gh issue view`.** Both ask for
-`projectCards`, so `gh pr view <N>` and `gh issue view <N>` exit 1 on
-`(repository.pullRequest.projectCards)` / `(repository.issue.projectCards)` and print nothing
-usable — the error is on stderr, so a piped or backgrounded call reads as success again.
-**`--json` never touches that field and works**: `gh pr view <N> --json state`,
-`gh issue view <N> --json state,title`. That is why nothing in the tree is broken — every
-caller already passes it (`scripts/finish.sh:188,208,215`, `scripts/deps-gate.sh:61`). Read a
-PR or an issue with `--json`, or with REST (`gh api repos/Crazz-Org/SPO-WebClient/issues/<N>`).
-⚠ `.github/workflows/claude-review.yml:123` allowlists the bare `gh pr view`, so the review
-agent meets the same wall. `gh pr create`, `gh pr merge` and `gh issue list` are unaffected.
-
-**An update is finished only after `npm run finish`.** It refuses unless the PR is MERGED, then
-fast-forwards `~/SPO-WebClient`, prunes stale refs, reinstalls the bench worker if the merge
-touched `src/e2e/bench/` or `scripts/bench-*`, and **retires** this worktree — it stays on disk
-while a session stands in it, and the next run reaps it (it also heals worktrees a previous
-session forgot). **A session may keep working after `finish`**: a process standing anywhere inside the worktree
-protects it, and that is the only thing that does. A per-session heartbeat was the second
-protection until #441 removed it — its writer had gone with the pilot hooks in #425, so it had
-been abstaining on every worktree since. Keep a shell inside the tree if you want the ground to
-stay. `npm run finish -- --now` removes immediately, for a human on the way out.
-
-**The last link is the release:** every merge to `main` runs `release.yml` — version from the
-last `v*` tag and the commits since it (`feat` → minor, otherwise patch), then build, tag,
-publish. Never create `v*` tags by hand (a tag ruleset forbids updating or deleting them).
+An update is finished only after `npm run finish` (refuses unless the PR is MERGED; retires
+the worktree) — `doc/bench-worker.md` §5.
 
 Branches: `feature/`, `fix/`, `refactor/`, `doc/` + description — or the session worktree
 branch (`claude-<user>/…`); the hook accepts any branch but `main`.
