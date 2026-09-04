@@ -29,7 +29,7 @@ export function TownsTab({ properties, buildingX, buildingY, canGovern }: TownsT
     name: valueMap.get(`Town${i}`) ?? '',
     population: getNum(valueMap, `TownPopulation${i}`),
     qol: getNum(valueMap, `TownQOL${i}`),
-    commerce: getNum(valueMap, `TownRating${i}`),
+    rating: getNum(valueMap, `TownRating${i}`),
     wealth: getNum(valueMap, `TownWealth${i}`),
     tax: getNum(valueMap, `TownTax${i}`),
     qos: getNum(valueMap, `TownQOS${i}`),
@@ -58,9 +58,10 @@ export function TownsTab({ properties, buildingX, buildingY, canGovern }: TownsT
             <th>Town</th>
             <th>Pop.</th>
             <th>QOL</th>
+            <th>Rating</th>
             <th>Commerce</th>
+            <th>Wealth</th>
             <th>Tax</th>
-            <th>QoS</th>
             <th>Mayor</th>
             {isPresident && <th />}
           </tr>
@@ -71,7 +72,9 @@ export function TownsTab({ properties, buildingX, buildingY, canGovern }: TownsT
               <td>{row.name}</td>
               <td>{formatCompact(row.population)}</td>
               <td>{row.qol}%</td>
-              <td>{row.commerce}%</td>
+              <td>{row.rating}%</td>
+              <td>{row.qos}%</td>
+              <td>{row.wealth}%</td>
               <td>
                 <TaxSlider
                   value={row.tax}
@@ -82,7 +85,6 @@ export function TownsTab({ properties, buildingX, buildingY, canGovern }: TownsT
                   editable={isPresident}
                 />
               </td>
-              <td>{row.qos}%</td>
               <td>{row.hasMayor ? 'Yes' : 'No'}</td>
               {isPresident && (
                 <td>

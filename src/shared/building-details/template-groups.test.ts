@@ -700,7 +700,7 @@ describe('Capitol building RDO property name generation', () => {
     const wrongCol = tableDef!.columns!.find(c => c.rdoSuffix === 'TownName');
     expect(wrongCol).toBeUndefined();
 
-    // TownRating column should exist (Commerce in original client)
+    // TownRating column should exist (Voyager fetches it, CapitolTownsSheet.pas:198)
     const ratingCol = tableDef!.columns!.find(c => c.rdoSuffix === 'TownRating');
     expect(ratingCol).toBeDefined();
   });
