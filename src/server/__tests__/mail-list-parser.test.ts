@@ -274,12 +274,12 @@ describe('parseMessageListHtml', () => {
 </tr>
 </table></body></html>`;
 
-      // Draft is not "Sent", so by default the name goes to "from"
-      // In practice the ASP page would show "To" column for drafts,
-      // but our parser uses the folder name to decide
+      // Draft is an outgoing folder like Sent, so the name is the recipient.
       const messages = parseMessageListHtml(html, 'Draft');
       expect(messages).toHaveLength(1);
       expect(messages[0].messageId).toBe('DRAFT001');
+      expect(messages[0].to).toBe('Charlie');
+      expect(messages[0].from).toBe('');
     });
   });
 });
