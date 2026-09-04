@@ -498,6 +498,14 @@ describe('prepareCheckout — retrying a network step', () => {
   });
 });
 
+// Mutation proof for runNetworkCommand (doc/bench-worker.md § Retry mutation proof), 6/8
+// killed, measured by hand: deleting the success append or the sleep, starting `attempt` at
+// 0, the attempts off-by-one, returning early with no retry, and an unconditional success
+// append are each killed by one of the four tests below. The other two mutants — writing
+// `${attempt}` instead of `${attempts}` on exhaustion, and moving the attempt marker after
+// `runCommand` — are accepted survivors, not gaps: the first is equivalent (the two values
+// are always equal at exhaustion), the second guards an ordering only two real processes can
+// race on, which a fake `runCommand` cannot exercise.
 describe('prepareCheckout — the job log tells a retried success from a first-try one', () => {
   const ATTEMPTS = NETWORK_RETRY_DELAYS_MS.length + 1;
 

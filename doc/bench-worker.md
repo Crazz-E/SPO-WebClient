@@ -592,6 +592,25 @@ If `gh auth token` produces nothing, the fetch is anonymous exactly as it was be
 line says so. A missing token must never turn a job that would have worked into one that
 fails.
 
+### Retry mutation proof
+
+Measured, not asserted: each mutant below was applied by hand to `runNetworkCommand` in
+`checkout.ts`, `npx jest src/e2e/bench/checkout.test.ts --selectProjects unit` was run against
+it, and the file was restored before the next mutant. Non-zero exit = killed. **6/8 killed**;
+the two survivors are both expected and accepted, not gaps — the comment block over
+`checkout.test.ts:501` carries this same table anchored to the tests that killed each mutant.
+
+| # | mutant | result |
+|---|---|---|
+| M1 | delete the `succeeded on attempt` append | killed |
+| M2 | start `attempt` at 0 | killed |
+| M3 | `const attempts = delays.length` (denominator off by one) | killed |
+| M4 | delete `await deps.sleep(delay)` | killed |
+| M5 | return `code` right after the first non-zero exit (no retry) | killed |
+| M6 | write `failed after ${attempt}` instead of `${attempts}` | **survived — equivalent mutant.** On exhaustion `attempt === attempts` always (the loop only reaches the failure branch on the last iteration), so the two interpolations produce the same string; no test can distinguish them without changing what exhaustion means. |
+| M7 | append the success line unconditionally, before the exit-code check | killed |
+| M8 | write the attempt marker after `runCommand` instead of before | **survived — known, accepted.** The ordering this guards (git's own stderr for an attempt lands under that attempt's marker) is a property of two real processes racing to write the same file; a fake `runCommand` in the harness has no stderr of its own to interleave, so no in-repo unit test can observe the difference. Verified instead by reading — the append happens before the `await`, so nothing else can run between them in Node's single-threaded event loop. |
+
 ### SSH remotes vs a credential store — recommendation
 
 **Recommendation: neither. Keep HTTPS with the `extraheader` token above; propose no

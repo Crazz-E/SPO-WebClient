@@ -181,6 +181,27 @@ export const NETWORK_RETRY_DELAYS_MS = [2_000, 8_000];
  * the worker's own stdout/journal): a first-try success and a retried one must be
  * distinguishable by reading the job log alone. The marker is written *before* the child
  * runs, so git's own stderr for that attempt lands under the marker it belongs to.
+ *
+ * Sample excerpts (taken from checkout.test.ts's own temp logs — the format is pinned there):
+ *
+ * ```
+ * --- git fetch: attempt 1/3 ---            # first-try success
+ * git fetch: succeeded on attempt 1/3
+ *
+ * --- git fetch: attempt 1/3 ---            # retried success
+ * git fetch: exited 1 — retrying in 2000ms
+ * --- git fetch: attempt 2/3 ---
+ * git fetch: exited 1 — retrying in 8000ms
+ * --- git fetch: attempt 3/3 ---
+ * git fetch: succeeded on attempt 3/3
+ *
+ * --- git fetch: attempt 1/3 ---            # exhaustion
+ * git fetch: exited 1 — retrying in 2000ms
+ * --- git fetch: attempt 2/3 ---
+ * git fetch: exited 1 — retrying in 8000ms
+ * --- git fetch: attempt 3/3 ---
+ * git fetch: failed after 3 attempts (last exit 1)
+ * ```
  */
 async function runNetworkCommand(
   deps: CheckoutDeps,
