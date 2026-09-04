@@ -14,8 +14,11 @@ import type {
   WsRespFavoriteRename,
   WsRespFavoriteFolderCreate,
   WsRespFavoriteMove,
+  WsRespMailConnected,
   WsRespMailFolder,
+  WsRespMailMessage,
   WsRespMailSent,
+  WsRespMailUnreadCount,
   WsRespPoliticsData,
   WsRespSearchMenuPeopleSearch,
 } from '../shared/types/message-types';
@@ -245,7 +248,10 @@ const mailRoundTrip: Flow = {
 
     const recipient = await login(SECONDARY_ACCOUNT);
     try {
-      await recipient.driver.request({ type: WsMessageType.REQ_MAIL_CONNECT }, WsMessageType.RESP_MAIL_CONNECTED);
+      const connected = await recipient.driver.request<WsRespMailConnected>(
+        { type: WsMessageType.REQ_MAIL_CONNECT },
+        WsMessageType.RESP_MAIL_CONNECTED,
+      );
       const inbox = await recipient.driver.request<WsRespMailFolder>(
         { type: WsMessageType.REQ_MAIL_GET_FOLDER, folder: 'Inbox' },
         WsMessageType.RESP_MAIL_FOLDER,
@@ -254,6 +260,21 @@ const mailRoundTrip: Flow = {
       assertions.check('the message arrived in the recipient inbox', Boolean(delivered), subject);
 
       if (delivered) {
+        const before = connected.unreadCount;
+        await recipient.driver.request<WsRespMailMessage>(
+          { type: WsMessageType.REQ_MAIL_READ_MESSAGE, folder: 'Inbox', messageId: delivered.messageId },
+          WsMessageType.RESP_MAIL_MESSAGE,
+        );
+        const { count: after } = await recipient.driver.request<WsRespMailUnreadCount>(
+          { type: WsMessageType.REQ_MAIL_GET_UNREAD_COUNT },
+          WsMessageType.RESP_MAIL_UNREAD_COUNT,
+        );
+        assertions.check(
+          'reading the message lowered CheckNewMail by one',
+          after === before - 1,
+          `messageId=${delivered.messageId} before=${before} after=${after}`,
+        );
+
         await recipient.driver.request(
           { type: WsMessageType.REQ_MAIL_DELETE, folder: 'Inbox', messageId: delivered.messageId },
           WsMessageType.RESP_MAIL_DELETED,

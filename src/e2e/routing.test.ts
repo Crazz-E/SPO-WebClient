@@ -30,6 +30,11 @@ describe('route', () => {
     ]));
   });
 
+  it('routes mail-handler.ts to mail-roundtrip, not to the governance flows', () => {
+    const d = route(['src/server/session/mail-handler.ts']);
+    expect(d.required).toEqual([SPINE_FLOW, 'mail-roundtrip']);
+  });
+
   it('routes a Favorites change to its own flows, not to the governance ones', () => {
     const d = route(['src/server/session/favorites-handler.ts']);
     expect(d.required).toEqual(['login-spine', 'favorites-roundtrip', 'favorites-folders']);

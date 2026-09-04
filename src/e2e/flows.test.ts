@@ -444,13 +444,18 @@ describe('politics-write', () => {
 });
 
 describe('mail-roundtrip', () => {
-  function mailSession(inboxSubjects: string[], record?: (msg: WsMessage) => void) {
+  function mailSession(
+    inboxSubjects: string[],
+    record?: (msg: WsMessage) => void,
+    opts: { unreadCount?: number; afterUnreadCount?: number } = {},
+  ) {
+    const { unreadCount = 1, afterUnreadCount = 0 } = opts;
     return stubSession(msg => {
       record?.(msg);
       switch (msg.type) {
         case WsMessageType.RESP_MAIL_CONNECTED:
         case WsMessageType.REQ_MAIL_CONNECT:
-          return { type: WsMessageType.RESP_MAIL_CONNECTED, unreadCount: 0 };
+          return { type: WsMessageType.RESP_MAIL_CONNECTED, unreadCount };
         case WsMessageType.REQ_MAIL_COMPOSE:
           return { type: WsMessageType.RESP_MAIL_SENT };
         case WsMessageType.REQ_MAIL_GET_FOLDER:
@@ -459,6 +464,10 @@ describe('mail-roundtrip', () => {
             folder: 'Inbox',
             messages: inboxSubjects.map((subject, i) => ({ messageId: String(i), subject })),
           };
+        case WsMessageType.REQ_MAIL_READ_MESSAGE:
+          return { type: WsMessageType.RESP_MAIL_MESSAGE, message: {} };
+        case WsMessageType.REQ_MAIL_GET_UNREAD_COUNT:
+          return { type: WsMessageType.RESP_MAIL_UNREAD_COUNT, count: afterUnreadCount };
         default:
           return { type: WsMessageType.RESP_MAIL_DELETED };
       }
@@ -492,6 +501,31 @@ describe('mail-roundtrip', () => {
 
     expect(result.status).toBe('PASS');
     expect(sent.some(m => m.type === WsMessageType.REQ_MAIL_DELETE)).toBe(true);
+  });
+
+  it('FAILs when the unread count does not drop after the read', async () => {
+    const sent: WsMessage[] = [];
+    let subject = '';
+    jest.spyOn(session, 'login').mockImplementation(async () =>
+      mailSession(
+        subject ? [subject] : [],
+        msg => {
+          sent.push(msg);
+          if (msg.type === WsMessageType.REQ_MAIL_COMPOSE) {
+            subject = (msg as unknown as { subject: string }).subject;
+          }
+        },
+        { unreadCount: 1, afterUnreadCount: 1 },
+      ),
+    );
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    const result = await flowByName('mail-roundtrip').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    const failed = result.assertions.find(a => !a.ok);
+    expect(failed?.what).toMatch(/lowered CheckNewMail by one/);
+    expect(failed?.detail).toMatch(/messageId=\d+ before=1 after=1/);
   });
 
   it('addresses the probe message to the second account', async () => {

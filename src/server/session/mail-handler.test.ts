@@ -1,8 +1,10 @@
 /// <reference path="../__tests__/matchers/rdo-matchers.d.ts" />
 
 /**
- * mail-handler — the Mail Server members, on the `mail` socket, plus the one
- * HTTP scrape (MessageList.asp) that lists a folder.
+ * mail-handler — the Mail Server members, on the `mail` socket, plus the two
+ * HTTP scrapes: MessageList.asp (lists a folder) and MessageBody.asp (touched
+ * after an Inbox read so the mail server's Read flag is set, see the file
+ * header of mail-handler.ts).
  *
  * Two channels, and this file watches both:
  *   - `sendRdoRequest` (`fake.sent`) — the functions (`NewMail`, `Post`,
@@ -385,6 +387,10 @@ describe('saveDraft', () => {
 // ===========================================================================
 
 describe('readMailMessage', () => {
+  beforeEach(() => {
+    mockFetch.mockResolvedValue(htmlResponse('<html></html>'));
+  });
+
   const HEADERS_TEXT = [
     'MessageId=MSG-77', 'FromAddr=alice@shamba.net', 'ToAddr=bob@shamba.net', 'From=Alice', 'To=Bob',
     'Subject=Re: hello=world', 'Date=2244.5', 'DateFmt=3/9/2244', 'Read=1', 'Stamp=42', 'NoReply=0',
@@ -579,6 +585,83 @@ describe('readMailMessage', () => {
     const fake = makeMailCtx(override);
     await expect(readMailMessage(fake.ctx, 'Inbox', 'X')).rejects.toThrow('Mail service not connected');
     expect(fake.sent).toHaveLength(0);
+  });
+
+  // ── MessageBody.asp header touch — Inbox only ────────────────────────────
+
+  it('after an Inbox read, GETs MessageBody.asp once, after the RDO sequence completes', async () => {
+    const fake = makeMailCtx();
+    answerRead(fake);
+    let sentCountAtFetch = -1;
+    mockFetch.mockImplementation(async () => {
+      sentCountAtFetch = fake.sent.length;
+      return htmlResponse('<html></html>');
+    });
+
+    await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('http://158.69.153.134/five/0/visual/voyager/mail/MessageBody.asp?WorldName=Shamba&Account=SPO_test3%40shamba.net&Folder=Inbox&MsgId=MSG-77');
+    expect(init).toEqual(expect.objectContaining({ redirect: 'follow' }));
+    expect((init as { signal?: unknown }).signal).toBeInstanceOf(AbortSignal);
+    expect(membersOf(fake.sent)).toEqual(['OpenMessage', 'GetHeaders', 'GetLines', 'GetAttachmentCount', 'CloseMessage']);
+    // all five RDO requests were already sent by the time the fetch fired
+    expect(sentCountAtFetch).toBe(5);
+  });
+
+  it.each(['Draft', 'Sent'])('does not touch MessageBody.asp for a %s read', async folder => {
+    const fake = makeMailCtx();
+    answerRead(fake);
+
+    const msg = await readMailMessage(fake.ctx, folder, 'MSG-77');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(msg.messageId).toBe('MSG-77');
+  });
+
+  it('a non-OK status from MessageBody.asp warns but still returns the message', async () => {
+    const fake = makeMailCtx();
+    answerRead(fake);
+    mockFetch.mockResolvedValue(htmlResponse('', 500));
+
+    const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+    expect(msg.messageId).toBe('MSG-77');
+    expect(fake.log.warn).toHaveBeenCalledWith('[Mail] MessageBody.asp returned 500 — unread flag not cleared');
+  });
+
+  it('a rejected MessageBody.asp fetch warns but still returns the message', async () => {
+    const fake = makeMailCtx();
+    answerRead(fake);
+    mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+    expect(msg.messageId).toBe('MSG-77');
+    expect(fake.log.warn).toHaveBeenCalledWith('[Mail] Header touch failed — unread flag not cleared:', 'ECONNREFUSED');
+  });
+
+  it('a GetLines timeout rejects before the header touch, and MessageBody.asp is never fetched', async () => {
+    const fake = makeMailCtx();
+    fake.respond(p => {
+      if (p.member === 'OpenMessage') return `OpenMessage="#${MSG_ID}"`;
+      if (p.member === 'GetLines') return new Error('Request timeout: GetLines');
+      return '';
+    });
+
+    await expect(readMailMessage(fake.ctx, 'Inbox', 'X')).rejects.toThrow('Request timeout: GetLines');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('with no currentWorldInfo, an Inbox read fetches nothing and still returns the message', async () => {
+    const fake = makeMailCtx({ currentWorldInfo: null });
+    answerRead(fake);
+
+    const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(msg.messageId).toBe('MSG-77');
   });
 });
 

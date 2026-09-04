@@ -91,6 +91,13 @@ export const ROUTES: RouteRule[] = [
     why: 'the search WS handler changed — including the people-search request path',
   },
   {
+    // Before the broad wire-level rule below, which would otherwise route a
+    // mail-handler change through flows that never open the mail socket.
+    test: /^src\/server\/session\/mail-handler\.ts$/,
+    flows: ['mail-roundtrip'],
+    why: 'the mail-socket handler changed — the one flow that drives it',
+  },
+  {
     test: /^src\/shared\/rdo-|^src\/server\/rdo\.ts$|^src\/server\/session\//,
     flows: ['politics-read', 'politics-write', 'building-details'],
     why: 'wire-level change: frames, session phases or RDO members',
