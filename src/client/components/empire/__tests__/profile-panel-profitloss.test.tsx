@@ -106,4 +106,72 @@ describe('ProfilePanel — Profit & Loss history series', () => {
     expect(tabBody.querySelectorAll('[class*="plChart"]').length).toBe(0);
     expect(tabBody.querySelectorAll('svg').length).toBe(0);
   });
+
+  it('a tax section shows the Town / IFEL captions and split, non-tax rows keep two children', () => {
+    const TREE_WITH_TAX: ProfitLossData = {
+      root: {
+        label: 'Net Profit',
+        level: 0,
+        amount: '1000',
+        children: [
+          {
+            label: 'RESIDENTIALS',
+            level: 2,
+            amount: '500',
+            isHeader: true,
+            children: [{ label: 'Rent', level: 3, amount: '500' }],
+          },
+          {
+            label: 'TAXES',
+            level: 2,
+            amount: '-300',
+            isHeader: true,
+            isTax: true,
+            children: [
+              { label: 'Income tax', level: 3, amount: '-200', isTax: true, secAmount: '-100' },
+              { label: 'Sales tax', level: 3, amount: '-100', isTax: true, secAmount: '-100' },
+            ],
+          },
+        ],
+      },
+    };
+
+    const { container } = renderWithProviders(<ProfilePanel />);
+    clickSection('Profit & Loss');
+    act(() => {
+      useProfileStore.getState().setProfitLoss(TREE_WITH_TAX);
+    });
+
+    const tabBody = container.querySelector('[class*="tabBody"]') as HTMLElement;
+    const rows = tabBody.querySelectorAll('[class*="plRow"]');
+
+    const taxesRow = Array.from(rows).find((r) => r.textContent?.startsWith('TAXES'));
+    expect(taxesRow).toBeTruthy();
+    const taxesSplit = taxesRow?.lastElementChild as HTMLElement;
+    expect(taxesSplit.className).toContain('plSplit');
+    const taxesCells = Array.from(taxesSplit.children).map((c) => c.textContent);
+    expect(taxesCells).toEqual(['Town', 'IFEL']);
+
+    const incomeTaxRow = Array.from(rows).find((r) => r.textContent?.startsWith('Income tax'));
+    expect(incomeTaxRow).toBeTruthy();
+    const incomeTaxSplit = incomeTaxRow?.lastElementChild as HTMLElement;
+    expect(incomeTaxSplit.className).toContain('plSplit');
+    const incomeTaxCells = Array.from(incomeTaxSplit.children);
+    expect(incomeTaxCells.map((c) => c.textContent)).toEqual(['-100', '-100']);
+    incomeTaxCells.forEach((c) => expect(c.className).toContain('negativeValue'));
+
+    const salesTaxRow = Array.from(rows).find((r) => r.textContent?.startsWith('Sales tax'));
+    expect(salesTaxRow).toBeTruthy();
+    const salesTaxSplit = salesTaxRow?.lastElementChild as HTMLElement;
+    const salesTaxCells = Array.from(salesTaxSplit.children);
+    expect(salesTaxCells.map((c) => c.textContent)).toEqual(['0', '-100']);
+
+    const residentialsRow = Array.from(rows).find((r) => r.textContent?.startsWith('RESIDENTIALS'));
+    const rentRow = Array.from(rows).find((r) => r.textContent?.startsWith('Rent'));
+    for (const row of [residentialsRow, rentRow]) {
+      expect(row).toBeTruthy();
+      expect(row?.children.length).toBe(2);
+      expect(row?.lastElementChild?.className).toContain('plAmount');
+    }
+  });
 });
