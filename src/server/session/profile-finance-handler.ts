@@ -21,6 +21,7 @@ import { extractAllActionUrls } from '../asp-url-extractor';
 import { toErrorMessage } from '../../shared/error-utils';
 import { fetchWithTimeout } from '../fetch-with-timeout';
 import { requireDaParams } from './asp-da-params';
+import { isCacheUnavailablePage } from './asp-cache-unavailable';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PRIVATE — ASP money format
@@ -200,14 +201,19 @@ export async function fetchCurriculumData(ctx: SessionContext): Promise<Curricul
   const aspPath = 'NewTycoon/TycoonCurriculum.asp';
   let html = '';
   let baseUrl = '';
+  let unavailable = false;
   try {
     baseUrl = ctx.buildAspUrl(aspPath, { RIWS: '' });
     html = await ctx.fetchAspPage(aspPath, { RIWS: '' });
   } catch {
     ctx.log.warn('[Profile] TycoonCurriculum.asp re-fetch for curriculum details failed');
+    unavailable = true;
   }
+  if (isCacheUnavailablePage(html)) unavailable = true;
 
-  return parseCurriculumDetails(ctx, html, profile, level, levelNames, baseUrl);
+  const data = parseCurriculumDetails(ctx, html, profile, level, levelNames, baseUrl);
+  if (unavailable) data.cacheUnavailable = true;
+  return data;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -441,11 +447,24 @@ function parseCurriculumDetails(
  * Fetch bank account data via TycoonBankAccount.asp on IS HTTP server.
  * Parses budget, loan list, interest rates, and terms from the ASP HTML response.
  */
-export async function fetchBankAccount(ctx: SessionContext): Promise<BankAccountData> {
+/** The page as the server renders it, or a throw — executeBankAction needs the throw. */
+async function readBankAccountPage(ctx: SessionContext): Promise<{ html: string; baseUrl: string }> {
   const aspPath = 'NewTycoon/TycoonBankAccount.asp';
   const baseUrl = ctx.buildAspUrl(aspPath, { RIWS: '' });
   const html = await ctx.fetchAspPage(aspPath, { RIWS: '' });
-  return parseBankAccountHtml(ctx, html, baseUrl);
+  return { html, baseUrl };
+}
+
+export async function fetchBankAccount(ctx: SessionContext): Promise<BankAccountData> {
+  try {
+    const { html, baseUrl } = await readBankAccountPage(ctx);
+    const data = parseBankAccountHtml(ctx, html, baseUrl);
+    if (isCacheUnavailablePage(html)) data.cacheUnavailable = true;
+    return data;
+  } catch (e: unknown) {
+    ctx.log.warn('[Bank] ASP fetch failed:', e);
+    return { ...parseBankAccountHtml(ctx, '', ''), cacheUnavailable: true };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -646,7 +665,11 @@ export async function executeBankAction(
     if (action === 'payoff') extraParams.set('LID', String(loanIndex));
 
     // The state BEFORE the mutation — the only oracle this page allows.
-    const before = await fetchBankAccount(ctx);
+    const beforePage = await readBankAccountPage(ctx);
+    const before = parseBankAccountHtml(ctx, beforePage.html, beforePage.baseUrl);
+    if (isCacheUnavailablePage(beforePage.html)) {
+      return { success: false, message: `${action} refused: the bank page cannot be read before the action` };
+    }
 
     // 1. Try cached form action URL from last fetchBankAccount() ASP parse
     const cached = ctx.getAspActionCache('NewTycoon/TycoonBankAccount.asp');
@@ -743,8 +766,15 @@ export async function executeBankAction(
  * Parses the full hierarchical P&L tree from the ASP HTML response.
  */
 export async function fetchProfitLoss(ctx: SessionContext): Promise<ProfitLossData> {
-  const html = await ctx.fetchAspPage('NewTycoon/TycoonProfitAndLoses.asp', { RIWS: '' });
-  return parseProfitLossHtml(html);
+  try {
+    const html = await ctx.fetchAspPage('NewTycoon/TycoonProfitAndLoses.asp', { RIWS: '' });
+    const data = parseProfitLossHtml(html);
+    if (isCacheUnavailablePage(html)) data.cacheUnavailable = true;
+    return data;
+  } catch (e: unknown) {
+    ctx.log.warn('[ProfitLoss] ASP fetch failed:', e);
+    return { ...parseProfitLossHtml(''), cacheUnavailable: true };
+  }
 }
 
 /** CompanyPage.asp:185 — the one div the parser keys on; only rendered under `if ObjValid` (:139). */
@@ -921,11 +951,16 @@ export async function fetchCompanies(ctx: SessionContext): Promise<CompaniesData
     });
     const companies = parseCompaniesHtml(ctx, html);
     const worldName = ctx.currentWorldInfo?.name || '';
+    // chooseCompany.asp never renders the sentence itself, but the guard costs
+    // one regex and keeps the six fetches uniform.
+    if (isCacheUnavailablePage(html)) {
+      return { companies, currentCompany, worldName, cacheUnavailable: true };
+    }
     return { companies, currentCompany, worldName };
   } catch (e: unknown) {
     ctx.log.warn('[Companies] ASP fetch failed:', e);
     const worldName = ctx.currentWorldInfo?.name || '';
-    return { companies: [], currentCompany, worldName };
+    return { companies: [], currentCompany, worldName, cacheUnavailable: true };
   }
 }
 

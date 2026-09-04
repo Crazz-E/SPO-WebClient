@@ -845,6 +845,10 @@ export interface CurriculumData {
   abilityLoanPoints: number;
   rankings: CurriculumRanking[];
   curriculumItems: CurriculumItem[];
+  /** `true` when the page carried "cannot retrieve Tycoon information from server"
+   *  (ObjValid=false — e.g. TycoonBankAccount.asp:304/:623) or the fetch itself failed;
+   *  absent on a page that parsed. The rest of the object is the neutral default. */
+  cacheUnavailable?: boolean;
 }
 
 export interface CurriculumRanking {
@@ -882,6 +886,10 @@ export interface BankAccountData {
   loans: LoanInfo[];
   defaultInterest: number;
   defaultTerm: number;
+  /** `true` when the page carried "cannot retrieve Tycoon information from server"
+   *  (ObjValid=false — e.g. TycoonBankAccount.asp:304/:623) or the fetch itself failed;
+   *  absent on a page that parsed. The rest of the object is the neutral default. */
+  cacheUnavailable?: boolean;
 }
 
 export type BankActionType = 'borrow' | 'send' | 'payoff';
@@ -906,6 +914,10 @@ export interface ProfitLossNode {
 
 export interface ProfitLossData {
   root: ProfitLossNode;
+  /** `true` when the page carried "cannot retrieve Tycoon information from server"
+   *  (ObjValid=false — e.g. TycoonBankAccount.asp:304/:623) or the fetch itself failed;
+   *  absent on a page that parsed. The rest of the object is the neutral default. */
+  cacheUnavailable?: boolean;
 }
 
 // =============================================================================
@@ -925,6 +937,10 @@ export interface CompaniesData {
   companies: CompanyListItem[];
   currentCompany: string;
   worldName: string;
+  /** `true` when the page carried "cannot retrieve Tycoon information from server"
+   *  (ObjValid=false — e.g. TycoonBankAccount.asp:304/:623) or the fetch itself failed;
+   *  absent on a page that parsed. The rest of the object is the neutral default. */
+  cacheUnavailable?: boolean;
 }
 
 // =============================================================================
@@ -956,6 +972,10 @@ export interface AutoConnectionFluid {
 
 export interface AutoConnectionsData {
   fluids: AutoConnectionFluid[];
+  /** `true` when the page carried "cannot retrieve Tycoon information from server"
+   *  (ObjValid=false — e.g. TycoonBankAccount.asp:304/:623) or the fetch itself failed;
+   *  absent on a page that parsed. The rest of the object is the neutral default. */
+  cacheUnavailable?: boolean;
 }
 
 export type AutoConnectionActionType = 'add' | 'delete' | 'hireTradeCenter' | 'dontHireTradeCenter' | 'onlyWarehouses' | 'dontOnlyWarehouses';
@@ -975,6 +995,10 @@ export interface PolicyData {
   /** `false` when the page comments out the Ally option (`TycoonPolicy.asp:96`, `:451`,
    *  world flag `AlliesPageOn` off, `:56`): the stance may still be READ, never OFFERED. */
   alliesAllowed: boolean;
+  /** `true` when the page carried "cannot retrieve Tycoon information from server"
+   *  (ObjValid=false — e.g. TycoonBankAccount.asp:304/:623) or the fetch itself failed;
+   *  absent on a page that parsed. The rest of the object is the neutral default. */
+  cacheUnavailable?: boolean;
 }
 
 // =============================================================================

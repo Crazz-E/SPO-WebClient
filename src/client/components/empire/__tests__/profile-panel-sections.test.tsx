@@ -242,4 +242,73 @@ describe('ProfilePanel — sections', () => {
     expect(screen.getByRole('alert')).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toBe('Prestige is falling.');
   });
+
+  it('shows the unavailable state, not the skeleton, when the bank page could not be read', () => {
+    const { container } = renderWithProviders(<ProfilePanel />);
+
+    clickSection('Bank Account');
+    act(() => {
+      useProfileStore.getState().setBankAccount({
+        balance: '0', maxLoan: '0', totalLoans: '0', maxTransfer: '0',
+        totalNextPayment: '0', loans: [], defaultInterest: 0, defaultTerm: 5,
+        cacheUnavailable: true,
+      });
+    });
+
+    expect(useProfileStore.getState().isLoading).toBe(false);
+    expect(container.querySelector('[class*="loading"]')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain('The server could not read your profile');
+    expect(screen.queryByText('No active loans')).toBeNull();
+  });
+
+  it('a genuinely empty bank account keeps the neutral text', () => {
+    renderWithProviders(<ProfilePanel />);
+
+    clickSection('Bank Account');
+    act(() => {
+      useProfileStore.getState().setBankAccount({
+        balance: '0', maxLoan: '0', totalLoans: '0', maxTransfer: '0',
+        totalNextPayment: '0', loans: [], defaultInterest: 0, defaultTerm: 5,
+      });
+    });
+
+    expect(screen.getByText('No active loans')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('Retry re-requests the section', () => {
+    const onProfileBank = jest.fn();
+    renderWithProviders(<ProfilePanel />, {
+      clientCallbacks: createSpiedCallbacks({ onProfileBank }),
+    });
+
+    clickSection('Bank Account');
+    act(() => {
+      useProfileStore.getState().setBankAccount({
+        balance: '0', maxLoan: '0', totalLoans: '0', maxTransfer: '0',
+        totalNextPayment: '0', loans: [], defaultInterest: 0, defaultTerm: 5,
+        cacheUnavailable: true,
+      });
+    });
+
+    fireEvent.click(screen.getByText('Retry'));
+
+    expect(onProfileBank).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the unavailable state for Profit & Loss when the page could not be read', () => {
+    const { container } = renderWithProviders(<ProfilePanel />);
+
+    clickSection('Profit & Loss');
+    act(() => {
+      useProfileStore.getState().setProfitLoss({
+        root: { label: 'Net Profit (losses)', level: 0, amount: '0', children: [] },
+        cacheUnavailable: true,
+      });
+    });
+
+    expect(useProfileStore.getState().isLoading).toBe(false);
+    expect(container.querySelector('[class*="loading"]')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain('The server could not read your profile');
+  });
 });
