@@ -1,4 +1,9 @@
 /// <reference path="../../server/__tests__/matchers/rdo-matchers.d.ts" />
+jest.mock('node-fetch', () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
+
 /**
  * The civic write path, checked against the two authorities it answers to:
  * the RDO catalogue (kind and arity) and the property templates (which members
@@ -11,8 +16,12 @@
  * here rather than on the wire.
  */
 
+import fetch from 'node-fetch';
+import type { Response } from 'node-fetch';
 import { RdoProtocol } from '@/server/rdo';
 import { RDO_MEMBERS } from '@/shared/rdo-members';
+import { rdoCall } from '@/shared/rdo-frame';
+import { RdoValue } from '@/shared/rdo-types';
 import {
   VOTES_GROUP,
   CAPITOL_TOWNS_GROUP,
@@ -27,9 +36,12 @@ import {
   parseCampaignProjects,
   parseCampaignPromise,
   parseCampaignState,
+  getPoliticsData,
 } from '@/server/session/politics-handler';
+import { makeSessionCtx } from '@/server/__tests__/session/fake-session-context';
 import { RdoMock } from '../rdo-mock';
 import { HttpMock } from '../http-mock';
+import type { RdoExchange } from '../types/rdo-exchange-types';
 import {
   createCivicMutationsScenario,
   CIVIC_MUTATIONS,
@@ -38,7 +50,19 @@ import {
   POLITICS_PATH,
 } from './civic-mutations-scenario';
 
+const mockFetch = fetch as unknown as jest.MockedFunction<
+  (url: string, init?: unknown) => Promise<Response>
+>;
+
 const { rdo, http } = createCivicMutationsScenario();
+
+/**
+ * The exchanges that are reads, not mutations. `SetPath` is a `function`, so it
+ * carries `"^"` and a non-empty response — the loops below are about
+ * *mutations*, which is exactly what this filter expresses.
+ */
+const isRead = (ex: RdoExchange): boolean =>
+  ex.matchKeys?.member === 'GetPropertyList' || ex.matchKeys?.member === 'SetPath';
 
 /** Every `rdoCommands` entry the civic template groups declare. */
 const TEMPLATE_CIVIC_COMMANDS = Array.from(new Set(
@@ -56,7 +80,7 @@ describe('civic-mutations scenario — the catalogue', () => {
       expect(RDO_MEMBERS[m.member].kind).toBe('procedure');
     }
     for (const ex of rdo.exchanges) {
-      if (ex.matchKeys?.member === 'GetPropertyList') continue;
+      if (isRead(ex)) continue;
       // `"^"` on a procedure leaves a result pointer nobody pops — the freeze.
       expect(ex.request).toContain('"*"');
       expect(ex.request).not.toContain('"^"');
@@ -72,7 +96,7 @@ describe('civic-mutations scenario — the catalogue', () => {
   it('a procedure answers nothing, so no mutation exchange carries a response', () => {
     // Not an omission: this is OB-28 stated as a fixture. "Confirmed" can never
     // come from the reply of a member that has none.
-    const mutations = rdo.exchanges.filter(ex => ex.matchKeys?.member !== 'GetPropertyList');
+    const mutations = rdo.exchanges.filter(ex => !isRead(ex));
     expect(mutations).not.toHaveLength(0);
     for (const ex of mutations) {
       expect(ex.response).toBe('');
@@ -244,5 +268,89 @@ describe('civic-mutations scenario — the Politics ASP pages', () => {
   it('the Withdraw button is what says the campaign is running', () => {
     expect(parseCampaignState(fetchPage('tycooncampaign.asp'), false))
       .toEqual({ state: 'running', message: '' });
+  });
+});
+
+describe('civic-mutations scenario — the world.five flag drives getPoliticsData', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  function drive(electionsOn: boolean) {
+    const { rdo, http } = createCivicMutationsScenario(undefined, { electionsOn });
+    const rdoMock = new RdoMock();
+    rdoMock.addScenario(rdo);
+    const httpMock = new HttpMock();
+    httpMock.addScenario(http);
+
+    mockFetch.mockImplementation(async (url: string) => {
+      const result = httpMock.match('GET', url);
+      if (!result) {
+        return { ok: false, status: 404, text: async () => '' } as unknown as Response;
+      }
+      return { ok: true, status: 200, text: async () => result.body } as unknown as Response;
+    });
+
+    const fake = makeSessionCtx({
+      currentWorldInfo: { name: 'Shamba', url: 'http://158.69.153.134', ip: '158.69.153.134', port: 7000 },
+      activeUsername: 'SPO_test3', cachedPassword: 'test3',
+      daAddr: '158.69.153.134', daPort: 7001,
+    });
+    fake.cacher.createObject.mockResolvedValue(CIVIC_TARGETS.tempObject);
+    fake.cacher.setPath.mockImplementation(async (id, path) => {
+      const frame = rdoCall('SetPath', id, RdoValue.string(path)).toFrame();
+      const result = rdoMock.match(frame);
+      if (!result) throw new Error(`L1: no exchange for SetPath ${path}`);
+    });
+    fake.cacher.getPropertyList.mockImplementation(async (id, props) => {
+      const frame = rdoCall(
+        'GetPropertyList', id, RdoValue.string(props.join('\t') + '\t'),
+      ).toFrame();
+      const result = rdoMock.match(frame);
+      if (!result) throw new Error(`L1: no exchange for GetPropertyList ${props.join(',')}`);
+      const match = /res="%([^"]*)"/.exec(result.response);
+      return match ? match[1].split('\t') : [];
+    });
+
+    return { fake, rdoMock };
+  }
+
+  it('ElectionsOn = 0: the state is noElections and the campaign page is never fetched', async () => {
+    const { fake, rdoMock } = drive(false);
+
+    const data = await getPoliticsData(fake.ctx, 'Shamba', 118, 226);
+
+    expect(data.campaignState).toBe('noElections');
+    expect(data.canLaunchCampaign).toBe(false);
+    const urls = mockFetch.mock.calls.map(c => c[0] as string);
+    expect(urls.some(u => u.includes('tycooncampaign.asp'))).toBe(false);
+    expect(rdoMock.getConsumedIds().has('civic-rdo-world-set-path')).toBe(true);
+    expect(rdoMock.getConsumedIds().has('civic-rdo-world-elections-on')).toBe(true);
+    expect(data.mayorName).toBe('Rio');
+    expect(data.townHallId).toBe(130500777);
+  });
+
+  it('ElectionsOn = 1: the campaign page decides, as today', async () => {
+    const { fake } = drive(true);
+
+    const data = await getPoliticsData(fake.ctx, 'Shamba', 118, 226);
+
+    expect(data.campaignState).toBe('running');
+    const urls = mockFetch.mock.calls.map(c => c[0] as string);
+    expect(urls).toHaveLength(5);
+    expect(urls[4]).toContain('tycooncampaign.asp');
+  });
+
+  it('each path read matches back to its own exchange', () => {
+    const { rdo } = createCivicMutationsScenario(undefined, { electionsOn: false });
+    const mock = new RdoMock();
+    mock.addScenario(rdo);
+    for (const id of [
+      'civic-rdo-town-set-path', 'civic-rdo-town-ruler-block',
+      'civic-rdo-world-set-path', 'civic-rdo-world-elections-on',
+    ]) {
+      const ex = rdo.exchanges.find(e => e.id === id)!;
+      expect(mock.match(ex.request)!.exchange.id).toBe(ex.id);
+    }
   });
 });

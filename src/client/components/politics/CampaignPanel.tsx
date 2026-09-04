@@ -4,7 +4,9 @@
  * The opposition header (`opositiondata.asp`) sits above two sub-tabs
  * (`campaigntabs.asp:88-119`):
  *
- *   YOUR CAMPAIGN — `tycooncampaign.asp`, one of four mutually exclusive states
+ *   YOUR CAMPAIGN — `tycooncampaign.asp`, one of five mutually exclusive states
+ *     (the fifth, `noElections`, is `tycoonCampaignNoElections.asp`, loaded by
+ *     `politics.asp:40-44` on a tournament planet)
  *   ALL CAMPAIGNS — `allcampaigns.asp`, shown only when someone is running
  */
 
@@ -106,6 +108,7 @@ export function CampaignPanel({ data, buildingX, buildingY }: CampaignPanelProps
   // `campaigntabs.asp:104` — the second tab exists only when someone is running.
   const showAll = data.campaigns.length > 0;
   const showPhoto = strongest !== undefined && strongest.photoUrl !== '' && failedPhotoUrl !== strongest.photoUrl;
+  const noElections = data.campaignState === 'noElections';
 
   return (
     <>
@@ -136,7 +139,9 @@ export function CampaignPanel({ data, buildingX, buildingY }: CampaignPanelProps
             </dl>
           </div>
         ) : (
-          <div className={styles.politicsVacant}>No candidates</div>
+          <div className={styles.politicsVacant}>
+            {noElections ? 'No elections are held on Tournament planets' : 'No candidates'}
+          </div>
         )}
       </section>
 
@@ -179,6 +184,16 @@ export function CampaignPanel({ data, buildingX, buildingY }: CampaignPanelProps
           </table>
         ) : (
           <>
+            {data.campaignState === 'noElections' && (
+              /* StrCo0nCampaign_12 — ePolitics.lng:49, the whole body of
+                 tycoonCampaignNoElections.asp (:129-131): one banner, no button. */
+              <p className={styles.railLead}>
+                No elections are held in Tournament planets. Taxes values are fixed and the
+                necessary zoning is provided when the planet is opened. There is no minimum
+                wage and players will have to rely on themselves for civic facilities.
+              </p>
+            )}
+
             {data.campaignState === 'available' && (
               <>
                 {/* StrCo0nCampaign_6 — ePolitics.lng:43, with the page's own threshold. */}

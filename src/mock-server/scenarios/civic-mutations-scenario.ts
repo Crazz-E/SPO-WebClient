@@ -15,7 +15,10 @@
  *    what ships. Every one of them is a Pascal `procedure`: the separator is
  *    `"*"`, and **the response is empty on purpose**. A procedure answers
  *    nothing, so "the write landed" is never something the reply can say
- *    (`OB-28`); the client re-reads to find out.
+ *    (`OB-28`); the client re-reads to find out. It also serves the two cache
+ *    reads by path `getPoliticsData` makes before any of that — the town
+ *    folder's ruler block and `world.five`'s `ElectionsOn`, `1` by default,
+ *    `0` via `createCivicMutationsScenario(vars, { electionsOn: false })`.
  *  - **HTTP** — the five Politics ASP pages `getPoliticsData` fetches. Their
  *    bodies are cut to the markup the parsers actually key on, from
  *    `Five/0/Visual/Voyager/Politics/*.asp`, and the suite feeds each one
@@ -31,6 +34,7 @@
 import { rdoCall } from '@/shared/rdo-frame';
 import { RdoValue } from '@/shared/rdo-types';
 import type { RdoMemberName } from '@/shared/rdo-members';
+import { RULER_PROPS } from '@/server/session/politics-handler';
 import type { RdoScenario, RdoExchange } from '../types/rdo-exchange-types';
 import type { HttpScenario, HttpExchange } from '../types/http-exchange-types';
 import type { ScenarioVariables } from './scenario-variables';
@@ -57,6 +61,8 @@ export const CIVIC_TARGETS = {
   capitolBlock: '130400301',
   /** The political entity the three politics procedures bind to. */
   townHallId: '130500777',
+  /** The cacher temp object id — distinct from every block id and coordinate. */
+  tempObject: '7734',
 } as const;
 
 // =============================================================================
@@ -205,6 +211,75 @@ const CIVIC_ID_LOOKUPS: { slug: string; property: string; value: string; note: s
     note: 'Row 1 of the MINISTRIES table is ministry 1',
   },
 ];
+
+// =============================================================================
+// WORLD AND TOWN CACHE OBJECTS — the two reads by path
+// =============================================================================
+
+/**
+ * The ruler-block read (`Towns\Shamba.five\`, `header.asp:20-23`) and the
+ * `world.five` `ElectionsOn` read `getPoliticsData` makes before the campaign
+ * page is ever fetched. Both go through the same temp object id, same as the
+ * real gateway (`readCacheObjectAtPath`).
+ */
+function buildPathReadExchanges(electionsOn: boolean): RdoExchange[] {
+  const rulerQuery = `${RULER_PROPS.join('\t')}\t`;
+  const electionsQuery = 'ElectionsOn\t';
+
+  return [
+    {
+      id: 'civic-rdo-town-set-path',
+      request: rdoCall(
+        'SetPath', CIVIC_TARGETS.tempObject, RdoValue.string('Towns\\Shamba.five\\'),
+      ).toFrame(),
+      // Delphi WordBool TRUE — the only success value (building-inspector-rdo.test.ts:721-729).
+      response: 'A0 res="#-1"',
+      matchKeys: {
+        verb: 'sel', action: 'call', member: 'SetPath',
+        argsPattern: ['"%Towns\\Shamba.five\\"'],
+      },
+    },
+    {
+      // Keeps the ruler read from falling through `RdoMock`'s member-only match
+      // onto the tax-id lookup — both are `GetPropertyList` calls.
+      id: 'civic-rdo-town-ruler-block',
+      request: rdoCall(
+        'GetPropertyList', CIVIC_TARGETS.tempObject, RdoValue.string(rulerQuery),
+      ).toFrame(),
+      // Ten values in RULER_PROPS order: TownHallId = CIVIC_TARGETS.townHallId,
+      // CampaignCount 0, HasRuler -1.
+      response: 'A0 res="%Rio\t55\t70\t60\t45\t2\t3\t0\t130500777\t-1"',
+      matchKeys: {
+        verb: 'sel', action: 'call', member: 'GetPropertyList',
+        argsPattern: [`"%${rulerQuery}"`],
+      },
+    },
+    {
+      // header.asp:22, Kernel/WorldPolitics.pas:2069.
+      id: 'civic-rdo-world-set-path',
+      request: rdoCall(
+        'SetPath', CIVIC_TARGETS.tempObject, RdoValue.string('world.five'),
+      ).toFrame(),
+      response: 'A0 res="#-1"',
+      matchKeys: {
+        verb: 'sel', action: 'call', member: 'SetPath',
+        argsPattern: ['"%world.five"'],
+      },
+    },
+    {
+      // Kernel/WorldPolitics.pas:2078, Cache/CacheAgent.pas:150-151.
+      id: 'civic-rdo-world-elections-on',
+      request: rdoCall(
+        'GetPropertyList', CIVIC_TARGETS.tempObject, RdoValue.string(electionsQuery),
+      ).toFrame(),
+      response: electionsOn ? 'A0 res="%1"' : 'A0 res="%0"',
+      matchKeys: {
+        verb: 'sel', action: 'call', member: 'GetPropertyList',
+        argsPattern: [`"%${electionsQuery}"`],
+      },
+    },
+  ];
+}
 
 // =============================================================================
 // POLITICS ASP PAGES
@@ -413,7 +488,7 @@ function campaignPage(): string {
 // SCENARIO FACTORY
 // =============================================================================
 
-function buildRdoExchanges(): RdoExchange[] {
+function buildRdoExchanges(electionsOn: boolean): RdoExchange[] {
   const mutations: RdoExchange[] = CIVIC_MUTATIONS.map(m => {
     const frame = rdoCall(m.member, m.targetId, ...m.args);
     return {
@@ -449,7 +524,9 @@ function buildRdoExchanges(): RdoExchange[] {
     };
   });
 
-  return [...lookups, ...mutations];
+  const pathReads = buildPathReadExchanges(electionsOn);
+
+  return [...lookups, ...pathReads, ...mutations];
 }
 
 function buildHttpExchanges(): HttpExchange[] {
@@ -488,14 +565,16 @@ function buildHttpExchanges(): HttpExchange[] {
 }
 
 export function createCivicMutationsScenario(
-  overrides?: Partial<ScenarioVariables>
+  overrides?: Partial<ScenarioVariables>,
+  opts: { electionsOn?: boolean } = {},
 ): { rdo: RdoScenario; http: HttpScenario } {
   const vars = mergeVariables(overrides);
+  const electionsOn = opts.electionsOn ?? true;
 
   const rdo: RdoScenario = {
     name: 'civic-mutations',
     description: 'The civic write path: every Politics procedure, and the two id lookups that precede one',
-    exchanges: buildRdoExchanges(),
+    exchanges: buildRdoExchanges(electionsOn),
     variables: vars as unknown as Record<string, string>,
   };
 

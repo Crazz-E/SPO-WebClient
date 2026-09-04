@@ -13,7 +13,36 @@ import { OverviewSection } from './OverviewSection';
 import { usePoliticsStore } from '../../store/politics-store';
 import { useNewspaperStore } from '../../store/newspaper-store';
 import { useUiStore } from '../../store/ui-store';
-import type { BuildingPropertyValue, BuildingDetailsTab } from '@/shared/types';
+import type { BuildingPropertyValue, BuildingDetailsTab, PoliticsData } from '@/shared/types';
+
+const POLITICS: PoliticsData = {
+  townName: 'Helartia',
+  isCapitol: false,
+  hasRuler: true,
+  yearsToElections: 16,
+  mayorName: 'SPO_test3',
+  mayorPrestige: 588,
+  mayorRating: 83,
+  tycoonsRating: 83,
+  ifelRating: 83,
+  mandateNo: 1,
+  rulerPhotoUrl: '',
+  popularRatings: [],
+  ifelRatings: [],
+  tycoonsRatings: [],
+  publicity: [],
+  publicityAds: '',
+  campaignCount: 0,
+  campaigns: [],
+  campaignState: 'available',
+  campaignMessage: '',
+  canLaunchCampaign: true,
+  prestigeThreshold: 200,
+  projects: [],
+  promise: '',
+  townHallId: 90210,
+  isRuler: false,
+};
 
 function makeTab(id: string, name: string, order: number): BuildingDetailsTab {
   return { id, name, icon: name.charAt(0), order, handlerName: id };
@@ -101,6 +130,36 @@ describe('OverviewSection', () => {
       expect(useNewspaperStore.getState().loadState).toBe('idle');
       expect(useUiStore.getState().modal).toBe('newspaper');
     });
+  });
+
+  it('prints the election countdown when elections are on', () => {
+    usePoliticsStore.setState({ data: POLITICS });
+    renderWithProviders(
+      <OverviewSection
+        generalProperties={TOWN_HALL_WITH_PAPER}
+        votesProperties={[]}
+        buildingX={510}
+        buildingY={420}
+        serverTabs={TOWN_HALL_TABS}
+      />
+    );
+    expect(screen.getByText('16')).toBeTruthy();
+    expect(screen.getByText(/years until next mayoral election/)).toBeTruthy();
+  });
+
+  it('replaces the countdown on a tournament planet', () => {
+    usePoliticsStore.setState({ data: { ...POLITICS, campaignState: 'noElections' } });
+    renderWithProviders(
+      <OverviewSection
+        generalProperties={TOWN_HALL_WITH_PAPER}
+        votesProperties={[]}
+        buildingX={510}
+        buildingY={420}
+        serverTabs={TOWN_HALL_TABS}
+      />
+    );
+    expect(screen.getByText('No elections on Tournament planets')).toBeTruthy();
+    expect(screen.queryByText(/until next/)).toBeNull();
   });
 
   it('shows no buttons and the "no newspaper" message when the town has no paper', () => {

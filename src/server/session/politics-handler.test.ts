@@ -1086,7 +1086,9 @@ describe('getPoliticsData', () => {
   /**
    * A TOWN reads its ruler block off the town FOLDER object, not off the
    * facility — see `readCacheObjectAtPath`. Each `reads` entry answers one
-   * create/SetPath/GetPropertyList/CloseObject cycle, in call order.
+   * create/SetPath/GetPropertyList/CloseObject cycle, in call order. The
+   * ruler block is always the first cycle; a third entry, when supplied,
+   * answers the `world.five` `ElectionsOn` read that follows it.
    */
   function stubTownRead(fake: FakeSessionCtx, ...reads: string[][]): void {
     fake.cacher.createObject.mockResolvedValue(TEMP_OBJ);
@@ -1221,8 +1223,9 @@ describe('getPoliticsData', () => {
     expect(q.get('y')).toBe('226');
     expect(q.get('TownName')).toBe('');
     // …and the ruler block comes off the MAP object, not off a town folder.
+    // The Capitol still reads `world.five` by path, same as `header.asp:20-23`.
     expect(propsAt(fake)).toHaveBeenCalledWith(118, 226, RULER_PROPS_ORDER);
-    expect(fake.cacher.setPath).not.toHaveBeenCalled();
+    expect(fake.cacher.setPath.mock.calls.map(c => c[1])).toEqual(['world.five']);
     expect(data.isCapitol).toBe(true);
     expect(data.mayorName).toBe('Innos');
     expect(data.mandateNo).toBe(4);
@@ -1244,6 +1247,71 @@ describe('getPoliticsData', () => {
     expect(fake.cacher.getPropertyList).toHaveBeenCalledWith(TEMP_OBJ, RULER_PROPS_ORDER);
     expect(fake.cacher.closeObject).toHaveBeenCalledWith(TEMP_OBJ);
     expect(propsAt(fake)).not.toHaveBeenCalled();
+  });
+
+  it('ElectionsOn = 0 on world.five names the state noElections and never fetches the campaign page', async () => {
+    const fake = makeWebCtx();
+    stubPages({ campaign: campaignPage({ view: 'invite' }) });
+    stubTownRead(fake, RULER_ROW, ['0']);
+
+    const data = await getPoliticsData(fake.ctx, 'New Town', 118, 226);
+
+    expect(data.campaignState).toBe('noElections');
+    expect(data.canLaunchCampaign).toBe(false);
+    expect(data.campaignMessage).toBe('');
+    expect(data.projects).toEqual([]);
+    expect(data.promise).toBe('');
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+    const urls = mockFetch.mock.calls.map(c => c[0] as string);
+    expect(urls.some(u => u.includes('/tycooncampaign.asp?'))).toBe(false);
+    expect(fake.cacher.setPath).toHaveBeenCalledWith(TEMP_OBJ, 'world.five');
+    expect(fake.cacher.getPropertyList).toHaveBeenNthCalledWith(2, TEMP_OBJ, ['ElectionsOn']);
+    // The ruler block is untouched by the elections flag.
+    expect(data.mayorName).toBe('Rio');
+    expect(data.yearsToElections).toBe(3);
+  });
+
+  it('ElectionsOn = 1 leaves the campaign page to decide, as before', async () => {
+    const fake = makeWebCtx();
+    stubPages({ campaign: campaignPage({ view: 'invite' }) });
+    stubTownRead(fake, RULER_ROW, ['1']);
+
+    const data = await getPoliticsData(fake.ctx, 'New Town', 118, 226);
+
+    expect(data.campaignState).toBe('available');
+    expect(data.canLaunchCampaign).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(5);
+    const urls = mockFetch.mock.calls.map(c => c[0] as string);
+    expect(urls[4]).toContain('/tycooncampaign.asp?');
+  });
+
+  it.each([
+    ['empty', ['']],
+    ['absent', []],
+  ])('an %s ElectionsOn value keeps elections on', async (_label, electionsValues) => {
+    const fake = makeWebCtx();
+    stubPages({ campaign: campaignPage({ view: 'invite' }) });
+    stubTownRead(fake, RULER_ROW, electionsValues);
+
+    const data = await getPoliticsData(fake.ctx, 'New Town', 118, 226);
+
+    expect(data.campaignState).toBe('available');
+  });
+
+  it('a failed ElectionsOn read keeps elections on and is logged at debug', async () => {
+    const fake = makeWebCtx();
+    stubPages({ campaign: campaignPage({ view: 'invite' }) });
+    fake.cacher.createObject.mockResolvedValue(TEMP_OBJ);
+    fake.cacher.getPropertyList
+      .mockResolvedValueOnce(RULER_ROW)
+      .mockRejectedValueOnce(new Error('Request timeout: GetPropertyList'));
+
+    const data = await getPoliticsData(fake.ctx, 'New Town', 118, 226);
+
+    expect(data.campaignState).toBe('available');
+    expect(fake.log.debug).toHaveBeenCalledWith(
+      '[Politics] Could not read ElectionsOn: Request timeout: GetPropertyList'
+    );
   });
 
   it('refuses when the DA lock channel is unset, rather than falling back to the directory host/port', async () => {

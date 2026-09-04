@@ -63,7 +63,9 @@ export function PoliticsSection({ buildingX, buildingY }: PoliticsSectionProps) 
       <header className={styles.politicsHeader}>
         <span className={styles.politicsPlace}>{place}</span>
         <span className={styles.politicsCountdown}>
-          {years} {years === 1 ? 'year' : 'years'} to elections
+          {data.campaignState === 'noElections'
+            ? 'No elections on Tournament planets'
+            : `${years} ${years === 1 ? 'year' : 'years'} to elections`}
         </span>
         <IconButton
           icon={<RefreshCw size={14} />}

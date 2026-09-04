@@ -1,6 +1,7 @@
 /**
  * OverviewSection — Ruler banner + election countdown + general building properties.
  * Consolidates ruler info (previously repeated on Towns/Ministries tabs) into one place.
+ * The countdown yields to the tournament line on a tournament planet.
  */
 
 import { useCallback, useMemo } from 'react';
@@ -99,10 +100,16 @@ export function OverviewSection({
       {/* Election countdown */}
       {data && (
         <div className={styles.countdownBar}>
-          <span className={styles.countdownValue}>{data.yearsToElections}</span>
-          <span className={styles.countdownLabel}>
-            {data.yearsToElections === 1 ? 'year' : 'years'} until next {isCapitol ? 'presidential' : 'mayoral'} election
-          </span>
+          {data.campaignState === 'noElections' ? (
+            <span className={styles.countdownLabel}>No elections on Tournament planets</span>
+          ) : (
+            <>
+              <span className={styles.countdownValue}>{data.yearsToElections}</span>
+              <span className={styles.countdownLabel}>
+                {data.yearsToElections === 1 ? 'year' : 'years'} until next {isCapitol ? 'presidential' : 'mayoral'} election
+              </span>
+            </>
+          )}
         </div>
       )}
 

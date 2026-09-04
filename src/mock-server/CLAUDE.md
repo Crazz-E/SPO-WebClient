@@ -34,6 +34,9 @@ civic `procedure` the gateway emits (built by `rdoCall`, so it cannot drift), th
 id lookups that precede a tax or budget write, and the five Politics ASP pages
 `getPoliticsData` fetches. Its mutation exchanges carry an **empty response** on
 purpose: a `procedure` answers nothing, so no reply can ever say the write landed.
+It also serves the two cache reads by path `getPoliticsData` makes — the town
+folder's ruler block and `world.five`'s `ElectionsOn`, `1` by default, `0` via
+`createCivicMutationsScenario(vars, { electionsOn: false })`.
 
 ### Scenario Structure
 
