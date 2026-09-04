@@ -31,6 +31,7 @@ function resetStore() {
     composeBody: '',
     composeHeaders: '',
     composeDraftId: null,
+    composeFocusTo: false,
     isSavingDraft: false,
   });
 }
@@ -192,6 +193,50 @@ describe('Mail Store — Reply quoting', () => {
     useMailStore.getState().startReply(mockFullMessage);
     useMailStore.getState().startEditDraft({ ...mockFullMessage, messageId: 'draft-4' });
     expect(useMailStore.getState().composeHeaders).toBe('');
+  });
+});
+
+// #509 — a message cannot be forwarded: no Forward action exists in the mail panel.
+describe('Mail Store — Forward', () => {
+  beforeEach(resetStore);
+
+  it('startForward opens compose with an empty To, prefixed subject, quoted body, no headers, no draft id, and caret in To', () => {
+    useMailStore.getState().startForward(mockFullMessage);
+    const state = useMailStore.getState();
+    expect(state.currentView).toBe('compose');
+    expect(state.composeTo).toBe('');
+    expect(state.composeSubject).toBe('Fw: Hello');
+    expect(state.composeBody).toBe(
+      [REPLY_SEPARATOR, 'Alice wrote, on "Hello":', '> Test body'].join('\n'),
+    );
+    expect(state.composeBody).toBe(buildReplyBody(mockFullMessage));
+    expect(state.composeHeaders).toBe('');
+    expect(state.composeDraftId).toBeNull();
+    expect(state.composeFocusTo).toBe(true);
+  });
+
+  it('startForward does not double-prefix Fw:', () => {
+    useMailStore.getState().startForward({ ...mockFullMessage, subject: 'Fw: Already sent' });
+    expect(useMailStore.getState().composeSubject).toBe('Fw: Already sent');
+  });
+
+  it('startForward does not double-prefix a lower-case fw:', () => {
+    useMailStore.getState().startForward({ ...mockFullMessage, subject: 'fw: quietly' });
+    expect(useMailStore.getState().composeSubject).toBe('fw: quietly');
+  });
+
+  it('startCompose, startReply and clearCompose reset composeFocusTo after a forward', () => {
+    useMailStore.getState().startForward(mockFullMessage);
+    useMailStore.getState().startCompose();
+    expect(useMailStore.getState().composeFocusTo).toBe(false);
+
+    useMailStore.getState().startForward(mockFullMessage);
+    useMailStore.getState().startReply(mockFullMessage);
+    expect(useMailStore.getState().composeFocusTo).toBe(false);
+
+    useMailStore.getState().startForward(mockFullMessage);
+    useMailStore.getState().clearCompose();
+    expect(useMailStore.getState().composeFocusTo).toBe(false);
   });
 });
 

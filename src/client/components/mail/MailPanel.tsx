@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef, memo } from 'react';
-import { Send, Trash2, Reply, PenSquare, Save } from 'lucide-react';
+import { Send, Trash2, Reply, Forward, PenSquare, Save } from 'lucide-react';
 import { useMailStore } from '../../store/mail-store';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
@@ -67,6 +67,8 @@ export function MailPanel() {
   const setView = useMailStore((s) => s.setView);
   const startCompose = useMailStore((s) => s.startCompose);
   const startReply = useMailStore((s) => s.startReply);
+  const startForward = useMailStore((s) => s.startForward);
+  const composeFocusTo = useMailStore((s) => s.composeFocusTo);
   const startEditDraft = useMailStore((s) => s.startEditDraft);
   const clearCompose = useMailStore((s) => s.clearCompose);
 
@@ -118,6 +120,13 @@ export function MailPanel() {
   useEffect(() => {
     if (currentView === 'compose') bodyWarnedRef.current = false;
   }, [currentView]);
+
+  // A forward opens with the caret in To (MsgComposerHandlerViewer.pas:150-156),
+  // where Reply and a fresh compose focus the body instead.
+  const toRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (currentView === 'compose' && composeFocusTo) toRef.current?.focus();
+  }, [currentView, composeFocusTo]);
   const handleBodyChange = useCallback(
     (value: string) => {
       if (value.length > MAIL_BODY_MAX_CHARS) {
@@ -239,9 +248,17 @@ export function MailPanel() {
                   <PenSquare size={14} aria-hidden="true" />
                 </button>
               ) : (
-                <button className={styles.actionBtn} onClick={() => startReply(currentMessage)} aria-label="Reply" title="Reply">
-                  <Reply size={14} aria-hidden="true" />
-                </button>
+                <>
+                  {/* A system letter cannot be answered, but it can still be passed on. */}
+                  {!currentMessage.noReply && (
+                    <button className={styles.actionBtn} onClick={() => startReply(currentMessage)} aria-label="Reply" title="Reply">
+                      <Reply size={14} aria-hidden="true" />
+                    </button>
+                  )}
+                  <button className={styles.actionBtn} onClick={() => startForward(currentMessage)} aria-label="Forward" title="Forward">
+                    <Forward size={14} aria-hidden="true" />
+                  </button>
+                </>
               )}
               <button className={styles.actionBtn} onClick={handleDelete} aria-label="Delete" title="Delete">
                 <Trash2 size={14} aria-hidden="true" />
@@ -268,6 +285,7 @@ export function MailPanel() {
       {currentView === 'compose' && (
         <div className={styles.composeView}>
           <input
+            ref={toRef}
             className={styles.composeInput}
             placeholder="To"
             aria-label="To"
