@@ -7,13 +7,15 @@
  * header (President / Mayor, refresh) drawn here and the inspector body below it.
  */
 
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Mail } from 'lucide-react';
 import { useBuildingStore } from '../../store/building-store';
 import { usePoliticsStore } from '../../store/politics-store';
 import { useClient } from '../../context';
 import { isCivicBuilding } from '@/shared/building-details/civic-buildings';
 import { BuildingInspector } from '../building';
-import { getCivicSubtitle } from '../building/civic-subtitle';
+import { getCivicSubtitle, findPropertyValue } from '../building/civic-subtitle';
+import { isCapitolBuilding } from '../politics/CivicTabConfig';
+import { mayorAddress, writeTo } from '../mail/write-to';
 import { IconButton } from '../common';
 import styles from './BuildingSurface.module.css';
 
@@ -29,6 +31,8 @@ export function BuildingSurface() {
   if (!civic) return <BuildingInspector />;
 
   const title = details?.buildingName ?? focusedBuilding?.buildingName ?? 'City Government';
+  const townName = details ? findPropertyValue(details, 'Town') : undefined;
+  const capitol = details ? isCapitolBuilding(details.tabs) : false;
   return (
     <div className={styles.root}>
       <div className={styles.header}>
@@ -36,6 +40,15 @@ export function BuildingSurface() {
           <h2 className={styles.title} tabIndex={-1}>{title}</h2>
           {details && <span className={styles.subtitle}>{getCivicSubtitle(details, politicsData)}</span>}
         </div>
+        {details && !capitol && townName && (
+          <IconButton
+            icon={<Mail size={16} />}
+            label={`Write to the Mayor of ${townName}`}
+            size="sm"
+            variant="ghost"
+            onClick={() => writeTo(mayorAddress(townName))}
+          />
+        )}
         <IconButton
           icon={<RefreshCw size={16} />}
           label="Refresh"

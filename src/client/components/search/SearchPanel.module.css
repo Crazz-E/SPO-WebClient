@@ -183,6 +183,24 @@
   padding: var(--space-4) !important;
 }
 
+.profileWriteBtn {
+  background: var(--accent-gold);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--surface-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  transition: opacity var(--duration-fast) var(--ease-default);
+}
+
+.profileWriteBtn:hover {
+  opacity: 0.85;
+}
+
 .profileHeader {
   display: flex;
   align-items: center;

@@ -3,14 +3,17 @@
  * Used inside SearchPanel when currentPage is 'tycoon-profile'.
  */
 
-import { User, DollarSign, Trophy, Star, Award } from 'lucide-react';
+import { User, DollarSign, Trophy, Star, Award, Mail } from 'lucide-react';
 import { formatMoney } from '../../format-utils';
 import { useSearchStore } from '../../store/search-store';
+import { useGameStore } from '../../store/game-store';
 import { GlassCard } from '../common';
+import { tycoonAddress, writeTo } from '../mail/write-to';
 import styles from './SearchPanel.module.css';
 
 export function TycoonProfileView() {
   const profile = useSearchStore((s) => s.tycoonProfileData?.profile);
+  const worldName = useGameStore((s) => s.worldName);
 
   if (!profile) {
     return <div className={styles.emptyState}>No profile data available.</div>;
@@ -64,6 +67,14 @@ export function TycoonProfileView() {
           </span>
           <span className={styles.profileStatValue}>{profile.prestige} points</span>
         </div>
+
+        <button
+          type="button"
+          className={styles.profileWriteBtn}
+          onClick={() => writeTo(tycoonAddress(profile.name, worldName))}
+        >
+          <Mail size={14} /> Write to {profile.name}
+        </button>
       </GlassCard>
     </div>
   );
