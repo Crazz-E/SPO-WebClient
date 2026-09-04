@@ -972,6 +972,9 @@ export interface PolicyEntry {
 
 export interface PolicyData {
   policies: PolicyEntry[];
+  /** `false` when the page comments out the Ally option (`TycoonPolicy.asp:96`, `:451`,
+   *  world flag `AlliesPageOn` off, `:56`): the stance may still be READ, never OFFERED. */
+  alliesAllowed: boolean;
 }
 
 // =============================================================================
