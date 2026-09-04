@@ -213,7 +213,7 @@ export interface ClientCallbacks {
   // Mail
   onMailGetFolder: (folder: MailFolder) => void;
   onMailReadMessage: (messageId: string) => void;
-  onMailSend: (to: string, subject: string, body: string) => void;
+  onMailSend: (to: string, subject: string, body: string, existingDraftId?: string) => void;
   onMailSaveDraft: (to: string, subject: string, body: string, headers?: string, existingDraftId?: string) => void;
   onMailDelete: (messageId: string) => void;
 
@@ -677,6 +677,10 @@ export const ClientBridge = {
       case WsMessageType.RESP_MAIL_SENT: {
         const resp = msg as WsRespMailSent;
         if (resp.success) {
+          // Fire-and-forget DeleteMessage can lag the folder scrape (OB-29) — drop
+          // the row locally so the just-sent draft doesn't reappear for a beat.
+          const draftId = mail.composeDraftId;
+          if (draftId) mail.removeMessage(draftId);
           mail.clearCompose();
           // The listing the user lands back on predates the send — read it again
           // (OB-11). A delete needs no such refetch: its row is dropped locally.

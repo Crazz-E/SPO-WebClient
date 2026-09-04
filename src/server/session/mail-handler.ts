@@ -138,12 +138,18 @@ function parseMailAttachment(attachText: string): MailAttachment {
 
 // ── Public API ─────────────────────────────────────────────────────────────
 
+/**
+ * Send a composed mail message.
+ * Reference: MsgComposerHandler.pas:302-343
+ * Flow: NewMail -> [AddHeaders] -> AddLine ×n -> Post -> [DeleteMessage old draft, on success] -> CloseMessage
+ */
 export async function composeMail(
   ctx: SessionContext,
   to: string,
   subject: string,
   bodyLines: string[],
-  headers?: string
+  headers?: string,
+  existingDraftId?: string
 ): Promise<boolean> {
   await ctx.ensureMailConnection();
   if (!ctx.mailServerId || !ctx.mailAccount) {
@@ -191,6 +197,16 @@ export async function composeMail(
   const resultStr = parsePropertyResponseHelper(postPacket.payload!, 'Post');
   const success = resultStr === '-1';
   ctx.log.debug(`[Mail] Post result: ${resultStr} (success=${success})`);
+
+  // 3b. Sent from an opened draft: the reference client deletes the Draft copy only
+  // when Post said yes, and before CloseMessage (MsgComposerHandler.pas:329-338).
+  if (success && existingDraftId) {
+    try {
+      await deleteMailMessage(ctx, 'Draft', existingDraftId);
+    } catch (e: unknown) {
+      ctx.log.warn('[Mail] Sent, but the old draft could not be deleted:', toErrorMessage(e));
+    }
+  }
 
   // 4. Close message to release server memory (MsgComposerHandler.pas:338)
   // Synchronous — Delphi WaitForAnswer still true from AddLine setting.

@@ -117,6 +117,25 @@ describe('Mail body splitting', () => {
         })
       );
     });
+
+    it('includes existingDraftId when provided', () => {
+      const sendSpy = jest.spyOn(client, 'sendMessage' as any);
+      client.callbacks.onMailSend('recipient@test.com', 'Subject', 'body', 'draft-456');
+
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          existingDraftId: 'draft-456',
+        })
+      );
+    });
+
+    it('omits existingDraftId when not provided', () => {
+      const sendSpy = jest.spyOn(client, 'sendMessage' as any);
+      client.callbacks.onMailSend('recipient@test.com', 'Subject', 'body');
+
+      const call = sendSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect('existingDraftId' in call).toBe(false);
+    });
   });
 
   describe('onMailSaveDraft', () => {

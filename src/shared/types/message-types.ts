@@ -1100,6 +1100,7 @@ export interface WsReqMailCompose extends WsMessage {
   subject: string;
   body: string[];      // Lines of text
   headers?: string;    // Original message headers for reply/forward threading (AddHeaders)
+  existingDraftId?: string;   // If sending a draft opened from Drafts, delete that copy after Post succeeds
 }
 
 export interface WsReqMailDelete extends WsMessage {

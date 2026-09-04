@@ -152,7 +152,7 @@ describe('composeMail', () => {
       args: [RdoValue.int(parseInt(MSG_ID, 10)).format()],
     });
 
-    // nothing on the fire-and-forget channel without headers
+    // nothing on the fire-and-forget channel without headers or an existingDraftId (#510)
     expect(fake.frames.mail).toHaveLength(0);
   });
 
@@ -266,6 +266,61 @@ describe('composeMail', () => {
     const fake = makeMailCtx(override);
     await expect(composeMail(fake.ctx, 'A', 'S', ['x'])).rejects.toThrow('Mail service not connected');
     expect(fake.sent).toHaveLength(0);
+  });
+
+  // ── existingDraftId: sent from a draft opened from Drafts (#510) ─────────
+
+  it('with existingDraftId and a successful Post, deletes the old draft before CloseMessage', async () => {
+    const fake = makeMailCtx();
+    let framesAtClose = -1;
+    fake.respond(p => {
+      if (p.member === 'NewMail') return `NewMail="#${MSG_ID}"`;
+      if (p.member === 'Post') return 'Post="#-1"';
+      if (p.member === 'CloseMessage') framesAtClose = fake.frames.mail.length;
+      return '';
+    });
+
+    const ok = await composeMail(fake.ctx, 'A', 'S', ['x'], undefined, 'OLD_DRAFT_7');
+
+    expect(ok).toBe(true);
+    expect(fake.frames.mail).toEqual([
+      RdoCommand.sel(MAIL_SERVER).call('DeleteMessage').push()
+        .args(RdoValue.string('Shamba'), RdoValue.string(ACCOUNT), RdoValue.string('Draft'), RdoValue.string('OLD_DRAFT_7'))
+        .build(),
+    ]);
+    expect(framesAtClose).toBe(1);
+    expect(membersOf(fake.sent)).toEqual(['NewMail', 'AddLine', 'Post', 'CloseMessage']);
+  });
+
+  it('with existingDraftId but Post answers #0, deletes nothing and still closes', async () => {
+    const fake = makeMailCtx();
+    answerCompose(fake, '#0');
+
+    expect(await composeMail(fake.ctx, 'A', 'S', ['x'], undefined, 'OLD_DRAFT_7')).toBe(false);
+    expect(fake.frames.mail).toHaveLength(0);
+    expect(membersOf(fake.sent)).toContain('CloseMessage');
+  });
+
+  it('without existingDraftId, deletes nothing even on a successful Post (see also the no-headers case above)', async () => {
+    const fake = makeMailCtx();
+    answerCompose(fake);
+    expect(await composeMail(fake.ctx, 'A', 'S', ['x'])).toBe(true);
+    expect(fake.frames.mail).toHaveLength(0);
+  });
+
+  it('with existingDraftId, Post success, but the mail socket is gone: the send still stands and only a warning is logged', async () => {
+    // No 'mail' socket registered, so the fire-and-forget DeleteMessage throws
+    // 'Mail socket unavailable' — composeMail's catch must not turn a delivered
+    // send into a failure; CloseMessage still runs via the independent sendRdoRequest mock.
+    const fake = makeSessionCtx({ mailAccount: ACCOUNT, currentWorldInfo: WORLD, mailServerId: MAIL_SERVER });
+    answerCompose(fake);
+
+    expect(await composeMail(fake.ctx, 'A', 'S', ['x'], undefined, 'OLD_DRAFT_7')).toBe(true);
+    expect(fake.log.warn).toHaveBeenCalledWith(
+      '[Mail] Sent, but the old draft could not be deleted:',
+      expect.any(String),
+    );
+    expect(membersOf(fake.sent)).toContain('CloseMessage');
   });
 });
 

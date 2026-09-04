@@ -96,7 +96,7 @@ describe('Mail compose — integration flow', () => {
     fireEvent.click(screen.getByText('Send'));
 
     // Verify client callback was invoked with the right args
-    expect(sendSpy).toHaveBeenCalledWith('player42', 'Trade Offer', 'I have wheat for sale.');
+    expect(sendSpy).toHaveBeenCalledWith('player42', 'Trade Offer', 'I have wheat for sale.', undefined);
 
     // Criterion changed (T6, audit P2): the draft is KEPT until the server answers —
     // a failed send must not lose the letter. The form is locked meanwhile.
@@ -108,6 +108,24 @@ describe('Mail compose — integration flow', () => {
     act(() => useMailStore.getState().clearCompose());
     expect(useMailStore.getState().currentView).toBe('list');
     expect(useMailStore.getState().composeTo).toBe('');
+  });
+
+  // #510 — sending a draft opened from Drafts carries its id so the server
+  // deletes that copy after Post succeeds.
+  it('sending a draft opened from Drafts carries its composeDraftId', () => {
+    const sendSpy = jest.fn();
+    renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSend: sendSpy }) });
+
+    const draftMsg: MailMessageFull = {
+      messageId: 'DRAFT-9', from: '', fromAddr: '', to: 'player42', toAddr: '',
+      subject: 'Trade Offer', date: '2025-01-15', dateFmt: 'Jan 15',
+      body: ['I have wheat for sale.'], read: true, stamp: 0, noReply: false, attachments: [],
+    };
+    act(() => useMailStore.getState().startEditDraft(draftMsg));
+
+    fireEvent.click(screen.getByText('Send'));
+
+    expect(sendSpy).toHaveBeenCalledWith('player42', 'Trade Offer', 'I have wheat for sale.', 'DRAFT-9');
   });
 
   it('Send is disabled without a recipient', () => {
@@ -186,7 +204,7 @@ describe('Mail compose — integration flow', () => {
     expect((screen.getByPlaceholderText('To') as HTMLInputElement).value).toBe('alice');
     fireEvent.change(screen.getByPlaceholderText('Message...'), { target: { value: 'Fine, thanks.' } });
     fireEvent.click(screen.getByText('Send'));
-    expect(sendSpy).toHaveBeenCalledWith('alice', 'Re: Hello there', 'Fine, thanks.');
+    expect(sendSpy).toHaveBeenCalledWith('alice', 'Re: Hello there', 'Fine, thanks.', undefined);
   });
 
   it('Delete asks first, then the confirmed delete is sent and the row leaves the list on the server answer', () => {

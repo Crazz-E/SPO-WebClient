@@ -259,6 +259,35 @@ describe('ClientBridge mail responses (T6)', () => {
     expect(showToast).toHaveBeenCalledWith('Draft saved.', 'info', { title: 'Draft' });
   });
 
+  // #510 — sending a draft opened from Drafts removes it from the list locally,
+  // ahead of the (possibly lagging) folder re-scrape.
+  it('a successful send of a draft opened from Drafts drops that row locally', () => {
+    useMailStore.setState({
+      messages: [
+        { messageId: 'D1', from: '', to: '', subject: 's1', date: '', read: true } as never,
+        { messageId: 'D2', from: '', to: '', subject: 's2', date: '', read: true } as never,
+      ],
+      currentFolder: 'Draft',
+      composeDraftId: 'D1',
+    });
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_SENT, success: true } as never);
+    const s = useMailStore.getState();
+    expect(s.messages.map(m => m.messageId)).toEqual(['D2']);
+    expect(s.composeDraftId).toBeNull();
+  });
+
+  it('a successful send of a brand-new message leaves the message list untouched', () => {
+    useMailStore.setState({
+      messages: [
+        { messageId: 'D1', from: '', to: '', subject: 's1', date: '', read: true } as never,
+      ],
+      currentFolder: 'Inbox',
+      composeDraftId: null,
+    });
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_SENT, success: true } as never);
+    expect(useMailStore.getState().messages.map(m => m.messageId)).toEqual(['D1']);
+  });
+
   it('a failed save keeps the text on screen and releases the button', () => {
     useMailStore.setState({ isSavingDraft: true });
     const before = useMailStore.getState().folderRefreshToken;

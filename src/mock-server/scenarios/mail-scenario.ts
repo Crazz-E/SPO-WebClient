@@ -1,10 +1,12 @@
 /**
  * Scenario 14: Mail System
- * RDO: idof MailServer, NewMail, AddLine, Save, CloseMessage
+ * RDO: idof MailServer, NewMail, AddLine, Save, CloseMessage, Post, DeleteMessage
  * HTTP: MailFolder.asp (inbox frameset), MailFolderTop.asp (tabs + action buttons),
  *       MessageList.asp (folder listing), MessageBody.asp (Inbox read-touch that
  *       sets the mail server's Read header flag — see mail-handler.ts's file header)
- * WS: REQ_MAIL_COMPOSE -> RESP_MAIL_SENT, REQ_MAIL_GET_FOLDER -> RESP_MAIL_FOLDER
+ * WS: REQ_MAIL_COMPOSE(+existingDraftId) -> RESP_MAIL_SENT, REQ_MAIL_GET_FOLDER -> RESP_MAIL_FOLDER
+ *     Voyager order for a sent draft: Post -> DeleteMessage(Draft) -> CloseMessage
+ *     (MsgComposerHandler.pas:329-338).
  *
  * NOTE on Save vs Post (from MailServer.pas):
  *   - Save(WorldName, MessageId) → saves to DRAFT folder only
@@ -175,9 +177,11 @@ ${msgRows}
 }
 
 export function createMailScenario(
-  overrides?: Partial<ScenarioVariables>
+  overrides?: Partial<ScenarioVariables>,
+  options?: { postSucceeds?: boolean }
 ): { ws: WsCaptureScenario; rdo: RdoScenario; http: HttpScenario } {
   const vars = mergeVariables(overrides);
+  const postSucceeds = options?.postSucceeds ?? true;
 
   const rdo: RdoScenario = {
     name: 'mail',
@@ -223,7 +227,7 @@ export function createMailScenario(
       {
         id: 'mail-rdo-007',
         request: `C 2180 sel ${vars.mailServerId} call Post "^" "%${vars.worldName}","#${CAPTURED_MAIL_SEND.messageId}"`,
-        response: `A2180 res="#-1"`,
+        response: postSucceeds ? `A2180 res="#-1"` : `A2180 res="#0"`,
         matchKeys: { verb: 'sel', action: 'call', member: 'Post' },
       },
       {
@@ -383,6 +387,26 @@ export function createMailScenario(
             wsRequestId: 'mail-002',
             folder: 'Inbox',
             messages: [],
+          } as WsMessage,
+        ],
+        tags: ['mail'],
+      },
+      {
+        id: 'mail-ws-003',
+        timestamp: '2026-02-18T21:35:10.000Z',
+        request: {
+          type: WsMessageType.REQ_MAIL_COMPOSE,
+          wsRequestId: 'mail-003',
+          to: CAPTURED_MAIL_SEND.to,
+          subject: CAPTURED_MAIL_SEND.subject,
+          body: [CAPTURED_MAIL_SEND.body],
+          existingDraftId: 'DRAFT-9',
+        } as WsMessage,
+        responses: [
+          {
+            type: WsMessageType.RESP_MAIL_SENT,
+            wsRequestId: 'mail-003',
+            success: true,
           } as WsMessage,
         ],
         tags: ['mail'],

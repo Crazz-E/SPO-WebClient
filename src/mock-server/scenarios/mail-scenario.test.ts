@@ -21,13 +21,15 @@ import type { WebSocket } from 'ws';
 import { RdoProtocol } from '@/server/rdo';
 import type { RdoPacket } from '@/shared/types/protocol-types';
 import { WsMessageType, type WsMessage } from '@/shared/types';
-import { readMailMessage as readMailMessageHandler } from '@/server/session/mail-handler';
-import { handleMailReadMessage } from '@/server/ws-handlers/mail-handlers';
+import { RdoValue, RdoCommand } from '@/shared/rdo-types';
+import { readMailMessage as readMailMessageHandler, composeMail as composeMailHandler } from '@/server/session/mail-handler';
+import { handleMailReadMessage, handleMailCompose } from '@/server/ws-handlers/mail-handlers';
 import type { WsHandlerContext } from '@/server/ws-handlers/types';
 import { makeSessionCtx } from '@/server/__tests__/session/fake-session-context';
 import { RdoMock } from '../rdo-mock';
 import { HttpMock } from '../http-mock';
-import { createMailScenario } from './mail-scenario';
+import type { RdoScenario } from '../types/rdo-exchange-types';
+import { createMailScenario, CAPTURED_MAIL_SEND } from './mail-scenario';
 import { DEFAULT_VARIABLES } from './scenario-variables';
 
 const mockFetch = fetch as unknown as jest.MockedFunction<
@@ -40,12 +42,12 @@ function membersOf(sent: string[]): string[] {
   return sent.map(cmd => RdoProtocol.parse(cmd).member ?? '');
 }
 
-/** Drives `handleMailReadMessage` through a fresh RdoMock/HttpMock pair. */
-function drive() {
+/** Drives `handleMailReadMessage` / `handleMailCompose` through a fresh RdoMock/HttpMock pair. */
+function drive(scenario: { rdo: RdoScenario; http: typeof http } = { rdo, http }) {
   const rdoMock = new RdoMock();
-  rdoMock.addScenario(rdo);
+  rdoMock.addScenario(scenario.rdo);
   const httpMock = new HttpMock();
-  httpMock.addScenario(http);
+  httpMock.addScenario(scenario.http);
 
   mockFetch.mockImplementation(async (url: string) => {
     const result = httpMock.match('GET', url);
@@ -86,10 +88,12 @@ function drive() {
     session: {
       readMailMessage: (folder: string, messageId: string) =>
         readMailMessageHandler(fake.ctx, folder, messageId),
+      composeMail: (to: string, subject: string, body: string[], headers?: string, existingDraftId?: string) =>
+        composeMailHandler(fake.ctx, to, subject, body, headers, existingDraftId),
     },
   } as unknown as WsHandlerContext;
 
-  return { wsCtx, sentCommands, sentResponses };
+  return { wsCtx, sentCommands, sentResponses, sentFrames: fake.frames.mail };
 }
 
 const request = (folder: string, messageId: string): WsMessage => ({
@@ -137,5 +141,71 @@ describe('mail-scenario — readMailMessage at the WS frontier', () => {
     expect(mockFetch).not.toHaveBeenCalled();
     expect(sentResponses).toHaveLength(1);
     expect(sentResponses[0]).toMatchObject({ type: WsMessageType.RESP_MAIL_MESSAGE, wsRequestId: 'req-1' });
+  });
+});
+
+const composeRequest = (existingDraftId?: string): WsMessage => ({
+  type: WsMessageType.REQ_MAIL_COMPOSE,
+  wsRequestId: 'compose-1',
+  to: CAPTURED_MAIL_SEND.to,
+  subject: CAPTURED_MAIL_SEND.subject,
+  body: [CAPTURED_MAIL_SEND.body],
+  ...(existingDraftId ? { existingDraftId } : {}),
+}) as unknown as WsMessage;
+
+describe('mail-scenario — composeMail at the WS frontier', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('passes strict RDO validation', () => {
+    expect(rdo).toPassStrictRdoValidation();
+  });
+
+  it('an existingDraftId with a successful Post fires DeleteMessage on Draft before CloseMessage', async () => {
+    const { wsCtx, sentCommands, sentResponses, sentFrames } = drive();
+
+    await handleMailCompose(wsCtx, composeRequest('DRAFT-9'));
+
+    expect(membersOf(sentCommands)).toEqual(['NewMail', 'AddLine', 'Post', 'CloseMessage']);
+    const expectedFrame = RdoCommand.sel(DEFAULT_VARIABLES.mailServerId).call('DeleteMessage').push()
+      .args(
+        RdoValue.string(DEFAULT_VARIABLES.worldName),
+        RdoValue.string(DEFAULT_VARIABLES.mailAccount),
+        RdoValue.string('Draft'),
+        RdoValue.string('DRAFT-9'),
+      ).build();
+    expect(sentFrames).toEqual([expectedFrame]);
+
+    const rdoMock = new RdoMock();
+    rdoMock.addScenario(rdo);
+    const matched = rdoMock.match(sentFrames[0]);
+    expect(matched?.exchange.id).toBe('mail-rdo-008');
+
+    expect(sentResponses).toHaveLength(1);
+    expect(sentResponses[0]).toMatchObject({ type: WsMessageType.RESP_MAIL_SENT, wsRequestId: 'compose-1', success: true });
+  });
+
+  it('an existingDraftId with a failing Post fires no DeleteMessage and reports the failure', async () => {
+    const scenario = createMailScenario(undefined, { postSucceeds: false });
+    const { wsCtx, sentCommands, sentResponses, sentFrames } = drive({ rdo: scenario.rdo, http: scenario.http });
+
+    await handleMailCompose(wsCtx, composeRequest('DRAFT-9'));
+
+    expect(membersOf(sentCommands)).toEqual(['NewMail', 'AddLine', 'Post', 'CloseMessage']);
+    expect(sentFrames).toEqual([]);
+    expect(sentResponses).toHaveLength(1);
+    expect(sentResponses[0]).toMatchObject({ type: WsMessageType.RESP_MAIL_SENT, wsRequestId: 'compose-1', success: false });
+  });
+
+  it('no existingDraftId fires no DeleteMessage even on a successful Post', async () => {
+    const { wsCtx, sentCommands, sentResponses, sentFrames } = drive();
+
+    await handleMailCompose(wsCtx, composeRequest());
+
+    expect(membersOf(sentCommands)).toEqual(['NewMail', 'AddLine', 'Post', 'CloseMessage']);
+    expect(sentFrames).toEqual([]);
+    expect(sentResponses).toHaveLength(1);
+    expect(sentResponses[0]).toMatchObject({ type: WsMessageType.RESP_MAIL_SENT, wsRequestId: 'compose-1', success: true });
   });
 });

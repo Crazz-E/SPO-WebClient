@@ -53,7 +53,7 @@ export async function handleMailReadMessage(ctx: WsHandlerContext, msg: WsMessag
 
 export async function handleMailCompose(ctx: WsHandlerContext, msg: WsMessage): Promise<void> {
   const req = msg as WsReqMailCompose;
-  const success = await ctx.session.composeMail(req.to, req.subject, req.body, req.headers);
+  const success = await ctx.session.composeMail(req.to, req.subject, req.body, req.headers, req.existingDraftId);
   const response: WsRespMailSent = {
     type: WsMessageType.RESP_MAIL_SENT,
     wsRequestId: msg.wsRequestId,
