@@ -977,29 +977,37 @@ describe('TownJobs', () => {
     expect(HANDLER_TO_GROUP['townJobs']).toBe(TOWN_JOBS_GROUP);
   });
 
-  it('hiActualMinSalary: SLIDER, editable', () => {
-    const prop = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'hiActualMinSalary');
+  it('hiMinSalary: SLIDER, editable', () => {
+    const prop = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'hiMinSalary');
     expect(prop).toBeDefined();
     expect(prop!.type).toBe(PropertyType.SLIDER);
     expect(prop!.editable).toBe(true);
   });
 
-  it('midActualMinSalary: SLIDER, editable', () => {
-    const prop = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'midActualMinSalary');
+  it('midMinSalary: SLIDER, editable', () => {
+    const prop = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'midMinSalary');
     expect(prop!.type).toBe(PropertyType.SLIDER);
     expect(prop!.editable).toBe(true);
   });
 
-  it('loActualMinSalary: SLIDER, editable', () => {
-    const prop = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'loActualMinSalary');
+  it('loMinSalary: SLIDER, editable', () => {
+    const prop = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'loMinSalary');
     expect(prop!.type).toBe(PropertyType.SLIDER);
     expect(prop!.editable).toBe(true);
+  });
+
+  it('hiActualMinSalary/midActualMinSalary/loActualMinSalary: NUMBER, not editable', () => {
+    for (const name of ['hiActualMinSalary', 'midActualMinSalary', 'loActualMinSalary']) {
+      const prop = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === name);
+      expect(prop!.type).toBe(PropertyType.NUMBER);
+      expect(prop!.editable).toBeUndefined();
+    }
   });
 
   it('rdoCommands: all 3 sliders map to RDOSetMinSalaryValue with levelIndex', () => {
-    const hi = TOWN_JOBS_GROUP.rdoCommands?.['hiActualMinSalary'];
-    const mid = TOWN_JOBS_GROUP.rdoCommands?.['midActualMinSalary'];
-    const lo = TOWN_JOBS_GROUP.rdoCommands?.['loActualMinSalary'];
+    const hi = TOWN_JOBS_GROUP.rdoCommands?.['hiMinSalary'];
+    const mid = TOWN_JOBS_GROUP.rdoCommands?.['midMinSalary'];
+    const lo = TOWN_JOBS_GROUP.rdoCommands?.['loMinSalary'];
     expect(hi?.command).toBe('RDOSetMinSalaryValue');
     expect(hi?.params?.levelIndex).toBe('0');
     expect(mid?.command).toBe('RDOSetMinSalaryValue');
