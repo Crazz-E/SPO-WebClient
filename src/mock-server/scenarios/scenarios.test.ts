@@ -352,13 +352,14 @@ describe('mail scenario', () => {
     ]);
   });
 
-  it('HTTP has MailFolder, MailFolderTop, and MessageList pages', () => {
+  it('HTTP has MailFolder, MailFolderTop, MessageList, and MessageBody pages', () => {
     const { http } = createMailScenario();
-    expect(http.exchanges).toHaveLength(4);
+    expect(http.exchanges).toHaveLength(5);
     expect(http.exchanges[0].urlPattern).toContain('MailFolder.asp');
     expect(http.exchanges[1].urlPattern).toContain('MailFolderTop.asp');
     expect(http.exchanges[2].urlPattern).toContain('MessageList.asp');
     expect(http.exchanges[3].urlPattern).toContain('MessageList.asp');
+    expect(http.exchanges[4].urlPattern).toContain('MessageBody.asp');
   });
 
   it('MailFolderTop HTML contains Inbox/Sent/Draft tabs', () => {

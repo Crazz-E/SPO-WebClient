@@ -13,6 +13,17 @@
  * capture-proven: AddLine → A2174 ;) but forbidden here; the real crash risk
  * is "^" WITHOUT a QueryId.
  * Ref: MsgComposerHandler.pas:324-326.
+ *
+ * There are two HTTP scrapes: `MessageList.asp` (folder listing, `getMailFolder`)
+ * and `MessageBody.asp` (Inbox read-touch, `markInboxMessageRead`). RDO has no member
+ * that clears the mail server's `Read` flag — `CheckNewMail` counts Inbox headers whose
+ * `Read` is not `1` (`~/SPO-Original/Mail Server/MailServer.pas:557`, walk at `:543-560`),
+ * and the only writer of that flag is the ASP COM object `TFiveMessage.LoadHeader`
+ * (`~/SPO-Original/Mail/MailMessageAuto.pas:165-166`), reached the first time a page asks
+ * `Message.Header(...)` (`UpdateHeader`, `:184-188`). `MessageBody.asp` does exactly that
+ * (`~/SPO-ASP/Five/0/Visual/Voyager/Mail/MessageBody.asp:28-30`), so after an Inbox
+ * `readMailMessage` the gateway issues the same GET to make the flag match the client's
+ * re-query of `CheckNewMail`.
  */
 
 import type { SessionContext } from './session-context';
@@ -38,6 +49,39 @@ function mailFireAndForget(ctx: SessionContext, targetId: string, method: RdoMem
 }
 
 // ── Private Helpers ────────────────────────────────────────────────────────
+
+const MAIL_READ_TOUCH_TIMEOUT_MS = 5000;
+
+/**
+ * Touch MessageBody.asp for an Inbox message so the mail server's `Read` header
+ * flag is set (MailMessageAuto.pas:165-166), the way MessageBody.asp:28-30 does when
+ * a Voyager page opens the message. Never throws — a failed or slow GET only degrades
+ * to today's behaviour (the unread flag stays uncleared), it never blocks or fails the read.
+ */
+async function markInboxMessageRead(ctx: SessionContext, messageId: string): Promise<void> {
+  if (!ctx.currentWorldInfo || !ctx.mailAccount) {
+    ctx.log.debug('[Mail] Cannot touch header: not logged into world or no mail account');
+    return;
+  }
+
+  const params = new URLSearchParams({
+    WorldName: ctx.currentWorldInfo.name,
+    Account: ctx.mailAccount,
+    Folder: 'Inbox',
+    MsgId: messageId,
+  });
+
+  const url = `http://${ctx.currentWorldInfo.ip}/five/0/visual/voyager/mail/MessageBody.asp?${params.toString().replace(/\+/g, '%20')}`;
+
+  try {
+    const response = await fetchWithTimeout(url, { redirect: 'follow' }, MAIL_READ_TOUCH_TIMEOUT_MS);
+    if (!response.ok) {
+      ctx.log.warn(`[Mail] MessageBody.asp returned ${response.status} — unread flag not cleared`);
+    }
+  } catch (e: unknown) {
+    ctx.log.warn('[Mail] Header touch failed — unread flag not cleared:', toErrorMessage(e));
+  }
+}
 
 /**
  * Parse ini-style mail headers text into MailMessageHeader.
@@ -244,6 +288,7 @@ export async function saveDraft(
  * Open and read a mail message.
  * Reference: MsgComposerHandler.pas:416-420
  * Flow: OpenMessage -> GetHeaders -> GetLines -> GetAttachmentCount -> GetAttachment -> CloseMessage
+ * -> [Inbox only] MessageBody.asp header touch (see the file header for why).
  */
 export async function readMailMessage(
   ctx: SessionContext,
@@ -268,6 +313,7 @@ export async function readMailMessage(
   const msgId = parsePropertyResponseHelper(openPacket.payload!, 'OpenMessage');
   ctx.log.debug(`[Mail] Opened message, msgId: ${msgId}`);
 
+  let message: MailMessageFull;
   try {
     // 2. Get headers (ini-style key=value text)
     const headersPacket = await ctx.sendRdoRequest('mail', rdoCall(
@@ -304,7 +350,7 @@ export async function readMailMessage(
     // Parse headers and body into structured format
     const parsedHeaders = parseMailHeaders(headersText);
 
-    return {
+    message = {
       ...parsedHeaders,
       messageId,
       body: bodyText.split('\n').filter(l => l.length > 0),
@@ -322,6 +368,13 @@ export async function readMailMessage(
       ctx.log.warn('[Mail] Failed to close message:', e);
     }
   }
+
+  // 6. Inbox only — Sent/Draft carry no meaningful Read flag (MailServer.pas:544 walks tidInbox).
+  if (folder.toLowerCase() === 'inbox') {
+    await markInboxMessageRead(ctx, messageId);
+  }
+
+  return message;
 }
 
 /**

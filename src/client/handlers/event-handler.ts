@@ -288,10 +288,13 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
     case WsMessageType.RESP_MAIL_MESSAGE:
     case WsMessageType.RESP_MAIL_DELETED:
       ClientBridge.handleMailResponse(msg);
-      // Reading a message clears its unread flag, and deleting one can remove an
-      // unread message outright — both move a count only the server can compute.
-      // Without this the badge only ever climbs: RESP_MAIL_CONNECTED sets it once
-      // at login and EVENT_NEW_MAIL raises it, and nothing ever brought it down.
+      // Reading an Inbox message clears its unread flag: the gateway touches
+      // MessageBody.asp after the RDO read completes, before it sends this
+      // response, so the mail server's Read flag is already on disk by the
+      // time we get here. Deleting a message can remove an unread one outright.
+      // Both move a count only the server can compute — without this the badge
+      // only ever climbs: RESP_MAIL_CONNECTED sets it once at login and
+      // EVENT_NEW_MAIL raises it, and nothing ever brought it down.
       requestMailUnreadCount(ctx);
       break;
 

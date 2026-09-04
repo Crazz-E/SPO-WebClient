@@ -1,7 +1,9 @@
 /**
  * Scenario 14: Mail System
  * RDO: idof MailServer, NewMail, AddLine, Save, CloseMessage
- * HTTP: MailFolder.asp (inbox frameset), MailFolderTop.asp (tabs + action buttons)
+ * HTTP: MailFolder.asp (inbox frameset), MailFolderTop.asp (tabs + action buttons),
+ *       MessageList.asp (folder listing), MessageBody.asp (Inbox read-touch that
+ *       sets the mail server's Read header flag — see mail-handler.ts's file header)
  * WS: REQ_MAIL_COMPOSE -> RESP_MAIL_SENT, REQ_MAIL_GET_FOLDER -> RESP_MAIL_FOLDER
  *
  * NOTE on Save vs Post (from MailServer.pas):
@@ -326,6 +328,17 @@ export function createMailScenario(
         status: 200,
         contentType: 'text/html',
         body: buildMessageListHtml(vars, 'SENT'),
+      },
+      {
+        id: 'mail-http-005',
+        method: 'GET',
+        urlPattern: '/five/0/visual/voyager/mail/MessageBody.asp',
+        queryPatterns: {
+          Folder: 'Inbox',
+        },
+        status: 200,
+        contentType: 'text/html',
+        body: '<html><body>test message</body></html>',
       },
     ],
     variables: {},
