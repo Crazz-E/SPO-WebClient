@@ -10,7 +10,16 @@ import { act, fireEvent, screen, within } from '@testing-library/react';
 import { renderWithProviders, createSpiedCallbacks } from '../../../__tests__/setup/render-helpers';
 import { useProfileStore } from '../../../store/profile-store';
 import { ProfilePanel } from '../ProfilePanel';
-import type { CurriculumData } from '@/shared/types';
+import type { BankAccountData, CurriculumData } from '@/shared/types';
+
+/** The neutral bank page — no loans, nothing owed — plus whatever the case is about. */
+function bankData(overrides: Partial<BankAccountData> = {}): BankAccountData {
+  return {
+    balance: '0', maxLoan: '0', totalLoans: '0',
+    totalNextPayment: '0', loans: [], defaultInterest: 0, defaultTerm: 5,
+    ...overrides,
+  };
+}
 
 const CURRICULUM_BASE: CurriculumData = {
   tycoonName: 'SPO_test3',
@@ -249,7 +258,7 @@ describe('ProfilePanel — sections', () => {
     clickSection('Bank Account');
     act(() => {
       useProfileStore.getState().setBankAccount({
-        balance: '0', maxLoan: '0', totalLoans: '0', maxTransfer: '0',
+        balance: '0', maxLoan: '0', totalLoans: '0',
         totalNextPayment: '0', loans: [], defaultInterest: 0, defaultTerm: 5,
         cacheUnavailable: true,
       });
@@ -267,13 +276,66 @@ describe('ProfilePanel — sections', () => {
     clickSection('Bank Account');
     act(() => {
       useProfileStore.getState().setBankAccount({
-        balance: '0', maxLoan: '0', totalLoans: '0', maxTransfer: '0',
+        balance: '0', maxLoan: '0', totalLoans: '0',
         totalNextPayment: '0', loans: [], defaultInterest: 0, defaultTerm: 5,
       });
     });
 
     expect(screen.getByText('No active loans')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  /** Open the Bank drawer on a given page. */
+  function openBank(data: Partial<BankAccountData>): void {
+    renderWithProviders(<ProfilePanel />);
+    clickSection('Bank Account');
+    act(() => {
+      useProfileStore.getState().setBankAccount(bankData(data));
+    });
+  }
+
+  it('offers Send Money on a page that carries a cap, and shows the cap in the form', () => {
+    openBank({ maxTransfer: '12345678' });
+
+    fireEvent.click(screen.getByText('Send Money'));
+    expect(screen.getByText('You can transfer up to $12345678')).toBeTruthy();
+  });
+
+  it('offers Send Money with no cap line when the page carries no cap note', () => {
+    openBank({});
+
+    fireEvent.click(screen.getByText('Send Money'));
+    expect(screen.queryByText(/transfer up to/)).toBeNull();
+  });
+
+  it('a tournament world offers no Send pill and states the reason, Request Loan untouched', () => {
+    openBank({ transferDenied: 'tournament' });
+
+    expect(screen.queryByText('Send Money')).toBeNull();
+    expect(screen.getByText('Money transfers are not allowed in Tournament planets')).toBeTruthy();
+    expect(screen.getByText('Request Loan')).toBeTruthy();
+  });
+
+  it('a zero cap with money still owed states the loans / Investor Visa reason', () => {
+    openBank({ transferDenied: 'loans' });
+
+    expect(screen.queryByText('Send Money')).toBeNull();
+    expect(screen.getByText('You cannot send money that you received with loans or as part of your Investor Visa')).toBeTruthy();
+  });
+
+  it('a zero cap with nothing to send states the no-money reason', () => {
+    openBank({ transferDenied: 'no-money' });
+
+    expect(screen.queryByText('Send Money')).toBeNull();
+    expect(screen.getByText('You have no money to send')).toBeTruthy();
+  });
+
+  it('a Demo account states the Demo notice and never shows the cap it carries', () => {
+    openBank({ transferDenied: 'demo', maxTransfer: '12345678' });
+
+    expect(screen.queryByText('Send Money')).toBeNull();
+    expect(screen.getByText('This is a Demo account: you cannot transfer money to other players or political figures')).toBeTruthy();
+    expect(screen.queryByText(/transfer up to/)).toBeNull();
   });
 
   it('Retry re-requests the section', () => {
@@ -285,7 +347,7 @@ describe('ProfilePanel — sections', () => {
     clickSection('Bank Account');
     act(() => {
       useProfileStore.getState().setBankAccount({
-        balance: '0', maxLoan: '0', totalLoans: '0', maxTransfer: '0',
+        balance: '0', maxLoan: '0', totalLoans: '0',
         totalNextPayment: '0', loans: [], defaultInterest: 0, defaultTerm: 5,
         cacheUnavailable: true,
       });

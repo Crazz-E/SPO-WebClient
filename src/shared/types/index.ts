@@ -104,7 +104,7 @@ export type {
   ClusterFacilityPreview,
 } from './domain-types';
 
-export type { MailFolder, BankActionType, AutoConnectionActionType, CurriculumActionType } from './domain-types';
+export type { MailFolder, BankActionType, TransferDenial, AutoConnectionActionType, CurriculumActionType } from './domain-types';
 
 // Message types (WebSocket protocol)
 export {
