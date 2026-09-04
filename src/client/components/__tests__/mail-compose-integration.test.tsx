@@ -316,6 +316,49 @@ describe('Mail compose — integration flow', () => {
     expect(getFolderSpy).toHaveBeenCalledWith('Sent');
   });
 
+  // #503 — the read view never showed who a message was addressed to.
+  describe('Read view — To: line', () => {
+    const baseMsg: MailMessageFull = {
+      messageId: 'msg-503', from: 'Alice', fromAddr: 'alice', to: '', toAddr: '',
+      subject: 'Recipients', date: '2025-01-15', dateFmt: 'Jan 15',
+      body: ['hi'], read: true, stamp: 3, noReply: false, attachments: [],
+    };
+
+    it('falls back to toAddr when to is empty', () => {
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage({ ...baseMsg, to: '', toAddr: 'bob@shamba.net' }));
+      expect(screen.getByText('To: bob@shamba.net')).toBeTruthy();
+    });
+
+    it('prefers to over toAddr when both are set', () => {
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage({ ...baseMsg, to: 'Bob', toAddr: 'bob@shamba.net' }));
+      expect(screen.getByText('To: Bob')).toBeTruthy();
+      expect(screen.queryByText('To: bob@shamba.net')).toBeNull();
+    });
+
+    it('shows several recipients as the server joined them', () => {
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage({ ...baseMsg, to: 'Bob; Carol', toAddr: '' }));
+      expect(screen.getByText('To: Bob; Carol')).toBeTruthy();
+    });
+
+    it('appears in the Sent folder', () => {
+      useMailStore.setState({ currentFolder: 'Sent' });
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage({ ...baseMsg, to: 'Bob', toAddr: 'bob' }));
+      expect(screen.getByText('To: Bob')).toBeTruthy();
+    });
+
+    it('appears in the Draft folder, alongside the Edit draft button', () => {
+      useMailStore.setState({ currentFolder: 'Draft' });
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage({ ...baseMsg, to: 'Bob', toAddr: 'bob' }));
+      expect(screen.getByText('To: Bob')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Edit draft' })).toBeTruthy();
+    });
+  });
+
   // OB-11: a confirmed send used to leave the listing as it was before the send.
   it('a refresh asked for by the store re-reads the open folder', () => {
     const getFolderSpy = jest.fn();

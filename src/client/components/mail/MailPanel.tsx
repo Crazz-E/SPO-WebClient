@@ -222,8 +222,11 @@ export function MailPanel() {
           </div>
           <h3 className={styles.readSubject}>{currentMessage.subject}</h3>
           <div className={styles.readMeta}>
-            <span>From: {currentMessage.from || currentMessage.fromAddr}</span>
-            <span>{currentMessage.dateFmt || currentMessage.date}</span>
+            <div className={styles.readMetaRow}>
+              <span>From: {currentMessage.from || currentMessage.fromAddr}</span>
+              <span>{currentMessage.dateFmt || currentMessage.date}</span>
+            </div>
+            <span>To: {currentMessage.to || currentMessage.toAddr}</span>
           </div>
           {isHtmlContent(currentMessage.body) ? (
             <HtmlMailBody body={currentMessage.body} />
