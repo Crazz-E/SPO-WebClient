@@ -877,11 +877,19 @@ export interface LoanInfo {
   loanIndex: number;
 }
 
+/** Why TycoonBankAccount.asp offers no Send form — the explanation it prints in its place
+ *  (`:506` StrTyconBank_28 / `:476` _16 / `:478` _17 / `:467`,`:488` _27). */
+export type TransferDenial = 'tournament' | 'loans' | 'no-money' | 'demo';
+
 export interface BankAccountData {
   balance: string;
   maxLoan: string;
   totalLoans: string;
-  maxTransfer: string;
+  /** The digits of the "You can transfer up to $X" note (`TycoonBankAccount.asp:438`);
+   *  **absent** when the page carries no note — never `'0'`. */
+  maxTransfer?: string;
+  /** Why the page printed an explanation instead of the Send form; absent when it offers it. */
+  transferDenied?: TransferDenial;
   totalNextPayment: string;
   loans: LoanInfo[];
   defaultInterest: number;

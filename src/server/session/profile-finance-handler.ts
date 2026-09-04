@@ -10,6 +10,7 @@ import type {
   TycoonProfileFull,
   CurriculumData,
   BankAccountData,
+  TransferDenial,
   LoanInfo,
   BankActionResult,
   ProfitLossData,
@@ -500,12 +501,17 @@ function parseBankAccountHtml(ctx: SessionContext, html: string, baseUrl: string
     totalLoans = totalLoansMatch[1];
   }
 
-  // Extract max transfer from "You can transfer up to $X"
-  let maxTransfer = '0';
+  // Send panel (:424-508). The cap note (:438) exists only under TransferMoney > 0; every
+  // other branch prints an explanation instead. StrTyconBank_18 (:499) is dead — :426 is
+  // hardcoded `if true`. The Demo note (:467, :488) may sit beside the cap (:466); the pill
+  // follows the Demo note, the cap is still reported.
   const maxTransferMatch = /You can transfer up to \$([0-9,]+)/i.exec(html);
-  if (maxTransferMatch) {
-    maxTransfer = maxTransferMatch[1].replace(/,/g, '');
-  }
+  const maxTransfer = maxTransferMatch ? maxTransferMatch[1].replace(/,/g, '') : undefined;
+  let transferDenied: TransferDenial | undefined;
+  if (/Since this is a <b>DEMO<\/b> account/i.test(html)) transferDenied = 'demo';           // StrTyconBank_27
+  else if (/Money transfers are not allowed in Tournament planets/i.test(html)) transferDenied = 'tournament'; // _28
+  else if (/You cannot send money/i.test(html)) transferDenied = 'loans';                    // _16
+  else if (/You have no money to send/i.test(html)) transferDenied = 'no-money';             // _17
 
   // Parse loan rows — <tr id="r0" lid="0" onClick="onRowClick()"> (:550).
   // Cells are read by their own id (`r<i>Bank`, `…Date`, `…Amount`, `…Int`,
@@ -590,7 +596,8 @@ function parseBankAccountHtml(ctx: SessionContext, html: string, baseUrl: string
     balance,
     maxLoan,
     totalLoans,
-    maxTransfer,
+    ...(maxTransfer !== undefined ? { maxTransfer } : {}),
+    ...(transferDenied ? { transferDenied } : {}),
     totalNextPayment,
     loans,
     defaultInterest,

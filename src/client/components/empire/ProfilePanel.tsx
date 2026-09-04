@@ -23,6 +23,7 @@ import type {
   AutoConnectionActionType,
   CurriculumActionType,
   ProfitLossNode as ProfitLossNodeData,
+  TransferDenial,
 } from '@/shared/types';
 import styles from './ProfilePanel.module.css';
 
@@ -439,6 +440,14 @@ function CurriculumTab() {
 // Bank Tab — with date column, pay off, total row, dynamic calc
 // ---------------------------------------------------------------------------
 
+/** What TycoonBankAccount.asp prints where the Send form would be (:476, :478, :488, :506). */
+const TRANSFER_DENIED_TEXT: Record<TransferDenial, string> = {
+  tournament: 'Money transfers are not allowed in Tournament planets',
+  loans: 'You cannot send money that you received with loans or as part of your Investor Visa',
+  'no-money': 'You have no money to send',
+  demo: 'This is a Demo account: you cannot transfer money to other players or political figures',
+};
+
 function BankTab() {
   const data = useProfileStore((s) => s.bankAccount);
   const client = useClient();
@@ -557,13 +566,18 @@ function BankTab() {
         >
           Request Loan
         </button>
-        <button
-          className={`${styles.actionPill} ${action === 'send' ? styles.actionPillActive : ''}`}
-          onClick={() => setAction(action === 'send' ? null : 'send')}
-        >
-          Send Money
-        </button>
+        {!data.transferDenied && (
+          <button
+            className={`${styles.actionPill} ${action === 'send' ? styles.actionPillActive : ''}`}
+            onClick={() => setAction(action === 'send' ? null : 'send')}
+          >
+            Send Money
+          </button>
+        )}
       </div>
+      {data.transferDenied && (
+        <p className={styles.hint}>{TRANSFER_DENIED_TEXT[data.transferDenied]}</p>
+      )}
 
       {/* Inline forms */}
       {action === 'borrow' && (
@@ -589,7 +603,7 @@ function BankTab() {
           </div>
         </div>
       )}
-      {action === 'send' && (
+      {action === 'send' && !data.transferDenied && (
         <div className={styles.inlineForm}>
           <label className={styles.formLabel}>Recipient</label>
           <input
