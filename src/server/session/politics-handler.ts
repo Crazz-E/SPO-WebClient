@@ -301,11 +301,33 @@ async function readCacheObjectAtPath(
 }
 
 /** The properties `mayordata.asp` and `opositiondata.asp` read, in one list. */
-const RULER_PROPS = [
+export const RULER_PROPS = [
   'ActualRuler', 'RulerActualPrestige', 'RulerRating', 'TycoonsRating',
   'IFELRating', 'RulerPeriods', 'YearsToElections', 'CampaignCount',
   'TownHallId', 'HasRuler',
 ] as const;
+
+/**
+ * Is this a tournament planet? `header.asp:20-28`, `opositiondata.asp:19-27` and
+ * `politics.asp:7-15` all open `world.five` and test `ElectionsOn = "1"` before
+ * rendering anything election-related. The flag is written by
+ * `TPoliticalWorldCacheAgent` (Kernel/WorldPolitics.pas:2069, :2078) as `1` / `0`
+ * (Cache/CacheAgent.pas:150-151), from the `ElectionsOn` config parameter
+ * (Kernel/World.pas:7172, default `'1'`).
+ *
+ * Only the literal `'0'` turns elections off. An empty value or a failed read
+ * keeps them on: an unanswered question must never take the campaign panel
+ * away from the player — the page then decides, exactly as before.
+ */
+async function readElectionsOff(ctx: SessionContext): Promise<boolean> {
+  try {
+    const [electionsOn] = await readCacheObjectAtPath(ctx, 'world.five', ['ElectionsOn']);
+    return electionsOn === '0';
+  } catch (e: unknown) {
+    ctx.log.debug(`[Politics] Could not read ElectionsOn: ${toErrorMessage(e)}`);
+    return false;
+  }
+}
 
 /**
  * `mayordata.asp:39` / `opositiondata.asp:53` — the same portrait path for a
@@ -638,6 +660,9 @@ export function parseCampaignPromise(html: string): string {
  * already knows the office holder's name and the player's own, and holding the
  * office is precisely the condition `:223` tests (`not IsMayor`). Everything
  * else that reaches this branch was refused.
+ *
+ * `noElections` never reaches this parser: it is decided from the cache flag
+ * before the page is fetched.
  */
 export function parseCampaignState(
   html: string, isRuler: boolean
@@ -736,6 +761,9 @@ export function getDefaultPoliticsData(townName: string, isCapitol = false): Pol
 /**
  * Fetch politics data for a Town Hall building.
  * Fetches mayor info and ratings from the game server's politics ASP pages.
+ *
+ * On a tournament planet (`world.five` `ElectionsOn = 0`) the campaign page is
+ * not fetched and `campaignState` is `noElections`.
  */
 export async function getPoliticsData(
   ctx: SessionContext, townName: string, buildingX: number, buildingY: number,
@@ -788,25 +816,34 @@ export async function getPoliticsData(
     // happens to keep. One question, one answer (OB-31).
     const isRuler = holdsOffice(ctx, rulerData.mayorName, townName);
 
+    const electionsOff = await readElectionsOff(ctx);
+
     // YOUR CAMPAIGN — the same page the Launch/Cancel buttons post to, fetched
     // with neither marker so it reports without mutating (`buildCampaignParams`).
     let campaignState: CampaignState = 'refused';
     let campaignMessage = '';
     let projects: PoliticsProjectEntry[] = [];
     let promise = '';
-    try {
-      const params = buildCampaignParams(ctx, 'Read', buildingX, buildingY, isCapitol ? undefined : townName);
-      const campaignHtml = await fetchPoliticsPage(
-        ctx,
-        `${baseUrl}/tycooncampaign.asp?${params.toString().replace(/\+/g, '%20')}`,
-        'campaign panel',
-      );
-      ({ state: campaignState, message: campaignMessage } = parseCampaignState(campaignHtml, isRuler));
-      projects = parseCampaignProjects(campaignHtml);
-      promise = parseCampaignPromise(campaignHtml);
-    } catch (e: unknown) {
-      ctx.log.warn(`[Politics] Campaign panel fetch failed: ${toErrorMessage(e)}`);
-      campaignMessage = 'The campaign page could not be reached.';
+    // On a tournament planet `politics.asp:40-44` loads
+    // `tycoonCampaignNoElections.asp` instead — one banner, no button, nothing
+    // to parse.
+    if (electionsOff) {
+      campaignState = 'noElections';
+    } else {
+      try {
+        const params = buildCampaignParams(ctx, 'Read', buildingX, buildingY, isCapitol ? undefined : townName);
+        const campaignHtml = await fetchPoliticsPage(
+          ctx,
+          `${baseUrl}/tycooncampaign.asp?${params.toString().replace(/\+/g, '%20')}`,
+          'campaign panel',
+        );
+        ({ state: campaignState, message: campaignMessage } = parseCampaignState(campaignHtml, isRuler));
+        projects = parseCampaignProjects(campaignHtml);
+        promise = parseCampaignPromise(campaignHtml);
+      } catch (e: unknown) {
+        ctx.log.warn(`[Politics] Campaign panel fetch failed: ${toErrorMessage(e)}`);
+        campaignMessage = 'The campaign page could not be reached.';
+      }
     }
 
     return {

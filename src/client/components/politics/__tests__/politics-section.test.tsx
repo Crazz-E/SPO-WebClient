@@ -2,7 +2,7 @@
  * PoliticsSection — Voyager's `politics.asp` inside the civic modal.
  *
  * Covers the three things the page is: the lazy read that fills it, the ratings
- * rail (including the two that mutate), and the campaign panel's four states.
+ * rail (including the two that mutate), and the campaign panel's five states.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -367,6 +367,17 @@ describe('PoliticsSection — campaign panel', () => {
     renderWithProviders(<PoliticsSection buildingX={1} buildingY={2} />);
     expect(screen.getByText('You are the Mayor. You cannot have a campaign.')).toBeTruthy();
     expect(screen.queryByText('Launch Campaign')).toBeNull();
+  });
+
+  it('a tournament planet gets the banner and no launch button', () => {
+    seed({ campaignState: 'noElections', canLaunchCampaign: false });
+    renderWithProviders(<PoliticsSection buildingX={1} buildingY={2} />);
+    expect(screen.getByText(/No elections are held in Tournament planets/)).toBeTruthy();
+    expect(screen.queryByText('Launch Campaign')).toBeNull();
+    expect(screen.queryByText('Withdraw Campaign')).toBeNull();
+    expect(screen.getByText('No elections on Tournament planets')).toBeTruthy();
+    expect(screen.queryByText('16 years to elections')).toBeNull();
+    expect(screen.getByText('No elections are held on Tournament planets')).toBeTruthy();
   });
 
   it('publishes the refusal the server gave', () => {
