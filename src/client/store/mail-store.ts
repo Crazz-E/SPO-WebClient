@@ -72,6 +72,8 @@ interface MailState {
    * instead of leaving two (`saveDraft`, `mail-handler.ts:186`).
    */
   composeDraftId: string | null;
+  /** The compose form should open with the caret in To (MsgComposerHandlerViewer.pas:155). */
+  composeFocusTo: boolean;
   /** A send is in flight — the compose form is kept until the server answers (T6). */
   isSending: boolean;
   /** A draft save is in flight — the form is locked so one click cannot make two drafts. */
@@ -99,6 +101,8 @@ interface MailState {
   setLoading: (loading: boolean) => void;
   startCompose: (to?: string, subject?: string, body?: string, headers?: string) => void;
   startReply: (message: MailMessageFull) => void;
+  /** Blank the To, prefix the subject `Fw: `, quote the body — MsgComposerHandler.pas:216-243. */
+  startForward: (message: MailMessageFull) => void;
   /** Re-open a saved draft in the compose form, remembering the copy to replace. */
   startEditDraft: (message: MailMessageFull) => void;
   clearCompose: () => void;
@@ -127,6 +131,7 @@ export const useMailStore = create<MailState>((set) => ({
   composeBody: '',
   composeHeaders: '',
   composeDraftId: null,
+  composeFocusTo: false,
   isSending: false,
   isSavingDraft: false,
   isMessageLoading: false,
@@ -148,6 +153,7 @@ export const useMailStore = create<MailState>((set) => ({
       composeBody: body,
       composeHeaders: headers,
       composeDraftId: null,
+      composeFocusTo: false,
     }),
 
   startReply: (message) =>
@@ -160,6 +166,19 @@ export const useMailStore = create<MailState>((set) => ({
       composeBody: buildReplyBody(message),
       composeHeaders: buildReplyHeaders(message),
       composeDraftId: null,
+      composeFocusTo: false,
+    }),
+
+  startForward: (message) =>
+    set({
+      currentView: 'compose',
+      composeTo: '',
+      // Case-insensitive, as the Pascal's `pos(…, UpperCase(Subj))` test is (MsgComposerHandler.pas:227).
+      composeSubject: /^fw:/i.test(message.subject.trim()) ? message.subject : `Fw: ${message.subject}`,
+      composeBody: buildReplyBody(message),
+      composeHeaders: '',
+      composeDraftId: null,
+      composeFocusTo: true,
     }),
 
   startEditDraft: (message) =>
@@ -170,6 +189,7 @@ export const useMailStore = create<MailState>((set) => ({
       composeBody: message.body.join('\n'),
       composeHeaders: '',
       composeDraftId: message.messageId,
+      composeFocusTo: false,
     }),
 
   clearCompose: () =>
@@ -179,6 +199,7 @@ export const useMailStore = create<MailState>((set) => ({
       composeBody: '',
       composeHeaders: '',
       composeDraftId: null,
+      composeFocusTo: false,
       currentView: 'list',
       isSending: false,
       isSavingDraft: false,

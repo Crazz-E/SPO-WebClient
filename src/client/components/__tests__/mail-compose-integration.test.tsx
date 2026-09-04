@@ -41,6 +41,7 @@ describe('Mail compose — integration flow', () => {
       composeBody: '',
       composeHeaders: '',
       composeDraftId: null,
+      composeFocusTo: false,
       isSending: false,
       isSavingDraft: false,
       isMessageLoading: false,
@@ -222,6 +223,49 @@ describe('Mail compose — integration flow', () => {
     expect(useMailStore.getState().pendingDeleteId).toBeNull();
   });
 
+  // #509 — a message cannot be forwarded: no Forward action exists in the mail panel.
+  describe('Forward', () => {
+    const inboxMsg: MailMessageFull = {
+      messageId: 'msg-509', from: 'Alice', fromAddr: 'alice', to: 'Me', toAddr: 'me',
+      subject: 'Hello', date: '2025-01-15', dateFmt: 'Jan 15',
+      body: ['hi'], read: true, stamp: 3, noReply: false, attachments: [],
+    };
+
+    it('offers both Reply and Forward on an ordinary Inbox message, and forwarding opens an empty To, prefixed subject, quoted body, with the caret in To', () => {
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage(inboxMsg));
+      expect(screen.getByRole('button', { name: 'Reply' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Forward' })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Forward' }));
+
+      expect(useMailStore.getState().currentView).toBe('compose');
+      const to = screen.getByPlaceholderText('To') as HTMLInputElement;
+      const subject = screen.getByPlaceholderText('Subject') as HTMLInputElement;
+      const body = screen.getByPlaceholderText('Message...') as HTMLTextAreaElement;
+      expect(to.value).toBe('');
+      expect(subject.value).toBe('Fw: Hello');
+      expect(body.value.split('\n')[0]).toBe('_'.repeat(39));
+      expect(body.value).toContain('Alice wrote, on "Hello":');
+      expect(body.value).toContain('> hi');
+      expect(document.activeElement).toBe(to);
+    });
+
+    it('is offered in the Sent folder', () => {
+      useMailStore.setState({ currentFolder: 'Sent' });
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage(inboxMsg));
+      expect(screen.getByRole('button', { name: 'Forward' })).toBeTruthy();
+    });
+
+    it('is offered, and Reply is not, on noReply mail', () => {
+      renderWithProviders(<MailPanel />);
+      act(() => useMailStore.getState().setCurrentMessage({ ...inboxMsg, noReply: true }));
+      expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Forward' })).toBeTruthy();
+    });
+  });
+
   // #120 — REQ_MAIL_SAVE_DRAFT had a gateway handler, a bridge response and a Drafts tab,
   // and no control anywhere that emitted it.
   describe('Save draft', () => {
@@ -268,6 +312,8 @@ describe('Mail compose — integration flow', () => {
       act(() => useMailStore.getState().setCurrentMessage(draft));
       // A draft has no sender to answer — the read view offers Edit in place of Reply.
       expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
+      // #509 — a draft is unsent, so there is nothing to pass on either.
+      expect(screen.queryByRole('button', { name: 'Forward' })).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Edit draft' }));
 
       expect((screen.getByPlaceholderText('To') as HTMLInputElement).value).toBe('bob');
