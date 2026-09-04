@@ -27,7 +27,7 @@ import { handleBuildRoad, handleGetRoadCost, handleDemolishRoad, handleDemolishR
 import { handleMailConnect, handleMailGetFolder, handleMailReadMessage, handleMailCompose, handleMailSaveDraft, handleMailDelete, handleMailGetUnreadCount } from './mail-handlers';
 
 // Profile
-import { handleGetProfile, handleProfileCurriculum, handleProfileBank, handleProfileBankAction, handleProfileProfitLoss, handleProfileCompanies, handleProfileAutoConnections, handleProfileAutoConnectionAction, handleProfilePolicy, handleProfilePolicySet, handleProfileCurriculumAction } from './profile-handlers';
+import { handleGetProfile, handleProfileCurriculum, handleProfileBank, handleProfileBankAction, handleProfileProfitLoss, handleProfileCompanies, handleProfileCompanyProfitLoss, handleProfileAutoConnections, handleProfileAutoConnectionAction, handleProfilePolicy, handleProfilePolicySet, handleProfileCurriculumAction } from './profile-handlers';
 
 // Search menu
 import { handleSearchMenuHome, handleSearchMenuTowns, handleSearchMenuPeopleSearch, handleSearchMenuTycoonProfile, handleSearchMenuRankings, handleSearchMenuRankingDetail, handleSearchMenuBanks } from './search-handlers';
@@ -103,6 +103,7 @@ export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   [WsMessageType.REQ_PROFILE_BANK_ACTION]: handleProfileBankAction,
   [WsMessageType.REQ_PROFILE_PROFITLOSS]: handleProfileProfitLoss,
   [WsMessageType.REQ_PROFILE_COMPANIES]: handleProfileCompanies,
+  [WsMessageType.REQ_PROFILE_COMPANY_PROFITLOSS]: handleProfileCompanyProfitLoss,
   [WsMessageType.REQ_PROFILE_AUTOCONNECTIONS]: handleProfileAutoConnections,
   [WsMessageType.REQ_PROFILE_AUTOCONNECTION_ACTION]: handleProfileAutoConnectionAction,
   [WsMessageType.REQ_PROFILE_POLICY]: handleProfilePolicy,

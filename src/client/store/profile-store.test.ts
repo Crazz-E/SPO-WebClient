@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { useProfileStore } from './profile-store';
-import type { CurriculumData, BankAccountData, PolicyData } from '@/shared/types';
+import type { CurriculumData, BankAccountData, PolicyData, ProfitLossData } from '@/shared/types';
 
 const mockCurriculum: CurriculumData = {
   tycoonName: 'TestTycoon',
@@ -68,6 +68,7 @@ describe('Profile Store', () => {
     expect(state.bankAccount).toBeNull();
     expect(state.profitLoss).toBeNull();
     expect(state.companies).toBeNull();
+    expect(state.companyProfitLoss).toBeNull();
     expect(state.autoConnections).toBeNull();
     expect(state.policy).toBeNull();
     // refreshCounter is non-zero after beforeEach reset() (increment-based reset)
@@ -194,12 +195,69 @@ describe('Profile Store', () => {
       expect(state.bankAccount).toBeNull();
       expect(state.profitLoss).toBeNull();
       expect(state.companies).toBeNull();
+      expect(state.companyProfitLoss).toBeNull();
       expect(state.autoConnections).toBeNull();
       expect(state.policy).toBeNull();
       // reset() increments counter to guarantee useEffect re-triggers
       expect(state.refreshCounter).toBe(counterBefore + 1);
       expect(state.currentTab).toBeNull();
       expect(state.isLoading).toBe(false);
+    });
+  });
+
+  describe('company profit & loss drill-down', () => {
+    const mockTree: ProfitLossData = { root: { label: 'Net Profit (losses)', level: 0, amount: '1250000', children: [] } };
+
+    it('starts null', () => {
+      expect(useProfileStore.getState().companyProfitLoss).toBeNull();
+    });
+
+    it('openCompanyProfitLoss sets a loading view for that company', () => {
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      expect(useProfileStore.getState().companyProfitLoss).toEqual({
+        companyName: 'Green Co', cluster: 'A', status: 'loading', data: null, error: null,
+      });
+    });
+
+    it('setCompanyProfitLoss with data moves the view to loaded', () => {
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().setCompanyProfitLoss('Green Co', mockTree);
+      expect(useProfileStore.getState().companyProfitLoss).toEqual({
+        companyName: 'Green Co', cluster: 'A', status: 'loaded', data: mockTree, error: null,
+      });
+    });
+
+    it('setCompanyProfitLoss with null + error moves the view to error', () => {
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().setCompanyProfitLoss('Green Co', null, 'boom');
+      expect(useProfileStore.getState().companyProfitLoss).toEqual({
+        companyName: 'Green Co', cluster: 'A', status: 'error', data: null, error: 'boom',
+      });
+    });
+
+    it('a response for another company than the one open is ignored', () => {
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().setCompanyProfitLoss('Some Other Co', mockTree);
+      expect(useProfileStore.getState().companyProfitLoss).toEqual({
+        companyName: 'Green Co', cluster: 'A', status: 'loading', data: null, error: null,
+      });
+    });
+
+    it('closeCompanyProfitLoss, setCurrentTab and reset all clear the view, and none touches isLoading', () => {
+      useProfileStore.getState().setLoading(true);
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().closeCompanyProfitLoss();
+      expect(useProfileStore.getState().companyProfitLoss).toBeNull();
+      expect(useProfileStore.getState().isLoading).toBe(true);
+
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().setCurrentTab('companies');
+      expect(useProfileStore.getState().companyProfitLoss).toBeNull();
+      expect(useProfileStore.getState().isLoading).toBe(true);
+
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().reset();
+      expect(useProfileStore.getState().companyProfitLoss).toBeNull();
     });
   });
 });

@@ -8,6 +8,9 @@ import { useUiStore } from '../store/ui-store';
 import { useBuildingStore } from '../store/building-store';
 import { useLogStore } from '../store/log-store';
 import { useChatStore } from '../store/chat-store';
+import { useProfileStore } from '../store/profile-store';
+import { WsMessageType } from '../../shared/types';
+import type { WsMessage, ProfitLossData } from '../../shared/types';
 
 // Mock showToast to prevent import issues in test environment
 jest.mock('../components/common/Toast', () => ({
@@ -320,5 +323,43 @@ describe('ClientBridge optimistic write feedback (OB-1)', () => {
 
     expect(useBuildingStore.getState().failedUpdates.get(KEY)?.error)
       .toBe('Server rejected the change');
+  });
+});
+
+describe('ClientBridge.handleProfileResponse — RESP_PROFILE_COMPANY_PROFITLOSS', () => {
+  beforeEach(() => {
+    useProfileStore.getState().reset();
+  });
+
+  it('routes the parsed tree to profile-store, keyed by company name', () => {
+    const tree: ProfitLossData = { root: { label: 'Net Profit (losses)', level: 0, amount: '1250000', children: [] } };
+    useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+
+    ClientBridge.handleProfileResponse({
+      type: WsMessageType.RESP_PROFILE_COMPANY_PROFITLOSS,
+      wsRequestId: 'req-1',
+      companyName: 'Green Co',
+      data: tree,
+    } as unknown as WsMessage);
+
+    expect(useProfileStore.getState().companyProfitLoss).toEqual({
+      companyName: 'Green Co', cluster: 'A', status: 'loaded', data: tree, error: null,
+    });
+  });
+
+  it('routes a failure through to the store error state', () => {
+    useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+
+    ClientBridge.handleProfileResponse({
+      type: WsMessageType.RESP_PROFILE_COMPANY_PROFITLOSS,
+      wsRequestId: 'req-1',
+      companyName: 'Green Co',
+      data: null,
+      error: 'boom',
+    } as unknown as WsMessage);
+
+    expect(useProfileStore.getState().companyProfitLoss).toEqual({
+      companyName: 'Green Co', cluster: 'A', status: 'error', data: null, error: 'boom',
+    });
   });
 });

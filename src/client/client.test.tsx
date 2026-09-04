@@ -16,6 +16,7 @@ jest.mock('./handlers/chat-handler');
 
 import { StarpeaceClient } from './client';
 import * as chatHandler from './handlers/chat-handler';
+import { WsMessageType } from '@/shared/types';
 
 class FakeSocket {
   onopen: (() => void) | null = null;
@@ -46,6 +47,16 @@ describe('StarpeaceClient callback wiring', () => {
     client.callbacks.onGetChannelInfo('Trade');
 
     expect(chatHandler.requestChannelInfo).toHaveBeenCalledWith(client, 'Trade');
+  });
+
+  it('onProfileCompanyProfitLoss sends REQ_PROFILE_COMPANY_PROFITLOSS with the company name and cluster', () => {
+    const sendSpy = jest.spyOn(client, 'sendMessage' as any);
+
+    client.callbacks.onProfileCompanyProfitLoss('Green Co', 'A');
+
+    expect(sendSpy).toHaveBeenCalledWith({
+      type: WsMessageType.REQ_PROFILE_COMPANY_PROFITLOSS, companyName: 'Green Co', cluster: 'A',
+    });
   });
 });
 

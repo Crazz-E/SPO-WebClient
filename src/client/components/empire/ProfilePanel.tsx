@@ -15,7 +15,7 @@ import {
   RotateCcw, LogOut, Wrench, ChevronUp, ChevronRight, ArrowLeft, User,
 } from 'lucide-react';
 import { Skeleton, SkeletonLines, ConfirmDialog, Switch, Sparkline } from '../common';
-import { useProfileStore, type ProfileTab } from '../../store/profile-store';
+import { useProfileStore, type ProfileTab, type CompanyProfitLossView as CompanyProfitLossViewData } from '../../store/profile-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
@@ -659,7 +659,7 @@ function ProfitLossNode({ node }: { node: ProfitLossNodeData }) {
             <Sparkline data={history} width={64} height={14} />
           </span>
         )}
-        <span className={styles.plAmount}>{node.amount}</span>
+        <span className={`${styles.plAmount} ${node.amount.startsWith('-') ? styles.negativeValue : ''}`}>{node.amount}</span>
       </div>
       {node.children?.map((child, i) => (
         <ProfitLossNode key={i} node={child} />
@@ -674,11 +674,13 @@ function ProfitLossNode({ node }: { node: ProfitLossNodeData }) {
 
 function CompaniesTab() {
   const data = useProfileStore((s) => s.companies);
+  const companyView = useProfileStore((s) => s.companyProfitLoss);
   const client = useClient();
   const currentCompanyName = useGameStore((s) => s.companyName);
   const isSwitchingCompany = useGameStore((s) => s.isSwitchingCompany);
 
   if (!data) return <EmptyState message="No companies data" />;
+  if (companyView) return <CompanyProfitLossView view={companyView} />;
 
   const handleSwitch = (co: { companyId: number; name: string; ownerRole: string }) => {
     if (co.name === (data.currentCompany || currentCompanyName)) return;
@@ -689,6 +691,11 @@ function CompaniesTab() {
   const handleCreate = () => {
     useUiStore.getState().openModal('createCompany');
     client.onCreateCompany();
+  };
+
+  const openProfitLoss = (co: { name: string; cluster: string }) => {
+    useProfileStore.getState().openCompanyProfitLoss(co.name, co.cluster);
+    client.onProfileCompanyProfitLoss(co.name, co.cluster);
   };
 
   return (
@@ -721,6 +728,15 @@ function CompaniesTab() {
               <span className={styles.rowSub}>{co.cluster} &middot; {co.companyType}</span>
             </div>
             <div className={styles.rowMeta}>
+              <button
+                type="button"
+                className={styles.rowActionBtn}
+                aria-label={`Open Profit & Loss of ${co.name}`}
+                disabled={isSwitchingCompany}
+                onClick={(e) => { e.stopPropagation(); openProfitLoss(co); }}
+              >
+                P&amp;L
+              </button>
               <span className={styles.rowValue}>{co.facilityCount} facilities</span>
               <span className={styles.rowSub}>{co.ownerRole}</span>
             </div>
@@ -732,6 +748,33 @@ function CompaniesTab() {
         Create New Company
       </button>
       {data.companies.length === 0 && <EmptyState message="No companies" />}
+    </div>
+  );
+}
+
+function CompanyProfitLossView({ view }: { view: CompanyProfitLossViewData }) {
+  const client = useClient();
+  const close = () => useProfileStore.getState().closeCompanyProfitLoss();
+  const retry = () => {
+    useProfileStore.getState().openCompanyProfitLoss(view.companyName, view.cluster);
+    client.onProfileCompanyProfitLoss(view.companyName, view.cluster);
+  };
+  return (
+    <div className={styles.tabBody}>
+      <div className={styles.companyPlHeader}>
+        <button type="button" className={styles.drawerBack} onClick={close} aria-label="Back to companies">
+          <ArrowLeft size={16} />
+        </button>
+        <h4 className={styles.sectionTitle}>{view.companyName} · Profit &amp; Loss</h4>
+      </div>
+      {view.status === 'loading' && <SkeletonLines lines={6} />}
+      {view.status === 'error' && (
+        <div role="alert" className={styles.plError}>
+          <p>Could not read the Profit &amp; Loss of {view.companyName}: {view.error}</p>
+          <button type="button" className={styles.formCancel} onClick={retry}>Retry</button>
+        </div>
+      )}
+      {view.status === 'loaded' && view.data && <ProfitLossNode node={view.data.root} />}
     </div>
   );
 }

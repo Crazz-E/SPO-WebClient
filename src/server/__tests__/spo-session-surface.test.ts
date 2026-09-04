@@ -248,6 +248,13 @@ const DELEGATIONS: readonly Delegation[] = [
     forwarded: [],
     result: { companies: [] },
   },
+  {
+    method: 'fetchCompanyProfitLoss',
+    install: () => jest.spyOn(profileFinanceHandler, 'fetchCompanyProfitLoss'),
+    call: s => s.fetchCompanyProfitLoss('Yellow Inc.', 'PGI'),
+    forwarded: ['Yellow Inc.', 'PGI'],
+    result: { root: { label: 'Net', level: 0, amount: '1' } },
+  },
 
   // ── auto-connection-handler ──────────────────────────────────────────────
   {
@@ -633,7 +640,7 @@ describe('StarpeaceSession — handler delegation', () => {
   it('covers every one-line handler delegation the facade declares', () => {
     // A guard on the table itself: if a delegation is added to the facade and
     // not to the table, the count stops matching and this row says so.
-    expect(DELEGATIONS).toHaveLength(67);
+    expect(DELEGATIONS).toHaveLength(68);
     expect(new Set(DELEGATIONS.map(d => d.method)).size).toBe(DELEGATIONS.length);
   });
 

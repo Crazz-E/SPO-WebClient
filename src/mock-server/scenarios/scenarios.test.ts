@@ -148,12 +148,14 @@ describe('company-list scenario', () => {
     expect(CAPTURED_COMPANY.ownerRole).toBe('SPO_test3');
   });
 
-  it('HTTP has 3 exchanges (pleasewait, logonComplete, chooseCompany)', () => {
+  it('HTTP has 5 exchanges (pleasewait, logonComplete, chooseCompany, CompanyPage x2)', () => {
     const { http } = createCompanyListScenario();
-    expect(http.exchanges).toHaveLength(3);
+    expect(http.exchanges).toHaveLength(5);
     expect(http.exchanges[0].urlPattern).toContain('pleasewait.asp');
     expect(http.exchanges[1].urlPattern).toContain('logonComplete.asp');
     expect(http.exchanges[2].urlPattern).toContain('chooseCompany.asp');
+    expect(http.exchanges[3].urlPattern).toContain('CompanyPage.asp');
+    expect(http.exchanges[4].urlPattern).toContain('CompanyPage.asp');
   });
 
   it('chooseCompany HTML contains company name and ID', () => {

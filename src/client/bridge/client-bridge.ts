@@ -55,6 +55,7 @@ import {
   type WsRespProfileBankAction,
   type WsRespProfileProfitLoss,
   type WsRespProfileCompanies,
+  type WsRespProfileCompanyProfitLoss,
   type WsRespProfileAutoConnections,
   type WsRespProfileAutoConnectionAction,
   type WsRespProfilePolicy,
@@ -230,6 +231,7 @@ export interface ClientCallbacks {
   onProfileBank: () => void;
   onProfileProfitLoss: () => void;
   onProfileCompanies: () => void;
+  onProfileCompanyProfitLoss: (companyName: string, cluster: string) => void;
   onProfileAutoConnections: () => void;
   onProfilePolicy: () => void;
 
@@ -782,6 +784,11 @@ export const ClientBridge = {
       case WsMessageType.RESP_PROFILE_COMPANIES:
         profile.setCompanies((msg as WsRespProfileCompanies).data);
         break;
+      case WsMessageType.RESP_PROFILE_COMPANY_PROFITLOSS: {
+        const resp = msg as WsRespProfileCompanyProfitLoss;
+        profile.setCompanyProfitLoss(resp.companyName, resp.data, resp.error);
+        break;
+      }
       case WsMessageType.RESP_PROFILE_AUTOCONNECTIONS:
         profile.setAutoConnections((msg as WsRespProfileAutoConnections).data);
         break;

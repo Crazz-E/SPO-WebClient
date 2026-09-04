@@ -37,6 +37,7 @@ import {
   fetchBankAccount,
   executeBankAction,
   fetchProfitLoss,
+  fetchCompanyProfitLoss,
   fetchCompanies,
 } from './profile-finance-handler';
 import { makeSessionCtx } from '../__tests__/session/fake-session-context';
@@ -1684,6 +1685,47 @@ describe('fetchProfitLoss', () => {
     const fake = makeWebCtx();
     fetchAsp(fake).mockRejectedValue(new Error('ASP request failed: 500'));
     await expect(fetchProfitLoss(fake.ctx)).rejects.toThrow('ASP request failed: 500');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// fetchCompanyProfitLoss
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('fetchCompanyProfitLoss', () => {
+  it('fetches CompanyPage.asp with Company/CompanyCluster and builds the same tree fetchProfitLoss would', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue([
+      plRow(0, 'Net Profit (losses)', '$1,000,000', '3,10,-20,30'),
+      plRow(1, 'Income', '$2,000,000'),
+      plRow(2, 'Residentials', ''),
+      plRow(3, 'Houses', '$500,000'),
+      plRow(3, 'Flats', '$1,500,000'),
+      plFlush('$2,000,000', 'Residentials', '2,4,5'),
+      plRow(1, 'Expenses', '-$1,000,000'),
+      plRow(2, 'Salaries', ''),
+      plFlush('-$1,000,000', 'Salaries'),
+    ].join('\n'));
+
+    const data = await fetchCompanyProfitLoss(fake.ctx, 'Yellow Inc.', 'PGI');
+
+    expect(fetchAsp(fake)).toHaveBeenCalledWith('NewTycoon/CompanyPage.asp', { Company: 'Yellow Inc.', CompanyCluster: 'PGI', RIWS: '' });
+    expect(data.root).toMatchObject({ label: 'Net Profit (losses)', level: 0, amount: '1000000' });
+    expect(data.root.children![0]).toMatchObject({ label: 'Income', amount: '2000000' });
+  });
+
+  it('an ObjValid=false page (no account row) is refused, naming the company', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue('<html><body><div class=header2 style="padding: 20px">Sorry, cannot retrieve Tycoon information from server.</div></body></html>');
+    await expect(fetchCompanyProfitLoss(fake.ctx, 'Red Corp.', 'PGI')).rejects.toThrow(
+      'CompanyPage.asp carries no account tree for "Red Corp."',
+    );
+  });
+
+  it('propagates a rejected ASP fetch', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockRejectedValue(new Error('ASP request failed: 500'));
+    await expect(fetchCompanyProfitLoss(fake.ctx, 'Yellow Inc.', 'PGI')).rejects.toThrow('ASP request failed: 500');
   });
 });
 

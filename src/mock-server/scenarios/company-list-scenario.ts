@@ -1,10 +1,12 @@
 /**
  * Scenario 3: Server Selection + Company List
- * HTTP: chooseCompany.asp → company HTML with name, id, ownerRole
+ * HTTP: chooseCompany.asp → company HTML with name, id, ownerRole; CompanyPage.asp →
+ * one company's Profit & Loss account tree (or the ObjValid=false failure page).
  */
 
 import { WsMessageType } from '@/shared/types/message-types';
 import type { WsMessage } from '@/shared/types/message-types';
+import type { ProfitLossData } from '@/shared/types/domain-types';
 import type { WsCaptureScenario } from '../types/mock-types';
 import type { HttpScenario } from '../types/http-exchange-types';
 import type { ScenarioVariables } from './scenario-variables';
@@ -78,6 +80,108 @@ function buildPleaseWaitHtml(): string {
 </html>`;
 }
 
+/** CompanyPage.asp:175-261 — one account row. Level 2 renders no inline value (:161-165). */
+function buildAccountRow(level: number, label: string, amount: string | null, chart?: string): string {
+  const labelHtml = level === 2 ? label.toUpperCase() : label;
+  const chartLink = chart
+    ? `<a href="local.asp?frame_Action=ShowChart&ChartInfo=${chart}"><img src="images/chart.jpg"></a>`
+    : '';
+  const valueHtml = amount === null
+    ? ''
+    : `<div class=labelAccountLevel${level} style="color: white"><div style="margin-left: 0px">${amount}${chartLink}</div></div>`;
+  return `<tr><td><div class=labelAccountLevel${level} style="margin-left: ${30 * level}px; margin-right: 5px"><nobr>${labelHtml}</nobr></div></td>`
+    + `<td align="right"><nobr>${valueHtml}</nobr></td></tr>`;
+}
+
+/** The level-2 total flushed in a row of its own — CompanyPage.asp:156-173 / :272-290. */
+function buildAccountFlush(amount: string, chart?: string): string {
+  const color = amount.startsWith('-') ? '#ff7700' : 'white';
+  const chartLink = chart
+    ? `<a href="local.asp?frame_Action=ShowChart&ChartInfo=${chart}"><img src="images/chart.jpg"></a>`
+    : '';
+  return `<tr><td></td><td align="right"><div class=labelAccountLevel2 style="color: ${color}"><nobr>${amount}${chartLink}</nobr></div></td></tr>`;
+}
+
+function buildCompanyPageHeader(vars: ScenarioVariables): string {
+  return `<table><tr><td><img src="images/comp-${vars.companyCluster}.gif"></td>`
+    + `<td><h2>${vars.companyName}</h2></td></tr></table>`;
+}
+
+/** CompanyPage.asp:143-292 — the `if ObjValid` branch, same generator as TycoonProfitAndLoses.asp. */
+function buildCompanyPageHtml(vars: ScenarioVariables): string {
+  return `<html><body>
+${buildCompanyPageHeader(vars)}
+<div class=header2>Profit & Loss</div>
+<table>
+${buildAccountRow(0, 'Net Profit (losses)', '$1,250,000', '3,1000000,1100000,1250000')}
+${buildAccountRow(1, 'Income', '$2,000,000')}
+${buildAccountRow(2, 'Residentials', null)}
+${buildAccountRow(3, 'Houses', '$500,000')}
+${buildAccountRow(3, 'Flats', '$1,500,000')}
+${buildAccountFlush('$2,000,000')}
+${buildAccountRow(1, 'Expenses', '-$750,000')}
+${buildAccountRow(2, 'Salaries', null)}
+${buildAccountRow(3, 'Workers', '-$750,000')}
+${buildAccountFlush('-$750,000')}
+</table>
+</body></html>`;
+}
+
+/** CompanyPage.asp:296-299 — the `else` branch: no account row at all. */
+function buildCompanyPageUnavailableHtml(vars: ScenarioVariables): string {
+  return `<html><body>
+${buildCompanyPageHeader(vars)}
+<div class=header2 style="padding: 20px">Sorry, cannot retrieve Tycoon information from server.</div>
+</body></html>`;
+}
+
+/** The tree `buildCompanyPageHtml` describes, written by hand from the markup above. */
+const COMPANY_PAGE_TREE: ProfitLossData = {
+  root: {
+    label: 'Net Profit (losses)',
+    level: 0,
+    amount: '1250000',
+    chartData: [1000000, 1100000, 1250000],
+    children: [
+      {
+        label: 'Income',
+        level: 1,
+        amount: '2000000',
+        isHeader: false,
+        children: [
+          {
+            label: 'RESIDENTIALS',
+            level: 2,
+            amount: '2000000',
+            isHeader: true,
+            children: [
+              { label: 'Houses', level: 3, amount: '500000', isHeader: false, children: [] },
+              { label: 'Flats', level: 3, amount: '1500000', isHeader: false, children: [] },
+            ],
+          },
+        ],
+      },
+      {
+        label: 'Expenses',
+        level: 1,
+        amount: '-750000',
+        isHeader: false,
+        children: [
+          {
+            label: 'SALARIES',
+            level: 2,
+            amount: '-750000',
+            isHeader: true,
+            children: [
+              { label: 'Workers', level: 3, amount: '-750000', isHeader: false, children: [] },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+};
+
 export function createCompanyListScenario(
   overrides?: Partial<ScenarioVariables>
 ): { ws: WsCaptureScenario; http: HttpScenario } {
@@ -120,6 +224,27 @@ export function createCompanyListScenario(
         status: 200,
         contentType: 'text/html',
         body: buildChooseCompanyHtml(vars),
+      },
+      {
+        id: 'cl-http-004',
+        method: 'GET',
+        // The page reads Request("Company") (CompanyPage.asp:10): a request that
+        // does not name THIS company must not be served this tree.
+        urlPattern: '/Five/0/Visual/Voyager/NewTycoon/CompanyPage.asp',
+        queryPatterns: { Company: vars.companyName, WorldName: vars.worldName, Tycoon: vars.username },
+        status: 200,
+        contentType: 'text/html',
+        body: buildCompanyPageHtml(vars),
+      },
+      {
+        id: 'cl-http-005',
+        method: 'GET',
+        // Any other company: the ObjValid=false page (:296-299), no account row.
+        urlPattern: '/Five/0/Visual/Voyager/NewTycoon/CompanyPage.asp',
+        queryPatterns: { Company: '*' },
+        status: 200,
+        contentType: 'text/html',
+        body: buildCompanyPageUnavailableHtml(vars),
       },
     ],
     variables: {},
@@ -165,4 +290,4 @@ export function createCompanyListScenario(
   return { ws, http };
 }
 
-export { CAPTURED_COMPANY };
+export { CAPTURED_COMPANY, COMPANY_PAGE_TREE };
