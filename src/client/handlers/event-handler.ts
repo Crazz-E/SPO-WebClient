@@ -329,6 +329,7 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
     case WsMessageType.RESP_PROFILE_BANK_ACTION:
     case WsMessageType.RESP_PROFILE_PROFITLOSS:
     case WsMessageType.RESP_PROFILE_COMPANIES:
+    case WsMessageType.RESP_PROFILE_COMPANY_PROFITLOSS:
     case WsMessageType.RESP_PROFILE_AUTOCONNECTIONS:
     case WsMessageType.RESP_PROFILE_AUTOCONNECTION_ACTION:
     case WsMessageType.RESP_PROFILE_POLICY:

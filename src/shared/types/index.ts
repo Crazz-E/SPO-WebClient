@@ -247,6 +247,8 @@ export type {
   WsRespProfileProfitLoss,
   WsReqProfileCompanies,
   WsRespProfileCompanies,
+  WsReqProfileCompanyProfitLoss,
+  WsRespProfileCompanyProfitLoss,
   WsReqProfileAutoConnections,
   WsRespProfileAutoConnections,
   WsReqProfileAutoConnectionAction,

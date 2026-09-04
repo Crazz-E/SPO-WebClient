@@ -228,6 +228,8 @@ export enum WsMessageType {
   RESP_PROFILE_PROFITLOSS = 'RESP_PROFILE_PROFITLOSS',
   REQ_PROFILE_COMPANIES = 'REQ_PROFILE_COMPANIES',
   RESP_PROFILE_COMPANIES = 'RESP_PROFILE_COMPANIES',
+  REQ_PROFILE_COMPANY_PROFITLOSS = 'REQ_PROFILE_COMPANY_PROFITLOSS',
+  RESP_PROFILE_COMPANY_PROFITLOSS = 'RESP_PROFILE_COMPANY_PROFITLOSS',
   REQ_PROFILE_AUTOCONNECTIONS = 'REQ_PROFILE_AUTOCONNECTIONS',
   RESP_PROFILE_AUTOCONNECTIONS = 'RESP_PROFILE_AUTOCONNECTIONS',
   REQ_PROFILE_AUTOCONNECTION_ACTION = 'REQ_PROFILE_AUTOCONNECTION_ACTION',
@@ -1228,6 +1230,22 @@ export interface WsReqProfileCompanies extends WsMessage {
 export interface WsRespProfileCompanies extends WsMessage {
   type: WsMessageType.RESP_PROFILE_COMPANIES;
   data: CompaniesData;
+}
+
+// --- Company Profit & Loss (CompanyPage.asp) ---
+export interface WsReqProfileCompanyProfitLoss extends WsMessage {
+  type: WsMessageType.REQ_PROFILE_COMPANY_PROFITLOSS;
+  companyName: string;
+  cluster: string;
+}
+
+export interface WsRespProfileCompanyProfitLoss extends WsMessage {
+  type: WsMessageType.RESP_PROFILE_COMPANY_PROFITLOSS;
+  companyName: string;
+  /** The parsed tree, or null when the page could not be read. */
+  data: ProfitLossData | null;
+  /** Why `data` is null — present exactly when it is. */
+  error?: string;
 }
 
 // --- Auto Connections ---

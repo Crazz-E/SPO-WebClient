@@ -6,12 +6,14 @@ import type {
   WsReqProfileAutoConnectionAction,
   WsReqProfilePolicySet,
   WsReqProfileCurriculumAction,
+  WsReqProfileCompanyProfitLoss,
   WsRespGetProfile,
   WsRespProfileCurriculum,
   WsRespProfileBank,
   WsRespProfileBankAction,
   WsRespProfileProfitLoss,
   WsRespProfileCompanies,
+  WsRespProfileCompanyProfitLoss,
   WsRespProfileAutoConnections,
   WsRespProfileAutoConnectionAction,
   WsRespProfilePolicy,
@@ -20,6 +22,7 @@ import type {
 } from '../../shared/types';
 import { WsMessageType } from '../../shared/types';
 import type { BankActionType, CurriculumActionType } from '../../shared/types';
+import { toErrorMessage } from '../../shared/error-utils';
 
 export async function handleGetProfile(ctx: WsHandlerContext, msg: WsMessage): Promise<void> {
   const profile = await ctx.session.fetchTycoonProfile();
@@ -85,6 +88,28 @@ export async function handleProfileCompanies(ctx: WsHandlerContext, msg: WsMessa
     wsRequestId: msg.wsRequestId,
     data,
   };
+  sendResponse(ctx.ws, response);
+}
+
+/**
+ * A failure travels in the typed response, not as RESP_ERROR: the client's
+ * RESP_ERROR branch (event-handler.ts:426-431) only logs and routes to the
+ * search menu, so it could never clear the company view.
+ */
+export async function handleProfileCompanyProfitLoss(ctx: WsHandlerContext, msg: WsMessage): Promise<void> {
+  const req = msg as WsReqProfileCompanyProfitLoss;
+  const companyName = typeof req.companyName === 'string' ? req.companyName.trim() : '';
+  const base = { type: WsMessageType.RESP_PROFILE_COMPANY_PROFITLOSS as const, wsRequestId: msg.wsRequestId, companyName };
+  let response: WsRespProfileCompanyProfitLoss;
+  if (!companyName) {
+    response = { ...base, data: null, error: 'A company name is required' };
+  } else {
+    try {
+      response = { ...base, data: await ctx.session.fetchCompanyProfitLoss(companyName, req.cluster ?? '') };
+    } catch (e: unknown) {
+      response = { ...base, data: null, error: toErrorMessage(e) };
+    }
+  }
   sendResponse(ctx.ws, response);
 }
 

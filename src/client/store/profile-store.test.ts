@@ -169,6 +169,60 @@ describe('Profile Store', () => {
     });
   });
 
+  describe('company Profit & Loss drill-down', () => {
+    const TREE = { root: { label: 'Net Profit (losses)', level: 0, amount: '1250000', children: [] } };
+
+    it('starts null', () => {
+      expect(useProfileStore.getState().companyProfitLoss).toBeNull();
+    });
+
+    it('openCompanyProfitLoss opens a loading view, without touching isLoading', () => {
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      expect(useProfileStore.getState().companyProfitLoss).toEqual({
+        companyName: 'Green Co', cluster: 'A', status: 'loading', data: null, error: null,
+      });
+      expect(useProfileStore.getState().isLoading).toBe(false);
+    });
+
+    it('setCompanyProfitLoss with data moves the view to loaded', () => {
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().setCompanyProfitLoss('Green Co', TREE);
+      expect(useProfileStore.getState().companyProfitLoss).toEqual({
+        companyName: 'Green Co', cluster: 'A', status: 'loaded', data: TREE, error: null,
+      });
+    });
+
+    it('setCompanyProfitLoss with null + error moves the view to error', () => {
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().setCompanyProfitLoss('Green Co', null, 'boom');
+      expect(useProfileStore.getState().companyProfitLoss).toEqual({
+        companyName: 'Green Co', cluster: 'A', status: 'error', data: null, error: 'boom',
+      });
+    });
+
+    it('a response for another company than the one currently open is ignored', () => {
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().setCompanyProfitLoss('Stale Co', TREE);
+      expect(useProfileStore.getState().companyProfitLoss).toMatchObject({ companyName: 'Green Co', status: 'loading' });
+    });
+
+    it('closeCompanyProfitLoss, setCurrentTab and reset all clear the view, none touches isLoading', () => {
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().closeCompanyProfitLoss();
+      expect(useProfileStore.getState().companyProfitLoss).toBeNull();
+
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().setCurrentTab('companies');
+      expect(useProfileStore.getState().companyProfitLoss).toBeNull();
+      expect(useProfileStore.getState().isLoading).toBe(false);
+
+      useProfileStore.getState().openCompanyProfitLoss('Green Co', 'A');
+      useProfileStore.getState().reset();
+      expect(useProfileStore.getState().companyProfitLoss).toBeNull();
+      expect(useProfileStore.getState().isLoading).toBe(false);
+    });
+  });
+
   describe('reset()', () => {
     it('should clear all tab data and increment counter on reset', () => {
       // Populate state
