@@ -912,6 +912,17 @@ export interface ProfitLossNode {
   children?: ProfitLossNode[];
 }
 
+// Declaration merging: adds the tax fields without touching the interface block above
+// (kept verbatim for the plan's invariant).
+export interface ProfitLossNode {
+  /** Tax account (TycoonProfitAndLoses.asp:167, :179 — Obj.AccountIsTax). On the level-2
+   *  header the page renders the Town / IFEL captions; on each row beneath, the split. */
+  isTax?: boolean;
+  /** The IFEL share of `amount` (:190, FormatValue(AccountSecValue)); Town = amount − secAmount
+   *  (:183). Only on a tax row deeper than level 2. Same signed, group-free format as `amount`. */
+  secAmount?: string;
+}
+
 export interface ProfitLossData {
   root: ProfitLossNode;
   /** `true` when the page carried "cannot retrieve Tycoon information from server"

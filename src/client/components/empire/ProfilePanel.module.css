@@ -478,6 +478,18 @@
   margin-left: var(--space-3);
 }
 
+.plSplit {
+  display: flex;
+  flex-shrink: 0;
+  margin-left: var(--space-3);
+}
+
+.plSplitCell {
+  min-width: 6.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .companyPlHeader {
   display: flex;
   align-items: center;

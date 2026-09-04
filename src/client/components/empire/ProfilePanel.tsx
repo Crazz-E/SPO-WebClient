@@ -644,12 +644,15 @@ function ProfitLossTab() {
   );
 }
 
-function ProfitLossNode({ node }: { node: ProfitLossNodeData }) {
+function ProfitLossNode({ node, inTaxSection = false }: { node: ProfitLossNodeData; inTaxSection?: boolean }) {
   const indent = node.level * 12;
   const history = node.chartData && node.chartData.length >= 2 ? node.chartData : null;
   const historySummary = history
     ? `Latest ${formatMoney(history[history.length - 1])} · High ${formatMoney(Math.max(...history))} · Low ${formatMoney(Math.min(...history))}`
     : undefined;
+  const isTaxHeader = node.isTax === true && node.isHeader === true;
+  const showSplit = isTaxHeader || inTaxSection;
+  const childInTaxSection = node.isHeader ? node.isTax === true : inTaxSection;
   return (
     <>
       <div
@@ -663,9 +666,36 @@ function ProfitLossNode({ node }: { node: ProfitLossNodeData }) {
           </span>
         )}
         <span className={`${styles.plAmount} ${node.amount.startsWith('-') ? styles.negativeValue : ''}`}>{node.amount}</span>
+        {showSplit && (
+          <span className={styles.plSplit}>
+            {isTaxHeader ? (
+              <>
+                <span className={styles.plSplitCell}>Town</span>
+                <span className={styles.plSplitCell}>IFEL</span>
+              </>
+            ) : node.secAmount !== undefined ? (
+              <>
+                {(() => {
+                  const town = String(Number(node.amount) - Number(node.secAmount));
+                  return (
+                    <>
+                      <span className={`${styles.plSplitCell} ${town.startsWith('-') ? styles.negativeValue : ''}`}>{town}</span>
+                      <span className={`${styles.plSplitCell} ${node.secAmount.startsWith('-') ? styles.negativeValue : ''}`}>{node.secAmount}</span>
+                    </>
+                  );
+                })()}
+              </>
+            ) : (
+              <>
+                <span className={styles.plSplitCell} />
+                <span className={styles.plSplitCell} />
+              </>
+            )}
+          </span>
+        )}
       </div>
       {node.children?.map((child, i) => (
-        <ProfitLossNode key={i} node={child} />
+        <ProfitLossNode key={i} node={child} inTaxSection={childInTaxSection} />
       ))}
     </>
   );

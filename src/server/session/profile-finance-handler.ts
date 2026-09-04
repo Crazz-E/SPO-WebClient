@@ -827,6 +827,12 @@ export async function fetchCompanyProfitLoss(ctx: SessionContext, companyName: s
  *     dropped (the node used to read `$0`);
  *   - `ChartInfo` (:151-153) is looked up inside the row, not in a 500-character
  *     window forward, which used to attribute the NEXT row's chart to this one.
+ *
+ * A tax account (`Obj.AccountIsTax(i)`) renders two extra cells in the same row: on the
+ * level-2 header, the `Town` / `IFEL` captions (:167-178, `isTax` on the header); on each
+ * row beneath, the split figures (:179-194) — Town = `AccountValue - AccountSecValue`,
+ * IFEL = `AccountSecValue`. Only the IFEL half is stored, as `secAmount`; Town is `amount −
+ * secAmount` by construction.
  */
 function parseProfitLossHtml(html: string): ProfitLossData {
   const root: ProfitLossNode = {
@@ -836,11 +842,15 @@ function parseProfitLossHtml(html: string): ProfitLossData {
     children: [],
   };
 
-  /** `ChartInfo=<count>,<values…>` inside this row only (up to its `</tr>`). */
-  function chartOf(fromIdx: number): number[] | undefined {
+  /** This row's markup only, from `fromIdx` up to its `</tr>` (or end of page). */
+  function rowScope(fromIdx: number): string {
     const rowEnd = html.indexOf('</tr>', fromIdx);
-    const scope = html.substring(fromIdx, rowEnd === -1 ? html.length : rowEnd);
-    const chartMatch = /ChartInfo=(\d+),([-\d,]+)/i.exec(scope);
+    return html.substring(fromIdx, rowEnd === -1 ? html.length : rowEnd);
+  }
+
+  /** `ChartInfo=<count>,<values…>` inside this row only. */
+  function chartOf(fromIdx: number): number[] | undefined {
+    const chartMatch = /ChartInfo=(\d+),([-\d,]+)/i.exec(rowScope(fromIdx));
     return chartMatch ? chartMatch[2].split(',').map(v => parseInt(v, 10)) : undefined;
   }
 
@@ -854,6 +864,14 @@ function parseProfitLossHtml(html: string): ProfitLossData {
   // Flush rows carrying a level-2 total: `style="color: white"` / `"color: #ff7700"`.
   const flushRegex = new RegExp(
     String.raw`<div\s+class=labelAccountLevel2\s+style="color:[^>]*>\s*(?:<[^>]*>\s*)*?(` + ASP_MONEY_SOURCE + `)`,
+    'gi',
+  );
+  // Tax section markers (TycoonProfitAndLoses.asp — rendered only when Obj.AccountIsTax(i)).
+  // Level-2 header caption cells (:167-178): `Town` / `IFEL`.
+  const TAX_CAPTION = /<div\s+class=labelAccountLevel2\s+align="right">/i;
+  // Level>2 split figure cells (:179-194): Town = AccountValue - AccountSecValue, then IFEL = AccountSecValue.
+  const TAX_SPLIT = new RegExp(
+    String.raw`<div\s+class=labelAccountLevel\d\s+style="color:\s*white;\s*padding-left:\s*20px"[^>]*>\s*(` + ASP_MONEY_SOURCE + `)`,
     'gi',
   );
 
@@ -902,7 +920,16 @@ function parseProfitLossHtml(html: string): ProfitLossData {
       isHeader: token.level === 2,
       children: [],
     };
-    if (token.level === 2) pendingLevel2 = node;
+    if (token.level === 2) {
+      pendingLevel2 = node;
+      if (TAX_CAPTION.test(rowScope(token.index))) node.isTax = true;
+    } else if (token.level > 2) {
+      const splitMatches = Array.from(rowScope(token.index).matchAll(TAX_SPLIT));
+      if (splitMatches.length >= 2) {
+        node.isTax = true;
+        node.secAmount = parseAspMoney(splitMatches[1][1]) ?? '0';
+      }
+    }
 
     nodes.push(node);
   }
