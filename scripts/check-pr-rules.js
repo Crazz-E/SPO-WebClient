@@ -43,8 +43,9 @@ function checkCitation(files, body) {
     ok: false,
     detail:
       `${touched.join(', ')} changed, but the PR body cites no server declaration.\n` +
-      `    A member's kind and arity come from ../SPO-Original/Rdo/Server/ — read it with\n` +
-      `    delphi-archaeologist and cite it as \`File.pas:Line\` in the PR body.`,
+      `    A member's kind and arity come from its declaring unit in ../SPO-Original\n` +
+      `    (Kernel/, DServer/, or Voyager/ — never Rdo/Server/, which is the transport) —\n` +
+      `    read it with delphi-archaeologist and cite it as \`File.pas:Line\` in the PR body.`,
   };
 }
 
