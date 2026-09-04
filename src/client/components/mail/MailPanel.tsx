@@ -233,15 +233,20 @@ export function MailPanel() {
               ← Back
             </button>
             <div className={styles.readActions}>
-              {/* A draft is unsent, so there is nobody to reply to — it is re-opened for editing. */}
-              {currentFolder === 'Draft' ? (
-                <button className={styles.actionBtn} onClick={() => startEditDraft(currentMessage)} aria-label="Edit draft" title="Edit draft">
-                  <PenSquare size={14} aria-hidden="true" />
-                </button>
-              ) : (
-                <button className={styles.actionBtn} onClick={() => startReply(currentMessage)} aria-label="Reply" title="Reply">
-                  <Reply size={14} aria-hidden="true" />
-                </button>
+              {/* Reply-only guard, matching MessageHeader.asp:197 — Forward (once it exists) stays outside it, as :217-221 does. */}
+              {currentMessage.noReply && currentFolder !== 'Draft' ? null : (
+                <>
+                  {/* A draft is unsent, so there is nobody to reply to — it is re-opened for editing. */}
+                  {currentFolder === 'Draft' ? (
+                    <button className={styles.actionBtn} onClick={() => startEditDraft(currentMessage)} aria-label="Edit draft" title="Edit draft">
+                      <PenSquare size={14} aria-hidden="true" />
+                    </button>
+                  ) : (
+                    <button className={styles.actionBtn} onClick={() => startReply(currentMessage)} aria-label="Reply" title="Reply">
+                      <Reply size={14} aria-hidden="true" />
+                    </button>
+                  )}
+                </>
               )}
               <button className={styles.actionBtn} onClick={handleDelete} aria-label="Delete" title="Delete">
                 <Trash2 size={14} aria-hidden="true" />
