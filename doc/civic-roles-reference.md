@@ -81,8 +81,8 @@ inherits tabs from a parent class; it does not. Each class record carries all it
 | 4 | `RESIDENTIALS` | `townRes` | `townRes` |
 | 5 | `VOTES` | `Votes` | `votes` |
 
-The Capitol shares `townJobs` with the Town Hall — **the president's minimum-wage sliders are real**
-and bind to the world floor, not to a town. The tab caption is misspelled `MINISTERIES` on screen
+The Capitol shares `townJobs` with the Town Hall. The president's sliders are real on the server and work in the WebClient, but are dead in Voyager: `TownHallJobsSheet.pas:142-145` prefers `ExtraSecurityId`, which `WorldPolitics.pas:1389` writes as a bare integer that `GrantAccess` (`Protocol.pas:428-430`) can never match — the WebClient repairs this by gating on `SecurityId` (`WorldPolitics.pas:1417`).
+The tab caption is misspelled `MINISTERIES` on screen
 while the grid header inside reads `Ministry`.
 
 ---
@@ -312,8 +312,10 @@ WebClient keeps Voyager's two captions and adds the `TownRating` figure under "R
 
 Below the list, `pnTax` — visible only with access — holds the tax control, an `edMayor` **free-text
 box**, and `btnElect`. There is **no candidate list**: the president types a username.
-`btnElectClick` requires only a selected row and a non-empty box (`:353-356`), so Voyager lets you
-click into the void on an occupied seat and the server ignores it.
+`lvTownsChange` hides `lbMayor`, `edMayor` and `btnElect` whenever the selected row has a mayor
+(`noMayor := lvTowns.Selected.ImageIndex = 0`, `:326-329`) and `Clear` hides all three too
+(`:159-161`); `btnElectClick` (`:353-356`) only checks a selected row and a non-empty box, but it
+is never reachable on an occupied seat because the button is hidden.
 
 ### 6.4 Capitol › MINISTERIES (`MinisteriesSheet.pas`)
 
@@ -329,8 +331,11 @@ budget widget does.
 ### 6.5 The Politics page (full-screen overlay)
 
 Reached from a `Visit Politics Page` / `Visit President Politics Page` button on the GENERAL tab.
-Four left-hand tabs: `POPULAR RATING`, `TYCOONS' RATINGS`, `IFEL's RATING`, `PUBLICITY`. The Capitol
-page lists 23 rating axes, the Town Hall page 15 — the difference is the eight ministries.
+Four left-hand tabs: `POPULAR RATING`, `TYCOONS' RATINGS`, `IFEL's RATING`, `PUBLICITY`. The rails
+are a directory walk — `popularratings.asp:58-59` iterates `FolderIterator.DirectoryIterator` over
+`Worlds\<world>\<Path>` — so the row count is per-world data the world's `RegisterPolitics`
+created, not fixed structure. The one observed figure is 15 rows on a Town Hall (2026-08-20 run,
+§7); the Capitol's count was not observed live.
 The right half carries `The Opposition`, the candidate list and a `YOUR CAMPAIGN` panel.
 
 `Rate the Mayor` opens the town newspaper (*"<Town> Herald"*): a column list plus a
@@ -347,6 +352,12 @@ The ASP pages call the rating and publicity members server-side; the client neve
 `:41`) and `RDOSetProjectData` (procedure, 3 — `:45`) **are already in the working tree's catalogue**,
 added ahead of their first call site with the Pascal declaration cited in place of a call site.
 `RDOGetRatingFrom` (function, 2 — `:39`) and `RDOLaunchCampaign` (function, 1 — `:43`) are not.
+The tournament-planet routing of `politics.asp:40-44` (`tycoonCampaignNoElections.asp` when
+`Elections` is false) is now covered: `getPoliticsData` reads `ElectionsOn` from `world.five` and
+sets `campaignState = 'noElections'` without fetching the campaign page
+(`src/server/session/politics-handler.ts:826-832`); `CampaignState` is declared at
+`src/shared/types/domain-types.ts:1107`. Closed by issue #497 ("Tournament planets still get an
+election countdown and a Launch Campaign button", merged as PR #679).
 
 ⚠ `RDOSetRatingFrom`, `RDOSetPublicity`, `RDOSetProjectData` and `RDOCancelCampaign` carry **no
 authorisation check whatsoever** server-side, and the ASP route carries the player's password in a
@@ -474,14 +485,14 @@ interval. The repeated reads buy freshness; they are not waste. The constant car
 
 ### Deliberate divergences
 
-Two places where matching Voyager exactly would be worse, and the WebClient should not:
+One place where matching Voyager exactly would be worse, and the WebClient should not:
 
-1. **Hide *Elect* on a town that already has a mayor.** Voyager lets the click through and the server
-   ignores it (§3.2 rule 1). Hiding makes a server rule legible instead of silent.
-2. **Show `TownRating` as a Rating column** on the Capitol's Towns grid — Voyager fetches it and
+1. **Show `TownRating` as a Rating column** on the Capitol's Towns grid — Voyager fetches it and
    drops it (§6.3). Commerce and Wealth carry the suffixes Voyager gave them.
 
-Both are recorded here so a later reader does not "fix" them back.
+This is recorded here so a later reader does not "fix" it back. Hiding *Elect* on a town that
+already has a mayor (`TownsTab.tsx`) is not a divergence: Voyager hides `lbMayor`, `edMayor` and
+`btnElect` on an occupied seat too (`CapitolTownsSheet.pas:326-329`, §6.3) — this is parity.
 
 ---
 
@@ -495,9 +506,14 @@ status table says what shipped against each.
 
 What remains:
 
-- **`OB-26`, in part.** The mock's `townTaxes` / `townServices` key divergences are fixed and pinned
-  by tests, but no civic *mutation* is simulated — there is still no mock RDO exchange for
-  `RDOSetTaxValue`, `RDOSitMayor` and the rest, and no HTTP mock for the Politics ASP pages.
+- **`OB-26` is closed, as issue #93.** `src/mock-server/scenarios/civic-mutations-scenario.ts`
+  supplies the write half of the Politics surface — one RDO exchange per civic mutation
+  (`RDOSetTaxValue` ×2, `RDOSetMinSalaryValue`, `RDOSetTownTaxes`, `RDOSitMayor`, `RDOSitMinister`,
+  `RDOBanMinister`, `RDOSetMinistryBudget`, `RDOVote`, `RDOSetRatingFrom`, `RDOSetPublicity`,
+  `RDOSetProjectData`) plus HTTP exchanges for the five Politics ASP pages. Its header still notes
+  that the three ASP mutation pages (`rdoModifyRating.asp`, `rdoModifyPub.asp`,
+  `rdoModifyProject.asp`) have no exchange **by design** — the gateway emits the procedures
+  directly, so the WebClient never fetches them.
 - **A `SEC-L-1` violation outside this subsystem.** The Politics and Newspaper log sites are redacted
   by `src/server/url-redact.ts`; `auto-connection-handler.ts` builds eight URLs carrying
   `Password=` and logs two of them unredacted.

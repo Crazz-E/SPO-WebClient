@@ -92,9 +92,9 @@ export function TownsTab({ properties, buildingX, buildingY, canGovern }: TownsT
                       `Mayor.SuperRole = nil` (WorldPolitics.pas:1801) and there
                       is no unseat call at all, so on an occupied seat the button
                       would send a frame the server discards without a word.
-                      Voyager does let you click into that void; we do not — a
-                      deliberate divergence, recorded in
-                      doc/civic-roles-reference.md §7. */}
+                      Voyager hides the box and the button too
+                      (CapitolTownsSheet.pas:326-329), so this is parity,
+                      recorded in doc/civic-roles-reference.md §7. */}
                   {row.hasMayor ? (
                     <span className={styles.actionUnavailable} title="A mayor only leaves by losing an election">
                       —
