@@ -621,6 +621,23 @@ describe('fetchCurriculumData', () => {
     expect(data.abilityLoanPoints).toBe(5);
   });
 
+  it('the "cannot retrieve" sentence flags cacheUnavailable', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(curriculumPage({ objValid: false }));
+    mockFetch.mockResolvedValue(htmlResponse(''));
+    const data = await fetchCurriculumData(fake.ctx);
+    expect(data.cacheUnavailable).toBe(true);
+    expect(data.curriculumItems).toEqual([]);
+  });
+
+  it('never throws when the re-fetch fails: flags cacheUnavailable instead', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockRejectedValue(new Error('ASP request failed: 500'));
+    mockFetch.mockResolvedValue(htmlResponse(''));
+    const data = await fetchCurriculumData(fake.ctx);
+    expect(data.cacheUnavailable).toBe(true);
+  });
+
   // Regression guard for B-20. `FormatValue` (:17-23) is
   // `FormatCurrency(v,0,0,0,-1)`: the 4th argument turns parentheses OFF, so a
   // negative balance renders `-$1,234,567` with the sign BEFORE the `$`. The
@@ -1194,10 +1211,27 @@ describe('fetchBankAccount', () => {
     expect(setCache(fake)).not.toHaveBeenCalled();
   });
 
-  it('propagates the session error when the ASP fetch fails (status guarded by fetchAspPage)', async () => {
+  it('never throws when the ASP fetch fails: returns the neutral default with cacheUnavailable', async () => {
     const fake = makeWebCtx();
     fetchAsp(fake).mockRejectedValue(new Error('ASP request failed: 500 Internal Server Error'));
-    await expect(fetchBankAccount(fake.ctx)).rejects.toThrow('ASP request failed: 500');
+    await expect(fetchBankAccount(fake.ctx)).resolves.toMatchObject({
+      loans: [], cacheUnavailable: true,
+    });
+  });
+
+  it('the "cannot retrieve" sentence flags cacheUnavailable instead of the parsed page', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(bankPage({ objValid: false }));
+    await expect(fetchBankAccount(fake.ctx)).resolves.toMatchObject({
+      loans: [], cacheUnavailable: true,
+    });
+  });
+
+  it('a page that parses carries no cacheUnavailable key', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(bankPage());
+    const data = await fetchBankAccount(fake.ctx);
+    expect(data).not.toHaveProperty('cacheUnavailable');
   });
 });
 
@@ -1258,6 +1292,15 @@ describe('executeBankAction', () => {
     fetchAsp(fake).mockRejectedValue(new Error('ASP request failed: 503 Service Unavailable'));
     expect(await executeBankAction(fake.ctx, 'borrow', '1')).toEqual({
       success: false, message: 'ASP request failed: 503 Service Unavailable',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses to move money when the "before" page carries the "cannot retrieve" sentence', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(bankPage({ objValid: false }));
+    expect(await executeBankAction(fake.ctx, 'borrow', '1')).toEqual({
+      success: false, message: 'borrow refused: the bank page cannot be read before the action',
     });
     expect(mockFetch).not.toHaveBeenCalled();
   });
@@ -1681,10 +1724,28 @@ describe('fetchProfitLoss', () => {
     expect(data.root.children![0].children).toEqual([]);
   });
 
-  it('propagates the session error when the ASP fetch fails', async () => {
+  it('never throws when the ASP fetch fails: returns the default root with cacheUnavailable', async () => {
     const fake = makeWebCtx();
     fetchAsp(fake).mockRejectedValue(new Error('ASP request failed: 500'));
-    await expect(fetchProfitLoss(fake.ctx)).rejects.toThrow('ASP request failed: 500');
+    await expect(fetchProfitLoss(fake.ctx)).resolves.toEqual({
+      root: { label: 'Net Profit (losses)', level: 0, amount: '0', children: [] },
+      cacheUnavailable: true,
+    });
+  });
+
+  it('the "cannot retrieve" sentence flags cacheUnavailable instead of the default root', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(
+      '<div class=header2 style="padding: 20px">\n\t\t\t\t    Sorry, cannot retrieve Tycoon information from server.\n\t\t\t\t</div>',
+    );
+    await expect(fetchProfitLoss(fake.ctx)).resolves.toMatchObject({ cacheUnavailable: true });
+  });
+
+  it('a page that parses carries no cacheUnavailable key', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(plRow(0, 'Net', '$1'));
+    const data = await fetchProfitLoss(fake.ctx);
+    expect(data).not.toHaveProperty('cacheUnavailable');
   });
 });
 
@@ -1818,11 +1879,21 @@ describe('fetchCompanies', () => {
   it('a failing ASP fetch is warned about and yields no companies, keeping current company and world', async () => {
     const fake = makeWebCtx();
     fetchAsp(fake).mockRejectedValue(new Error('ASP request failed: 500'));
-    expect(await fetchCompanies(fake.ctx)).toEqual({ companies: [], currentCompany: 'SPO_test3 - Green', worldName: 'Shamba' });
+    expect(await fetchCompanies(fake.ctx)).toEqual({
+      companies: [], currentCompany: 'SPO_test3 - Green', worldName: 'Shamba', cacheUnavailable: true,
+    });
     expect(fake.log.warn).toHaveBeenCalledWith('[Companies] ASP fetch failed:', expect.any(Error));
 
     const noWorld = makeWebCtx({ currentWorldInfo: null });
     fetchAsp(noWorld).mockRejectedValue(new Error('x'));
     expect((await fetchCompanies(noWorld.ctx)).worldName).toBe('');
+  });
+
+  it('the "cannot retrieve" sentence flags cacheUnavailable, with an empty list', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(
+      '<body>Sorry, cannot retrieve Tycoon information from server.</body>',
+    );
+    await expect(fetchCompanies(fake.ctx)).resolves.toMatchObject({ companies: [], cacheUnavailable: true });
   });
 });

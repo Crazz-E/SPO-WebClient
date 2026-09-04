@@ -14,7 +14,7 @@ import {
   GraduationCap, Landmark, TrendingUp, Factory, Link, Flag, X, Plus,
   RotateCcw, LogOut, Wrench, ChevronUp, ChevronRight, ArrowLeft, User,
 } from 'lucide-react';
-import { Skeleton, SkeletonLines, ConfirmDialog, Switch, Sparkline } from '../common';
+import { Skeleton, SkeletonLines, ConfirmDialog, Switch, Sparkline, ErrorState } from '../common';
 import { useProfileStore, type ProfileTab, type CompanyProfitLossView } from '../../store/profile-store';
 import { useGameStore } from '../../store/game-store';
 import { useUiStore } from '../../store/ui-store';
@@ -255,6 +255,7 @@ function CurriculumTab() {
   }, [client, confirmAction]);
 
   if (!data) return <EmptyState message="No curriculum data" />;
+  if (data.cacheUnavailable) return <ProfileUnavailable />;
 
   return (
     <div className={styles.tabBody}>
@@ -461,6 +462,7 @@ function BankTab() {
   }, [amount, data]);
 
   if (!data) return <EmptyState message="No bank data" />;
+  if (data.cacheUnavailable) return <ProfileUnavailable />;
 
   const handleBorrow = () => {
     if (!amount) return;
@@ -633,6 +635,7 @@ function BankTab() {
 function ProfitLossTab() {
   const data = useProfileStore((s) => s.profitLoss);
   if (!data) return <EmptyState message="No P&L data" />;
+  if (data.cacheUnavailable) return <ProfileUnavailable />;
 
   return (
     <div className={styles.tabBody}>
@@ -680,6 +683,7 @@ function CompaniesTab() {
   const isSwitchingCompany = useGameStore((s) => s.isSwitchingCompany);
 
   if (!data) return <EmptyState message="No companies data" />;
+  if (data.cacheUnavailable) return <ProfileUnavailable />;
   if (companyView) return <CompanyProfitLossView view={companyView} />;
 
   const openProfitLoss = (co: { name: string; cluster: string }) => {
@@ -788,6 +792,7 @@ function AutoConnectionsTab() {
   const client = useClient();
 
   if (!data) return <EmptyState message="No connections data" />;
+  if (data.cacheUnavailable) return <ProfileUnavailable />;
 
   const toggleOption = (fluidId: string, current: boolean, onAction: AutoConnectionActionType, offAction: AutoConnectionActionType) => {
     client.onProfileAutoConnectionAction(current ? offAction : onAction, fluidId);
@@ -894,7 +899,9 @@ function PolicyTab() {
   return (
     <div className={styles.tabBody}>
       {/* Existing policies table */}
-      {data && data.policies.length > 0 ? (
+      {data?.cacheUnavailable ? (
+        <ProfileUnavailable />
+      ) : data && data.policies.length > 0 ? (
         <div className={styles.tableWrap}>
           <table className={styles.table}>
             <thead>
@@ -983,6 +990,17 @@ function PolicyTab() {
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+/** The section's page came back as "cannot retrieve Tycoon information", or did not come back at all. */
+function ProfileUnavailable() {
+  return (
+    <ErrorState
+      title="The server could not read your profile"
+      description="This section is unavailable until the game server can read your tycoon again."
+      onRetry={() => useProfileStore.getState().incrementRefresh()}
+    />
+  );
+}
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (

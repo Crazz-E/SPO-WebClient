@@ -17,6 +17,7 @@ import { extractAllActionUrls } from '../asp-url-extractor';
 import { toErrorMessage } from '../../shared/error-utils';
 import { fetchWithTimeout } from '../fetch-with-timeout';
 import { requireDaParams } from './asp-da-params';
+import { isCacheUnavailablePage } from './asp-cache-unavailable';
 
 // ===========================================================================
 // ACTION-PAGE OUTCOME
@@ -62,10 +63,12 @@ export async function fetchAutoConnections(ctx: SessionContext): Promise<AutoCon
     const aspPath = 'NewTycoon/TycoonAutoConnections.asp';
     const baseUrl = ctx.buildAspUrl(aspPath, { RIWS: '' });
     const html = await ctx.fetchAspPage(aspPath, { RIWS: '' });
-    return parseAutoConnectionsHtml(ctx, html, baseUrl);
+    const data = parseAutoConnectionsHtml(ctx, html, baseUrl);
+    if (isCacheUnavailablePage(html)) data.cacheUnavailable = true;
+    return data;
   } catch (e: unknown) {
     ctx.log.warn('[AutoConnections] ASP fetch failed:', e);
-    return { fluids: [] };
+    return { fluids: [], cacheUnavailable: true };
   }
 }
 
@@ -332,10 +335,16 @@ export async function fetchPolicy(ctx: SessionContext): Promise<PolicyData> {
     const aspPath = 'NewTycoon/TycoonPolicy.asp';
     const baseUrl = ctx.buildAspUrl(aspPath, { RIWS: '' });
     const html = await ctx.fetchAspPage(aspPath, { RIWS: '' });
-    return parsePolicyHtml(ctx, html, baseUrl);
+    const data = parsePolicyHtml(ctx, html, baseUrl);
+    // TycoonPolicy.asp:246 guards on `FullAccess and ObjValid`, so a wrong
+    // password shows the same sentence — the page gives nothing to tell them
+    // apart, and "the server could not read your profile" is the honest
+    // rendering of both.
+    if (isCacheUnavailablePage(html)) data.cacheUnavailable = true;
+    return data;
   } catch (e: unknown) {
     ctx.log.warn('[Policy] ASP fetch failed:', e);
-    return { policies: [], alliesAllowed: true };
+    return { policies: [], alliesAllowed: true, cacheUnavailable: true };
   }
 }
 

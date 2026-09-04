@@ -412,8 +412,21 @@ describe('fetchAutoConnections', () => {
   it('returns no fluids and warns when the ASP fetch rejects', async () => {
     const fake = makeWebCtx();
     fetchAsp(fake).mockRejectedValue(new Error('HTTP 500'));
-    expect(await fetchAutoConnections(fake.ctx)).toEqual({ fluids: [] });
+    expect(await fetchAutoConnections(fake.ctx)).toEqual({ fluids: [], cacheUnavailable: true });
     expect(fake.log.warn).toHaveBeenCalledWith('[AutoConnections] ASP fetch failed:', expect.any(Error));
+  });
+
+  it('the "cannot retrieve" sentence flags cacheUnavailable, with an empty list', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(autoConnectionsPage([], { objValid: false }));
+    await expect(fetchAutoConnections(fake.ctx)).resolves.toEqual({ fluids: [], cacheUnavailable: true });
+  });
+
+  it('a page that parses carries no cacheUnavailable key', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(autoConnectionsPage([]));
+    const data = await fetchAutoConnections(fake.ctx);
+    expect(data).not.toHaveProperty('cacheUnavailable');
   });
 });
 
@@ -995,8 +1008,21 @@ describe('fetchPolicy', () => {
   it('returns no policies and warns when the ASP fetch rejects', async () => {
     const fake = makeWebCtx();
     fetchAsp(fake).mockRejectedValue(new Error('HTTP 500'));
-    expect(await fetchPolicy(fake.ctx)).toEqual({ policies: [], alliesAllowed: true });
+    expect(await fetchPolicy(fake.ctx)).toEqual({ policies: [], alliesAllowed: true, cacheUnavailable: true });
     expect(fake.log.warn).toHaveBeenCalledWith('[Policy] ASP fetch failed:', expect.any(Error));
+  });
+
+  it('the "cannot retrieve" sentence flags cacheUnavailable, with an empty list', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(policyPage([], { objValid: false }));
+    await expect(fetchPolicy(fake.ctx)).resolves.toMatchObject({ policies: [], cacheUnavailable: true });
+  });
+
+  it('a page that parses carries no cacheUnavailable key', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(policyPage([]));
+    const data = await fetchPolicy(fake.ctx);
+    expect(data).not.toHaveProperty('cacheUnavailable');
   });
 });
 
