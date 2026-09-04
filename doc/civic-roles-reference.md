@@ -303,8 +303,10 @@ A plain 3 × 5 label matrix — *Vacancies, Private Vacancies, Average Wage, Spe
 
 ### 6.3 Capitol › TOWNS (`CapitolTownsSheet.pas`)
 
-`lvTowns` columns: Name, Population, QOL, QOS, Wealth, Tax (`:118-124`). The `.dfm` captions the QOS
-column **"Commerce"** — a legacy mislabel; the data behind it is `TownQOS<i>`.
+`lvTowns` columns: Name, Population, QOL, QOS, Wealth, Tax (`:118-124`). The `.dfm` captions the
+`TownQOS` column **"Commerce"** and the `TownWealth` column **"Wealth"**; `TownRating`
+(`OverallRating`, `Kernel/Population.pas:990`) is fetched (`:198`) but never displayed. The
+WebClient keeps Voyager's two captions and adds the `TownRating` figure under "Rating".
 
 `HasMayor<i>` drives the row **icon** (`ImageIndex` 0 / 1, `:126-128`), not a column.
 
@@ -476,8 +478,8 @@ Two places where matching Voyager exactly would be worse, and the WebClient shou
 
 1. **Hide *Elect* on a town that already has a mayor.** Voyager lets the click through and the server
    ignores it (§3.2 rule 1). Hiding makes a server rule legible instead of silent.
-2. **Show Commerce and QoS as separate columns** on the Capitol's Towns grid, rather than reproducing
-   the legacy mislabel described in §6.3.
+2. **Show `TownRating` as a Rating column** on the Capitol's Towns grid — Voyager fetches it and
+   drops it (§6.3). Commerce and Wealth carry the suffixes Voyager gave them.
 
 Both are recorded here so a later reader does not "fix" them back.
 

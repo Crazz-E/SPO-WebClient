@@ -741,14 +741,17 @@ export const CAPITOL_TOWNS_GROUP: PropertyGroup = {
       type: PropertyType.TABLE,
       indexed: true,
       countProperty: 'TownCount',
+      // Voyager/CapitolTownsSheet.pas:120-125 captions the TownQOS column "Commerce" and the
+      // TownWealth column "Wealth"; the three figures are written at
+      // Kernel/WorldPolitics.pas:1379-1384.
       columns: [
         { rdoSuffix: 'Town', label: 'Name', type: PropertyType.TEXT, width: '14%' },
         { rdoSuffix: 'TownPopulation', label: 'Population', type: PropertyType.NUMBER, width: '12%' },
         { rdoSuffix: 'TownQOL', label: 'QOL', type: PropertyType.PERCENTAGE, width: '10%' },
-        { rdoSuffix: 'TownRating', label: 'Commerce', type: PropertyType.PERCENTAGE, width: '10%' },
+        { rdoSuffix: 'TownRating', label: 'Rating', type: PropertyType.PERCENTAGE, width: '10%' },
+        { rdoSuffix: 'TownQOS', label: 'Commerce', type: PropertyType.PERCENTAGE, width: '10%' },
         { rdoSuffix: 'TownWealth', label: 'Wealth', type: PropertyType.PERCENTAGE, width: '10%' },
         { rdoSuffix: 'TownTax', label: 'Tax', type: PropertyType.SLIDER, width: '14%', editable: true, min: 0, max: 100, step: 1 },
-        { rdoSuffix: 'TownQOS', label: 'QoS', type: PropertyType.PERCENTAGE, width: '10%' },
         { rdoSuffix: 'HasMayor', label: 'Mayor', type: PropertyType.BOOLEAN, width: '8%' },
         { rdoSuffix: 'electMayor', label: '', type: PropertyType.ACTION_BUTTON, width: '12%', actionId: 'electMayor', buttonLabel: 'Elect' },
       ],
