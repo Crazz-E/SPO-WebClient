@@ -73,14 +73,17 @@ export function parseMessageListHtml(html: string, folder: MailFolder): MailMess
       || /unread/i.test(rowHtml)
       || /newmail/i.test(rowHtml);
 
-    const isSentFolder = folder.toLowerCase() === 'sent';
+    // Sent and Draft are outgoing folders: the person column is the recipient.
+    // Inbox is the only incoming folder: the person column is the sender.
+    const lower = folder.toLowerCase();
+    const isOutgoingFolder = lower === 'sent' || lower === 'draft';
 
     const header: MailMessageHeader = {
       messageId,
       fromAddr: '',     // Not available from listing HTML
       toAddr: '',       // Not available from listing HTML
-      from: isSentFolder ? '' : personName,
-      to: isSentFolder ? personName : '',
+      from: isOutgoingFolder ? '' : personName,
+      to: isOutgoingFolder ? personName : '',
       subject,
       date: '',         // Raw float not in listing HTML
       dateFmt,
