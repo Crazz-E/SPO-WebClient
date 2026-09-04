@@ -5,12 +5,12 @@
  * Folder tabs at top, message list scrollable, compose form.
  */
 
-import { useCallback, useEffect, memo } from 'react';
+import { useCallback, useEffect, useRef, memo } from 'react';
 import { Send, Trash2, Reply, PenSquare, Save } from 'lucide-react';
 import { useMailStore } from '../../store/mail-store';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
-import { TabBar, Skeleton } from '../common';
+import { TabBar, Skeleton, showToast } from '../common';
 import type { MailFolder, MailMessageHeader } from '@/shared/types';
 import { isHtmlContent } from '@/shared/mail-html-utils';
 import { HtmlMailBody } from './HtmlMailBody';
@@ -21,6 +21,10 @@ const FOLDERS: { id: MailFolder; label: string; badge?: boolean }[] = [
   { id: 'Sent', label: 'Sent' },
   { id: 'Draft', label: 'Drafts' },
 ];
+
+// Client-side budget on a letter body — the server has no documented limit, so this is
+// a sane cap chosen to keep a paste from silently becoming an unusable wall of text.
+export const MAIL_BODY_MAX_CHARS = 10240;
 
 interface MailMessageRowProps {
   msg: MailMessageHeader;
@@ -101,12 +105,36 @@ export function MailPanel() {
   // The draft is kept until the server answers: RESP_MAIL_SENT clears it on success and a
   // failure leaves it in place with a toast (audit P2). Sending twice is blocked meanwhile.
   const isBusy = isSending || isSavingDraft;
-  const canSend = composeTo.trim().length > 0 && !isBusy;
+  const canSend = composeTo.trim().length > 0 && composeSubject.trim().length > 0 && !isBusy;
   const handleSend = useCallback(() => {
     if (!canSend) return;
     setSending(true);
     client.onMailSend(composeTo.trim(), composeSubject, composeBody);
   }, [canSend, setSending, client, composeTo, composeSubject, composeBody]);
+
+  // Warn once per compose session — a pasted-in wall of text should not toast on every
+  // keystroke once it is already clipped to the cap.
+  const bodyWarnedRef = useRef(false);
+  useEffect(() => {
+    if (currentView === 'compose') bodyWarnedRef.current = false;
+  }, [currentView]);
+  const handleBodyChange = useCallback(
+    (value: string) => {
+      if (value.length > MAIL_BODY_MAX_CHARS) {
+        if (!bodyWarnedRef.current) {
+          bodyWarnedRef.current = true;
+          showToast(
+            `The message was cut to ${MAIL_BODY_MAX_CHARS} characters — that is the most a letter can hold.`,
+            'warning',
+          );
+        }
+        setComposeField('body', value.slice(0, MAIL_BODY_MAX_CHARS));
+        return;
+      }
+      setComposeField('body', value);
+    },
+    [setComposeField],
+  );
 
   // A draft is what you keep BEFORE you have a recipient, so — unlike Send — it asks
   // for no address: anything typed is enough. Editing an existing draft carries its id,
@@ -243,10 +271,14 @@ export function MailPanel() {
             className={styles.composeInput}
             placeholder="To"
             aria-label="To"
+            aria-describedby="mail-to-hint"
             value={composeTo}
             onChange={(e) => setComposeField('to', e.target.value)}
             disabled={isBusy}
           />
+          <span className={styles.composeHint} id="mail-to-hint">
+            Several recipients? Separate the addresses with ;
+          </span>
           <input
             className={styles.composeInput}
             placeholder="Subject"
@@ -259,13 +291,23 @@ export function MailPanel() {
             className={styles.composeBody}
             placeholder="Message..."
             aria-label="Message"
+            aria-describedby="mail-body-counter"
             value={composeBody}
-            onChange={(e) => setComposeField('body', e.target.value)}
+            onChange={(e) => handleBodyChange(e.target.value)}
             rows={8}
             disabled={isBusy}
           />
+          <span className={styles.composeCounter} role="status" aria-live="polite" id="mail-body-counter">
+            {MAIL_BODY_MAX_CHARS - composeBody.length} characters left
+          </span>
           <div className={styles.composeActions}>
-            <button className={styles.sendBtn} onClick={handleSend} disabled={!canSend} aria-busy={isSending || undefined} title={composeTo.trim() ? undefined : 'Add a recipient'}>
+            <button
+              className={styles.sendBtn}
+              onClick={handleSend}
+              disabled={!canSend}
+              aria-busy={isSending || undefined}
+              title={!composeTo.trim() ? 'Add a recipient' : !composeSubject.trim() ? 'Add a subject' : undefined}
+            >
               <Send size={14} aria-hidden="true" />
               <span>{isSending ? 'Sending…' : 'Send'}</span>
             </button>

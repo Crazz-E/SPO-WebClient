@@ -221,7 +221,10 @@ describe('ClientBridge mail responses (T6)', () => {
     expect(s.currentView).toBe('compose');
     expect(s.composeTo).toBe('bob');
     expect(s.isSending).toBe(false);
-    expect(showToast).toHaveBeenCalledWith('Message not sent. Your draft is kept.', 'error');
+    expect(showToast).toHaveBeenCalledWith(
+      'Message not sent. Most likely one of the recipients does not exist — the server does not say which. Your draft is kept.',
+      'error',
+    );
   });
 
   it('a successful send clears the draft and asks for the folder to be read again', () => {
