@@ -170,6 +170,7 @@ export const useMailStore = create<MailState>((set) => ({
       composeBody: message.body.join('\n'),
       composeHeaders: '',
       composeDraftId: message.messageId,
+      isMessageLoading: false,
     }),
 
   clearCompose: () =>

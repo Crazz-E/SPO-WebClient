@@ -671,7 +671,9 @@ export const ClientBridge = {
       }
       case WsMessageType.RESP_MAIL_MESSAGE: {
         const resp = msg as WsRespMailMessage;
-        mail.setCurrentMessage(resp.message);
+        // A draft is unsent, so there is nothing to "read" — the row opens it for editing (#511).
+        if (mail.currentFolder === 'Draft') mail.startEditDraft(resp.message);
+        else mail.setCurrentMessage(resp.message);
         break;
       }
       case WsMessageType.RESP_MAIL_SENT: {

@@ -215,6 +215,57 @@ describe('ClientBridge mail responses (T6)', () => {
     showToast.mockClear();
   });
 
+  it('RESP_MAIL_MESSAGE in the Draft folder opens the composer with the draft filled', () => {
+    useMailStore.setState({ currentFolder: 'Draft', currentView: 'list', isMessageLoading: true });
+    const message = {
+      messageId: 'draft-4',
+      fromAddr: 'me@starworld.net',
+      toAddr: 'bob@starworld.net',
+      from: 'Me',
+      to: 'Bob',
+      subject: 'Hi',
+      date: '1',
+      dateFmt: '1',
+      read: true,
+      stamp: 0,
+      noReply: false,
+      body: ['line one', 'line two'],
+      attachments: [],
+    };
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_MESSAGE, message } as never);
+    const s = useMailStore.getState();
+    expect(s.currentView).toBe('compose');
+    expect(s.composeDraftId).toBe('draft-4');
+    expect(s.composeTo).toBe('bob@starworld.net');
+    expect(s.composeSubject).toBe('Hi');
+    expect(s.composeBody).toBe('line one\nline two');
+    expect(s.isMessageLoading).toBe(false);
+  });
+
+  it('RESP_MAIL_MESSAGE in the Inbox folder opens the read view', () => {
+    useMailStore.setState({ currentFolder: 'Inbox', currentView: 'list', isMessageLoading: true, composeDraftId: null });
+    const message = {
+      messageId: 'msg-1',
+      fromAddr: 'alice@starworld.net',
+      toAddr: 'me@starworld.net',
+      from: 'Alice',
+      to: 'Me',
+      subject: 'Hello',
+      date: '1',
+      dateFmt: '1',
+      read: true,
+      stamp: 0,
+      noReply: false,
+      body: ['hi there'],
+      attachments: [],
+    };
+    ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_MESSAGE, message } as never);
+    const s = useMailStore.getState();
+    expect(s.currentView).toBe('read');
+    expect(s.currentMessage).toEqual(message);
+    expect(s.composeDraftId).toBeNull();
+  });
+
   it('a failed send keeps the draft and says so', () => {
     ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_SENT, success: false } as never);
     const s = useMailStore.getState();
