@@ -564,9 +564,75 @@ Two things follow, in this order of importance:
    loop's. `reset` and `clean` never retry — they are local and deterministic, and a second
    run would only hide a real error.
 
+   Every attempt is numbered **in the job log itself**, not just the worker's own journal:
+   `--- git fetch: attempt n/3 ---` before the child runs, then either
+   `git fetch: succeeded on attempt n/3` or, on exhaustion,
+   `git fetch: failed after 3 attempts (last exit c)`. A retried success is distinguishable
+   from a first-try one by reading `done/<id>.log` or `nightly/prepare.log` alone.
+
+   The bound is sized from the corpus, not guessed: `done/` on 2026-09-04 held 7
+   ENVIRONMENT jobs, all `git fetch failed while fetching …`, all one episode
+   (07:44:26Z–07:49:22Z, a floor of 296 s with **no observed ceiling** — one episode, not
+   seven independent samples). Surviving that floor would take ≥ 296 s of patience — 2.3×
+   the 128 s median `ref` job on a serialised bench — for a cause the token above already
+   removes, and which produced zero fetch failures and zero retries in the worker journal
+   since. No bound sized from this corpus could honestly claim to survive "an episode", so
+   `[2_000, 8_000]` is an **honest partial mitigation**, sized on the cost side (10 s ≈ 8 %
+   of a median job) for the ordinary transient, not a throttle survivor.
+
+   `worker.ts`'s separate `git fetch --quiet origin main` (the `origin/main` refresh before
+   `verify-gate`, ~worker.ts:799) is deliberately **not** wrapped in this retry: its failure
+   is already ignored (`worker.test.ts:691-696` pins a 128 exit as still `PASS`), so it has
+   never produced an ENVIRONMENT and is not part of the corpus above; for `ref` jobs it is
+   redundant since `prepareRef` just ran a retried fetch; for `live`/`lease` jobs a missed
+   refresh only leaves `baseMain` naming a lagging local ref, a precision loss in the
+   attestation, not a lost job.
+
 If `gh auth token` produces nothing, the fetch is anonymous exactly as it was before and a
 line says so. A missing token must never turn a job that would have worked into one that
 fails.
+
+### SSH remotes vs a credential store — recommendation
+
+**Recommendation: neither. Keep HTTPS with the `extraheader` token above; propose no
+operational change today.**
+
+Facts read on this machine (read-only): all three live checkouts —
+`/home/crazz/SPO-WebClient`, `~/.spo-bench/ref/checkout`, `~/.spo-bench/nightly/checkout` —
+use `https://github.com/Crazz-Org/SPO-WebClient.git`; `~/.ssh` holds only
+`authorized_keys` (no key pair, no `known_hosts`; `ssh -T git@github.com` fails host
+verification); the global credential helper is `!/usr/bin/gh auth git-credential`; the
+worker runs from `/home/crazz/SPO-WebClient` under systemd with `HOME=/home/crazz`.
+
+- A **credential store** (`credential.helper store` / libsecret) is *ineffective* here, not
+  merely undesirable: git only consults a helper after a `401`, and GitHub answers `200` to
+  anonymous reads of a public repo — a stored token would never be sent. It would also put
+  a plaintext credential at rest in `~/.git-credentials`, the exact thing the `extraheader`
+  approach above was built to avoid.
+- **SSH remotes** would work and would remove HTTP throttling entirely, but add a second
+  credential to manage (a deploy key with its own rotation, outside `gh`), need a
+  `known_hosts` entry the box does not have, and make the `extraheader` token inert — a
+  silent no-op nobody would notice. The token path is live, authenticated, and has shown
+  zero throttle refusals since it shipped. Switching transports now would be change without
+  a measured problem.
+
+If the maintainer still wants SSH as belt-and-braces, the exact commands — **proposed, not
+run**, applied only by the maintainer with the worker stopped:
+
+```bash
+ssh-keygen -t ed25519 -C "spo-bench@$(hostname)" -f ~/.ssh/spo-bench -N ""
+gh repo deploy-key add ~/.ssh/spo-bench.pub --repo Crazz-Org/SPO-WebClient --title spo-bench   # read-only deploy key
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+printf 'Host github.com\n  IdentityFile ~/.ssh/spo-bench\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+git -C ~/.spo-bench/ref/checkout remote set-url origin git@github.com:Crazz-Org/SPO-WebClient.git
+git -C ~/.spo-bench/nightly/checkout remote set-url origin git@github.com:Crazz-Org/SPO-WebClient.git
+git -C /home/crazz/SPO-WebClient remote set-url origin git@github.com:Crazz-Org/SPO-WebClient.git   # prepareCheckout clones from this remote's URL
+git -C ~/.spo-bench/ref/checkout ls-remote origin HEAD   # verify before restarting the worker
+```
+
+Reversal: `remote set-url origin https://github.com/Crazz-Org/SPO-WebClient.git` on the
+same three checkouts. On SSH, `NETWORK_SUBCOMMANDS`'s auth env is harmless but does
+nothing.
 
 ## 11. The push chain after #158 stage C
 

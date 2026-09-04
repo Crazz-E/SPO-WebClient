@@ -497,3 +497,85 @@ describe('prepareCheckout — retrying a network step', () => {
     expect(total).toBeLessThanOrEqual(30_000);
   });
 });
+
+describe('prepareCheckout — the job log tells a retried success from a first-try one', () => {
+  const ATTEMPTS = NETWORK_RETRY_DELAYS_MS.length + 1;
+
+  const prep = (h: Harness, dir: string, logFile: string): Promise<{ failed: string | null }> =>
+    prepareCheckout(h.deps, { dir, ref: 'origin/main', workerRepo: '/repo', logFile }, git);
+
+  const readLog = (logFile: string): string => fs.readFileSync(logFile, 'utf8');
+
+  it('a first-try success names attempt 1 and nothing higher', async () => {
+    const h = harness();
+    const logFile = path.join(tempDir(), 'p.log');
+    await prep(h, clonedDir(), logFile);
+
+    const log = readLog(logFile);
+    expect(log).toContain(`--- git fetch: attempt 1/${ATTEMPTS} ---`);
+    expect(log).toContain(`git fetch: succeeded on attempt 1/${ATTEMPTS}`);
+    expect(log).not.toContain('attempt 2/');
+    expect(log).not.toContain('retrying');
+  });
+
+  it('a success after N failures is readable from the log alone, in order', async () => {
+    const h = harness();
+    h.exitCodes = [1, 1, 0];
+    const logFile = path.join(tempDir(), 'p.log');
+    const result = await prep(h, clonedDir(), logFile);
+
+    expect(result.failed).toBeNull();
+    const log = readLog(logFile);
+    expect(log.indexOf(`--- git fetch: attempt 1/${ATTEMPTS} ---`)).toBeGreaterThanOrEqual(0);
+    const i1 = log.indexOf(`--- git fetch: attempt 1/${ATTEMPTS} ---`);
+    const i2 = log.indexOf(`--- git fetch: attempt 2/${ATTEMPTS} ---`);
+    const i3 = log.indexOf(`--- git fetch: attempt 3/${ATTEMPTS} ---`);
+    expect(i1).toBeLessThan(i2);
+    expect(i2).toBeLessThan(i3);
+    expect(log).toContain('git fetch: exited 1 — retrying in 2000ms');
+    expect(log).toContain('git fetch: exited 1 — retrying in 8000ms');
+    expect(log).toContain(`git fetch: succeeded on attempt ${ATTEMPTS}/${ATTEMPTS}`);
+    expect(h.slept).toEqual(NETWORK_RETRY_DELAYS_MS);
+  });
+
+  it('exhaustion names the attempt count and never claims success', async () => {
+    const h = harness();
+    h.exitCodes = [1, 1, 1];
+    const logFile = path.join(tempDir(), 'p.log');
+    const result = await prep(h, clonedDir(), logFile);
+
+    expect(result.failed).toBe('git fetch');
+    const log = readLog(logFile);
+    expect(log).toContain(`git fetch: failed after ${ATTEMPTS} attempts (last exit 1)`);
+    expect(log).not.toContain('succeeded');
+    expect(log.match(/attempt \d\/\d ---/g)).toHaveLength(ATTEMPTS);
+  });
+
+  it('the clone gets the same per-attempt lines as the fetch', async () => {
+    const h = harness();
+    const logFile = path.join(tempDir(), 'p.log');
+    await prep(h, path.join(tempDir(), 'fresh'), logFile);
+
+    const log = readLog(logFile);
+    expect(log).toContain(`--- git clone: attempt 1/${ATTEMPTS} ---`);
+    expect(log).toContain(`git clone: succeeded on attempt 1/${ATTEMPTS}`);
+  });
+
+  it('runs under a throwaway SPO_BENCH_DIR, never the real one', () => {
+    expect(process.env.SPO_BENCH_DIR).toBeDefined();
+    expect((process.env.SPO_BENCH_DIR as string).startsWith(os.tmpdir())).toBe(true);
+    const logFile = path.join(tempDir(), 'p.log');
+    expect(logFile.startsWith(os.tmpdir())).toBe(true);
+  });
+
+  it('local steps write no attempt lines of their own', async () => {
+    const h = harness();
+    const logFile = path.join(tempDir(), 'p.log');
+    await prep(h, clonedDir(), logFile);
+
+    const log = readLog(logFile);
+    expect(log.match(/^--- git fetch: attempt 1\//gm)).toHaveLength(1);
+    expect(log).not.toMatch(/reset.*attempt/);
+    expect(log).not.toMatch(/clean.*attempt/);
+  });
+});

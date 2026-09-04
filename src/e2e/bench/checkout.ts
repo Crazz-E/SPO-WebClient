@@ -154,6 +154,19 @@ export function needsInstall(dir: string, exists: (p: string) => boolean = fs.ex
  * It stays short because the bench is serialised: every second spent retrying is a second
  * no other job can run. Waiting out a multi-minute outage is not this loop's job; failing
  * honestly and letting the caller resubmit is.
+ *
+ * Sized against the corpus, not guessed: `done/` on 2026-09-04 held 7 ENVIRONMENT jobs, all
+ * `git fetch failed while fetching …`, all one episode — 07:44:26Z to (at least) 07:49:22Z,
+ * a floor of 296 s with **no observed ceiling** (one episode, not seven independent
+ * samples). Surviving that floor would need ≥ 296 s of patience — 2.3× the 128 s median
+ * `ref` job on a serialised bench — for a cause (`anonymous` throttling) that the token in
+ * `git-auth.ts` already removes, and that produced zero fetch failures and zero retries in
+ * the ~370 lines of worker journal since. No bound sized from this corpus could honestly
+ * claim to survive "an episode"; `[2_000, 8_000]` is therefore an **honest partial
+ * mitigation** — sized on the cost side (10 s ≈ 8 % of a median job) for the ordinary
+ * transient, not a throttle survivor. `worker.ts`'s separate best-effort `origin/main`
+ * refresh (~worker.ts:799) is deliberately not wrapped in this retry — see the comment
+ * there for why.
  */
 export const NETWORK_RETRY_DELAYS_MS = [2_000, 8_000];
 
@@ -163,6 +176,11 @@ export const NETWORK_RETRY_DELAYS_MS = [2_000, 8_000];
  * Only ever used for `clone` and `fetch`. `reset`, `clean` and `merge` are local and
  * deterministic: retrying those would not fix anything and would turn a real error into
  * three copies of itself in the log.
+ *
+ * Every attempt is numbered in `options.logFile`, not just `deps.log` (which reaches only
+ * the worker's own stdout/journal): a first-try success and a retried one must be
+ * distinguishable by reading the job log alone. The marker is written *before* the child
+ * runs, so git's own stderr for that attempt lands under the marker it belongs to.
  */
 async function runNetworkCommand(
   deps: CheckoutDeps,
@@ -172,14 +190,24 @@ async function runNetworkCommand(
   options: CheckoutCommandOptions,
   delays: number[] = NETWORK_RETRY_DELAYS_MS,
 ): Promise<number> {
-  let code = await deps.runCommand(cmd, args, options);
-  for (const delay of delays) {
-    if (code === 0) return code;
+  const attempts = delays.length + 1;
+  for (let attempt = 1; ; attempt++) {
+    fs.appendFileSync(options.logFile, `--- ${name}: attempt ${attempt}/${attempts} ---\n`, 'utf8');
+    const code = await deps.runCommand(cmd, args, options);
+    if (code === 0) {
+      fs.appendFileSync(options.logFile, `${name}: succeeded on attempt ${attempt}/${attempts}\n`, 'utf8');
+      return code;
+    }
+    if (attempt > delays.length) {
+      fs.appendFileSync(options.logFile, `${name}: failed after ${attempts} attempts (last exit ${code})\n`, 'utf8');
+      deps.log(`checkout: ${name} failed after ${attempts} attempts — last exit ${code}`);
+      return code;
+    }
+    const delay = delays[attempt - 1];
+    fs.appendFileSync(options.logFile, `${name}: exited ${code} — retrying in ${delay}ms\n`, 'utf8');
     deps.log(`checkout: ${name} exited ${code} — retrying in ${delay}ms`);
     await deps.sleep(delay);
-    code = await deps.runCommand(cmd, args, options);
   }
-  return code;
 }
 
 /**

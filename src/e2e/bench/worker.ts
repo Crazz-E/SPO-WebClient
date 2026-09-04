@@ -795,7 +795,14 @@ export async function runJob(deps: WorkerDeps, request: JobRequest): Promise<Job
   }
 
   // Refresh origin/main so verify-gate judges the branch against the real main, not a
-  // lagging local one. Best-effort: offline, the gate falls back on its own.
+  // lagging local one. Best-effort, deliberately unretried — out of scope for #654's retry:
+  // its failure is ignored on purpose (worker.test.ts:691-696 pins a 128 exit as still
+  // PASS), so it has never produced an ENVIRONMENT and is not part of the 7/66 corpus. For
+  // `ref` jobs it is redundant — prepareRef already ran a retried `git fetch` moments ago,
+  // so origin/main here is already the real tip. For `live`/`lease` jobs a missed refresh
+  // only leaves `baseMain` naming a lagging local ref — a precision loss in the
+  // attestation's base, not a lost job — and retrying it would spend bench time to improve
+  // a field, and would break the exit-code queue the worker tests rely on.
   await deps.runCommand('git', ['fetch', '--quiet', 'origin', 'main'], {
     cwd: request.worktree,
     logFile,
