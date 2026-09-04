@@ -202,9 +202,9 @@ describe('the mechanism is named on all four surfaces', () => {
     expect(mergingIdx).toBe(validationIdx + 1);
   });
 
-  it('names ten columns in both the rulebook and CLAUDE.md', () => {
+  it('names ten columns in the rulebook, in both its heading and its short form', () => {
     expect(rulebook).toMatch(/## The board — ten columns/);
-    expect(claudeMd).toMatch(
+    expect(rulebook).toMatch(
       /ten columns \(Intake · Todo ·\s+Planning · Implementing · Checks & PR · Gate · Validation · Merging · Done · Parked\)/
     );
   });
@@ -233,8 +233,8 @@ describe('the mechanism is named on all four surfaces', () => {
     expect(claudeMd).toMatch(/\|\s*`change-validator`\s*\|\s*Fable\s*\|/);
   });
 
-  it('is in the CLAUDE.md filing-route sentence, bounded to ground the diff touched', () => {
-    const text = collapse(claudeMd);
+  it('is in the filing-route sentence, bounded to ground the diff touched', () => {
+    const text = collapse(rulebook);
     expect(text).toMatch(/a `PASS WITH FINDINGS` verdict from the `change-validator` sub-agent/);
     expect(text).toMatch(/bounded to ground the diff touched/);
   });

@@ -196,6 +196,16 @@ Only the worker writes attestations. A session cannot unblock its own push, and 
 cannot merge on CI alone — the live evidence must exist even if the local hook were
 sidestepped.
 
+**An update is finished only after `npm run finish`.** It refuses unless the PR is MERGED, then
+fast-forwards `~/SPO-WebClient`, prunes stale refs, reinstalls the bench worker if the merge
+touched `src/e2e/bench/` or `scripts/bench-*`, and **retires** this worktree — it stays on disk
+while a session stands in it, and the next run reaps it (it also heals worktrees a previous
+session forgot). **A session may keep working after `finish`**: a process standing anywhere inside the worktree
+protects it, and that is the only thing that does. A per-session heartbeat was the second
+protection until #441 removed it — its writer had gone with the pilot hooks in #425, so it had
+been abstaining on every worktree since. Keep a shell inside the tree if you want the ground to
+stay. `npm run finish -- --now` removes immediately, for a human on the way out.
+
 ### The gate base
 
 Every attestation records `baseMain`: the `origin/main` sha the run was judged against,
@@ -279,6 +289,32 @@ the exit code cannot fail that way.
 The same reflex applies one level down, inside the live drive: a mutation is proven by the
 `FIVEMODELSERVER/Survival` log line, never by a `success: true` in a response
 (E2E-POLICY.md, `OB-28`).
+
+#### The session-side rules
+
+**The live bench has one owner: the bench worker.** Many sessions run on this machine, but
+port 8080, the LOCKED accounts and the Helartia world state belong to one permanent process
+(systemd --user unit `spo-bench-worker`, installed by `scripts/bench-install.sh`). Sessions
+never start a gateway, never kill a process, never hold a lock: they deposit a job and wait for
+the report — one background command, zero tokens. **Background it with the tool's own
+`run_in_background`, never with a trailing `&`**: the shell then reports the fork rather
+than the run, so the exit code is 0 whatever happened and the verdict is destroyed before
+anyone reads it. The redirect to a log file is fine and needs no permission; only the
+ampersand does. Jobs run one at a time, oldest first,
+each in the depositing session's worktree, which the worker builds. `npm run dev:local` is the
+conscious exception, for debugging only — its results attest nothing.
+`.claude/hooks/bench-port-guard.sh` refuses every other route to the port and to the live
+world, naming the sanctioned form in the refusal.
+
+**Read the verdict from the exit code, never from the printed report** — 0 PASS · 1 verdict not
+passing · 2 refused at deposit (dirty tree) · 3 worker down · 4 wait timed out. The
+machine-readable surfaces are that code and `~/.spo-bench/verdicts/<sha>.json`. **And a
+pipeline's exit code is the last stage's**, so never pipe a command whose exit code is the
+verdict: `npm test | tail -20` reports *tail*, and has already been read here as a green suite
+that had failed. Redirect to a file, capture the code, then filter the file. **A trailing `&`
+loses it the same way** — the shell reports the fork, so the code is 0 whatever happened;
+background with the tool's own `run_in_background`, keeping the redirect, which is fine on its
+own. So does `out=$(npm test)`, which keeps the text and drops the number.
 
 **Dependabot PRs** ride the same chain through `npm run deps:gate`: it merges main in, installs
 (`npm ci` *in the PR's worktree* — a worktree has no `node_modules` of its own and would
@@ -604,6 +640,20 @@ public visibility is not enough, the two are separate conditions — and the tra
 lifted that. `gh api repos/Crazz-Org/SPO-WebClient --jq .owner.type` now answers
 `Organization`.
 
+### The short form
+
+**`main` has a merge queue** — so `gh pr merge <N> --merge` **enqueues**; it does not merge.
+Every `gh pr merge` here — the correct form included — prints one stderr warning,
+`! The merge strategy for main is set by the merge queue`, and exits 0: **expected and
+benign**, not a failure. The queue's method is `MERGE`, so a `--squash` or `--rebase` you pass
+is **overridden, not refused**; pass `--merge` so the command says what will happen. Judge on
+the **exit code and the PR state, never on stderr text** — in doubt, one REST call settles it:
+`gh api repos/Crazz-Org/SPO-WebClient/pulls/<N> --jq '{state,merged}'` (`open` = enqueued).
+Never "recover" a merge that did not fail. **Never add `--delete-branch`**: `gh` honours it the
+instant the entry is created, destroying it and leaving the PR CLOSED and unmerged — same exit
+0, same warning. GitHub deletes the branch itself when the entry lands. Recovery:
+`git push -u origin <branch>` + `gh pr reopen <N>` + merge again, same sha.
+
 ### What it buys, and why it is the point
 
 A gate proves `merge(branch, the main it was based on)`. A queue entry is
@@ -674,6 +724,10 @@ guarantee is optional.
 the ruleset gains the rule. Enable the queue first and the very pull request that adds the
 trigger cannot merge: its queue entry waits for checks that no event fires, and the entry is
 ejected on timeout.
+
+`bench/gate` was dropped from this required list on 2026-08-29T10:17:40Z (advisory only for
+five days) and restored on 2026-09-03T07:32:42+02:00 — check the ruleset itself before trusting
+either this sentence or that date: `gh api repos/Crazz-Org/SPO-WebClient/rulesets/21111153`.
 
 ### ⚠ Never pass `--delete-branch` while the queue is on
 

@@ -94,7 +94,7 @@ git push -u origin HEAD
 ```
 
 Then open (or refresh) the PR. The branch is **not** required to be up to date with `main`
-(that rule was removed 2026-08-24 — CLAUDE.md § Git). If `main` moved past your gate's
+(that rule was removed 2026-08-24 — `doc/bench-worker.md` § The gate base). If `main` moved past your gate's
 `baseMain`, the `bench/gate` status and the push hook *announce* it rather than refuse:
 read the note and judge — if the incoming `main` touches the same ground, merge
 `origin/main` in, commit, and **run `npm run gate` again**, because the new sha has no
@@ -111,7 +111,7 @@ intervals with a deadline, never a tight loop
 Then enqueue the merge: **`gh pr merge <n> --merge`, nothing else.** `main` has a merge
 queue, so this *enqueues* and the queue lands it; GitHub deletes the branch itself. **Never
 `--delete-branch`** — `gh` honours it the instant the entry is created, destroying it and
-leaving the PR CLOSED unmerged (CLAUDE.md § merge queue). The queue's method is `MERGE`, so
+leaving the PR CLOSED unmerged (`doc/bench-worker.md` §12). The queue's method is `MERGE`, so
 `--squash` would be overridden anyway. The command prints `! The merge strategy for main is
 set by the merge queue` on stderr and exits **0**: expected and benign — judge on the exit
 code, never on stderr text, and in doubt on one REST call,

@@ -71,7 +71,7 @@ curl -s "http://158.69.153.134/logs/FIVEMODELSERVER/Survival%20<YY-MM-DD>.log" -
 ```
 
 The civic members log on entry, *before* their `try`, so a line there proves the frame reached
-the object. Reading a log is **not** probing the live server — CLAUDE.md permits it explicitly.
+the object. Reading a log is **not** probing the live server — `doc/E2E-POLICY.md` §5 says so explicitly.
 The log runs 2–3 MB/day: grep it, never read it into context.
 
 ⚠ **Clock skew — grep a window, not a second.** The client stamps `createdAtUtc` and the gateway

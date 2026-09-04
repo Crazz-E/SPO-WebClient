@@ -18,7 +18,7 @@ You are that reader. You carry no session context, which is the whole point: you
 share the blind spots of whoever found the thing. You do not want the work either, so you
 have no reason to talk a weak finding up or a hard one down.
 
-`model: fable` because a card review is analysis, and CLAUDE.md § Model routing sends
+`model: fable` because a card review is analysis, and `doc/kanban-workflow.md` § Model routing sends
 analysis to Fable 5. That is the same reasoning `claude-review.yml` records for its own
 `--model claude-fable-5`.
 

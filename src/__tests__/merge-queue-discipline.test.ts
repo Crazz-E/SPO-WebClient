@@ -22,13 +22,20 @@ const read = (...p: string[]): string => fs.readFileSync(path.join(ROOT, ...p), 
 const collapse = (text: string): string => text.replace(/\s+/g, ' ');
 
 describe('the merge-queue warning is documented as benign, with a verdict that is not stderr', () => {
-  it('CLAUDE.md says the correct form prints it too, and names what to judge on', () => {
-    const claudeMd = collapse(read('CLAUDE.md'));
-    expect(claudeMd).toMatch(/the correct form included — prints one stderr warning/);
-    expect(claudeMd).toMatch(/\*\*expected and benign\*\*, not a failure/);
-    expect(claudeMd).toMatch(/exit code and the PR state, never on stderr text/);
+  it('bench-worker.md says the correct form prints it too, and names what to judge on', () => {
+    const benchWorker = collapse(read('doc', 'bench-worker.md'));
+    expect(benchWorker).toMatch(/the correct form included — prints one stderr warning/);
+    expect(benchWorker).toMatch(/\*\*expected and benign\*\*, not a failure/);
+    expect(benchWorker).toMatch(/exit code and the PR state, never on stderr text/);
     // The flag override is why the line exists at all — without it the warning reads arbitrary.
-    expect(claudeMd).toMatch(/\*\*overridden, not refused\*\*/);
+    expect(benchWorker).toMatch(/\*\*overridden, not refused\*\*/);
+  });
+
+  it('CLAUDE.md still carries the short form and points at bench-worker.md §12', () => {
+    const claudeMd = collapse(read('CLAUDE.md'));
+    expect(claudeMd).toMatch(/--merge` \*\*enqueues\*\*/);
+    expect(claudeMd).toMatch(/Never add `--delete-branch`/);
+    expect(claudeMd).toMatch(/bench-worker\.md §12/);
   });
 
   it('bench-worker.md warns the trap runs in both directions', () => {
