@@ -109,8 +109,8 @@ export function MailPanel() {
   const handleSend = useCallback(() => {
     if (!canSend) return;
     setSending(true);
-    client.onMailSend(composeTo.trim(), composeSubject, composeBody);
-  }, [canSend, setSending, client, composeTo, composeSubject, composeBody]);
+    client.onMailSend(composeTo.trim(), composeSubject, composeBody, composeHeaders || undefined);
+  }, [canSend, setSending, client, composeTo, composeSubject, composeBody, composeHeaders]);
 
   // Warn once per compose session — a pasted-in wall of text should not toast on every
   // keystroke once it is already clipped to the cap.

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { useMailStore } from './mail-store';
+import { useMailStore, buildReplyBody, buildReplyHeaders, REPLY_SEPARATOR } from './mail-store';
 import type { MailMessageHeader, MailMessageFull } from '@/shared/types';
 
 const mockMessages: MailMessageHeader[] = [
@@ -118,6 +118,80 @@ describe('Mail Store — Compose', () => {
       subject: 'Re: Already replied',
     });
     expect(useMailStore.getState().composeSubject).toBe('Re: Already replied');
+  });
+
+  it('startReply does not double-prefix a lower-case re:', () => {
+    useMailStore.getState().startReply({ ...mockFullMessage, subject: 're: shouting quietly' });
+    expect(useMailStore.getState().composeSubject).toBe('re: shouting quietly');
+  });
+});
+
+// #507 — Reply opened an empty letter: nothing quoted, and no header saying
+// which message it answered.
+describe('Mail Store — Reply quoting', () => {
+  beforeEach(resetStore);
+
+  it('startReply opens the body with the separator, the attribution and the quoted lines', () => {
+    useMailStore.getState().startReply(mockFullMessage);
+    expect(useMailStore.getState().composeBody).toBe(
+      [REPLY_SEPARATOR, 'Alice wrote, on "Hello":', '> Test body'].join('\n'),
+    );
+  });
+
+  it('prefixes every source line, blank ones included', () => {
+    const body = buildReplyBody({ ...mockFullMessage, body: ['first', '', 'third'] });
+    expect(body.split('\n')).toEqual([
+      REPLY_SEPARATOR,
+      'Alice wrote, on "Hello":',
+      '> first',
+      '> ',
+      '> third',
+    ]);
+  });
+
+  it('the separator is the 39 underscores of the original client', () => {
+    expect(REPLY_SEPARATOR).toBe('_'.repeat(39));
+    expect(buildReplyBody(mockFullMessage).startsWith(REPLY_SEPARATOR)).toBe(true);
+  });
+
+  it('names the address when the message carries no display name', () => {
+    const body = buildReplyBody({ ...mockFullMessage, from: '' });
+    expect(body.split('\n')[1]).toBe('alice@test.com wrote, on "Hello":');
+  });
+
+  it('an empty source message still quotes nothing more than the separator and the attribution', () => {
+    expect(buildReplyBody({ ...mockFullMessage, body: [] }).split('\n')).toHaveLength(2);
+  });
+
+  it('startReply carries the source message under the four threading keys', () => {
+    useMailStore.getState().startReply(mockFullMessage);
+    expect(useMailStore.getState().composeHeaders).toBe(
+      [
+        'In-Reply-To=msg-1',
+        'In-Reply-To-From=alice@test.com',
+        'In-Reply-To-Subject=Hello',
+        'In-Reply-To-Date=1.0',
+      ].join('\n'),
+    );
+  });
+
+  it('the header block names no key the mail server sets on the new message', () => {
+    const keys = buildReplyHeaders(mockFullMessage).split('\n').map((l) => l.split('=')[0]);
+    expect(keys).not.toContain('MessageId');
+    expect(keys).not.toContain('FromAddr');
+    expect(keys).not.toContain('Subject');
+    expect(keys).not.toContain('Date');
+  });
+
+  it('a fresh compose and a re-opened draft carry no reply body or headers', () => {
+    useMailStore.getState().startReply(mockFullMessage);
+    useMailStore.getState().startCompose();
+    expect(useMailStore.getState().composeBody).toBe('');
+    expect(useMailStore.getState().composeHeaders).toBe('');
+
+    useMailStore.getState().startReply(mockFullMessage);
+    useMailStore.getState().startEditDraft({ ...mockFullMessage, messageId: 'draft-4' });
+    expect(useMailStore.getState().composeHeaders).toBe('');
   });
 });
 

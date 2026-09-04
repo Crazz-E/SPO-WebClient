@@ -117,6 +117,29 @@ describe('Mail body splitting', () => {
         })
       );
     });
+
+    // #507 — a reply's threading headers had no way out of the browser.
+    it('carries the reply headers when there are any', () => {
+      const sendSpy = jest.spyOn(client, 'sendMessage' as any);
+      client.callbacks.onMailSend('recipient@test.com', 'Re: Subject', '> quoted', 'In-Reply-To=msg-1\nIn-Reply-To-From=alice');
+
+      expect(sendSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          headers: 'In-Reply-To=msg-1\nIn-Reply-To-From=alice',
+        })
+      );
+    });
+
+    it('omits the key entirely for a letter with nothing to thread', () => {
+      const sendSpy = jest.spyOn(client, 'sendMessage' as any);
+      client.callbacks.onMailSend('recipient@test.com', 'Subject', 'plain', '');
+
+      const msg = sendSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect('headers' in msg).toBe(false);
+
+      client.callbacks.onMailSend('recipient@test.com', 'Subject', 'plain');
+      expect('headers' in (sendSpy.mock.calls[1][0] as Record<string, unknown>)).toBe(false);
+    });
   });
 
   describe('onMailSaveDraft', () => {
