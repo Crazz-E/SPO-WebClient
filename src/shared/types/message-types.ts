@@ -288,6 +288,10 @@ export enum WsMessageType {
   RESP_FAVORITE_DELETE = 'RESP_FAVORITE_DELETE',
   REQ_FAVORITE_RENAME = 'REQ_FAVORITE_RENAME',
   RESP_FAVORITE_RENAME = 'RESP_FAVORITE_RENAME',
+  REQ_FAVORITE_FOLDER_CREATE = 'REQ_FAVORITE_FOLDER_CREATE',
+  RESP_FAVORITE_FOLDER_CREATE = 'RESP_FAVORITE_FOLDER_CREATE',
+  REQ_FAVORITE_MOVE = 'REQ_FAVORITE_MOVE',
+  RESP_FAVORITE_MOVE = 'RESP_FAVORITE_MOVE',
 
   // Research / Inventions
   REQ_RESEARCH_INVENTORY = 'REQ_RESEARCH_INVENTORY',
@@ -1590,6 +1594,10 @@ export interface FavoritesItem {
    * rename address an item by this path, never by its bare id.
    */
   path: string;
+  /** True only on a folder (`fvkFolder`, `Kernel/FavProtocol.pas:6`). */
+  isFolder?: boolean;
+  /** A folder's fetched contents. Absent or empty for a link, or an unfetched folder. */
+  children?: FavoritesItem[];
 }
 
 export interface WsReqEmpireFacilities extends WsMessage {
@@ -1641,6 +1649,37 @@ export interface WsReqFavoriteRename extends WsMessage {
 
 export interface WsRespFavoriteRename extends WsMessage {
   type: WsMessageType.RESP_FAVORITE_RENAME;
+  success: boolean;
+  message?: string;
+}
+
+/**
+ * Create a folder in the Favorites tree — `RDOFavoritesNewItem` with
+ * `Kind = fvkFolder` (`Interface Server/InterfaceServer.pas:200`).
+ */
+export interface WsReqFavoriteFolderCreate extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_FOLDER_CREATE;
+  parentPath: string;
+  name: string;
+}
+
+export interface WsRespFavoriteFolderCreate extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_FOLDER_CREATE;
+  success: boolean;
+  /** The id the server assigned, present only on success. */
+  id?: number;
+  message?: string;
+}
+
+/** Move one item — `RDOFavoritesMoveItem` (`Interface Server/InterfaceServer.pas:202`). */
+export interface WsReqFavoriteMove extends WsMessage {
+  type: WsMessageType.REQ_FAVORITE_MOVE;
+  path: string;
+  destPath: string;
+}
+
+export interface WsRespFavoriteMove extends WsMessage {
+  type: WsMessageType.RESP_FAVORITE_MOVE;
   success: boolean;
   message?: string;
 }

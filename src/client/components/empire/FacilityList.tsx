@@ -1,18 +1,28 @@
 /**
- * FacilityList — Scrollable list of owned facilities, grouped by state (H6).
+ * FacilityList — Scrollable list of owned facilities, grouped by state (H6),
+ * plus the Favorites folder tree: create, rename, remove and move-into.
  *
  * Three sections: "Losing money" (server alert bit on a loaded building),
  * "Status unknown" (zone never loaded — honestly unknown, never assumed
  * healthy), "Operating". Clicking a row pans the map and opens the building
  * inspector — which also loads the zone and resolves an unknown state.
+ *
+ * Folders never enter a section: they carry no coordinates and the server
+ * has no notion of a folder's status. `RDOFavoritesMoveItem`'s server-side
+ * guard is a plain string prefix test (`Kernel/Favorites.pas:247`), which
+ * would refuse moving a folder into one of its own descendants but not into
+ * an unrelated one — so, to keep the client from ever depending on that
+ * distinction, the client moves links only.
  */
 
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useUiStore } from '../../store/ui-store';
 import { useBuildingStore } from '../../store/building-store';
 import { useMapStore } from '../../store/map-store';
+import { useEmpireStore } from '../../store/empire-store';
 import { useClient } from '../../context';
 import type { FavoritesItem } from '@/shared/types';
+import { flattenFolders } from '@/shared/favorites-tree';
 import { classifyFacilities } from './facility-status';
 import styles from './FacilityList.module.css';
 
@@ -25,12 +35,27 @@ type FacilityState = 'losing' | 'unknown' | 'operating';
  */
 const FAV_NAME_MAX = 50;
 
+/** Locations never start with '/' — the sentinel for "move to the root". */
+const ROOT_OPTION = '/';
+
+/** The Location of the folder a path currently sits in, or '' for the root. */
+function parentPathOf(path: string): string {
+  const idx = path.lastIndexOf('/');
+  return idx < 0 ? '' : path.slice(0, idx);
+}
+
 interface FacilityRowProps {
   facility: FavoritesItem;
   state: FacilityState;
+  parentName?: string;
+  /** True when the tree holds at least one folder — decides whether the select renders at all. */
+  hasFolders: boolean;
+  /** Every folder the item can move into — the folder it already sits in is excluded. */
+  folderOptions: { path: string; label: string }[];
   onClick: (facility: FavoritesItem) => void;
   onRename: (facility: FavoritesItem, name: string) => void;
   onRemove: (facility: FavoritesItem) => void;
+  onMove: (facility: FavoritesItem, destPath: string) => void;
 }
 
 const DOT_CLASS: Record<FacilityState, string> = {
@@ -40,7 +65,7 @@ const DOT_CLASS: Record<FacilityState, string> = {
 };
 
 const FacilityRow = memo(function FacilityRow({
-  facility, state, onClick, onRename, onRemove,
+  facility, state, parentName, hasFolders, folderOptions, onClick, onRename, onRemove, onMove,
 }: FacilityRowProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(facility.name);
@@ -91,10 +116,31 @@ const FacilityRow = memo(function FacilityRow({
             <span className={`${styles.dot} ${styles[DOT_CLASS[state]]}`} aria-hidden="true" />
             {facility.name}
           </span>
-          <span className={styles.category}>{facility.x}, {facility.y}</span>
+          <span className={styles.category}>
+            {facility.x}, {facility.y}{parentName ? ` · in ${parentName}` : ''}
+          </span>
         </div>
       </button>
       <div className={styles.rowActions}>
+        {hasFolders && (
+          <select
+            className={styles.moveSelect}
+            aria-label={`Move ${facility.name} to…`}
+            value=""
+            onChange={(e) => {
+              const value = e.target.value;
+              if (!value) return;
+              onMove(facility, value === ROOT_OPTION ? '' : value);
+              e.target.value = '';
+            }}
+          >
+            <option value="" disabled>Move to…</option>
+            <option value={ROOT_OPTION}>Root</option>
+            {folderOptions.map((opt) => (
+              <option key={opt.path} value={opt.path}>{opt.label}</option>
+            ))}
+          </select>
+        )}
         <button
           className={styles.rowAction}
           title={`Rename ${facility.name}`}
@@ -118,6 +164,91 @@ const FacilityRow = memo(function FacilityRow({
   );
 });
 
+interface FolderRowProps {
+  folder: FavoritesItem;
+  depth: number;
+  onRename: (folder: FavoritesItem, name: string) => void;
+  onRemove: (folder: FavoritesItem) => void;
+}
+
+const FolderRow = memo(function FolderRow({ folder, depth, onRename, onRemove }: FolderRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(folder.name);
+  const count = folder.children?.length ?? 0;
+
+  const startEditing = () => {
+    setDraft(folder.name);
+    setEditing(true);
+  };
+
+  const commit = () => {
+    setEditing(false);
+    const next = draft.trim();
+    if (next && next !== folder.name) {
+      onRename(folder, next);
+    }
+  };
+
+  const handleRemove = () => {
+    if (count === 0) {
+      onRemove(folder);
+      return;
+    }
+    useUiStore.getState().requestConfirm(
+      'Remove folder',
+      `"${folder.name}" holds ${count} item${count === 1 ? '' : 's'}. Remove the folder and everything in it?`,
+      () => onRemove(folder),
+    );
+  };
+
+  if (editing) {
+    return (
+      <div className={styles.row} style={{ paddingLeft: depth * 16 }}>
+        <input
+          className={styles.renameInput}
+          value={draft}
+          maxLength={FAV_NAME_MAX}
+          autoFocus
+          aria-label={`Rename ${folder.name}`}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') setEditing(false);
+          }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.row} style={{ paddingLeft: depth * 16 }}>
+      <div className={styles.rowLeft}>
+        <span className={styles.name}>📁 {folder.name}</span>
+        <span className={styles.category}>{count} item{count === 1 ? '' : 's'}</span>
+      </div>
+      <div className={styles.rowActions}>
+        <button
+          className={styles.rowAction}
+          title={`Rename ${folder.name}`}
+          aria-label={`Rename ${folder.name}`}
+          onClick={startEditing}
+        >
+          ✎
+        </button>
+        <button
+          className={styles.rowAction}
+          title={`Remove ${folder.name}`}
+          aria-label={`Remove ${folder.name}`}
+          onClick={handleRemove}
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  );
+});
+
 interface FacilityListProps {
   facilities: FavoritesItem[];
 }
@@ -125,7 +256,14 @@ interface FacilityListProps {
 export function FacilityList({ facilities }: FacilityListProps) {
   const openRightPanel = useUiStore((s) => s.openRightPanel);
   const source = useMapStore((s) => s.source);
+  const tree = useEmpireStore((s) => s.tree);
   const client = useClient();
+
+  const folders = useMemo(() => flattenFolders(tree), [tree]);
+  const folderNameByPath = useMemo(
+    () => new Map(folders.map(({ folder }) => [folder.path, folder.name])),
+    [folders],
+  );
 
   const groups = useMemo(
     () => classifyFacilities(facilities, source?.getAllBuildings?.() ?? []),
@@ -146,66 +284,111 @@ export function FacilityList({ facilities }: FacilityListProps) {
     client.onRemoveFavorite(facility.path, facility.name);
   }, [client]);
 
-  if (facilities.length === 0) {
-    return (
-      <div className={styles.empty}>
-        No facilities found
-      </div>
-    );
-  }
+  const handleMove = useCallback((facility: FavoritesItem, destPath: string) => {
+    client.onMoveFavorite(facility.path, destPath, facility.name);
+  }, [client]);
+
+  const handleFolderRename = useCallback((folder: FavoritesItem, name: string) => {
+    client.onRenameFavorite(folder.path, name);
+  }, [client]);
+
+  const handleFolderRemove = useCallback((folder: FavoritesItem) => {
+    client.onRemoveFavorite(folder.path, folder.name);
+  }, [client]);
+
+  const handleNewFolder = useCallback(() => {
+    useUiStore.getState().requestPrompt('New folder', 'Name:', (name) => {
+      const trimmed = name.trim();
+      if (trimmed) client.onCreateFavoriteFolder('', trimmed);
+    }, { placeholder: 'e.g. Farms' });
+  }, [client]);
+
+  const folderOptionsFor = useCallback((facility: FavoritesItem) => {
+    if (folders.length === 0) return [];
+    const currentParent = parentPathOf(facility.path);
+    return folders
+      .filter(({ folder }) => folder.path !== currentParent)
+      .map(({ folder, depth }) => ({
+        path: folder.path,
+        label: `${'  '.repeat(depth)}${folder.name}`,
+      }));
+  }, [folders]);
+
+  const renderRow = (f: FavoritesItem, state: FacilityState) => (
+    <FacilityRow
+      key={f.id}
+      facility={f}
+      state={state}
+      parentName={folderNameByPath.get(parentPathOf(f.path))}
+      hasFolders={folders.length > 0}
+      folderOptions={folderOptionsFor(f)}
+      onClick={handleClick}
+      onRename={handleRename}
+      onRemove={handleRemove}
+      onMove={handleMove}
+    />
+  );
+
+  const isEmpty = facilities.length === 0 && folders.length === 0;
 
   return (
     <div className={styles.list}>
-      <div className={styles.sectionHeader}>
-        Losing money{groups.losing.length > 0 ? ` (${groups.losing.length})` : ''}
+      <div className={styles.listHead}>
+        <button
+          className={styles.newFolderButton}
+          aria-label="New folder"
+          onClick={handleNewFolder}
+        >
+          + New Folder
+        </button>
       </div>
-      {groups.losing.length === 0 ? (
-        <div className={styles.sectionEmpty}>
-          No facility is losing money in the areas you&apos;ve visited.
+
+      {isEmpty ? (
+        <div className={styles.empty}>
+          No facilities found
         </div>
       ) : (
-        groups.losing.map((f) => (
-          <FacilityRow
-              key={f.id}
-              facility={f}
-              state="losing"
-              onClick={handleClick}
-              onRename={handleRename}
-              onRemove={handleRemove}
-            />
-        ))
-      )}
-
-      {groups.unknown.length > 0 && (
         <>
-          <div className={styles.sectionHeader}>Status unknown</div>
-          <div className={styles.sectionNote}>Not visited yet — tap to check.</div>
-          {groups.unknown.map((f) => (
-            <FacilityRow
-              key={f.id}
-              facility={f}
-              state="unknown"
-              onClick={handleClick}
-              onRename={handleRename}
-              onRemove={handleRemove}
-            />
-          ))}
-        </>
-      )}
+          {folders.length > 0 && (
+            <>
+              <div className={styles.sectionHeader}>Folders</div>
+              {folders.map(({ folder, depth }) => (
+                <FolderRow
+                  key={folder.id}
+                  folder={folder}
+                  depth={depth}
+                  onRename={handleFolderRename}
+                  onRemove={handleFolderRemove}
+                />
+              ))}
+            </>
+          )}
 
-      {groups.operating.length > 0 && (
-        <>
-          <div className={styles.sectionHeader}>Operating</div>
-          {groups.operating.map((f) => (
-            <FacilityRow
-              key={f.id}
-              facility={f}
-              state="operating"
-              onClick={handleClick}
-              onRename={handleRename}
-              onRemove={handleRemove}
-            />
-          ))}
+          <div className={styles.sectionHeader}>
+            Losing money{groups.losing.length > 0 ? ` (${groups.losing.length})` : ''}
+          </div>
+          {groups.losing.length === 0 ? (
+            <div className={styles.sectionEmpty}>
+              No facility is losing money in the areas you&apos;ve visited.
+            </div>
+          ) : (
+            groups.losing.map((f) => renderRow(f, 'losing'))
+          )}
+
+          {groups.unknown.length > 0 && (
+            <>
+              <div className={styles.sectionHeader}>Status unknown</div>
+              <div className={styles.sectionNote}>Not visited yet — tap to check.</div>
+              {groups.unknown.map((f) => renderRow(f, 'unknown'))}
+            </>
+          )}
+
+          {groups.operating.length > 0 && (
+            <>
+              <div className={styles.sectionHeader}>Operating</div>
+              {groups.operating.map((f) => renderRow(f, 'operating'))}
+            </>
+          )}
         </>
       )}
     </div>

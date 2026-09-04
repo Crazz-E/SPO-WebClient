@@ -30,14 +30,20 @@ describe('route', () => {
     ]));
   });
 
-  it('routes a Favorites change to its own flow, not to the governance ones', () => {
+  it('routes a Favorites change to its own flows, not to the governance ones', () => {
     const d = route(['src/server/session/favorites-handler.ts']);
-    expect(d.required).toEqual(['login-spine', 'favorites-roundtrip']);
+    expect(d.required).toEqual(['login-spine', 'favorites-roundtrip', 'favorites-folders']);
   });
 
   it('routes the Empire panel the same way — it is the surface of that tree', () => {
     const d = route(['src/client/components/empire/FacilityList.tsx']);
     expect(d.required).toContain('favorites-roundtrip');
+    expect(d.required).toContain('favorites-folders');
+  });
+
+  it('routes the shared tree helper to both favourites flows', () => {
+    const d = route(['src/shared/favorites-tree.ts']);
+    expect(d.required).toEqual(['login-spine', 'favorites-roundtrip', 'favorites-folders']);
   });
 
   it('routes politics UI to the permission-negative flow, not only the happy path', () => {
@@ -118,7 +124,7 @@ describe('route', () => {
 
   it('routes a removed file a rule does cover — a deleted handler still changes behaviour', () => {
     const gone = ['src/server/session/favorites-handler.ts'];
-    expect(route(gone, gone).required).toEqual([SPINE_FLOW, 'favorites-roundtrip']);
+    expect(route(gone, gone).required).toEqual([SPINE_FLOW, 'favorites-roundtrip', 'favorites-folders']);
   });
 
   it('fails closed on a path no rule covers', () => {

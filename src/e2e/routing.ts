@@ -73,9 +73,9 @@ export const ROUTES: RouteRule[] = [
     // Before the broad wire-level rule below, which would otherwise swallow
     // `session/favorites-handler.ts` and drive the politics flows instead of
     // the one flow that actually exercises the Favorites tree.
-    test: /favorites-handler\.ts$|^src\/client\/components\/empire\//,
-    flows: ['favorites-roundtrip'],
-    why: 'the Favorites tree — the only flow that writes to it',
+    test: /favorites-handler\.ts$|^src\/client\/components\/empire\/|^src\/shared\/favorites-tree\.ts$/,
+    flows: ['favorites-roundtrip', 'favorites-folders'],
+    why: 'the Favorites tree — the two flows that write to it',
   },
   {
     // Before the broad wire-level rule below, which would otherwise route

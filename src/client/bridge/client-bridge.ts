@@ -260,6 +260,8 @@ export interface ClientCallbacks {
   onAddFavorite: (name: string, x: number, y: number) => void;
   onRemoveFavorite: (path: string, name: string) => void;
   onRenameFavorite: (path: string, name: string) => void;
+  onCreateFavoriteFolder: (parentPath: string, name: string) => void;
+  onMoveFavorite: (path: string, destPath: string, name: string) => void;
 
   // Zone painting
   onToggleZonePainting: (zoneType: number) => void;
