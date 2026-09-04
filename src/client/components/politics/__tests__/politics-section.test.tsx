@@ -15,6 +15,7 @@ import {
 import { usePoliticsStore } from '../../../store/politics-store';
 import { useGameStore } from '../../../store/game-store';
 import { PoliticsSection } from '../PoliticsSection';
+import { CampaignPanel } from '../CampaignPanel';
 import type { PoliticsData } from '@/shared/types';
 
 /**
@@ -277,11 +278,70 @@ describe('PoliticsSection — campaign panel', () => {
 
   // `opositiondata.asp:46` — `Tycoon0`, the head of the list.
   it('shows the strongest candidate with prestige and rating', () => {
-    seed({ campaigns: [{ candidateName: 'Alice', rating: 61, prestige: 2000 }], campaignCount: 1 });
+    seed({ campaigns: [{ candidateName: 'Alice', rating: 61, prestige: 2000, photoUrl: '' }], campaignCount: 1 });
     renderWithProviders(<PoliticsSection buildingX={1} buildingY={2} />);
     expect(screen.getByText('Alice')).toBeTruthy();
     expect(screen.getByText('Strongest candidate')).toBeTruthy();
     expect(screen.getByText(grouped(2000, 'points'))).toBeTruthy();
+  });
+
+  // `opositiondata.asp:53-56` — the strongest candidate's portrait, same shape
+  // as the ruler's on `mayordata.asp`.
+  it("shows the strongest candidate's portrait when the gateway resolved one", () => {
+    seed();
+    const { container } = renderWithProviders(
+      <CampaignPanel
+        data={{
+          ...BASE,
+          campaignCount: 1,
+          campaigns: [{
+            candidateName: 'Alice', rating: 61, prestige: 2000,
+            photoUrl: 'http://host/fivedata/userinfo/Planitia/Alice/largephoto.jpg',
+          }],
+        }}
+        buildingX={1}
+        buildingY={2}
+      />,
+    );
+    expect(container.querySelector('img')!.getAttribute('src')).toMatch(/\/Alice\/largephoto\.jpg$/);
+  });
+
+  it("falls back to the initial when the strongest candidate's portrait 404s", () => {
+    seed();
+    const { container } = renderWithProviders(
+      <CampaignPanel
+        data={{
+          ...BASE,
+          campaignCount: 1,
+          campaigns: [{
+            candidateName: 'Alice', rating: 61, prestige: 2000,
+            photoUrl: 'http://host/fivedata/userinfo/Planitia/Alice/largephoto.jpg',
+          }],
+        }}
+        buildingX={1}
+        buildingY={2}
+      />,
+    );
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText('A')).toBeTruthy();
+  });
+
+  it('renders no img when the strongest candidate has an empty photoUrl', () => {
+    seed();
+    const { container } = renderWithProviders(
+      <CampaignPanel
+        data={{
+          ...BASE,
+          campaignCount: 1,
+          campaigns: [{ candidateName: 'Alice', rating: 61, prestige: 2000, photoUrl: '' }],
+        }}
+        buildingX={1}
+        buildingY={2}
+      />,
+    );
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getByText('A')).toBeTruthy();
   });
 
   it('offers the launch button with the town threshold', () => {
@@ -398,8 +458,8 @@ describe('PoliticsSection — campaign panel', () => {
     seed({
       campaignCount: 2,
       campaigns: [
-        { candidateName: 'Alice', rating: 61, prestige: 2000 },
-        { candidateName: 'Carol', rating: 12, prestige: 300 },
+        { candidateName: 'Alice', rating: 61, prestige: 2000, photoUrl: '' },
+        { candidateName: 'Carol', rating: 12, prestige: 300, photoUrl: '' },
       ],
     });
     const { container } = renderWithProviders(<PoliticsSection buildingX={1} buildingY={2} />);

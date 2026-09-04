@@ -1286,9 +1286,25 @@ describe('getPoliticsData', () => {
     );
     expect(data.campaignCount).toBe(3);
     expect(data.campaigns).toEqual([
-      { candidateName: 'Alice', rating: 61, prestige: 2000 },
-      { candidateName: 'Carol', rating: 0, prestige: 0 },
+      { candidateName: 'Alice', rating: 61, prestige: 2000, photoUrl: 'http://158.69.153.134/fivedata/userinfo/Shamba/Alice/largephoto.jpg' },
+      { candidateName: 'Carol', rating: 0, prestige: 0, photoUrl: 'http://158.69.153.134/fivedata/userinfo/Shamba/Carol/largephoto.jpg' },
     ]);
+  });
+
+  it('encodes a candidate name with a space in the portrait URL', async () => {
+    const fake = makeWebCtx();
+    mockFetch.mockResolvedValue(htmlResponse(''));
+    stubTownRead(
+      fake,
+      ['Rio', '1', '2', '3', '4', '5', '6', '1', '77', '-1'],
+      ['Ann Lee', '61', '2000'],
+    );
+
+    const data = await getPoliticsData(fake.ctx, 'T', 1, 2);
+
+    expect(data.campaigns[0].photoUrl).toBe(
+      'http://158.69.153.134/fivedata/userinfo/Shamba/Ann%20Lee/largephoto.jpg',
+    );
   });
 
   it('keeps the ruler data when the candidate read fails', async () => {

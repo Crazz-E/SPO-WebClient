@@ -307,6 +307,16 @@ const RULER_PROPS = [
   'TownHallId', 'HasRuler',
 ] as const;
 
+/**
+ * `mayordata.asp:39` / `opositiondata.asp:53` — the same portrait path for a
+ * ruler and for a candidate. Only the gateway knows the world IP, so it is
+ * built here. Empty name → empty string, never a URL to nobody.
+ */
+function portraitUrl(ctx: SessionContext, worldIp: string, tycoonName: string): string {
+  if (!tycoonName) return '';
+  return `http://${worldIp}/fivedata/userinfo/${encodeURIComponent(ctx.currentWorldInfo?.name || '')}/${encodeURIComponent(tycoonName)}/largephoto.jpg`;
+}
+
 interface RulerData {
   mayorName: string;
   mayorPrestige: number;
@@ -333,7 +343,7 @@ const EMPTY_RULER_DATA: RulerData = {
  * the two building kinds.
  */
 async function fetchRulerData(
-  ctx: SessionContext, isCapitol: boolean, townName: string, x: number, y: number
+  ctx: SessionContext, isCapitol: boolean, townName: string, x: number, y: number, worldIp: string
 ): Promise<RulerData> {
   const read = (props: string[]): Promise<string[]> => isCapitol
     ? ctx.getCacherPropertyListAt(x, y, props)
@@ -364,6 +374,7 @@ async function fetchRulerData(
             candidateName: name,
             rating: parseInt(candidateValues[i * 3 + 1]) || 0,
             prestige: parseInt(candidateValues[i * 3 + 2]) || 0,
+            photoUrl: portraitUrl(ctx, worldIp, name),
           });
         }
       } catch (e: unknown) {
@@ -769,7 +780,7 @@ export async function getPoliticsData(
       ctx.log.warn(`[Politics] Publicity fetch failed: ${toErrorMessage(e)}`);
     }
 
-    const rulerData = await fetchRulerData(ctx, isCapitol, townName, buildingX, buildingY);
+    const rulerData = await fetchRulerData(ctx, isCapitol, townName, buildingX, buildingY, worldIp);
 
     // Asked ONCE, here, and carried to every consumer in the payload. The
     // campaign panel below needs it, and so does the ratings rail in the
@@ -809,9 +820,7 @@ export async function getPoliticsData(
       tycoonsRating: rulerData.tycoonsRating,
       ifelRating: rulerData.ifelRating,
       mandateNo: rulerData.mandateNo,
-      rulerPhotoUrl: rulerData.mayorName
-        ? `http://${worldIp}/fivedata/userinfo/${encodeURIComponent(ctx.currentWorldInfo?.name || '')}/${encodeURIComponent(rulerData.mayorName)}/largephoto.jpg`
-        : '',
+      rulerPhotoUrl: portraitUrl(ctx, worldIp, rulerData.mayorName),
       isRuler,
       popularRatings,
       ifelRatings,
