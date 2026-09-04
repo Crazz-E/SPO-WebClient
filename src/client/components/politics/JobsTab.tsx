@@ -33,6 +33,7 @@ interface JobClass {
   avgWage: number;
   spendingPower: number;
   minWage: number;
+  worldFloor: number;
 }
 
 export function JobsTab({ properties, buildingX, buildingY, isCapitol, canGovern }: JobsTabProps) {
@@ -48,6 +49,7 @@ export function JobsTab({ properties, buildingX, buildingY, isCapitol, canGovern
       avgWage: getNum(valueMap, 'hiSalary'),
       spendingPower: getNum(valueMap, 'hiSalaryValue'),
       minWage: getNum(valueMap, 'hiMinSalary'),
+      worldFloor: getNum(valueMap, 'hiActualMinSalary'),
     },
     {
       label: 'Professional',
@@ -57,6 +59,7 @@ export function JobsTab({ properties, buildingX, buildingY, isCapitol, canGovern
       avgWage: getNum(valueMap, 'midSalary'),
       spendingPower: getNum(valueMap, 'midSalaryValue'),
       minWage: getNum(valueMap, 'midMinSalary'),
+      worldFloor: getNum(valueMap, 'midActualMinSalary'),
     },
     {
       label: 'Worker',
@@ -66,6 +69,7 @@ export function JobsTab({ properties, buildingX, buildingY, isCapitol, canGovern
       avgWage: getNum(valueMap, 'loSalary'),
       spendingPower: getNum(valueMap, 'loSalaryValue'),
       minWage: getNum(valueMap, 'loMinSalary'),
+      worldFloor: getNum(valueMap, 'loActualMinSalary'),
     },
   ];
 
@@ -115,6 +119,17 @@ export function JobsTab({ properties, buildingX, buildingY, isCapitol, canGovern
             buildingY={buildingY}
             editable={canEdit}
           />
+          {!isCapitol && (
+            <div className={styles.statRow}>
+              {/* Same blend as the comment above the slider —
+                  Kernel/Kernel.pas:9342-9345 — the world floor the town's
+                  own figure is compared against. A <span>, never an
+                  <input>: it has no handler and never emits
+                  RDOSetMinSalaryValue. */}
+              <span className={styles.statLabel}>World floor</span>
+              <span className={styles.statValue}>{cls.worldFloor}%</span>
+            </div>
+          )}
         </div>
       ))}
     </div>

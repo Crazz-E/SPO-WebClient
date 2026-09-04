@@ -38,6 +38,60 @@ function renderJobs() {
   return { sent, sliders };
 }
 
+// Same values as the mock scenario's Town Hall fixture
+// (src/mock-server/scenarios/building-details-scenario.ts:527-540): town figure
+// 140/95/55, world floor 150/100/60.
+const JOBS_WITH_WORLD_FLOOR: BuildingPropertyValue[] = [
+  { name: 'hiMinSalary', value: '140' }, { name: 'hiActualMinSalary', value: '150' },
+  { name: 'midMinSalary', value: '95' }, { name: 'midActualMinSalary', value: '100' },
+  { name: 'loMinSalary', value: '55' }, { name: 'loActualMinSalary', value: '60' },
+];
+
+describe('JobsTab world floor', () => {
+  it('shows both figures and names the second as the world floor', () => {
+    renderWithProviders(
+      <JobsTab properties={JOBS_WITH_WORLD_FLOOR} buildingX={1} buildingY={2} isCapitol={false} canGovern />,
+      { clientCallbacks: createSpiedCallbacks({}) },
+    );
+    expect(screen.getAllByText('World floor')).toHaveLength(3);
+    expect(screen.getByText('150%')).toBeTruthy();
+    expect(screen.getByText('100%')).toBeTruthy();
+    expect(screen.getByText('60%')).toBeTruthy();
+  });
+
+  it('binds only the town figure to the range input', () => {
+    renderWithProviders(
+      <JobsTab properties={JOBS_WITH_WORLD_FLOOR} buildingX={1} buildingY={2} isCapitol={false} canGovern />,
+      { clientCallbacks: createSpiedCallbacks({}) },
+    );
+    const sliders = screen.getAllByRole('slider');
+    expect(sliders).toHaveLength(3);
+    expect(sliders.map((s) => (s as HTMLInputElement).value)).toEqual(['140', '95', '55']);
+    expect(screen.getByText('150%').tagName).toBe('SPAN');
+    expect(screen.queryByLabelText(/world floor/i)).toBeNull();
+  });
+
+  it('the world floor never emits RDOSetMinSalaryValue', () => {
+    const sent: unknown[] = [];
+    renderWithProviders(
+      <JobsTab properties={JOBS_WITH_WORLD_FLOOR} buildingX={1} buildingY={2} isCapitol={false} canGovern />,
+      { clientCallbacks: createSpiedCallbacks({ onSetBuildingProperty: (...args: unknown[]) => { sent.push(args); } }) },
+    );
+    const worldFloor = screen.getByText('150%');
+    fireEvent.click(worldFloor);
+    fireEvent.blur(worldFloor);
+    expect(sent).toEqual([]);
+  });
+
+  it('omits the world-floor row on the Capitol', () => {
+    renderWithProviders(
+      <JobsTab properties={JOBS_WITH_WORLD_FLOOR} buildingX={1} buildingY={2} isCapitol canGovern />,
+      { clientCallbacks: createSpiedCallbacks({}) },
+    );
+    expect(screen.queryByText('World floor')).toBeNull();
+  });
+});
+
 describe('JobsTab min-wage slider', () => {
   it('names each slider after its job class', () => {
     const { sliders } = renderJobs();

@@ -739,16 +739,29 @@ describe('Capitol building RDO property name generation', () => {
   });
 
   it('townJobs should have slider properties with max 200', () => {
-    const hiSlider = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'hiActualMinSalary');
+    const hiSlider = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'hiMinSalary');
     expect(hiSlider).toBeDefined();
     expect(hiSlider!.type).toBe(PropertyType.SLIDER);
     expect(hiSlider!.max).toBe(200);
 
-    const midSlider = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'midActualMinSalary');
+    const midSlider = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'midMinSalary');
     expect(midSlider!.max).toBe(200);
 
-    const loSlider = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'loActualMinSalary');
+    const loSlider = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === 'loMinSalary');
     expect(loSlider!.max).toBe(200);
+  });
+
+  it('townJobs ActualMinSalary properties are read-only NUMBER, not the slider', () => {
+    for (const name of ['hiActualMinSalary', 'midActualMinSalary', 'loActualMinSalary']) {
+      const prop = TOWN_JOBS_GROUP.properties.find(p => p.rdoName === name);
+      expect(prop).toBeDefined();
+      expect(prop!.type).toBe(PropertyType.NUMBER);
+      expect(prop!.editable).toBeUndefined();
+    }
+  });
+
+  it('townJobs rdoCommands are keyed on the MinSalary names', () => {
+    expect(Object.keys(TOWN_JOBS_GROUP.rdoCommands!).sort()).toEqual(['hiMinSalary', 'loMinSalary', 'midMinSalary']);
   });
 
   it('townJobs salary properties should be PERCENTAGE type', () => {
