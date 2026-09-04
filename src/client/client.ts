@@ -536,6 +536,8 @@ export class StarpeaceClient implements ClientHandlerContext {
       onAddFavorite: (name, x, y) => { void favoritesHandler.addFavorite(this, name, x, y); },
       onRemoveFavorite: (path, name) => { void favoritesHandler.removeFavorite(this, path, name); },
       onRenameFavorite: (path, name) => { void favoritesHandler.renameFavorite(this, path, name); },
+      onCreateFavoriteFolder: (parentPath, name) => { void favoritesHandler.createFolder(this, parentPath, name); },
+      onMoveFavorite: (path, destPath, name) => { void favoritesHandler.moveFavorite(this, path, destPath, name); },
 
       // Zone painting
       onToggleZonePainting: (zoneType: number) => zoneHandler.toggleZonePaintingMode(this, zoneType),
