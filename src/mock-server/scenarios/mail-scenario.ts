@@ -4,7 +4,9 @@
  * HTTP: MailFolder.asp (inbox frameset), MailFolderTop.asp (tabs + action buttons),
  *       MessageList.asp (folder listing), MessageBody.asp (Inbox read-touch that
  *       sets the mail server's Read header flag — see mail-handler.ts's file header)
- * WS: REQ_MAIL_COMPOSE -> RESP_MAIL_SENT, REQ_MAIL_GET_FOLDER -> RESP_MAIL_FOLDER
+ * WS: REQ_MAIL_COMPOSE -> RESP_MAIL_SENT, REQ_MAIL_GET_FOLDER -> RESP_MAIL_FOLDER,
+ *     and the reply form of REQ_MAIL_COMPOSE (mail-ws-003) — same request carrying
+ *     a `headers` block, which the gateway turns into AddHeaders before AddLine
  *
  * NOTE on Save vs Post (from MailServer.pas):
  *   - Save(WorldName, MessageId) → saves to DRAFT folder only
@@ -45,6 +47,24 @@ export const CAPTURED_MAIL_SEND: CapturedMailSendData = {
   subject: 'test subjct',
   body: 'test message',
   messageId: '30430748',
+};
+
+/** What a reply to {@link CAPTURED_MAIL_SEND} carries — the shape `startReply` builds. */
+export interface CapturedMailReplyData {
+  headers: string;
+  subject: string;
+  body: string;
+}
+
+export const CAPTURED_MAIL_REPLY: CapturedMailReplyData = {
+  headers: [
+    `In-Reply-To=${CAPTURED_MAIL_SEND.messageId}`,
+    `In-Reply-To-From=${CAPTURED_MAIL_SEND.to}`,
+    `In-Reply-To-Subject=${CAPTURED_MAIL_SEND.subject}`,
+    'In-Reply-To-Date=3/9/2244',
+  ].join('\n'),
+  subject: `Re: ${CAPTURED_MAIL_SEND.subject}`,
+  body: `> ${CAPTURED_MAIL_SEND.body}`,
 };
 
 function buildMailFolderHtml(vars: ScenarioVariables): string {
@@ -383,6 +403,29 @@ export function createMailScenario(
             wsRequestId: 'mail-002',
             folder: 'Inbox',
             messages: [],
+          } as WsMessage,
+        ],
+        tags: ['mail'],
+      },
+      {
+        // The reply form: same request type, plus the header block. It is what
+        // makes the gateway emit AddHeaders (mail-rdo-014) before the first
+        // AddLine (mail-rdo-003) — proven in mail-reply-scenario.test.ts.
+        id: 'mail-ws-003',
+        timestamp: '2026-02-18T21:36:00.000Z',
+        request: {
+          type: WsMessageType.REQ_MAIL_COMPOSE,
+          wsRequestId: 'mail-003',
+          to: CAPTURED_MAIL_SEND.to,
+          subject: CAPTURED_MAIL_REPLY.subject,
+          body: [CAPTURED_MAIL_REPLY.body],
+          headers: CAPTURED_MAIL_REPLY.headers,
+        } as WsMessage,
+        responses: [
+          {
+            type: WsMessageType.RESP_MAIL_SENT,
+            wsRequestId: 'mail-003',
+            success: true,
           } as WsMessage,
         ],
         tags: ['mail'],

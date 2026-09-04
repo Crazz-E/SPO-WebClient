@@ -11,6 +11,46 @@ import type {
 
 type MailView = 'list' | 'read' | 'compose';
 
+/**
+ * The rule above the quoted text of a reply — 39 underscores, exactly the
+ * `tidMessageSeparator` the original client inserted
+ * (Voyager/URLHandlers/MsgComposerHandler.pas:32).
+ */
+export const REPLY_SEPARATOR = '_______________________________________';
+
+/**
+ * The quoted body of a reply: the separator, who wrote what, then every source
+ * line prefixed `> ` — the shape of `CopyLines('> ')` and the three inserts
+ * above it (MsgComposerHandler.pas:200-205). The sender is the display name
+ * when the message carries one, the address otherwise (`:193-195`).
+ */
+export function buildReplyBody(message: MailMessageFull): string {
+  const sender = message.from || message.fromAddr;
+  return [
+    REPLY_SEPARATOR,
+    `${sender} wrote, on "${message.subject}":`,
+    ...message.body.map((line) => `> ${line}`),
+  ].join('\n');
+}
+
+/**
+ * What the reply carries about the message it answers, one `key=value` per
+ * line — the same block form the mail server's own `GetHeaders` answers with.
+ *
+ * Only keys no server code writes: `NewMail` sets `MessageId`, `FromAddr`,
+ * `Subject` and `Date` on the new message itself (Mail Server/MailServer.pas:946-951)
+ * and `Post` uses `Header[MessageId]` as the folder name (`:1062`), so re-sending
+ * any of those would at best duplicate them and at worst redirect the delivery.
+ */
+export function buildReplyHeaders(message: MailMessageFull): string {
+  return [
+    `In-Reply-To=${message.messageId}`,
+    `In-Reply-To-From=${message.fromAddr}`,
+    `In-Reply-To-Subject=${message.subject}`,
+    `In-Reply-To-Date=${message.date}`,
+  ].join('\n');
+}
+
 interface MailState {
   // State
   currentFolder: MailFolder;
@@ -114,9 +154,11 @@ export const useMailStore = create<MailState>((set) => ({
     set({
       currentView: 'compose',
       composeTo: message.fromAddr,
-      composeSubject: message.subject.startsWith('Re: ') ? message.subject : `Re: ${message.subject}`,
-      composeBody: '',
-      composeHeaders: '',
+      // Case-insensitive, as the Pascal's `pos(…, UpperCase(Subj))` test is —
+      // a subject already answered once must not collect a second prefix.
+      composeSubject: /^re:/i.test(message.subject.trim()) ? message.subject : `Re: ${message.subject}`,
+      composeBody: buildReplyBody(message),
+      composeHeaders: buildReplyHeaders(message),
       composeDraftId: null,
     }),
 

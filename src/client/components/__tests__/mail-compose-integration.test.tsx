@@ -95,8 +95,9 @@ describe('Mail compose — integration flow', () => {
     // Click send
     fireEvent.click(screen.getByText('Send'));
 
-    // Verify client callback was invoked with the right args
-    expect(sendSpy).toHaveBeenCalledWith('player42', 'Trade Offer', 'I have wheat for sale.');
+    // Verify client callback was invoked with the right args — a fresh letter
+    // has nothing to thread, so it carries no header block.
+    expect(sendSpy).toHaveBeenCalledWith('player42', 'Trade Offer', 'I have wheat for sale.', undefined);
 
     // Criterion changed (T6, audit P2): the draft is KEPT until the server answers —
     // a failed send must not lose the letter. The form is locked meanwhile.
@@ -184,9 +185,16 @@ describe('Mail compose — integration flow', () => {
     act(() => useMailStore.getState().setCurrentMessage(replyMessage));
     fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
     expect((screen.getByPlaceholderText('To') as HTMLInputElement).value).toBe('alice');
-    fireEvent.change(screen.getByPlaceholderText('Message...'), { target: { value: 'Fine, thanks.' } });
+    // #507 — the letter opens on the quoted original, before anything is typed over it.
+    const body = screen.getByPlaceholderText('Message...') as HTMLTextAreaElement;
+    expect(body.value.split('\n')[0]).toBe('_'.repeat(39));
+    expect(body.value).toContain('Alice wrote, on "Hello there":');
+    expect(body.value).toContain('> Hi');
+    fireEvent.change(body, { target: { value: 'Fine, thanks.' } });
     fireEvent.click(screen.getByText('Send'));
-    expect(sendSpy).toHaveBeenCalledWith('alice', 'Re: Hello there', 'Fine, thanks.');
+    expect(sendSpy).toHaveBeenCalledWith(
+      'alice', 'Re: Hello there', 'Fine, thanks.', expect.stringContaining('In-Reply-To=msg-99'),
+    );
   });
 
   it('Delete asks first, then the confirmed delete is sent and the row leaves the list on the server answer', () => {
