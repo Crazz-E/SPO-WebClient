@@ -335,7 +335,7 @@ export async function fetchPolicy(ctx: SessionContext): Promise<PolicyData> {
     return parsePolicyHtml(ctx, html, baseUrl);
   } catch (e: unknown) {
     ctx.log.warn('[Policy] ASP fetch failed:', e);
-    return { policies: [] };
+    return { policies: [], alliesAllowed: true };
   }
 }
 
@@ -365,10 +365,20 @@ export async function fetchPolicy(ctx: SessionContext): Promise<PolicyData> {
  *
  * `RenderStatus` emits nothing at all when the status is `""` (`:66`), on either
  * side: the neutral default below is that case, not a parse failure.
+ *
+ * `alliesAllowed` reports whether the world's `AlliesPageOn` flag (`:56`) offers the Ally
+ * stance at all: when it is off, the Ally `<option value="0">` is rendered inside an HTML
+ * comment on every select (`:96`, `:451`).
  */
 function parsePolicyHtml(ctx: SessionContext, html: string, baseUrl: string): PolicyData {
   const policies: PolicyEntry[] = [];
   const policyLetterMap: Record<string, number> = { A: 0, N: 1, E: 2 };
+
+  // :96 / :451 — with AlliesPageOn off the Ally option is rendered inside an HTML
+  // comment, on the row selects and on the set-by-name select alike. Its presence
+  // in a comment is the only signal the page gives; a page carrying no such
+  // comment (allies on, or no table at all) leaves Ally offered as before.
+  const alliesAllowed = !/<!--\s*<option\s+value="0"/i.test(html);
 
   // Match select elements with tycoon attribute (:83-90). The second select of
   // the page (`name="Status"`, :333 / :448) carries no `tycoon` and is skipped.
@@ -413,7 +423,7 @@ function parsePolicyHtml(ctx: SessionContext, html: string, baseUrl: string): Po
     }
   }
 
-  return { policies };
+  return { policies, alliesAllowed };
 }
 
 /**

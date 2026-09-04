@@ -54,6 +54,7 @@ const mockPolicy: PolicyData = {
   policies: [
     { tycoonName: 'TestPlayer', yourPolicy: 0, theirPolicy: 1 },
   ],
+  alliesAllowed: true,
 };
 
 describe('Profile Store', () => {

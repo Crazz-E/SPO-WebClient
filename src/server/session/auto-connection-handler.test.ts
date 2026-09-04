@@ -793,7 +793,7 @@ describe('fetchPolicy', () => {
   it('fetches TycoonPolicy.asp with RIWS="" through ctx.fetchAspPage', async () => {
     const fake = makeWebCtx();
     fetchAsp(fake).mockResolvedValue('<html></html>');
-    expect(await fetchPolicy(fake.ctx)).toEqual({ policies: [] });
+    expect(await fetchPolicy(fake.ctx)).toEqual({ policies: [], alliesAllowed: true });
     expect(fetchAsp(fake)).toHaveBeenCalledWith(POLICY, { RIWS: '' });
   });
 
@@ -810,6 +810,7 @@ describe('fetchPolicy', () => {
         { tycoonName: 'Bob', yourPolicy: 1, theirPolicy: 1 },
         { tycoonName: 'Carol', yourPolicy: 0, theirPolicy: 2 },
       ],
+      alliesAllowed: true,
     });
   });
 
@@ -839,6 +840,78 @@ describe('fetchPolicy', () => {
     expect(html).toContain('<!--<option value="0"  selected  >Ally-->');
     fetchAsp(fake).mockResolvedValue(html);
     expect((await fetchPolicy(fake.ctx)).policies).toEqual([{ tycoonName: 'Alice', yourPolicy: 0, theirPolicy: 1 }]);
+  });
+
+  // Criterion's L0 test — two fixtures cut from the real TycoonPolicy.asp:88-100
+  // markup, one with the live Ally option, one with it commented out (:96).
+  it('alliesAllowed follows the Ally option form; yourPolicy is unaffected', async () => {
+    const liveHtml = `
+      <div class=label id=label0 style="cursor: hand">
+       <b> <span id=labelspan0 style="color: greenyellow">A</span> </b>
+      </div>
+      <select style="font-size: 8px; display: none"
+       id=pol0
+       name="pol0"
+       size="0"
+       index="0"
+       tycoon="Alice"
+       OnClick="onSelectClick()"
+       OnChange="onSelectChange()">
+       <option value="0"  selected >Ally
+       <option value="1" >Neutral
+       <option value="2" >Enemy
+      </select>
+      <div class=label>
+       <b> <span id=otherspan0 style="color: DARKKHAKI">N</span> </b>
+      </div>`;
+
+    const noAlliesHtml = `
+      <div class=label id=label0 style="cursor: hand">
+       <b> <span id=labelspan0 style="color: greenyellow">A</span> </b>
+      </div>
+      <select style="font-size: 8px; display: none"
+       id=pol0
+       name="pol0"
+       size="0"
+       index="0"
+       tycoon="Alice"
+       OnClick="onSelectClick()"
+       OnChange="onSelectChange()">
+       <!--<option value="0"  selected  >Ally-->
+       <option value="1" >Neutral
+       <option value="2" >Enemy
+      </select>
+      <div class=label>
+       <b> <span id=otherspan0 style="color: DARKKHAKI">N</span> </b>
+      </div>`;
+
+    const fakeLive = makeWebCtx();
+    fetchAsp(fakeLive).mockResolvedValue(liveHtml);
+    const live = await fetchPolicy(fakeLive.ctx);
+
+    const fakeNoAllies = makeWebCtx();
+    fetchAsp(fakeNoAllies).mockResolvedValue(noAlliesHtml);
+    const noAllies = await fetchPolicy(fakeNoAllies.ctx);
+
+    expect(live.alliesAllowed).toBe(true);
+    expect(noAllies.alliesAllowed).toBe(false);
+    expect(live.policies).toEqual([{ tycoonName: 'Alice', yourPolicy: 0, theirPolicy: 1 }]);
+    expect(noAllies.policies).toEqual(live.policies);
+  });
+
+  it('alliesAllowed is false on a page whose Ally option is commented out for every row', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(policyPage([
+      { tycoon: 'Alice', to: '1', from: '1' },
+      { tycoon: 'Bob', to: '2', from: '0' },
+    ], { alliesPage: false }));
+    expect((await fetchPolicy(fake.ctx)).alliesAllowed).toBe(false);
+  });
+
+  it('alliesAllowed is true on the default (allies-on) page', async () => {
+    const fake = makeWebCtx();
+    fetchAsp(fake).mockResolvedValue(policyPage([{ tycoon: 'Alice', to: '1', from: '1' }]));
+    expect((await fetchPolicy(fake.ctx)).alliesAllowed).toBe(true);
   });
 
   // RenderStatus emits nothing when the status is "" (:66) — on either side.
@@ -922,7 +995,7 @@ describe('fetchPolicy', () => {
   it('returns no policies and warns when the ASP fetch rejects', async () => {
     const fake = makeWebCtx();
     fetchAsp(fake).mockRejectedValue(new Error('HTTP 500'));
-    expect(await fetchPolicy(fake.ctx)).toEqual({ policies: [] });
+    expect(await fetchPolicy(fake.ctx)).toEqual({ policies: [], alliesAllowed: true });
     expect(fake.log.warn).toHaveBeenCalledWith('[Policy] ASP fetch failed:', expect.any(Error));
   });
 });

@@ -877,6 +877,7 @@ function PolicyTab() {
   const client = useClient();
   const [tycoonName, setTycoonName] = useState('');
   const [policyStatus, setPolicyStatus] = useState<number>(1); // default: Neutral
+  const alliesAllowed = data?.alliesAllowed ?? true;
 
   // Delphi TPolicyStatus: 0=Ally, 1=Neutral, 2=Enemy
   const POLICY_LABELS: Record<number, string> = { 0: 'Ally', 1: 'Neutral', 2: 'Enemy' };
@@ -921,12 +922,18 @@ function PolicyTab() {
                       >
                         Neutral
                       </button>
-                      <button
-                        className={`${styles.policyBtn} ${p.yourPolicy === 0 ? styles.policyAlly : ''}`}
-                        onClick={() => client.onProfilePolicySet(p.tycoonName, 0)}
-                      >
-                        Ally
-                      </button>
+                      {alliesAllowed ? (
+                        <button
+                          className={`${styles.policyBtn} ${p.yourPolicy === 0 ? styles.policyAlly : ''}`}
+                          onClick={() => client.onProfilePolicySet(p.tycoonName, 0)}
+                        >
+                          Ally
+                        </button>
+                      ) : (
+                        p.yourPolicy === 0 && (
+                          <span className={`${styles.policyBtn} ${styles.policyAlly}`}>Ally</span>
+                        )
+                      )}
                     </div>
                   </td>
                   <td>{policyLabel(p.theirPolicy)}</td>
@@ -955,7 +962,7 @@ function PolicyTab() {
           value={policyStatus}
           onChange={(e) => setPolicyStatus(Number(e.target.value))}
         >
-          <option value={0}>Ally</option>
+          {alliesAllowed && <option value={0}>Ally</option>}
           <option value={1}>Neutral</option>
           <option value={2}>Enemy</option>
         </select>
