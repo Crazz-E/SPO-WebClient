@@ -4,7 +4,7 @@
 
 Matches and validates RDO exchanges without a real game server. This is **L1** in
 [doc/E2E-POLICY.md](../../doc/E2E-POLICY.md) — the layer that proves a frame is well formed
-before it ever reaches the wire — and it is consumed by 16 suites under
+before it ever reaches the wire — and it is consumed by 19 suites under
 `src/server/__tests__/`, plus the `toPassStrictRdoValidation` matcher and the scenario
 tests in `scenarios/` (`newspaper-scenario.test.ts` among them).
 

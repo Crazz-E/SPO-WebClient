@@ -837,13 +837,17 @@ describe('newspaper-read', () => {
     expect(result.assertions.find(a => !a.ok)?.what).toMatch(/names its paper/);
   });
 
-  // A paper that has stopped printing is a real finding about the News Server,
-  // not a condition to skip past.
-  it('fails when the paper keeps no issue', async () => {
-    arrange({ list: { paperName: 'Helartia Herald', issues: [], error: '' } });
+  // A bar that parses but lists nothing is the world running no news server —
+  // an environment exception. It is recorded, and no issue is opened.
+  it('records an exception, and opens no issue, when the paper keeps none', async () => {
+    const requests = arrange({ list: { paperName: 'Helartia Herald', issues: [], error: '' } });
     const result = await flowByName('newspaper-read').run(ctx);
-    expect(result.status).toBe('FAIL');
-    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/kept issues/);
+    expect(result.status).toBe('PASS');
+    expect(result.assertions.find(a => /environment exception/.test(a.what))).toMatchObject({
+      ok: true,
+      detail: 'Helartia Herald: 0 issues',
+    });
+    expect(requests.some(m => m.type === WsMessageType.REQ_NEWSPAPER_ISSUE)).toBe(false);
   });
 
   it('fails when the bar itself could not be read', async () => {

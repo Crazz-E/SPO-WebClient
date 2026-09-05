@@ -614,9 +614,14 @@ const favoritesFolders: Flow = {
  * that the pages are reachable, that the folder names still decode, and that
  * an issue page still parses into stories.
  *
- * A paper with no kept issue FAILS here on purpose. It is a real finding about
- * the News Server — the world stopped printing — and it belongs in the report,
- * not behind a skip.
+ * A paper with no kept issue is an environment exception, not a failure. The
+ * issues are folders under `Newspapers\<World>\<Paper>\` written by the News
+ * Server (`News.pas:986`), a process planitia does not run — its log listing
+ * carries FIVECACHE, FIVEINTERFACE, FIVEMAIL and FIVEMODELSERVER and no news
+ * server — so `ShowBar.asp:81-109` has nothing to iterate and the gateway
+ * correctly answers an empty list with no error. What still holds live is the
+ * half this world can prove: the town hall names its paper, and `showbar.asp`
+ * is reachable and parses. The empty-list rendering itself is covered at L0/L1.
  */
 const newspaperRead: Flow = {
   name: 'newspaper-read',
@@ -645,29 +650,35 @@ const newspaperRead: Flow = {
         WsMessageType.RESP_NEWSPAPER_ISSUES,
       );
       assertions.check('the issue bar was read', listed.list.error === '', listed.list.error);
-      assertions.check(
-        'the paper has kept issues',
-        listed.list.issues.length > 0,
-        `${listed.list.issues.length} issues, newest ${listed.list.issues[0]?.date ?? '(none)'}`,
-      );
 
-      // The newest, which is what the bar selects with `Selected` empty.
-      const newest = listed.list.issues[0]?.folder ?? '';
-      const opened = await session.driver.request<WsRespNewspaperIssue>(
-        { type: WsMessageType.REQ_NEWSPAPER_ISSUE, ...target, folder: newest },
-        WsMessageType.RESP_NEWSPAPER_ISSUE,
-      );
-      assertions.check('the newest issue was read', opened.issue.error === '', opened.issue.error);
-      assertions.check(
-        'the issue answers for the folder that was asked for',
-        opened.issue.folder === newest,
-        `${opened.issue.folder} vs ${newest}`,
-      );
-      assertions.check(
-        'the newest issue opens with stories',
-        opened.issue.stories.length > 0,
-        `${opened.issue.stories.length} stories`,
-      );
+      const issues = listed.list.issues;
+      if (issues.length > 0) {
+        // The newest, which is what the bar selects with `Selected` empty.
+        const newest = issues[0].folder;
+        const opened = await session.driver.request<WsRespNewspaperIssue>(
+          { type: WsMessageType.REQ_NEWSPAPER_ISSUE, ...target, folder: newest },
+          WsMessageType.RESP_NEWSPAPER_ISSUE,
+        );
+        assertions.check('the newest issue was read', opened.issue.error === '', opened.issue.error);
+        assertions.check(
+          'the issue answers for the folder that was asked for',
+          opened.issue.folder === newest,
+          `${opened.issue.folder} vs ${newest}`,
+        );
+        assertions.check(
+          'the newest issue opens with stories',
+          opened.issue.stories.length > 0,
+          `${opened.issue.stories.length} stories`,
+        );
+      } else {
+        // Environment exception, not a defect — see the flow's note above. Never
+        // fall through to REQ_NEWSPAPER_ISSUE with the folder `''`.
+        assertions.check(
+          'the bar kept no issue — environment exception, no news server prints on this world',
+          true,
+          `${paperName}: 0 issues`,
+        );
+      }
 
       assertions.check('no gateway errors', session.driver.errors.length === 0);
       return report('newspaper-read', assertions, [], session);
