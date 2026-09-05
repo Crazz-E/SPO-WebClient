@@ -98,6 +98,7 @@ export type {
   NewspaperColumn,
   NewspaperArticle,
   NewspaperBoard,
+  NewspaperColumnTree,
   NewspaperIssueRef,
   NewspaperStory,
   NewspaperIssueList,
@@ -292,6 +293,8 @@ export type {
   WsRespNewspaperIssues,
   WsReqNewspaperIssue,
   WsRespNewspaperIssue,
+  WsReqNewspaperColumnTree,
+  WsRespNewspaperColumnTree,
   // Connection Search
   WsReqSearchConnections,
   WsRespSearchConnections,

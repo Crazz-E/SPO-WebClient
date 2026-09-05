@@ -9,13 +9,15 @@ import {
   type WsRespNewspaperIssues,
   type WsReqNewspaperIssue,
   type WsRespNewspaperIssue,
+  type WsReqNewspaperColumnTree,
+  type WsRespNewspaperColumnTree,
 } from '../../shared/types';
 import type { NewspaperTarget } from '../session/newspaper-handler';
 import type { WsHandlerContext, WsHandler } from './types';
 import { sendResponse } from './ws-utils';
 
 function targetOf(
-  req: WsReqNewspaperBoard | WsReqNewspaperPost | WsReqNewspaperIssues | WsReqNewspaperIssue,
+  req: WsReqNewspaperBoard | WsReqNewspaperPost | WsReqNewspaperIssues | WsReqNewspaperIssue | WsReqNewspaperColumnTree,
 ): NewspaperTarget {
   return {
     paperName: req.paperName,
@@ -74,6 +76,18 @@ export const handleNewspaperIssue: WsHandler = async (ctx: WsHandlerContext, msg
     type: WsMessageType.RESP_NEWSPAPER_ISSUE,
     wsRequestId: msg.wsRequestId,
     issue,
+  };
+  sendResponse(ctx.ws, response);
+};
+
+export const handleNewspaperColumnTree: WsHandler = async (ctx: WsHandlerContext, msg: WsMessage): Promise<void> => {
+  const req = msg as WsReqNewspaperColumnTree;
+  console.log(`[Gateway] Reading the column tree of ${req.paperName}`);
+  const tree = await ctx.session.getNewspaperColumnTree(targetOf(req));
+  const response: WsRespNewspaperColumnTree = {
+    type: WsMessageType.RESP_NEWSPAPER_COLUMN_TREE,
+    wsRequestId: msg.wsRequestId,
+    tree,
   };
   sendResponse(ctx.ws, response);
 };

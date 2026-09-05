@@ -1227,6 +1227,18 @@ export interface NewspaperBoard {
   error: string;
 }
 
+/**
+ * The board's whole column tree — `boardlist.asp:17-38` walked from the root,
+ * every column and every reply, flat. `summary` is always '' here: the page
+ * prints the summary inside an HTML comment (`:26-30`) and it is not read.
+ */
+export interface NewspaperColumnTree {
+  paperName: string;
+  entries: NewspaperColumn[];
+  /** Non-empty when the page could not be read; `entries` is then empty. */
+  error: string;
+}
+
 // =============================================================================
 // NEWSPAPER — the daily paper (Visual/News/Newsreader.asp)
 // =============================================================================

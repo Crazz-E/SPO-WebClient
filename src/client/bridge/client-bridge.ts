@@ -74,6 +74,7 @@ import {
   type WsRespNewspaperPost,
   type WsRespNewspaperIssues,
   type WsRespNewspaperIssue,
+  type WsRespNewspaperColumnTree,
   type WsRespTycoonRole,
   type WsRespEmpireFacilities,
 } from '@/shared/types';
@@ -260,6 +261,7 @@ export interface ClientCallbacks {
   onPostNewspaperColumn: (subject: string, body: string, replyToPath?: string) => void;
   onRequestNewspaperIssues: () => void;
   onRequestNewspaperIssue: (folder: string) => void;
+  onRequestNewspaperColumnTree: () => void;
 
   // Empire
   onRequestFacilities: () => void;
@@ -918,6 +920,10 @@ export const ClientBridge = {
       useNewspaperStore.getState().setIssue((msg as WsRespNewspaperIssue).issue);
       return;
     }
+    if (msg.type === WsMessageType.RESP_NEWSPAPER_COLUMN_TREE) {
+      useNewspaperStore.getState().setTree((msg as WsRespNewspaperColumnTree).tree);
+      return;
+    }
     if (msg.type === WsMessageType.RESP_NEWSPAPER_BOARD) {
       useNewspaperStore.getState().setBoard((msg as WsRespNewspaperBoard).board);
       return;
@@ -929,6 +935,10 @@ export const ClientBridge = {
       useNewspaperStore.getState().setBoard(resp.board);
     } else {
       useNewspaperStore.getState().setPosting(false);
+    }
+    if (resp.success) {
+      // A published column belongs in the archive too; `idle` is the modal's re-read signal.
+      useNewspaperStore.getState().setTreeState('idle');
     }
     showToast(resp.message, resp.success ? 'success' : 'error');
   },

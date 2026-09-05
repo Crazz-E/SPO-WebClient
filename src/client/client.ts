@@ -543,6 +543,12 @@ export class StarpeaceClient implements ClientHandlerContext {
         useNewspaperStore.getState().selectIssue(folder);
         this.sendMessage({ type: WsMessageType.REQ_NEWSPAPER_ISSUE, ...context, folder });
       },
+      onRequestNewspaperColumnTree: () => {
+        const context = useNewspaperStore.getState().context;
+        if (!context) return;
+        useNewspaperStore.getState().setTreeState('loading');
+        this.sendMessage({ type: WsMessageType.REQ_NEWSPAPER_COLUMN_TREE, ...context });
+      },
 
       // Empire
       onRequestFacilities: () => {

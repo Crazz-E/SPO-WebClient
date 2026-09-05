@@ -12,9 +12,10 @@
  * rooted at `boards\<World>\<Paper>\`, reachable only through the ASP pages —
  * there is no RDO member for it.
  *
- * Two operations, both on `boardmsg.asp`:
+ * Three operations, two of them on `boardmsg.asp`:
  *   - read   `?top=TRUE&root=…&path=…`      -> the index, or one column
  *   - post   `?action=post&…` + a form body -> `NewsObj.NewMessage` (`:146`)
+ *   - tree   `boardlist.asp?root=…&path=…` -> every column and reply, flat
  *
  * **Bodies come back as TEXT, never as HTML.** `NewsObj.BodyHTML` (`:255`) is
  * markup typed by other players and stored verbatim; this client has no
@@ -28,6 +29,7 @@ import type {
   NewspaperArticle,
   NewspaperBoard,
   NewspaperColumn,
+  NewspaperColumnTree,
   NewspaperIssue,
   NewspaperIssueList,
   NewspaperIssueRef,
@@ -80,6 +82,14 @@ const INDEX_ENTRY =
  */
 const REPLY_ENTRY =
   /<b>([\s\S]*?)<\/b>\s*-\s*<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<div\s+class=comment[^>]*>([\s\S]*?)<\/div>/gi;
+
+/**
+ * One node of `boardlist.asp`'s `RenderLevel` (`:24`): author in bold, a dash,
+ * the subject as a link whose `path` identifies the column. The summary that
+ * follows sits inside an HTML comment (`:26-30`) and is deliberately not read —
+ * which is why `REPLY_ENTRY` (anchored on `<div class=comment`) is not reused.
+ */
+const TREE_ENTRY = /<b>([\s\S]*?)<\/b>\s*-\s*<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
 
 /** `boardmsg.asp:250-256` — the open column: title, byline, body. */
 const ARTICLE_TITLE = /<div\s+class=title>([\s\S]*?)<\/div>/i;
@@ -149,6 +159,30 @@ export function parseNewspaperArticle(html: string): NewspaperArticle | null {
     body: toText(afterByline),
     replies,
   };
+}
+
+/**
+ * The whole column tree, `boardlist.asp:17-38` walked from the root — every
+ * column and every reply, flat, in page order. Depth is only expressible
+ * through `<div style="margin-left: 20px">` wrappers the server does not
+ * indent reliably, so it is read flat, exactly like `REPLY_ENTRY` above: every
+ * node is reachable by its own `path` whatever level it sits at.
+ */
+export function parseNewspaperColumnTree(html: string): NewspaperColumn[] {
+  const entries: NewspaperColumn[] = [];
+  TREE_ENTRY.lastIndex = 0;
+  let entry: RegExpExecArray | null;
+  while ((entry = TREE_ENTRY.exec(html)) !== null) {
+    const path = pathOf(entry[2]);
+    if (!path) continue;
+    entries.push({
+      author: toText(entry[1]),
+      subject: toText(entry[3]),
+      path,
+      summary: '',
+    });
+  }
+  return entries;
 }
 
 // =========================================================================
@@ -247,6 +281,48 @@ export async function getNewspaperBoard(
   } catch (e: unknown) {
     ctx.log.warn(`[Newspaper] Board read failed: ${toErrorMessage(e)}`);
     return emptyBoard(target, toErrorMessage(e));
+  }
+}
+
+function emptyTree(target: NewspaperTarget, error: string): NewspaperColumnTree {
+  return { paperName: target.paperName, entries: [], error };
+}
+
+/**
+ * Read the board's whole column tree — `boardlist.asp`, the archive frame
+ * Voyager showed beside `boardmsg.asp`'s ten-entry index. Uncapped and
+ * recursive from the root, so every column and every reply is reachable here
+ * even when `getNewspaperBoard`'s index only shows the latest ten.
+ */
+export async function getNewspaperColumnTree(
+  ctx: SessionContext, target: NewspaperTarget,
+): Promise<NewspaperColumnTree> {
+  const worldIp = ctx.currentWorldInfo?.ip;
+  const worldName = ctx.currentWorldInfo?.name || '';
+  if (!worldIp) return emptyTree(target, 'Not connected to a world.');
+  if (!target.paperName) return emptyTree(target, 'This town has no newspaper.');
+
+  const root = boardRoot(worldName, target.paperName);
+
+  try {
+    const params = boardParams(ctx, target, root, root);
+    const url = `http://${worldIp}/Five/0/Visual/News/boardlist.asp?${encodeParams(params)}`;
+    ctx.log.debug(`[Newspaper] Reading the column tree ${redactUrlCredentials(url)}`);
+
+    const resp = await fetchWithTimeout(url, { redirect: 'follow' });
+    if (!resp.ok) {
+      ctx.log.warn(`[Newspaper] column tree answered HTTP ${resp.status} — ${redactUrlCredentials(url)}`);
+      return emptyTree(target, `The newspaper answered HTTP ${resp.status}.`);
+    }
+
+    return {
+      paperName: target.paperName,
+      entries: parseNewspaperColumnTree(await resp.text()),
+      error: '',
+    };
+  } catch (e: unknown) {
+    ctx.log.warn(`[Newspaper] Column tree read failed: ${toErrorMessage(e)}`);
+    return emptyTree(target, toErrorMessage(e));
   }
 }
 

@@ -361,6 +361,7 @@ export function dispatchEvent(ctx: ClientHandlerContext, msg: WsMessage): void {
     case WsMessageType.RESP_NEWSPAPER_POST:
     case WsMessageType.RESP_NEWSPAPER_ISSUES:
     case WsMessageType.RESP_NEWSPAPER_ISSUE:
+    case WsMessageType.RESP_NEWSPAPER_COLUMN_TREE:
       ClientBridge.handleNewspaperResponse(msg);
       break;
 

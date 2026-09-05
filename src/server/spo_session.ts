@@ -34,6 +34,7 @@ import {
   PolicyData,
   PoliticsData,
   NewspaperBoard,
+  NewspaperColumnTree,
   NewspaperIssue,
   NewspaperIssueList,
   PoliticalRoleInfo,
@@ -1200,6 +1201,10 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
 
   public async getNewspaperIssue(target: NewspaperTarget, folder: string): Promise<NewspaperIssue> {
     return newspaperHandler.getNewspaperIssue(this, target, folder);
+  }
+
+  public async getNewspaperColumnTree(target: NewspaperTarget): Promise<NewspaperColumnTree> {
+    return newspaperHandler.getNewspaperColumnTree(this, target);
   }
 
   public async politicsVote(buildingX: number, buildingY: number, candidateName: string): Promise<{ success: boolean; message: string }> {

@@ -8,7 +8,14 @@
  */
 
 import { create } from 'zustand';
-import type { NewspaperBoard, NewspaperIssue, NewspaperIssueList, NewspaperIssueRef } from '@/shared/types';
+import type {
+  NewspaperBoard,
+  NewspaperColumn,
+  NewspaperColumnTree,
+  NewspaperIssue,
+  NewspaperIssueList,
+  NewspaperIssueRef,
+} from '@/shared/types';
 
 export type NewspaperLoadState = 'idle' | 'loading' | 'loaded' | 'error';
 
@@ -37,6 +44,11 @@ interface NewspaperState {
   requestedPath: string;
   isPosting: boolean;
 
+  /** The archive frame `boardlist.asp` — every column and reply, flat; read once per paper and re-read on refresh or after a post. */
+  tree: NewspaperColumn[];
+  treeState: NewspaperLoadState;
+  treeError: string;
+
   /** The paper's kept issues, newest first as the gateway sorted them. */
   issues: NewspaperIssueRef[];
   issuesState: NewspaperLoadState;
@@ -52,6 +64,8 @@ interface NewspaperState {
   setRequestedPath: (path: string) => void;
   setBoard: (board: NewspaperBoard) => void;
   setPosting: (posting: boolean) => void;
+  setTreeState: (state: NewspaperLoadState) => void;
+  setTree: (tree: NewspaperColumnTree) => void;
   setIssuesState: (state: NewspaperLoadState) => void;
   setIssues: (list: NewspaperIssueList) => void;
   selectIssue: (folder: string) => void;
@@ -67,6 +81,9 @@ const EMPTY = {
   loadState: 'idle' as NewspaperLoadState,
   requestedPath: '',
   isPosting: false,
+  tree: [] as NewspaperColumn[],
+  treeState: 'idle' as NewspaperLoadState,
+  treeError: '',
   issues: [] as NewspaperIssueRef[],
   issuesState: 'idle' as NewspaperLoadState,
   issuesError: '',
@@ -101,6 +118,13 @@ export const useNewspaperStore = create<NewspaperState>((set) => ({
     isPosting: false,
   }),
   setPosting: (isPosting) => set({ isPosting }),
+
+  setTreeState: (treeState) => set({ treeState }),
+  setTree: (tree) => set({
+    tree: tree.entries,
+    treeState: tree.error ? 'error' : 'loaded',
+    treeError: tree.error,
+  }),
 
   setIssuesState: (issuesState) => set({ issuesState }),
   setIssues: (list) => set({
