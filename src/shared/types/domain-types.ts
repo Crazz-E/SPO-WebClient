@@ -1221,6 +1221,52 @@ export interface NewspaperBoard {
 }
 
 // =============================================================================
+// NEWSPAPER — the daily paper (Visual/News/Newsreader.asp)
+// =============================================================================
+
+/** One kept issue: the folder `ShowBar.asp` iterates and the date it prints for it. */
+export interface NewspaperIssueRef {
+  /** `<issueId>@<date>`, the folder name (`News.pas:986`). The id of the issue. */
+  folder: string;
+  /** What the bar shows for it — `DecodeDate(folder)` (`ShowBar.asp:14-31`). */
+  date: string;
+}
+
+/**
+ * One story of an issue.
+ *
+ * `body` is PLAIN TEXT, not markup, for the same reason as `NewspaperArticle`:
+ * nothing leaves the gateway as HTML, so the client never needs a sanitiser.
+ */
+export interface NewspaperStory {
+  headline: string;
+  /** `<div class=author>` when the story carries one, else empty. */
+  byline: string;
+  body: string;
+}
+
+export interface NewspaperIssueList {
+  paperName: string;
+  /** Newest first — the folder id is `IssueMax - Issue` (`News.pas:956-961`). */
+  issues: NewspaperIssueRef[];
+  /** Non-empty when the bar could not be read; `issues` is then empty. */
+  error: string;
+}
+
+export interface NewspaperIssue {
+  paperName: string;
+  /** The folder this issue was read from — echoed so a stale answer is detectable. */
+  folder: string;
+  townName: string;
+  title: string;
+  /** The long date the issue's own header prints (`standard.header:19`). */
+  date: string;
+  stories: NewspaperStory[];
+  /** Non-empty when the issue could not be read; everything else is then empty. */
+  error: string;
+}
+
+// =============================================================================
 // POLITICAL ROLES (Tycoon Cache)
 // =============================================================================
 

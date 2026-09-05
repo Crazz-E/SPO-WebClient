@@ -33,7 +33,12 @@ import { handleGetProfile, handleProfileCurriculum, handleProfileBank, handlePro
 import { handleSearchMenuHome, handleSearchMenuTowns, handleSearchMenuPeopleSearch, handleSearchMenuTycoonProfile, handleSearchMenuRankings, handleSearchMenuRankingDetail, handleSearchMenuBanks } from './search-handlers';
 
 // Politics
-import { handleNewspaperBoard, handleNewspaperPost } from './newspaper-handlers';
+import {
+  handleNewspaperBoard,
+  handleNewspaperPost,
+  handleNewspaperIssues,
+  handleNewspaperIssue,
+} from './newspaper-handlers';
 import { handlePoliticsData, handlePoliticsVote, handlePoliticsLaunchCampaign, handlePoliticsCancelCampaign, handlePoliticsSetRating, handlePoliticsSetPublicity, handlePoliticsSetProject, handleTycoonRole } from './politics-handlers';
 
 // Miscellaneous
@@ -129,6 +134,8 @@ export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   [WsMessageType.REQ_POLITICS_SET_PROJECT]: handlePoliticsSetProject,
   [WsMessageType.REQ_NEWSPAPER_BOARD]: handleNewspaperBoard,
   [WsMessageType.REQ_NEWSPAPER_POST]: handleNewspaperPost,
+  [WsMessageType.REQ_NEWSPAPER_ISSUES]: handleNewspaperIssues,
+  [WsMessageType.REQ_NEWSPAPER_ISSUE]: handleNewspaperIssue,
   [WsMessageType.REQ_TYCOON_ROLE]: handleTycoonRole,
 
   // Miscellaneous
