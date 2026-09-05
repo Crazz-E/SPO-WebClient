@@ -766,6 +766,7 @@ export interface MailMessageHeader {
 export interface MailMessageFull extends MailMessageHeader {
   body: string[];               // Message body lines
   attachments: MailAttachment[];
+  stampUrl?: string;            // Proxied stamp picture (MessageHeader.asp:167-169); absent when no world is joined
 }
 
 /**

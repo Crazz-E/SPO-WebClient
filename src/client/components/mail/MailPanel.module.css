@@ -240,6 +240,34 @@
   justify-content: space-between;
 }
 
+/* Header fields + stamp (MessageHeader.asp:178 puts the stamp beside the header table).
+   The fields own the width; the stamp is a fixed-size box that shrinks to nothing first. */
+.readMetaRowWithStamp {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.readMetaRowWithStamp .readMeta {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.readStamp {
+  flex-shrink: 0;
+  width: 64px;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+/* Narrow viewports: the header fields keep every pixel; the stamp goes. */
+@media (max-width: 479px) {
+  .readStamp {
+    display: none;
+  }
+}
+
 .readBody {
   font-size: var(--text-sm);
   color: var(--text-secondary);

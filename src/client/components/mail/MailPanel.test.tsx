@@ -144,3 +144,89 @@ describe('MailPanel — folder empty state', () => {
     expect(screen.queryByText(EMPTY_FOLDER_TEXT.Draft.title)).toBeNull();
   });
 });
+
+describe('MailPanel — message stamp', () => {
+  const withStamp: MailMessageFull = {
+    messageId: 'msg-1', from: 'Alice', fromAddr: 'alice', to: 'Me', toAddr: 'me', subject: 'First',
+    date: '', dateFmt: 'Jan 1', body: ['hi'], read: true, stamp: 17, noReply: false, attachments: [],
+    stampUrl: '/proxy-image?url=http%3A%2F%2Fworld%2Fstamp2.jpg',
+  };
+  const secondWithStamp: MailMessageFull = {
+    ...withStamp, messageId: 'msg-2', subject: 'Second',
+    stampUrl: '/proxy-image?url=http%3A%2F%2Fworld%2Fstamp5.jpg',
+  };
+
+  beforeEach(() => {
+    resetStores();
+    useMailStore.setState({
+      currentFolder: 'Inbox',
+      currentView: 'list',
+      messages: [],
+      currentMessage: null,
+      isLoading: false,
+      isMessageLoading: false,
+      pendingDeleteId: null,
+      folderRefreshToken: 0,
+    });
+  });
+
+  it('shows the stamp image alongside the header fields when stampUrl is present', () => {
+    const { container } = renderWithProviders(<MailPanel />);
+    act(() => useMailStore.getState().setCurrentMessage(withStamp));
+
+    const img = container.querySelector('img[src*="stamp2.jpg"]');
+    expect(img).toBeTruthy();
+    expect(screen.getByText('From: Alice')).toBeTruthy();
+    expect(screen.getByText('To: Me')).toBeTruthy();
+  });
+
+  it('renders no stamp image when stampUrl is absent', () => {
+    const noStamp: MailMessageFull = { ...withStamp, stampUrl: undefined };
+    const { container } = renderWithProviders(<MailPanel />);
+    act(() => useMailStore.getState().setCurrentMessage(noStamp));
+
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('removes the stamp on image error', () => {
+    const { container } = renderWithProviders(<MailPanel />);
+    act(() => useMailStore.getState().setCurrentMessage(withStamp));
+
+    const img = container.querySelector('img[src*="stamp2.jpg"]') as HTMLImageElement;
+    fireEvent.error(img);
+
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('removes the stamp when the proxy answers its 1x1 placeholder, keeps a real picture', () => {
+    const { container } = renderWithProviders(<MailPanel />);
+    act(() => useMailStore.getState().setCurrentMessage(withStamp));
+
+    const img = container.querySelector('img[src*="stamp2.jpg"]') as HTMLImageElement;
+    Object.defineProperty(img, 'naturalWidth', { value: 1, configurable: true });
+    fireEvent.load(img);
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('keeps a real picture on load', () => {
+    const { container } = renderWithProviders(<MailPanel />);
+    act(() => useMailStore.getState().setCurrentMessage(withStamp));
+
+    const img = container.querySelector('img[src*="stamp2.jpg"]') as HTMLImageElement;
+    Object.defineProperty(img, 'naturalWidth', { value: 70, configurable: true });
+    fireEvent.load(img);
+    expect(container.querySelector('img[src*="stamp2.jpg"]')).toBeTruthy();
+  });
+
+  it('resets the hidden flag per message: an error on one message does not hide the next', () => {
+    const { container } = renderWithProviders(<MailPanel />);
+    act(() => useMailStore.getState().setCurrentMessage(withStamp));
+
+    const firstImg = container.querySelector('img[src*="stamp2.jpg"]') as HTMLImageElement;
+    fireEvent.error(firstImg);
+    expect(container.querySelector('img')).toBeNull();
+
+    act(() => useMailStore.getState().setCurrentMessage(secondWithStamp));
+    expect(container.querySelector('img[src*="stamp5.jpg"]')).toBeTruthy();
+  });
+});
