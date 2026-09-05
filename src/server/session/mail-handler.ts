@@ -38,6 +38,7 @@ import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } f
 import { parseMessageListHtml } from '../mail-list-parser';
 import { toErrorMessage } from '../../shared/error-utils';
 import { fetchWithTimeout } from '../fetch-with-timeout';
+import { isHtmlContent, extractMetaRefreshUrl, prepareInlinedMailPage } from '../../shared/mail-html-utils';
 
 // ── Fire-and-forget helper for void mail procedures ──────────────────────
 function mailFireAndForget(ctx: SessionContext, targetId: string, method: RdoMemberName, ...args: RdoValue[]): void {
@@ -80,6 +81,40 @@ async function markInboxMessageRead(ctx: SessionContext, messageId: string): Pro
     }
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Header touch failed — unread flag not cleared:', toErrorMessage(e));
+  }
+}
+
+const MAIL_PAGE_INLINE_TIMEOUT_MS = 5000;
+
+/**
+ * Inline a system notification's META-REFRESH target into the message body itself, so the
+ * client can render it same-origin instead of loading it into a cross-origin iframe (where
+ * no click handler can be attached). Only ever fetches the world's own IP — any other host in
+ * a META REFRESH (a player-composed message, never a system one in practice) is an SSRF risk
+ * and is left untouched, on today's cross-origin iframe path. `redirect: 'manual'` so a 3xx
+ * from the world server cannot walk the gateway to a third host — it just yields `!ok` and
+ * falls back. Never throws, never blocks the read — same contract as `markInboxMessageRead`.
+ */
+async function inlineWorldPage(ctx: SessionContext, body: string[]): Promise<string[]> {
+  if (!isHtmlContent(body)) return body;
+  const pageUrl = extractMetaRefreshUrl(body.join('\n'));
+  if (!pageUrl) return body;
+
+  try {
+    const parsed = new URL(pageUrl);
+    if (parsed.hostname !== ctx.currentWorldInfo?.ip) return body;
+
+    const response = await fetchWithTimeout(pageUrl, { redirect: 'manual' }, MAIL_PAGE_INLINE_TIMEOUT_MS);
+    if (!response.ok) {
+      ctx.log.warn(`[Mail] Inline fetch of ${pageUrl} returned ${response.status} — leaving the META REFRESH iframe path`);
+      return body;
+    }
+
+    const inlined = prepareInlinedMailPage(await response.text(), pageUrl);
+    return inlined.split('\n').filter(l => l.length > 0);
+  } catch (e: unknown) {
+    ctx.log.warn('[Mail] Failed to inline world page:', toErrorMessage(e));
+    return body;
   }
 }
 
@@ -368,6 +403,8 @@ export async function readMailMessage(
       ctx.log.warn('[Mail] Failed to close message:', e);
     }
   }
+
+  message.body = await inlineWorldPage(ctx, message.body);
 
   // 6. Inbox only — Sent/Draft carry no meaningful Read flag (MailServer.pas:544 walks tidInbox).
   if (folder.toLowerCase() === 'inbox') {

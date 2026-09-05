@@ -30,9 +30,14 @@ describe('route', () => {
     ]));
   });
 
-  it('routes mail-handler.ts to mail-roundtrip, not to the governance flows', () => {
+  it('routes mail-handler.ts to the mail flows, not to the governance flows', () => {
     const d = route(['src/server/session/mail-handler.ts']);
-    expect(d.required).toEqual([SPINE_FLOW, 'mail-roundtrip']);
+    expect(d.required).toEqual([SPINE_FLOW, 'mail-roundtrip', 'zoning-alert-link']);
+  });
+
+  it('routes the shared local-asp-url translator to the two mail flows', () => {
+    const d = route(['src/shared/local-asp-url.ts']);
+    expect(d.required).toEqual([SPINE_FLOW, 'mail-roundtrip', 'zoning-alert-link']);
   });
 
   it('routes a Favorites change to its own flows, not to the governance ones', () => {

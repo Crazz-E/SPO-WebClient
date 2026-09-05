@@ -1,4 +1,4 @@
-import { isHtmlContent, extractMetaRefreshUrl } from './mail-html-utils';
+import { isHtmlContent, extractMetaRefreshUrl, prepareInlinedMailPage } from './mail-html-utils';
 
 describe('isHtmlContent', () => {
   it('returns true for body starting with <HEAD>', () => {
@@ -93,5 +93,42 @@ describe('extractMetaRefreshUrl', () => {
   it('handles META tag with extra attributes', () => {
     const html = '<META NAME="test" HTTP-EQUIV="REFRESH" CONTENT="5; URL=http://example.com/delayed">';
     expect(extractMetaRefreshUrl(html)).toBe('http://example.com/delayed');
+  });
+});
+
+describe('prepareInlinedMailPage', () => {
+  const PAGE_URL = 'http://158.69.153.134/Five/0/Visual/Voyager/Mail/SpecialMessages/MsgZoned.asp';
+  const EXPECTED_BASE = 'http://158.69.153.134/Five/0/Visual/Voyager/Mail/SpecialMessages/';
+
+  it('removes a script block', () => {
+    const html = '<head></head><body><script>alert(1)</script><a href="x">link</a></body>';
+    const out = prepareInlinedMailPage(html, PAGE_URL);
+    expect(out).not.toMatch(/<script/i);
+    expect(out).toContain('<a href="x">link</a>');
+  });
+
+  it('removes inline handler attributes while href survives', () => {
+    const html = '<head></head><body><a href="x" onclick="evil()" onload="evil2()">link</a></body>';
+    const out = prepareInlinedMailPage(html, PAGE_URL);
+    expect(out).not.toMatch(/onclick/i);
+    expect(out).not.toMatch(/onload/i);
+    expect(out).toContain('href="x"');
+  });
+
+  it('injects the base tag right after <head>', () => {
+    const html = '<head><title>t</title></head><body></body>';
+    const out = prepareInlinedMailPage(html, PAGE_URL);
+    expect(out).toBe(`<head><base href="${EXPECTED_BASE}"><title>t</title></head><body></body>`);
+  });
+
+  it('prepends a head with the base tag when there is no head', () => {
+    const html = '<body>hello</body>';
+    const out = prepareInlinedMailPage(html, PAGE_URL);
+    expect(out).toBe(`<head><base href="${EXPECTED_BASE}"></head><body>hello</body>`);
+  });
+
+  it('resolves the base to the real-shaped MsgZoned.asp directory', () => {
+    const out = prepareInlinedMailPage('<head></head>', PAGE_URL);
+    expect(out).toContain(`<base href="${EXPECTED_BASE}">`);
   });
 });

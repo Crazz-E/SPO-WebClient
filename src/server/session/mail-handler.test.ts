@@ -587,6 +587,97 @@ describe('readMailMessage', () => {
     expect(fake.sent).toHaveLength(0);
   });
 
+  // ── Gateway inlining — issue #515 ─────────────────────────────────────────
+
+  describe('gateway inlining (inlineWorldPage)', () => {
+    const ZONED_URL = 'http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//MsgZoned.asp?BuildX0=12&BuildY0=34';
+    const zonedBody = [
+      '<HEAD>',
+      `<META HTTP-EQUIV="REFRESH" CONTENT="0; URL=${ZONED_URL}">`,
+      '</HEAD>',
+    ];
+    const WORLD_PAGE =
+      '<head></head><body><a href="http://local.asp?frame_Id=MapIsoView&frame_Action=SELECT&x=12&y=34">Town Hall</a><script>evil()</script></body>';
+
+    // GetLines answers `res="%<body>"` on the wire — a literal `"` inside the body must be
+    // doubled the way `encodeRdoLiteral` does (rdo-types.ts:71), or the fake payload's own
+    // quotes end the property value early.
+    const rdoEncode = (s: string) => s.replace(/"/g, '""');
+
+    it('fetches the world page (redirect: manual) and inlines it, base injected, script stripped', async () => {
+      const fake = makeMailCtx();
+      answerRead(fake, { body: rdoEncode(zonedBody.join('\n')) });
+      mockFetch.mockResolvedValueOnce(htmlResponse(WORLD_PAGE));
+
+      const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+      expect(mockFetch.mock.calls[0][0]).toBe(ZONED_URL);
+      expect(mockFetch.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'manual' }));
+      const joined = msg.body.join('\n');
+      expect(joined).toContain('href="http://local.asp?frame_Id=MapIsoView&frame_Action=SELECT&x=12&y=34"');
+      expect(joined).toContain('<base href="http://158.69.153.134/Five/0/Visual/Voyager/Mail/SpecialMessages/">');
+      expect(joined).not.toMatch(/<script/i);
+      expect(membersOf(fake.sent)).toEqual(['OpenMessage', 'GetHeaders', 'GetLines', 'GetAttachmentCount', 'CloseMessage']);
+    });
+
+    it('never fetches a page whose host is not the current world — SSRF guard', async () => {
+      const evilBody = [
+        '<HEAD>',
+        '<META HTTP-EQUIV="REFRESH" CONTENT="0; URL=http://evil.example/MsgZoned.asp?BuildX0=12&BuildY0=34">',
+        '</HEAD>',
+      ];
+      const fake = makeMailCtx();
+      answerRead(fake, { body: rdoEncode(evilBody.join('\n')) });
+
+      const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][0]).toContain('MessageBody.asp');
+      expect(msg.body).toEqual(evilBody);
+    });
+
+    it('falls back to the original body when the page fetch answers non-OK', async () => {
+      const fake = makeMailCtx();
+      answerRead(fake, { body: rdoEncode(zonedBody.join('\n')) });
+      mockFetch.mockResolvedValueOnce(htmlResponse('', 500));
+
+      const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+      expect(msg.body).toEqual(zonedBody);
+    });
+
+    it('falls back to the original body when the page fetch rejects', async () => {
+      const fake = makeMailCtx();
+      answerRead(fake, { body: rdoEncode(zonedBody.join('\n')) });
+      mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+      const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+      expect(msg.body).toEqual(zonedBody);
+    });
+
+    it('inlines a Sent-folder message too — inlining does not depend on the Inbox touch', async () => {
+      const fake = makeMailCtx();
+      answerRead(fake, { body: rdoEncode(zonedBody.join('\n')) });
+      mockFetch.mockResolvedValueOnce(htmlResponse(WORLD_PAGE));
+
+      const msg = await readMailMessage(fake.ctx, 'Sent', 'MSG-77');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(msg.body.join('\n')).toContain('local.asp');
+    });
+
+    it('leaves a plain-text body alone — only the Inbox touch fetches', async () => {
+      const fake = makeMailCtx();
+      answerRead(fake);
+
+      await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][0]).toContain('MessageBody.asp');
+    });
+  });
+
   // ── MessageBody.asp header touch — Inbox only ────────────────────────────
 
   it('after an Inbox read, GETs MessageBody.asp once, after the RDO sequence completes', async () => {

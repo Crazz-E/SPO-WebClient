@@ -28,3 +28,32 @@ export function extractMetaRefreshUrl(html: string): string | null {
   );
   return match?.[1]?.trim() ?? null;
 }
+
+/**
+ * A world-server page about to be rendered inside the app's own origin: scripts and inline
+ * handlers removed (the sandbox already refuses to run them — this is the second fence), and a
+ * `<base href>` pointing at the page's directory so its relative stylesheets keep resolving.
+ */
+export function prepareInlinedMailPage(html: string, pageUrl: string): string {
+  let stripped = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<script\b[^>]*>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+
+  const url = new URL(pageUrl);
+  // The Delphi server writes doubled slashes into these paths (`Five//0/…//MsgZoned.asp`);
+  // collapse them so the directory a stylesheet resolves against is the one that exists.
+  const cleanPath = url.pathname.replace(/\/{2,}/g, '/');
+  const dir = `${url.origin}${cleanPath.slice(0, cleanPath.lastIndexOf('/') + 1)}`;
+  const base = `<base href="${dir}">`;
+
+  const headMatch = stripped.match(/<head[^>]*>/i);
+  if (headMatch) {
+    const idx = stripped.indexOf(headMatch[0]) + headMatch[0].length;
+    stripped = stripped.slice(0, idx) + base + stripped.slice(idx);
+  } else {
+    stripped = `<head>${base}</head>${stripped}`;
+  }
+
+  return stripped;
+}
