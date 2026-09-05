@@ -32,6 +32,7 @@ import {
   parseNewspaperIssue,
   getNewspaperIssues,
   getNewspaperIssue,
+  isBoardRoot,
   type NewspaperTarget,
 } from './newspaper-handler';
 import { makeSessionCtx } from '../__tests__/session/fake-session-context';
@@ -130,8 +131,9 @@ function articlePage(opts: {
   authorDesc?: string;
   body: string;
   replies?: Array<{ author: string; subject: string; summary: string; path: string }>;
+  parentPath?: string;
 }): string {
-  const { subject, author, authorDesc = '', body, replies = [] } = opts;
+  const { subject, author, authorDesc = '', body, replies = [], parentPath = '' } = opts;
   const replyBlock = replies.map((r) => [
     '\t\t\t\t<div style="margin-top: 5px">',                            // :169
     `\t\t\t\t\t<b>${r.author}</b> - <a href="boardmsg.asp?root=${ROOT}&path=${encodeURIComponent(r.path)}&TownName=Helartia&WorldName=Planitia&tycoon=SPO_test3&DAAddr=10.0.0.5&DAPort=1111"> ${r.subject}</a><br>`,
@@ -145,7 +147,7 @@ function articlePage(opts: {
 
   return [
     '\t\t<div style="text-align: right; border-style-bottom: solid; border-style-size: 1;">',
-    '\t\t\t<a href="boardmsg.asp?root=' + ROOT + '&path=&tycoon=SPO_test3">',
+    '\t\t\t<a href="boardmsg.asp?root=' + ROOT + '&path=' + encodeURIComponent(parentPath) + '&tycoon=SPO_test3">',
     '\t\t\t\t<img src="images\\up.gif" width=36 height=30 border=0></a>',
     '\t\t</div>',
     '\t\t<table>',                                                      // :242
@@ -230,7 +232,36 @@ describe('parseNewspaperArticle', () => {
       byline: 'By SPO_test3 of Yellow Inc.',
       body: 'VOTE FOR HIM',
       replies: [],
+      parentPath: '',
+      photoUrl: '/fivedata/userinfo/Planitia/SPO_test3/largephoto.jpg',
     });
+  });
+
+  // `boardmsg.asp:236-237` — the Up link carries the parent column's own path
+  // for a reply, and the board root for a top-level column.
+  it('reads the parent path of the Up link for a reply', () => {
+    const parentPath = 'C:\\news\\boards\\Planitia\\Helartia Herald\\m1.five\\';
+    const article = parseNewspaperArticle(articlePage({
+      subject: 'S', author: 'A', body: 'B', parentPath,
+    }));
+    expect(article?.parentPath).toBe(parentPath);
+  });
+
+  // The root-page half of the criterion: no article at all, so no parent path.
+  it('yields no parent path for the index (root) page', () => {
+    const article = parseNewspaperArticle(indexPage([
+      { author: 'A', subject: 'S', summary: 'x', path: 'm.five' },
+    ]));
+    expect(article?.parentPath).toBeUndefined();
+  });
+
+  // `:263` — the index page's own `<img id=picture>` has no `src`; a column
+  // page that somehow carries none either should not crash the parser.
+  it('yields an empty photo URL when the picture tag has no src', () => {
+    const html = articlePage({ subject: 'S', author: 'A', body: 'B' })
+      .replace(/<img id=picture src="[^"]*"[^>]*>/, '<img id=picture style="display: none">');
+    const article = parseNewspaperArticle(html);
+    expect(article?.photoUrl).toBe('');
   });
 
   // `NewsObj.BodyHTML` (`:255`) is markup other players typed. This client has no
@@ -282,6 +313,31 @@ describe('parseNewspaperArticle', () => {
     expect(article?.subject).toBe('S');
     expect(article?.byline).toBe('');
     expect(article?.body).toContain('B');
+  });
+});
+
+// =============================================================================
+// isBoardRoot
+// =============================================================================
+describe('isBoardRoot', () => {
+  const root = 'boards\\Planitia\\Helartia Herald\\';
+
+  it('treats an empty parent path as the root', () => {
+    expect(isBoardRoot('', root)).toBe(true);
+  });
+
+  it('treats the relative root, with or without a trailing backslash, as the root', () => {
+    expect(isBoardRoot(root, root)).toBe(true);
+    expect(isBoardRoot(root.replace(/\\$/, ''), root)).toBe(true);
+  });
+
+  it('treats the globalized root, case-insensitively, as the root', () => {
+    const globalized = 'C:\\news\\BOARDS\\Planitia\\Helartia Herald\\';
+    expect(isBoardRoot(globalized, root)).toBe(true);
+  });
+
+  it('does not treat a column under the root as the root', () => {
+    expect(isBoardRoot(root + 'm1.five\\', root)).toBe(false);
   });
 });
 
@@ -341,6 +397,36 @@ describe('getNewspaperBoard', () => {
     // `RenderGlobal` is not called on a column page (`:266-272`), so the index
     // is legitimately empty here rather than missing.
     expect(board.columns).toEqual([]);
+  });
+
+  // The parser reads the parent path exactly as printed; the transport is
+  // what decides a top-level column's parent (the board root) means "none".
+  // The portrait must come back through the image proxy — a raw cross-origin
+  // `http://<worldIp>/…` URL is blocked by the gateway's own CSP (`img-src
+  // 'self' data: blob:`), same as the mail stamp (`mail-handlers.ts:54`).
+  it('keeps the parent path of a reply and resolves the photo through the proxy', async () => {
+    const fake = makeWebCtx();
+    mockFetch.mockResolvedValue(htmlResponse(articlePage({
+      subject: 'Agreed', author: 'Bob', body: 'Well said', parentPath: 'm1.five',
+    })));
+
+    const board = await getNewspaperBoard(fake.ctx, TARGET, 'm1.five\\r1.five');
+
+    expect(board.article?.parentPath).toBe('m1.five');
+    expect(board.article?.photoUrl).toBe(
+      '/proxy-image?url=' + encodeURIComponent('http://158.69.153.134/fivedata/userinfo/Planitia/Bob/largephoto.jpg'),
+    );
+  });
+
+  it('clears the parent path of a top-level column whose Up link points at the board root', async () => {
+    const fake = makeWebCtx();
+    mockFetch.mockResolvedValue(htmlResponse(articlePage({
+      subject: 'Roads', author: 'Innos', body: 'More of them', parentPath: ROOT,
+    })));
+
+    const board = await getNewspaperBoard(fake.ctx, TARGET, 'm1.five');
+
+    expect(board.article?.parentPath).toBe('');
   });
 
   it('a Capitol board carries Capitol=YES with x/y and an empty TownName', async () => {

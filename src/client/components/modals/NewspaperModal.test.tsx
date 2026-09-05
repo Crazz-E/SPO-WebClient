@@ -49,6 +49,8 @@ const ARTICLE: NewspaperBoard = {
     byline: 'By SPO_test3 of Yellow Inc.',
     body: 'VOTE FOR HIM',
     replies: [{ author: 'Innos', subject: 'Agreed', summary: 'Well said', path: 'r1.five' }],
+    parentPath: '',
+    photoUrl: 'http://host/fivedata/userinfo/Planitia/SPO_test3/largephoto.jpg',
   },
 };
 
@@ -127,6 +129,46 @@ describe('NewspaperModal', () => {
     expect(screen.getByText('VOTE FOR HIM')).toBeTruthy();
     expect(screen.getByText('Replies')).toBeTruthy();
     expect(screen.getByText('Agreed')).toBeTruthy();
+  });
+
+  // A top-level column's parent is the board root — the index "All columns"
+  // already opens — so the Up control is absent, not disabled.
+  it('shows no Up control at the root of the tree', () => {
+    openWith(ARTICLE);
+    renderWithProviders(<NewspaperModal />);
+    expect(screen.queryByText('Up')).toBeNull();
+  });
+
+  it('opens the parent column through the Up control', () => {
+    const spy = jest.fn();
+    openWith({ ...ARTICLE, article: { ...ARTICLE.article!, parentPath: 'C:\\news\\boards\\Planitia\\Helartia Herald\\m1.five\\' } });
+    renderWithProviders(
+      <NewspaperModal />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestNewspaperBoard: spy }) },
+    );
+    fireEvent.click(screen.getByText('Up'));
+    expect(spy).toHaveBeenCalledWith('C:\\news\\boards\\Planitia\\Helartia Herald\\m1.five\\');
+  });
+
+  it('shows the author portrait beside the byline', () => {
+    openWith(ARTICLE);
+    const { container } = renderWithProviders(<NewspaperModal />);
+    const img = container.querySelector('img') as HTMLImageElement;
+    expect(img.src).toBe(ARTICLE.article!.photoUrl);
+  });
+
+  it('falls back to a silhouette when the portrait fails to load, never a broken image', () => {
+    openWith(ARTICLE);
+    const { container } = renderWithProviders(<NewspaperModal />);
+    const img = container.querySelector('img') as HTMLImageElement;
+    fireEvent.error(img);
+    expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('shows the silhouette outright when the page printed no picture', () => {
+    openWith({ ...ARTICLE, article: { ...ARTICLE.article!, photoUrl: '' } });
+    const { container } = renderWithProviders(<NewspaperModal />);
+    expect(container.querySelector('img')).toBeNull();
   });
 
   it('goes back to the index with no path', () => {

@@ -18,12 +18,25 @@
  */
 
 import { useEffect, useState } from 'react';
-import { ArrowLeft, X, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowUp, User, X, RefreshCw } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { useNewspaperStore } from '../../store/newspaper-store';
 import { useClient } from '../../context';
 import { IconButton, SkeletonLines } from '../common';
 import styles from './NewspaperModal.module.css';
+
+/**
+ * The author's portrait (`boardmsg.asp:244`). Most tycoons have no photo on
+ * disk — `:44-45` swaps in a default when the file is missing — so a failed
+ * load shows a silhouette, never the browser's broken-image box.
+ */
+function AuthorPortrait({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+  if (url === '' || failed) {
+    return <div className={styles.portraitFallback} aria-hidden="true"><User size={20} /></div>;
+  }
+  return <img className={styles.portrait} src={url} alt="" onError={() => setFailed(true)} />;
+}
 
 export function NewspaperModal() {
   const modal = useUiStore((s) => s.modal);
@@ -234,14 +247,27 @@ export function NewspaperModal() {
               {loadState === 'loaded' && board && (
                 article ? (
                   <article className={styles.article}>
-                    <button
-                      className={styles.backLink}
-                      onClick={() => client.onRequestNewspaperBoard()}
-                    >
-                      <ArrowLeft size={14} /> All columns
-                    </button>
+                    <div className={styles.articleNav}>
+                      <button
+                        className={styles.backLink}
+                        onClick={() => client.onRequestNewspaperBoard()}
+                      >
+                        <ArrowLeft size={14} /> All columns
+                      </button>
+                      {article.parentPath !== '' && (
+                        <button
+                          className={styles.backLink}
+                          onClick={() => client.onRequestNewspaperBoard(article.parentPath)}
+                        >
+                          <ArrowUp size={14} /> Up
+                        </button>
+                      )}
+                    </div>
                     <h3 className={styles.articleTitle}>{article.subject}</h3>
-                    {article.byline && <p className={styles.byline}>{article.byline}</p>}
+                    <div className={styles.bylineRow}>
+                      <AuthorPortrait key={board.path} url={article.photoUrl} />
+                      {article.byline && <p className={styles.byline}>{article.byline}</p>}
+                    </div>
                     <p className={styles.articleBody}>{article.body}</p>
 
                     {article.replies.length > 0 && (
