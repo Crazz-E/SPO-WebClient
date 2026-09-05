@@ -401,7 +401,10 @@ describe('getNewspaperBoard', () => {
 
   // The parser reads the parent path exactly as printed; the transport is
   // what decides a top-level column's parent (the board root) means "none".
-  it('keeps the parent path of a reply and resolves the photo to the world host', async () => {
+  // The portrait must come back through the image proxy — a raw cross-origin
+  // `http://<worldIp>/…` URL is blocked by the gateway's own CSP (`img-src
+  // 'self' data: blob:`), same as the mail stamp (`mail-handlers.ts:54`).
+  it('keeps the parent path of a reply and resolves the photo through the proxy', async () => {
     const fake = makeWebCtx();
     mockFetch.mockResolvedValue(htmlResponse(articlePage({
       subject: 'Agreed', author: 'Bob', body: 'Well said', parentPath: 'm1.five',
@@ -410,7 +413,9 @@ describe('getNewspaperBoard', () => {
     const board = await getNewspaperBoard(fake.ctx, TARGET, 'm1.five\\r1.five');
 
     expect(board.article?.parentPath).toBe('m1.five');
-    expect(board.article?.photoUrl).toBe('http://158.69.153.134/fivedata/userinfo/Planitia/Bob/largephoto.jpg');
+    expect(board.article?.photoUrl).toBe(
+      '/proxy-image?url=' + encodeURIComponent('http://158.69.153.134/fivedata/userinfo/Planitia/Bob/largephoto.jpg'),
+    );
   });
 
   it('clears the parent path of a top-level column whose Up link points at the board root', async () => {

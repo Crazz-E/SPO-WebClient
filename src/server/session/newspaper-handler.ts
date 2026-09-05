@@ -37,6 +37,7 @@ import type {
   NewspaperStory,
 } from '../../shared/types';
 import { toErrorMessage } from '../../shared/error-utils';
+import { toProxyUrl } from '../../shared/proxy-utils';
 import { fetchWithTimeout } from '../fetch-with-timeout';
 import { redactUrlCredentials } from '../url-redact';
 import { requireDaParams } from './asp-da-params';
@@ -218,17 +219,17 @@ export function isBoardRoot(parentPath: string, root: string): boolean {
   return parent === '' || parent === base || parent.endsWith('\\' + base);
 }
 
-/** The article as the client needs it: no Up onto the index, portrait resolved to the host. */
+/** The article as the client needs it: no Up onto the index, portrait resolved through the proxy. */
 function resolveArticle(article: NewspaperArticle | null, worldIp: string, root: string): NewspaperArticle | null {
   if (!article) return null;
   return {
     ...article,
     parentPath: isBoardRoot(article.parentPath, root) ? '' : article.parentPath,
-    // `:244` is root-relative, so it resolves against the HOST — the same trap
-    // profile-finance-handler.ts:103-112 documents.
-    photoUrl: article.photoUrl === '' || /^https?:\/\//i.test(article.photoUrl)
-      ? article.photoUrl
-      : `http://${worldIp}${article.photoUrl.startsWith('/') ? '' : '/'}${article.photoUrl}`,
+    // `:244` is root-relative and the browser's CSP (`img-src 'self' data: blob:`,
+    // server.ts setSecurityHeaders) blocks a raw cross-origin `http://<worldIp>/…`
+    // image — route it through the same `/proxy-image` mechanism mail-handlers.ts:54
+    // and search-menu-service.ts:111 use for the same kind of world-hosted picture.
+    photoUrl: article.photoUrl === '' ? '' : toProxyUrl(article.photoUrl, worldIp),
   };
 }
 
