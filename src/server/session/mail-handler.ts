@@ -38,6 +38,7 @@ import { parsePropertyResponse as parsePropertyResponseHelper, writeRdoFrame } f
 import { parseMessageListHtml } from '../mail-list-parser';
 import { toErrorMessage } from '../../shared/error-utils';
 import { fetchWithTimeout } from '../fetch-with-timeout';
+import { isHtmlContent, extractMetaRefreshUrl, prepareInlinedMailPage } from '../../shared/mail-html-utils';
 
 // ── Fire-and-forget helper for void mail procedures ──────────────────────
 function mailFireAndForget(ctx: SessionContext, targetId: string, method: RdoMemberName, ...args: RdoValue[]): void {
@@ -80,6 +81,44 @@ async function markInboxMessageRead(ctx: SessionContext, messageId: string): Pro
     }
   } catch (e: unknown) {
     ctx.log.warn('[Mail] Header touch failed — unread flag not cleared:', toErrorMessage(e));
+  }
+}
+
+const MAIL_PAGE_INLINE_TIMEOUT_MS = 5000;
+
+/**
+ * Inline the world-server page a zoning-alert (or other system-mail) META REFRESH points at,
+ * so the client can read the page's own DOM instead of loading it into a cross-origin iframe
+ * it cannot see into.
+ *
+ * SSRF guard: only fetched when the URL's host is the world server the session is already
+ * logged into (`ctx.currentWorldInfo.ip`) — the gateway already talks to that host for every
+ * other ASP page. A META REFRESH to any other host (a player-composed message) is left
+ * untouched and keeps today's iframe path. `redirect: 'manual'` so a 3xx from the world
+ * server cannot walk the gateway elsewhere. Never throws, never blocks the read — same
+ * contract as `markInboxMessageRead`.
+ */
+async function inlineWorldPage(ctx: SessionContext, body: string[]): Promise<string[]> {
+  if (!isHtmlContent(body)) return body;
+
+  const pageUrl = extractMetaRefreshUrl(body.join('\n'));
+  if (!pageUrl) return body;
+
+  try {
+    const url = new URL(pageUrl);
+    if (url.hostname !== ctx.currentWorldInfo?.ip) return body;
+
+    const response = await fetchWithTimeout(pageUrl, { redirect: 'manual' }, MAIL_PAGE_INLINE_TIMEOUT_MS);
+    if (!response.ok) {
+      ctx.log.warn(`[Mail] Mail page inline fetch returned ${response.status} — falling back to iframe redirect`);
+      return body;
+    }
+
+    const inlined = prepareInlinedMailPage(await response.text(), pageUrl);
+    return inlined.split('\n').filter(l => l.length > 0);
+  } catch (e: unknown) {
+    ctx.log.warn('[Mail] Mail page inline fetch failed — falling back to iframe redirect:', toErrorMessage(e));
+    return body;
   }
 }
 
@@ -368,6 +407,8 @@ export async function readMailMessage(
       ctx.log.warn('[Mail] Failed to close message:', e);
     }
   }
+
+  message.body = await inlineWorldPage(ctx, message.body);
 
   // 6. Inbox only — Sent/Draft carry no meaningful Read flag (MailServer.pas:544 walks tidInbox).
   if (folder.toLowerCase() === 'inbox') {

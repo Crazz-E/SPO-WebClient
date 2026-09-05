@@ -402,7 +402,7 @@ describe('readMailMessage', () => {
       switch (p.member) {
         case 'OpenMessage': return `OpenMessage="#${MSG_ID}"`;
         case 'GetHeaders': return `res="%${HEADERS_TEXT}"`;
-        case 'GetLines': return `res="%${opts.body ?? 'first\n\nsecond'}"`;
+        case 'GetLines': return `res="%${(opts.body ?? 'first\n\nsecond').replace(/"/g, '""')}"`;
         case 'GetAttachmentCount': return `GetAttachmentCount="#${opts.attachCount ?? '0'}"`;
         case 'GetAttachment': return opts.attach ? opts.attach(RdoValue.int(0).format() === (p.args?.[0] ?? '') ? 0 : 1) : '';
         default: return '';
@@ -662,6 +662,84 @@ describe('readMailMessage', () => {
 
     expect(mockFetch).not.toHaveBeenCalled();
     expect(msg.messageId).toBe('MSG-77');
+  });
+
+  // ── Gateway inlining of a META-REFRESH world page ────────────────────────
+
+  const ZONED_PAGE_URL =
+    'http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//MsgZoned.asp?BuildX0=12&BuildY0=34';
+  const ZONED_BODY = ['<HEAD>', `<META HTTP-EQUIV="REFRESH" CONTENT="0; URL=${ZONED_PAGE_URL}">`, '</HEAD>'];
+  const ZONED_PAGE_HTML =
+    '<head></head><body><script>alert(1)</script>' +
+    '<a href="http://local.asp?frame_Id=MapIsoView&frame_Action=SELECT&x=12&y=34">Town Hall</a></body>';
+
+  it('inlines the world page a zoning alert points at, stripping scripts and adding a base', async () => {
+    const fake = makeMailCtx();
+    answerRead(fake, { body: ZONED_BODY.join('\n') });
+    mockFetch.mockResolvedValueOnce(htmlResponse(ZONED_PAGE_HTML));
+
+    const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+    expect(mockFetch.mock.calls[0][0]).toBe(ZONED_PAGE_URL);
+    expect(mockFetch.mock.calls[0][1]).toEqual(expect.objectContaining({ redirect: 'manual' }));
+    const joined = msg.body.join('\n');
+    expect(joined).toContain('local.asp?frame_Id=MapIsoView&frame_Action=SELECT&x=12&y=34');
+    expect(joined).not.toContain('<script');
+    expect(joined).toContain('<base href="http://158.69.153.134/Five//0/Visual/Voyager/Mail/SpecialMessages//">');
+    expect(membersOf(fake.sent)).toEqual(['OpenMessage', 'GetHeaders', 'GetLines', 'GetAttachmentCount', 'CloseMessage']);
+  });
+
+  it('does not fetch a META REFRESH pointing at a host other than the world server', async () => {
+    const evilBody = ['<HEAD>', '<META HTTP-EQUIV="REFRESH" CONTENT="0; URL=http://evil.example/MsgZoned.asp">', '</HEAD>'];
+    const fake = makeMailCtx();
+    answerRead(fake, { body: evilBody.join('\n') });
+
+    const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toContain('MessageBody.asp');
+    expect(msg.body).toEqual(evilBody);
+  });
+
+  it('falls back to the original body when the page fetch answers non-OK', async () => {
+    const fake = makeMailCtx();
+    answerRead(fake, { body: ZONED_BODY.join('\n') });
+    mockFetch.mockResolvedValueOnce(htmlResponse('', 500));
+
+    const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+    expect(msg.body).toEqual(ZONED_BODY);
+  });
+
+  it('falls back to the original body when the page fetch rejects', async () => {
+    const fake = makeMailCtx();
+    answerRead(fake, { body: ZONED_BODY.join('\n') });
+    mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+    const msg = await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+    expect(msg.body).toEqual(ZONED_BODY);
+  });
+
+  it('inlines a Sent-folder read too — inlining does not depend on the Inbox touch', async () => {
+    const fake = makeMailCtx();
+    answerRead(fake, { body: ZONED_BODY.join('\n') });
+    mockFetch.mockResolvedValueOnce(htmlResponse(ZONED_PAGE_HTML));
+
+    const msg = await readMailMessage(fake.ctx, 'Sent', 'MSG-77');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(msg.body.join('\n')).toContain('local.asp');
+  });
+
+  it('leaves a plain-text body untouched — only the Inbox touch fetches', async () => {
+    const fake = makeMailCtx();
+    answerRead(fake);
+
+    await readMailMessage(fake.ctx, 'Inbox', 'MSG-77');
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toContain('MessageBody.asp');
   });
 });
 

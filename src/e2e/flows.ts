@@ -21,9 +21,11 @@ import type {
   WsRespMailUnreadCount,
   WsRespPoliticsData,
   WsRespSearchMenuPeopleSearch,
+  WsRespBuildingFocus,
 } from '../shared/types/message-types';
 import { flattenFavoriteLinks, flattenFolders } from '../shared/favorites-tree';
 import { toErrorMessage } from '../shared/error-utils';
+import { translateLocalAspUrl, type LocalAspSelect } from '../shared/local-asp-url';
 import { GOVERNED_TOWN, PRIMARY_ACCOUNT, SECONDARY_ACCOUNT, TIMEOUTS } from './config';
 import { findCurrentSurvivalLog, openLogWindow } from './live-log';
 import { runProbe, probeFailure, type ProbeResult, type ProbeSpec } from './probe';
@@ -284,6 +286,111 @@ const mailRoundTrip: Flow = {
       return report('mail-roundtrip', assertions, [], recipient);
     } finally {
       await logoff(recipient);
+    }
+  },
+};
+
+const HREF_RE = /<a\s[^>]*href\s*=\s*"([^"]*)"/gi;
+
+/**
+ * A zoning alert's building link, followed end to end — issue #515: clicking a demolished
+ * building's name in a zoning alert must select the same tile the map would.
+ *
+ * The world will not produce a real zoning alert on demand, so this flow mails one to
+ * itself, in the exact shape `TModelServer.SendHTMLMessage` writes
+ * (`~/SPO-Original/Mail Server/ModelServer.pas:896-905`), pointing at the real
+ * `MsgZoned.asp` on the live world server with Helartia's Town Hall coordinates. It is
+ * self-addressed on purpose: `doc/E2E-POLICY.md:297-300` promises the second account is
+ * touched only by `mail-roundtrip`.
+ *
+ * The gate is a headless WebSocket drive with no renderer, so "the map centres on it" is
+ * asserted at the wire up to the point a browser click would hand off to pixels: the
+ * gateway inlines the real `MsgZoned.asp` page, the shared translator turns its building
+ * anchor into the tile, and `REQ_BUILDING_FOCUS` at that tile — what `focusBuilding` sends
+ * when the client navigates there — answers with the building.
+ */
+const zoningAlertLink: Flow = {
+  name: 'zoning-alert-link',
+  what: 'zoning alert -> gateway inlines MsgZoned.asp -> translate building link -> focus tile',
+  mutates: true,
+  run: async () => {
+    const assertions = new Assertions();
+    const subject = `e2e zoning ${new Date().toISOString()}`;
+
+    const session = await login(PRIMARY_ACCOUNT);
+    try {
+      const town = await findTown(session, GOVERNED_TOWN);
+
+      const page =
+        `http://${session.worldIp}/Five//0/Visual/Voyager/Mail/SpecialMessages//MsgZoned.asp` +
+        `?Zoned=${PRIMARY_ACCOUNT.username}&BuildNo=1&Zoner0=${PRIMARY_ACCOUNT.username}` +
+        `&BuildName0=Town%20Hall&BuildCompany0=e2e&BuildX0=${town.x}&BuildY0=${town.y}&BuildDate0=e2e`;
+
+      await session.driver.request({ type: WsMessageType.REQ_MAIL_CONNECT }, WsMessageType.RESP_MAIL_CONNECTED);
+      const sent = await session.driver.request<WsRespMailSent>(
+        {
+          type: WsMessageType.REQ_MAIL_COMPOSE,
+          to: PRIMARY_ACCOUNT.username,
+          subject,
+          body: ['<HEAD>', `<META HTTP-EQUIV="REFRESH" CONTENT="0; URL=${page}">`, '</HEAD>'],
+        },
+        WsMessageType.RESP_MAIL_SENT,
+        TIMEOUTS.login,
+      );
+      assertions.check('the compose was accepted', sent.type === WsMessageType.RESP_MAIL_SENT);
+
+      const inbox = await session.driver.request<WsRespMailFolder>(
+        { type: WsMessageType.REQ_MAIL_GET_FOLDER, folder: 'Inbox' },
+        WsMessageType.RESP_MAIL_FOLDER,
+      );
+      const delivered = inbox.messages.find(m => m.subject === subject);
+      assertions.check('the zoning alert arrived in the inbox', Boolean(delivered), subject);
+      if (!delivered) return report('zoning-alert-link', assertions, [], session);
+
+      const read = await session.driver.request<WsRespMailMessage>(
+        { type: WsMessageType.REQ_MAIL_READ_MESSAGE, folder: 'Inbox', messageId: delivered.messageId },
+        WsMessageType.RESP_MAIL_MESSAGE,
+      );
+      const body = read.message.body.join('\n');
+      const hrefs = Array.from(body.matchAll(HREF_RE)).map(m => m[1]);
+      const translated = hrefs
+        .map(href => translateLocalAspUrl(href))
+        .filter((t): t is LocalAspSelect => t !== null);
+      assertions.check(
+        'the gateway inlined MsgZoned.asp — the body carries the building link',
+        translated.length > 0,
+        `${hrefs.length} href(s), ${translated.length} translated`,
+      );
+
+      const tileLink = translated.find(t => t.x === town.x && t.y === town.y);
+      assertions.check(
+        'the link translates to the Town Hall tile',
+        Boolean(tileLink),
+        translated.map(t => `${t.x},${t.y}`).join(' '),
+      );
+
+      if (tileLink) {
+        const focus = await session.driver.request<WsRespBuildingFocus>(
+          { type: WsMessageType.REQ_BUILDING_FOCUS, x: tileLink.x, y: tileLink.y },
+          WsMessageType.RESP_BUILDING_FOCUS,
+        );
+        assertions.check(
+          'focusing the translated tile answers with the Town Hall',
+          Boolean(focus.building?.buildingName) && focus.building.x === tileLink.x && focus.building.y === tileLink.y,
+          `${focus.building?.buildingName ?? '(none)'} at ${focus.building?.x},${focus.building?.y}`,
+        );
+      }
+
+      assertions.check('no gateway errors', session.driver.errors.length === 0);
+
+      await session.driver.request(
+        { type: WsMessageType.REQ_MAIL_DELETE, folder: 'Inbox', messageId: delivered.messageId },
+        WsMessageType.RESP_MAIL_DELETED,
+      );
+
+      return report('zoning-alert-link', assertions, [], session);
+    } finally {
+      await logoff(session);
     }
   },
 };
@@ -610,6 +717,7 @@ export const FLOWS: Flow[] = [
   buildingDetails,
   permissionNegative,
   mailRoundTrip,
+  zoningAlertLink,
   favoritesRoundTrip,
   favoritesFolders,
   peopleSearch,

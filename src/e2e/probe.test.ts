@@ -61,6 +61,7 @@ function sessionReading(values: (string | undefined)[], onWrite?: (value: string
     company: { id: '1', name: 'SPO_test3 - Green' },
     worlds: 1,
     companies: [],
+    worldIp: '158.69.153.134',
   };
 }
 

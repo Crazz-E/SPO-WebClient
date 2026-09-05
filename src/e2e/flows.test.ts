@@ -23,6 +23,7 @@ function stubSession(responder: (msg: WsMessage) => unknown): session.LiveSessio
     company: { id: '1', name: 'SPO_test3 - Green' },
     worlds: 3,
     companies: [],
+    worldIp: '158.69.153.134',
   };
 }
 
@@ -44,7 +45,9 @@ describe('the catalogue', () => {
 
   it('marks exactly the writing flows as mutating', () => {
     const mutating = FLOWS.filter(f => f.mutates).map(f => f.name).sort();
-    expect(mutating).toEqual(['favorites-folders', 'favorites-roundtrip', 'mail-roundtrip', 'politics-write']);
+    expect(mutating).toEqual([
+      'favorites-folders', 'favorites-roundtrip', 'mail-roundtrip', 'politics-write', 'zoning-alert-link',
+    ]);
   });
 
   it('names the known flows when asked for one that does not exist', () => {
@@ -537,6 +540,102 @@ describe('mail-roundtrip', () => {
 
     const compose = sent.find(m => m.type === WsMessageType.REQ_MAIL_COMPOSE);
     expect(compose).toMatchObject({ to: 'Crazz' });
+  });
+});
+
+describe('zoning-alert-link', () => {
+  const HELARTIA_TOWN = {
+    name: 'Helartia',
+    iconUrl: '',
+    mayor: null,
+    population: 0,
+    unemploymentPercent: 0,
+    qualityOfLife: 0,
+    x: 100,
+    y: 200,
+    path: '',
+    classId: '512',
+  };
+
+  const ZONING_ANCHOR =
+    '<a href="http://local.asp?frame_Id=MapIsoView&frame_Action=SELECT&x=100&y=200">Town Hall</a>';
+
+  function zoningSession(
+    opts: {
+      messageBody?: string;
+      buildingFocus?: { buildingName: string; x: number; y: number };
+      record?: (msg: WsMessage) => void;
+    } = {},
+  ) {
+    const {
+      messageBody = ZONING_ANCHOR,
+      buildingFocus = { buildingName: 'Helartia Town Hall', x: 100, y: 200 },
+    } = opts;
+    let subject = '';
+    return stubSession(msg => {
+      opts.record?.(msg);
+      switch (msg.type) {
+        case WsMessageType.REQ_SEARCH_MENU_TOWNS:
+          return { type: WsMessageType.RESP_SEARCH_MENU_TOWNS, towns: [HELARTIA_TOWN] };
+        case WsMessageType.REQ_MAIL_CONNECT:
+          return { type: WsMessageType.RESP_MAIL_CONNECTED, unreadCount: 0 };
+        case WsMessageType.REQ_MAIL_COMPOSE:
+          subject = (msg as unknown as { subject: string }).subject;
+          return { type: WsMessageType.RESP_MAIL_SENT };
+        case WsMessageType.REQ_MAIL_GET_FOLDER:
+          return { type: WsMessageType.RESP_MAIL_FOLDER, folder: 'Inbox', messages: [{ messageId: '1', subject }] };
+        case WsMessageType.REQ_MAIL_READ_MESSAGE:
+          return { type: WsMessageType.RESP_MAIL_MESSAGE, message: { body: [messageBody] } };
+        case WsMessageType.REQ_BUILDING_FOCUS:
+          return { type: WsMessageType.RESP_BUILDING_FOCUS, building: buildingFocus };
+        default:
+          return { type: WsMessageType.RESP_MAIL_DELETED };
+      }
+    });
+  }
+
+  it('passes and deletes the probe message', async () => {
+    const sent: WsMessage[] = [];
+    jest.spyOn(session, 'login').mockResolvedValue(zoningSession({ record: m => sent.push(m) }));
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    const result = await flowByName('zoning-alert-link').run(ctx);
+
+    expect(result.status).toBe('PASS');
+    expect(sent.some(m => m.type === WsMessageType.REQ_MAIL_DELETE)).toBe(true);
+  });
+
+  it('FAILs with "inlined" when the body has no local.asp anchor', async () => {
+    jest.spyOn(session, 'login').mockResolvedValue(zoningSession({ messageBody: 'plain text, no link' }));
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    const result = await flowByName('zoning-alert-link').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/inlined/);
+  });
+
+  it('FAILs with "Town Hall tile" when the link points at another tile', async () => {
+    const otherTileAnchor =
+      '<a href="http://local.asp?frame_Id=MapIsoView&frame_Action=SELECT&x=1&y=2">Somewhere else</a>';
+    jest.spyOn(session, 'login').mockResolvedValue(zoningSession({ messageBody: otherTileAnchor }));
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    const result = await flowByName('zoning-alert-link').run(ctx);
+
+    expect(result.status).toBe('FAIL');
+    expect(result.assertions.find(a => !a.ok)?.what).toMatch(/Town Hall tile/);
+  });
+
+  it('addresses the probe message to itself, not the second account', async () => {
+    const sent: WsMessage[] = [];
+    jest.spyOn(session, 'login').mockResolvedValue(zoningSession({ record: m => sent.push(m) }));
+    jest.spyOn(session, 'logoff').mockResolvedValue(undefined);
+
+    await flowByName('zoning-alert-link').run(ctx);
+
+    const compose = sent.find(m => m.type === WsMessageType.REQ_MAIL_COMPOSE);
+    expect(compose).toMatchObject({ to: PRIMARY_ACCOUNT.username });
   });
 });
 

@@ -94,8 +94,8 @@ export const ROUTES: RouteRule[] = [
     // Before the broad wire-level rule below, which would otherwise route a
     // mail-handler change through flows that never open the mail socket.
     test: /^src\/server\/session\/mail-handler\.ts$/,
-    flows: ['mail-roundtrip'],
-    why: 'the mail-socket handler changed — the one flow that drives it',
+    flows: ['mail-roundtrip', 'zoning-alert-link'],
+    why: 'the mail-socket handler changed — the two flows that drive it',
   },
   {
     test: /^src\/shared\/rdo-|^src\/server\/rdo\.ts$|^src\/server\/session\//,
@@ -123,8 +123,8 @@ export const ROUTES: RouteRule[] = [
     why: 'facility inspector and its template groups',
   },
   {
-    test: /^src\/client\/components\/mail\/|^src\/server\/mail/,
-    flows: ['mail-roundtrip'],
+    test: /^src\/client\/components\/mail\/|^src\/server\/mail|^src\/shared\/mail-html-utils\.ts$|^src\/shared\/local-asp-url\.ts$/,
+    flows: ['mail-roundtrip', 'zoning-alert-link'],
     why: 'mail path',
   },
   {

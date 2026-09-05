@@ -38,6 +38,7 @@ export interface LiveSession {
   company: CompanyInfo;
   worlds: number;
   companies: CompanyInfo[];
+  worldIp: string;
 }
 
 /**
@@ -66,7 +67,8 @@ export async function login(account: E2eAccount): Promise<LiveSession> {
     TIMEOUTS.login,
   );
 
-  if (!directory.worlds.some(w => w.name === WORLD_NAME)) {
+  const world = directory.worlds.find(w => w.name === WORLD_NAME);
+  if (!world) {
     throw new Error(
       `World "${WORLD_NAME}" is not in the ${ZONE_PATH} listing — ` +
         `got: ${directory.worlds.map(w => w.name).join(', ') || '(none)'}`,
@@ -94,7 +96,7 @@ export async function login(account: E2eAccount): Promise<LiveSession> {
 
   await awaitSearchMenu(driver);
 
-  return { driver, account, company, worlds: directory.worlds.length, companies };
+  return { driver, account, company, worlds: directory.worlds.length, companies, worldIp: world.ip };
 }
 
 /**

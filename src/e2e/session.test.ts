@@ -42,6 +42,7 @@ function sessionWith(responder: Responder): LiveSession {
     company: { id: '1', name: 'SPO_test3 - Green' },
     worlds: 3,
     companies: [],
+    worldIp: '158.69.153.134',
   };
 }
 

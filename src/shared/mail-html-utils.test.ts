@@ -1,4 +1,4 @@
-import { isHtmlContent, extractMetaRefreshUrl } from './mail-html-utils';
+import { isHtmlContent, extractMetaRefreshUrl, prepareInlinedMailPage } from './mail-html-utils';
 
 describe('isHtmlContent', () => {
   it('returns true for body starting with <HEAD>', () => {
@@ -93,5 +93,48 @@ describe('extractMetaRefreshUrl', () => {
   it('handles META tag with extra attributes', () => {
     const html = '<META NAME="test" HTTP-EQUIV="REFRESH" CONTENT="5; URL=http://example.com/delayed">';
     expect(extractMetaRefreshUrl(html)).toBe('http://example.com/delayed');
+  });
+});
+
+describe('prepareInlinedMailPage', () => {
+  const PAGE_URL = 'http://158.69.153.134/Five/0/Visual/Voyager/Mail/SpecialMessages/MsgZoned.asp?Zoned=x';
+
+  it('removes a script block', () => {
+    const html = '<head></head><body><script>alert(1)</script><a href="x">Town Hall</a></body>';
+    const out = prepareInlinedMailPage(html, PAGE_URL);
+    expect(out).not.toContain('<script');
+    expect(out).not.toContain('alert(1)');
+    expect(out).toContain('<a href="x">Town Hall</a>');
+  });
+
+  it('removes onclick/onload attributes while href survives', () => {
+    const html = '<head></head><body onload="doStuff()"><a href="x" onclick="nav()">Town Hall</a></body>';
+    const out = prepareInlinedMailPage(html, PAGE_URL);
+    expect(out).not.toContain('onload');
+    expect(out).not.toContain('onclick');
+    expect(out).toContain('href="x"');
+  });
+
+  it('injects the base tag right after <head>', () => {
+    const html = '<head><title>t</title></head><body></body>';
+    const out = prepareInlinedMailPage(html, PAGE_URL);
+    expect(out).toBe(
+      '<head><base href="http://158.69.153.134/Five/0/Visual/Voyager/Mail/SpecialMessages/"><title>t</title></head><body></body>',
+    );
+  });
+
+  it('prepends a head with the base tag when there is no head', () => {
+    const html = '<body>hi</body>';
+    const out = prepareInlinedMailPage(html, PAGE_URL);
+    expect(out).toBe(
+      '<head><base href="http://158.69.153.134/Five/0/Visual/Voyager/Mail/SpecialMessages/"></head><body>hi</body>',
+    );
+  });
+
+  it('computes the base directory for the real-shaped MsgZoned URL', () => {
+    const out = prepareInlinedMailPage('<head></head>', PAGE_URL);
+    expect(out).toContain(
+      '<base href="http://158.69.153.134/Five/0/Visual/Voyager/Mail/SpecialMessages/">',
+    );
   });
 });

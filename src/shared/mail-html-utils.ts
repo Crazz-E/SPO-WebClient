@@ -28,3 +28,31 @@ export function extractMetaRefreshUrl(html: string): string | null {
   );
   return match?.[1]?.trim() ?? null;
 }
+
+const SCRIPT_BLOCK_RE = /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi;
+const DANGLING_SCRIPT_TAG_RE = /<script\b[^>]*>/gi;
+const INLINE_HANDLER_ATTR_RE = /\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
+const HEAD_TAG_RE = /<head[^>]*>/i;
+
+/**
+ * A world-server page about to be rendered inside the app's own origin: scripts and inline
+ * handlers removed (the sandbox already refuses to run them — this is the second fence), and
+ * a `<base href>` pointing at the page's directory so its relative stylesheets keep resolving.
+ */
+export function prepareInlinedMailPage(html: string, pageUrl: string): string {
+  const stripped = html
+    .replace(SCRIPT_BLOCK_RE, '')
+    .replace(DANGLING_SCRIPT_TAG_RE, '')
+    .replace(INLINE_HANDLER_ATTR_RE, '');
+
+  const url = new URL(pageUrl);
+  const dir = `${url.origin}${url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1)}`;
+  const base = `<base href="${dir}">`;
+
+  const headMatch = stripped.match(HEAD_TAG_RE);
+  if (headMatch) {
+    const idx = stripped.indexOf(headMatch[0]) + headMatch[0].length;
+    return stripped.slice(0, idx) + base + stripped.slice(idx);
+  }
+  return `<head>${base}</head>${stripped}`;
+}
