@@ -1212,6 +1212,14 @@ export interface NewspaperArticle {
   byline: string;
   body: string;
   replies: NewspaperColumn[];
+  /**
+   * Board path of the parent column — the `path` of the Up link
+   * (`boardmsg.asp:236`). `''` when the parent is the board root: the index
+   * is what "All columns" already opens, so there is nothing to go up to.
+   */
+  parentPath: string;
+  /** Absolute URL of the author's portrait (`boardmsg.asp:244`), or `''`. */
+  photoUrl: string;
 }
 
 export interface NewspaperBoard {

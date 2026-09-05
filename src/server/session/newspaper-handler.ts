@@ -16,6 +16,9 @@
  *   - read   `?top=TRUE&root=…&path=…`      -> the index, or one column
  *   - post   `?action=post&…` + a form body -> `NewsObj.NewMessage` (`:146`)
  *
+ * A column page also carries the Up link (`:236-237`, the parent's `path`) and
+ * the author's portrait (`:244`), both read here alongside the title/byline/body.
+ *
  * **Bodies come back as TEXT, never as HTML.** `NewsObj.BodyHTML` (`:255`) is
  * markup typed by other players and stored verbatim; this client has no
  * sanitiser and no `dangerouslySetInnerHTML` anywhere, and adding both to render
@@ -86,6 +89,11 @@ const ARTICLE_TITLE = /<div\s+class=title>([\s\S]*?)<\/div>/i;
 const ARTICLE_AUTHOR = /<div\s+class=author>([\s\S]*?)<\/div>/i;
 const ARTICLE_MESSAGE = /<div\s+class=message>([\s\S]*?)<\/div>\s*<\/td>/i;
 
+/** `boardmsg.asp:236-237` — the Up link: an anchor wrapping `images\up.gif`. */
+const ARTICLE_UP_LINK = /<a\b[^>]*href="([^"]*)"[^>]*>\s*<img\b[^>]*\bup\.gif/i;
+/** `boardmsg.asp:244` — the author's portrait. The index page's `<img id=picture>` (`:263`) has no `src`. */
+const ARTICLE_PICTURE = /<img\b[^>]*\bid=picture\b[^>]*\bsrc="([^"]*)"/i;
+
 function pathOf(href: string): string {
   const match = LINK_PATH.exec(href);
   return match ? decodeURIComponent(match[1].replace(/\+/g, ' ')) : '';
@@ -142,12 +150,17 @@ export function parseNewspaperArticle(html: string): NewspaperArticle | null {
     });
   }
 
+  const up = ARTICLE_UP_LINK.exec(html);
+  const picture = ARTICLE_PICTURE.exec(html);
+
   return {
     subject: title ? toText(title[1]) : '',
     // `:258` prints "By <author> <authorDesc>" — one line, kept as one line.
     byline: author ? toText(author[1]) : '',
     body: toText(afterByline),
     replies,
+    parentPath: up ? pathOf(up[1]) : '',
+    photoUrl: picture ? picture[1].trim() : '',
   };
 }
 
@@ -190,6 +203,33 @@ function boardParams(ctx: SessionContext, target: NewspaperTarget, root: string,
 /** Paper names and town names carry spaces; `+` is not decoded by these pages. */
 function encodeParams(params: URLSearchParams): string {
   return params.toString().replace(/\+/g, '%20');
+}
+
+/**
+ * `NewsObject.pas:487-490` returns the parent GLOBALIZED — the registry `Path`
+ * prefixed to the relative root — so a top-level column's parent is an absolute
+ * disk path that ENDS with `boards\<World>\<Paper>\`. Compared without case and
+ * without the trailing backslash `CanonicalizePath` (`:86-91`) appends.
+ */
+export function isBoardRoot(parentPath: string, root: string): boolean {
+  const norm = (p: string) => p.replace(/\\+$/, '').toLowerCase();
+  const parent = norm(parentPath);
+  const base = norm(root);
+  return parent === '' || parent === base || parent.endsWith('\\' + base);
+}
+
+/** The article as the client needs it: no Up onto the index, portrait resolved to the host. */
+function resolveArticle(article: NewspaperArticle | null, worldIp: string, root: string): NewspaperArticle | null {
+  if (!article) return null;
+  return {
+    ...article,
+    parentPath: isBoardRoot(article.parentPath, root) ? '' : article.parentPath,
+    // `:244` is root-relative, so it resolves against the HOST — the same trap
+    // profile-finance-handler.ts:103-112 documents.
+    photoUrl: article.photoUrl === '' || /^https?:\/\//i.test(article.photoUrl)
+      ? article.photoUrl
+      : `http://${worldIp}${article.photoUrl.startsWith('/') ? '' : '/'}${article.photoUrl}`,
+  };
 }
 
 function emptyBoard(target: NewspaperTarget, error: string): NewspaperBoard {
@@ -241,7 +281,7 @@ export async function getNewspaperBoard(
       // The index is only rendered on the folder page (`:266-272`), so on a
       // column page this is legitimately empty and `article` carries the content.
       columns: parseNewspaperIndex(html),
-      article: parseNewspaperArticle(html),
+      article: resolveArticle(parseNewspaperArticle(html), worldIp, root),
       error: '',
     };
   } catch (e: unknown) {
@@ -327,7 +367,7 @@ export async function postNewspaperColumn(
         root,
         path: root,
         columns,
-        article: parseNewspaperArticle(html),
+        article: resolveArticle(parseNewspaperArticle(html), worldIp, root),
         error: '',
       },
     };
