@@ -463,6 +463,63 @@ describe('ClientBridge handleNewspaperResponse — the paper view (#516)', () =>
   });
 });
 
+describe('ClientBridge handleNewspaperResponse — the whole column tree (#518)', () => {
+  const TREE = {
+    paperName: 'Helartia Herald',
+    root: 'boards\\Planitia\\Helartia Herald\\',
+    entries: [{ author: 'A', subject: 'S', summary: '', path: 'm1.five' }],
+    error: '',
+  };
+
+  beforeEach(() => {
+    useNewspaperStore.getState().reset();
+  });
+
+  it('puts the tree in the store as loaded', () => {
+    ClientBridge.handleNewspaperResponse({
+      type: WsMessageType.RESP_NEWSPAPER_TREE,
+      tree: TREE,
+    } as unknown as WsMessage);
+
+    expect(useNewspaperStore.getState().tree).toEqual(TREE);
+    expect(useNewspaperStore.getState().treeState).toBe('loaded');
+  });
+
+  it('a successful post puts the tree state back to idle, for a re-read', () => {
+    useNewspaperStore.getState().setTree(TREE);
+    useNewspaperStore.getState().setTreeState('loaded');
+
+    ClientBridge.handleNewspaperResponse({
+      type: WsMessageType.RESP_NEWSPAPER_POST,
+      success: true,
+      message: 'Column published',
+      board: {
+        paperName: 'Helartia Herald',
+        root: 'boards\\Planitia\\Helartia Herald\\',
+        path: 'boards\\Planitia\\Helartia Herald\\',
+        columns: [],
+        article: null,
+        error: '',
+      },
+    } as unknown as WsMessage);
+
+    expect(useNewspaperStore.getState().treeState).toBe('idle');
+  });
+
+  it('a refused post leaves the tree state as it was', () => {
+    useNewspaperStore.getState().setTree(TREE);
+
+    ClientBridge.handleNewspaperResponse({
+      type: WsMessageType.RESP_NEWSPAPER_POST,
+      success: false,
+      message: 'The newspaper did not publish the column.',
+      board: null,
+    } as unknown as WsMessage);
+
+    expect(useNewspaperStore.getState().treeState).toBe('loaded');
+  });
+});
+
 describe('ClientBridge handleSearchMenuResponse — RESP_SEARCH_MENU_NEWSPAPERS (#517)', () => {
   beforeEach(() => {
     useSearchStore.getState().reset();

@@ -1227,6 +1227,21 @@ export interface NewspaperBoard {
   error: string;
 }
 
+/**
+ * The whole board, flat — every column and every reply, in page order
+ * (`boardlist.asp:17-38`, entered from the root at `:78-79`). Uncapped: the
+ * archive frame, not the "Latest 10 columns" front page.
+ */
+export interface NewspaperColumnTree {
+  paperName: string;
+  /** `boards\<World>\<Paper>\` — the board root (`boardreader.asp:5`). */
+  root: string;
+  /** Every entry, each reachable by its own `path`. `summary` is always empty here. */
+  entries: NewspaperColumn[];
+  /** Non-empty when the tree could not be read; `entries` is then empty. */
+  error: string;
+}
+
 // =============================================================================
 // NEWSPAPER — the daily paper (Visual/News/Newsreader.asp)
 // =============================================================================

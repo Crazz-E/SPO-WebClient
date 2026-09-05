@@ -39,6 +39,7 @@ import * as buildingDetailsHandler from '../session/building-details-handler';
 import * as buildingPropertyHandler from '../session/building-property-handler';
 import * as researchHandler from '../session/research-handler';
 import * as loginHandler from '../session/login-handler';
+import * as newspaperHandler from '../session/newspaper-handler';
 import { RdoParser } from '../../shared/rdo-types';
 import { PROXY_IMAGE_ENDPOINT } from '../../shared/proxy-utils';
 import { SessionPhase, SurfaceType } from '../../shared/types';
@@ -107,6 +108,10 @@ interface Delegation {
  * now forward. One entry is enough here: the table proves forwarding, not pricing.
  */
 const ROAD_FACTS = [{ hasRoad: false, isBridge: true, isVoid: false }];
+
+const NEWSPAPER_TARGET = {
+  paperName: 'Helartia Herald', townName: 'Helartia', isCapitol: false, buildingX: 118, buildingY: 226,
+};
 
 const DELEGATIONS: readonly Delegation[] = [
   // ── login-handler ────────────────────────────────────────────────────────
@@ -631,6 +636,15 @@ const DELEGATIONS: readonly Delegation[] = [
     forwarded: [706, 436, 'Invention7'],
     result: { name: 'Invention7' },
   },
+
+  // ── newspaper-handler ────────────────────────────────────────────────────
+  {
+    method: 'getNewspaperColumnTree',
+    install: () => jest.spyOn(newspaperHandler, 'getNewspaperColumnTree'),
+    call: s => s.getNewspaperColumnTree(NEWSPAPER_TARGET),
+    forwarded: [NEWSPAPER_TARGET],
+    result: { paperName: 'Helartia Herald', root: 'boards\\Planitia\\Helartia Herald\\', entries: [], error: '' },
+  },
 ];
 
 describe('StarpeaceSession — handler delegation', () => {
@@ -654,7 +668,7 @@ describe('StarpeaceSession — handler delegation', () => {
   it('covers every one-line handler delegation the facade declares', () => {
     // A guard on the table itself: if a delegation is added to the facade and
     // not to the table, the count stops matching and this row says so.
-    expect(DELEGATIONS).toHaveLength(70);
+    expect(DELEGATIONS).toHaveLength(71);
     expect(new Set(DELEGATIONS.map(d => d.method)).size).toBe(DELEGATIONS.length);
   });
 

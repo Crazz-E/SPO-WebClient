@@ -17,7 +17,7 @@ import {
 import { useNewspaperStore } from '../../store/newspaper-store';
 import { useUiStore } from '../../store/ui-store';
 import { NewspaperModal } from './NewspaperModal';
-import type { NewspaperBoard, NewspaperIssue, NewspaperIssueRef } from '@/shared/types';
+import type { NewspaperBoard, NewspaperColumnTree, NewspaperIssue, NewspaperIssueRef } from '@/shared/types';
 
 const CONTEXT = {
   paperName: 'Helartia Herald',
@@ -56,9 +56,13 @@ function openWith(
   board: NewspaperBoard | null,
   loadState: 'idle' | 'loading' | 'loaded' | 'error' = 'loaded',
   view: 'paper' | 'board' = 'board',
+  tree: NewspaperColumnTree | null = null,
+  treeState: 'idle' | 'loading' | 'loaded' | 'error' = 'idle',
 ): void {
   useUiStore.getState().openModal('newspaper');
-  useNewspaperStore.setState({ context: CONTEXT, view, board, loadState, isPosting: false, requestedPath: '' });
+  useNewspaperStore.setState({
+    context: CONTEXT, view, board, loadState, isPosting: false, requestedPath: '', tree, treeState,
+  });
 }
 
 beforeEach(() => {
@@ -215,6 +219,7 @@ describe('NewspaperModal', () => {
     renderWithProviders(<NewspaperModal />);
     fireEvent.click(screen.getByLabelText('Refresh'));
     expect(useNewspaperStore.getState().loadState).toBe('idle');
+    expect(useNewspaperStore.getState().treeState).toBe('idle');
   });
 
   it('closes the modal', () => {
@@ -222,6 +227,92 @@ describe('NewspaperModal', () => {
     renderWithProviders(<NewspaperModal />);
     fireEvent.click(screen.getByLabelText('Close'));
     expect(useUiStore.getState().modal).toBeNull();
+  });
+});
+
+// =============================================================================
+// "All columns" — the whole tree, `boardlist.asp` (#518)
+// =============================================================================
+
+function makeEntries(n: number): NewspaperColumnTree['entries'] {
+  return Array.from({ length: n }, (_, i) => (
+    { author: `Author${i}`, subject: `Subject${i}`, summary: '', path: `m${i}.five` }
+  ));
+}
+
+function treeOf(entries: NewspaperColumnTree['entries'], error = ''): NewspaperColumnTree {
+  return { paperName: 'Helartia Herald', root: ROOT, entries, error };
+}
+
+describe('NewspaperModal — All columns', () => {
+  it('reads the tree on open when nothing has been read', () => {
+    const spy = jest.fn();
+    openWith(INDEX, 'loaded', 'board', null, 'idle');
+    renderWithProviders(
+      <NewspaperModal />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestNewspaperTree: spy }) },
+    );
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not read the tree again while a read is in flight', () => {
+    const spy = jest.fn();
+    openWith(INDEX, 'loaded', 'board', null, 'loading');
+    renderWithProviders(
+      <NewspaperModal />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestNewspaperTree: spy }) },
+    );
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('a 25-entry tree lists 25 rows; a 3-entry tree lists 3', () => {
+    openWith(INDEX, 'loaded', 'board', treeOf(makeEntries(25)), 'loaded');
+    const { unmount } = renderWithProviders(<NewspaperModal />);
+    expect(screen.getByLabelText('All columns').querySelectorAll('li')).toHaveLength(25);
+    unmount();
+
+    openWith(INDEX, 'loaded', 'board', treeOf(makeEntries(3)), 'loaded');
+    renderWithProviders(<NewspaperModal />);
+    expect(screen.getByLabelText('All columns').querySelectorAll('li')).toHaveLength(3);
+  });
+
+  it('an empty tree renders neither the heading nor the list', () => {
+    openWith(INDEX, 'loaded', 'board', treeOf([]), 'loaded');
+    renderWithProviders(<NewspaperModal />);
+    expect(screen.queryByText('All columns')).toBeNull();
+    expect(screen.queryByLabelText('All columns')).toBeNull();
+  });
+
+  it('an entry below the tenth still opens by its own path', () => {
+    const spy = jest.fn();
+    const entries = makeEntries(15);
+    openWith(INDEX, 'loaded', 'board', treeOf(entries), 'loaded');
+    renderWithProviders(
+      <NewspaperModal />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestNewspaperBoard: spy }) },
+    );
+    fireEvent.click(screen.getByText('Subject14'));
+    expect(spy).toHaveBeenCalledWith('m14.five');
+  });
+
+  it('an entry with empty author and subject renders a clickable (untitled) row', () => {
+    const spy = jest.fn();
+    const entries: NewspaperColumnTree['entries'] = [
+      { author: '', subject: '', summary: '', path: 'm1.five' },
+    ];
+    openWith(INDEX, 'loaded', 'board', treeOf(entries), 'loaded');
+    renderWithProviders(
+      <NewspaperModal />,
+      { clientCallbacks: createSpiedCallbacks({ onRequestNewspaperBoard: spy }) },
+    );
+    fireEvent.click(screen.getByText('(untitled)'));
+    expect(spy).toHaveBeenCalledWith('m1.five');
+  });
+
+  it('a tree error is shown', () => {
+    openWith(INDEX, 'loaded', 'board', treeOf([], 'The column list could not be read.'), 'error');
+    renderWithProviders(<NewspaperModal />);
+    expect(screen.getByText('The column list could not be read.')).toBeTruthy();
   });
 });
 

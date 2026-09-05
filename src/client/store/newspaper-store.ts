@@ -8,7 +8,13 @@
  */
 
 import { create } from 'zustand';
-import type { NewspaperBoard, NewspaperIssue, NewspaperIssueList, NewspaperIssueRef } from '@/shared/types';
+import type {
+  NewspaperBoard,
+  NewspaperColumnTree,
+  NewspaperIssue,
+  NewspaperIssueList,
+  NewspaperIssueRef,
+} from '@/shared/types';
 
 export type NewspaperLoadState = 'idle' | 'loading' | 'loaded' | 'error';
 
@@ -37,6 +43,10 @@ interface NewspaperState {
   requestedPath: string;
   isPosting: boolean;
 
+  /** The whole board, flat — every column and every reply (`boardlist.asp`). */
+  tree: NewspaperColumnTree | null;
+  treeState: NewspaperLoadState;
+
   /** The paper's kept issues, newest first as the gateway sorted them. */
   issues: NewspaperIssueRef[];
   issuesState: NewspaperLoadState;
@@ -52,6 +62,8 @@ interface NewspaperState {
   setRequestedPath: (path: string) => void;
   setBoard: (board: NewspaperBoard) => void;
   setPosting: (posting: boolean) => void;
+  setTreeState: (state: NewspaperLoadState) => void;
+  setTree: (tree: NewspaperColumnTree) => void;
   setIssuesState: (state: NewspaperLoadState) => void;
   setIssues: (list: NewspaperIssueList) => void;
   selectIssue: (folder: string) => void;
@@ -67,6 +79,8 @@ const EMPTY = {
   loadState: 'idle' as NewspaperLoadState,
   requestedPath: '',
   isPosting: false,
+  tree: null as NewspaperColumnTree | null,
+  treeState: 'idle' as NewspaperLoadState,
   issues: [] as NewspaperIssueRef[],
   issuesState: 'idle' as NewspaperLoadState,
   issuesError: '',
@@ -101,6 +115,9 @@ export const useNewspaperStore = create<NewspaperState>((set) => ({
     isPosting: false,
   }),
   setPosting: (isPosting) => set({ isPosting }),
+
+  setTreeState: (treeState) => set({ treeState }),
+  setTree: (tree) => set({ tree, treeState: tree.error ? 'error' : 'loaded' }),
 
   setIssuesState: (issuesState) => set({ issuesState }),
   setIssues: (list) => set({

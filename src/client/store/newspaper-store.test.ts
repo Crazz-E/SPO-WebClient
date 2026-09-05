@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { useNewspaperStore, type NewspaperContext } from './newspaper-store';
-import type { NewspaperBoard, NewspaperIssue, NewspaperIssueList } from '@/shared/types';
+import type { NewspaperBoard, NewspaperColumnTree, NewspaperIssue, NewspaperIssueList } from '@/shared/types';
 
 const CONTEXT: NewspaperContext = {
   paperName: 'Helartia Herald',
@@ -21,6 +21,13 @@ const BOARD: NewspaperBoard = {
   path: 'boards\\Planitia\\Helartia Herald\\',
   columns: [{ author: 'A', subject: 'S', summary: 'x', path: 'm1.five' }],
   article: null,
+  error: '',
+};
+
+const TREE: NewspaperColumnTree = {
+  paperName: 'Helartia Herald',
+  root: 'boards\\Planitia\\Helartia Herald\\',
+  entries: [{ author: 'A', subject: 'S', summary: '', path: 'm1.five' }],
   error: '',
 };
 
@@ -90,6 +97,50 @@ describe('newspaper-store', () => {
     useNewspaperStore.getState().reset();
     expect(useNewspaperStore.getState().context).toBeNull();
     expect(useNewspaperStore.getState().board).toBeNull();
+  });
+
+  it('the tree starts null and idle', () => {
+    const s = useNewspaperStore.getState();
+    expect(s.tree).toBeNull();
+    expect(s.treeState).toBe('idle');
+  });
+
+  it('setTreeState marks the tree read as in flight', () => {
+    useNewspaperStore.getState().setTreeState('loading');
+    expect(useNewspaperStore.getState().treeState).toBe('loading');
+  });
+
+  it('a tree lands loaded, and its error lands in the error state', () => {
+    useNewspaperStore.getState().setTree(TREE);
+    expect(useNewspaperStore.getState().tree).toEqual(TREE);
+    expect(useNewspaperStore.getState().treeState).toBe('loaded');
+
+    useNewspaperStore.getState().setTree({ ...TREE, entries: [], error: 'HTTP 500' });
+    expect(useNewspaperStore.getState().treeState).toBe('error');
+  });
+
+  it('re-opening the same paper keeps the tree', () => {
+    useNewspaperStore.getState().openFor(CONTEXT);
+    useNewspaperStore.getState().setTree(TREE);
+    useNewspaperStore.getState().openFor(CONTEXT);
+    expect(useNewspaperStore.getState().tree).toEqual(TREE);
+    expect(useNewspaperStore.getState().treeState).toBe('loaded');
+  });
+
+  it('opening a different paper clears the tree', () => {
+    useNewspaperStore.getState().openFor(CONTEXT);
+    useNewspaperStore.getState().setTree(TREE);
+    useNewspaperStore.getState().openFor({ ...CONTEXT, paperName: 'Other Times' });
+    expect(useNewspaperStore.getState().tree).toBeNull();
+    expect(useNewspaperStore.getState().treeState).toBe('idle');
+  });
+
+  it('reset clears the tree', () => {
+    useNewspaperStore.getState().openFor(CONTEXT);
+    useNewspaperStore.getState().setTree(TREE);
+    useNewspaperStore.getState().reset();
+    expect(useNewspaperStore.getState().tree).toBeNull();
+    expect(useNewspaperStore.getState().treeState).toBe('idle');
   });
 });
 

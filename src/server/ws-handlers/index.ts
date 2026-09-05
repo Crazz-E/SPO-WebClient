@@ -38,6 +38,7 @@ import {
   handleNewspaperPost,
   handleNewspaperIssues,
   handleNewspaperIssue,
+  handleNewspaperTree,
 } from './newspaper-handlers';
 import { handlePoliticsData, handlePoliticsVote, handlePoliticsLaunchCampaign, handlePoliticsCancelCampaign, handlePoliticsSetRating, handlePoliticsSetPublicity, handlePoliticsSetProject, handleTycoonRole } from './politics-handlers';
 
@@ -137,6 +138,7 @@ export const wsHandlerRegistry: Partial<Record<WsMessageType, WsHandler>> = {
   [WsMessageType.REQ_NEWSPAPER_POST]: handleNewspaperPost,
   [WsMessageType.REQ_NEWSPAPER_ISSUES]: handleNewspaperIssues,
   [WsMessageType.REQ_NEWSPAPER_ISSUE]: handleNewspaperIssue,
+  [WsMessageType.REQ_NEWSPAPER_TREE]: handleNewspaperTree,
   [WsMessageType.REQ_TYCOON_ROLE]: handleTycoonRole,
 
   // Miscellaneous

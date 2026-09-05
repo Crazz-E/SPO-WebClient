@@ -74,6 +74,7 @@ import {
   type WsRespNewspaperPost,
   type WsRespNewspaperIssues,
   type WsRespNewspaperIssue,
+  type WsRespNewspaperTree,
   type WsRespTycoonRole,
   type WsRespEmpireFacilities,
 } from '@/shared/types';
@@ -260,6 +261,7 @@ export interface ClientCallbacks {
   onPostNewspaperColumn: (subject: string, body: string, replyToPath?: string) => void;
   onRequestNewspaperIssues: () => void;
   onRequestNewspaperIssue: (folder: string) => void;
+  onRequestNewspaperTree: () => void;
 
   // Empire
   onRequestFacilities: () => void;
@@ -918,6 +920,10 @@ export const ClientBridge = {
       useNewspaperStore.getState().setIssue((msg as WsRespNewspaperIssue).issue);
       return;
     }
+    if (msg.type === WsMessageType.RESP_NEWSPAPER_TREE) {
+      useNewspaperStore.getState().setTree((msg as WsRespNewspaperTree).tree);
+      return;
+    }
     if (msg.type === WsMessageType.RESP_NEWSPAPER_BOARD) {
       useNewspaperStore.getState().setBoard((msg as WsRespNewspaperBoard).board);
       return;
@@ -927,6 +933,11 @@ export const ClientBridge = {
     // with, and blanking the page would lose the column the player just typed.
     if (resp.board) {
       useNewspaperStore.getState().setBoard(resp.board);
+      // A published column is now in the tree — re-read it on the next render.
+      // A refused post never got here, so the tree is left as it was.
+      if (resp.success) {
+        useNewspaperStore.getState().setTreeState('idle');
+      }
     } else {
       useNewspaperStore.getState().setPosting(false);
     }

@@ -43,6 +43,7 @@ import type {
   PolicyData,
   PoliticsData,
   NewspaperBoard,
+  NewspaperColumnTree,
   NewspaperIssue,
   NewspaperIssueList,
   PoliticalRoleInfo,
@@ -273,6 +274,8 @@ export enum WsMessageType {
   RESP_NEWSPAPER_ISSUES = 'RESP_NEWSPAPER_ISSUES',
   REQ_NEWSPAPER_ISSUE = 'REQ_NEWSPAPER_ISSUE',
   RESP_NEWSPAPER_ISSUE = 'RESP_NEWSPAPER_ISSUE',
+  REQ_NEWSPAPER_TREE = 'REQ_NEWSPAPER_TREE',
+  RESP_NEWSPAPER_TREE = 'RESP_NEWSPAPER_TREE',
 
   // Connection Search
   REQ_SEARCH_CONNECTIONS = 'REQ_SEARCH_CONNECTIONS',
@@ -1539,6 +1542,24 @@ export interface WsReqNewspaperIssue extends WsMessage {
 export interface WsRespNewspaperIssue extends WsMessage {
   type: WsMessageType.RESP_NEWSPAPER_ISSUE;
   issue: NewspaperIssue;
+}
+
+/**
+ * The whole board's column tree — `boardlist.asp`, not `boardmsg.asp`. Same
+ * five target fields as `WsReqNewspaperIssues`.
+ */
+export interface WsReqNewspaperTree extends WsMessage {
+  type: WsMessageType.REQ_NEWSPAPER_TREE;
+  paperName: string;
+  townName: string;
+  isCapitol: boolean;
+  buildingX: number;
+  buildingY: number;
+}
+
+export interface WsRespNewspaperTree extends WsMessage {
+  type: WsMessageType.RESP_NEWSPAPER_TREE;
+  tree: NewspaperColumnTree;
 }
 
 // =============================================================================

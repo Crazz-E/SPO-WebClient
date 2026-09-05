@@ -27,6 +27,8 @@ import {
   parseNewspaperArticle,
   getNewspaperBoard,
   postNewspaperColumn,
+  parseNewspaperColumnTree,
+  getNewspaperColumnTree,
   decodeIssueDate,
   parseNewspaperIssueList,
   parseNewspaperIssue,
@@ -515,6 +517,212 @@ describe('postNewspaperColumn', () => {
     const result = await postNewspaperColumn(fake.ctx, TARGET, 'S', 'B');
     expect(result).toEqual({ success: false, message: 'ECONNRESET', board: null });
     expect(fake.log.warn).toHaveBeenCalledWith('[Newspaper] Post failed: ECONNRESET');
+  });
+});
+
+// =============================================================================
+// boardlist.asp fixture — the whole tree, uncapped
+// =============================================================================
+
+interface TreeNode {
+  author: string;
+  subject: string;
+  path: string;
+  children?: TreeNode[];
+}
+
+/**
+ * `boardlist.asp:15-38, 75-80` — `<h1>` paper name, `<h2>All columns</h2>`, then
+ * `RenderLevel` walking the tree from the root, the summary commented out
+ * (`:26-30`) and depth expressed only by the `margin-left: 20px` wrapper.
+ */
+function treePage(nodes: TreeNode[], paperName = 'Helartia Herald'): string {
+  function renderLevel(level: TreeNode[]): string {
+    return level.map((n) => [
+      `\t\t\t\t\t<b>${n.author}</b> - <a target="BoardMain" href="boardmsg.asp?root=${ROOT}&TownName=Helartia&path=${encodeURIComponent(n.path)}&tycoon=SPO_test3&WorldName=Planitia&PaperName=Helartia%20Herald&DAAddr=10.0.0.5&DAPort=1111"> ${n.subject}</a><br>`,
+      '\t\t\t\t\t<div style="margin-left: 20px">',
+      '\t\t\t\t\t\t<!--',
+      '\t\t\t\t\t\t<div class=comment style="margin-left: 20px">',
+      '\t\t\t\t\t\t\tsummary...',
+      '\t\t\t\t\t\t</div>',
+      '\t\t\t\t\t\t-->',
+      n.children ? renderLevel(n.children) : '',
+      '\t\t\t\t\t</div>',
+    ].join('\n')).join('\n');
+  }
+
+  return [
+    '<html>',
+    '\t<head><link rel="stylesheet" type="text/css" href="BoardList.css"></head>',
+    '<body>',
+    `\t<h1>${paperName}</h1>`,
+    '\t<br>',
+    '\t<h2>All columns</h2>',
+    renderLevel(nodes),
+    '<body>',
+    '</html>',
+  ].join('\n');
+}
+
+// =============================================================================
+// parseNewspaperColumnTree
+// =============================================================================
+describe('parseNewspaperColumnTree', () => {
+  it('reads every path of a nested tree flat, in page order, with an empty summary', () => {
+    const tree = treePage([
+      {
+        author: 'SPO_test3', subject: 'VERY NICE GUY', path: 'm1.five',
+        children: [
+          { author: 'Bob', subject: 'Agreed', path: 'm1.five\\r1.five', children: [
+            { author: 'Eve', subject: 'Reply to a reply', path: 'm1.five\\r1.five\\r2.five' },
+          ] },
+        ],
+      },
+      { author: 'Innos', subject: 'Roads', path: 'm2.five' },
+    ]);
+
+    expect(parseNewspaperColumnTree(tree)).toEqual([
+      { author: 'SPO_test3', subject: 'VERY NICE GUY', path: 'm1.five', summary: '' },
+      { author: 'Bob', subject: 'Agreed', path: 'm1.five\\r1.five', summary: '' },
+      { author: 'Eve', subject: 'Reply to a reply', path: 'm1.five\\r1.five\\r2.five', summary: '' },
+      { author: 'Innos', subject: 'Roads', path: 'm2.five', summary: '' },
+    ]);
+  });
+
+  it('25 top-level columns yield 25 entries; 3 yield 3', () => {
+    const make = (n: number) => Array.from({ length: n }, (_, i) => (
+      { author: `A${i}`, subject: `S${i}`, path: `m${i}.five` }
+    ));
+    expect(parseNewspaperColumnTree(treePage(make(25)))).toHaveLength(25);
+    expect(parseNewspaperColumnTree(treePage(make(3)))).toHaveLength(3);
+  });
+
+  it('an empty tree yields an empty list', () => {
+    expect(parseNewspaperColumnTree(treePage([]))).toEqual([]);
+  });
+
+  it('finds nothing on a page carrying no entries', () => {
+    expect(parseNewspaperColumnTree('<html><body>Nothing</body></html>')).toEqual([]);
+  });
+
+  it('keeps an entry with an empty author or empty subject, with its path intact', () => {
+    const html = treePage([{ author: '', subject: 'S', path: 'm1.five' }]);
+    expect(parseNewspaperColumnTree(html)).toEqual([{ author: '', subject: 'S', path: 'm1.five', summary: '' }]);
+
+    const html2 = treePage([{ author: 'A', subject: '', path: 'm2.five' }]);
+    expect(parseNewspaperColumnTree(html2)).toEqual([{ author: 'A', subject: '', path: 'm2.five', summary: '' }]);
+  });
+
+  it('drops an entry whose link carries no path', () => {
+    const html = treePage([{ author: 'A', subject: 'S', path: 'm1.five' }])
+      .replace('path=m1.five', 'other=m1.five');
+    expect(parseNewspaperColumnTree(html)).toEqual([]);
+  });
+
+  it('decodes a path carrying an escaped space', () => {
+    const [entry] = parseNewspaperColumnTree(treePage([
+      { author: 'A', subject: 'S', path: 'sub folder\\m.five' },
+    ]));
+    expect(entry.path).toBe('sub folder\\m.five');
+  });
+
+  it('never reads the commented-out summary into `summary`', () => {
+    const [entry] = parseNewspaperColumnTree(treePage([
+      { author: 'A', subject: 'S', path: 'm1.five' },
+    ]));
+    expect(entry.summary).toBe('');
+  });
+
+  // `boardmsg.asp`'s own index has no `<b>…</b> - <a>` pair (it uses
+  // `<div class=author>` cells instead), so this parser reads nothing from it.
+  it('yields nothing from the boardmsg.asp index fixture', () => {
+    expect(parseNewspaperColumnTree(indexPage([
+      { author: 'A', subject: 'S', summary: 'x', path: 'm1.five' },
+    ]))).toEqual([]);
+  });
+});
+
+// =============================================================================
+// getNewspaperColumnTree
+// =============================================================================
+describe('getNewspaperColumnTree', () => {
+  it('reads boardlist.asp with root and path both the board root, %20-encoded, no top', async () => {
+    const fake = makeWebCtx();
+    mockFetch.mockResolvedValue(htmlResponse(treePage([
+      { author: 'SPO_test3', subject: 'VERY NICE GUY', path: 'm1.five' },
+    ])));
+
+    const tree = await getNewspaperColumnTree(fake.ctx, TARGET);
+
+    const url = mockFetch.mock.calls[0][0];
+    expect(url).toMatch(/^http:\/\/158\.69\.153\.134\/Five\/0\/Visual\/News\/boardlist\.asp\?/);
+    expect(url).not.toContain('+');
+    const q = queryOf(0);
+    expect(q.get('root')).toBe(ROOT);
+    expect(q.get('path')).toBe(ROOT);
+    expect(q.get('Tycoon')).toBe('SPO_test3');
+    expect(q.get('TycoonName')).toBeNull();
+    expect(q.get('PaperName')).toBe('Helartia Herald');
+    expect(q.get('TownName')).toBe('Helartia');
+    expect(q.get('WorldName')).toBe('Planitia');
+    expect(q.get('DAAddr')).toBe('10.0.0.5');
+    expect(q.get('DAPort')).toBe('1111');
+    expect(q.get('top')).toBeNull();
+
+    expect(tree.root).toBe(ROOT);
+    expect(tree.entries).toHaveLength(1);
+    expect(tree.error).toBe('');
+  });
+
+  it('a Capitol target carries Capitol=YES with x/y and an empty TownName', async () => {
+    const fake = makeWebCtx();
+    mockFetch.mockResolvedValue(htmlResponse(treePage([])));
+    await getNewspaperColumnTree(fake.ctx, { ...TARGET, isCapitol: true });
+    const q = queryOf(0);
+    expect(q.get('Capitol')).toBe('YES');
+    expect(q.get('x')).toBe('118');
+    expect(q.get('y')).toBe('226');
+    expect(q.get('TownName')).toBe('');
+  });
+
+  it('refuses when the DA lock channel is unset, without fetching', async () => {
+    const fake = makeWebCtx({ activeUsername: null, cachedUsername: 'Cached', daAddr: null, daPort: null });
+    const tree = await getNewspaperColumnTree(fake.ctx, TARGET);
+    expect(tree.error).toBe('ASP call refused: DA lock channel not announced yet (daAddr/daPort unset)');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('reports an HTTP failure instead of parsing the error body', async () => {
+    const fake = makeWebCtx();
+    mockFetch.mockResolvedValue(htmlResponse('<html><title>404</title></html>', 404));
+
+    const tree = await getNewspaperColumnTree(fake.ctx, TARGET);
+
+    expect(tree.error).toBe('The newspaper answered HTTP 404.');
+    expect(tree.entries).toEqual([]);
+    expect(fake.log.warn).toHaveBeenCalledWith(expect.stringContaining('column tree answered HTTP 404'));
+  });
+
+  it('reports a transport failure', async () => {
+    const fake = makeWebCtx();
+    mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+    const tree = await getNewspaperColumnTree(fake.ctx, TARGET);
+    expect(tree.error).toBe('ECONNREFUSED');
+    expect(fake.log.warn).toHaveBeenCalledWith('[Newspaper] Column tree read failed: ECONNREFUSED');
+  });
+
+  it('does not fetch when the world is unknown', async () => {
+    const fake = makeWebCtx({ currentWorldInfo: null });
+    const tree = await getNewspaperColumnTree(fake.ctx, TARGET);
+    expect(tree.error).toBe('Not connected to a world.');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch when the town has no newspaper', async () => {
+    const fake = makeWebCtx();
+    const tree = await getNewspaperColumnTree(fake.ctx, { ...TARGET, paperName: '' });
+    expect(tree.error).toBe('This town has no newspaper.');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 

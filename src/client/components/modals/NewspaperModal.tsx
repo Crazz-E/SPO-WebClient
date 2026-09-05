@@ -35,6 +35,8 @@ export function NewspaperModal() {
   const board = useNewspaperStore((s) => s.board);
   const loadState = useNewspaperStore((s) => s.loadState);
   const isPosting = useNewspaperStore((s) => s.isPosting);
+  const tree = useNewspaperStore((s) => s.tree);
+  const treeState = useNewspaperStore((s) => s.treeState);
 
   const issues = useNewspaperStore((s) => s.issues);
   const issuesState = useNewspaperStore((s) => s.issuesState);
@@ -57,6 +59,12 @@ export function NewspaperModal() {
       client.onRequestNewspaperBoard();
     }
   }, [isOpen, hasPaper, view, loadState, client]);
+
+  useEffect(() => {
+    if (isOpen && hasPaper && view === 'board' && treeState === 'idle') {
+      client.onRequestNewspaperTree();
+    }
+  }, [isOpen, hasPaper, view, treeState, client]);
 
   useEffect(() => {
     if (isOpen && hasPaper && view === 'paper' && issuesState === 'idle') {
@@ -94,6 +102,7 @@ export function NewspaperModal() {
       useNewspaperStore.getState().refreshIssues();
     } else {
       useNewspaperStore.getState().setLoadState('idle');
+      useNewspaperStore.getState().setTreeState('idle');
     }
   };
 
@@ -288,6 +297,29 @@ export function NewspaperModal() {
                           </li>
                         ))}
                       </ul>
+                    )}
+
+                    {treeState === 'loading' && <SkeletonLines lines={4} />}
+                    {treeState === 'error' && (
+                      <div className={styles.error}>{tree?.error || 'The column list could not be read.'}</div>
+                    )}
+                    {treeState === 'loaded' && tree && tree.entries.length > 0 && (
+                      <>
+                        <h4 className={styles.sectionTitle}>All columns</h4>
+                        <ul className={styles.columnList} aria-label="All columns">
+                          {tree.entries.map((entry, i) => (
+                            <li key={`${entry.path}-${i}`}>
+                              <button
+                                className={styles.columnLink}
+                                onClick={() => client.onRequestNewspaperBoard(entry.path)}
+                              >
+                                {entry.author && <span className={styles.columnAuthor}>{entry.author}</span>}
+                                <span className={styles.columnSubject}>{entry.subject || '(untitled)'}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
                     )}
                   </>
                 )

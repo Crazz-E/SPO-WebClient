@@ -11,7 +11,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import type { WebSocket } from 'ws';
 import { WsMessageType, type WsMessage } from '../../../shared/types';
-import { handleNewspaperIssues, handleNewspaperIssue } from '../newspaper-handlers';
+import { handleNewspaperIssues, handleNewspaperIssue, handleNewspaperTree } from '../newspaper-handlers';
 import type { NewspaperTarget } from '../../session/newspaper-handler';
 import type { WsHandlerContext } from '../types';
 
@@ -24,6 +24,12 @@ const TARGET: NewspaperTarget = {
 };
 
 const LIST = { paperName: 'Helartia Herald', issues: [{ folder: 'f1', date: '3/1/2027' }], error: '' };
+const TREE = {
+  paperName: 'Helartia Herald',
+  root: 'boards\\Planitia\\Helartia Herald\\',
+  entries: [{ author: 'A', subject: 'S', path: 'm1.five', summary: '' }],
+  error: '',
+};
 const ISSUE = {
   paperName: 'Helartia Herald',
   folder: 'f1',
@@ -44,13 +50,14 @@ function createCtx() {
 
   const getNewspaperIssues = jest.fn(async (_target: NewspaperTarget) => LIST);
   const getNewspaperIssue = jest.fn(async (_target: NewspaperTarget, _folder: string) => ISSUE);
+  const getNewspaperColumnTree = jest.fn(async (_target: NewspaperTarget) => TREE);
 
   const ctx = {
     ws,
-    session: { getNewspaperIssues, getNewspaperIssue },
+    session: { getNewspaperIssues, getNewspaperIssue, getNewspaperColumnTree },
   } as unknown as WsHandlerContext;
 
-  return { ctx, sent, getNewspaperIssues, getNewspaperIssue };
+  return { ctx, sent, getNewspaperIssues, getNewspaperIssue, getNewspaperColumnTree };
 }
 
 describe('handleNewspaperIssues', () => {
@@ -90,6 +97,25 @@ describe('handleNewspaperIssue', () => {
       type: WsMessageType.RESP_NEWSPAPER_ISSUE,
       wsRequestId: '43',
       issue: ISSUE,
+    }]);
+  });
+});
+
+describe('handleNewspaperTree', () => {
+  it('asks the session for that building`s column tree and echoes it back', async () => {
+    const { ctx, sent, getNewspaperColumnTree } = createCtx();
+
+    await handleNewspaperTree(ctx, {
+      type: WsMessageType.REQ_NEWSPAPER_TREE,
+      wsRequestId: '44',
+      ...TARGET,
+    } as unknown as WsMessage);
+
+    expect(getNewspaperColumnTree).toHaveBeenCalledWith(TARGET);
+    expect(sent).toEqual([{
+      type: WsMessageType.RESP_NEWSPAPER_TREE,
+      wsRequestId: '44',
+      tree: TREE,
     }]);
   });
 });
