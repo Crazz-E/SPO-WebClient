@@ -14,7 +14,7 @@ import {
 } from '../../__tests__/setup/render-helpers';
 import { useMailStore } from '../../store/mail-store';
 import { useUiStore } from '../../store/ui-store';
-import { MailPanel } from './MailPanel';
+import { MailPanel, EMPTY_FOLDER_TEXT } from './MailPanel';
 import type { MailMessageFull } from '@/shared/types';
 
 const LIST_MESSAGES = [
@@ -93,5 +93,54 @@ describe('MailPanel — list-row delete', () => {
     act(() => useUiStore.getState().confirmPayload?.onConfirm());
 
     expect(deleteSpy).toHaveBeenCalledWith('msg-1');
+  });
+});
+
+describe('MailPanel — folder empty state', () => {
+  beforeEach(() => {
+    resetStores();
+    useMailStore.setState({
+      currentFolder: 'Inbox',
+      currentView: 'list',
+      messages: [],
+      currentMessage: null,
+      isLoading: false,
+      isMessageLoading: false,
+      pendingDeleteId: null,
+      folderRefreshToken: 0,
+    });
+  });
+
+  it('Draft empty text differs from Inbox empty text', () => {
+    const { unmount } = renderWithProviders(<MailPanel />);
+    act(() => useMailStore.setState({ isLoading: false }));
+    expect(screen.getByText(EMPTY_FOLDER_TEXT.Inbox.title)).toBeTruthy();
+    expect(screen.queryByText(EMPTY_FOLDER_TEXT.Draft.title)).toBeNull();
+    unmount();
+
+    useMailStore.setState({ currentFolder: 'Draft', isLoading: false });
+    renderWithProviders(<MailPanel />);
+    act(() => useMailStore.setState({ isLoading: false }));
+    expect(screen.getByText(EMPTY_FOLDER_TEXT.Draft.title)).toBeTruthy();
+    expect(screen.queryByText(EMPTY_FOLDER_TEXT.Inbox.title)).toBeNull();
+  });
+
+  it('Sent has its own empty text, distinct from Inbox and Draft', () => {
+    useMailStore.setState({ currentFolder: 'Sent', isLoading: false });
+    renderWithProviders(<MailPanel />);
+    act(() => useMailStore.setState({ isLoading: false }));
+
+    expect(screen.getByText(EMPTY_FOLDER_TEXT.Sent.title)).toBeTruthy();
+    expect(screen.queryByText(EMPTY_FOLDER_TEXT.Inbox.title)).toBeNull();
+    expect(screen.queryByText(EMPTY_FOLDER_TEXT.Draft.title)).toBeNull();
+  });
+
+  it('shows none of the empty-folder texts while loading', () => {
+    useMailStore.setState({ currentFolder: 'Inbox', isLoading: true });
+    renderWithProviders(<MailPanel />);
+
+    expect(screen.queryByText(EMPTY_FOLDER_TEXT.Inbox.title)).toBeNull();
+    expect(screen.queryByText(EMPTY_FOLDER_TEXT.Sent.title)).toBeNull();
+    expect(screen.queryByText(EMPTY_FOLDER_TEXT.Draft.title)).toBeNull();
   });
 });

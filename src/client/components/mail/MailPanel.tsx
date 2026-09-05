@@ -10,7 +10,7 @@ import { Send, Trash2, Reply, PenSquare, Save } from 'lucide-react';
 import { useMailStore } from '../../store/mail-store';
 import { useUiStore } from '../../store/ui-store';
 import { useClient } from '../../context';
-import { TabBar, Skeleton, showToast } from '../common';
+import { TabBar, Skeleton, showToast, EmptyState } from '../common';
 import type { MailFolder, MailMessageHeader } from '@/shared/types';
 import { isHtmlContent } from '@/shared/mail-html-utils';
 import { HtmlMailBody } from './HtmlMailBody';
@@ -21,6 +21,18 @@ const FOLDERS: { id: MailFolder; label: string; badge?: boolean }[] = [
   { id: 'Sent', label: 'Sent' },
   { id: 'Draft', label: 'Drafts' },
 ];
+
+// What each folder holds, in the WebClient's own voice — carries the sense of
+// Voyager.lng:81-83 (strClickInbox / strClickSent / strInDraft) without the "click the tab"
+// framing, since the player is already on it.
+export const EMPTY_FOLDER_TEXT: Record<MailFolder, { title: string; description: string }> = {
+  Inbox: { title: 'Nothing received yet', description: 'Messages other tycoons send you land here.' },
+  Sent: { title: 'Nothing sent yet', description: 'Every message you send is kept here.' },
+  Draft: {
+    title: 'No drafts',
+    description: 'A draft is a message you saved before finishing it. Save one from Compose and it waits here.',
+  },
+};
 
 // Client-side budget on a letter body — the server has no documented limit, so this is
 // a sane cap chosen to keep a paste from silently becoming an unusable wall of text.
@@ -218,7 +230,11 @@ export function MailPanel() {
       {!isLoading && currentView === 'list' && (
         <div className={styles.messageList}>
           {messages.length === 0 && (
-            <div className={styles.empty}>No messages</div>
+            <EmptyState
+              title={EMPTY_FOLDER_TEXT[currentFolder].title}
+              description={EMPTY_FOLDER_TEXT[currentFolder].description}
+              className={styles.empty}
+            />
           )}
           {messages.map((msg) => (
             <MailMessageRow
