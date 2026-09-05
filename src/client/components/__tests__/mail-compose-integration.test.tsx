@@ -101,7 +101,7 @@ describe('Mail compose — integration flow', () => {
 
     // Verify client callback was invoked with the right args — a fresh letter
     // has nothing to thread, so it carries no header block.
-    expect(sendSpy).toHaveBeenCalledWith('player42', 'Trade Offer', 'I have wheat for sale.', undefined);
+    expect(sendSpy).toHaveBeenCalledWith('player42', 'Trade Offer', 'I have wheat for sale.', undefined, undefined);
 
     // Criterion changed (T6, audit P2): the draft is KEPT until the server answers —
     // a failed send must not lose the letter. The form is locked meanwhile.
@@ -197,7 +197,7 @@ describe('Mail compose — integration flow', () => {
     fireEvent.change(body, { target: { value: 'Fine, thanks.' } });
     fireEvent.click(screen.getByText('Send'));
     expect(sendSpy).toHaveBeenCalledWith(
-      'alice', 'Re: Hello there', 'Fine, thanks.', expect.stringContaining('In-Reply-To=msg-99'),
+      'alice', 'Re: Hello there', 'Fine, thanks.', expect.stringContaining('In-Reply-To=msg-99'), undefined,
     );
   });
 
@@ -244,6 +244,24 @@ describe('Mail compose — integration flow', () => {
       expect((screen.getByPlaceholderText('To') as HTMLInputElement).value).toBe('bob');
       expect((screen.getByPlaceholderText('Subject') as HTMLInputElement).value).toBe('Half written');
       expect((screen.getByPlaceholderText('Message...') as HTMLTextAreaElement).value).toBe('first line\nsecond line');
+    });
+
+    // #510 — sending a letter opened from Drafts must carry the draft's id, so
+    // the server removes that copy once the send succeeds.
+    it('sending an opened draft carries its id as the fifth argument', () => {
+      const sendSpy = jest.fn();
+      renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSend: sendSpy }) });
+
+      const draft: MailMessageFull = {
+        messageId: 'draft-4', from: 'Me', fromAddr: 'me', to: 'Bob', toAddr: 'bob',
+        subject: 'Half written', date: '2025-01-15', dateFmt: 'Jan 15',
+        body: ['first line', 'second line'], read: true, stamp: 3, noReply: false, attachments: [],
+      };
+      act(() => useMailStore.getState().startEditDraft(draft));
+
+      fireEvent.click(screen.getByText('Send'));
+
+      expect(sendSpy).toHaveBeenCalledWith('bob', 'Half written', 'first line\nsecond line', undefined, 'draft-4');
     });
 
     it('an Inbox row still opens the read view', () => {

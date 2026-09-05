@@ -397,12 +397,12 @@ export class StarpeaceClient implements ClientHandlerContext {
         folder: useMailStore.getState().currentFolder,
         messageId,
       }),
-      onMailSend: (to, subject, body, headers) => this.sendMessage({
+      onMailSend: (to, subject, body, headers, existingDraftId) => this.sendMessage({
         type: WsMessageType.REQ_MAIL_COMPOSE,
         to, subject, body: body.split('\n'),
-        // Optional on the wire — a letter with nothing to thread sends no header
-        // block at all, rather than an empty one (same idiom as the draft below).
+        // Both optional on the wire — omitted rather than sent empty (same idiom as the draft below).
         ...(headers ? { headers } : {}),
+        ...(existingDraftId ? { existingDraftId } : {}),
       }),
       onMailSaveDraft: (to, subject, body, headers, existingDraftId) => this.sendMessage({
         type: WsMessageType.REQ_MAIL_SAVE_DRAFT,

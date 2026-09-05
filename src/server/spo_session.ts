@@ -1069,8 +1069,8 @@ public async switchCompany(company: CompanyInfo): Promise<void> {
     }
   }
   // -- MAIL (facade -> mail-handler) ----------------------------------------
-  public async composeMail(to: string, subject: string, bodyLines: string[], headers?: string): Promise<boolean> {
-    return mailHandler.composeMail(this, to, subject, bodyLines, headers);
+  public async composeMail(to: string, subject: string, bodyLines: string[], headers?: string, existingDraftId?: string): Promise<boolean> {
+    return mailHandler.composeMail(this, to, subject, bodyLines, headers, existingDraftId);
   }
 
   public async saveDraft(to: string, subject: string, bodyLines: string[], headers?: string, existingDraftId?: string): Promise<boolean> {

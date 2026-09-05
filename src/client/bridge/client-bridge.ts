@@ -215,7 +215,7 @@ export interface ClientCallbacks {
   // Mail
   onMailGetFolder: (folder: MailFolder) => void;
   onMailReadMessage: (messageId: string) => void;
-  onMailSend: (to: string, subject: string, body: string, headers?: string) => void;
+  onMailSend: (to: string, subject: string, body: string, headers?: string, existingDraftId?: string) => void;
   onMailSaveDraft: (to: string, subject: string, body: string, headers?: string, existingDraftId?: string) => void;
   onMailDelete: (messageId: string) => void;
 
