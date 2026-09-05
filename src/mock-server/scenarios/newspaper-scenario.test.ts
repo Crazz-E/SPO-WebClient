@@ -15,19 +15,25 @@ jest.mock('node-fetch', () => ({
  * does.
  */
 
+import http from 'http';
+import { EventEmitter } from 'events';
 import fetch from 'node-fetch';
 import type { Response } from 'node-fetch';
 import { getNewspaperIssues, getNewspaperIssue } from '@/server/session/newspaper-handler';
 import type { NewspaperTarget } from '@/server/session/newspaper-handler';
 import { makeSessionCtx } from '@/server/__tests__/session/fake-session-context';
 import type { FakeSessionCtx } from '@/server/__tests__/session/fake-session-context';
+import { SearchMenuService } from '@/server/search-menu-service';
+import { parseNewspapersPage } from '@/server/search-menu-parser';
 import { HttpMock } from '../http-mock';
 import {
   createNewspaperScenario,
   MOCK_ISSUES,
   MOCK_ISSUE_FOLDERS,
   MOCK_PAPER_NAME,
+  MOCK_DIRECTORY_PAPERS,
   NEWS_PATH,
+  DIRECTORY_PATH,
 } from './newspaper-scenario';
 
 const mockFetch = fetch as unknown as jest.MockedFunction<
@@ -156,5 +162,66 @@ describe('newspaper scenario — the gateway reads it', () => {
     const fake = serve({ issues: [] });
     const list = await getNewspaperIssues(fake.ctx, TARGET);
     expect(list).toEqual({ paperName: MOCK_PAPER_NAME, issues: [], error: '' });
+  });
+});
+
+/** Point Node's `http.request` (what `SearchMenuService.fetchPage` calls) at the scenario's HttpMock. */
+function mockHttpRequest(httpMock: HttpMock): jest.SpyInstance {
+  return jest.spyOn(http, 'request').mockImplementation(((
+    options: http.RequestOptions,
+    callback?: (res: EventEmitter & { statusCode?: number }) => void,
+  ) => {
+    const req = new EventEmitter() as unknown as http.ClientRequest;
+    Object.assign(req, {
+      end: () => {
+        const result = httpMock.match('GET', String(options.path), { worldName: 'Shamba' });
+        const res = new EventEmitter() as EventEmitter & { statusCode?: number };
+        res.statusCode = result?.status ?? 404;
+        callback?.(res);
+        res.emit('data', result?.body ?? '');
+        res.emit('end');
+      },
+      setTimeout: () => req,
+      destroy: () => {},
+    });
+    return req;
+  }) as unknown as typeof http.request);
+}
+
+describe('newspaper scenario — the directory Media listing', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('serves one entry per paper with its town name', () => {
+    const { http: httpScenario } = createNewspaperScenario();
+    const httpMock = new HttpMock();
+    httpMock.addScenario(httpScenario);
+
+    const result = httpMock.match('GET', `${DIRECTORY_PATH}/Newspapers.asp?WorldName=Shamba&RIWS=`);
+    expect(result?.status).toBe(200);
+    expect(parseNewspapersPage(result!.body)).toEqual(MOCK_DIRECTORY_PAPERS);
+  });
+
+  it('the real SearchMenuService.getNewspapers() resolves one entry per paper with its town name', async () => {
+    const { http: httpScenario } = createNewspaperScenario();
+    const httpMock = new HttpMock();
+    httpMock.addScenario(httpScenario);
+    mockHttpRequest(httpMock);
+
+    const service = new SearchMenuService('158.69.153.134', 8000, 'Shamba', 'SPO_test3', 'Co', '158.69.153.134', 7001);
+    const result = await service.getNewspapers();
+    expect(result).toEqual(MOCK_DIRECTORY_PAPERS);
+  });
+
+  it('a world with no newspapers resolves to []', async () => {
+    const { http: httpScenario } = createNewspaperScenario(undefined, { papers: [] });
+    const httpMock = new HttpMock();
+    httpMock.addScenario(httpScenario);
+    mockHttpRequest(httpMock);
+
+    const service = new SearchMenuService('158.69.153.134', 8000, 'Shamba', 'SPO_test3', 'Co', '158.69.153.134', 7001);
+    const result = await service.getNewspapers();
+    expect(result).toEqual([]);
   });
 });
