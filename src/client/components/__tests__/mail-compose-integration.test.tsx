@@ -19,7 +19,11 @@ import {
 } from '../../__tests__/setup/render-helpers';
 import { useMailStore } from '../../store/mail-store';
 import { MailPanel, MAIL_BODY_MAX_CHARS } from '../mail/MailPanel';
+import { ClientBridge } from '../../bridge/client-bridge';
+import { WsMessageType } from '@/shared/types';
 import type { MailMessageFull } from '@/shared/types';
+
+jest.mock('../common/Toast', () => ({ showToast: jest.fn() }));
 
 jest.mock('../common', () => ({
   ...(jest.requireActual('../common') as object),
@@ -222,6 +226,44 @@ describe('Mail compose — integration flow', () => {
     expect(useMailStore.getState().pendingDeleteId).toBeNull();
   });
 
+  // #511 — one click on a Draft row lands in the composer, not the read view.
+  describe('One click on a Draft row', () => {
+    it('opens the composer with To, Subject and body filled, and composeDraftId set', () => {
+      useMailStore.setState({ currentFolder: 'Draft' });
+      renderWithProviders(<MailPanel />);
+
+      const draft: MailMessageFull = {
+        messageId: 'draft-4', from: 'Me', fromAddr: 'me', to: 'Bob', toAddr: 'bob',
+        subject: 'Half written', date: '2025-01-15', dateFmt: 'Jan 15',
+        body: ['first line', 'second line'], read: true, stamp: 3, noReply: false, attachments: [],
+      };
+      act(() => ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_MESSAGE, message: draft } as never));
+
+      expect(useMailStore.getState().currentView).toBe('compose');
+      expect(useMailStore.getState().composeDraftId).toBe('draft-4');
+      expect((screen.getByPlaceholderText('To') as HTMLInputElement).value).toBe('bob');
+      expect((screen.getByPlaceholderText('Subject') as HTMLInputElement).value).toBe('Half written');
+      expect((screen.getByPlaceholderText('Message...') as HTMLTextAreaElement).value).toBe('first line\nsecond line');
+    });
+
+    it('an Inbox row still opens the read view', () => {
+      useMailStore.setState({ currentFolder: 'Inbox' });
+      renderWithProviders(<MailPanel />);
+
+      const msg: MailMessageFull = {
+        messageId: 'msg-1', from: 'Alice', fromAddr: 'alice', to: 'Me', toAddr: 'me',
+        subject: 'Hello', date: '2025-01-15', dateFmt: 'Jan 15',
+        body: ['hi'], read: true, stamp: 3, noReply: false, attachments: [],
+      };
+      act(() => ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_MESSAGE, message: msg } as never));
+
+      expect(useMailStore.getState().currentView).toBe('read');
+      expect(useMailStore.getState().composeDraftId).toBeNull();
+      expect(screen.getByRole('button', { name: 'Reply' })).toBeTruthy();
+      expect(screen.queryByPlaceholderText('To')).toBeNull();
+    });
+  });
+
   // #120 — REQ_MAIL_SAVE_DRAFT had a gateway handler, a bridge response and a Drafts tab,
   // and no control anywhere that emitted it.
   describe('Save draft', () => {
@@ -265,10 +307,8 @@ describe('Mail compose — integration flow', () => {
       useMailStore.setState({ currentFolder: 'Draft' });
       renderWithProviders(<MailPanel />, { clientCallbacks: createSpiedCallbacks({ onMailSaveDraft: saveSpy }) });
 
-      act(() => useMailStore.getState().setCurrentMessage(draft));
-      // A draft has no sender to answer — the read view offers Edit in place of Reply.
-      expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull();
-      fireEvent.click(screen.getByRole('button', { name: 'Edit draft' }));
+      // One click on the Draft row (#511) lands straight in the composer.
+      act(() => ClientBridge.handleMailResponse({ type: WsMessageType.RESP_MAIL_MESSAGE, message: draft } as never));
 
       expect((screen.getByPlaceholderText('To') as HTMLInputElement).value).toBe('bob');
       expect((screen.getByPlaceholderText('Message...') as HTMLTextAreaElement).value).toBe('first line\nsecond line');
@@ -389,12 +429,16 @@ describe('Mail compose — integration flow', () => {
       expect(screen.getByText('To: Bob')).toBeTruthy();
     });
 
-    it('appears in the Draft folder, alongside the Edit draft button', () => {
+    it('a draft opens the composer with the To field filled, not a read view', () => {
       useMailStore.setState({ currentFolder: 'Draft' });
       renderWithProviders(<MailPanel />);
-      act(() => useMailStore.getState().setCurrentMessage({ ...baseMsg, to: 'Bob', toAddr: 'bob' }));
-      expect(screen.getByText('To: Bob')).toBeTruthy();
-      expect(screen.getByRole('button', { name: 'Edit draft' })).toBeTruthy();
+      act(() => ClientBridge.handleMailResponse({
+        type: WsMessageType.RESP_MAIL_MESSAGE,
+        message: { ...baseMsg, to: 'Bob', toAddr: 'bob' },
+      } as never));
+      expect((screen.getByPlaceholderText('To') as HTMLInputElement).value).toBe('bob');
+      expect(screen.queryByText('To: Bob')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Edit draft' })).toBeNull();
     });
   });
 
