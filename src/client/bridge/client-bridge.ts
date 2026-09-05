@@ -71,6 +71,8 @@ import {
   type WsRespPoliticsData,
   type WsRespNewspaperBoard,
   type WsRespNewspaperPost,
+  type WsRespNewspaperIssues,
+  type WsRespNewspaperIssue,
   type WsRespTycoonRole,
   type WsRespEmpireFacilities,
 } from '@/shared/types';
@@ -254,6 +256,8 @@ export interface ClientCallbacks {
   // Newspaper
   onRequestNewspaperBoard: (path?: string) => void;
   onPostNewspaperColumn: (subject: string, body: string, replyToPath?: string) => void;
+  onRequestNewspaperIssues: () => void;
+  onRequestNewspaperIssue: (folder: string) => void;
 
   // Empire
   onRequestFacilities: () => void;
@@ -901,6 +905,14 @@ export const ClientBridge = {
   // ---- Newspaper response handling ----
 
   handleNewspaperResponse(msg: WsMessage): void {
+    if (msg.type === WsMessageType.RESP_NEWSPAPER_ISSUES) {
+      useNewspaperStore.getState().setIssues((msg as WsRespNewspaperIssues).list);
+      return;
+    }
+    if (msg.type === WsMessageType.RESP_NEWSPAPER_ISSUE) {
+      useNewspaperStore.getState().setIssue((msg as WsRespNewspaperIssue).issue);
+      return;
+    }
     if (msg.type === WsMessageType.RESP_NEWSPAPER_BOARD) {
       useNewspaperStore.getState().setBoard((msg as WsRespNewspaperBoard).board);
       return;

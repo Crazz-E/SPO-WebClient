@@ -530,6 +530,18 @@ export class StarpeaceClient implements ClientHandlerContext {
           type: WsMessageType.REQ_NEWSPAPER_POST, ...context, subject, body, replyToPath,
         });
       },
+      onRequestNewspaperIssues: () => {
+        const context = useNewspaperStore.getState().context;
+        if (!context) return;
+        useNewspaperStore.getState().setIssuesState('loading');
+        this.sendMessage({ type: WsMessageType.REQ_NEWSPAPER_ISSUES, ...context });
+      },
+      onRequestNewspaperIssue: (folder) => {
+        const context = useNewspaperStore.getState().context;
+        if (!context) return;
+        useNewspaperStore.getState().selectIssue(folder);
+        this.sendMessage({ type: WsMessageType.REQ_NEWSPAPER_ISSUE, ...context, folder });
+      },
 
       // Empire
       onRequestFacilities: () => {

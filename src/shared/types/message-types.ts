@@ -42,6 +42,8 @@ import type {
   PolicyData,
   PoliticsData,
   NewspaperBoard,
+  NewspaperIssue,
+  NewspaperIssueList,
   PoliticalRoleInfo,
   ClusterInfo,
   ClusterFacilityPreview,
@@ -264,6 +266,10 @@ export enum WsMessageType {
   RESP_NEWSPAPER_BOARD = 'RESP_NEWSPAPER_BOARD',
   REQ_NEWSPAPER_POST = 'REQ_NEWSPAPER_POST',
   RESP_NEWSPAPER_POST = 'RESP_NEWSPAPER_POST',
+  REQ_NEWSPAPER_ISSUES = 'REQ_NEWSPAPER_ISSUES',
+  RESP_NEWSPAPER_ISSUES = 'RESP_NEWSPAPER_ISSUES',
+  REQ_NEWSPAPER_ISSUE = 'REQ_NEWSPAPER_ISSUE',
+  RESP_NEWSPAPER_ISSUE = 'RESP_NEWSPAPER_ISSUE',
 
   // Connection Search
   REQ_SEARCH_CONNECTIONS = 'REQ_SEARCH_CONNECTIONS',
@@ -1484,6 +1490,42 @@ export interface WsRespNewspaperPost extends WsMessage {
   message: string;
   /** The board as re-rendered by the post — `null` when the post never ran. */
   board: NewspaperBoard | null;
+}
+
+/**
+ * The paper's kept issues — what `ShowBar.asp` iterates for its date row.
+ *
+ * The same five fields as `WsReqNewspaperBoard`: the bar identifies the paper
+ * exactly as the board pages do (`Newsreader.asp:4` forwards both sets).
+ */
+export interface WsReqNewspaperIssues extends WsMessage {
+  type: WsMessageType.REQ_NEWSPAPER_ISSUES;
+  paperName: string;
+  townName: string;
+  isCapitol: boolean;
+  buildingX: number;
+  buildingY: number;
+}
+
+export interface WsRespNewspaperIssues extends WsMessage {
+  type: WsMessageType.RESP_NEWSPAPER_ISSUES;
+  list: NewspaperIssueList;
+}
+
+export interface WsReqNewspaperIssue extends WsMessage {
+  type: WsMessageType.REQ_NEWSPAPER_ISSUE;
+  paperName: string;
+  townName: string;
+  isCapitol: boolean;
+  buildingX: number;
+  buildingY: number;
+  /** The issue folder to open — one of the folders the issue list carries. */
+  folder: string;
+}
+
+export interface WsRespNewspaperIssue extends WsMessage {
+  type: WsMessageType.RESP_NEWSPAPER_ISSUE;
+  issue: NewspaperIssue;
 }
 
 // =============================================================================

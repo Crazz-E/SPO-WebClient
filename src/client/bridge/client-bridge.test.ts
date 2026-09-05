@@ -9,6 +9,7 @@ import { useBuildingStore } from '../store/building-store';
 import { useLogStore } from '../store/log-store';
 import { useChatStore } from '../store/chat-store';
 import { useProfileStore } from '../store/profile-store';
+import { useNewspaperStore } from '../store/newspaper-store';
 import { WsMessageType, type WsMessage } from '../../shared/types';
 
 // Mock showToast to prevent import issues in test environment
@@ -414,5 +415,49 @@ describe('ClientBridge handleProfileResponse — RESP_PROFILE_COMPANY_PROFITLOSS
     expect(useProfileStore.getState().companyProfitLoss).toEqual({
       companyName: 'Green Co', cluster: 'A', status: 'error', data: null, error: 'boom',
     });
+  });
+});
+
+describe('ClientBridge handleNewspaperResponse — the paper view (#516)', () => {
+  const LIST = {
+    paperName: 'Helartia Herald',
+    issues: [{ folder: '002147483640@3-1-2027', date: '3/1/2027' }],
+    error: '',
+  };
+
+  const ISSUE = {
+    paperName: 'Helartia Herald',
+    folder: '002147483640@3-1-2027',
+    townName: 'Helartia',
+    title: 'Helartia Herald',
+    date: 'Monday, March 01, 2027',
+    stories: [{ headline: 'Domestic Wars!', byline: '', body: 'One person died.' }],
+    error: '',
+  };
+
+  beforeEach(() => {
+    useNewspaperStore.getState().reset();
+  });
+
+  it('puts the issue list in the store', () => {
+    ClientBridge.handleNewspaperResponse({
+      type: WsMessageType.RESP_NEWSPAPER_ISSUES,
+      list: LIST,
+    } as unknown as WsMessage);
+
+    expect(useNewspaperStore.getState().issues).toEqual(LIST.issues);
+    expect(useNewspaperStore.getState().issuesState).toBe('loaded');
+  });
+
+  it('puts the issue in the store, under the folder that was asked for', () => {
+    useNewspaperStore.getState().selectIssue(ISSUE.folder);
+
+    ClientBridge.handleNewspaperResponse({
+      type: WsMessageType.RESP_NEWSPAPER_ISSUE,
+      issue: ISSUE,
+    } as unknown as WsMessage);
+
+    expect(useNewspaperStore.getState().issue).toEqual(ISSUE);
+    expect(useNewspaperStore.getState().issueState).toBe('loaded');
   });
 });

@@ -97,6 +97,10 @@ export type {
   NewspaperColumn,
   NewspaperArticle,
   NewspaperBoard,
+  NewspaperIssueRef,
+  NewspaperStory,
+  NewspaperIssueList,
+  NewspaperIssue,
   PoliticalRoleInfo,
   // Cluster / company creation types
   ClusterInfo,
@@ -281,6 +285,10 @@ export type {
   WsRespNewspaperBoard,
   WsReqNewspaperPost,
   WsRespNewspaperPost,
+  WsReqNewspaperIssues,
+  WsRespNewspaperIssues,
+  WsReqNewspaperIssue,
+  WsRespNewspaperIssue,
   // Connection Search
   WsReqSearchConnections,
   WsRespSearchConnections,
