@@ -698,6 +698,12 @@ export interface TownInfo {
   classId: string;
 }
 
+/** One row of the directory's Media page (New Directory/Newspapers.asp:12-24). */
+export interface NewspaperListing {
+  paperName: string;
+  townName: string;
+}
+
 /**
  * Tycoon profile from RenderTycoon.asp
  */

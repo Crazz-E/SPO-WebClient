@@ -22,6 +22,7 @@ import type {
   WarehouseWareData,
   SearchMenuCategory,
   TownInfo,
+  NewspaperListing,
   TycoonProfile,
   TycoonProfileFull,
   RankingCategory,
@@ -183,6 +184,7 @@ export enum WsMessageType {
   REQ_SEARCH_MENU_RANKINGS = 'REQ_SEARCH_MENU_RANKINGS',
   REQ_SEARCH_MENU_RANKING_DETAIL = 'REQ_SEARCH_MENU_RANKING_DETAIL',
   REQ_SEARCH_MENU_BANKS = 'REQ_SEARCH_MENU_BANKS',
+  REQ_SEARCH_MENU_NEWSPAPERS = 'REQ_SEARCH_MENU_NEWSPAPERS',
 
   RESP_SEARCH_MENU_HOME = 'RESP_SEARCH_MENU_HOME',
   RESP_SEARCH_MENU_TOWNS = 'RESP_SEARCH_MENU_TOWNS',
@@ -191,6 +193,7 @@ export enum WsMessageType {
   RESP_SEARCH_MENU_RANKINGS = 'RESP_SEARCH_MENU_RANKINGS',
   RESP_SEARCH_MENU_RANKING_DETAIL = 'RESP_SEARCH_MENU_RANKING_DETAIL',
   RESP_SEARCH_MENU_BANKS = 'RESP_SEARCH_MENU_BANKS',
+  RESP_SEARCH_MENU_NEWSPAPERS = 'RESP_SEARCH_MENU_NEWSPAPERS',
 
   // Logout
   REQ_LOGOUT = 'REQ_LOGOUT',
@@ -982,6 +985,15 @@ export interface WsReqSearchMenuBanks extends WsMessage {
 export interface WsRespSearchMenuBanks extends WsMessage {
   type: WsMessageType.RESP_SEARCH_MENU_BANKS;
   banks: unknown[];
+}
+
+export interface WsReqSearchMenuNewspapers extends WsMessage {
+  type: WsMessageType.REQ_SEARCH_MENU_NEWSPAPERS;
+}
+
+export interface WsRespSearchMenuNewspapers extends WsMessage {
+  type: WsMessageType.RESP_SEARCH_MENU_NEWSPAPERS;
+  newspapers: NewspaperListing[];
 }
 
 // =============================================================================

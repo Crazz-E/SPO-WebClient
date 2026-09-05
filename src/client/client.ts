@@ -432,6 +432,7 @@ export class StarpeaceClient implements ClientHandlerContext {
         type: WsMessageType.REQ_SEARCH_MENU_RANKING_DETAIL, rankingPath,
       }),
       onSearchMenuBanks: () => this.sendMessage({ type: WsMessageType.REQ_SEARCH_MENU_BANKS }),
+      onSearchMenuNewspapers: () => this.sendMessage({ type: WsMessageType.REQ_SEARCH_MENU_NEWSPAPERS }),
 
       // Profile tabs
       onProfileCurriculum: () => this.sendMessage({ type: WsMessageType.REQ_PROFILE_CURRICULUM }),

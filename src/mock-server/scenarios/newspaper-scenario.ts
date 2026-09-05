@@ -1,5 +1,6 @@
 /**
- * Scenario 17: the daily paper — `Newsreader.asp`'s two pages.
+ * Scenario 17: the daily paper — `Newsreader.asp`'s two pages, plus the
+ * directory's Media listing (`New Directory/Newspapers.asp`).
  *
  * The board half of the town paper already had no L1 fixture and no need for
  * one: `boardmsg.asp` is a single page and its parsers are unit-tested against
@@ -9,8 +10,8 @@
  * wrong way, an `@` left unescaped, a `Selected=` read off the wrong cell)
  * cannot be caught by testing either page alone.
  *
- * So this scenario serves both, and its suite drives the real handler across
- * them:
+ * So this scenario serves all three, and its suites drive the real handlers
+ * across them:
  *
  *  - `showbar.asp` — the issue row of `ShowBar.asp:81-109`, with the cells in
  *    an order that is NOT the order they must come back in. The page order is
@@ -23,13 +24,16 @@
  *    `<div class=articleBody>`), then the footer.
  *  - a trailing 404 for any other folder, so an issue nobody printed fails
  *    loudly instead of matching a neighbour's page.
+ *  - `New Directory/Newspapers.asp` — the directory's Media listing, one row
+ *    per paper in the world (`Newspapers.asp:12-24`); `papers: []` is the
+ *    world with no newspapers.
  *
  * There is no RDO half: the paper is reachable only through the ASP pages,
  * exactly like the board.
  */
 
 import type { HttpScenario, HttpExchange } from '../types/http-exchange-types';
-import type { NewspaperIssueRef } from '../../shared/types';
+import type { NewspaperIssueRef, NewspaperListing } from '../../shared/types';
 import type { ScenarioVariables } from './scenario-variables';
 import { mergeVariables } from './scenario-variables';
 
@@ -38,6 +42,15 @@ export const NEWS_PATH = '/Five/0/Visual/News';
 
 /** The paper the Town Hall of the building-details scenario names (`:503`). */
 export const MOCK_PAPER_NAME = 'Shamba Daily';
+
+/** Where the directory's Media listing lives (`Newspapers.asp`). */
+export const DIRECTORY_PATH = '/Five/0/Visual/Voyager/New%20Directory';
+
+/** The directory's Media listing — every paper in the world, one row each. */
+export const MOCK_DIRECTORY_PAPERS: NewspaperListing[] = [
+  { paperName: MOCK_PAPER_NAME, townName: 'Shamba' },
+  { paperName: 'Helartia Herald', townName: 'Helartia' },
+];
 
 /**
  * Three kept issues, newest first.
@@ -217,6 +230,38 @@ function issuePage(folder: string): string {
   ].join('\n');
 }
 
+/** One `<tr>` of the Media listing (`Newspapers.asp:12-24`). */
+function newspaperRow(paper: NewspaperListing, idx: number): string {
+  const dirHref =
+    `../../news/newsreader.asp?RIWS=&Tycoon={{username}}&WorldName={{worldName}}`
+    + `&TownName=${paper.townName}&PaperName=${encodeURIComponent(paper.paperName)}`
+    + `&DAAddr=127.0.0.1&DAPort=7001&frame_Id=NewsView&frame_Class=HTMLView`
+    + `&frame_Align=client&frame_NoBorder=yes::local.asp?frame_Id=DirectoryView&frame_Close=yes`;
+  return [
+    `\t\t\t\t<tr onMouseOver="onItemMouseOver()" onMouseOut="onItemMouseOut()"`,
+    `\t\t\t\t\tonClick="onItemMouseClick()" dirHref="${dirHref}" textId="text_${idx}">`,
+    `\t\t\t\t\t<td width="*" style="padding-left: 15px">`,
+    `\t\t\t\t\t\t<div id=text_${idx} class=listItem>${paper.paperName}&nbsp;</div>`,
+    '\t\t\t\t\t</td>',
+    '\t\t\t\t</tr>',
+    '\t\t\t\t<tr><td class=gradient></td></tr>',
+  ].join('\n');
+}
+
+/** `New Directory/Newspapers.asp:40-64` as IIS emits it. `papers: []` is the world with no papers. */
+function newspapersPage(papers: NewspaperListing[]): string {
+  return [
+    '<html>',
+    '\t<body>',
+    '\t\t<div class=header2>Media</div>',                        // strMedia, New Directory.lng:14
+    '\t\t<table>',
+    ...papers.map((paper, idx) => newspaperRow(paper, idx)),
+    '\t\t</table>',
+    '\t</body>',
+    '</html>',
+  ].join('\n');
+}
+
 /**
  * Put the SECOND folder first, so the page never arrives in the order the
  * gateway must answer in — and the selected cell (`:87`, the first one) is not
@@ -227,7 +272,7 @@ function pageOrderOf(folders: string[]): string[] {
   return [folders[1], folders[0], ...folders.slice(2)];
 }
 
-function buildHttpExchanges(folders: string[]): HttpExchange[] {
+function buildHttpExchanges(folders: string[], papers: NewspaperListing[]): HttpExchange[] {
   const exchanges: HttpExchange[] = [
     {
       id: 'newspaper-http-bar',
@@ -237,6 +282,15 @@ function buildHttpExchanges(folders: string[]): HttpExchange[] {
       status: 200,
       contentType: 'text/html',
       body: barPage(pageOrderOf(folders)),
+    },
+    {
+      id: 'newspaper-http-directory',
+      method: 'GET',
+      urlPattern: `${DIRECTORY_PATH}/Newspapers.asp`,
+      queryPatterns: { WorldName: '{{worldName}}' },
+      status: 200,
+      contentType: 'text/html',
+      body: newspapersPage(papers),
     },
   ];
 
@@ -274,18 +328,21 @@ function buildHttpExchanges(folders: string[]): HttpExchange[] {
  * @param opts.issues Which folders the paper keeps. `[]` is the legitimate
  *   "no issue printed yet" paper — an empty bar, which `ShowPaper.asp:10-24`
  *   answers with the connecting page rather than an empty frame.
+ * @param opts.papers Which papers the directory's Media listing carries.
+ *   `[]` is a world with no newspapers.
  */
 export function createNewspaperScenario(
   overrides?: Partial<ScenarioVariables>,
-  opts: { issues?: string[] } = {},
+  opts: { issues?: string[]; papers?: NewspaperListing[] } = {},
 ): { http: HttpScenario } {
   const vars = mergeVariables(overrides);
   const folders = opts.issues ?? MOCK_ISSUE_FOLDERS;
+  const papers = opts.papers ?? MOCK_DIRECTORY_PAPERS;
 
   return {
     http: {
       name: 'newspaper',
-      exchanges: buildHttpExchanges(folders),
+      exchanges: buildHttpExchanges(folders, papers),
       variables: vars as unknown as Record<string, string>,
     },
   };

@@ -68,6 +68,7 @@ import {
   type WsRespSearchMenuRankings,
   type WsRespSearchMenuRankingDetail,
   type WsRespSearchMenuBanks,
+  type WsRespSearchMenuNewspapers,
   type WsRespPoliticsData,
   type WsRespNewspaperBoard,
   type WsRespNewspaperPost,
@@ -227,6 +228,7 @@ export interface ClientCallbacks {
   onSearchMenuRankings: () => void;
   onSearchMenuRankingDetail: (rankingPath: string) => void;
   onSearchMenuBanks: () => void;
+  onSearchMenuNewspapers: () => void;
 
   // Profile tabs
   onProfileCurriculum: () => void;
@@ -765,6 +767,9 @@ export const ClientBridge = {
         break;
       case WsMessageType.RESP_SEARCH_MENU_BANKS:
         search.setBanksData(msg as WsRespSearchMenuBanks);
+        break;
+      case WsMessageType.RESP_SEARCH_MENU_NEWSPAPERS:
+        search.setNewspapersData(msg as WsRespSearchMenuNewspapers);
         break;
     }
   },

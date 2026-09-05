@@ -62,6 +62,7 @@ export type {
   BuildingDetailsResponse,
   SearchMenuCategory,
   TownInfo,
+  NewspaperListing,
   TycoonProfile,
   RankingCategory,
   RankingEntry,
@@ -208,6 +209,8 @@ export type {
   WsRespSearchMenuRankingDetail,
   WsReqSearchMenuBanks,
   WsRespSearchMenuBanks,
+  WsReqSearchMenuNewspapers,
+  WsRespSearchMenuNewspapers,
   // Road building messages
   WsReqBuildRoad,
   WsRespBuildRoad,

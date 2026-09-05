@@ -10,6 +10,7 @@ import { useLogStore } from '../store/log-store';
 import { useChatStore } from '../store/chat-store';
 import { useProfileStore } from '../store/profile-store';
 import { useNewspaperStore } from '../store/newspaper-store';
+import { useSearchStore } from '../store/search-store';
 import { WsMessageType, type WsMessage } from '../../shared/types';
 
 // Mock showToast to prevent import issues in test environment
@@ -459,5 +460,25 @@ describe('ClientBridge handleNewspaperResponse — the paper view (#516)', () =>
 
     expect(useNewspaperStore.getState().issue).toEqual(ISSUE);
     expect(useNewspaperStore.getState().issueState).toBe('loaded');
+  });
+});
+
+describe('ClientBridge handleSearchMenuResponse — RESP_SEARCH_MENU_NEWSPAPERS (#517)', () => {
+  beforeEach(() => {
+    useSearchStore.getState().reset();
+  });
+
+  it('puts the newspaper listings in the search store', () => {
+    const newspapers = [
+      { paperName: 'Shamba Daily', townName: 'Shamba' },
+      { paperName: 'Helartia Herald', townName: 'Helartia' },
+    ];
+
+    ClientBridge.handleSearchMenuResponse({
+      type: WsMessageType.RESP_SEARCH_MENU_NEWSPAPERS,
+      newspapers,
+    } as unknown as WsMessage);
+
+    expect(useSearchStore.getState().newspapersData?.newspapers).toEqual(newspapers);
   });
 });
