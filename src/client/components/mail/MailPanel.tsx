@@ -5,7 +5,7 @@
  * Folder tabs at top, message list scrollable, compose form.
  */
 
-import { useCallback, useEffect, useRef, memo } from 'react';
+import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { Send, Trash2, Reply, PenSquare, Save } from 'lucide-react';
 import { useMailStore } from '../../store/mail-store';
 import { useUiStore } from '../../store/ui-store';
@@ -102,6 +102,14 @@ export function MailPanel() {
   const isMessageLoading = useMailStore((s) => s.isMessageLoading);
   const setMessageLoading = useMailStore((s) => s.setMessageLoading);
   const requestConfirm = useUiStore((s) => s.requestConfirm);
+
+  // The stamp picture can fail (missing on the world's IIS, or the proxy's 1x1
+  // placeholder for a missing upstream) — hidden per message so one broken stamp
+  // never hides the next message's.
+  const [stampHidden, setStampHidden] = useState(false);
+  useEffect(() => {
+    setStampHidden(false);
+  }, [currentMessage?.messageId]);
 
   const client = useClient();
   const setLoading = useMailStore((s) => s.setLoading);
@@ -276,12 +284,26 @@ export function MailPanel() {
             </div>
           </div>
           <h3 className={styles.readSubject}>{currentMessage.subject}</h3>
-          <div className={styles.readMeta}>
-            <div className={styles.readMetaRow}>
-              <span>From: {currentMessage.from || currentMessage.fromAddr}</span>
-              <span>{currentMessage.dateFmt || currentMessage.date}</span>
+          <div className={styles.readMetaRowWithStamp}>
+            <div className={styles.readMeta}>
+              <div className={styles.readMetaRow}>
+                <span>From: {currentMessage.from || currentMessage.fromAddr}</span>
+                <span>{currentMessage.dateFmt || currentMessage.date}</span>
+              </div>
+              <span>To: {currentMessage.to || currentMessage.toAddr}</span>
             </div>
-            <span>To: {currentMessage.to || currentMessage.toAddr}</span>
+            {currentMessage.stampUrl && !stampHidden && (
+              <img
+                className={styles.readStamp}
+                src={currentMessage.stampUrl}
+                alt=""
+                aria-hidden="true"
+                onError={() => setStampHidden(true)}
+                onLoad={(e) => {
+                  if (e.currentTarget.naturalWidth <= 1) setStampHidden(true);
+                }}
+              />
+            )}
           </div>
           {isHtmlContent(currentMessage.body) ? (
             <HtmlMailBody body={currentMessage.body} />
