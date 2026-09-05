@@ -30,28 +30,36 @@ interface MailMessageRowProps {
   msg: MailMessageHeader;
   isSentFolder: boolean;
   onClick: (msg: MailMessageHeader) => void;
+  onDelete: (msg: MailMessageHeader) => void;
 }
 
-const MailMessageRow = memo(function MailMessageRow({ msg, isSentFolder, onClick }: MailMessageRowProps) {
+const MailMessageRow = memo(function MailMessageRow({ msg, isSentFolder, onClick, onDelete }: MailMessageRowProps) {
   const person = isSentFolder
     ? (msg.to || msg.toAddr || '')
     : (msg.from || msg.fromAddr || '');
   return (
-    <button
-      className={`${styles.messageRow} ${!msg.read ? styles.unread : ''}`}
-      onClick={() => onClick(msg)}
-    >
-      <div className={styles.msgAvatar}>
-        {(person || '?')[0].toUpperCase()}
-      </div>
-      <div className={styles.msgContent}>
-        <div className={styles.msgHeader}>
-          <span className={styles.msgSender}>{isSentFolder ? `To: ${person}` : person}</span>
-          <span className={styles.msgDate}>{msg.dateFmt || msg.date}</span>
+    <div className={`${styles.messageRow} ${!msg.read ? styles.unread : ''}`}>
+      <button className={styles.messageOpen} onClick={() => onClick(msg)}>
+        <div className={styles.msgAvatar}>
+          {(person || '?')[0].toUpperCase()}
         </div>
-        <span className={styles.msgSubject}>{msg.subject}</span>
-      </div>
-    </button>
+        <div className={styles.msgContent}>
+          <div className={styles.msgHeader}>
+            <span className={styles.msgSender}>{isSentFolder ? `To: ${person}` : person}</span>
+            <span className={styles.msgDate}>{msg.dateFmt || msg.date}</span>
+          </div>
+          <span className={styles.msgSubject}>{msg.subject}</span>
+        </div>
+      </button>
+      <button
+        className={styles.rowDeleteBtn}
+        onClick={() => onDelete(msg)}
+        aria-label={`Delete “${msg.subject || '(no subject)'}”`}
+        title="Delete"
+      >
+        <Trash2 size={14} aria-hidden="true" />
+      </button>
+    </div>
   );
 });
 
@@ -153,19 +161,26 @@ export function MailPanel() {
   }, [canSaveDraft, setSavingDraft, client, composeTo, composeSubject, composeBody, composeHeaders, composeDraftId]);
 
   // Deleting asks first (B5); the row is removed locally when the server confirms.
+  // Shared by the read-view Delete button and each list row's own delete control (#512) —
+  // neither path issues OpenMessage.
+  const requestDelete = useCallback(
+    (msg: Pick<MailMessageHeader, 'messageId' | 'subject'>) => {
+      const id = msg.messageId;
+      requestConfirm(
+        'Delete this message?',
+        `“${msg.subject || '(no subject)'}” will be removed from ${currentFolder}.`,
+        () => {
+          useMailStore.getState().setPendingDeleteId(id);
+          client.onMailDelete(id);
+        },
+        { kind: 'destructive', confirmLabel: 'Delete', typeToConfirm: null },
+      );
+    },
+    [currentFolder, client, requestConfirm],
+  );
   const handleDelete = useCallback(() => {
-    if (!currentMessage) return;
-    const id = currentMessage.messageId;
-    requestConfirm(
-      'Delete this message?',
-      `“${currentMessage.subject || '(no subject)'}” will be removed from ${currentFolder}.`,
-      () => {
-        useMailStore.getState().setPendingDeleteId(id);
-        client.onMailDelete(id);
-      },
-      { kind: 'destructive', confirmLabel: 'Delete', typeToConfirm: null },
-    );
-  }, [currentMessage, currentFolder, client, requestConfirm]);
+    if (currentMessage) requestDelete(currentMessage);
+  }, [currentMessage, requestDelete]);
 
   const folderTabs = FOLDERS.map((f) => ({
     id: f.id,
@@ -211,6 +226,7 @@ export function MailPanel() {
               msg={msg}
               isSentFolder={currentFolder === 'Sent' || currentFolder === 'Draft'}
               onClick={handleReadMessage}
+              onDelete={requestDelete}
             />
           ))}
         </div>
